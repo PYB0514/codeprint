@@ -1,3 +1,4 @@
+﻿// 코드 분석 결과 Aggregate Root 엔티티
 package com.codeprint.domain.analysis;
 
 import jakarta.persistence.*;

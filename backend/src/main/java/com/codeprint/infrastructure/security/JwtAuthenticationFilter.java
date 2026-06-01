@@ -1,3 +1,4 @@
+﻿// 요청마다 JWT를 검증하여 인증 컨텍스트를 설정하는 필터
 package com.codeprint.infrastructure.security;
 
 import com.codeprint.domain.user.User;

@@ -1,3 +1,4 @@
+﻿// 사용자 ID Value Object
 package com.codeprint.domain.user;
 
 import java.util.UUID;

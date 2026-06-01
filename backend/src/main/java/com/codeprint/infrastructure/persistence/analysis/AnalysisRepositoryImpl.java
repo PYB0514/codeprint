@@ -1,3 +1,4 @@
+﻿// 분석 결과 도메인 Repository JPA 구현체
 package com.codeprint.infrastructure.persistence.analysis;
 
 import com.codeprint.domain.analysis.AnalysisRepository;

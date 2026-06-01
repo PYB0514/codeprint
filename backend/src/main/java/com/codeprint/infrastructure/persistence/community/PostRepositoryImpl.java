@@ -1,3 +1,4 @@
+﻿// 커뮤니티 게시글 도메인 Repository JPA 구현체
 package com.codeprint.infrastructure.persistence.community;
 
 import com.codeprint.domain.community.Comment;

@@ -1,3 +1,4 @@
+﻿// 프로젝트 Aggregate Root 엔티티
 package com.codeprint.domain.project;
 
 import jakarta.persistence.*;

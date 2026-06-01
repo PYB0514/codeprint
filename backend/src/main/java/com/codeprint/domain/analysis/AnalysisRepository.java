@@ -1,3 +1,4 @@
+﻿// 분석 결과 도메인 Repository 인터페이스
 package com.codeprint.domain.analysis;
 
 import java.util.List;

@@ -1,3 +1,4 @@
+﻿// 그래프 도메인 Repository 인터페이스 (노드/엣지 포함)
 package com.codeprint.domain.graph;
 
 import java.util.List;

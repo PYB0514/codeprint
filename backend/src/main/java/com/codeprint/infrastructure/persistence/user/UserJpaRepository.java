@@ -1,3 +1,4 @@
+﻿// 사용자 JPA Repository (Spring Data)
 package com.codeprint.infrastructure.persistence.user;
 
 import com.codeprint.domain.user.User;

@@ -1,3 +1,4 @@
+﻿// 분석 결과 JPA Repository (Spring Data)
 package com.codeprint.infrastructure.persistence.analysis;
 
 import com.codeprint.domain.analysis.AnalysisResult;

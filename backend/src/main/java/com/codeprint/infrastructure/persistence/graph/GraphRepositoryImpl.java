@@ -1,3 +1,4 @@
+﻿// 그래프 도메인 Repository JPA 구현체 (노드/엣지 포함)
 package com.codeprint.infrastructure.persistence.graph;
 
 import com.codeprint.domain.graph.*;

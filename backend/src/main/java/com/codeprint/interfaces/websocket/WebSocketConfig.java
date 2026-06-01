@@ -1,3 +1,4 @@
+﻿// STOMP 기반 WebSocket 설정
 package com.codeprint.interfaces.websocket;
 
 import org.springframework.context.annotation.Configuration;

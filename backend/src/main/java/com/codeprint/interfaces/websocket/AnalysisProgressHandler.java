@@ -1,3 +1,4 @@
+﻿// 분석 진행률을 WebSocket으로 클라이언트에 푸시하는 핸들러
 package com.codeprint.interfaces.websocket;
 
 import lombok.RequiredArgsConstructor;

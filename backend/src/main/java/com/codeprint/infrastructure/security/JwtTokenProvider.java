@@ -1,3 +1,4 @@
+﻿// JWT 토큰 발급 및 검증 컴포넌트
 package com.codeprint.infrastructure.security;
 
 import io.jsonwebtoken.*;

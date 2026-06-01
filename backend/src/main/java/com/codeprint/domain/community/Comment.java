@@ -1,3 +1,4 @@
+﻿// 게시글 댓글 엔티티
 package com.codeprint.domain.community;
 
 import jakarta.persistence.*;

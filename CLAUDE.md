@@ -1,4 +1,4 @@
-c # Codeprint — CLAUDE.md
+# Codeprint — CLAUDE.md
 
 ## 프로젝트 개요
 
@@ -345,3 +345,101 @@ CREATE INDEX idx_comments_post_id     ON comments(post_id);
 - 엣지 식별자 체계 변경 시 마이그레이션 필요 — 신중히 결정
 - 커스터마이징 데이터(node_styles, edge_styles)는 초기부터 별도 테이블로 분리 저장
 - nodes.metadata, edges.metadata는 JSONB로 유연하게 확장 (타입별 추가 정보)
+
+---
+
+## Behavioral Guidelines
+
+Tradeoff: These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+### 1. Think Before Coding
+Don't assume. Don't hide confusion. Surface tradeoffs.
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them — don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+### 2. Simplicity First
+Minimum code that solves the problem. Nothing speculative.
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+### 3. Surgical Changes
+Touch only what you must. Clean up only your own mess.
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it — don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+### 4. Goal-Driven Execution
+Define success criteria. Loop until verified.
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+### 5. No Closing Colons (Korean Output)
+End Korean sentences with a period, not a colon.
+- Don't end sentences with `:` even if the next line is a list or example.
+- The test: every Korean sentence terminator should be `.`, `?`, or `!` — not `:`.
+- Colons are fine inside code, key-value pairs, or labels. Not as sentence enders.
+
+### 6. File Header Comments in Korean
+First line of every new source file: a one-line Korean comment stating its role.
+- TypeScript/JavaScript: `// 사용자 인증 상태를 관리하는 Context Provider`
+- Java: `// GitHub OAuth2 로그인 성공 후 JWT를 발급하는 핸들러`
+- SQL: `-- 일별 집계 결과를 저장하는 머티리얼라이즈드 뷰`
+- Place it directly under required directives (`'use client'`, `package` declaration, etc.).
+- Skip config files (`*.config.ts`, `build.gradle`, `package.json`, etc.).
+
+### 7. Plan + Checklist + Context Notes
+Before any non-trivial task, produce three artifacts. Don't start coding without them.
+- **Plan** — what we're building and why.
+- **Checklist** (`checklist.md`) — concrete tasks as checkboxes. Tick as you go.
+- **Context Notes** (`context-notes.md`) — decisions made during the work and the reasoning behind them. Append continuously.
+
+### 8. Run Tests Before Marking Complete
+If you touched code, run the tests before saying "done".
+- `./gradlew test`, `npm test`, `pytest` — run it.
+- If tests pass, report results. If they fail, fix and re-run.
+- No test setup? At minimum, verify the project builds/compiles.
+- Run tests proactively — not after the user signals done.
+
+This is the step LLMs skip most often. Treat it as non-negotiable.
+
+### 9. Semantic Commits
+Commit when one logical change is complete. Don't wait for the user to ask.
+- The test: "Can I describe this commit in one sentence?" If yes, commit.
+- Good: "feat: JWT 인증 필터 추가". Bad: "auth 추가하고 UI도 고치고 버그도 수정" (split into 3).
+- Don't accumulate unrelated edits and lose the ability to roll back individually.
+
+### 10. Read Errors, Don't Guess
+Read the actual error/log line. Don't pattern-match from memory.
+- Read the full error message and stack trace.
+- Check the actual log output, not what you assume it should say.
+- Don't apply a "common fix" before confirming the cause.
+- If unclear, add a log to verify state — then fix.
+
+These guidelines are working if: fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

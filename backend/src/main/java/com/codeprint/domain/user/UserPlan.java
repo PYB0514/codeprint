@@ -1,3 +1,4 @@
+﻿// 사용자 플랜 열거형 (FREE / PRO)
 package com.codeprint.domain.user;
 
 public enum UserPlan {

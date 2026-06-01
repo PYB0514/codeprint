@@ -1,3 +1,4 @@
+﻿// 댓글 ID Value Object
 package com.codeprint.domain.community;
 
 import java.util.UUID;

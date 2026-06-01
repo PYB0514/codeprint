@@ -1,3 +1,4 @@
+﻿// 게시글/댓글 CRUD 애플리케이션 서비스
 package com.codeprint.application.community;
 
 import com.codeprint.domain.community.Comment;

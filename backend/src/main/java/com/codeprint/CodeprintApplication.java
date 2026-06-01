@@ -1,3 +1,4 @@
+﻿// Spring Boot 애플리케이션 진입점
 package com.codeprint;
 
 import org.springframework.boot.SpringApplication;
