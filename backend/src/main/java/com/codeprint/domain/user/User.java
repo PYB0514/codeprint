@@ -1,0 +1,65 @@
+package com.codeprint.domain.user;
+
+import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import java.time.Instant;
+import java.util.UUID;
+
+@Entity
+@Table(name = "users")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class User {
+
+    @Id
+    @Column(columnDefinition = "uuid")
+    private UUID id;
+
+    @Column(name = "github_id", unique = true, nullable = false)
+    private Long githubId;
+
+    @Column(unique = true, nullable = false)
+    private String email;
+
+    @Column(nullable = false, length = 100)
+    private String username;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UserPlan plan;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    public static User create(Long githubId, String email, String username) {
+        User user = new User();
+        user.id = UUID.randomUUID();
+        user.githubId = githubId;
+        user.email = email;
+        user.username = username;
+        user.plan = UserPlan.FREE;
+        user.createdAt = Instant.now();
+        user.updatedAt = Instant.now();
+        return user;
+    }
+
+    public void upgradeToPro() {
+        this.plan = UserPlan.PRO;
+        this.updatedAt = Instant.now();
+    }
+
+    public void downgradeToFree() {
+        this.plan = UserPlan.FREE;
+        this.updatedAt = Instant.now();
+    }
+
+    public UserId getUserId() {
+        return UserId.of(id);
+    }
+}

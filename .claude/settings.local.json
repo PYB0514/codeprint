@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Dev\\\\Codeprint\\\\backend\")",
+      "PowerShell(cd \"C:\\\\Dev\\\\codeprint\\\\backend\" ; \\(New-Object Net.WebClient\\).DownloadFile\\(\"https://github.com/gradle/gradle/raw/master/gradle/wrapper/gradle-wrapper.jar\", \"gradle\\\\wrapper\\\\gradle-wrapper.jar\"\\); Write-Host \"Downloaded\")"
+    ]
+  }
+}

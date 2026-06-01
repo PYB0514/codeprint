@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: codeprint
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/codeprint
+    username: ${DB_USERNAME:codeprint}
+    password: ${DB_PASSWORD:codeprint}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: ${GITHUB_CLIENT_ID}
+            client-secret: ${GITHUB_CLIENT_SECRET}
+            scope: read:user,user:email
+
+  async:
+    executor:
+      core-pool-size: 4
+      max-pool-size: 16
+      queue-capacity: 500
+
+server:
+  port: 8080
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration-ms: 86400000  # 24h
+
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY:}
+
+logging:
+  level:
+    com.codeprint: DEBUG
+    org.springframework.security: INFO
