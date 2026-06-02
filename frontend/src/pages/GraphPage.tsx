@@ -18,14 +18,20 @@ import { toPng } from 'html-to-image'
 import { buildLayout, downloadTreeText } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
+import SectionNode from '../components/SectionNode'
+import FileNode from '../components/FileNode'
 
-const nodeTypes = { groupNode: GroupNode }
+const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
 interface EdgeModalInfo {
   edgeIdentifier: string
   type: string
   sourceId: string
   targetId: string
+  sourceNodeId: string
+  targetNodeId: string
+  funcLabel: string
+  funcNodeId: string | null
 }
 
 // JWT 토큰을 Authorization 헤더로 반환
@@ -47,6 +53,8 @@ function GraphPageInner() {
   const [edgeModal, setEdgeModal] = useState<EdgeModalInfo | null>(null)
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
+  const [showIsoGroups, setShowIsoGroups] = useState(true)
+  const [showEdges, setShowEdges] = useState(true)
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -89,10 +97,34 @@ function GraphPageInner() {
     }
   }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges])
 
+  // 엣지 전체 표시/숨김 토글
+  const toggleEdges = useCallback(() => {
+    setShowEdges((prev) => {
+      const next = !prev
+      setEdges((eds) => eds.map((e) => ({ ...e, hidden: !next })))
+      return next
+    })
+  }, [setEdges])
+
+  // 고립 그룹(연결 없는 그룹) 표시/숨김 토글
+  const toggleIsoGroups = useCallback(() => {
+    setShowIsoGroups((prev) => {
+      const next = !prev
+      setNodes((nds) => nds.map((n) =>
+        n.data?.isIso || n.id === '__iso-section__'
+          ? { ...n, hidden: !next }
+          : n
+      ))
+      return next
+    })
+  }, [setNodes])
+
   // 레이아웃 프리셋 전환 — 그래프를 재계산하여 적용
   const toggleLayoutPreset = useCallback(() => {
     const next: LayoutPreset = layoutPreset === 'layer' ? 'hub' : 'layer'
     setLayoutPreset(next)
+    setShowIsoGroups(true)
+    setShowEdges(true)
     if (rawNodes.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next)
       setNodes(ln)
@@ -180,15 +212,29 @@ function GraphPageInner() {
   // 엣지 클릭 시 상세 정보 모달을 표시
   const handleEdgeClick: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
     const data = edge.data as { edgeIdentifier?: string; type?: string } | undefined
-    const sourceNode = rawNodes.find((n) => n.id === edge.source)
-    const targetNode = rawNodes.find((n) => n.id === edge.target)
+    const sourceNode = rawNodes.find((n) => n.id === edge.source && n.type === 'FILE')
+    const targetNode = rawNodes.find((n) => n.id === edge.target && n.type === 'FILE')
+    const edgeId = data?.edgeIdentifier ?? edge.id
+    const edgeType = data?.type ?? 'IMPORT'
+    // FUNCTION_CALL만 edgeIdentifier에서 함수명 파싱 — IMPORT 등은 파일명 기반이라 파싱 불가
+    const funcName = edgeType === 'FUNCTION_CALL' ? (edgeId.split('-').pop() ?? '') : ''
+    const funcNode = funcName
+      ? rawNodes.find((n) => n.type === 'FUNCTION' && n.filePath === sourceNode?.filePath && n.name === funcName)
+      : null
+    const funcLabel = funcName
+      ? (labelMode === 'comment' && funcNode?.comment ? funcNode.comment : funcName)
+      : '—'
     setEdgeModal({
-      edgeIdentifier: data?.edgeIdentifier ?? edge.id,
+      edgeIdentifier: edgeId,
       type: data?.type ?? 'IMPORT',
       sourceId: sourceNode?.name ?? edge.source,
       targetId: targetNode?.name ?? edge.target,
+      sourceNodeId: edge.source,
+      targetNodeId: edge.target,
+      funcLabel,
+      funcNodeId: funcNode?.id ?? null,
     })
-  }, [rawNodes])
+  }, [rawNodes, labelMode])
 
   if (loading) {
     return (
@@ -229,6 +275,15 @@ function GraphPageInner() {
           <span className="text-gray-600">/</span>
           <span className={layoutPreset === 'hub' ? 'text-white' : 'text-gray-500'}>허브</span>
         </button>
+        {layoutPreset === 'hub' && (
+          <button
+            onClick={toggleIsoGroups}
+            className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700"
+            title="연결 없는 그룹 표시/숨김"
+          >
+            <span className={showIsoGroups ? 'text-white' : 'text-gray-500'}>고립 그룹</span>
+          </button>
+        )}
         <button
           onClick={toggleLabelMode}
           className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700"
@@ -236,6 +291,13 @@ function GraphPageInner() {
           <span className={labelMode === 'name' ? 'text-white' : 'text-gray-500'}>이름</span>
           <span className="text-gray-600">/</span>
           <span className={labelMode === 'comment' ? 'text-white' : 'text-gray-500'}>주석</span>
+        </button>
+        <button
+          onClick={toggleEdges}
+          className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700"
+          title="연결선 표시/숨김"
+        >
+          <span className={showEdges ? 'text-white' : 'text-gray-500'}>연결선</span>
         </button>
         <button
           onClick={() => downloadTreeText(rawNodes)}
@@ -332,23 +394,45 @@ function GraphPageInner() {
               <button onClick={() => setEdgeModal(null)} className="text-gray-500 hover:text-white text-xs">✕</button>
             </div>
             <div className="flex flex-col gap-3 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-xs bg-blue-900 text-blue-300 px-2 py-0.5 rounded">{edgeModal.type}</span>
+              {/* 함수 — 핵심 정보 */}
+              <div className="bg-gray-800 rounded-xl p-4 flex flex-col items-center gap-1">
+                <p className="text-xs text-gray-500">호출 함수</p>
+                <p
+                  className="text-white font-mono text-sm font-semibold text-center break-all cursor-pointer hover:text-blue-300 underline decoration-gray-600"
+                  title="클릭하여 해당 함수로 이동"
+                  onClick={() => {
+                    if (!edgeModal.funcNodeId) return
+                    setEdgeModal(null)
+                    setTimeout(() => fitView({ nodes: [{ id: edgeModal.funcNodeId! }], duration: 500, padding: 0.4 }), 50)
+                  }}
+                >{edgeModal.funcLabel}</p>
+                <span className="text-xs bg-blue-900 text-blue-300 px-2 py-0.5 rounded mt-1">{edgeModal.type}</span>
               </div>
-              <div className="bg-gray-800 rounded-lg p-3 flex flex-col gap-2">
+              {/* 출발 → 도착 */}
+              <div className="bg-gray-800/60 rounded-lg p-3 flex flex-col gap-2">
                 <div>
-                  <p className="text-xs text-gray-500 mb-0.5">출발</p>
-                  <p className="text-white font-mono text-xs">{edgeModal.sourceId}</p>
+                  <p className="text-xs text-gray-500 mb-0.5">출발 파일</p>
+                  <p
+                    className="text-gray-300 font-mono text-xs cursor-pointer hover:text-white underline decoration-gray-600"
+                    title="클릭하여 해당 파일로 이동"
+                    onClick={() => {
+                      setEdgeModal(null)
+                      setTimeout(() => fitView({ nodes: [{ id: edgeModal.sourceNodeId }], duration: 500, padding: 0.3 }), 50)
+                    }}
+                  >{edgeModal.sourceId}</p>
                 </div>
                 <div className="text-gray-600 text-xs text-center">↓</div>
                 <div>
-                  <p className="text-xs text-gray-500 mb-0.5">도착</p>
-                  <p className="text-white font-mono text-xs">{edgeModal.targetId}</p>
+                  <p className="text-xs text-gray-500 mb-0.5">도착 파일</p>
+                  <p
+                    className="text-gray-300 font-mono text-xs cursor-pointer hover:text-white underline decoration-gray-600"
+                    title="클릭하여 해당 파일로 이동"
+                    onClick={() => {
+                      setEdgeModal(null)
+                      setTimeout(() => fitView({ nodes: [{ id: edgeModal.targetNodeId }], duration: 500, padding: 0.3 }), 50)
+                    }}
+                  >{edgeModal.targetId}</p>
                 </div>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-0.5">식별자</p>
-                <p className="text-gray-300 font-mono text-xs break-all">{edgeModal.edgeIdentifier}</p>
               </div>
             </div>
           </div>
