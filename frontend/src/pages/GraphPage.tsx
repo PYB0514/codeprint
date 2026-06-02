@@ -16,22 +16,12 @@ import type { Edge, EdgeMouseHandler, Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
 import { buildLayout, downloadTreeText } from '../utils/graphLayout'
-import type { RawNode, RawEdge, LabelMode, LayoutPreset } from '../utils/graphLayout'
+import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
-
-interface CallEntry {
-  callerName: string
-  callerComment: string | null
-  callerNodeId: string
-  calleeFile: string
-  calleeName: string
-  calleeComment: string | null
-  calleeNodeId: string
-}
 
 interface FuncCallChainEntry {
   funcName: string
@@ -41,25 +31,11 @@ interface FuncCallChainEntry {
   fileNodeId: string
 }
 
-interface FuncModalInfo {
-  funcName: string
-  funcComment: string | null
-  funcNodeId: string
-  parentFileName: string
-  parentFileNodeId: string
-  callers: FuncCallChainEntry[]  // 이 함수를 호출하는 함수들
-  callees: FuncCallChainEntry[]  // 이 함수가 호출하는 함수들
-}
-
-interface EdgeModalInfo {
-  edgeIdentifier: string
-  type: string
-  sourceId: string
-  targetId: string
-  sourceNodeId: string
-  targetNodeId: string
-  callChain: CallEntry[]
-}
+// 사이드바 콘텐츠 — 엣지 클릭 / 파일 연결 보기 / 함수 노드 클릭 세 종류
+type SidebarContent =
+  | { kind: 'edge'; sourceId: string; targetId: string; sourceNodeId: string; targetNodeId: string; callChain: ConnEntry['callChain'] }
+  | { kind: 'file'; data: FileSidebarData }
+  | { kind: 'func'; funcName: string; funcComment: string | null; parentFileName: string; parentFileNodeId: string; callers: FuncCallChainEntry[]; callees: FuncCallChainEntry[] }
 
 // JWT 토큰을 Authorization 헤더로 반환
 function authHeaders() {
@@ -77,8 +53,7 @@ function GraphPageInner() {
   const [counts, setCounts] = useState({ files: 0, funcs: 0, edges: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [edgeModal, setEdgeModal] = useState<EdgeModalInfo | null>(null)
-  const [funcModal, setFuncModal] = useState<FuncModalInfo | null>(null)
+  const [sidebar, setSidebar] = useState<SidebarContent | null>(null)
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
   const [showIsoGroups, setShowIsoGroups] = useState(true)
@@ -91,13 +66,18 @@ function GraphPageInner() {
   const flowRef = useRef<HTMLDivElement>(null)
   const { getNodes, fitView } = useReactFlow()
 
+  // 파일 연결 보기 — 사이드바 오픈 콜백
+  const openFileSidebar = useCallback((data: FileSidebarData) => {
+    setSidebar({ kind: 'file', data })
+  }, [])
+
   // 서버에서 그래프 데이터를 불러와 React Flow 레이아웃으로 변환
   const fetchGraph = useCallback(async () => {
     try {
       const res = await axios.get(`/api/projects/${projectId}/graph`, { headers: authHeaders() })
       const { graphId: gid, nodes: rn, edges: re } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[] }
       setGraphId(gid)
-      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset)
+      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebar)
       setRawNodes(rn)
       setRawEdgesCache(re)
       setNodes(layoutNodes)
@@ -112,7 +92,7 @@ function GraphPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, setNodes, setEdges])
+  }, [projectId, setNodes, setEdges, openFileSidebar])
 
   useEffect(() => { fetchGraph() }, [fetchGraph])
 
@@ -121,11 +101,11 @@ function GraphPageInner() {
     const next: LabelMode = labelMode === 'name' ? 'comment' : 'name'
     setLabelMode(next)
     if (rawNodes.length > 0) {
-      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, next, layoutPreset)
+      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, next, layoutPreset, openFileSidebar)
       setNodes(layoutNodes)
       setEdges(layoutEdges)
     }
-  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges])
+  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar])
 
   // IMPORT 엣지 표시/숨김 토글
   const toggleEdges = useCallback(() => {
@@ -186,12 +166,12 @@ function GraphPageInner() {
     setShowIsoGroups(true)
     setShowEdges(true)
     if (rawNodes.length > 0) {
-      const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next)
+      const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
       setNodes(ln)
       setEdges(le)
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
-  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView])
+  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar])
 
   // 전체 그래프를 원본 크기 PNG로 다운로드
   const handleExportImage = useCallback(async () => {
@@ -277,37 +257,26 @@ function GraphPageInner() {
     ))
   }, [setEdges])
 
-  // 엣지 클릭 시 상세 정보 모달을 표시
+  // 엣지 클릭 시 사이드바에 연결 상세 표시
   const handleEdgeClick: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
-    const data = edge.data as { edgeIdentifier?: string; type?: string } | undefined
-    const edgeId = data?.edgeIdentifier ?? edge.id
+    const data = edge.data as { type?: string } | undefined
+    if (data?.type === 'FUNCTION_CALL' || data?.type === 'INSTANTIATION') return
 
     const sourceFile = rawNodes.find((n) => n.id === edge.source && n.type === 'FILE')
     const targetFile = rawNodes.find((n) => n.id === edge.target && n.type === 'FILE')
 
-    // 두 파일 사이의 FUNCTION_CALL 엣지에서 콜 체인 목록 수집
-    const callChain: CallEntry[] = rawEdgesCache
+    const callChain: ConnEntry['callChain'] = rawEdgesCache
       .filter((e) => e.type === 'FUNCTION_CALL')
       .flatMap((e) => {
         const srcFunc = rawNodes.find((n) => n.id === e.source && n.type === 'FUNCTION')
         const tgtFunc = rawNodes.find((n) => n.id === e.target && n.type === 'FUNCTION')
         if (!srcFunc || !tgtFunc) return []
-        if (srcFunc.filePath !== sourceFile?.filePath) return []
-        if (tgtFunc.filePath !== targetFile?.filePath) return []
-        return [{
-          callerName: srcFunc.name,
-          callerComment: srcFunc.comment ?? null,
-          callerNodeId: srcFunc.id,
-          calleeFile: tgtFunc.filePath,
-          calleeName: tgtFunc.name,
-          calleeComment: tgtFunc.comment ?? null,
-          calleeNodeId: tgtFunc.id,
-        }]
+        if (srcFunc.filePath !== sourceFile?.filePath || tgtFunc.filePath !== targetFile?.filePath) return []
+        return [{ callerName: srcFunc.name, callerLabel: srcFunc.comment ?? srcFunc.name, callerNodeId: srcFunc.id, calleeName: tgtFunc.name, calleeLabel: tgtFunc.comment ?? tgtFunc.name, calleeNodeId: tgtFunc.id }] as FuncCallEntry[]
       })
 
-    setEdgeModal({
-      edgeIdentifier: edgeId,
-      type: data?.type ?? 'IMPORT',
+    setSidebar({
+      kind: 'edge',
       sourceId: sourceFile?.name ?? edge.source,
       targetId: targetFile?.name ?? edge.target,
       sourceNodeId: edge.source,
@@ -316,7 +285,7 @@ function GraphPageInner() {
     })
   }, [rawNodes, rawEdgesCache])
 
-  // 함수 노드 클릭 시 해당 함수의 콜 체인 모달 표시
+  // 함수 노드 클릭 시 사이드바에 콜 체인 표시
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     if (node.type === 'fileNode' || node.type === 'groupNode' || node.type === 'sectionNode') return
     // FUNCTION 노드만 처리
@@ -348,10 +317,10 @@ function GraphPageInner() {
       .filter((n): n is RawNode => !!n && n.filePath !== rawFunc.filePath)
       .map(toEntry)
 
-    setFuncModal({
+    setSidebar({
+      kind: 'func',
       funcName: rawFunc.name,
       funcComment: rawFunc.comment ?? null,
-      funcNodeId: rawFunc.id,
       parentFileName: parentFile?.name ?? rawFunc.filePath,
       parentFileNodeId: parentFile?.id ?? '',
       callers,
@@ -529,169 +498,189 @@ function GraphPageInner() {
         />
       </ReactFlow>
 
-      {/* 엣지 클릭 모달 */}
-      {edgeModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={() => setEdgeModal(null)}
-        >
-          <div
-            className="bg-gray-900 rounded-2xl p-5 w-96 shadow-xl max-h-[80vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4 flex-shrink-0">
-              <h3 className="font-semibold text-sm">연결 상세</h3>
-              <button onClick={() => setEdgeModal(null)} className="text-gray-500 hover:text-white text-xs">✕</button>
-            </div>
-
-            {/* 출발 파일 → 도착 파일 */}
-            <div className="bg-gray-800/60 rounded-lg p-3 flex items-center gap-2 flex-shrink-0 mb-3">
-              <p
-                className="text-gray-300 font-mono text-xs cursor-pointer hover:text-white underline decoration-gray-700 truncate flex-1"
-                title="클릭하여 해당 파일로 이동"
-                onClick={() => {
-                  setEdgeModal(null)
-                  setTimeout(() => fitView({ nodes: [{ id: edgeModal.sourceNodeId }], duration: 500, padding: 0.3 }), 50)
-                }}
-              >{edgeModal.sourceId}</p>
-              <span className="text-gray-500 text-xs flex-shrink-0">→</span>
-              <p
-                className="text-gray-300 font-mono text-xs cursor-pointer hover:text-white underline decoration-gray-700 truncate flex-1 text-right"
-                title="클릭하여 해당 파일로 이동"
-                onClick={() => {
-                  setEdgeModal(null)
-                  setTimeout(() => fitView({ nodes: [{ id: edgeModal.targetNodeId }], duration: 500, padding: 0.3 }), 50)
-                }}
-              >{edgeModal.targetId}</p>
-            </div>
-
-            {/* 함수 호출 체인 목록 */}
-            <div className="flex flex-col gap-1 flex-1 overflow-y-auto min-h-0">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 flex-shrink-0">
-                함수 호출 체인 {edgeModal.callChain.length > 0 && `(${edgeModal.callChain.length}건)`}
-              </p>
-              {edgeModal.callChain.length === 0 ? (
-                <p className="text-gray-600 text-xs text-center py-4">분석된 함수 호출 없음</p>
-              ) : (
-                edgeModal.callChain.map((entry, i) => (
-                  <div key={i} className="bg-gray-800 rounded-lg px-3 py-2 flex items-center gap-2 text-xs">
-                    <p
-                      className="text-emerald-400 font-mono cursor-pointer hover:text-emerald-200 truncate flex-1"
-                      title={`${entry.callerComment ?? entry.callerName} — 클릭하여 이동`}
-                      onClick={() => {
-                        setEdgeModal(null)
-                        setTimeout(() => fitView({ nodes: [{ id: entry.callerNodeId }], duration: 500, padding: 0.4 }), 50)
-                      }}
-                    >
-                      {labelMode === 'comment' && entry.callerComment ? entry.callerComment : entry.callerName}
-                    </p>
-                    <span className="text-amber-500 flex-shrink-0">→</span>
-                    <p
-                      className="text-emerald-400 font-mono cursor-pointer hover:text-emerald-200 truncate flex-1 text-right"
-                      title={`${entry.calleeComment ?? entry.calleeName} — 클릭하여 이동`}
-                      onClick={() => {
-                        setEdgeModal(null)
-                        setTimeout(() => fitView({ nodes: [{ id: entry.calleeNodeId }], duration: 500, padding: 0.4 }), 50)
-                      }}
-                    >
-                      {labelMode === 'comment' && entry.calleeComment ? entry.calleeComment : entry.calleeName}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
+      {/* 우측 사이드바 */}
+      {sidebar && (
+        <aside className="fixed right-0 top-0 h-full w-80 bg-gray-950 border-l border-gray-800 z-40 flex flex-col shadow-2xl">
+          {/* 사이드바 헤더 */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              {sidebar.kind === 'edge' ? '연결 상세' : sidebar.kind === 'file' ? '파일 연결' : '함수 상세'}
+            </span>
+            <button onClick={() => setSidebar(null)} className="text-gray-600 hover:text-white text-sm">✕</button>
           </div>
-        </div>
-      )}
 
-      {/* 함수 노드 클릭 모달 */}
-      {funcModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={() => setFuncModal(null)}
-        >
-          <div
-            className="bg-gray-900 rounded-2xl p-5 w-96 shadow-xl max-h-[80vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 헤더 */}
-            <div className="flex items-start justify-between mb-4 flex-shrink-0">
-              <div>
-                <p className="font-mono font-semibold text-sm text-white">{funcModal.funcName}</p>
-                {funcModal.funcComment && (
-                  <p className="text-gray-500 text-xs mt-0.5">{funcModal.funcComment}</p>
-                )}
-                <p
-                  className="text-blue-400 text-xs font-mono mt-1 cursor-pointer hover:text-blue-300 underline decoration-gray-700"
-                  onClick={() => {
-                    setFuncModal(null)
-                    setTimeout(() => fitView({ nodes: [{ id: funcModal.parentFileNodeId }], duration: 500, padding: 0.3 }), 50)
-                  }}
-                >{funcModal.parentFileName}</p>
-              </div>
-              <button onClick={() => setFuncModal(null)} className="text-gray-500 hover:text-white text-xs ml-4">✕</button>
-            </div>
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
 
-            <div className="flex flex-col gap-4 overflow-y-auto min-h-0">
-              {/* 이 함수를 호출하는 함수들 */}
-              <div>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">
-                  호출하는 함수 {funcModal.callers.length > 0 && `(${funcModal.callers.length})`}
-                </p>
-                {funcModal.callers.length === 0
-                  ? <p className="text-gray-700 text-xs">없음</p>
-                  : funcModal.callers.map((c, i) => (
-                    <FuncChainRow key={i} entry={c} direction="caller"
-                      onFuncClick={(id) => { setFuncModal(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
-                      onFileClick={(id) => { setFuncModal(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
-                    />
-                  ))
-                }
-              </div>
+            {/* ── 엣지 클릭: 파일→파일 + 콜 체인 ── */}
+            {sidebar.kind === 'edge' && (
+              <>
+                <div className="bg-gray-800/60 rounded-lg p-3 flex items-center gap-2">
+                  <span
+                    className="text-blue-300 font-mono text-xs cursor-pointer hover:text-white truncate flex-1"
+                    onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.sourceNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                  >{sidebar.sourceId}</span>
+                  <span className="text-gray-600 text-xs flex-shrink-0">→</span>
+                  <span
+                    className="text-blue-300 font-mono text-xs cursor-pointer hover:text-white truncate flex-1 text-right"
+                    onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.targetNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                  >{sidebar.targetId}</span>
+                </div>
+                <SidebarSection title={`함수 호출 체인${sidebar.callChain.length > 0 ? ` (${sidebar.callChain.length})` : ''}`}>
+                  {sidebar.callChain.length === 0
+                    ? <p className="text-gray-700 text-xs">분석된 함수 호출 없음</p>
+                    : sidebar.callChain.map((e, i) => (
+                      <CallChainRow key={i}
+                        leftLabel={e.callerLabel} leftNodeId={e.callerNodeId}
+                        rightLabel={e.calleeLabel} rightNodeId={e.calleeNodeId}
+                        onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                      />
+                    ))
+                  }
+                </SidebarSection>
+              </>
+            )}
 
-              {/* 이 함수가 호출하는 함수들 */}
-              <div>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">
-                  호출받는 함수 {funcModal.callees.length > 0 && `(${funcModal.callees.length})`}
-                </p>
-                {funcModal.callees.length === 0
-                  ? <p className="text-gray-700 text-xs">없음</p>
-                  : funcModal.callees.map((c, i) => (
-                    <FuncChainRow key={i} entry={c} direction="callee"
-                      onFuncClick={(id) => { setFuncModal(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
-                      onFileClick={(id) => { setFuncModal(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
-                    />
-                  ))
-                }
-              </div>
-            </div>
+            {/* ── 파일 연결 보기 ── */}
+            {sidebar.kind === 'file' && (
+              <>
+                <div>
+                  <p className="text-white font-mono font-semibold text-sm">{sidebar.data.name}</p>
+                  {sidebar.data.comment && <p className="text-gray-500 text-xs mt-0.5">{sidebar.data.comment}</p>}
+                </div>
+                <SidebarSection title={`들어오는 연결 (${sidebar.data.incoming.length})`}>
+                  {sidebar.data.incoming.length === 0
+                    ? <p className="text-gray-700 text-xs">없음</p>
+                    : sidebar.data.incoming.map((c, i) => (
+                      <FileConnGroup key={i} entry={c} direction="in"
+                        onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                      />
+                    ))
+                  }
+                </SidebarSection>
+                <SidebarSection title={`나가는 연결 (${sidebar.data.outgoing.length})`}>
+                  {sidebar.data.outgoing.length === 0
+                    ? <p className="text-gray-700 text-xs">없음</p>
+                    : sidebar.data.outgoing.map((c, i) => (
+                      <FileConnGroup key={i} entry={c} direction="out"
+                        onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                      />
+                    ))
+                  }
+                </SidebarSection>
+              </>
+            )}
+
+            {/* ── 함수 노드 클릭 ── */}
+            {sidebar.kind === 'func' && (
+              <>
+                <div>
+                  <p className="text-white font-mono font-semibold text-sm">{sidebar.funcName}</p>
+                  {sidebar.funcComment && <p className="text-gray-500 text-xs mt-0.5">{sidebar.funcComment}</p>}
+                  <p
+                    className="text-blue-400 font-mono text-xs mt-1 cursor-pointer hover:text-blue-300 underline decoration-gray-700"
+                    onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.parentFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                  >{sidebar.parentFileName}</p>
+                </div>
+                <SidebarSection title={`호출하는 함수${sidebar.callers.length > 0 ? ` (${sidebar.callers.length})` : ''}`}>
+                  {sidebar.callers.length === 0
+                    ? <p className="text-gray-700 text-xs">없음</p>
+                    : sidebar.callers.map((c, i) => (
+                      <FuncChainRow key={i} entry={c} direction="caller"
+                        onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                      />
+                    ))
+                  }
+                </SidebarSection>
+                <SidebarSection title={`호출받는 함수${sidebar.callees.length > 0 ? ` (${sidebar.callees.length})` : ''}`}>
+                  {sidebar.callees.length === 0
+                    ? <p className="text-gray-700 text-xs">없음</p>
+                    : sidebar.callees.map((c, i) => (
+                      <FuncChainRow key={i} entry={c} direction="callee"
+                        onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                      />
+                    ))
+                  }
+                </SidebarSection>
+              </>
+            )}
+
           </div>
-        </div>
+        </aside>
       )}
     </div>
   )
 }
 
-// 함수 콜 체인 한 줄 컴포넌트
-function FuncChainRow({ entry, direction, onFuncClick, onFileClick }: {
-  entry: FuncCallChainEntry
-  direction: 'caller' | 'callee'
-  onFuncClick: (nodeId: string) => void
-  onFileClick: (nodeId: string) => void
+// 섹션 헤더
+function SidebarSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">{title}</p>
+      <div className="flex flex-col gap-1">{children}</div>
+    </div>
+  )
+}
+
+// 파일 연결 항목 — 파일명 + 콜 체인
+function FileConnGroup({ entry, direction, onNav }: {
+  entry: ConnEntry; direction: 'in' | 'out'; onNav: (id: string) => void
+}) {
+  const accent = direction === 'in' ? '#3b82f6' : '#10b981'
+  return (
+    <div className="bg-gray-900 rounded-lg p-2.5 mb-1">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <span className="text-[9px]" style={{ color: accent }}>{direction === 'in' ? '◀' : '▶'}</span>
+        <span
+          className="text-blue-300 font-mono text-xs font-semibold cursor-pointer hover:text-white truncate"
+          onClick={() => onNav(entry.nodeId)}
+        >{entry.name}</span>
+      </div>
+      {entry.callChain.length > 0 ? (
+        <div className="flex flex-col gap-1 pl-3">
+          {entry.callChain.map((c, i) => (
+            <CallChainRow key={i}
+              leftLabel={c.callerLabel} leftNodeId={c.callerNodeId}
+              rightLabel={c.calleeLabel} rightNodeId={c.calleeNodeId}
+              onNav={onNav}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="text-gray-700 text-[11px] pl-3">함수 호출 없음</p>
+      )}
+    </div>
+  )
+}
+
+// 콜 체인 한 줄 — 출발함수 → 도착함수
+function CallChainRow({ leftLabel, leftNodeId, rightLabel, rightNodeId, onNav }: {
+  leftLabel: string; leftNodeId: string; rightLabel: string; rightNodeId: string
+  onNav: (id: string) => void
 }) {
   return (
-    <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-2 mb-1.5 text-xs">
+    <div className="flex items-center gap-1.5 bg-gray-800 rounded px-2.5 py-1.5 text-[11px]">
+      <span className="text-emerald-400 font-mono cursor-pointer hover:text-emerald-200 truncate flex-1"
+        onClick={() => onNav(leftNodeId)}>{leftLabel}</span>
+      <span className="text-amber-500 flex-shrink-0">→</span>
+      <span className="text-emerald-400 font-mono cursor-pointer hover:text-emerald-200 truncate flex-1 text-right"
+        onClick={() => onNav(rightNodeId)}>{rightLabel}</span>
+    </div>
+  )
+}
+
+// 함수 콜 체인 한 줄
+function FuncChainRow({ entry, direction, onNav }: {
+  entry: FuncCallChainEntry; direction: 'caller' | 'callee'; onNav: (id: string) => void
+}) {
+  return (
+    <div className="flex items-center gap-2 bg-gray-900 rounded-lg px-2.5 py-2 text-xs">
       <span className="text-amber-500 flex-shrink-0">{direction === 'caller' ? '←' : '→'}</span>
       <div className="flex flex-col min-w-0 flex-1">
-        <span
-          className="text-emerald-400 font-mono cursor-pointer hover:text-emerald-200 truncate"
-          title={`${entry.funcName} — 클릭하여 이동`}
-          onClick={() => onFuncClick(entry.funcNodeId)}
+        <span className="text-emerald-400 font-mono cursor-pointer hover:text-emerald-200 truncate"
+          onClick={() => onNav(entry.funcNodeId)}
         >{entry.funcComment ?? entry.funcName}</span>
-        <span
-          className="text-gray-500 font-mono text-[10px] cursor-pointer hover:text-gray-300 truncate"
-          title="클릭하여 파일로 이동"
-          onClick={() => onFileClick(entry.fileNodeId)}
+        <span className="text-gray-600 font-mono text-[10px] cursor-pointer hover:text-gray-400 truncate"
+          onClick={() => onNav(entry.fileNodeId)}
         >{entry.fileName}</span>
       </div>
     </div>

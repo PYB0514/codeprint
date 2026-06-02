@@ -94,6 +94,22 @@ function calcFileSize(funcCount: number): { w: number; h: number; cols: number }
 export type LabelMode = 'name' | 'comment'
 export type LayoutPreset = 'layer' | 'hub'
 
+export interface FuncCallEntry {
+  callerName: string; callerLabel: string; callerNodeId: string
+  calleeName: string; calleeLabel: string; calleeNodeId: string
+}
+
+export interface ConnEntry {
+  nodeId: string; name: string; callChain: FuncCallEntry[]
+}
+
+export interface FileSidebarData {
+  name: string
+  comment?: string
+  incoming: ConnEntry[]
+  outgoing: ConnEntry[]
+}
+
 // 텍스트가 maxLen을 초과하면 말줄임표 + title tooltip이 있는 span 반환, 아니면 문자열 그대로
 function labelNode(full: string, maxLen: number): React.ReactNode {
   if (full.length <= maxLen) return full
@@ -290,7 +306,8 @@ export function buildLayout(
   rawNodes: RawNode[],
   rawEdges: RawEdge[],
   labelMode: LabelMode = 'name',
-  layoutPreset: LayoutPreset = 'layer'
+  layoutPreset: LayoutPreset = 'layer',
+  onOpenFileSidebar?: (data: FileSidebarData) => void
 ): { nodes: Node[]; edges: Edge[] } {
   // 노드 라벨 반환 — 초과 시 말줄임표 + hover tooltip
   const getLabel = (node: RawNode, maxLen = 999): React.ReactNode => {
@@ -361,9 +378,7 @@ export function buildLayout(
   const fileToGroup = new Map<string, string>()
   fileNodes.forEach((f) => fileToGroup.set(f.id, getGroupKey(f.filePath, commonPrefix)))
 
-  // 파일별 인/아웃 연결 집계 (모달 데이터용)
-  type FuncCallEntry = { callerName: string; callerLabel: string; callerNodeId: string; calleeName: string; calleeLabel: string; calleeNodeId: string }
-  type ConnEntry = { nodeId: string; name: string; callChain: FuncCallEntry[] }
+  // 파일별 인/아웃 연결 집계 (사이드바 데이터용)
   const fileIncoming = new Map<string, ConnEntry[]>()
   const fileOutgoing = new Map<string, ConnEntry[]>()
   fileNodes.forEach((f) => { fileIncoming.set(f.id, []); fileOutgoing.set(f.id, []) })
@@ -457,6 +472,12 @@ export function buildLayout(
           isIso,
           incoming: fileIncoming.get(file.id) ?? [],
           outgoing: fileOutgoing.get(file.id) ?? [],
+          onOpenSidebar: onOpenFileSidebar ? () => onOpenFileSidebar({
+            name: file.name,
+            comment: file.comment,
+            incoming: fileIncoming.get(file.id) ?? [],
+            outgoing: fileOutgoing.get(file.id) ?? [],
+          }) : undefined,
         },
         style: {
           background: '#1e3a5f',
