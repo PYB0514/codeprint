@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: codeprint-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "1234"
+      POSTGRES_DB: codeprint
+    ports:
+      - "5432:5432"
+    volumes:
+      - codeprint_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  codeprint_pgdata:

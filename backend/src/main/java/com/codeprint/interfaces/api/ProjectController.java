@@ -2,9 +2,11 @@
 package com.codeprint.interfaces.api;
 
 import com.codeprint.application.project.ProjectCommandService;
-import com.codeprint.domain.project.Project;
+import com.codeprint.application.project.ProjectQueryService;
+import com.codeprint.domain.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,25 +18,42 @@ import java.util.UUID;
 public class ProjectController {
 
     private final ProjectCommandService projectCommandService;
+    private final ProjectQueryService projectQueryService;
 
     @GetMapping
-    public ResponseEntity<List<Project>> getProjects(@RequestParam UUID userId) {
-        return ResponseEntity.ok(projectCommandService.getProjectsByUser(userId));
+    public ResponseEntity<List<ProjectResponse>> getProjects(@AuthenticationPrincipal User user) {
+        List<ProjectResponse> projects = projectQueryService.getProjectsByUser(user.getId())
+                .stream()
+                .map(ProjectResponse::from)
+                .toList();
+        return ResponseEntity.ok(projects);
+    }
+
+    @GetMapping("/{projectId}")
+    public ResponseEntity<ProjectResponse> getProject(
+            @PathVariable UUID projectId,
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(
+                ProjectResponse.from(projectQueryService.getProject(projectId, user.getId())));
     }
 
     @PostMapping
-    public ResponseEntity<Project> createProject(@RequestBody CreateProjectRequest request) {
-        Project project = projectCommandService.createProject(
-                request.userId(), request.githubRepoUrl(), request.name(), request.description());
-        return ResponseEntity.ok(project);
+    public ResponseEntity<ProjectResponse> createProject(
+            @RequestBody CreateProjectRequest request,
+            @AuthenticationPrincipal User user) {
+        ProjectResponse response = ProjectResponse.from(
+                projectCommandService.createProject(
+                        user.getId(), request.githubRepoUrl(), request.name(), request.description()));
+        return ResponseEntity.status(201).body(response);
     }
 
     @DeleteMapping("/{projectId}")
-    public ResponseEntity<Void> deleteProject(@PathVariable UUID projectId,
-                                              @RequestParam UUID userId) {
-        projectCommandService.deleteProject(projectId, userId);
+    public ResponseEntity<Void> deleteProject(
+            @PathVariable UUID projectId,
+            @AuthenticationPrincipal User user) {
+        projectCommandService.deleteProject(projectId, user.getId());
         return ResponseEntity.noContent().build();
     }
 
-    public record CreateProjectRequest(UUID userId, String githubRepoUrl, String name, String description) {}
+    public record CreateProjectRequest(String githubRepoUrl, String name, String description) {}
 }

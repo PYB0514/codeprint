@@ -10,18 +10,25 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class ProjectCommandService {
 
+    private static final Pattern GITHUB_URL_PATTERN =
+            Pattern.compile("^https://github\\.com/[\\w.-]+/[\\w.-]+/?$");
+
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
 
     public Project createProject(UUID userId, String githubRepoUrl, String name, String description) {
+        if (!GITHUB_URL_PATTERN.matcher(githubRepoUrl).matches()) {
+            throw new IllegalArgumentException("Invalid GitHub repository URL: " + githubRepoUrl);
+        }
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
 
@@ -42,10 +49,5 @@ public class ProjectCommandService {
             throw new IllegalStateException("Not authorized to delete this project");
         }
         projectRepository.deleteById(projectId);
-    }
-
-    @Transactional(readOnly = true)
-    public List<Project> getProjectsByUser(UUID userId) {
-        return projectRepository.findByUserId(userId);
     }
 }
