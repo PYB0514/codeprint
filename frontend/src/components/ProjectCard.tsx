@@ -39,19 +39,28 @@ export default function ProjectCard({ project, onDelete, onAnalysisDone }: Props
       .catch(() => setHasGraph(false))
   }, [project.id])
 
-  // 분석 완료 시 게이지 애니메이션 후 상태 초기화
+  // 분석 완료 시 게이지 애니메이션 후 상태 초기화 및 알림 발송
   const handleDone = useCallback(() => {
     setHasGraph(true)
     onAnalysisDone?.()
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('Codeprint', {
+        body: `"${project.name}" 분석이 완료됐습니다.`,
+        icon: '/favicon.ico',
+      })
+    }
     setTimeout(() => setAnalysisId(null), 800)
-  }, [onAnalysisDone])
+  }, [onAnalysisDone, project.name])
 
   const { progress, status } = useAnalysisProgress(analysisId, handleDone)
 
-  // 분석 시작 API를 호출하고 analysisId를 저장
+  // 분석 시작 API를 호출하고 analysisId를 저장 (알림 권한 사전 요청)
   const handleStartAnalysis = async () => {
     setStarting(true)
     setAnalysisError(null)
+    if ('Notification' in window && Notification.permission === 'default') {
+      await Notification.requestPermission()
+    }
     try {
       const res = await axios.post(
         '/api/analyses',
