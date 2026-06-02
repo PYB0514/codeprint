@@ -37,6 +37,8 @@
 | 그래프 이미지 다운로드 | ✅ | 전체 그래프 원본 크기 PNG (html-to-image) |
 | AI 컨텍스트 트리 다운로드 | ✅ | 파일명/함수명 — 한국어 주석 형태 .txt |
 | DECISIONS.md | ✅ | 기술 결정 및 trial-and-error 기록 |
+| 노드 드래그 위치 저장 | ✅ | PUT /api/graphs/{graphId}/nodes/{nodeId}/position |
+| 전체 함수 한글 주석 완전화 | ✅ | 멀티라인 파라미터 버그 수정 포함 |
 
 ### 인프라
 
@@ -69,23 +71,23 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재 브랜치: feat/export-image
-# 1. feat/export-image → main PR 머지
-# 2. 백엔드 재시작 + main 브랜치로 재분석 → 한글 주석 최종 확인
-# 3. 노드 드래그 위치 저장 구현 (PUT /api/graphs/{graphId}/nodes/{nodeId}/position)
-# 4. feat/share 브랜치 시작
+# 현재 브랜치: main (feat/node-position 머지 완료)
+# 1. 백엔드 재시작 + main 브랜치로 재분석 → 한글 주석 최종 확인
+# 2. feat/share 브랜치 시작
+#    - 프로젝트 공개/비공개 토글 (Project.makePublic / makePrivate)
+#    - 공유 URL 생성 및 공개 그래프 조회 API
+#    - 커뮤니티 게시판 (Post, Comment)
 ```
 
 ---
 
 ## 다음 작업 순서
 
-### 1단계: `feat/export-image` (현재 브랜치)
-- 이미지 다운로드, AI 컨텍스트 트리, 주석 소급 완료
-- PR 머지 대기
-
-### 2단계: 그래프 인터랙션
+### ✅ 완료: `feat/export-image` → main 머지
+### ✅ 완료: `feat/node-position` → main 머지
 - 노드 드래그 위치 저장 (`PUT /api/graphs/{graphId}/nodes/{nodeId}/position`)
+- 멀티라인 파라미터 메서드 한글 주석 미추출 버그 수정 (extractFunctionComments 순방향 스캔으로 교체)
+- 전체 함수 한글 주석 완전화
 
 ### 3단계: `feat/share`
 - 프로젝트 공개/비공개 토글
