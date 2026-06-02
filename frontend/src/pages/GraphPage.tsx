@@ -31,6 +31,7 @@ function authHeaders() {
   return { Authorization: `Bearer ${token}` }
 }
 
+// 그래프 페이지 내부 컴포넌트 (ReactFlow 훅 사용)
 function GraphPageInner() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()

@@ -48,6 +48,7 @@ export default function ProjectCard({ project, onDelete }: Props) {
 
   // 피커 외부 클릭 시 닫기
   useEffect(() => {
+    // 브랜치 피커 외부 클릭 감지 핸들러
     const handleClickOutside = (e: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
         setShowBranchPicker(false)
