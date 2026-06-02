@@ -144,6 +144,26 @@ function GraphPageInner() {
     ).catch(() => {})
   }, [graphId])
 
+  // 엣지 마우스 진입 — 두껍고 밝게 강조
+  const handleEdgeMouseEnter: EdgeMouseHandler<Edge> = useCallback((_evt, edge) => {
+    const broken = (edge.data as { broken?: boolean })?.broken
+    setEdges((es) => es.map((e) =>
+      e.id === edge.id
+        ? { ...e, style: { ...e.style, strokeWidth: broken ? 3.5 : 3, stroke: broken ? '#fca5a5' : '#a1a1aa' } }
+        : e
+    ))
+  }, [setEdges])
+
+  // 엣지 마우스 이탈 — 원래 스타일 복원
+  const handleEdgeMouseLeave: EdgeMouseHandler<Edge> = useCallback((_evt, edge) => {
+    const broken = (edge.data as { broken?: boolean })?.broken
+    setEdges((es) => es.map((e) =>
+      e.id === edge.id
+        ? { ...e, style: { ...e.style, strokeWidth: broken ? 2 : 1.5, stroke: broken ? '#ef4444' : '#4b5563' } }
+        : e
+    ))
+  }, [setEdges])
+
   // 엣지 클릭 시 상세 정보 모달을 표시
   const handleEdgeClick: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
     const data = edge.data as { edgeIdentifier?: string; type?: string } | undefined
@@ -255,6 +275,8 @@ function GraphPageInner() {
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onEdgeMouseEnter={handleEdgeMouseEnter}
+        onEdgeMouseLeave={handleEdgeMouseLeave}
         onEdgeClick={handleEdgeClick}
         onNodeDragStop={handleNodeDragStop}
         fitView

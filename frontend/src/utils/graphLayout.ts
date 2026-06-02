@@ -1,7 +1,21 @@
-// 그래프 노드/엣지 레이아웃 계산 — dagre 기반 방향 그래프 + DDD 폴더 그룹핑
+// 그래프 노드/엣지 레이아웃 계산 — DDD 레이어 컬럼 배치 + dagre 내부 레이아웃
 import React from 'react'
-import dagre from '@dagrejs/dagre'
+
 import type { Node, Edge } from '@xyflow/react'
+
+// DDD 레이어 → 컬럼 순서 (왼쪽=외부진입, 오른쪽=데이터)
+// 백엔드: infrastructure(0) → domain(1) → application(2) → interfaces(3)
+// 프론트: pages(4) → components/hooks(5) → utils(6)
+const LAYER_COLUMN: Record<string, number> = {
+  infrastructure: 0,
+  domain:         1,
+  application:    2,
+  interfaces:     3,
+  pages:          4,
+  components:     5,
+  hooks:          5,
+  utils:          6,
+}
 
 export interface RawNode {
   id: string
@@ -31,7 +45,8 @@ const FILE_PAD_BOTTOM = 10
 const FILE_GAP = 20
 const GROUP_PAD = 24
 const GROUP_HEADER = 36  // 커스텀 헤더 높이에 맞춤
-const GROUP_GAP = 48
+const _GROUP_GAP = 48  // 미사용 — 컬럼 레이아웃으로 교체됨
+void _GROUP_GAP
 
 // 공통 prefix 제거 후 DDD 의미 있는 그룹 키 추출
 function getGroupKey(filePath: string, commonPrefix: string): string {
@@ -151,41 +166,59 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
     groupLayouts.set(key, { files: placed, w: gw, h: gh })
   })
 
-  // 그룹들을 dagre로 배치
-  const gg = new dagre.graphlib.Graph()
-  gg.setDefaultEdgeLabel(() => ({}))
-  gg.setGraph({ rankdir: 'LR', ranksep: GROUP_GAP, nodesep: GROUP_GAP })
+  // DDD 레이어 컬럼 기반 그룹 배치
+  // 같은 레이어(domain/user, domain/project 등)는 같은 컬럼에 세로로 쌓임
+  const COL_GAP = 64   // 컬럼 간 가로 간격
+  const ROW_GAP = 40   // 같은 컬럼 내 세로 간격
 
-  groupLayouts.forEach((layout, key) => {
-    gg.setNode(key, { width: layout.w, height: layout.h })
+  // 그룹을 컬럼별로 분류
+  const colGroups = new Map<number, string[]>()
+  groups.forEach((_, key) => {
+    const slashIdx = key.indexOf('/')
+    const layer = slashIdx >= 0 ? key.slice(0, slashIdx) : key
+    const col = LAYER_COLUMN[layer] ?? 7
+    if (!colGroups.has(col)) colGroups.set(col, [])
+    colGroups.get(col)!.push(key)
   })
 
-  // 그룹 간 연결 (파일 간 import 엣지 기반)
+  // 컬럼별 최대 너비 계산 → 각 컬럼의 x 시작 위치 산출
+  const sortedCols = Array.from(colGroups.keys()).sort((a, b) => a - b)
+  const colMaxW = new Map<number, number>()
+  colGroups.forEach((keys, col) => {
+    colMaxW.set(col, Math.max(...keys.map((k) => groupLayouts.get(k)!.w)))
+  })
+
+  const colStartX = new Map<number, number>()
+  let xCursor = 0
+  sortedCols.forEach((col) => {
+    colStartX.set(col, xCursor)
+    xCursor += (colMaxW.get(col) ?? 0) + COL_GAP
+  })
+
+  // 그룹별 최종 위치
+  const groupPositions = new Map<string, { x: number; y: number }>()
+  colGroups.forEach((keys, col) => {
+    let y = 0
+    const x = colStartX.get(col) ?? 0
+    keys.forEach((key) => {
+      groupPositions.set(key, { x, y })
+      y += groupLayouts.get(key)!.h + ROW_GAP
+    })
+  })
+
   const fileIdSet = new Set(fileNodes.map((f) => f.id))
   const fileToGroup = new Map<string, string>()
   fileNodes.forEach((f) => fileToGroup.set(f.id, getGroupKey(f.filePath, commonPrefix)))
-
-  rawEdges
-    .filter((e) => fileIdSet.has(e.source) && fileIdSet.has(e.target))
-    .forEach((e) => {
-      const sg = fileToGroup.get(e.source)
-      const tg = fileToGroup.get(e.target)
-      if (sg && tg && sg !== tg) {
-        try { gg.setEdge(sg, tg) } catch {}
-      }
-    })
-
-  dagre.layout(gg)
 
   const result: Node[] = []
 
   // 그룹 노드 + 파일 노드 + 함수 노드 생성
   groups.forEach((groupFiles, key) => {
     const layout = groupLayouts.get(key)!
-    const gPos = gg.node(key)
-    if (!gPos) return
-    const gx = gPos.x - layout.w / 2
-    const gy = gPos.y - layout.h / 2
+    const pos = groupPositions.get(key)
+    if (!pos) return
+    const gx = pos.x
+    const gy = pos.y
 
     // 그룹 키에서 layer / sub 분리 (예: "domain/user" → layer="domain", sub="user")
     const slashIdx = key.indexOf('/')
@@ -271,7 +304,7 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
         id: e.id,
         source: e.source,
         target: e.target,
-        data: { edgeIdentifier: e.edgeIdentifier, type: e.type },
+        data: { edgeIdentifier: e.edgeIdentifier, type: e.type, broken },
         style: { stroke: broken ? '#ef4444' : '#4b5563', strokeWidth: broken ? 2 : 1.5 },
         zIndex: 0,
         interactionWidth: 0,  // 보이지 않는 넓은 hit area 제거 — 시각적 획 위에서만 클릭 가능
