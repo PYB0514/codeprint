@@ -1,5 +1,5 @@
 // 프로젝트 카드 — 분석 시작/그래프 보기 버튼 및 진행률 표시 포함
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAnalysisProgress } from '../hooks/useAnalysisProgress'
@@ -31,12 +31,32 @@ export default function ProjectCard({ project, onDelete }: Props) {
   const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
 
+  // 브랜치 선택 상태
+  const [branches, setBranches] = useState<string[]>([])
+  const [loadingBranches, setLoadingBranches] = useState(false)
+  const [showBranchPicker, setShowBranchPicker] = useState(false)
+  const [selectedBranch, setSelectedBranch] = useState<string>('')
+  const pickerRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     axios
       .get(`/api/projects/${project.id}/graph`, { headers: authHeaders() })
       .then(() => setHasGraph(true))
       .catch(() => setHasGraph(false))
   }, [project.id])
+
+  // 피커 외부 클릭 시 닫기
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowBranchPicker(false)
+      }
+    }
+    if (showBranchPicker) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showBranchPicker])
 
   // 분석 완료 시 게이지 애니메이션 후 상태 초기화
   const handleDone = useCallback(() => {
@@ -46,14 +66,33 @@ export default function ProjectCard({ project, onDelete }: Props) {
 
   const { progress, status } = useAnalysisProgress(analysisId, handleDone)
 
-  // 분석 시작 API를 호출하고 analysisId를 저장
+  // 분석 버튼 클릭 시 브랜치 목록 로딩 후 피커 표시
+  const handleAnalysisButtonClick = async () => {
+    setAnalysisError(null)
+    setShowBranchPicker(true)
+    setLoadingBranches(true)
+    try {
+      const res = await axios.get(`/api/projects/${project.id}/branches`, { headers: authHeaders() })
+      const list: string[] = res.data
+      setBranches(list)
+      setSelectedBranch(list[0] ?? '')
+    } catch {
+      setAnalysisError('브랜치 목록을 불러오지 못했습니다.')
+      setShowBranchPicker(false)
+    } finally {
+      setLoadingBranches(false)
+    }
+  }
+
+  // 선택된 브랜치로 분석 시작
   const handleStartAnalysis = async () => {
+    setShowBranchPicker(false)
     setStarting(true)
     setAnalysisError(null)
     try {
       const res = await axios.post(
         '/api/analyses',
-        { projectId: project.id },
+        { projectId: project.id, branch: selectedBranch || null },
         { headers: authHeaders() }
       )
       setAnalysisId(res.data.analysisId)
@@ -94,7 +133,7 @@ export default function ProjectCard({ project, onDelete }: Props) {
       {isAnalyzing && (
         <div className="flex flex-col gap-1">
           <div className="flex justify-between text-xs text-gray-400">
-            <span>분석 중...</span>
+            <span>분석 중{selectedBranch ? ` (${selectedBranch})` : ''}...</span>
             <span>{progress}%</span>
           </div>
           <div className="w-full bg-gray-700 rounded-full h-1.5">
@@ -103,6 +142,41 @@ export default function ProjectCard({ project, onDelete }: Props) {
               style={{ width: `${progress}%` }}
             />
           </div>
+        </div>
+      )}
+
+      {/* 브랜치 선택 피커 */}
+      {showBranchPicker && (
+        <div ref={pickerRef} className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
+          {loadingBranches ? (
+            <p className="text-xs text-gray-400">브랜치 로딩 중...</p>
+          ) : (
+            <>
+              <select
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="w-full bg-gray-700 text-white text-xs rounded px-2 py-1.5 border border-gray-600 focus:outline-none"
+              >
+                {branches.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowBranchPicker(false)}
+                  className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleStartAnalysis}
+                  className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200"
+                >
+                  분석 시작
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -124,8 +198,8 @@ export default function ProjectCard({ project, onDelete }: Props) {
         {hasGraph && !isAnalyzing ? (
           <div className="flex gap-2">
             <button
-              onClick={handleStartAnalysis}
-              disabled={starting}
+              onClick={handleAnalysisButtonClick}
+              disabled={starting || showBranchPicker}
               className="text-xs text-gray-500 hover:text-gray-300 disabled:opacity-40"
             >
               재분석
@@ -139,8 +213,8 @@ export default function ProjectCard({ project, onDelete }: Props) {
           </div>
         ) : (
           <button
-            onClick={handleStartAnalysis}
-            disabled={isAnalyzing || starting}
+            onClick={handleAnalysisButtonClick}
+            disabled={isAnalyzing || starting || showBranchPicker}
             className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isAnalyzing ? '분석 중' : starting ? '시작 중...' : '분석 시작'}

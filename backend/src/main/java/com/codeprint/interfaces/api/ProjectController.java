@@ -4,6 +4,7 @@ package com.codeprint.interfaces.api;
 import com.codeprint.application.project.ProjectCommandService;
 import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.user.User;
+import com.codeprint.infrastructure.github.GitHubApiClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,6 +20,7 @@ public class ProjectController {
 
     private final ProjectCommandService projectCommandService;
     private final ProjectQueryService projectQueryService;
+    private final GitHubApiClient gitHubApiClient;
 
     // 현재 사용자의 프로젝트 목록 조회
     @GetMapping
@@ -48,6 +50,15 @@ public class ProjectController {
                 projectCommandService.createProject(
                         user.getId(), request.githubRepoUrl(), request.name(), request.description()));
         return ResponseEntity.status(201).body(response);
+    }
+
+    // 프로젝트 레포의 GitHub 브랜치 목록 조회
+    @GetMapping("/{projectId}/branches")
+    public ResponseEntity<List<String>> getBranches(
+            @PathVariable UUID projectId,
+            @AuthenticationPrincipal User user) {
+        var project = projectQueryService.getProject(projectId, user.getId());
+        return ResponseEntity.ok(gitHubApiClient.fetchBranches(project.getGithubRepoUrl(), user.getGithubAccessToken()));
     }
 
     // 프로젝트 삭제

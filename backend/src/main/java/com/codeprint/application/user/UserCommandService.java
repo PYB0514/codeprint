@@ -23,6 +23,14 @@ public class UserCommandService {
         return userDomainService.getOrCreate(githubId, email, username);
     }
 
+    // GitHub OAuth access token을 저장 (로그인 시마다 갱신)
+    public void saveGithubAccessToken(UUID userId, String accessToken) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+        user.updateGithubAccessToken(accessToken);
+        userRepository.save(user);
+    }
+
     // 사용자 플랜을 PRO로 업그레이드
     public void upgradeToPro(UUID userId) {
         User user = userRepository.findById(userId)

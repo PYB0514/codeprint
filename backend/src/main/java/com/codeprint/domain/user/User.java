@@ -38,6 +38,9 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "github_access_token", length = 255)
+    private String githubAccessToken;
+
     // GitHub 사용자 정보로 새 User 인스턴스 생성
     public static User create(Long githubId, String email, String username) {
         User user = new User();
@@ -49,6 +52,12 @@ public class User {
         user.createdAt = Instant.now();
         user.updatedAt = Instant.now();
         return user;
+    }
+
+    // GitHub OAuth access token 갱신
+    public void updateGithubAccessToken(String token) {
+        this.githubAccessToken = token;
+        this.updatedAt = Instant.now();
     }
 
     // 사용자 플랜을 PRO로 업그레이드

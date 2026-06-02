@@ -12,13 +12,20 @@ import java.util.stream.Stream;
 @Component
 public class RepoCloner {
 
-    // GitHub 레포를 임시 디렉토리에 shallow clone
-    public Path clone(String githubRepoUrl) throws IOException, InterruptedException {
+    // GitHub 레포를 지정 브랜치로 shallow clone (branch null이면 기본 브랜치)
+    public Path clone(String githubRepoUrl, String branch) throws IOException, InterruptedException {
         Path tempDir = Files.createTempDirectory("codeprint-analysis-");
 
-        ProcessBuilder pb = new ProcessBuilder(
-                "git", "clone", "--depth=1", "--quiet", githubRepoUrl, tempDir.toString()
-        );
+        java.util.List<String> cmd = new java.util.ArrayList<>(java.util.Arrays.asList(
+                "git", "clone", "--depth=1", "--quiet"
+        ));
+        if (branch != null && !branch.isBlank()) {
+            cmd.addAll(java.util.Arrays.asList("--branch", branch));
+        }
+        cmd.add(githubRepoUrl);
+        cmd.add(tempDir.toString());
+
+        ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
         Process process = pb.start();
 

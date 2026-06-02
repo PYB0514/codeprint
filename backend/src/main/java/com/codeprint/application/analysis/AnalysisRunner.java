@@ -30,7 +30,7 @@ public class AnalysisRunner {
     // 레포 클론 → 파일 수집 → 정적 분석 → 그래프 빌드를 비동기로 실행
     @Async
     @Transactional
-    public void run(UUID analysisId, UUID projectId, String githubRepoUrl) {
+    public void run(UUID analysisId, UUID projectId, String githubRepoUrl, String branch) {
         Path repoDir = null;
         try {
             // 새 트랜잭션에서 조회 — outer 트랜잭션 커밋 후 확실히 존재
@@ -43,7 +43,7 @@ public class AnalysisRunner {
             log.info("분석 시작: analysisId={}, repo={}", analysisId, githubRepoUrl);
 
             progressHandler.sendProgress(analysisId, 10, "RUNNING");
-            repoDir = repoCloner.clone(githubRepoUrl);
+            repoDir = repoCloner.clone(githubRepoUrl, branch);
             log.info("클론 완료: {}", repoDir);
             progressHandler.sendProgress(analysisId, 30, "RUNNING");
 
