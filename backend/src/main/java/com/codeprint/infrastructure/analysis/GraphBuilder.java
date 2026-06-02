@@ -120,6 +120,34 @@ public class GraphBuilder {
             }
         }
 
+        // 파일 간 INSTANTIATION 엣지 생성 — new ClassName() 패턴으로 인스턴스화된 클래스의 파일과 연결
+        // 클래스명(확장자 제거 파일명) → 파일 노드 ID 인덱스
+        Map<String, UUID> classNameToFileId = new HashMap<>();
+        for (Map.Entry<String, UUID> entry : fileNodeIds.entrySet()) {
+            String fileName = extractFileName(entry.getKey());
+            String className = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
+            classNameToFileId.put(className, entry.getValue());
+        }
+
+        Set<String> usedInstEdgeIds = new HashSet<>();
+        for (ParsedFile pf : parsedFiles) {
+            UUID sourceFileId = fileNodeIds.get(pf.filePath());
+            if (sourceFileId == null) continue;
+
+            for (String className : pf.instantiatedClasses()) {
+                UUID targetFileId = classNameToFileId.get(className);
+                if (targetFileId == null || targetFileId.equals(sourceFileId)) continue;
+
+                String edgeIdentifier = extractFileName(pf.filePath()) + "-new-" + className;
+                if (usedInstEdgeIds.contains(edgeIdentifier)) continue;
+                usedInstEdgeIds.add(edgeIdentifier);
+
+                Edge instEdge = Edge.create(graphId, edgeIdentifier, EdgeType.INSTANTIATION,
+                        sourceFileId, targetFileId);
+                graphRepository.saveEdge(instEdge);
+            }
+        }
+
         return graph;
     }
 

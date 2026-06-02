@@ -84,6 +84,7 @@ function GraphPageInner() {
   const [showIsoGroups, setShowIsoGroups] = useState(true)
   const [showEdges, setShowEdges] = useState(true)
   const [showCallEdges, setShowCallEdges] = useState(true)
+  const [showInstEdges, setShowInstEdges] = useState(true)
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -141,6 +142,19 @@ function GraphPageInner() {
       const next = !prev
       setEdges((eds) => eds.map((e) =>
         (e.data as { type?: string })?.type === 'FUNCTION_CALL'
+          ? { ...e, hidden: !next }
+          : e
+      ))
+      return next
+    })
+  }, [setEdges])
+
+  // INSTANTIATION 엣지 표시/숨김 토글
+  const toggleInstEdges = useCallback(() => {
+    setShowInstEdges((prev) => {
+      const next = !prev
+      setEdges((eds) => eds.map((e) =>
+        (e.data as { type?: string })?.type === 'INSTANTIATION'
           ? { ...e, hidden: !next }
           : e
       ))
@@ -236,9 +250,11 @@ function GraphPageInner() {
     const data = edge.data as { broken?: boolean; type?: string } | undefined
     const broken = data?.broken
     const isCall = data?.type === 'FUNCTION_CALL'
+    const isInst = data?.type === 'INSTANTIATION'
+    const hoverColor = broken ? '#fca5a5' : isCall ? '#fcd34d' : isInst ? '#d8b4fe' : '#a1a1aa'
     setEdges((es) => es.map((e) =>
       e.id === edge.id
-        ? { ...e, style: { ...e.style, strokeWidth: isCall ? 2.5 : broken ? 3.5 : 3, stroke: broken ? '#fca5a5' : isCall ? '#fcd34d' : '#a1a1aa' } }
+        ? { ...e, style: { ...e.style, strokeWidth: (isCall || isInst) ? 2.5 : broken ? 3.5 : 3, stroke: hoverColor } }
         : e
     ))
   }, [setEdges])
@@ -248,9 +264,11 @@ function GraphPageInner() {
     const data = edge.data as { broken?: boolean; type?: string } | undefined
     const broken = data?.broken
     const isCall = data?.type === 'FUNCTION_CALL'
+    const isInst = data?.type === 'INSTANTIATION'
+    const baseColor = broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : '#4b5563'
     setEdges((es) => es.map((e) =>
       e.id === edge.id
-        ? { ...e, style: { ...e.style, strokeWidth: isCall ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : '#4b5563' } }
+        ? { ...e, style: { ...e.style, strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: baseColor } }
         : e
     ))
   }, [setEdges])
@@ -408,6 +426,13 @@ function GraphPageInner() {
           <span className={showCallEdges ? 'text-amber-400' : 'text-gray-500'}>콜 체인</span>
         </button>
         <button
+          onClick={toggleInstEdges}
+          className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-purple-800/50"
+          title="인스턴스화 관계 표시/숨김"
+        >
+          <span className={showInstEdges ? 'text-purple-400' : 'text-gray-500'}>생성</span>
+        </button>
+        <button
           onClick={() => downloadTreeText(rawNodes)}
           disabled={rawNodes.length === 0}
           className="bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700 disabled:opacity-40"
@@ -460,6 +485,12 @@ function GraphPageInner() {
             <line x1="0" y1="2" x2="12" y2="2" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4 3" />
           </svg>
           <span className="text-amber-400">FUNCTION_CALL</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <svg width="12" height="4" className="flex-shrink-0">
+            <line x1="0" y1="2" x2="12" y2="2" stroke="#a855f7" strokeWidth="1.5" strokeDasharray="3 4" />
+          </svg>
+          <span className="text-purple-400">INSTANTIATION</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-0.5 flex-shrink-0" style={{ background: '#ef4444' }} />

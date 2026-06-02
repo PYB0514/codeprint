@@ -24,8 +24,9 @@ public class StaticCodeAnalyzer {
         String fileComment = extractFileComment(content, language);
         Map<String, String> functionComments = extractFunctionComments(content, language);
         Map<String, List<String>> functionCalls = extractFunctionCalls(content, language, functions);
+        List<String> instantiatedClasses = extractInstantiatedClasses(content);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses);
     }
 
     // 파일 상단 첫 번째 주석 추출
@@ -209,6 +210,27 @@ public class StaticCodeAnalyzer {
         }
         return result;
     }
+
+    // 파일 전체에서 new ClassName() 패턴으로 인스턴스화되는 클래스명 목록 추출
+    private List<String> extractInstantiatedClasses(String content) {
+        Pattern pattern = Pattern.compile("\\bnew\\s+([A-Z][\\w]*)\\s*[<(]");
+        Matcher m = pattern.matcher(content);
+        Set<String> result = new LinkedHashSet<>();
+        while (m.find()) {
+            String name = m.group(1);
+            // 제네릭 컨테이너·예외·빌더 등 제외
+            if (!INSTANTIATION_SKIP.contains(name)) result.add(name);
+        }
+        return new ArrayList<>(result);
+    }
+
+    private static final Set<String> INSTANTIATION_SKIP = Set.of(
+        "ArrayList", "HashMap", "HashSet", "LinkedHashMap", "LinkedHashSet", "LinkedList",
+        "TreeMap", "TreeSet", "StringBuilder", "StringBuffer",
+        "Object", "Exception", "RuntimeException", "IllegalArgumentException",
+        "IllegalStateException", "UnsupportedOperationException", "NullPointerException",
+        "Thread", "Runnable", "Random", "Scanner", "File", "Path"
+    );
 
     // 식별자가 언어 예약어인지 확인
     private boolean isKeyword(String name) {

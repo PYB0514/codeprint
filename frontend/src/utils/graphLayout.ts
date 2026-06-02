@@ -565,7 +565,22 @@ export function buildLayout(
       zIndex: 1,
     } as Edge))
 
-  return { nodes: result, edges: [...importEdges, ...callEdges] }
+  // INSTANTIATION 엣지 — 파일 간 new ClassName() 관계, 보라색 점선
+  const instEdges: Edge[] = rawEdges
+    .filter((e) => e.type === 'INSTANTIATION' && fileIdSet.has(e.source) && fileIdSet.has(e.target))
+    .filter((e) => e.source !== e.target)
+    .map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      data: { edgeIdentifier: e.edgeIdentifier, type: e.type },
+      style: { stroke: '#a855f7', strokeWidth: 1.2, strokeDasharray: '3 4' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#a855f7', width: 10, height: 10 },
+      zIndex: 0,
+      interactionWidth: 0,
+    } as Edge))
+
+  return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges] }
 }
 
 // AI 컨텍스트용 트리 다운로드 — "파일명 — 주석" 형태로 이름과 역할을 함께 표시
