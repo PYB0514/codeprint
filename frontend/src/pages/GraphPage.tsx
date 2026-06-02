@@ -33,6 +33,24 @@ interface CallEntry {
   calleeNodeId: string
 }
 
+interface FuncCallChainEntry {
+  funcName: string
+  funcComment: string | null
+  funcNodeId: string
+  fileName: string
+  fileNodeId: string
+}
+
+interface FuncModalInfo {
+  funcName: string
+  funcComment: string | null
+  funcNodeId: string
+  parentFileName: string
+  parentFileNodeId: string
+  callers: FuncCallChainEntry[]  // 이 함수를 호출하는 함수들
+  callees: FuncCallChainEntry[]  // 이 함수가 호출하는 함수들
+}
+
 interface EdgeModalInfo {
   edgeIdentifier: string
   type: string
@@ -60,6 +78,7 @@ function GraphPageInner() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [edgeModal, setEdgeModal] = useState<EdgeModalInfo | null>(null)
+  const [funcModal, setFuncModal] = useState<FuncModalInfo | null>(null)
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
   const [showIsoGroups, setShowIsoGroups] = useState(true)
@@ -257,6 +276,49 @@ function GraphPageInner() {
     })
   }, [rawNodes, rawEdgesCache])
 
+  // 함수 노드 클릭 시 해당 함수의 콜 체인 모달 표시
+  const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    if (node.type === 'fileNode' || node.type === 'groupNode' || node.type === 'sectionNode') return
+    // FUNCTION 노드만 처리
+    const rawFunc = rawNodes.find((n) => n.id === node.id && n.type === 'FUNCTION')
+    if (!rawFunc) return
+
+    const parentFile = rawNodes.find((n) => n.type === 'FILE' && n.filePath === rawFunc.filePath)
+
+    const toEntry = (funcNode: RawNode): FuncCallChainEntry => {
+      const file = rawNodes.find((n) => n.type === 'FILE' && n.filePath === funcNode.filePath)
+      return {
+        funcName: funcNode.name,
+        funcComment: funcNode.comment ?? null,
+        funcNodeId: funcNode.id,
+        fileName: file?.name ?? funcNode.filePath,
+        fileNodeId: file?.id ?? '',
+      }
+    }
+
+    const callers: FuncCallChainEntry[] = rawEdgesCache
+      .filter((e) => e.type === 'FUNCTION_CALL' && e.target === rawFunc.id)
+      .map((e) => rawNodes.find((n) => n.id === e.source && n.type === 'FUNCTION'))
+      .filter((n): n is RawNode => !!n && n.filePath !== rawFunc.filePath)
+      .map(toEntry)
+
+    const callees: FuncCallChainEntry[] = rawEdgesCache
+      .filter((e) => e.type === 'FUNCTION_CALL' && e.source === rawFunc.id)
+      .map((e) => rawNodes.find((n) => n.id === e.target && n.type === 'FUNCTION'))
+      .filter((n): n is RawNode => !!n && n.filePath !== rawFunc.filePath)
+      .map(toEntry)
+
+    setFuncModal({
+      funcName: rawFunc.name,
+      funcComment: rawFunc.comment ?? null,
+      funcNodeId: rawFunc.id,
+      parentFileName: parentFile?.name ?? rawFunc.filePath,
+      parentFileNodeId: parentFile?.id ?? '',
+      callers,
+      callees,
+    })
+  }, [rawNodes, rawEdgesCache])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-400">
@@ -383,6 +445,7 @@ function GraphPageInner() {
         onEdgeMouseEnter={handleEdgeMouseEnter}
         onEdgeMouseLeave={handleEdgeMouseLeave}
         onEdgeClick={handleEdgeClick}
+        onNodeClick={handleNodeClick}
         onNodeDragStop={handleNodeDragStop}
         fitView
         fitViewOptions={{ padding: 0.1 }}
@@ -474,6 +537,97 @@ function GraphPageInner() {
           </div>
         </div>
       )}
+
+      {/* 함수 노드 클릭 모달 */}
+      {funcModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setFuncModal(null)}
+        >
+          <div
+            className="bg-gray-900 rounded-2xl p-5 w-96 shadow-xl max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 헤더 */}
+            <div className="flex items-start justify-between mb-4 flex-shrink-0">
+              <div>
+                <p className="font-mono font-semibold text-sm text-white">{funcModal.funcName}</p>
+                {funcModal.funcComment && (
+                  <p className="text-gray-500 text-xs mt-0.5">{funcModal.funcComment}</p>
+                )}
+                <p
+                  className="text-blue-400 text-xs font-mono mt-1 cursor-pointer hover:text-blue-300 underline decoration-gray-700"
+                  onClick={() => {
+                    setFuncModal(null)
+                    setTimeout(() => fitView({ nodes: [{ id: funcModal.parentFileNodeId }], duration: 500, padding: 0.3 }), 50)
+                  }}
+                >{funcModal.parentFileName}</p>
+              </div>
+              <button onClick={() => setFuncModal(null)} className="text-gray-500 hover:text-white text-xs ml-4">✕</button>
+            </div>
+
+            <div className="flex flex-col gap-4 overflow-y-auto min-h-0">
+              {/* 이 함수를 호출하는 함수들 */}
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">
+                  호출하는 함수 {funcModal.callers.length > 0 && `(${funcModal.callers.length})`}
+                </p>
+                {funcModal.callers.length === 0
+                  ? <p className="text-gray-700 text-xs">없음</p>
+                  : funcModal.callers.map((c, i) => (
+                    <FuncChainRow key={i} entry={c} direction="caller"
+                      onFuncClick={(id) => { setFuncModal(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                      onFileClick={(id) => { setFuncModal(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                    />
+                  ))
+                }
+              </div>
+
+              {/* 이 함수가 호출하는 함수들 */}
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">
+                  호출받는 함수 {funcModal.callees.length > 0 && `(${funcModal.callees.length})`}
+                </p>
+                {funcModal.callees.length === 0
+                  ? <p className="text-gray-700 text-xs">없음</p>
+                  : funcModal.callees.map((c, i) => (
+                    <FuncChainRow key={i} entry={c} direction="callee"
+                      onFuncClick={(id) => { setFuncModal(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                      onFileClick={(id) => { setFuncModal(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                    />
+                  ))
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 함수 콜 체인 한 줄 컴포넌트
+function FuncChainRow({ entry, direction, onFuncClick, onFileClick }: {
+  entry: FuncCallChainEntry
+  direction: 'caller' | 'callee'
+  onFuncClick: (nodeId: string) => void
+  onFileClick: (nodeId: string) => void
+}) {
+  return (
+    <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-2 mb-1.5 text-xs">
+      <span className="text-amber-500 flex-shrink-0">{direction === 'caller' ? '←' : '→'}</span>
+      <div className="flex flex-col min-w-0 flex-1">
+        <span
+          className="text-emerald-400 font-mono cursor-pointer hover:text-emerald-200 truncate"
+          title={`${entry.funcName} — 클릭하여 이동`}
+          onClick={() => onFuncClick(entry.funcNodeId)}
+        >{entry.funcComment ?? entry.funcName}</span>
+        <span
+          className="text-gray-500 font-mono text-[10px] cursor-pointer hover:text-gray-300 truncate"
+          title="클릭하여 파일로 이동"
+          onClick={() => onFileClick(entry.fileNodeId)}
+        >{entry.fileName}</span>
+      </div>
     </div>
   )
 }
