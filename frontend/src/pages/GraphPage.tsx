@@ -691,6 +691,8 @@ function GraphPageInner() {
                   </div>
                 )}
 
+                {sidebar && (<>
+
                 {/* ── FUNCTION_CALL 엣지 클릭 ── */}
                 {sidebar.kind === 'func-call' && (
                   <div className="flex flex-col gap-3">
@@ -842,6 +844,8 @@ function GraphPageInner() {
                     </SidebarSection>
                   </>
                 )}
+
+                </>)}
 
               </div>
           </>
