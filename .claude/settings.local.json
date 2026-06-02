@@ -18,7 +18,17 @@
       "Bash(docker exec *)",
       "PowerShell(docker exec codeprint-db psql -U postgres -d codeprint -c \"SELECT name, type, metadata FROM nodes WHERE metadata IS NOT NULL LIMIT 10;\")",
       "Bash(gh pr *)",
-      "PowerShell(git stash; $gh = \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\"; & $gh pr merge 3 --squash --delete-branch 2>&1)"
+      "PowerShell(git stash; $gh = \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\"; & $gh pr merge 3 --squash --delete-branch 2>&1)",
+      "PowerShell(gh pr list)",
+      "PowerShell($env:PATH += \";C:\\\\Program Files\\\\GitHub CLI\"; gh pr list)",
+      "Bash(cmd /c \"gh pr list\")",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(git merge *)",
+      "Bash(git stash *)",
+      "Bash(./gradlew.bat compileJava)",
+      "Bash(npx tsc *)",
+      "Bash(git restore *)",
+      "Bash(xargs grep -l \"public\\\\|private\\\\|protected\")"
     ]
   }
 }

@@ -24,6 +24,7 @@ function authHeaders() {
   return { Authorization: `Bearer ${token}` }
 }
 
+// 프로젝트 카드 — 분석 시작/재분석, 진행률 표시, 그래프 이동
 export default function ProjectCard({ project, onDelete }: Props) {
   const navigate = useNavigate()
   const [hasGraph, setHasGraph] = useState(false)

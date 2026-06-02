@@ -5,6 +5,7 @@ import AuthCallbackPage from './pages/AuthCallbackPage'
 import DashboardPage from './pages/DashboardPage'
 import GraphPage from './pages/GraphPage'
 
+// 앱 최상위 라우터 컴포넌트
 export default function App() {
   return (
     <BrowserRouter>

@@ -51,7 +51,7 @@ public class GitHubApiClient {
         }
     }
 
-    // "https://github.com/owner/repo" -> "owner/repo"
+    // GitHub URL에서 owner/repo 경로를 추출
     private String extractOwnerRepo(String githubRepoUrl) {
         Matcher m = REPO_PATTERN.matcher(githubRepoUrl);
         if (!m.find()) {
