@@ -434,6 +434,11 @@ Commit when one logical change is complete. Don't wait for the user to ask.
 - The test: "Can I describe this commit in one sentence?" If yes, commit.
 - Good: "feat: JWT 인증 필터 추가". Bad: "auth 추가하고 UI도 고치고 버그도 수정" (split into 3).
 - Don't accumulate unrelated edits and lose the ability to roll back individually.
+- **기능 하나 완성할 때마다 즉시 커밋.** 세션 끝에 몰아서 커밋하지 않는다.
+- **커밋 메시지는 변경 내용을 구체적으로 요약.** 파일명, 추가된 기능, 수정 이유를 명시.
+  - Bad: `fix: BOM 제거 및 기타 수정`
+  - Good: `fix: Java 58개 파일 UTF-8 BOM 제거 — Windows 저장 시 발생한 컴파일 오류 수정`
+- **push는 작업 단위 완료 후 즉시.** 세션 마지막에 몰아서 push하지 않는다.
 
 ### 10. Read Errors, Don't Guess
 Read the actual error/log line. Don't pattern-match from memory.
