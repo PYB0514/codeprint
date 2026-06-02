@@ -39,20 +39,22 @@
 ## 로컬 실행 방법
 
 ```powershell
-# 1. Docker DB 시작
-docker start codeprint-db
+# 1. Docker DB 시작 (docker-compose 사용 — 포트 바인딩 안정적)
+cd C:\Dev\Codeprint
+docker compose up -d
 
-# 2. 백엔드 (터미널 1)
-cd C:\Dev\Codeprint\backend
-$env:SPRING_PROFILES_ACTIVE="local"; .\gradlew.bat bootRun
+# 2. 백엔드 — VS Code Spring Boot Dashboard에서 실행
 
-# 3. 프론트엔드 (터미널 2)
+# 3. 프론트엔드 (VS Code 터미널)
 cd C:\Dev\Codeprint\frontend
 npm run dev
 
 # 접속
 # 프론트: http://localhost:3000
 # OAuth 테스트: http://localhost:8080/oauth2/authorization/github
+
+# DB 종료
+docker compose down
 ```
 
 ---
