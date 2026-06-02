@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import CreateProjectModal from '../components/CreateProjectModal'
+import ProjectCard from '../components/ProjectCard'
 
 interface UserInfo {
   id: string
@@ -134,39 +135,11 @@ export default function DashboardPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {projects.map((project) => (
-              <div
+              <ProjectCard
                 key={project.id}
-                className="bg-gray-900 rounded-xl p-5 flex flex-col gap-3 hover:bg-gray-800 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <h2 className="font-semibold text-base leading-snug">{project.name}</h2>
-                  <button
-                    onClick={() => handleDeleteProject(project.id)}
-                    className="text-gray-600 hover:text-red-400 text-xs shrink-0 mt-0.5"
-                  >
-                    삭제
-                  </button>
-                </div>
-                {project.description && (
-                  <p className="text-sm text-gray-400 leading-relaxed">{project.description}</p>
-                )}
-                <a
-                  href={project.githubRepoUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-gray-500 hover:text-gray-300 truncate"
-                >
-                  {project.githubRepoUrl}
-                </a>
-                <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-800">
-                  <span className="text-xs text-gray-600">
-                    {new Date(project.createdAt).toLocaleDateString('ko-KR')}
-                  </span>
-                  <span className="text-xs text-gray-600">
-                    {project.isPublic ? '공개' : '비공개'}
-                  </span>
-                </div>
-              </div>
+                project={project}
+                onDelete={handleDeleteProject}
+              />
             ))}
           </div>
         )}

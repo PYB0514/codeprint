@@ -3,10 +3,13 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.application.analysis.AnalysisApplicationService;
 import com.codeprint.domain.analysis.AnalysisResult;
+import com.codeprint.domain.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -17,14 +20,28 @@ public class AnalysisController {
     private final AnalysisApplicationService analysisApplicationService;
 
     @PostMapping
-    public ResponseEntity<AnalysisResult> startAnalysis(@RequestBody StartAnalysisRequest request) {
+    public ResponseEntity<Map<String, Object>> startAnalysis(
+            @RequestBody StartAnalysisRequest request,
+            @AuthenticationPrincipal User user) {
         AnalysisResult result = analysisApplicationService.startAnalysis(request.projectId());
-        return ResponseEntity.ok(result);
+        return ResponseEntity.status(202).body(Map.of(
+                "analysisId", result.getId(),
+                "status", result.getStatus(),
+                "progress", result.getProgress()
+        ));
     }
 
     @GetMapping("/{analysisId}")
-    public ResponseEntity<AnalysisResult> getAnalysis(@PathVariable UUID analysisId) {
-        return ResponseEntity.ok(analysisApplicationService.getAnalysis(analysisId));
+    public ResponseEntity<Map<String, Object>> getAnalysis(
+            @PathVariable UUID analysisId,
+            @AuthenticationPrincipal User user) {
+        AnalysisResult result = analysisApplicationService.getAnalysis(analysisId);
+        return ResponseEntity.ok(Map.of(
+                "analysisId", result.getId(),
+                "status", result.getStatus(),
+                "progress", result.getProgress(),
+                "errorMsg", result.getErrorMsg() != null ? result.getErrorMsg() : ""
+        ));
     }
 
     public record StartAnalysisRequest(UUID projectId) {}
