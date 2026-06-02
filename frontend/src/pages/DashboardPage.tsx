@@ -1,5 +1,5 @@
 // 로그인 후 메인 대시보드 — 프로젝트 목록 및 생성 관리
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import CreateProjectModal from '../components/CreateProjectModal'
@@ -33,6 +33,8 @@ export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [showModal, setShowModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 사용자의 프로젝트 목록을 서버에서 불러와 상태에 저장
   const fetchProjects = useCallback(async () => {
@@ -58,6 +60,13 @@ export default function DashboardPage() {
         setError('인증 만료. 다시 로그인해주세요.')
       })
   }, [navigate, fetchProjects])
+
+  // 분석 완료 토스트를 표시하고 3초 후 자동으로 숨김
+  const showToast = useCallback((message: string) => {
+    setToast(message)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000)
+  }, [])
 
   // JWT를 삭제하고 로그인 페이지로 이동
   const handleLogout = () => {
@@ -143,11 +152,18 @@ export default function DashboardPage() {
                 key={project.id}
                 project={project}
                 onDelete={handleDeleteProject}
+                onAnalysisDone={() => showToast(`✓ "${project.name}" 분석 완료`)}
               />
             ))}
           </div>
         )}
       </main>
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-sm px-5 py-3 rounded-xl shadow-xl border border-gray-700 animate-fade-in z-50">
+          {toast}
+        </div>
+      )}
 
       {showModal && (
         <CreateProjectModal

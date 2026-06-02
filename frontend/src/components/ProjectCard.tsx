@@ -16,6 +16,7 @@ interface Project {
 interface Props {
   project: Project
   onDelete: (id: string) => void
+  onAnalysisDone?: () => void
 }
 
 // JWT 토큰을 Authorization 헤더로 반환
@@ -24,7 +25,7 @@ function authHeaders() {
   return { Authorization: `Bearer ${token}` }
 }
 
-export default function ProjectCard({ project, onDelete }: Props) {
+export default function ProjectCard({ project, onDelete, onAnalysisDone }: Props) {
   const navigate = useNavigate()
   const [hasGraph, setHasGraph] = useState(false)
   const [analysisId, setAnalysisId] = useState<string | null>(null)
@@ -42,7 +43,8 @@ export default function ProjectCard({ project, onDelete }: Props) {
   const handleDone = useCallback(() => {
     setAnalysisId(null)
     setHasGraph(true)
-  }, [])
+    onAnalysisDone?.()
+  }, [onAnalysisDone])
 
   const { progress, status } = useAnalysisProgress(analysisId, handleDone)
 
