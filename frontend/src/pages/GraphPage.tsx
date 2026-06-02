@@ -23,6 +23,16 @@ import FileNode from '../components/FileNode'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
+interface CallEntry {
+  callerName: string
+  callerComment: string | null
+  callerNodeId: string
+  calleeFile: string
+  calleeName: string
+  calleeComment: string | null
+  calleeNodeId: string
+}
+
 interface EdgeModalInfo {
   edgeIdentifier: string
   type: string
@@ -30,8 +40,7 @@ interface EdgeModalInfo {
   targetId: string
   sourceNodeId: string
   targetNodeId: string
-  funcLabel: string
-  funcNodeId: string | null
+  callChain: CallEntry[]
 }
 
 // JWT 토큰을 Authorization 헤더로 반환
@@ -55,7 +64,6 @@ function GraphPageInner() {
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
   const [showIsoGroups, setShowIsoGroups] = useState(true)
   const [showEdges, setShowEdges] = useState(true)
-  const [showCallEdges, setShowCallEdges] = useState(true)
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -102,26 +110,10 @@ function GraphPageInner() {
   const toggleEdges = useCallback(() => {
     setShowEdges((prev) => {
       const next = !prev
-      setEdges((eds) => eds.map((e) => ({
-        ...e,
-        hidden: !next || (!showCallEdges && (e.data as { type?: string })?.type === 'FUNCTION_CALL'),
-      })))
+      setEdges((eds) => eds.map((e) => ({ ...e, hidden: !next })))
       return next
     })
-  }, [setEdges, showCallEdges])
-
-  // FUNCTION_CALL 엣지 표시/숨김 토글
-  const toggleCallEdges = useCallback(() => {
-    setShowCallEdges((prev) => {
-      const next = !prev
-      setEdges((eds) => eds.map((e) =>
-        (e.data as { type?: string })?.type === 'FUNCTION_CALL'
-          ? { ...e, hidden: !next || !showEdges }
-          : e
-      ))
-      return next
-    })
-  }, [setEdges, showEdges])
+  }, [setEdges])
 
   // 고립 그룹(연결 없는 그룹) 표시/숨김 토글
   const toggleIsoGroups = useCallback(() => {
@@ -208,24 +200,20 @@ function GraphPageInner() {
 
   // 엣지 마우스 진입 — 두껍고 밝게 강조
   const handleEdgeMouseEnter: EdgeMouseHandler<Edge> = useCallback((_evt, edge) => {
-    const data = edge.data as { broken?: boolean; type?: string } | undefined
-    const broken = data?.broken
-    const isCall = data?.type === 'FUNCTION_CALL'
+    const broken = (edge.data as { broken?: boolean })?.broken
     setEdges((es) => es.map((e) =>
       e.id === edge.id
-        ? { ...e, style: { ...e.style, strokeWidth: broken ? 3.5 : 3, stroke: broken ? '#fca5a5' : isCall ? '#fcd34d' : '#a1a1aa' } }
+        ? { ...e, style: { ...e.style, strokeWidth: broken ? 3.5 : 3, stroke: broken ? '#fca5a5' : '#a1a1aa' } }
         : e
     ))
   }, [setEdges])
 
   // 엣지 마우스 이탈 — 원래 스타일 복원
   const handleEdgeMouseLeave: EdgeMouseHandler<Edge> = useCallback((_evt, edge) => {
-    const data = edge.data as { broken?: boolean; type?: string } | undefined
-    const broken = data?.broken
-    const isCall = data?.type === 'FUNCTION_CALL'
+    const broken = (edge.data as { broken?: boolean })?.broken
     setEdges((es) => es.map((e) =>
       e.id === edge.id
-        ? { ...e, style: { ...e.style, strokeWidth: broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : '#4b5563' } }
+        ? { ...e, style: { ...e.style, strokeWidth: broken ? 2 : 1.5, stroke: broken ? '#ef4444' : '#4b5563' } }
         : e
     ))
   }, [setEdges])
@@ -234,43 +222,40 @@ function GraphPageInner() {
   const handleEdgeClick: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
     const data = edge.data as { edgeIdentifier?: string; type?: string } | undefined
     const edgeId = data?.edgeIdentifier ?? edge.id
-    const edgeType = data?.type ?? 'IMPORT'
 
-    if (edgeType === 'FUNCTION_CALL') {
-      // FUNCTION→FUNCTION 엣지: 출발/도착이 함수 노드
-      const srcFunc = rawNodes.find((n) => n.id === edge.source && n.type === 'FUNCTION')
-      const tgtFunc = rawNodes.find((n) => n.id === edge.target && n.type === 'FUNCTION')
-      const srcFile = rawNodes.find((n) => n.type === 'FILE' && n.filePath === srcFunc?.filePath)
-      const tgtFile = rawNodes.find((n) => n.type === 'FILE' && n.filePath === tgtFunc?.filePath)
-      const srcLabel = labelMode === 'comment' && srcFunc?.comment ? srcFunc.comment : (srcFunc?.name ?? edge.source)
-      const tgtLabel = labelMode === 'comment' && tgtFunc?.comment ? tgtFunc.comment : (tgtFunc?.name ?? edge.target)
-      setEdgeModal({
-        edgeIdentifier: edgeId,
-        type: edgeType,
-        sourceId: srcLabel,
-        targetId: tgtLabel,
-        sourceNodeId: srcFile?.id ?? edge.source,
-        targetNodeId: tgtFile?.id ?? edge.target,
-        funcLabel: srcLabel,
-        funcNodeId: srcFunc?.id ?? null,
+    const sourceFile = rawNodes.find((n) => n.id === edge.source && n.type === 'FILE')
+    const targetFile = rawNodes.find((n) => n.id === edge.target && n.type === 'FILE')
+
+    // 두 파일 사이의 FUNCTION_CALL 엣지에서 콜 체인 목록 수집
+    const callChain: CallEntry[] = rawEdgesCache
+      .filter((e) => e.type === 'FUNCTION_CALL')
+      .flatMap((e) => {
+        const srcFunc = rawNodes.find((n) => n.id === e.source && n.type === 'FUNCTION')
+        const tgtFunc = rawNodes.find((n) => n.id === e.target && n.type === 'FUNCTION')
+        if (!srcFunc || !tgtFunc) return []
+        if (srcFunc.filePath !== sourceFile?.filePath) return []
+        if (tgtFunc.filePath !== targetFile?.filePath) return []
+        return [{
+          callerName: srcFunc.name,
+          callerComment: srcFunc.comment ?? null,
+          callerNodeId: srcFunc.id,
+          calleeFile: tgtFunc.filePath,
+          calleeName: tgtFunc.name,
+          calleeComment: tgtFunc.comment ?? null,
+          calleeNodeId: tgtFunc.id,
+        }]
       })
-      return
-    }
 
-    // IMPORT 엣지: 출발/도착이 파일 노드
-    const sourceNode = rawNodes.find((n) => n.id === edge.source && n.type === 'FILE')
-    const targetNode = rawNodes.find((n) => n.id === edge.target && n.type === 'FILE')
     setEdgeModal({
       edgeIdentifier: edgeId,
-      type: edgeType,
-      sourceId: sourceNode?.name ?? edge.source,
-      targetId: targetNode?.name ?? edge.target,
+      type: data?.type ?? 'IMPORT',
+      sourceId: sourceFile?.name ?? edge.source,
+      targetId: targetFile?.name ?? edge.target,
       sourceNodeId: edge.source,
       targetNodeId: edge.target,
-      funcLabel: '—',
-      funcNodeId: null,
+      callChain,
     })
-  }, [rawNodes, labelMode])
+  }, [rawNodes, rawEdgesCache])
 
   if (loading) {
     return (
@@ -336,13 +321,6 @@ function GraphPageInner() {
           <span className={showEdges ? 'text-white' : 'text-gray-500'}>연결선</span>
         </button>
         <button
-          onClick={toggleCallEdges}
-          className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-amber-800/60"
-          title="함수 호출 체인 표시/숨김"
-        >
-          <span className={showCallEdges ? 'text-amber-400' : 'text-gray-500'}>콜 체인</span>
-        </button>
-        <button
           onClick={() => downloadTreeText(rawNodes)}
           disabled={rawNodes.length === 0}
           className="bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700 disabled:opacity-40"
@@ -391,12 +369,6 @@ function GraphPageInner() {
           <span className="text-gray-400">IMPORT</span>
         </div>
         <div className="flex items-center gap-2">
-          <svg width="12" height="4" className="flex-shrink-0">
-            <line x1="0" y1="2" x2="12" y2="2" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4 3" />
-          </svg>
-          <span className="text-amber-400">FUNCTION_CALL</span>
-        </div>
-        <div className="flex items-center gap-2">
           <span className="w-3 h-0.5 flex-shrink-0" style={{ background: '#ef4444' }} />
           <span className="text-gray-400">끊긴 연결</span>
         </div>
@@ -435,54 +407,69 @@ function GraphPageInner() {
           onClick={() => setEdgeModal(null)}
         >
           <div
-            className="bg-gray-900 rounded-2xl p-6 w-80 shadow-xl"
+            className="bg-gray-900 rounded-2xl p-5 w-96 shadow-xl max-h-[80vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 flex-shrink-0">
               <h3 className="font-semibold text-sm">연결 상세</h3>
               <button onClick={() => setEdgeModal(null)} className="text-gray-500 hover:text-white text-xs">✕</button>
             </div>
-            <div className="flex flex-col gap-3 text-sm">
-              {/* 함수 — 핵심 정보 */}
-              <div className="bg-gray-800 rounded-xl p-4 flex flex-col items-center gap-1">
-                <p className="text-xs text-gray-500">호출 함수</p>
-                <p
-                  className="text-white font-mono text-sm font-semibold text-center break-all cursor-pointer hover:text-blue-300 underline decoration-gray-600"
-                  title="클릭하여 해당 함수로 이동"
-                  onClick={() => {
-                    if (!edgeModal.funcNodeId) return
-                    setEdgeModal(null)
-                    setTimeout(() => fitView({ nodes: [{ id: edgeModal.funcNodeId! }], duration: 500, padding: 0.4 }), 50)
-                  }}
-                >{edgeModal.funcLabel}</p>
-                <span className="text-xs bg-blue-900 text-blue-300 px-2 py-0.5 rounded mt-1">{edgeModal.type}</span>
-              </div>
-              {/* 출발 → 도착 */}
-              <div className="bg-gray-800/60 rounded-lg p-3 flex flex-col gap-2">
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">출발 파일</p>
-                  <p
-                    className="text-gray-300 font-mono text-xs cursor-pointer hover:text-white underline decoration-gray-600"
-                    title="클릭하여 해당 파일로 이동"
-                    onClick={() => {
-                      setEdgeModal(null)
-                      setTimeout(() => fitView({ nodes: [{ id: edgeModal.sourceNodeId }], duration: 500, padding: 0.3 }), 50)
-                    }}
-                  >{edgeModal.sourceId}</p>
-                </div>
-                <div className="text-gray-600 text-xs text-center">↓</div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">도착 파일</p>
-                  <p
-                    className="text-gray-300 font-mono text-xs cursor-pointer hover:text-white underline decoration-gray-600"
-                    title="클릭하여 해당 파일로 이동"
-                    onClick={() => {
-                      setEdgeModal(null)
-                      setTimeout(() => fitView({ nodes: [{ id: edgeModal.targetNodeId }], duration: 500, padding: 0.3 }), 50)
-                    }}
-                  >{edgeModal.targetId}</p>
-                </div>
-              </div>
+
+            {/* 출발 파일 → 도착 파일 */}
+            <div className="bg-gray-800/60 rounded-lg p-3 flex items-center gap-2 flex-shrink-0 mb-3">
+              <p
+                className="text-gray-300 font-mono text-xs cursor-pointer hover:text-white underline decoration-gray-700 truncate flex-1"
+                title="클릭하여 해당 파일로 이동"
+                onClick={() => {
+                  setEdgeModal(null)
+                  setTimeout(() => fitView({ nodes: [{ id: edgeModal.sourceNodeId }], duration: 500, padding: 0.3 }), 50)
+                }}
+              >{edgeModal.sourceId}</p>
+              <span className="text-gray-500 text-xs flex-shrink-0">→</span>
+              <p
+                className="text-gray-300 font-mono text-xs cursor-pointer hover:text-white underline decoration-gray-700 truncate flex-1 text-right"
+                title="클릭하여 해당 파일로 이동"
+                onClick={() => {
+                  setEdgeModal(null)
+                  setTimeout(() => fitView({ nodes: [{ id: edgeModal.targetNodeId }], duration: 500, padding: 0.3 }), 50)
+                }}
+              >{edgeModal.targetId}</p>
+            </div>
+
+            {/* 함수 호출 체인 목록 */}
+            <div className="flex flex-col gap-1 flex-1 overflow-y-auto min-h-0">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 flex-shrink-0">
+                함수 호출 체인 {edgeModal.callChain.length > 0 && `(${edgeModal.callChain.length}건)`}
+              </p>
+              {edgeModal.callChain.length === 0 ? (
+                <p className="text-gray-600 text-xs text-center py-4">분석된 함수 호출 없음</p>
+              ) : (
+                edgeModal.callChain.map((entry, i) => (
+                  <div key={i} className="bg-gray-800 rounded-lg px-3 py-2 flex items-center gap-2 text-xs">
+                    <p
+                      className="text-emerald-400 font-mono cursor-pointer hover:text-emerald-200 truncate flex-1"
+                      title={`${entry.callerComment ?? entry.callerName} — 클릭하여 이동`}
+                      onClick={() => {
+                        setEdgeModal(null)
+                        setTimeout(() => fitView({ nodes: [{ id: entry.callerNodeId }], duration: 500, padding: 0.4 }), 50)
+                      }}
+                    >
+                      {labelMode === 'comment' && entry.callerComment ? entry.callerComment : entry.callerName}
+                    </p>
+                    <span className="text-amber-500 flex-shrink-0">→</span>
+                    <p
+                      className="text-emerald-400 font-mono cursor-pointer hover:text-emerald-200 truncate flex-1 text-right"
+                      title={`${entry.calleeComment ?? entry.calleeName} — 클릭하여 이동`}
+                      onClick={() => {
+                        setEdgeModal(null)
+                        setTimeout(() => fitView({ nodes: [{ id: entry.calleeNodeId }], duration: 500, padding: 0.4 }), 50)
+                      }}
+                    >
+                      {labelMode === 'comment' && entry.calleeComment ? entry.calleeComment : entry.calleeName}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
