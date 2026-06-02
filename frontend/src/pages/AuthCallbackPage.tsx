@@ -2,6 +2,7 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+// OAuth 콜백 처리 — JWT 저장 후 대시보드로 이동
 export default function AuthCallbackPage() {
   const navigate = useNavigate()
 

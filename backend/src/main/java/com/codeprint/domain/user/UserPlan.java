@@ -4,6 +4,7 @@ package com.codeprint.domain.user;
 public enum UserPlan {
     FREE, PRO;
 
+    // 플랜별 최대 프로젝트 수 반환
     public int maxProjects() {
         return switch (this) {
             case FREE -> 3;

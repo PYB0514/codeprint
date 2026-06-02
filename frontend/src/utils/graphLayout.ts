@@ -78,6 +78,7 @@ export type LabelMode = 'name' | 'comment'
 
 // 원시 노드/엣지 데이터를 dagre 레이아웃으로 변환하여 React Flow용 노드/엣지 반환
 export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode: LabelMode = 'name'): { nodes: Node[]; edges: Edge[] } {
+  // 노드 라벨 반환 (이름 또는 주석)
   const getLabel = (node: RawNode) =>
     labelMode === 'comment' && node.comment ? node.comment : node.name
   const fileNodes = rawNodes.filter((n) => n.type === 'FILE')
