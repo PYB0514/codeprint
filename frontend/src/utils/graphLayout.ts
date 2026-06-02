@@ -427,9 +427,6 @@ export function buildLayout(
 
   const result: Node[] = []
 
-  // 고립 그룹 키 셋 (isIso 플래그 부착용)
-  const isoKeySet = new Set(isoKeys)
-
   // 그룹 노드 + 파일 노드 + 함수 노드 생성
   groups.forEach((groupFiles, key) => {
     const layout = groupLayouts.get(key)!
@@ -437,7 +434,6 @@ export function buildLayout(
     if (!pos) return
     const gx = pos.x
     const gy = pos.y
-    const isIso = isoKeySet.has(key)
 
     // 그룹 키에서 layer / sub 분리 (예: "domain/user" → layer="domain", sub="user")
     const slashIdx = key.indexOf('/')
@@ -449,7 +445,7 @@ export function buildLayout(
       id: `group-${key}`,
       type: 'groupNode',
       position: { x: gx, y: gy },
-      data: { layer, sub, fileCount: groupFiles.length, originalHeight: layout.h, isIso },
+      data: { layer, sub, fileCount: groupFiles.length, originalHeight: layout.h },
       style: { width: layout.w, height: layout.h },
       draggable: true,
     })
@@ -469,7 +465,6 @@ export function buildLayout(
           label: getLabel(file, fileMaxLen),
           name: file.name,
           comment: file.comment,
-          isIso,
           incoming: fileIncoming.get(file.id) ?? [],
           outgoing: fileOutgoing.get(file.id) ?? [],
           onOpenSidebar: onOpenFileSidebar ? () => onOpenFileSidebar({
@@ -506,7 +501,7 @@ export function buildLayout(
             y: FILE_PAD_TOP + fr * (FUNC_H + FUNC_PAD),
           },
           // 함수 박스 너비 110px, 좌우 패딩 8px → 102px / ~6px per char ≈ 17자
-          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment, isIso },
+          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment },
           style: {
             background: '#064e3b',
             border: '1px solid #10b981',
@@ -525,31 +520,6 @@ export function buildLayout(
       })
     })
   })
-
-  // 허브 레이아웃 — 고립 그룹들을 감싸는 섹션 박스
-  if (layoutPreset === 'hub' && isoKeys.length > 0) {
-    const PAD = 24
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    isoKeys.forEach((key) => {
-      const pos = groupPositions.get(key)
-      const l = groupLayouts.get(key)
-      if (!pos || !l) return
-      minX = Math.min(minX, pos.x)
-      minY = Math.min(minY, pos.y)
-      maxX = Math.max(maxX, pos.x + l.w)
-      maxY = Math.max(maxY, pos.y + l.h)
-    })
-    result.push({
-      id: '__iso-section__',
-      type: 'sectionNode',
-      position: { x: minX - PAD, y: minY - PAD - 28 },
-      data: { label: '연결 없는 그룹' },
-      style: { width: maxX - minX + PAD * 2, height: maxY - minY + PAD * 2 + 28 },
-      draggable: false,
-      selectable: false,
-      zIndex: -10,
-    } as Node)
-  }
 
   // 엣지 — 파일 간 IMPORT 엣지, 끊긴 연결 빨간색
   const allNodeIds = new Set(result.map((n) => n.id))

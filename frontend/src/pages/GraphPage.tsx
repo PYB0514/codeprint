@@ -60,7 +60,6 @@ function GraphPageInner() {
   const [leftOpen, setLeftOpen] = useState(true)
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
-  const [showIsoGroups, setShowIsoGroups] = useState(true)
   const [showEdges, setShowEdges] = useState(false)
   const [showCallEdges, setShowCallEdges] = useState(false)
   const [showInstEdges, setShowInstEdges] = useState(false)
@@ -159,25 +158,10 @@ function GraphPageInner() {
     })
   }, [setEdges])
 
-  // 고립 그룹(연결 없는 그룹) 표시/숨김 토글
-  const toggleIsoGroups = useCallback(() => {
-    setShowIsoGroups((prev) => {
-      const next = !prev
-      setNodes((nds) => nds.map((n) =>
-        n.data?.isIso || n.id === '__iso-section__'
-          ? { ...n, hidden: !next }
-          : n
-      ))
-      return next
-    })
-  }, [setNodes])
-
   // 레이아웃 프리셋 전환 — 그래프를 재계산하여 적용
   const toggleLayoutPreset = useCallback(() => {
     const next: LayoutPreset = layoutPreset === 'layer' ? 'hub' : 'layer'
     setLayoutPreset(next)
-    setShowIsoGroups(true)
-    setShowEdges(true)
     if (rawNodes.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
       setNodes(ln)
@@ -440,12 +424,6 @@ function GraphPageInner() {
                   <span className={layoutPreset === 'hub' ? 'text-white' : 'text-gray-500'}>허브</span>
                 </button>
               </div>
-              {layoutPreset === 'hub' && (
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-gray-400 text-xs">고립 그룹</span>
-                  <ToggleChip active={showIsoGroups} onClick={toggleIsoGroups} />
-                </div>
-              )}
             </LeftSection>
 
             {/* 라벨 */}
