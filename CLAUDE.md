@@ -456,6 +456,24 @@ main                    ← 항상 배포 가능한 상태 유지
 - PR 제목은 `feat: 프로젝트 생성/목록 API 구현` 형식
 - 면접관이 PR 목록만 봐도 개발 흐름을 이해할 수 있어야 함
 
+### 11. Context 기록
+컨텍스트가 끝날 때 (사용자가 마무리 신호를 보내거나 세션이 자연스럽게 정리될 때) `contexts/Context{N}.md`를 자동으로 생성한다.
+
+**파일명 규칙**
+- `contexts/` 폴더에 `Context1.md`, `Context2.md` 순서로 생성
+- N은 기존 파일 수 + 1 (직접 세어서 결정)
+
+**포함할 내용**
+- 날짜
+- 이번 컨텍스트에서 완료한 작업 목록 (구체적으로)
+- 발생한 문제와 해결 방법
+- 다음 컨텍스트에서 할 것 (브랜치명 포함)
+
+**시점**
+- 사용자가 "오늘 작업 마무리", "정리해줘", "다음에 이어서" 같은 신호를 보낼 때
+- 세션 요약을 요청받을 때
+- 자동으로 판단해서 생성 — 사용자가 따로 요청하지 않아도 됨
+
 ### 10. Read Errors, Don't Guess
 Read the actual error/log line. Don't pattern-match from memory.
 - Read the full error message and stack trace.
