@@ -63,7 +63,6 @@ docker compose up -d
 # 3. 프론트엔드
 cd C:\Dev\Codeprint\frontend
 npm run dev
-
 # 접속: http://localhost:3000
 # DB 종료: docker compose down
 ```
