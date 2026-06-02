@@ -39,11 +39,11 @@ export default function ProjectCard({ project, onDelete, onAnalysisDone }: Props
       .catch(() => setHasGraph(false))
   }, [project.id])
 
-  // 분석 완료 시 analysisId를 초기화하고 그래프 존재 상태를 업데이트
+  // 분석 완료 시 게이지 애니메이션 후 상태 초기화
   const handleDone = useCallback(() => {
-    setAnalysisId(null)
     setHasGraph(true)
     onAnalysisDone?.()
+    setTimeout(() => setAnalysisId(null), 800)
   }, [onAnalysisDone])
 
   const { progress, status } = useAnalysisProgress(analysisId, handleDone)
