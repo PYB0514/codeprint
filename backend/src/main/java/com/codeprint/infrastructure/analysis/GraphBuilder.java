@@ -19,6 +19,7 @@ public class GraphBuilder {
     private static final Logger log = LoggerFactory.getLogger(GraphBuilder.class);
     private final GraphRepository graphRepository;
 
+    // 분석된 파일 목록으로 그래프와 노드/엣지를 생성하여 저장
     public Graph build(UUID projectId, UUID analysisId, List<ParsedFile> parsedFiles) {
         Graph graph = Graph.create(projectId, analysisId);
         graphRepository.save(graph);
@@ -79,11 +80,13 @@ public class GraphBuilder {
         return graph;
     }
 
+    // 파일 경로에서 파일명만 추출
     private String extractFileName(String filePath) {
         int slash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
         return slash >= 0 ? filePath.substring(slash + 1) : filePath;
     }
 
+    // import 경로가 실제 파일 경로와 일치하는지 확인
     private boolean isImportMatch(String importPath, String filePath) {
         String normalizedImport = importPath.replace(".", "/").replace("\\", "/");
         String normalizedFile = filePath.replace("\\", "/");

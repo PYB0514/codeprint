@@ -20,6 +20,7 @@ public class SourceFileWalker {
 
     private static final int MAX_FILES = 500;
 
+    // 레포 루트에서 지원 언어 소스 파일을 최대 500개 수집
     public List<Path> walk(Path repoRoot) throws IOException {
         try (Stream<Path> stream = Files.walk(repoRoot)) {
             return stream
@@ -33,6 +34,7 @@ public class SourceFileWalker {
         }
     }
 
+    // 파일이 스킵 대상 디렉토리(node_modules, .git 등) 안에 있는지 확인
     private boolean isInSkipDir(Path root, Path file) {
         Path relative = root.relativize(file);
         for (Path part : relative) {

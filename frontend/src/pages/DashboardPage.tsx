@@ -21,6 +21,7 @@ interface Project {
   createdAt: string
 }
 
+// JWT 토큰을 Authorization 헤더로 반환
 function authHeaders() {
   const token = localStorage.getItem('jwt')
   return { Authorization: `Bearer ${token}` }
@@ -33,6 +34,7 @@ export default function DashboardPage() {
   const [showModal, setShowModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // 사용자의 프로젝트 목록을 서버에서 불러와 상태에 저장
   const fetchProjects = useCallback(async () => {
     const res = await axios.get<Project[]>('/api/projects', { headers: authHeaders() })
     setProjects(res.data)
@@ -57,11 +59,13 @@ export default function DashboardPage() {
       })
   }, [navigate, fetchProjects])
 
+  // JWT를 삭제하고 로그인 페이지로 이동
   const handleLogout = () => {
     localStorage.removeItem('jwt')
     navigate('/', { replace: true })
   }
 
+  // 확인 후 프로젝트를 삭제하고 목록에서 제거
   const handleDeleteProject = async (projectId: string) => {
     if (!confirm('프로젝트를 삭제할까요?')) return
     await axios.delete(`/api/projects/${projectId}`, { headers: authHeaders() })

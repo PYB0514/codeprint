@@ -22,6 +22,7 @@ interface EdgeModalInfo {
   targetId: string
 }
 
+// JWT 토큰을 Authorization 헤더로 반환
 function authHeaders() {
   const token = localStorage.getItem('jwt')
   return { Authorization: `Bearer ${token}` }
@@ -40,6 +41,7 @@ export default function GraphPage() {
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
 
+  // 서버에서 그래프 데이터를 불러와 React Flow 레이아웃으로 변환
   const fetchGraph = useCallback(async () => {
     try {
       const res = await axios.get(`/api/projects/${projectId}/graph`, { headers: authHeaders() })
@@ -63,6 +65,7 @@ export default function GraphPage() {
 
   useEffect(() => { fetchGraph() }, [fetchGraph])
 
+  // 노드 라벨 표시 모드를 이름/주석 간 전환
   const toggleLabelMode = useCallback(() => {
     const next: LabelMode = labelMode === 'name' ? 'comment' : 'name'
     setLabelMode(next)
@@ -73,6 +76,7 @@ export default function GraphPage() {
     }
   }, [labelMode, rawNodes, rawEdgesCache, setNodes, setEdges])
 
+  // 엣지 클릭 시 상세 정보 모달을 표시
   const handleEdgeClick: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
     const data = edge.data as { edgeIdentifier?: string; type?: string } | undefined
     const sourceNode = rawNodes.find((n) => n.id === edge.source)

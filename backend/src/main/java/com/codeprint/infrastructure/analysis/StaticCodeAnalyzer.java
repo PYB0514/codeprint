@@ -18,6 +18,7 @@ public class StaticCodeAnalyzer {
 
     private static final Logger log = LoggerFactory.getLogger(StaticCodeAnalyzer.class);
 
+    // 단일 소스 파일을 분석하여 함수명, import, 주석 등을 추출
     public ParsedFile analyze(Path file, Path repoRoot, String language) throws IOException {
         String content = Files.readString(file, StandardCharsets.UTF_8);
         String relativePath = repoRoot.relativize(file).toString().replace("\\", "/");
@@ -37,9 +38,18 @@ public class StaticCodeAnalyzer {
     // 파일 상단 첫 번째 주석 추출
     private String extractFileComment(String content, String language) {
         String[] lines = content.split("\n");
+        boolean logged = false;
         for (String line : lines) {
             String trimmed = line.trim();
             if (trimmed.isEmpty()) continue;
+            if (!logged) {
+                logged = true;
+                String preview = trimmed.length() > 60 ? trimmed.substring(0, 60) : trimmed;
+                log.debug("[extractFileComment] lang={} | 첫char=U+{} | preview={}",
+                        language,
+                        String.format("%04X", (int) trimmed.charAt(0)),
+                        preview);
+            }
             if (language.equals("Python")) {
                 if (trimmed.startsWith("#")) return trimmed.substring(1).trim();
                 break;
@@ -91,6 +101,7 @@ public class StaticCodeAnalyzer {
         return result;
     }
 
+    // 소스 코드에서 함수/메서드 이름 목록을 추출
     private List<String> extractFunctions(String content, String language) {
         Pattern pattern = getFunctionPattern(language);
         if (pattern == null) return List.of();
@@ -104,6 +115,7 @@ public class StaticCodeAnalyzer {
         return result;
     }
 
+    // 언어별 함수 정의 정규식 패턴 반환
     private Pattern getFunctionPattern(String language) {
         return switch (language) {
             case "Java", "Kotlin", "C#" ->
@@ -122,6 +134,7 @@ public class StaticCodeAnalyzer {
         };
     }
 
+    // 정규식 매칭 결과에서 첫 번째 유효 캡처 그룹 반환
     private String extractFirstGroup(Matcher m) {
         for (int i = 1; i <= m.groupCount(); i++) {
             if (m.group(i) != null && !m.group(i).isBlank()) return m.group(i);
@@ -129,6 +142,7 @@ public class StaticCodeAnalyzer {
         return null;
     }
 
+    // 소스 코드에서 import 경로 목록을 추출
     private List<String> extractImports(String content, String language) {
         Pattern pattern = switch (language) {
             case "Java" -> Pattern.compile("^import\\s+([\\w.]+);", Pattern.MULTILINE);
@@ -156,6 +170,7 @@ public class StaticCodeAnalyzer {
         return result;
     }
 
+    // 식별자가 언어 예약어인지 확인
     private boolean isKeyword(String name) {
         return Set.of("if", "else", "for", "while", "switch", "try", "catch", "return",
                 "new", "class", "interface", "enum", "void", "int", "long", "boolean",

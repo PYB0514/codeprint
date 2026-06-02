@@ -16,26 +16,31 @@ public class ProjectRepositoryImpl implements ProjectRepository {
 
     private final ProjectJpaRepository jpa;
 
+    // 프로젝트 엔티티를 저장하고 반환
     @Override
     public Project save(Project project) {
         return jpa.save(project);
     }
 
+    // UUID로 프로젝트 조회
     @Override
     public Optional<Project> findById(UUID id) {
         return jpa.findById(id);
     }
 
+    // 사용자 ID로 프로젝트 목록 조회
     @Override
     public List<Project> findByUserId(UUID userId) {
         return jpa.findByUserId(userId);
     }
 
+    // 사용자의 프로젝트 수 조회
     @Override
     public int countByUserId(UUID userId) {
         return jpa.countByUserId(userId);
     }
 
+    // UUID로 프로젝트 삭제
     @Override
     public void deleteById(UUID id) {
         jpa.deleteById(id);

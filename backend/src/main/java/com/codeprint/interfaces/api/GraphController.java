@@ -22,6 +22,7 @@ public class GraphController {
 
     private final GraphQueryService graphQueryService;
 
+    // 프로젝트의 최신 그래프(노드+엣지)를 조회
     @GetMapping("/{projectId}/graph")
     public ResponseEntity<?> getGraph(
             @PathVariable UUID projectId,

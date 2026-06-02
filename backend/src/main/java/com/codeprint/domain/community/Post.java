@@ -40,6 +40,7 @@ public class Post {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    // 사용자 입력으로 새 게시글 인스턴스 생성
     public static Post create(UUID userId, UUID graphId, String title, String content, String feedbackType) {
         Post post = new Post();
         post.id = UUID.randomUUID();
@@ -53,12 +54,14 @@ public class Post {
         return post;
     }
 
+    // 게시글 제목과 내용을 수정
     public void update(String title, String content) {
         this.title = title;
         this.content = content;
         this.updatedAt = Instant.now();
     }
 
+    // UUID를 PostId Value Object로 변환하여 반환
     public PostId getPostId() {
         return PostId.of(id);
     }

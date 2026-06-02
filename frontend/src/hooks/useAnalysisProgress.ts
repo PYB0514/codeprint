@@ -7,11 +7,13 @@ interface AnalysisState {
   status: string
 }
 
+// JWT 토큰을 Authorization 헤더로 반환
 function authHeaders() {
   const token = localStorage.getItem('jwt')
   return { Authorization: `Bearer ${token}` }
 }
 
+// analysisId가 있으면 2초 간격으로 폴링하여 진행률과 상태를 반환
 export function useAnalysisProgress(analysisId: string | null, onDone: () => void) {
   const [state, setState] = useState<AnalysisState>({ progress: 0, status: 'PENDING' })
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)

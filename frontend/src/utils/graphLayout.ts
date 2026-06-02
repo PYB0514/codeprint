@@ -65,6 +65,7 @@ function findCommonPrefix(paths: string[]): string {
   return prefix
 }
 
+// 함수 수에 따라 파일 노드 박스의 폭/높이/열 수를 계산
 function calcFileSize(funcCount: number): { w: number; h: number; cols: number } {
   const cols = Math.max(1, Math.min(3, funcCount === 0 ? 1 : Math.ceil(Math.sqrt(funcCount))))
   const rows = funcCount === 0 ? 0 : Math.ceil(funcCount / cols)
@@ -75,6 +76,7 @@ function calcFileSize(funcCount: number): { w: number; h: number; cols: number }
 
 export type LabelMode = 'name' | 'comment'
 
+// 원시 노드/엣지 데이터를 dagre 레이아웃으로 변환하여 React Flow용 노드/엣지 반환
 export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode: LabelMode = 'name'): { nodes: Node[]; edges: Edge[] } {
   const getLabel = (node: RawNode) =>
     labelMode === 'comment' && node.comment ? node.comment : node.name

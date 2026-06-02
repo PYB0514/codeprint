@@ -18,6 +18,7 @@ interface Props {
   onDelete: (id: string) => void
 }
 
+// JWT 토큰을 Authorization 헤더로 반환
 function authHeaders() {
   const token = localStorage.getItem('jwt')
   return { Authorization: `Bearer ${token}` }
@@ -37,6 +38,7 @@ export default function ProjectCard({ project, onDelete }: Props) {
       .catch(() => setHasGraph(false))
   }, [project.id])
 
+  // 분석 완료 시 analysisId를 초기화하고 그래프 존재 상태를 업데이트
   const handleDone = useCallback(() => {
     setAnalysisId(null)
     setHasGraph(true)
@@ -44,6 +46,7 @@ export default function ProjectCard({ project, onDelete }: Props) {
 
   const { progress, status } = useAnalysisProgress(analysisId, handleDone)
 
+  // 분석 시작 API를 호출하고 analysisId를 저장
   const handleStartAnalysis = async () => {
     setStarting(true)
     setAnalysisError(null)

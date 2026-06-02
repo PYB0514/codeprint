@@ -41,6 +41,7 @@ public class AnalysisResult {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    // PENDING 상태로 새 분석 결과 인스턴스 생성
     public static AnalysisResult create(UUID projectId) {
         AnalysisResult result = new AnalysisResult();
         result.id = UUID.randomUUID();
@@ -51,27 +52,32 @@ public class AnalysisResult {
         return result;
     }
 
+    // 분석을 RUNNING 상태로 전환하고 시작 시각을 기록
     public void start() {
         this.status = AnalysisStatus.RUNNING;
         this.startedAt = Instant.now();
     }
 
+    // 분석 진행률을 0~100 범위로 갱신
     public void updateProgress(int progress) {
         this.progress = Math.min(100, Math.max(0, progress));
     }
 
+    // 분석을 DONE 상태로 완료 처리하고 종료 시각을 기록
     public void complete() {
         this.status = AnalysisStatus.DONE;
         this.progress = 100;
         this.finishedAt = Instant.now();
     }
 
+    // 분석을 FAILED 상태로 전환하고 오류 메시지를 저장
     public void fail(String errorMsg) {
         this.status = AnalysisStatus.FAILED;
         this.errorMsg = errorMsg;
         this.finishedAt = Instant.now();
     }
 
+    // UUID를 AnalysisId Value Object로 변환하여 반환
     public AnalysisId getAnalysisId() {
         return AnalysisId.of(id);
     }

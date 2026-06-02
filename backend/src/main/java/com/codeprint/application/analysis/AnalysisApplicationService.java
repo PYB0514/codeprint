@@ -20,6 +20,7 @@ public class AnalysisApplicationService {
     private final ProjectRepository projectRepository;
     private final AnalysisRunner analysisRunner;
 
+    // 분석 레코드를 생성하고 비동기 분석을 시작
     public AnalysisResult startAnalysis(UUID projectId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
@@ -32,6 +33,7 @@ public class AnalysisApplicationService {
         return analysis;
     }
 
+    // 분석 ID로 분석 결과를 조회
     @Transactional(readOnly = true)
     public AnalysisResult getAnalysis(UUID analysisId) {
         return analysisRepository.findById(analysisId)

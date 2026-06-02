@@ -20,6 +20,7 @@ public class ProjectController {
     private final ProjectCommandService projectCommandService;
     private final ProjectQueryService projectQueryService;
 
+    // 현재 사용자의 프로젝트 목록 조회
     @GetMapping
     public ResponseEntity<List<ProjectResponse>> getProjects(@AuthenticationPrincipal User user) {
         List<ProjectResponse> projects = projectQueryService.getProjectsByUser(user.getId())
@@ -29,6 +30,7 @@ public class ProjectController {
         return ResponseEntity.ok(projects);
     }
 
+    // 단일 프로젝트 조회
     @GetMapping("/{projectId}")
     public ResponseEntity<ProjectResponse> getProject(
             @PathVariable UUID projectId,
@@ -37,6 +39,7 @@ public class ProjectController {
                 ProjectResponse.from(projectQueryService.getProject(projectId, user.getId())));
     }
 
+    // 새 프로젝트 생성
     @PostMapping
     public ResponseEntity<ProjectResponse> createProject(
             @RequestBody CreateProjectRequest request,
@@ -47,6 +50,7 @@ public class ProjectController {
         return ResponseEntity.status(201).body(response);
     }
 
+    // 프로젝트 삭제
     @DeleteMapping("/{projectId}")
     public ResponseEntity<Void> deleteProject(
             @PathVariable UUID projectId,

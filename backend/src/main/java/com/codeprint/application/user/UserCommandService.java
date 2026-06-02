@@ -18,10 +18,12 @@ public class UserCommandService {
     private final UserRepository userRepository;
     private final UserDomainService userDomainService;
 
+    // GitHub ID로 사용자를 조회하거나 없으면 신규 생성하여 반환
     public User getOrCreateUser(Long githubId, String email, String username) {
         return userDomainService.getOrCreate(githubId, email, username);
     }
 
+    // 사용자 플랜을 PRO로 업그레이드
     public void upgradeToPro(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
@@ -29,6 +31,7 @@ public class UserCommandService {
         userRepository.save(user);
     }
 
+    // 사용자 플랜을 FREE로 다운그레이드
     public void downgradeToFree(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));

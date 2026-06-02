@@ -27,6 +27,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     @Value("${app.frontend-url:http://localhost:3000}")
     private String frontendUrl;
 
+    // OAuth2 인증 성공 시 JWT를 발급하고 프론트엔드로 리다이렉트
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request,
                                         HttpServletResponse response,

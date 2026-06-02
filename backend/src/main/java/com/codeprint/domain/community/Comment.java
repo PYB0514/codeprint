@@ -31,6 +31,7 @@ public class Comment {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    // 게시글에 달린 새 댓글 인스턴스 생성
     public static Comment create(UUID postId, UUID userId, String content) {
         Comment comment = new Comment();
         comment.id = UUID.randomUUID();
@@ -41,6 +42,7 @@ public class Comment {
         return comment;
     }
 
+    // UUID를 CommentId Value Object로 변환하여 반환
     public CommentId getCommentId() {
         return CommentId.of(id);
     }

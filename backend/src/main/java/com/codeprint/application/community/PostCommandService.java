@@ -18,11 +18,13 @@ public class PostCommandService {
 
     private final PostRepository postRepository;
 
+    // 새 게시글을 생성하여 저장
     public Post createPost(UUID userId, UUID graphId, String title, String content, String feedbackType) {
         Post post = Post.create(userId, graphId, title, content, feedbackType);
         return postRepository.save(post);
     }
 
+    // 게시글에 댓글을 추가
     public Comment addComment(UUID postId, UUID userId, String content) {
         postRepository.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
@@ -30,6 +32,7 @@ public class PostCommandService {
         return postRepository.saveComment(comment);
     }
 
+    // 소유자 확인 후 게시글 삭제
     public void deletePost(UUID postId, UUID requestingUserId) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
@@ -39,11 +42,13 @@ public class PostCommandService {
         postRepository.deleteById(postId);
     }
 
+    // 최신순으로 게시글 목록을 페이지 조회
     @Transactional(readOnly = true)
     public List<Post> getPosts(int page, int size) {
         return postRepository.findAll(page, size);
     }
 
+    // 게시글 ID로 댓글 목록 조회
     @Transactional(readOnly = true)
     public List<Comment> getComments(UUID postId) {
         return postRepository.findCommentsByPostId(postId);

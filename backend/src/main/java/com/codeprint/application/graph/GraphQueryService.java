@@ -17,6 +17,7 @@ public class GraphQueryService {
 
     private final GraphRepository graphRepository;
 
+    // 프로젝트의 가장 최근 그래프를 조회
     public Optional<Graph> findLatestByProject(UUID projectId) {
         List<Graph> graphs = graphRepository.findByProjectId(projectId);
         if (graphs.isEmpty()) return Optional.empty();
@@ -24,10 +25,12 @@ public class GraphQueryService {
                 .max((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
     }
 
+    // 그래프 ID로 노드 목록 조회
     public List<Node> getNodes(UUID graphId) {
         return graphRepository.findNodesByGraphId(graphId);
     }
 
+    // 그래프 ID로 엣지 목록 조회
     public List<Edge> getEdges(UUID graphId) {
         return graphRepository.findEdgesByGraphId(graphId);
     }

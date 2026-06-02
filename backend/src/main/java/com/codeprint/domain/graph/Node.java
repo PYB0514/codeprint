@@ -50,6 +50,7 @@ public class Node {
     @Column(name = "is_hidden", nullable = false)
     private boolean isHidden;
 
+    // 그래프에 속하는 새 노드 인스턴스 생성
     public static Node create(UUID graphId, NodeType type, String name, String filePath, String language) {
         Node node = new Node();
         node.id = UUID.randomUUID();
@@ -64,19 +65,23 @@ public class Node {
         return node;
     }
 
+    // 노드의 화면 좌표를 업데이트
     public void updatePosition(double x, double y) {
         this.posX = x;
         this.posY = y;
     }
 
+    // 노드의 공개/숨김 상태를 토글
     public void toggleHidden() {
         this.isHidden = !this.isHidden;
     }
 
+    // 노드의 메타데이터(함수 시그니처, 주석 등)를 갱신
     public void updateMetadata(Map<String, Object> metadata) {
         this.metadata = metadata;
     }
 
+    // UUID를 NodeId Value Object로 변환하여 반환
     public NodeId getNodeId() {
         return NodeId.of(id);
     }

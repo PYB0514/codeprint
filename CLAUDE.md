@@ -440,6 +440,13 @@ First line of every new source file: a one-line Korean comment stating its role.
 - Place it directly under required directives (`'use client'`, `package` declaration, etc.).
 - Skip config files (`*.config.ts`, `build.gradle`, `package.json`, etc.).
 
+**함수/메서드 주석 (Function Comments in Korean)**
+모든 함수/메서드 정의 바로 위(어노테이션 블록 위)에 한 줄 한국어 `//` 주석을 추가한다.
+- Java: `// 사용자 ID로 사용자 조회`
+- TypeScript: `// JWT 토큰을 헤더에 포함하여 반환`
+- 생성자(`constructor`)는 제외.
+- 이 주석은 그래프 시각화에서 노드 라벨로 표시되므로 15자 이내로 간결하게.
+
 ### 7. Plan + Checklist + Context Notes
 Before any non-trivial task, produce three artifacts. Don't start coding without them.
 - **Plan** — what we're building and why.

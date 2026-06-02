@@ -27,6 +27,7 @@ public class AnalysisRunner {
     private final GraphBuilder graphBuilder;
     private final AnalysisProgressHandler progressHandler;
 
+    // 레포 클론 → 파일 수집 → 정적 분석 → 그래프 빌드를 비동기로 실행
     @Async
     @Transactional
     public void run(UUID analysisId, UUID projectId, String githubRepoUrl) {
@@ -93,7 +94,7 @@ public class AnalysisRunner {
         }
     }
 
-    // outer 트랜잭션 커밋 대기 — 최대 3초 재시도
+    // outer 트랜잭션 커밋 대기 후 분석 레코드를 조회 (최대 3초 재시도)
     private AnalysisResult waitForAnalysis(UUID analysisId) throws InterruptedException {
         for (int i = 0; i < 6; i++) {
             var result = analysisRepository.findById(analysisId);
