@@ -1,6 +1,7 @@
 // 그래프 조회 REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.graph.GraphCommandService;
 import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
@@ -16,14 +17,14 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/projects")
 @RequiredArgsConstructor
 public class GraphController {
 
     private final GraphQueryService graphQueryService;
+    private final GraphCommandService graphCommandService;
 
     // 프로젝트의 최신 그래프(노드+엣지)를 조회
-    @GetMapping("/{projectId}/graph")
+    @GetMapping("/api/projects/{projectId}/graph")
     public ResponseEntity<?> getGraph(
             @PathVariable UUID projectId,
             @AuthenticationPrincipal User user) {
@@ -69,5 +70,19 @@ public class GraphController {
                     ));
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    // 노드 드래그 후 위치를 저장
+    @PutMapping("/api/graphs/{graphId}/nodes/{nodeId}/position")
+    public ResponseEntity<Void> updateNodePosition(
+            @PathVariable UUID graphId,
+            @PathVariable UUID nodeId,
+            @RequestBody Map<String, Double> body,
+            @AuthenticationPrincipal User user) {
+
+        double x = body.getOrDefault("x", 0.0);
+        double y = body.getOrDefault("y", 0.0);
+        graphCommandService.updateNodePosition(nodeId, x, y);
+        return ResponseEntity.ok().build();
     }
 }

@@ -50,4 +50,12 @@ public class GraphCommandService {
     public List<Edge> getEdges(UUID graphId) {
         return graphRepository.findEdgesByGraphId(graphId);
     }
+
+    // 노드 드래그 후 저장된 위치를 업데이트
+    public void updateNodePosition(UUID nodeId, double x, double y) {
+        Node node = graphRepository.findNodeById(nodeId)
+                .orElseThrow(() -> new IllegalArgumentException("Node not found: " + nodeId));
+        node.updatePosition(x, y);
+        graphRepository.saveNode(node);
+    }
 }

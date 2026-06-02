@@ -53,6 +53,12 @@ public class GraphRepositoryImpl implements GraphRepository {
         return nodeJpa.save(node);
     }
 
+    // UUID로 노드 단건 조회
+    @Override
+    public Optional<Node> findNodeById(UUID nodeId) {
+        return nodeJpa.findById(nodeId);
+    }
+
     // 엣지 엔티티를 저장하고 반환
     @Override
     public Edge saveEdge(Edge edge) {
