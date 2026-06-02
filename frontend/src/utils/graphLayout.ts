@@ -149,7 +149,8 @@ function buildHubPositions(
   fileIdSet: Set<string>,
   fileToGroup: Map<string, string>
 ): Map<string, { x: number; y: number }> {
-  const GAP = 24  // 그룹 간 여백
+  const COL_GAP = 12  // 그룹 간 가로 여백
+  const ROW_GAP = 10  // 그룹 간 세로 여백
 
   // 그룹 간 연결 수 집계
   const connCount = new Map<string, number>()
@@ -176,8 +177,8 @@ function buildHubPositions(
   const allLayouts = Array.from(groupLayouts.values())
   const maxW = Math.max(...allLayouts.map((l) => l.w))
   const maxH = Math.max(...allLayouts.map((l) => l.h))
-  const cellW = maxW + GAP
-  const cellH = maxH + GAP
+  const cellW = maxW + COL_GAP
+  const cellH = maxH + ROW_GAP
 
   // 16:9에 가까운 그리드 크기 계산
   const cols = Math.max(1, Math.round(Math.sqrt(n * (16 / 9) * (cellH / cellW))))
