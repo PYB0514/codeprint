@@ -197,7 +197,7 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
       id: `group-${key}`,
       type: 'groupNode',
       position: { x: gx, y: gy },
-      data: { layer, sub, fileCount: groupFiles.length },
+      data: { layer, sub, fileCount: groupFiles.length, originalHeight: layout.h },
       style: { width: layout.w, height: layout.h },
       draggable: true,
     })
