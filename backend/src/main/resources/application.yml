@@ -29,7 +29,7 @@ spring:
           github:
             client-id: ${GITHUB_CLIENT_ID:placeholder}
             client-secret: ${GITHUB_CLIENT_SECRET:placeholder}
-            scope: read:user,user:email
+            scope: read:user,user:email,repo
 
   async:
     executor:
