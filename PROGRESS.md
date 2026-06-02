@@ -49,6 +49,8 @@
 | 엣지 화살표 + 파일 연결 모달 | ✅ | ArrowClosed, FileNode 커스텀, 함수명/주석 표시, 노드 이동 |
 | 연결선 토글 | ✅ | 상단 바 버튼으로 전체 엣지 표시/숨김 |
 | 고립 그룹 토글 | ✅ | 허브 모드 전용, 섹션 박스 포함 표시/숨김 |
+| FUNCTION_CALL 분석 엔진 | ✅ | StaticCodeAnalyzer 함수 호출 추출 + GraphBuilder 엣지 생성 |
+| EdgeType.CONTAINS 추가 | ✅ | FILE→FUNCTION 포함 관계를 IMPORT와 분리 |
 
 ### 인프라
 
@@ -80,13 +82,11 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재 브랜치: feat/group-layout (PR #5 오픈 상태)
-# 1. PR #5 머지 (feat/group-layout → main)
-# 2. feat/function-call 브랜치 생성
-# 3. FUNCTION_CALL 분석 엔진 구현
-#    - StaticCodeAnalyzer: 함수 호출 패턴 추출 추가
-#    - GraphBuilder: 파일 간 FUNCTION_CALL 엣지 생성 로직 추가
-#    - FILE→FUNCTION EdgeType.IMPORT 버그 수정
+# 현재 브랜치: feat/function-call
+# 1. PR 생성 후 머지 (feat/function-call → main)
+# 2. 다음 작업 선택:
+#    - FUNCTION_CALL 엣지 프론트 시각화 (현재 FILE-FILE 엣지만 표시)
+#    - feat/share 브랜치 생성 (공개/비공개 토글, 공유 URL)
 ```
 
 ---
