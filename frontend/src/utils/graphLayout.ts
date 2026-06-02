@@ -530,10 +530,11 @@ export function buildLayout(
     } as Node)
   }
 
-  // 엣지 — 파일 간만, 끊긴 연결 빨간색
+  // 엣지 — 파일 간 IMPORT 엣지, 끊긴 연결 빨간색
   const allNodeIds = new Set(result.map((n) => n.id))
+  const funcIdSet = new Set(funcNodes.map((f) => f.id))
 
-  const edges: Edge[] = rawEdges
+  const importEdges: Edge[] = rawEdges
     .filter((e) => fileIdSet.has(e.source) && fileIdSet.has(e.target))
     .filter((e) => e.source !== e.target)
     .map((e) => {
@@ -550,7 +551,21 @@ export function buildLayout(
       } as Edge
     })
 
-  return { nodes: result, edges }
+  // FUNCTION_CALL 엣지 — 함수 노드 간 호출 관계, amber 점선
+  const callEdges: Edge[] = rawEdges
+    .filter((e) => e.type === 'FUNCTION_CALL' && funcIdSet.has(e.source) && funcIdSet.has(e.target))
+    .filter((e) => e.source !== e.target)
+    .map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      data: { edgeIdentifier: e.edgeIdentifier, type: e.type },
+      style: { stroke: '#f59e0b', strokeWidth: 1.2, strokeDasharray: '5 4' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#f59e0b', width: 10, height: 10 },
+      zIndex: 1,
+    } as Edge))
+
+  return { nodes: result, edges: [...importEdges, ...callEdges] }
 }
 
 // AI 컨텍스트용 트리 다운로드 — "파일명 — 주석" 형태로 이름과 역할을 함께 표시

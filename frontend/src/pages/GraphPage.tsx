@@ -219,20 +219,24 @@ function GraphPageInner() {
 
   // 엣지 마우스 진입 — 두껍고 밝게 강조
   const handleEdgeMouseEnter: EdgeMouseHandler<Edge> = useCallback((_evt, edge) => {
-    const broken = (edge.data as { broken?: boolean })?.broken
+    const data = edge.data as { broken?: boolean; type?: string } | undefined
+    const broken = data?.broken
+    const isCall = data?.type === 'FUNCTION_CALL'
     setEdges((es) => es.map((e) =>
       e.id === edge.id
-        ? { ...e, style: { ...e.style, strokeWidth: broken ? 3.5 : 3, stroke: broken ? '#fca5a5' : '#a1a1aa' } }
+        ? { ...e, style: { ...e.style, strokeWidth: isCall ? 2.5 : broken ? 3.5 : 3, stroke: broken ? '#fca5a5' : isCall ? '#fcd34d' : '#a1a1aa' } }
         : e
     ))
   }, [setEdges])
 
   // 엣지 마우스 이탈 — 원래 스타일 복원
   const handleEdgeMouseLeave: EdgeMouseHandler<Edge> = useCallback((_evt, edge) => {
-    const broken = (edge.data as { broken?: boolean })?.broken
+    const data = edge.data as { broken?: boolean; type?: string } | undefined
+    const broken = data?.broken
+    const isCall = data?.type === 'FUNCTION_CALL'
     setEdges((es) => es.map((e) =>
       e.id === edge.id
-        ? { ...e, style: { ...e.style, strokeWidth: broken ? 2 : 1.5, stroke: broken ? '#ef4444' : '#4b5563' } }
+        ? { ...e, style: { ...e.style, strokeWidth: isCall ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : '#4b5563' } }
         : e
     ))
   }, [setEdges])
@@ -429,6 +433,12 @@ function GraphPageInner() {
         <div className="flex items-center gap-2">
           <span className="w-3 h-0.5 flex-shrink-0" style={{ background: '#4b5563' }} />
           <span className="text-gray-400">IMPORT</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <svg width="12" height="4" className="flex-shrink-0">
+            <line x1="0" y1="2" x2="12" y2="2" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4 3" />
+          </svg>
+          <span className="text-amber-400">FUNCTION_CALL</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-0.5 flex-shrink-0" style={{ background: '#ef4444' }} />
