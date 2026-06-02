@@ -10,32 +10,16 @@ import {
   useNodesState,
   useEdgesState,
 } from '@xyflow/react'
-import type { Node, Edge } from '@xyflow/react'
+import type { Edge, EdgeMouseHandler } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { buildLayout } from '../utils/graphLayout'
+import type { RawNode, RawEdge, LabelMode } from '../utils/graphLayout'
 
-interface RawNode {
-  id: string
-  type: string
-  name: string
-  filePath: string
-  language: string
-  posX: number
-  posY: number
-}
-
-interface RawEdge {
-  id: string
-  type: string
-  source: string
-  target: string
+interface EdgeModalInfo {
   edgeIdentifier: string
-}
-
-const NODE_COLORS: Record<string, string> = {
-  FILE: '#3b82f6',
-  FUNCTION: '#10b981',
-  DB_TABLE: '#f59e0b',
-  API_ENDPOINT: '#8b5cf6',
+  type: string
+  sourceId: string
+  targetId: string
 }
 
 function authHeaders() {
@@ -43,61 +27,33 @@ function authHeaders() {
   return { Authorization: `Bearer ${token}` }
 }
 
-function layoutNodes(rawNodes: RawNode[]): Node[] {
-  const COLS = 6
-  const COL_GAP = 220
-  const ROW_GAP = 120
-
-  return rawNodes.map((n, i) => ({
-    id: n.id,
-    position: {
-      x: (i % COLS) * COL_GAP,
-      y: Math.floor(i / COLS) * ROW_GAP,
-    },
-    data: {
-      label: (
-        <div style={{ fontSize: 11, textAlign: 'center' }}>
-          <div style={{ fontSize: 9, opacity: 0.6, marginBottom: 2 }}>{n.type}</div>
-          <div style={{ fontWeight: 600 }}>{n.name}</div>
-          {n.language && <div style={{ fontSize: 9, opacity: 0.5 }}>{n.language}</div>}
-        </div>
-      ),
-    },
-    style: {
-      background: NODE_COLORS[n.type] ?? '#6b7280',
-      color: '#fff',
-      border: 'none',
-      borderRadius: 8,
-      padding: '6px 10px',
-      minWidth: 120,
-    },
-  }))
-}
-
 export default function GraphPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [rawNodes, setRawNodes] = useState<RawNode[]>([])
+  const [counts, setCounts] = useState({ files: 0, funcs: 0, edges: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [edgeModal, setEdgeModal] = useState<EdgeModalInfo | null>(null)
+  const [labelMode, setLabelMode] = useState<LabelMode>('name')
+  const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
 
   const fetchGraph = useCallback(async () => {
     try {
       const res = await axios.get(`/api/projects/${projectId}/graph`, { headers: authHeaders() })
-      const { nodes: rawNodes, edges: rawEdges } = res.data as { nodes: RawNode[]; edges: RawEdge[] }
-
-      setNodes(layoutNodes(rawNodes))
-      setEdges(
-        rawEdges.map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          label: e.type,
-          style: { stroke: '#6b7280' },
-          labelStyle: { fontSize: 9, fill: '#9ca3af' },
-        } as Edge))
-      )
+      const { nodes: rn, edges: re } = res.data as { nodes: RawNode[]; edges: RawEdge[] }
+      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode)
+      setRawNodes(rn)
+      setRawEdgesCache(re)
+      setNodes(layoutNodes)
+      setEdges(layoutEdges)
+      setCounts({
+        files: rn.filter((n) => n.type === 'FILE').length,
+        funcs: rn.filter((n) => n.type === 'FUNCTION').length,
+        edges: re.length,
+      })
     } catch {
       setError('그래프를 불러오지 못했습니다.')
     } finally {
@@ -105,9 +61,29 @@ export default function GraphPage() {
     }
   }, [projectId, setNodes, setEdges])
 
-  useEffect(() => {
-    fetchGraph()
-  }, [fetchGraph])
+  useEffect(() => { fetchGraph() }, [fetchGraph])
+
+  const toggleLabelMode = useCallback(() => {
+    const next: LabelMode = labelMode === 'name' ? 'comment' : 'name'
+    setLabelMode(next)
+    if (rawNodes.length > 0) {
+      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, next)
+      setNodes(layoutNodes)
+      setEdges(layoutEdges)
+    }
+  }, [labelMode, rawNodes, rawEdgesCache, setNodes, setEdges])
+
+  const handleEdgeClick: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
+    const data = edge.data as { edgeIdentifier?: string; type?: string } | undefined
+    const sourceNode = rawNodes.find((n) => n.id === edge.source)
+    const targetNode = rawNodes.find((n) => n.id === edge.target)
+    setEdgeModal({
+      edgeIdentifier: data?.edgeIdentifier ?? edge.id,
+      type: data?.type ?? 'IMPORT',
+      sourceId: sourceNode?.name ?? edge.source,
+      targetId: targetNode?.name ?? edge.target,
+    })
+  }, [rawNodes])
 
   if (loading) {
     return (
@@ -121,15 +97,14 @@ export default function GraphPage() {
     return (
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center gap-4 text-gray-400">
         <p>{error}</p>
-        <button onClick={() => navigate('/dashboard')} className="underline text-sm">
-          대시보드로
-        </button>
+        <button onClick={() => navigate('/dashboard')} className="underline text-sm">대시보드로</button>
       </div>
     )
   }
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#030712' }}>
+      {/* 상단 바 */}
       <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
         <button
           onClick={() => navigate('/dashboard')}
@@ -138,8 +113,36 @@ export default function GraphPage() {
           ← 대시보드
         </button>
         <span className="text-gray-400 text-sm">
-          노드 {nodes.length}개 · 엣지 {edges.length}개
+          파일 {counts.files}개 · 함수 {counts.funcs}개 · 엣지 {counts.edges}개
         </span>
+        <button
+          onClick={toggleLabelMode}
+          className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700"
+        >
+          <span className={labelMode === 'name' ? 'text-white' : 'text-gray-500'}>이름</span>
+          <span className="text-gray-600">/</span>
+          <span className={labelMode === 'comment' ? 'text-white' : 'text-gray-500'}>주석</span>
+        </button>
+      </div>
+
+      {/* 범례 */}
+      <div className="absolute top-4 right-4 z-10 bg-gray-900 rounded-lg p-3 flex flex-col gap-1.5 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded" style={{ background: '#1e3a5f', border: '1.5px solid #3b82f6' }} />
+          <span className="text-gray-400">FILE</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded" style={{ background: '#064e3b', border: '1px solid #10b981' }} />
+          <span className="text-gray-400">FUNCTION</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-0.5" style={{ background: '#4b5563' }} />
+          <span className="text-gray-400">IMPORT</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-0.5" style={{ background: '#ef4444' }} />
+          <span className="text-gray-400">끊긴 연결</span>
+        </div>
       </div>
 
       <ReactFlow
@@ -147,16 +150,60 @@ export default function GraphPage() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onEdgeClick={handleEdgeClick}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
+        fitViewOptions={{ padding: 0.1 }}
+        minZoom={0.05}
+        maxZoom={2}
       >
         <Background color="#1f2937" gap={20} />
         <Controls />
         <MiniMap
-          nodeColor={(n) => (n.style?.background as string) ?? '#6b7280'}
+          nodeColor={(n) => {
+            const bg = n.style?.background as string
+            return bg ?? '#374151'
+          }}
           style={{ background: '#111827' }}
         />
       </ReactFlow>
+
+      {/* 엣지 클릭 모달 */}
+      {edgeModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setEdgeModal(null)}
+        >
+          <div
+            className="bg-gray-900 rounded-2xl p-6 w-80 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-sm">연결 상세</h3>
+              <button onClick={() => setEdgeModal(null)} className="text-gray-500 hover:text-white text-xs">✕</button>
+            </div>
+            <div className="flex flex-col gap-3 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-blue-900 text-blue-300 px-2 py-0.5 rounded">{edgeModal.type}</span>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-3 flex flex-col gap-2">
+                <div>
+                  <p className="text-xs text-gray-500 mb-0.5">출발</p>
+                  <p className="text-white font-mono text-xs">{edgeModal.sourceId}</p>
+                </div>
+                <div className="text-gray-600 text-xs text-center">↓</div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-0.5">도착</p>
+                  <p className="text-white font-mono text-xs">{edgeModal.targetId}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-0.5">식별자</p>
+                <p className="text-gray-300 font-mono text-xs break-all">{edgeModal.edgeIdentifier}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
