@@ -27,6 +27,7 @@ function authHeaders() {
   return { Authorization: `Bearer ${token}` }
 }
 
+// 프로젝트 목록 대시보드 페이지
 export default function DashboardPage() {
   const navigate = useNavigate()
   const [user, setUser] = useState<UserInfo | null>(null)

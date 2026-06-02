@@ -46,5 +46,6 @@ public class AnalysisController {
         ));
     }
 
+    // 분석 시작 요청 DTO (프로젝트 ID + 브랜치명)
     public record StartAnalysisRequest(UUID projectId, String branch) {}
 }

@@ -14,6 +14,7 @@ public record ProjectResponse(
         boolean isPublic,
         Instant createdAt
 ) {
+    // 프로젝트 도메인 객체를 응답 DTO로 변환
     public static ProjectResponse from(Project project) {
         return new ProjectResponse(
                 project.getId(),

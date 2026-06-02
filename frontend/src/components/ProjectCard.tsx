@@ -24,6 +24,7 @@ function authHeaders() {
   return { Authorization: `Bearer ${token}` }
 }
 
+// 프로젝트 카드 — 분석 시작/재분석, 진행률 표시, 그래프 이동
 export default function ProjectCard({ project, onDelete }: Props) {
   const navigate = useNavigate()
   const [hasGraph, setHasGraph] = useState(false)
@@ -47,6 +48,7 @@ export default function ProjectCard({ project, onDelete }: Props) {
 
   // 피커 외부 클릭 시 닫기
   useEffect(() => {
+    // 브랜치 피커 외부 클릭 감지 핸들러
     const handleClickOutside = (e: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
         setShowBranchPicker(false)

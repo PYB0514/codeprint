@@ -16,6 +16,7 @@ interface Props {
   onCreated: (project: Project) => void
 }
 
+// 새 프로젝트 생성 모달 컴포넌트
 export default function CreateProjectModal({ onClose, onCreated }: Props) {
   const [githubRepoUrl, setGithubRepoUrl] = useState('')
   const [name, setName] = useState('')

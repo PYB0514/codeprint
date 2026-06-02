@@ -12,7 +12,7 @@ import {
   useReactFlow,
   ReactFlowProvider,
 } from '@xyflow/react'
-import type { Edge, EdgeMouseHandler } from '@xyflow/react'
+import type { Edge, EdgeMouseHandler, NodeDragHandler } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
 import { buildLayout, downloadTreeText } from '../utils/graphLayout'
@@ -31,6 +31,7 @@ function authHeaders() {
   return { Authorization: `Bearer ${token}` }
 }
 
+// 그래프 페이지 내부 컴포넌트 (ReactFlow 훅 사용)
 function GraphPageInner() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
@@ -43,6 +44,7 @@ function GraphPageInner() {
   const [edgeModal, setEdgeModal] = useState<EdgeModalInfo | null>(null)
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
+  const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const flowRef = useRef<HTMLDivElement>(null)
   const { getNodes, fitView } = useReactFlow()
@@ -51,7 +53,8 @@ function GraphPageInner() {
   const fetchGraph = useCallback(async () => {
     try {
       const res = await axios.get(`/api/projects/${projectId}/graph`, { headers: authHeaders() })
-      const { nodes: rn, edges: re } = res.data as { nodes: RawNode[]; edges: RawEdge[] }
+      const { graphId: gid, nodes: rn, edges: re } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[] }
+      setGraphId(gid)
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode)
       setRawNodes(rn)
       setRawEdgesCache(re)
@@ -126,6 +129,16 @@ function GraphPageInner() {
       setExporting(false)
     }
   }, [getNodes, fitView])
+
+  // 노드 드래그 완료 시 서버에 위치를 저장
+  const handleNodeDragStop: NodeDragHandler = useCallback((_event, node) => {
+    if (!graphId) return
+    axios.put(
+      `/api/graphs/${graphId}/nodes/${node.id}/position`,
+      { x: node.position.x, y: node.position.y },
+      { headers: authHeaders() }
+    ).catch(() => {})
+  }, [graphId])
 
   // 엣지 클릭 시 상세 정보 모달을 표시
   const handleEdgeClick: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
@@ -222,6 +235,7 @@ function GraphPageInner() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onEdgeClick={handleEdgeClick}
+        onNodeDragStop={handleNodeDragStop}
         fitView
         fitViewOptions={{ padding: 0.1 }}
         minZoom={0.05}

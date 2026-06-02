@@ -70,5 +70,6 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 
+    // 프로젝트 생성 요청 DTO (레포 URL, 이름, 설명)
     public record CreateProjectRequest(String githubRepoUrl, String name, String description) {}
 }

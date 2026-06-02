@@ -19,6 +19,8 @@ public interface GraphRepository {
 
     Node saveNode(Node node);
 
+    Optional<Node> findNodeById(UUID nodeId);
+
     Edge saveEdge(Edge edge);
 
     void deleteById(UUID id);

@@ -48,40 +48,40 @@ public class StaticCodeAnalyzer {
         return null;
     }
 
-    // 함수 바로 위 한 줄 주석 추출 (함수명 → 주석 맵)
-    // 전체 content에서 매칭하여 멀티라인 파라미터도 처리
+    // 함수 바로 위 한 줄 주석 추출 (함수명 → 주석 맵) — 순방향 라인 스캔으로 멀티라인 파라미터 지원
     private Map<String, String> extractFunctionComments(String content, String language) {
         Map<String, String> result = new LinkedHashMap<>();
         String[] lines = content.split("\n");
 
-        Pattern funcPattern = getFunctionPattern(language);
-        if (funcPattern == null) return result;
+        for (int i = 0; i < lines.length - 1; i++) {
+            String line = lines[i].trim();
 
-        Matcher m = funcPattern.matcher(content);
-        while (m.find()) {
-            String funcName = extractFirstGroup(m);
-            if (funcName == null || isKeyword(funcName) || result.containsKey(funcName)) continue;
+            // 주석 줄인지 확인
+            String candidate = null;
+            if (line.startsWith("//")) {
+                candidate = line.substring(2).trim();
+            } else if (line.startsWith("*") && !line.startsWith("*/")) {
+                candidate = line.replaceAll("^\\*+\\s*", "").trim();
+            } else if (line.startsWith("#") && language.equals("Python")) {
+                candidate = line.substring(1).trim();
+            }
+            if (candidate == null || candidate.isBlank()) continue;
 
-            // 매칭 시작 위치로 줄 번호 역산
-            int lineIndex = countNewlines(content, m.start());
+            // 주석 다음으로 어노테이션/빈 줄을 건너뛰며 함수 정의 줄 탐색 (최대 10줄)
+            for (int k = i + 1; k < Math.min(i + 10, lines.length); k++) {
+                String ahead = lines[k].trim();
+                if (ahead.isEmpty()) continue;
+                if (ahead.startsWith("@")) continue;
 
-            // 위로 탐색하며 주석 찾기 (어노테이션은 건너뜀)
-            String comment = null;
-            for (int j = lineIndex - 1; j >= Math.max(0, lineIndex - 8); j--) {
-                String prev = lines[j].trim();
-                if (prev.isEmpty()) continue;
-                if (prev.startsWith("@")) continue;
-                if (prev.startsWith("//")) {
-                    comment = prev.substring(2).trim();
-                } else if (prev.startsWith("*") && !prev.startsWith("*/")) {
-                    comment = prev.replaceAll("^\\*+\\s*", "").trim();
-                } else if (prev.startsWith("#") && language.equals("Python")) {
-                    comment = prev.substring(1).trim();
+                // 함수 정의 줄에서 이름 추출 — 식별자(영문 시작) 뒤에 '(' 가 오는 패턴
+                Matcher nm = Pattern.compile("\\b([a-zA-Z_][\\w]*)\\s*\\(").matcher(ahead);
+                while (nm.find()) {
+                    String name = nm.group(1);
+                    if (!isKeyword(name) && !result.containsKey(name)) {
+                        result.put(name, candidate);
+                    }
                 }
                 break;
-            }
-            if (comment != null && !comment.isBlank()) {
-                result.put(funcName, comment);
             }
         }
         return result;

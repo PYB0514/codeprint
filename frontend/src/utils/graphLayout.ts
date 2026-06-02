@@ -295,6 +295,7 @@ export function downloadTreeText(rawNodes: RawNode[]): void {
 
   const lines: string[] = []
 
+  // 디렉터리 경로를 재귀적으로 트리 텍스트로 렌더링
   const renderDir = (dirPath: string, indent: string) => {
     const childDirs = Object.keys(tree)
       .filter((k) => k.substring(0, k.lastIndexOf('/')) === dirPath && k !== dirPath)
