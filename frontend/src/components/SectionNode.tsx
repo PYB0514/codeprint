@@ -1,8 +1,40 @@
-// 레이어 또는 그룹 섹션을 감싸는 배경 박스 — color prop으로 레이어별 색상 지원
+// 레이어 또는 그룹 섹션을 감싸는 배경 박스 — opaque 모드에서 레이어 색상으로 완전히 덮음
 import type { NodeProps } from '@xyflow/react'
 
 export default function SectionNode({ data }: NodeProps) {
   const color = (data?.color as string) ?? '#4b5563'
+  const opaque = (data?.opaque as boolean) ?? false
+
+  if (opaque) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          background: `${color}cc`,
+          borderRadius: 14,
+          pointerEvents: 'none',
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <span
+          style={{
+            fontSize: 13,
+            fontWeight: 800,
+            color: '#ffffff99',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {String(data?.label ?? '')}
+        </span>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{

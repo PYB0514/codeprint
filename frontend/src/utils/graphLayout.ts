@@ -465,6 +465,7 @@ export function buildLayout(
           label: getLabel(file, fileMaxLen),
           name: file.name,
           comment: file.comment,
+          layer,
           incoming: fileIncoming.get(file.id) ?? [],
           outgoing: fileOutgoing.get(file.id) ?? [],
           onOpenSidebar: onOpenFileSidebar ? () => onOpenFileSidebar({
@@ -501,7 +502,7 @@ export function buildLayout(
             y: FILE_PAD_TOP + fr * (FUNC_H + FUNC_PAD),
           },
           // 함수 박스 너비 110px, 좌우 패딩 8px → 102px / ~6px per char ≈ 17자
-          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment },
+          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment, layer },
           style: {
             background: '#064e3b',
             border: '1px solid #10b981',
@@ -611,7 +612,7 @@ export function buildLayout(
       id: `layer-section-${layer}`,
       type: 'sectionNode',
       position: { x: minX - LAYER_PAD, y: minY - LAYER_PAD - LABEL_H },
-      data: { label: meta.label, color: meta.color },
+      data: { label: meta.label, color: meta.color, layer },
       style: { width: maxX - minX + LAYER_PAD * 2, height: maxY - minY + LAYER_PAD * 2 + LABEL_H },
       draggable: false,
       selectable: false,

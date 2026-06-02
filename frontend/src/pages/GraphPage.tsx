@@ -60,6 +60,7 @@ function GraphPageInner() {
   const [leftOpen, setLeftOpen] = useState(true)
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
+  const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
   const [showEdges, setShowEdges] = useState(false)
   const [showCallEdges, setShowCallEdges] = useState(false)
   const [showInstEdges, setShowInstEdges] = useState(false)
@@ -76,6 +77,25 @@ function GraphPageInner() {
       const hidden = t === 'IMPORT' ? !se : t === 'FUNCTION_CALL' ? !sc : t === 'INSTANTIATION' ? !si : false
       return { ...e, hidden }
     }), [])
+
+  // 레이어 섹션 박스를 해당 색상으로 덮어 내용을 가리는 토글
+  const toggleLayerOpaque = useCallback((layer: string) => {
+    setOpaqueLayerSet((prev) => {
+      const next = new Set(prev)
+      if (next.has(layer)) next.delete(layer)
+      else next.add(layer)
+      const isOpaque = next.has(layer)
+      setNodes((nds) => nds.map((n) => {
+        if (n.id !== `layer-section-${layer}`) return n
+        return {
+          ...n,
+          zIndex: isOpaque ? 50 : -20,
+          data: { ...n.data, opaque: isOpaque },
+        }
+      }))
+      return next
+    })
+  }, [setNodes])
 
   // 파일 연결 보기 — 사이드바 오픈 콜백
   const openFileSidebar = useCallback((data: FileSidebarData) => {
@@ -504,17 +524,35 @@ function GraphPageInner() {
             <LeftSection title="범례">
               <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">DDD 레이어</p>
               {[
-                { label: 'Domain',           color: '#3b82f6' },
-                { label: 'Application',      color: '#eab308' },
-                { label: 'Infrastructure',   color: '#a855f7' },
-                { label: 'Interfaces',       color: '#10b981' },
-                { label: 'Pages/Components', color: '#06b6d4' },
-              ].map(({ label, color }) => (
-                <div key={label} className="flex items-center gap-2 py-0.5">
-                  <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: `${color}22`, border: `1.5px solid ${color}` }} />
-                  <span className="text-gray-400 text-xs">{label}</span>
-                </div>
-              ))}
+                { label: 'Domain',           color: '#3b82f6', key: 'domain' },
+                { label: 'Application',      color: '#eab308', key: 'application' },
+                { label: 'Infrastructure',   color: '#a855f7', key: 'infrastructure' },
+                { label: 'Interfaces',       color: '#10b981', key: 'interfaces' },
+                { label: 'Pages/Components', color: '#06b6d4', key: 'pages' },
+              ].map(({ label, color, key }) => {
+                const active = opaqueLayerSet.has(key)
+                return (
+                  <div key={key} className="flex items-center gap-2 py-0.5">
+                    <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: `${color}22`, border: `1.5px solid ${color}` }} />
+                    <span className="text-gray-400 text-xs flex-1">{label}</span>
+                    <button
+                      onClick={() => toggleLayerOpaque(key)}
+                      title={active ? '내용 표시' : '내용 가리기'}
+                      style={{
+                        width: 18, height: 18, borderRadius: 4,
+                        border: `1px solid ${color}66`,
+                        background: active ? `${color}99` : 'transparent',
+                        color: active ? '#fff' : color,
+                        fontSize: 10, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {active ? '◑' : '○'}
+                    </button>
+                  </div>
+                )
+              })}
               <div className="border-t border-gray-800 my-2" />
               <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">노드</p>
               <div className="flex items-center gap-2 py-0.5">
