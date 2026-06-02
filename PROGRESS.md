@@ -62,7 +62,10 @@ docker compose down
 ## 🚀 다음 세션 첫 번째 액션
 
 ```powershell
-git checkout -b feat/project-api
+# 현재 브랜치: feat/graph-layout
+# 1. 주석 추출 디버깅 — StaticCodeAnalyzer에 log 추가 후 재분석
+# 2. 주석 토글 동작 확인
+# 3. PR 머지
 ```
 
 ---
