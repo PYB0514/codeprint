@@ -18,14 +18,13 @@ export function useAnalysisProgress(analysisId: string | null, onDone: () => voi
   const onDoneRef = useRef(onDone)
   onDoneRef.current = onDone
 
-  // displayProgress를 target까지 부드럽게 증가시키고 완료 시 콜백 호출
-  const animateTo = (target: number, afterDone?: () => void) => {
+  // displayProgress를 target까지 부드럽게 증가
+  const animateTo = (target: number) => {
     if (animRef.current) clearInterval(animRef.current)
     animRef.current = setInterval(() => {
       setDisplayProgress((prev) => {
         if (prev >= target) {
           clearInterval(animRef.current!)
-          afterDone?.()
           return target
         }
         return prev + 1
@@ -33,10 +32,17 @@ export function useAnalysisProgress(analysisId: string | null, onDone: () => voi
     }, 15)
   }
 
+  // displayProgress가 100에 도달하면 onDone 호출 (setState 업데이터 밖에서 실행)
+  useEffect(() => {
+    if (displayProgress >= 100 && status === 'DONE') {
+      onDoneRef.current()
+    }
+  }, [displayProgress, status])
+
   // 실제 진행률이 바뀌면 displayProgress를 그 값까지 애니메이션
   useEffect(() => {
     if (status === 'DONE') {
-      animateTo(100, () => onDoneRef.current())
+      animateTo(100)
       return
     }
     if (realProgress > displayProgress) {
