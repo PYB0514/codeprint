@@ -1,4 +1,5 @@
 // 그래프 노드/엣지 레이아웃 계산 — dagre 기반 방향 그래프 + DDD 폴더 그룹핑
+import React from 'react'
 import dagre from '@dagrejs/dagre'
 import type { Node, Edge } from '@xyflow/react'
 
@@ -76,17 +77,19 @@ function calcFileSize(funcCount: number): { w: number; h: number; cols: number }
 
 export type LabelMode = 'name' | 'comment'
 
-// 텍스트가 maxLen을 초과하면 말줄임표로 자름 (한글 포함 모든 문자 기준)
-function truncate(text: string, maxLen: number): string {
-  return text.length <= maxLen ? text : text.slice(0, maxLen - 1) + '…'
+// 텍스트가 maxLen을 초과하면 말줄임표 + title tooltip이 있는 span 반환, 아니면 문자열 그대로
+function labelNode(full: string, maxLen: number): React.ReactNode {
+  if (full.length <= maxLen) return full
+  const trimmed = full.slice(0, maxLen - 1) + '…'
+  return React.createElement('span', { title: full, style: { cursor: 'default' } }, trimmed)
 }
 
 // 원시 노드/엣지 데이터를 dagre 레이아웃으로 변환하여 React Flow용 노드/엣지 반환
 export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode: LabelMode = 'name'): { nodes: Node[]; edges: Edge[] } {
-  // 노드 라벨 반환 (이름 또는 주석) — 픽셀 너비 기반 최대 글자 수 적용
-  const getLabel = (node: RawNode, maxLen = 999) => {
+  // 노드 라벨 반환 — 초과 시 말줄임표 + hover tooltip
+  const getLabel = (node: RawNode, maxLen = 999): React.ReactNode => {
     const raw = labelMode === 'comment' && node.comment ? node.comment : node.name
-    return truncate(raw, maxLen)
+    return labelNode(raw, maxLen)
   }
   const fileNodes = rawNodes.filter((n) => n.type === 'FILE')
   const funcNodes = rawNodes.filter((n) => n.type === 'FUNCTION')
