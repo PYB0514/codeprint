@@ -4,11 +4,19 @@ import { createPortal } from 'react-dom'
 import { Handle, Position, useReactFlow } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 
+interface FuncCallEntry {
+  callerName: string
+  callerLabel: string
+  callerNodeId: string
+  calleeName: string
+  calleeLabel: string
+  calleeNodeId: string
+}
+
 interface ConnItem {
   nodeId: string
   name: string
-  edgeType: string
-  funcLabel: string
+  callChain: FuncCallEntry[]
 }
 
 export default function FileNode({ data }: NodeProps) {
@@ -89,7 +97,10 @@ export default function FileNode({ data }: NodeProps) {
             {/* 들어오는 연결 */}
             <Section title={`들어오는 연결 (${incoming.length})`} empty={incoming.length === 0}>
               {incoming.map((c, i) => (
-                <ConnRow key={i} name={c.name} type={c.edgeType} funcLabel={c.funcLabel} direction="in" onClick={() => goToNode(c.nodeId)} />
+                <ConnRow key={i} name={c.name} direction="in" callChain={c.callChain}
+                  onFileClick={() => goToNode(c.nodeId)}
+                  onFuncClick={(nodeId) => { setOpen(false); setTimeout(() => fitView({ nodes: [{ id: nodeId }], duration: 500, padding: 0.4 }), 50) }}
+                />
               ))}
             </Section>
 
@@ -98,7 +109,10 @@ export default function FileNode({ data }: NodeProps) {
             {/* 나가는 연결 */}
             <Section title={`나가는 연결 (${outgoing.length})`} empty={outgoing.length === 0}>
               {outgoing.map((c, i) => (
-                <ConnRow key={i} name={c.name} type={c.edgeType} funcLabel={c.funcLabel} direction="out" onClick={() => goToNode(c.nodeId)} />
+                <ConnRow key={i} name={c.name} direction="out" callChain={c.callChain}
+                  onFileClick={() => goToNode(c.nodeId)}
+                  onFuncClick={(nodeId) => { setOpen(false); setTimeout(() => fitView({ nodes: [{ id: nodeId }], duration: 500, padding: 0.4 }), 50) }}
+                />
               ))}
             </Section>
           </div>
@@ -123,28 +137,49 @@ function Section({ title, empty, children }: { title: string; empty: boolean; ch
   )
 }
 
-// 연결 항목 한 줄 — 함수명 강조, 파일명은 보조
-function ConnRow({ name, type, funcLabel, direction, onClick }: {
-  name: string; type: string; funcLabel: string; direction: 'in' | 'out'; onClick: () => void
+// 연결 항목 — 파일명 + 함수 호출 체인 목록
+function ConnRow({ name, direction, callChain, onFileClick, onFuncClick }: {
+  name: string
+  direction: 'in' | 'out'
+  callChain: FuncCallEntry[]
+  onFileClick: () => void
+  onFuncClick: (nodeId: string) => void
 }) {
-  const typeColor = direction === 'in' ? '#3b82f6' : '#10b981'
-  const typeBg   = direction === 'in' ? '#1e3a5f' : '#064e3b'
+  const accent = direction === 'in' ? '#3b82f6' : '#10b981'
   return (
-    <div style={{ marginBottom: 8, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
-      {/* 함수명 — 핵심 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        <span style={{ color: typeColor, fontSize: 10, background: typeBg, padding: '1px 6px', borderRadius: 4, flexShrink: 0 }}>{type}</span>
-        <span style={{ color: '#e2e8f0', fontSize: 12, fontWeight: 600, fontFamily: 'monospace' }}>{funcLabel}</span>
-      </div>
-      {/* 파일명 — 보조 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ color: '#475569', fontSize: 10 }}>{direction === 'in' ? '출발' : '도착'}</span>
+    <div style={{ marginBottom: 10, padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
+      {/* 파일명 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: callChain.length > 0 ? 8 : 0 }}>
+        <span style={{ color: accent, fontSize: 9, flexShrink: 0 }}>{direction === 'in' ? '◀' : '▶'}</span>
         <span
-          onClick={onClick}
-          style={{ color: '#64748b', fontSize: 11, cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          onClick={onFileClick}
+          style={{ color: '#93c5fd', fontSize: 12, fontWeight: 700, fontFamily: 'monospace', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           title="클릭하여 해당 파일로 이동"
         >{name}</span>
       </div>
+      {/* 함수 호출 체인 */}
+      {callChain.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 14 }}>
+          {callChain.map((entry, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                onClick={() => onFuncClick(entry.callerNodeId)}
+                style={{ color: '#6ee7b7', fontSize: 11, fontFamily: 'monospace', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}
+                title={`${entry.callerName} — 클릭하여 이동`}
+              >{entry.callerLabel}</span>
+              <span style={{ color: '#f59e0b', fontSize: 10, flexShrink: 0 }}>→</span>
+              <span
+                onClick={() => onFuncClick(entry.calleeNodeId)}
+                style={{ color: '#6ee7b7', fontSize: 11, fontFamily: 'monospace', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, textAlign: 'right' }}
+                title={`${entry.calleeName} — 클릭하여 이동`}
+              >{entry.calleeLabel}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {callChain.length === 0 && (
+        <div style={{ paddingLeft: 14, color: '#334155', fontSize: 11 }}>함수 호출 없음</div>
+      )}
     </div>
   )
 }

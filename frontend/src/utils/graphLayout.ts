@@ -362,27 +362,41 @@ export function buildLayout(
   fileNodes.forEach((f) => fileToGroup.set(f.id, getGroupKey(f.filePath, commonPrefix)))
 
   // 파일별 인/아웃 연결 집계 (모달 데이터용)
-  type ConnEntry = { nodeId: string; name: string; edgeType: string; funcLabel: string }
+  type FuncCallEntry = { callerName: string; callerLabel: string; callerNodeId: string; calleeName: string; calleeLabel: string; calleeNodeId: string }
+  type ConnEntry = { nodeId: string; name: string; callChain: FuncCallEntry[] }
   const fileIncoming = new Map<string, ConnEntry[]>()
   const fileOutgoing = new Map<string, ConnEntry[]>()
   fileNodes.forEach((f) => { fileIncoming.set(f.id, []); fileOutgoing.set(f.id, []) })
+
+  // FUNCTION_CALL 엣지를 (출발filePath, 도착filePath) 키로 그룹핑
+  const funcCallMap = new Map<string, FuncCallEntry[]>()
+  rawEdges
+    .filter((e) => e.type === 'FUNCTION_CALL')
+    .forEach((e) => {
+      const srcFunc = funcNodes.find((fn) => fn.id === e.source)
+      const tgtFunc = funcNodes.find((fn) => fn.id === e.target)
+      if (!srcFunc || !tgtFunc) return
+      const key = srcFunc.filePath + '||' + tgtFunc.filePath
+      if (!funcCallMap.has(key)) funcCallMap.set(key, [])
+      funcCallMap.get(key)!.push({
+        callerName: srcFunc.name,
+        callerLabel: labelMode === 'comment' && srcFunc.comment ? srcFunc.comment : srcFunc.name,
+        callerNodeId: srcFunc.id,
+        calleeName: tgtFunc.name,
+        calleeLabel: labelMode === 'comment' && tgtFunc.comment ? tgtFunc.comment : tgtFunc.name,
+        calleeNodeId: tgtFunc.id,
+      })
+    })
 
   rawEdges
     .filter((e) => fileIdSet.has(e.source) && fileIdSet.has(e.target) && e.source !== e.target)
     .forEach((e) => {
       const src = fileNodes.find((f) => f.id === e.source)
       const tgt = fileNodes.find((f) => f.id === e.target)
-      // FUNCTION_CALL만 edgeIdentifier에서 함수명 파싱 — IMPORT 등은 파일명 기반
-      const funcName = e.type === 'FUNCTION_CALL' ? (e.edgeIdentifier.split('-').pop() ?? '') : ''
-      const funcNode = funcName
-        ? funcNodes.find((fn) => fn.filePath === src?.filePath && fn.name === funcName)
-        : null
-      const funcLabel = funcName
-        ? (labelMode === 'comment' && funcNode?.comment ? funcNode.comment : funcName)
-        : '—'
-
-      fileOutgoing.get(e.source)?.push({ nodeId: e.target, name: tgt?.name ?? e.target, edgeType: e.type, funcLabel })
-      fileIncoming.get(e.target)?.push({ nodeId: e.source, name: src?.name ?? e.source, edgeType: e.type, funcLabel })
+      if (!src || !tgt) return
+      const callChain = funcCallMap.get(src.filePath + '||' + tgt.filePath) ?? []
+      fileOutgoing.get(e.source)?.push({ nodeId: e.target, name: tgt.name, callChain })
+      fileIncoming.get(e.target)?.push({ nodeId: e.source, name: src.name, callChain })
     })
 
   // 레이아웃 프리셋에 따라 그룹 위치 계산
