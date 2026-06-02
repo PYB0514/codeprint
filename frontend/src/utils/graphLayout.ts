@@ -76,11 +76,18 @@ function calcFileSize(funcCount: number): { w: number; h: number; cols: number }
 
 export type LabelMode = 'name' | 'comment'
 
+// 텍스트가 maxLen을 초과하면 말줄임표로 자름 (한글 포함 모든 문자 기준)
+function truncate(text: string, maxLen: number): string {
+  return text.length <= maxLen ? text : text.slice(0, maxLen - 1) + '…'
+}
+
 // 원시 노드/엣지 데이터를 dagre 레이아웃으로 변환하여 React Flow용 노드/엣지 반환
 export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode: LabelMode = 'name'): { nodes: Node[]; edges: Edge[] } {
-  // 노드 라벨 반환 (이름 또는 주석)
-  const getLabel = (node: RawNode) =>
-    labelMode === 'comment' && node.comment ? node.comment : node.name
+  // 노드 라벨 반환 (이름 또는 주석) — 픽셀 너비 기반 최대 글자 수 적용
+  const getLabel = (node: RawNode, maxLen = 999) => {
+    const raw = labelMode === 'comment' && node.comment ? node.comment : node.name
+    return truncate(raw, maxLen)
+  }
   const fileNodes = rawNodes.filter((n) => n.type === 'FILE')
   const funcNodes = rawNodes.filter((n) => n.type === 'FUNCTION')
 
@@ -201,12 +208,14 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
     // 파일 노드
     layout.files.forEach(({ file, x, y }) => {
       const size = fileSizes.get(file.id)!
+      // 파일 헤더 너비 기준 최대 글자 수 (10px 폰트, 한글 약 6px/char)
+      const fileMaxLen = Math.floor((size.w - FILE_PAD_X * 2) / 6)
       result.push({
         id: file.id,
         parentId: `group-${key}`,
         extent: 'parent',
         position: { x: GROUP_PAD + x, y: GROUP_HEADER + GROUP_PAD + y },
-        data: { label: getLabel(file), name: file.name, comment: file.comment },
+        data: { label: getLabel(file, fileMaxLen), name: file.name, comment: file.comment },
         style: {
           background: '#1e3a5f',
           border: '1.5px solid #3b82f6',
@@ -233,7 +242,8 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
             x: FILE_PAD_X + fc * (FUNC_W + FUNC_PAD),
             y: FILE_PAD_TOP + fr * (FUNC_H + FUNC_PAD),
           },
-          data: { label: getLabel(fn), name: fn.name, comment: fn.comment },
+          // 함수 박스 너비 110px, 좌우 패딩 8px → 102px / ~6px per char ≈ 17자
+          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment },
           style: {
             background: '#064e3b',
             border: '1px solid #10b981',
