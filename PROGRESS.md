@@ -1,155 +1,131 @@
-# Codeprint 개발 진행 기록
+# Codeprint 개발 현황
 
-## 2026-06-01 작업 내용
-
----
-
-### 1. 백엔드 프로젝트 초기화 완료
-
-- `backend/` 폴더에 Spring Boot 3.5.0 + Gradle 프로젝트 생성
-- Java 17, DDD 폴더 구조 적용
-- 의존성: Web, Security, JPA, WebSocket, OAuth2, PostgreSQL, Flyway, Lombok, JWT, Stripe
-
-**DDD 구조 (53개 파일 생성)**
-- `domain/` — user, project, graph, analysis, community 5개 바운디드 컨텍스트
-- `application/` — 각 컨텍스트별 Command Service
-- `infrastructure/persistence/` — JPA Repository 구현체
-- `interfaces/api/` — REST Controller, SecurityConfig
-- `interfaces/websocket/` — WebSocket 설정, 분석 진행률 핸들러
+> 마지막 업데이트: 2026-06-02
 
 ---
 
-### 2. DB 세팅 완료
+## 완료된 작업
 
-- Docker PostgreSQL 컨테이너 생성 및 실행
-  ```
-  docker run --name codeprint-db -e POSTGRES_PASSWORD=1234 -e POSTGRES_DB=codeprint -p 5432:5432 -d postgres
-  ```
-- Flyway 마이그레이션 도입 (`V1__init_schema.sql`)
-- 앱 실행 시 자동으로 전체 스키마 생성 확인
+### 백엔드
 
-**DB 접속 정보 (로컬)**
-- Host: localhost:5432
-- DB: codeprint
-- User: postgres
-- Password: 1234
-
-**주의: PC 재시작 후 DB 컨테이너 수동 시작 필요**
-```
-docker start codeprint-db
-```
-
----
-
-### 3. GitHub OAuth2 + JWT 로그인 구현 완료
-
-**완료된 파일**
-- `JwtTokenProvider.java` — JWT 발급/검증
-- `JwtAuthenticationFilter.java` — 요청마다 JWT 검증
-- `OAuth2SuccessHandler.java` — GitHub 로그인 성공 시 JWT 발급 후 프론트로 리다이렉트
-- `SecurityConfig.java` — JWT 필터 + OAuth2 연결
-- `AuthController.java` — `GET /api/auth/me` (현재 로그인 유저 정보)
-- `GlobalExceptionHandler.java` — 전역 예외 → 일관된 JSON 오류 응답
-
-**GitHub OAuth App 등록 완료 (로컬용)**
-- Client ID: `0v23li9p7ck6LTB8bnqm`
-- Callback URL: `http://localhost:8080/login/oauth2/code/github`
-
-**실행 확인 완료 (2026-06-02)**
-- local 프로필 적용 확인
-- DB 연결, Flyway 마이그레이션 정상 확인
-- 8080 포트 LISTENING 확인
-
-**테스트 완료 (2026-06-02)**
-- GitHub 로그인 → JWT 발급 → 대시보드 자동 이동 전체 흐름 확인
-- DB users 테이블 INSERT 확인 (PYB0514, FREE 플랜)
-- `/api/auth/me` 유저 정보 응답 확인
-
----
-
-### 4. VS Code 환경 설정
-
-- Spring Boot Dashboard로 서버 실행/종료 가능
-- `.vscode/launch.json` — `SPRING_PROFILES_ACTIVE=local` 설정
-- `.vscode/tasks.json` — `Ctrl+Shift+B`로 백엔드 실행
-
----
-
-## 2026-06-02 작업 내용
-
----
-
-### 5. UTF-8 BOM 문제 수정
-
-- 전체 Java 파일 58개에서 BOM(`﻿`) 제거
-- Windows에서 파일 저장 시 BOM이 붙어 Java 컴파일러가 인식 불가
-- PowerShell로 일괄 제거 후 컴파일 성공 확인
-
----
-
-### 6. GlobalExceptionHandler 추가
-
-- `interfaces/api/GlobalExceptionHandler.java` 생성
-- `ResponseStatusException`, `IllegalArgumentException`, `IllegalStateException`, 일반 `Exception` 처리
-- 응답 포맷: `{ status, message, timestamp }`
-
----
-
-### 7. 프론트엔드 초기화 완료
-
-- `frontend/` 폴더에 React 18 + TypeScript + Vite 프로젝트 생성
-- 의존성: react-router-dom, axios, zustand, @xyflow/react, tailwindcss, html-to-image
-
-**생성된 페이지**
-- `LoginPage.tsx` — GitHub 로그인 버튼 (→ `localhost:8080/oauth2/authorization/github`)
-- `AuthCallbackPage.tsx` — JWT를 localStorage에 저장 후 대시보드로 이동
-- `DashboardPage.tsx` — `/api/auth/me` 호출로 유저 정보 표시
-
-**Vite 설정**
-- 포트: 3000
-- `/api` → `http://localhost:8080` 프록시
-
----
-
-## 다음 작업
-
-1. OAuth 로그인 흐름 브라우저 직접 테스트 (`localhost:3000` 실행 후)
-2. `UserCommandService` — GitHub 사용자 저장 로직 구현 (현재 스텁)
-3. `ProjectCommandService` — 프로젝트 생성/목록 API 구현
-4. 프로젝트 생성 UI 페이지
-
----
-
-## 현재 개발 우선순위
-
-| 단계 | 작업 | 상태 |
+| 항목 | 상태 | 비고 |
 |---|---|---|
-| Phase 1 | GitHub OAuth2 + JWT 로그인 | ✅ 완료 (테스트 미완) |
-| Phase 1 | GlobalExceptionHandler | ✅ 완료 |
-| Phase 1 | 프론트엔드 초기화 | ✅ 완료 |
-| Phase 1 | OAuth 로그인 E2E 테스트 | 🔄 진행 중 |
-| Phase 1 | 프로젝트 생성/목록 API | ⏳ 대기 |
-| Phase 2 | GitHub API 클라이언트 | ⏳ 대기 |
-| Phase 2 | Tree-sitter 분석 엔진 | ⏳ 대기 |
-| Phase 2 | React Flow 그래프 뷰 | ⏳ 대기 |
+| Spring Boot 3.5.0 + DDD 구조 | ✅ | domain / application / infrastructure / interfaces |
+| Docker PostgreSQL + Flyway 마이그레이션 | ✅ | V1__init_schema.sql, 전체 스키마 자동 생성 |
+| GitHub OAuth2 + JWT 로그인 | ✅ | E2E 테스트 완료 |
+| GlobalExceptionHandler | ✅ | JSON 오류 응답 { status, message, timestamp } |
+| `GET /api/auth/me` | ✅ | JWT 인증 후 유저 정보 반환 |
+| 프로젝트/분석/그래프 API | 🟡 스텁 | Controller만 있고 실제 로직 없음 |
+
+### 프론트엔드
+
+| 항목 | 상태 | 비고 |
+|---|---|---|
+| React 18 + TypeScript + Vite 초기화 | ✅ | 포트 3000, /api → 8080 프록시 |
+| Tailwind CSS + react-router-dom 설정 | ✅ | |
+| LoginPage | ✅ | GitHub 로그인 버튼 |
+| AuthCallbackPage | ✅ | JWT localStorage 저장 후 대시보드 이동 |
+| DashboardPage | ✅ | /api/auth/me 호출, 유저 정보 표시 |
+
+### 인프라
+
+| 항목 | 상태 |
+|---|---|
+| GitHub OAuth App 등록 (로컬용) | ✅ |
+| VS Code Spring Boot Dashboard 설정 | ✅ |
 
 ---
 
 ## 로컬 실행 방법
 
-```bash
+```powershell
 # 1. Docker DB 시작
 docker start codeprint-db
 
-# 2. 백엔드 실행
+# 2. 백엔드 (터미널 1)
 cd C:\Dev\Codeprint\backend
 $env:SPRING_PROFILES_ACTIVE="local"; .\gradlew.bat bootRun
 
-# 3. 프론트엔드 실행
+# 3. 프론트엔드 (터미널 2)
 cd C:\Dev\Codeprint\frontend
 npm run dev
 
-# 4. 접속
+# 접속
 # 프론트: http://localhost:3000
-# 백엔드 OAuth: http://localhost:8080/oauth2/authorization/github
+# OAuth 테스트: http://localhost:8080/oauth2/authorization/github
 ```
+
+---
+
+## 다음 작업 순서 (Phase 1 완성)
+
+### 브랜치: `feat/project-api`
+
+**백엔드**
+1. `ProjectCommandService` — 프로젝트 생성 로직 구현
+   - GitHub 레포 URL 유효성 검증
+   - FREE 플랜 3개 제한 체크 (`ProjectLimit`)
+   - `POST /api/projects` 응답 DTO 정의
+2. `ProjectQueryService` — 프로젝트 목록/상세 조회
+   - `GET /api/projects` — 내 프로젝트 목록
+   - `GET /api/projects/{id}` — 프로젝트 상세
+
+**프론트엔드**
+3. 프로젝트 목록 페이지 (`/dashboard` 개선)
+   - 프로젝트 카드 목록
+   - "새 프로젝트 추가" 버튼
+4. 프로젝트 생성 모달
+   - GitHub 레포 URL 입력
+   - 생성 요청 → 목록 갱신
+
+---
+
+## 이후 작업 순서
+
+### Phase 2: 코드 분석 엔진 (`feat/treesitter-analysis`)
+- Tree-sitter CLI 연동 (JNI 또는 subprocess)
+- 언어별 파싱 → Node/Edge 추출
+- 비동기 처리 (@Async) + WebSocket 진행률 푸시
+- `AnalysisApplicationService` 실제 구현
+
+### Phase 2: 그래프 시각화 (`feat/graph-visualization`)
+- React Flow 그래프 뷰 페이지
+- Node/Edge 렌더링 (FILE, FUNCTION, DB_TABLE, API_ENDPOINT)
+- 엣지 호버 모달 (호출 관계 상세)
+- 드래그로 노드 위치 조정 + 저장
+
+### Phase 3: 공유 & 커뮤니티 (`feat/share`)
+- 프로젝트 공개/비공개 토글
+- 공유 URL 생성
+- 커뮤니티 게시판 (Post, Comment)
+- 이미지 내보내기 (html-to-image)
+
+### Phase 3: 결제 (`feat/stripe`)
+- Stripe 연동
+- Free → Pro 업그레이드 플로우
+- 프로젝트 수 제한 해제
+
+---
+
+## 알려진 문제 / 주의사항
+
+| 항목 | 내용 |
+|---|---|
+| PC 재시작 후 | `docker start codeprint-db` 수동 실행 필요 |
+| GitHub OAuth Client ID | 대문자 O로 시작 (`Ov23li9p7ck6LTB8bnqm`) — 숫자 0 아님 |
+| application-local.yml | gitignore 처리됨. OAuth Secret 포함, 공유 금지 |
+| Java 파일 인코딩 | UTF-8 BOM 없이 저장할 것. VS Code에서 우하단 인코딩 확인 |
+
+---
+
+## 브랜치 전략
+
+```
+main                     ← 항상 배포 가능 상태
+└─ feat/project-api      ← 다음 작업 브랜치
+└─ feat/treesitter-analysis
+└─ feat/graph-visualization
+```
+
+- 작업 시작 전 브랜치 생성 → 기능 단위 커밋 → PR로 main 머지
+- main에 직접 커밋 금지
