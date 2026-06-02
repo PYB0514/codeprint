@@ -41,7 +41,7 @@ docker start codeprint-db
 
 ---
 
-### 3. GitHub OAuth2 + JWT 로그인 구현 (진행 중)
+### 3. GitHub OAuth2 + JWT 로그인 구현 완료
 
 **완료된 파일**
 - `JwtTokenProvider.java` — JWT 발급/검증
@@ -49,16 +49,21 @@ docker start codeprint-db
 - `OAuth2SuccessHandler.java` — GitHub 로그인 성공 시 JWT 발급 후 프론트로 리다이렉트
 - `SecurityConfig.java` — JWT 필터 + OAuth2 연결
 - `AuthController.java` — `GET /api/auth/me` (현재 로그인 유저 정보)
+- `GlobalExceptionHandler.java` — 전역 예외 → 일관된 JSON 오류 응답
 
 **GitHub OAuth App 등록 완료 (로컬용)**
 - Client ID: `0v23li9p7ck6LTB8bnqm`
-- Client Secret: `96da8a1bd493034e7af624b0e449a1278792eac5`
 - Callback URL: `http://localhost:8080/login/oauth2/code/github`
 
-**미완료 — 내일 확인 필요**
-- Spring Boot Dashboard로 실행 시 `local` 프로필 적용 여부 확인
-- `http://localhost:8080/oauth2/authorization/github` 접속 → GitHub 로그인 화면 뜨는지 확인
-- 로그인 후 JWT 발급 → `http://localhost:3000/auth/callback?token=...` 리다이렉트 확인
+**실행 확인 완료 (2026-06-02)**
+- local 프로필 적용 확인
+- DB 연결, Flyway 마이그레이션 정상 확인
+- 8080 포트 LISTENING 확인
+
+**테스트 완료 (2026-06-02)**
+- GitHub 로그인 → JWT 발급 → 대시보드 자동 이동 전체 흐름 확인
+- DB users 테이블 INSERT 확인 (PYB0514, FREE 플랜)
+- `/api/auth/me` 유저 정보 응답 확인
 
 ---
 
@@ -70,12 +75,48 @@ docker start codeprint-db
 
 ---
 
-## 내일 시작할 것
+## 2026-06-02 작업 내용
 
-1. Spring Boot Dashboard로 재시작 후 local 프로필 적용 확인
-2. GitHub 로그인 흐름 테스트 (OAuth2 → JWT 발급)
-3. 프론트엔드 초기화 (`frontend/` 폴더, React + Vite)
-4. 프론트에서 GitHub 로그인 버튼 → JWT 저장 → `/api/auth/me` 호출 확인
+---
+
+### 5. UTF-8 BOM 문제 수정
+
+- 전체 Java 파일 58개에서 BOM(`﻿`) 제거
+- Windows에서 파일 저장 시 BOM이 붙어 Java 컴파일러가 인식 불가
+- PowerShell로 일괄 제거 후 컴파일 성공 확인
+
+---
+
+### 6. GlobalExceptionHandler 추가
+
+- `interfaces/api/GlobalExceptionHandler.java` 생성
+- `ResponseStatusException`, `IllegalArgumentException`, `IllegalStateException`, 일반 `Exception` 처리
+- 응답 포맷: `{ status, message, timestamp }`
+
+---
+
+### 7. 프론트엔드 초기화 완료
+
+- `frontend/` 폴더에 React 18 + TypeScript + Vite 프로젝트 생성
+- 의존성: react-router-dom, axios, zustand, @xyflow/react, tailwindcss, html-to-image
+
+**생성된 페이지**
+- `LoginPage.tsx` — GitHub 로그인 버튼 (→ `localhost:8080/oauth2/authorization/github`)
+- `AuthCallbackPage.tsx` — JWT를 localStorage에 저장 후 대시보드로 이동
+- `DashboardPage.tsx` — `/api/auth/me` 호출로 유저 정보 표시
+
+**Vite 설정**
+- 포트: 3000
+- `/api` → `http://localhost:8080` 프록시
+
+---
+
+## 다음 작업
+
+1. OAuth 로그인 흐름 브라우저 직접 테스트 (`localhost:3000` 실행 후)
+2. `UserCommandService` — GitHub 사용자 저장 로직 구현 (현재 스텁)
+3. `ProjectCommandService` — 프로젝트 생성/목록 API 구현
+4. 프로젝트 생성 UI 페이지
 
 ---
 
@@ -83,10 +124,11 @@ docker start codeprint-db
 
 | 단계 | 작업 | 상태 |
 |---|---|---|
-| Phase 1 | GitHub OAuth2 + JWT 로그인 | 🔄 진행 중 |
-| Phase 1 | 프로젝트 생성/목록 API | ✅ 스텁 완료 |
-| Phase 1 | 프론트엔드 초기화 | ⏳ 대기 |
-| Phase 1 | GlobalExceptionHandler | ⏳ 대기 |
+| Phase 1 | GitHub OAuth2 + JWT 로그인 | ✅ 완료 (테스트 미완) |
+| Phase 1 | GlobalExceptionHandler | ✅ 완료 |
+| Phase 1 | 프론트엔드 초기화 | ✅ 완료 |
+| Phase 1 | OAuth 로그인 E2E 테스트 | 🔄 진행 중 |
+| Phase 1 | 프로젝트 생성/목록 API | ⏳ 대기 |
 | Phase 2 | GitHub API 클라이언트 | ⏳ 대기 |
 | Phase 2 | Tree-sitter 분석 엔진 | ⏳ 대기 |
 | Phase 2 | React Flow 그래프 뷰 | ⏳ 대기 |
@@ -99,11 +141,15 @@ docker start codeprint-db
 # 1. Docker DB 시작
 docker start codeprint-db
 
-# 2. 백엔드 실행 (VS Code Spring Boot Dashboard ▶ 버튼)
-# 또는 터미널에서:
-cd C:\Dev\codeprint\backend
+# 2. 백엔드 실행
+cd C:\Dev\Codeprint\backend
 $env:SPRING_PROFILES_ACTIVE="local"; .\gradlew.bat bootRun
 
-# 3. 접속 확인
-http://localhost:8080/oauth2/authorization/github
+# 3. 프론트엔드 실행
+cd C:\Dev\Codeprint\frontend
+npm run dev
+
+# 4. 접속
+# 프론트: http://localhost:3000
+# 백엔드 OAuth: http://localhost:8080/oauth2/authorization/github
 ```
