@@ -60,3 +60,8 @@
    - `GET /api/projects/{id}`
 4. 프론트: 프로젝트 목록 페이지, 생성 모달
 5. PR 생성 → main 머지
+
+---
+
+## 다음 세션 이름
+codeprint_3

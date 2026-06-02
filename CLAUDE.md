@@ -492,7 +492,12 @@ main                    ← 항상 배포 가능한 상태 유지
 
 **Context 파일 생성 후 반드시 할 것**
 1. PROGRESS.md의 "다음 세션 첫 번째 액션" 섹션을 최신 상태로 업데이트
-2. 커밋 + push
+2. Context 파일 맨 마지막에 다음 세션 이름 명시
+   ```markdown
+   ## 다음 세션 이름
+   codeprint_{N+1}
+   ```
+3. 커밋 + push
 
 ### 10. Read Errors, Don't Guess
 Read the actual error/log line. Don't pattern-match from memory.
