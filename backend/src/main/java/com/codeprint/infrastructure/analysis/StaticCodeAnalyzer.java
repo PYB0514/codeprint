@@ -120,7 +120,7 @@ public class StaticCodeAnalyzer {
     private Pattern getFunctionPattern(String language) {
         return switch (language) {
             case "Java", "Kotlin", "C#" ->
-                Pattern.compile("(?:public|private|protected|internal|static|\\s)+(?:\\w+\\s+)?(\\w+)\\s*\\([^)]*\\)\\s*(?:throws[^{]+)?\\{",
+                Pattern.compile("(?:(?:public|private|protected|static|final|synchronized|abstract|default|native)\\s+)+(?:[\\w<>\\[\\]?,]+\\s+)*(\\w+)\\s*\\([^)]*\\)\\s*(?:throws[^{]+)?\\{",
                         Pattern.MULTILINE);
             case "TypeScript", "JavaScript" ->
                 Pattern.compile("(?:function\\s+(\\w+)|(?:const|let|var)\\s+(\\w+)\\s*=\\s*(?:async\\s*)?(?:\\([^)]*\\)|\\w+)\\s*=>|(?:async\\s+)?function\\s*\\*?\\s*(\\w+))",
