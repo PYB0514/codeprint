@@ -33,6 +33,27 @@ GitHub OAuth 로그인 시 발급되는 `access_token`을 DB에 저장하고,
 
 ---
 
+## 2026-06-02 | 함수 주석 추출 — 멀티라인 파라미터 미인식
+
+**문제.**
+`doFilterInternal(HttpServletRequest request,\n HttpServletResponse response,\n FilterChain filterChain)` 처럼
+파라미터가 여러 줄에 걸친 함수의 주석이 추출되지 않았다.
+
+**원인.**
+`extractFunctionComments`가 `lines[i]` 한 줄씩 정규식 매칭을 했다.
+파라미터가 멀티라인이면 같은 줄에 `{`가 없어서 함수 패턴이 매칭 실패.
+반면 `extractFunctions`는 전체 `content`에 매칭해서 정상 동작 — 같은 파일 내 두 메서드가 다른 방식으로 동작하는 불일치였다.
+
+**수정.**
+`extractFunctionComments`도 전체 content에 정규식을 돌리고,
+매칭 시작 offset에서 `countNewlines()`로 줄 번호를 역산하여 위 줄의 주석을 탐색하도록 변경.
+
+**결과.**
+멀티라인 파라미터 함수 포함, 모든 언어에서 일관되게 동작.
+다른 사용자 레포 분석 시에도 영향 없음.
+
+---
+
 ## 2026-06-02 | 함수 주석 추출 — @어노테이션 건너뛰기
 
 **문제.**
