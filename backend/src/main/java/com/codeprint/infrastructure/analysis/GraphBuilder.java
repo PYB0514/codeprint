@@ -9,6 +9,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Set;
+import java.util.HashSet;
 
 @Component
 @RequiredArgsConstructor
@@ -23,6 +25,8 @@ public class GraphBuilder {
 
         UUID graphId = graph.getId();
         Map<String, UUID> fileNodeIds = new HashMap<>();
+        // 함수명 → 노드ID (파일 경로 포함: "filePath::funcName" → nodeId)
+        Map<String, UUID> funcNodeIds = new HashMap<>();
 
         // FILE 노드 생성
         for (ParsedFile pf : parsedFiles) {
@@ -53,10 +57,11 @@ public class GraphBuilder {
                 if (comment != null) meta.put("comment", comment);
                 funcNode.updateMetadata(meta);
                 graphRepository.saveNode(funcNode);
+                funcNodeIds.put(pf.filePath() + "::" + funcName, funcNode.getId());
 
                 // FILE → FUNCTION 포함 관계 엣지
                 String edgeId = extractFileName(pf.filePath()) + "-" + funcName;
-                Edge containsEdge = Edge.create(graphId, edgeId, EdgeType.IMPORT,
+                Edge containsEdge = Edge.create(graphId, edgeId, EdgeType.CONTAINS,
                         fileNodeIds.get(pf.filePath()), funcNode.getId());
                 graphRepository.saveEdge(containsEdge);
             }
@@ -77,6 +82,41 @@ public class GraphBuilder {
                                     sourceFileId, e.getValue());
                             graphRepository.saveEdge(importEdge);
                         });
+            }
+        }
+
+        // 파일 간 FUNCTION_CALL 엣지 생성
+        // 각 함수의 호출 목록에서 다른 파일의 함수를 호출하는 경우에만 엣지 생성
+        Set<String> usedEdgeIds = new HashSet<>();
+        for (ParsedFile callerFile : parsedFiles) {
+            for (Map.Entry<String, List<String>> entry : callerFile.functionCalls().entrySet()) {
+                String callerFunc = entry.getKey();
+                UUID callerFuncId = funcNodeIds.get(callerFile.filePath() + "::" + callerFunc);
+                if (callerFuncId == null) continue;
+
+                for (String calleeFunc : entry.getValue()) {
+                    // 같은 파일 내 호출은 제외 — 다른 파일의 함수를 찾는다
+                    for (ParsedFile calleeFile : parsedFiles) {
+                        if (calleeFile.filePath().equals(callerFile.filePath())) continue;
+                        if (!calleeFile.functions().contains(calleeFunc)) continue;
+
+                        UUID calleeFuncId = funcNodeIds.get(calleeFile.filePath() + "::" + calleeFunc);
+                        if (calleeFuncId == null) continue;
+
+                        String edgeIdentifier = extractFileName(callerFile.filePath()) + "-" + callerFunc + "-calls-" + calleeFunc;
+                        if (usedEdgeIds.contains(edgeIdentifier)) continue;
+                        usedEdgeIds.add(edgeIdentifier);
+
+                        Edge callEdge = Edge.create(graphId, edgeIdentifier, EdgeType.FUNCTION_CALL,
+                                callerFuncId, calleeFuncId);
+                        Map<String, Object> meta = new HashMap<>();
+                        meta.put("callerFile", callerFile.filePath());
+                        meta.put("calleeFile", calleeFile.filePath());
+                        callEdge.updateMetadata(meta);
+                        graphRepository.saveEdge(callEdge);
+                        break; // 첫 번째 매칭 파일만 사용
+                    }
+                }
             }
         }
 

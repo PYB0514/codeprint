@@ -10,5 +10,6 @@ public record ParsedFile(
         List<String> functions,
         List<String> imports,
         String fileComment,
-        Map<String, String> functionComments  // 함수명 → 주석
+        Map<String, String> functionComments,   // 함수명 → 주석
+        Map<String, List<String>> functionCalls // 함수명 → 호출하는 함수명 목록
 ) {}

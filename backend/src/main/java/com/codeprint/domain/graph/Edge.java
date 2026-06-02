@@ -58,6 +58,11 @@ public class Edge {
         return edge;
     }
 
+    // 엣지 메타데이터 갱신
+    public void updateMetadata(Map<String, Object> metadata) {
+        this.metadata = metadata;
+    }
+
     // 엣지의 공개/숨김 상태를 토글
     public void toggleHidden() {
         this.isHidden = !this.isHidden;

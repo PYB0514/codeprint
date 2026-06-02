@@ -23,8 +23,9 @@ public class StaticCodeAnalyzer {
         List<String> imports = extractImports(content, language);
         String fileComment = extractFileComment(content, language);
         Map<String, String> functionComments = extractFunctionComments(content, language);
+        Map<String, List<String>> functionCalls = extractFunctionCalls(content, language, functions);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls);
     }
 
     // 파일 상단 첫 번째 주석 추출
@@ -160,6 +161,50 @@ public class StaticCodeAnalyzer {
                     result.add(m.group(i).trim());
                     break;
                 }
+            }
+        }
+        return result;
+    }
+
+    // 각 함수 본문에서 호출하는 함수명 목록 추출 — 함수명(파라미터) 패턴 스캔
+    private Map<String, List<String>> extractFunctionCalls(String content, String language, List<String> definedFunctions) {
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        if (definedFunctions.isEmpty()) return result;
+
+        // 함수 정의 경계를 찾기 위한 패턴
+        Pattern funcDefPattern = getFunctionPattern(language);
+        if (funcDefPattern == null) return result;
+
+        // 함수 호출 패턴: 식별자 뒤에 '(' — 키워드·생성자(대문자 시작) 제외
+        Pattern callPattern = Pattern.compile("\\b([a-z][a-zA-Z0-9_]*)\\s*\\(");
+
+        Matcher defMatcher = funcDefPattern.matcher(content);
+        List<int[]> funcBoundaries = new ArrayList<>(); // [nameGroupStart, bodyStart]
+        List<String> funcOrder = new ArrayList<>();
+
+        while (defMatcher.find()) {
+            String name = extractFirstGroup(defMatcher);
+            if (name == null || isKeyword(name)) continue;
+            funcOrder.add(name);
+            funcBoundaries.add(new int[]{defMatcher.start(), defMatcher.end()});
+        }
+
+        for (int i = 0; i < funcOrder.size(); i++) {
+            String funcName = funcOrder.get(i);
+            int bodyStart = funcBoundaries.get(i)[1];
+            int bodyEnd = i + 1 < funcBoundaries.size() ? funcBoundaries.get(i + 1)[0] : content.length();
+
+            String body = content.substring(bodyStart, Math.min(bodyEnd, content.length()));
+            Matcher callMatcher = callPattern.matcher(body);
+            Set<String> calls = new LinkedHashSet<>();
+            while (callMatcher.find()) {
+                String callee = callMatcher.group(1);
+                if (!isKeyword(callee) && !callee.equals(funcName)) {
+                    calls.add(callee);
+                }
+            }
+            if (!calls.isEmpty()) {
+                result.put(funcName, new ArrayList<>(calls));
             }
         }
         return result;
