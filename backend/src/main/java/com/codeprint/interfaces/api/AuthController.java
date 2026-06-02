@@ -16,6 +16,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthController {
 
+    // 현재 인증된 사용자 정보를 반환
     @GetMapping("/me")
     public ResponseEntity<?> me(@AuthenticationPrincipal User user) {
         if (user == null) {

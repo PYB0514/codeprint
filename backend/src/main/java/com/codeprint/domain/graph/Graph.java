@@ -31,6 +31,7 @@ public class Graph {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    // 프로젝트 ID와 분석 ID로 새 그래프 인스턴스 생성
     public static Graph create(UUID projectId, UUID analysisId) {
         Graph graph = new Graph();
         graph.id = UUID.randomUUID();
@@ -41,10 +42,12 @@ public class Graph {
         return graph;
     }
 
+    // updatedAt 타임스탬프를 현재 시각으로 갱신
     public void touch() {
         this.updatedAt = Instant.now();
     }
 
+    // UUID를 GraphId Value Object로 변환하여 반환
     public GraphId getGraphId() {
         return GraphId.of(id);
     }

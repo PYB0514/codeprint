@@ -18,6 +18,7 @@ interface Props {
   onDelete: (id: string) => void
 }
 
+// JWT 토큰을 Authorization 헤더로 반환
 function authHeaders() {
   const token = localStorage.getItem('jwt')
   return { Authorization: `Bearer ${token}` }
@@ -37,13 +38,15 @@ export default function ProjectCard({ project, onDelete }: Props) {
       .catch(() => setHasGraph(false))
   }, [project.id])
 
+  // 분석 완료 시 게이지 애니메이션 후 상태 초기화
   const handleDone = useCallback(() => {
-    setAnalysisId(null)
     setHasGraph(true)
+    setTimeout(() => setAnalysisId(null), 800)
   }, [])
 
   const { progress, status } = useAnalysisProgress(analysisId, handleDone)
 
+  // 분석 시작 API를 호출하고 analysisId를 저장
   const handleStartAnalysis = async () => {
     setStarting(true)
     setAnalysisError(null)
@@ -61,7 +64,7 @@ export default function ProjectCard({ project, onDelete }: Props) {
     }
   }
 
-  const isAnalyzing = analysisId !== null && status !== 'DONE' && status !== 'FAILED'
+  const isAnalyzing = analysisId !== null && status !== 'FAILED'
 
   return (
     <div className="bg-gray-900 rounded-xl p-5 flex flex-col gap-3 hover:bg-gray-800 transition-colors">

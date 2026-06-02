@@ -24,6 +24,7 @@ public class ProjectCommandService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
 
+    // URL 유효성 및 플랜 제한 검사 후 프로젝트 생성
     public Project createProject(UUID userId, String githubRepoUrl, String name, String description) {
         if (!GITHUB_URL_PATTERN.matcher(githubRepoUrl).matches()) {
             throw new IllegalArgumentException("Invalid GitHub repository URL: " + githubRepoUrl);
@@ -42,6 +43,7 @@ public class ProjectCommandService {
         return projectRepository.save(project);
     }
 
+    // 소유자 확인 후 프로젝트 삭제
     public void deleteProject(UUID projectId, UUID requestingUserId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));

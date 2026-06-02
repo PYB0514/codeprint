@@ -40,6 +40,7 @@ public class Project {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    // 사용자 ID와 GitHub URL로 새 프로젝트 인스턴스 생성
     public static Project create(UUID userId, String githubRepoUrl, String name, String description) {
         Project project = new Project();
         project.id = UUID.randomUUID();
@@ -53,16 +54,19 @@ public class Project {
         return project;
     }
 
+    // 프로젝트를 공개 상태로 전환
     public void makePublic() {
         this.isPublic = true;
         this.updatedAt = Instant.now();
     }
 
+    // 프로젝트를 비공개 상태로 전환
     public void makePrivate() {
         this.isPublic = false;
         this.updatedAt = Instant.now();
     }
 
+    // UUID를 ProjectId Value Object로 변환하여 반환
     public ProjectId getProjectId() {
         return ProjectId.of(id);
     }

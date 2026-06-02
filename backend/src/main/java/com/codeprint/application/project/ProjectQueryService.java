@@ -17,10 +17,12 @@ public class ProjectQueryService {
 
     private final ProjectRepository projectRepository;
 
+    // 사용자 ID로 해당 사용자의 전체 프로젝트 목록 조회
     public List<Project> getProjectsByUser(UUID userId) {
         return projectRepository.findByUserId(userId);
     }
 
+    // 소유자 확인 후 단일 프로젝트 조회
     public Project getProject(UUID projectId, UUID requestingUserId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));

@@ -19,6 +19,7 @@ public class AnalysisController {
 
     private final AnalysisApplicationService analysisApplicationService;
 
+    // 프로젝트 코드 분석을 시작하고 analysisId를 반환
     @PostMapping
     public ResponseEntity<Map<String, Object>> startAnalysis(
             @RequestBody StartAnalysisRequest request,
@@ -31,6 +32,7 @@ public class AnalysisController {
         ));
     }
 
+    // 분석 상태 및 진행률 조회
     @GetMapping("/{analysisId}")
     public ResponseEntity<Map<String, Object>> getAnalysis(
             @PathVariable UUID analysisId,

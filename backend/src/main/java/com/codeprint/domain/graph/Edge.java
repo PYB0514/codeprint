@@ -44,6 +44,7 @@ public class Edge {
     @Column(name = "is_hidden", nullable = false)
     private boolean isHidden;
 
+    // 두 노드를 잇는 새 엣지 인스턴스 생성
     public static Edge create(UUID graphId, String edgeIdentifier, EdgeType type,
                               UUID sourceNodeId, UUID targetNodeId) {
         Edge edge = new Edge();
@@ -57,10 +58,12 @@ public class Edge {
         return edge;
     }
 
+    // 엣지의 공개/숨김 상태를 토글
     public void toggleHidden() {
         this.isHidden = !this.isHidden;
     }
 
+    // UUID를 EdgeId Value Object로 변환하여 반환
     public EdgeId getEdgeId() {
         return EdgeId.of(id);
     }

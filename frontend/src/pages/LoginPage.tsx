@@ -1,5 +1,6 @@
 // GitHub OAuth 로그인 진입 페이지
 export default function LoginPage() {
+  // GitHub OAuth 로그인 페이지로 이동
   const handleLogin = () => {
     window.location.href = 'http://localhost:8080/oauth2/authorization/github'
   }

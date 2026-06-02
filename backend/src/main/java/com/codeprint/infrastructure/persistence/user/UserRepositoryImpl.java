@@ -15,26 +15,31 @@ public class UserRepositoryImpl implements UserRepository {
 
     private final UserJpaRepository jpa;
 
+    // 사용자 엔티티를 저장하고 반환
     @Override
     public User save(User user) {
         return jpa.save(user);
     }
 
+    // UUID로 사용자 조회
     @Override
     public Optional<User> findById(UUID id) {
         return jpa.findById(id);
     }
 
+    // GitHub ID로 사용자 조회
     @Override
     public Optional<User> findByGithubId(Long githubId) {
         return jpa.findByGithubId(githubId);
     }
 
+    // 이메일로 사용자 조회
     @Override
     public Optional<User> findByEmail(String email) {
         return jpa.findByEmail(email);
     }
 
+    // GitHub ID 존재 여부 확인
     @Override
     public boolean existsByGithubId(Long githubId) {
         return jpa.existsByGithubId(githubId);

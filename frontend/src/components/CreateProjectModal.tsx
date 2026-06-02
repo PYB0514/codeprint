@@ -23,6 +23,7 @@ export default function CreateProjectModal({ onClose, onCreated }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // 폼 제출 시 프로젝트 생성 API 호출
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)

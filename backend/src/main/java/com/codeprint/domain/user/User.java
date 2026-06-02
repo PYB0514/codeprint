@@ -38,6 +38,7 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    // GitHub 사용자 정보로 새 User 인스턴스 생성
     public static User create(Long githubId, String email, String username) {
         User user = new User();
         user.id = UUID.randomUUID();
@@ -50,16 +51,19 @@ public class User {
         return user;
     }
 
+    // 사용자 플랜을 PRO로 업그레이드
     public void upgradeToPro() {
         this.plan = UserPlan.PRO;
         this.updatedAt = Instant.now();
     }
 
+    // 사용자 플랜을 FREE로 다운그레이드
     public void downgradeToFree() {
         this.plan = UserPlan.FREE;
         this.updatedAt = Instant.now();
     }
 
+    // UUID를 UserId Value Object로 변환하여 반환
     public UserId getUserId() {
         return UserId.of(id);
     }

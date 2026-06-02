@@ -14,6 +14,7 @@ public class AnalysisProgressHandler {
 
     private final SimpMessagingTemplate messagingTemplate;
 
+    // 분석 진행률과 상태를 WebSocket 토픽으로 전송
     public void sendProgress(UUID analysisId, int progress, String status) {
         messagingTemplate.convertAndSend(
                 "/topic/analysis/" + analysisId,

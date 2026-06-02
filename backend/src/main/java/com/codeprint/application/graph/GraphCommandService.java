@@ -16,11 +16,13 @@ public class GraphCommandService {
 
     private final GraphRepository graphRepository;
 
+    // 새 그래프를 생성하여 저장
     public Graph createGraph(UUID projectId, UUID analysisId) {
         Graph graph = Graph.create(projectId, analysisId);
         return graphRepository.save(graph);
     }
 
+    // 그래프에 노드를 추가하여 저장
     public Node addNode(UUID graphId, NodeType type, String name, String filePath, String language) {
         graphRepository.findById(graphId)
                 .orElseThrow(() -> new IllegalArgumentException("Graph not found: " + graphId));
@@ -28,6 +30,7 @@ public class GraphCommandService {
         return graphRepository.saveNode(node);
     }
 
+    // 그래프에 엣지를 추가하여 저장
     public Edge addEdge(UUID graphId, String edgeIdentifier, EdgeType type,
                         UUID sourceNodeId, UUID targetNodeId) {
         graphRepository.findById(graphId)
@@ -36,11 +39,13 @@ public class GraphCommandService {
         return graphRepository.saveEdge(edge);
     }
 
+    // 그래프 ID로 노드 목록을 조회 (읽기 전용)
     @Transactional(readOnly = true)
     public List<Node> getNodes(UUID graphId) {
         return graphRepository.findNodesByGraphId(graphId);
     }
 
+    // 그래프 ID로 엣지 목록을 조회 (읽기 전용)
     @Transactional(readOnly = true)
     public List<Edge> getEdges(UUID graphId) {
         return graphRepository.findEdgesByGraphId(graphId);

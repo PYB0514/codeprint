@@ -440,6 +440,13 @@ First line of every new source file: a one-line Korean comment stating its role.
 - Place it directly under required directives (`'use client'`, `package` declaration, etc.).
 - Skip config files (`*.config.ts`, `build.gradle`, `package.json`, etc.).
 
+**함수/메서드 주석 (Function Comments in Korean)**
+모든 함수/메서드 정의 바로 위(어노테이션 블록 위)에 한 줄 한국어 `//` 주석을 추가한다.
+- Java: `// 사용자 ID로 사용자 조회`
+- TypeScript: `// JWT 토큰을 헤더에 포함하여 반환`
+- 생성자(`constructor`)는 제외.
+- 이 주석은 그래프 시각화에서 노드 라벨로 표시되므로 15자 이내로 간결하게.
+
 ### 7. Plan + Checklist + Context Notes
 Before any non-trivial task, produce three artifacts. Don't start coding without them.
 - **Plan** — what we're building and why.
@@ -471,6 +478,7 @@ main                    ← 항상 배포 가능한 상태 유지
 
 **커밋 규칙**
 - 기능 하나 완성할 때마다 즉시 커밋. 세션 끝에 몰아서 커밋하지 않는다.
+- 기능 커밋 시 PROGRESS.md 완료 항목도 함께 갱신한다. 커밋과 PROGRESS.md 갱신은 세트다.
 - 커밋 메시지는 변경 내용을 구체적으로 요약. 파일명, 추가된 기능, 수정 이유를 명시.
   - Bad: `fix: BOM 제거 및 기타 수정`
   - Good: `fix: Java 58개 파일 UTF-8 BOM 제거 — Windows 저장 시 발생한 컴파일 오류 수정`

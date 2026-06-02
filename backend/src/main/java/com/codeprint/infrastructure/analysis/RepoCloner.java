@@ -12,6 +12,7 @@ import java.util.stream.Stream;
 @Component
 public class RepoCloner {
 
+    // GitHub 레포를 임시 디렉토리에 shallow clone
     public Path clone(String githubRepoUrl) throws IOException, InterruptedException {
         Path tempDir = Files.createTempDirectory("codeprint-analysis-");
 
@@ -31,6 +32,7 @@ public class RepoCloner {
         return tempDir;
     }
 
+    // 임시 디렉토리와 하위 파일 전체 삭제
     public void deleteDir(Path dir) {
         try (Stream<Path> walk = Files.walk(dir)) {
             walk.sorted(Comparator.reverseOrder())

@@ -2,10 +2,13 @@
 package com.codeprint.infrastructure.analysis;
 
 import java.util.List;
+import java.util.Map;
 
 public record ParsedFile(
         String filePath,
         String language,
         List<String> functions,
-        List<String> imports
+        List<String> imports,
+        String fileComment,
+        Map<String, String> functionComments  // 함수명 → 주석
 ) {}

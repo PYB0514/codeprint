@@ -28,6 +28,7 @@ public class LanguageDetector {
             "Java", "Kotlin", "TypeScript", "JavaScript", "Python", "Go", "Rust"
     );
 
+    // 파일 확장자로 프로그래밍 언어를 감지하여 반환
     public static Optional<String> detect(String fileName) {
         int dot = fileName.lastIndexOf('.');
         if (dot == -1) return Optional.empty();
@@ -35,6 +36,7 @@ public class LanguageDetector {
         return Optional.ofNullable(EXT_TO_LANG.get(ext));
     }
 
+    // 해당 언어가 정적 분석 지원 대상인지 확인
     public static boolean isSupported(String language) {
         return SUPPORTED.contains(language);
     }
