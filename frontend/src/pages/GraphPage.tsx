@@ -56,6 +56,8 @@ function GraphPageInner() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sidebar, setSidebar] = useState<SidebarContent | null>(null)
+  const [rightCollapsed, setRightCollapsed] = useState(false)
+  const [leftOpen, setLeftOpen] = useState(true)
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
   const [showIsoGroups, setShowIsoGroups] = useState(true)
@@ -79,6 +81,7 @@ function GraphPageInner() {
   // 파일 연결 보기 — 사이드바 오픈 콜백
   const openFileSidebar = useCallback((data: FileSidebarData) => {
     setSidebar({ kind: 'file', data })
+    setRightCollapsed(false)
   }, [])
 
   // 서버에서 그래프 데이터를 불러와 React Flow 레이아웃으로 변환
@@ -115,7 +118,7 @@ function GraphPageInner() {
       setNodes(layoutNodes)
       setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges))
     }
-  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar])
+  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showEdges, showCallEdges, showInstEdges, applyEdgeVisibility])
 
   // IMPORT 엣지 표시/숨김 토글
   const toggleEdges = useCallback(() => {
@@ -181,7 +184,7 @@ function GraphPageInner() {
       setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
-  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar])
+  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, applyEdgeVisibility])
 
   // 전체 그래프를 원본 크기 PNG로 다운로드
   const handleExportImage = useCallback(async () => {
@@ -190,7 +193,6 @@ function GraphPageInner() {
 
     setExporting(true)
     try {
-      // 전체 노드 바운딩 박스 계산
       const allNodes = getNodes()
       if (allNodes.length === 0) return
 
@@ -214,9 +216,7 @@ function GraphPageInner() {
         backgroundColor: '#030712',
         width: fullW,
         height: fullH,
-        style: {
-          transform: `translate(${PAD - minX}px, ${PAD - minY}px)`,
-        },
+        style: { transform: `translate(${PAD - minX}px, ${PAD - minY}px)` },
       })
 
       const a = document.createElement('a')
@@ -269,6 +269,7 @@ function GraphPageInner() {
 
   // 엣지 클릭 시 사이드바에 연결 상세 표시
   const handleEdgeClick: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
+    setRightCollapsed(false)
     const data = edge.data as { type?: string } | undefined
 
     if (data?.type === 'FUNCTION_CALL') {
@@ -331,7 +332,6 @@ function GraphPageInner() {
   // 함수 노드 클릭 시 사이드바에 콜 체인 표시
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     if (node.type === 'fileNode' || node.type === 'groupNode' || node.type === 'sectionNode') return
-    // FUNCTION 노드만 처리
     const rawFunc = rawNodes.find((n) => n.id === node.id && n.type === 'FUNCTION')
     if (!rawFunc) return
 
@@ -369,6 +369,7 @@ function GraphPageInner() {
       callers,
       callees,
     })
+    setRightCollapsed(false)
   }, [rawNodes, rawEdgesCache])
 
   if (loading) {
@@ -390,129 +391,179 @@ function GraphPageInner() {
 
   return (
     <div ref={flowRef} style={{ width: '100vw', height: '100vh', background: '#030712' }}>
-      {/* 상단 바 */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
+
+      {/* 상단 바 — 내비 + 통계만 */}
+      <div className="absolute top-4 z-10 flex items-center gap-3" style={{ left: leftOpen ? '228px' : '20px' }}>
         <button
           onClick={() => navigate('/dashboard')}
           className="bg-gray-800 hover:bg-gray-700 text-white text-sm px-3 py-1.5 rounded-lg"
         >
           ← 대시보드
         </button>
-        <span className="text-gray-400 text-sm">
-          파일 {counts.files}개 · 함수 {counts.funcs}개 · 엣지 {counts.edges}개
+        <span className="text-gray-500 text-sm">
+          파일 {counts.files} · 함수 {counts.funcs} · 엣지 {counts.edges}
         </span>
-        <button
-          onClick={toggleLayoutPreset}
-          className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700"
-          title={layoutPreset === 'layer' ? 'DDD 레이어별 컬럼 배치' : '연결 많은 그룹이 중앙으로'}
-        >
-          <span className={layoutPreset === 'layer' ? 'text-white' : 'text-gray-500'}>계층</span>
-          <span className="text-gray-600">/</span>
-          <span className={layoutPreset === 'hub' ? 'text-white' : 'text-gray-500'}>허브</span>
-        </button>
-        {layoutPreset === 'hub' && (
-          <button
-            onClick={toggleIsoGroups}
-            className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700"
-            title="연결 없는 그룹 표시/숨김"
-          >
-            <span className={showIsoGroups ? 'text-white' : 'text-gray-500'}>고립 그룹</span>
-          </button>
-        )}
-        <button
-          onClick={toggleLabelMode}
-          className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700"
-        >
-          <span className={labelMode === 'name' ? 'text-white' : 'text-gray-500'}>이름</span>
-          <span className="text-gray-600">/</span>
-          <span className={labelMode === 'comment' ? 'text-white' : 'text-gray-500'}>주석</span>
-        </button>
-        <button
-          onClick={toggleEdges}
-          className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700"
-          title="IMPORT 엣지 표시/숨김"
-        >
-          <span className={showEdges ? 'text-white' : 'text-gray-500'}>IMPORT</span>
-        </button>
-        <button
-          onClick={toggleCallEdges}
-          className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-amber-800/50"
-          title="함수 호출 체인 표시/숨김"
-        >
-          <span className={showCallEdges ? 'text-amber-400' : 'text-gray-500'}>콜 체인</span>
-        </button>
-        <button
-          onClick={toggleInstEdges}
-          className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-purple-800/50"
-          title="인스턴스화 관계 표시/숨김"
-        >
-          <span className={showInstEdges ? 'text-purple-400' : 'text-gray-500'}>생성</span>
-        </button>
-        <button
-          onClick={() => downloadTreeText(rawNodes)}
-          disabled={rawNodes.length === 0}
-          className="bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700 disabled:opacity-40"
-          title="파일명 — 한국어 주석 형태의 AI 컨텍스트용 트리 다운로드"
-        >
-          ↓ AI 컨텍스트
-        </button>
-        <button
-          onClick={handleExportImage}
-          disabled={exporting || rawNodes.length === 0}
-          className="bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700 disabled:opacity-40"
-          title="전체 그래프를 원본 크기 PNG로 저장"
-        >
-          {exporting ? '저장 중...' : '↓ 이미지'}
-        </button>
       </div>
 
-      {/* 범례 */}
-      <div className="absolute top-4 right-4 z-10 bg-gray-900/90 rounded-xl p-3 flex flex-col gap-2 text-xs border border-gray-700/50 backdrop-blur-sm">
-        <p className="text-gray-500 font-semibold text-[10px] uppercase tracking-widest mb-0.5">Legend</p>
-        <div className="flex flex-col gap-1 border-b border-gray-700/50 pb-2 mb-0.5">
-          <p className="text-gray-500 text-[9px] uppercase tracking-wider">DDD 레이어</p>
-          {[
-            { label: 'Domain',         color: '#3b82f6' },
-            { label: 'Application',    color: '#eab308' },
-            { label: 'Infrastructure', color: '#a855f7' },
-            { label: 'Interfaces',     color: '#10b981' },
-            { label: 'Pages/Components', color: '#06b6d4' },
-          ].map(({ label, color }) => (
-            <div key={label} className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: `${color}22`, border: `1.5px solid ${color}` }} />
-              <span className="text-gray-400">{label}</span>
-            </div>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#1e3a5f', border: '1.5px solid #3b82f6' }} />
-          <span className="text-gray-400">FILE</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#064e3b', border: '1px solid #10b981' }} />
-          <span className="text-gray-400">FUNCTION</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5 flex-shrink-0" style={{ background: '#4b5563' }} />
-          <span className="text-gray-400">IMPORT</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <svg width="12" height="4" className="flex-shrink-0">
-            <line x1="0" y1="2" x2="12" y2="2" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4 3" />
-          </svg>
-          <span className="text-amber-400">FUNCTION_CALL</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <svg width="12" height="4" className="flex-shrink-0">
-            <line x1="0" y1="2" x2="12" y2="2" stroke="#a855f7" strokeWidth="1.5" strokeDasharray="3 4" />
-          </svg>
-          <span className="text-purple-400">INSTANTIATION</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5 flex-shrink-0" style={{ background: '#ef4444' }} />
-          <span className="text-gray-400">끊긴 연결</span>
-        </div>
-      </div>
+      {/* 왼쪽 사이드바 여는 탭 — 닫혔을 때만 표시 */}
+      {!leftOpen && (
+        <button
+          onClick={() => setLeftOpen(true)}
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white rounded-r-lg px-1 py-3 text-xs"
+        >
+          ›
+        </button>
+      )}
+
+      {/* 왼쪽 사이드바 */}
+      {leftOpen && (
+        <aside className="absolute left-0 top-0 h-full z-20 flex flex-col bg-gray-950 border-r border-gray-800 shadow-xl overflow-y-auto" style={{ width: '220px' }}>
+
+          {/* 사이드바 헤더 */}
+          <div className="flex items-center justify-between px-3 py-3 border-b border-gray-800 flex-shrink-0">
+            <span className="text-xs font-bold text-gray-300 tracking-widest uppercase">Codeprint</span>
+            <button onClick={() => setLeftOpen(false)} className="text-gray-600 hover:text-white text-sm leading-none" title="사이드바 접기">‹</button>
+          </div>
+
+          <div className="flex flex-col gap-0 flex-1">
+
+            {/* 레이아웃 */}
+            <LeftSection title="레이아웃">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 text-xs">프리셋</span>
+                <button
+                  onClick={toggleLayoutPreset}
+                  className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2 py-1 rounded border border-gray-700"
+                >
+                  <span className={layoutPreset === 'layer' ? 'text-white' : 'text-gray-500'}>계층</span>
+                  <span className="text-gray-600">/</span>
+                  <span className={layoutPreset === 'hub' ? 'text-white' : 'text-gray-500'}>허브</span>
+                </button>
+              </div>
+              {layoutPreset === 'hub' && (
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-gray-400 text-xs">고립 그룹</span>
+                  <ToggleChip active={showIsoGroups} onClick={toggleIsoGroups} />
+                </div>
+              )}
+            </LeftSection>
+
+            {/* 라벨 */}
+            <LeftSection title="라벨">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 text-xs">표시 모드</span>
+                <button
+                  onClick={toggleLabelMode}
+                  className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2 py-1 rounded border border-gray-700"
+                >
+                  <span className={labelMode === 'name' ? 'text-white' : 'text-gray-500'}>이름</span>
+                  <span className="text-gray-600">/</span>
+                  <span className={labelMode === 'comment' ? 'text-white' : 'text-gray-500'}>주석</span>
+                </button>
+              </div>
+            </LeftSection>
+
+            {/* 엣지 토글 — 범례와 연동 */}
+            <LeftSection title="엣지">
+              <button
+                onClick={toggleEdges}
+                className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60 group"
+              >
+                <span className="w-4 flex-shrink-0">
+                  <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />
+                </span>
+                <span className={`text-xs flex-1 ${showEdges ? 'text-gray-300' : 'text-gray-600'}`}>IMPORT</span>
+                <ToggleChip active={showEdges} onClick={toggleEdges} stopPropagation />
+              </button>
+              <button
+                onClick={toggleCallEdges}
+                className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60"
+              >
+                <span className="w-4 flex-shrink-0">
+                  <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="4 3" /></svg>
+                </span>
+                <span className={`text-xs flex-1 ${showCallEdges ? 'text-amber-400' : 'text-gray-600'}`}>콜 체인</span>
+                <ToggleChip active={showCallEdges} onClick={toggleCallEdges} stopPropagation />
+              </button>
+              <button
+                onClick={toggleInstEdges}
+                className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60"
+              >
+                <span className="w-4 flex-shrink-0">
+                  <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>
+                </span>
+                <span className={`text-xs flex-1 ${showInstEdges ? 'text-purple-400' : 'text-gray-600'}`}>생성</span>
+                <ToggleChip active={showInstEdges} onClick={toggleInstEdges} stopPropagation />
+              </button>
+            </LeftSection>
+
+            {/* 내보내기 */}
+            <LeftSection title="내보내기">
+              <button
+                onClick={() => downloadTreeText(rawNodes)}
+                disabled={rawNodes.length === 0}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="파일명 — 한국어 주석 형태의 AI 컨텍스트용 트리 다운로드"
+              >
+                ↓ AI 컨텍스트
+              </button>
+              <button
+                onClick={handleExportImage}
+                disabled={exporting || rawNodes.length === 0}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed mt-1"
+                title="전체 그래프를 원본 크기 PNG로 저장"
+              >
+                {exporting ? '저장 중...' : '↓ 이미지'}
+              </button>
+            </LeftSection>
+
+            {/* 범례 */}
+            <LeftSection title="범례">
+              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">DDD 레이어</p>
+              {[
+                { label: 'Domain',           color: '#3b82f6' },
+                { label: 'Application',      color: '#eab308' },
+                { label: 'Infrastructure',   color: '#a855f7' },
+                { label: 'Interfaces',       color: '#10b981' },
+                { label: 'Pages/Components', color: '#06b6d4' },
+              ].map(({ label, color }) => (
+                <div key={label} className="flex items-center gap-2 py-0.5">
+                  <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: `${color}22`, border: `1.5px solid ${color}` }} />
+                  <span className="text-gray-400 text-xs">{label}</span>
+                </div>
+              ))}
+              <div className="border-t border-gray-800 my-2" />
+              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">노드</p>
+              <div className="flex items-center gap-2 py-0.5">
+                <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#1e3a5f', border: '1.5px solid #3b82f6' }} />
+                <span className="text-gray-400 text-xs">FILE</span>
+              </div>
+              <div className="flex items-center gap-2 py-0.5">
+                <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#064e3b', border: '1px solid #10b981' }} />
+                <span className="text-gray-400 text-xs">FUNCTION</span>
+              </div>
+              <div className="border-t border-gray-800 my-2" />
+              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">엣지</p>
+              <div className="flex items-center gap-2 py-0.5">
+                <span className="w-4 h-0.5 flex-shrink-0" style={{ background: '#4b5563' }} />
+                <span className="text-gray-400 text-xs">IMPORT</span>
+              </div>
+              <div className="flex items-center gap-2 py-0.5">
+                <svg width="16" height="4" className="flex-shrink-0"><line x1="0" y1="2" x2="16" y2="2" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4 3" /></svg>
+                <span className="text-amber-400 text-xs">FUNCTION_CALL</span>
+              </div>
+              <div className="flex items-center gap-2 py-0.5">
+                <svg width="16" height="4" className="flex-shrink-0"><line x1="0" y1="2" x2="16" y2="2" stroke="#a855f7" strokeWidth="1.5" strokeDasharray="3 4" /></svg>
+                <span className="text-purple-400 text-xs">INSTANTIATION</span>
+              </div>
+              <div className="flex items-center gap-2 py-0.5">
+                <span className="w-4 h-0.5 flex-shrink-0" style={{ background: '#ef4444' }} />
+                <span className="text-gray-400 text-xs">끊긴 연결</span>
+              </div>
+            </LeftSection>
+          </div>
+        </aside>
+      )}
 
       <ReactFlow
         nodes={nodes}
@@ -543,168 +594,206 @@ function GraphPageInner() {
 
       {/* 우측 사이드바 */}
       {sidebar && (
-        <aside className="fixed right-0 top-0 h-full w-80 bg-gray-950 border-l border-gray-800 z-40 flex flex-col shadow-2xl">
-          {/* 사이드바 헤더 */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              {sidebar.kind === 'edge' ? '연결 상세' : sidebar.kind === 'file' ? '파일 연결' : sidebar.kind === 'func' ? '함수 상세' : sidebar.kind === 'func-call' ? '함수 호출' : '인스턴스화'}
-            </span>
-            <button onClick={() => setSidebar(null)} className="text-gray-600 hover:text-white text-sm">✕</button>
-          </div>
+        <aside
+          className="fixed right-0 top-0 h-full bg-gray-950 border-l border-gray-800 z-40 flex flex-col shadow-2xl transition-all duration-200"
+          style={{ width: rightCollapsed ? '40px' : '320px' }}
+        >
+          {/* 사이드바 collapse 핸들 */}
+          <button
+            onClick={() => setRightCollapsed((v) => !v)}
+            className="absolute -left-3 top-1/2 -translate-y-1/2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10"
+            title={rightCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
+          >
+            {rightCollapsed ? '‹' : '›'}
+          </button>
 
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-
-            {/* ── FUNCTION_CALL 엣지 클릭 ── */}
-            {sidebar.kind === 'func-call' && (
-              <div className="flex flex-col gap-3">
-                <div className="bg-gray-800 rounded-lg p-3 flex flex-col gap-2">
-                  <div>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">호출하는 함수</p>
-                    <p className="text-emerald-400 font-mono text-sm font-semibold cursor-pointer hover:text-emerald-200"
-                      onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.callerNodeId }], duration: 500, padding: 0.4 }), 50) }}
-                    >{sidebar.callerComment ?? sidebar.callerName}</p>
-                    <p className="text-blue-400 font-mono text-xs cursor-pointer hover:text-blue-300 mt-0.5"
-                      onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.callerFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
-                    >{sidebar.callerFile}</p>
-                  </div>
-                  <div className="text-amber-500 text-sm text-center">↓</div>
-                  <div>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">호출받는 함수</p>
-                    <p className="text-emerald-400 font-mono text-sm font-semibold cursor-pointer hover:text-emerald-200"
-                      onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.calleeNodeId }], duration: 500, padding: 0.4 }), 50) }}
-                    >{sidebar.calleeComment ?? sidebar.calleeName}</p>
-                    <p className="text-blue-400 font-mono text-xs cursor-pointer hover:text-blue-300 mt-0.5"
-                      onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.calleeFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
-                    >{sidebar.calleeFile}</p>
-                  </div>
-                </div>
-                <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded self-start">FUNCTION_CALL</span>
+          {!rightCollapsed && (
+            <>
+              {/* 사이드바 헤더 */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  {sidebar.kind === 'edge' ? '연결 상세' : sidebar.kind === 'file' ? '파일 연결' : sidebar.kind === 'func' ? '함수 상세' : sidebar.kind === 'func-call' ? '함수 호출' : '인스턴스화'}
+                </span>
+                <button onClick={() => setSidebar(null)} className="text-gray-600 hover:text-white text-sm">✕</button>
               </div>
-            )}
 
-            {/* ── INSTANTIATION 엣지 클릭 ── */}
-            {sidebar.kind === 'instantiation' && (
-              <div className="flex flex-col gap-3">
-                <div className="bg-gray-800 rounded-lg p-3 flex flex-col gap-2">
-                  <div>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">생성하는 파일</p>
-                    <p className="text-blue-300 font-mono text-sm font-semibold cursor-pointer hover:text-white"
-                      onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.sourceNodeId }], duration: 500, padding: 0.3 }), 50) }}
-                    >{sidebar.sourceFile}</p>
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+
+                {/* ── FUNCTION_CALL 엣지 클릭 ── */}
+                {sidebar.kind === 'func-call' && (
+                  <div className="flex flex-col gap-3">
+                    <div className="bg-gray-800 rounded-lg p-3 flex flex-col gap-2">
+                      <div>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">호출하는 함수</p>
+                        <p className="text-emerald-400 font-mono text-sm font-semibold cursor-pointer hover:text-emerald-200"
+                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.callerNodeId }], duration: 500, padding: 0.4 }), 50) }}
+                        >{sidebar.callerComment ?? sidebar.callerName}</p>
+                        <p className="text-blue-400 font-mono text-xs cursor-pointer hover:text-blue-300 mt-0.5"
+                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.callerFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                        >{sidebar.callerFile}</p>
+                      </div>
+                      <div className="text-amber-500 text-sm text-center">↓</div>
+                      <div>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">호출받는 함수</p>
+                        <p className="text-emerald-400 font-mono text-sm font-semibold cursor-pointer hover:text-emerald-200"
+                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.calleeNodeId }], duration: 500, padding: 0.4 }), 50) }}
+                        >{sidebar.calleeComment ?? sidebar.calleeName}</p>
+                        <p className="text-blue-400 font-mono text-xs cursor-pointer hover:text-blue-300 mt-0.5"
+                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.calleeFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                        >{sidebar.calleeFile}</p>
+                      </div>
+                    </div>
+                    <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded self-start">FUNCTION_CALL</span>
                   </div>
-                  <div className="text-purple-400 text-sm text-center">↓ new</div>
-                  <div>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">인스턴스화 대상</p>
-                    <p className="text-blue-300 font-mono text-sm font-semibold cursor-pointer hover:text-white"
-                      onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.targetNodeId }], duration: 500, padding: 0.3 }), 50) }}
-                    >{sidebar.targetClass}</p>
+                )}
+
+                {/* ── INSTANTIATION 엣지 클릭 ── */}
+                {sidebar.kind === 'instantiation' && (
+                  <div className="flex flex-col gap-3">
+                    <div className="bg-gray-800 rounded-lg p-3 flex flex-col gap-2">
+                      <div>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">생성하는 파일</p>
+                        <p className="text-blue-300 font-mono text-sm font-semibold cursor-pointer hover:text-white"
+                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.sourceNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                        >{sidebar.sourceFile}</p>
+                      </div>
+                      <div className="text-purple-400 text-sm text-center">↓ new</div>
+                      <div>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">인스턴스화 대상</p>
+                        <p className="text-blue-300 font-mono text-sm font-semibold cursor-pointer hover:text-white"
+                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.targetNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                        >{sidebar.targetClass}</p>
+                      </div>
+                    </div>
+                    <span className="text-xs bg-purple-900/40 text-purple-400 px-2 py-0.5 rounded self-start">INSTANTIATION</span>
                   </div>
-                </div>
-                <span className="text-xs bg-purple-900/40 text-purple-400 px-2 py-0.5 rounded self-start">INSTANTIATION</span>
+                )}
+
+                {/* ── 엣지 클릭: 파일→파일 + 콜 체인 ── */}
+                {sidebar.kind === 'edge' && (
+                  <>
+                    <div className="bg-gray-800/60 rounded-lg p-3 flex items-center gap-2">
+                      <span
+                        className="text-blue-300 font-mono text-xs cursor-pointer hover:text-white truncate flex-1"
+                        onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.sourceNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                      >{sidebar.sourceId}</span>
+                      <span className="text-gray-600 text-xs flex-shrink-0">→</span>
+                      <span
+                        className="text-blue-300 font-mono text-xs cursor-pointer hover:text-white truncate flex-1 text-right"
+                        onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.targetNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                      >{sidebar.targetId}</span>
+                    </div>
+                    <SidebarSection title={`함수 호출 체인${sidebar.callChain.length > 0 ? ` (${sidebar.callChain.length})` : ''}`}>
+                      {sidebar.callChain.length === 0
+                        ? <p className="text-gray-700 text-xs">분석된 함수 호출 없음</p>
+                        : sidebar.callChain.map((e, i) => (
+                          <CallChainRow key={i}
+                            leftLabel={e.callerLabel} leftNodeId={e.callerNodeId}
+                            rightLabel={e.calleeLabel} rightNodeId={e.calleeNodeId}
+                            onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                          />
+                        ))
+                      }
+                    </SidebarSection>
+                  </>
+                )}
+
+                {/* ── 파일 연결 보기 ── */}
+                {sidebar.kind === 'file' && (
+                  <>
+                    <div>
+                      <p className="text-white font-mono font-semibold text-sm">{sidebar.data.name}</p>
+                      {sidebar.data.comment && <p className="text-gray-500 text-xs mt-0.5">{sidebar.data.comment}</p>}
+                    </div>
+                    <SidebarSection title={`들어오는 연결 (${sidebar.data.incoming.length})`}>
+                      {sidebar.data.incoming.length === 0
+                        ? <p className="text-gray-700 text-xs">없음</p>
+                        : sidebar.data.incoming.map((c, i) => (
+                          <FileConnGroup key={i} entry={c} direction="in"
+                            onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                          />
+                        ))
+                      }
+                    </SidebarSection>
+                    <SidebarSection title={`나가는 연결 (${sidebar.data.outgoing.length})`}>
+                      {sidebar.data.outgoing.length === 0
+                        ? <p className="text-gray-700 text-xs">없음</p>
+                        : sidebar.data.outgoing.map((c, i) => (
+                          <FileConnGroup key={i} entry={c} direction="out"
+                            onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                          />
+                        ))
+                      }
+                    </SidebarSection>
+                  </>
+                )}
+
+                {/* ── 함수 노드 클릭 ── */}
+                {sidebar.kind === 'func' && (
+                  <>
+                    <div>
+                      <p className="text-white font-mono font-semibold text-sm">{sidebar.funcName}</p>
+                      {sidebar.funcComment && <p className="text-gray-500 text-xs mt-0.5">{sidebar.funcComment}</p>}
+                      <p
+                        className="text-blue-400 font-mono text-xs mt-1 cursor-pointer hover:text-blue-300 underline decoration-gray-700"
+                        onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.parentFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                      >{sidebar.parentFileName}</p>
+                    </div>
+                    <SidebarSection title={`호출하는 함수${sidebar.callers.length > 0 ? ` (${sidebar.callers.length})` : ''}`}>
+                      {sidebar.callers.length === 0
+                        ? <p className="text-gray-700 text-xs">없음</p>
+                        : sidebar.callers.map((c, i) => (
+                          <FuncChainRow key={i} entry={c} direction="caller"
+                            onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                          />
+                        ))
+                      }
+                    </SidebarSection>
+                    <SidebarSection title={`호출받는 함수${sidebar.callees.length > 0 ? ` (${sidebar.callees.length})` : ''}`}>
+                      {sidebar.callees.length === 0
+                        ? <p className="text-gray-700 text-xs">없음</p>
+                        : sidebar.callees.map((c, i) => (
+                          <FuncChainRow key={i} entry={c} direction="callee"
+                            onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                          />
+                        ))
+                      }
+                    </SidebarSection>
+                  </>
+                )}
+
               </div>
-            )}
-
-            {/* ── 엣지 클릭: 파일→파일 + 콜 체인 ── */}
-            {sidebar.kind === 'edge' && (
-              <>
-                <div className="bg-gray-800/60 rounded-lg p-3 flex items-center gap-2">
-                  <span
-                    className="text-blue-300 font-mono text-xs cursor-pointer hover:text-white truncate flex-1"
-                    onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.sourceNodeId }], duration: 500, padding: 0.3 }), 50) }}
-                  >{sidebar.sourceId}</span>
-                  <span className="text-gray-600 text-xs flex-shrink-0">→</span>
-                  <span
-                    className="text-blue-300 font-mono text-xs cursor-pointer hover:text-white truncate flex-1 text-right"
-                    onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.targetNodeId }], duration: 500, padding: 0.3 }), 50) }}
-                  >{sidebar.targetId}</span>
-                </div>
-                <SidebarSection title={`함수 호출 체인${sidebar.callChain.length > 0 ? ` (${sidebar.callChain.length})` : ''}`}>
-                  {sidebar.callChain.length === 0
-                    ? <p className="text-gray-700 text-xs">분석된 함수 호출 없음</p>
-                    : sidebar.callChain.map((e, i) => (
-                      <CallChainRow key={i}
-                        leftLabel={e.callerLabel} leftNodeId={e.callerNodeId}
-                        rightLabel={e.calleeLabel} rightNodeId={e.calleeNodeId}
-                        onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
-                      />
-                    ))
-                  }
-                </SidebarSection>
-              </>
-            )}
-
-            {/* ── 파일 연결 보기 ── */}
-            {sidebar.kind === 'file' && (
-              <>
-                <div>
-                  <p className="text-white font-mono font-semibold text-sm">{sidebar.data.name}</p>
-                  {sidebar.data.comment && <p className="text-gray-500 text-xs mt-0.5">{sidebar.data.comment}</p>}
-                </div>
-                <SidebarSection title={`들어오는 연결 (${sidebar.data.incoming.length})`}>
-                  {sidebar.data.incoming.length === 0
-                    ? <p className="text-gray-700 text-xs">없음</p>
-                    : sidebar.data.incoming.map((c, i) => (
-                      <FileConnGroup key={i} entry={c} direction="in"
-                        onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
-                      />
-                    ))
-                  }
-                </SidebarSection>
-                <SidebarSection title={`나가는 연결 (${sidebar.data.outgoing.length})`}>
-                  {sidebar.data.outgoing.length === 0
-                    ? <p className="text-gray-700 text-xs">없음</p>
-                    : sidebar.data.outgoing.map((c, i) => (
-                      <FileConnGroup key={i} entry={c} direction="out"
-                        onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
-                      />
-                    ))
-                  }
-                </SidebarSection>
-              </>
-            )}
-
-            {/* ── 함수 노드 클릭 ── */}
-            {sidebar.kind === 'func' && (
-              <>
-                <div>
-                  <p className="text-white font-mono font-semibold text-sm">{sidebar.funcName}</p>
-                  {sidebar.funcComment && <p className="text-gray-500 text-xs mt-0.5">{sidebar.funcComment}</p>}
-                  <p
-                    className="text-blue-400 font-mono text-xs mt-1 cursor-pointer hover:text-blue-300 underline decoration-gray-700"
-                    onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.parentFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
-                  >{sidebar.parentFileName}</p>
-                </div>
-                <SidebarSection title={`호출하는 함수${sidebar.callers.length > 0 ? ` (${sidebar.callers.length})` : ''}`}>
-                  {sidebar.callers.length === 0
-                    ? <p className="text-gray-700 text-xs">없음</p>
-                    : sidebar.callers.map((c, i) => (
-                      <FuncChainRow key={i} entry={c} direction="caller"
-                        onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
-                      />
-                    ))
-                  }
-                </SidebarSection>
-                <SidebarSection title={`호출받는 함수${sidebar.callees.length > 0 ? ` (${sidebar.callees.length})` : ''}`}>
-                  {sidebar.callees.length === 0
-                    ? <p className="text-gray-700 text-xs">없음</p>
-                    : sidebar.callees.map((c, i) => (
-                      <FuncChainRow key={i} entry={c} direction="callee"
-                        onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
-                      />
-                    ))
-                  }
-                </SidebarSection>
-              </>
-            )}
-
-          </div>
+            </>
+          )}
         </aside>
       )}
     </div>
   )
 }
 
-// 섹션 헤더
+// 왼쪽 사이드바 섹션
+function LeftSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="px-3 py-3 border-b border-gray-800/60">
+      <p className="text-[9px] font-semibold text-gray-600 uppercase tracking-widest mb-2">{title}</p>
+      {children}
+    </div>
+  )
+}
+
+// on/off 상태 표시 칩
+function ToggleChip({ active, onClick, stopPropagation }: { active: boolean; onClick: () => void; stopPropagation?: boolean }) {
+  return (
+    <button
+      onClick={(e) => { if (stopPropagation) e.stopPropagation(); onClick() }}
+      className={`text-[10px] px-1.5 py-0.5 rounded font-mono flex-shrink-0 ${active ? 'bg-emerald-900/60 text-emerald-400' : 'bg-gray-800 text-gray-600'}`}
+    >
+      {active ? 'ON' : 'OFF'}
+    </button>
+  )
+}
+
+// 우측 사이드바 섹션 헤더
 function SidebarSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
