@@ -3,8 +3,6 @@ package com.codeprint.application.analysis;
 
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
-import com.codeprint.domain.project.Project;
-import com.codeprint.domain.project.ProjectRepository;
 import com.codeprint.infrastructure.analysis.*;
 import com.codeprint.interfaces.websocket.AnalysisProgressHandler;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +21,6 @@ import java.util.UUID;
 public class AnalysisRunner {
 
     private final AnalysisRepository analysisRepository;
-    private final ProjectRepository projectRepository;
     private final RepoCloner repoCloner;
     private final SourceFileWalker sourceFileWalker;
     private final StaticCodeAnalyzer staticCodeAnalyzer;
@@ -32,23 +29,20 @@ public class AnalysisRunner {
 
     @Async
     @Transactional
-    public void run(UUID analysisId) {
+    public void run(UUID analysisId, UUID projectId, String githubRepoUrl) {
         Path repoDir = null;
         try {
-            AnalysisResult analysis = analysisRepository.findById(analysisId)
-                    .orElseThrow(() -> new IllegalArgumentException("Analysis not found: " + analysisId));
+            // 새 트랜잭션에서 조회 — outer 트랜잭션 커밋 후 확실히 존재
+            AnalysisResult analysis = waitForAnalysis(analysisId);
 
             analysis.start();
             analysisRepository.save(analysis);
             progressHandler.sendProgress(analysisId, 5, "RUNNING");
 
-            Project project = projectRepository.findById(analysis.getProjectId())
-                    .orElseThrow(() -> new IllegalArgumentException("Project not found"));
-
-            log.info("분석 시작: analysisId={}, repo={}", analysisId, project.getGithubRepoUrl());
+            log.info("분석 시작: analysisId={}, repo={}", analysisId, githubRepoUrl);
 
             progressHandler.sendProgress(analysisId, 10, "RUNNING");
-            repoDir = repoCloner.clone(project.getGithubRepoUrl());
+            repoDir = repoCloner.clone(githubRepoUrl);
             log.info("클론 완료: {}", repoDir);
             progressHandler.sendProgress(analysisId, 30, "RUNNING");
 
@@ -71,7 +65,7 @@ public class AnalysisRunner {
                     .toList();
             progressHandler.sendProgress(analysisId, 70, "RUNNING");
 
-            graphBuilder.build(analysis.getProjectId(), analysisId, parsedFiles);
+            graphBuilder.build(projectId, analysisId, parsedFiles);
             progressHandler.sendProgress(analysisId, 95, "RUNNING");
 
             analysis.complete();
@@ -97,5 +91,15 @@ public class AnalysisRunner {
                 repoCloner.deleteDir(repoDir);
             }
         }
+    }
+
+    // outer 트랜잭션 커밋 대기 — 최대 3초 재시도
+    private AnalysisResult waitForAnalysis(UUID analysisId) throws InterruptedException {
+        for (int i = 0; i < 6; i++) {
+            var result = analysisRepository.findById(analysisId);
+            if (result.isPresent()) return result.get();
+            Thread.sleep(500);
+        }
+        throw new IllegalArgumentException("Analysis not found after retries: " + analysisId);
     }
 }

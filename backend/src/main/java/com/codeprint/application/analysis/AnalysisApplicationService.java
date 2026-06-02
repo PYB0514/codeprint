@@ -3,6 +3,8 @@ package com.codeprint.application.analysis;
 
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
+import com.codeprint.domain.project.Project;
+import com.codeprint.domain.project.ProjectRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,12 +17,18 @@ import java.util.UUID;
 public class AnalysisApplicationService {
 
     private final AnalysisRepository analysisRepository;
+    private final ProjectRepository projectRepository;
     private final AnalysisRunner analysisRunner;
 
     public AnalysisResult startAnalysis(UUID projectId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+
         AnalysisResult analysis = AnalysisResult.create(projectId);
         analysisRepository.save(analysis);
-        analysisRunner.run(analysis.getId());
+
+        // URL을 미리 추출해서 넘김 — 트랜잭션 커밋 전 비동기 스레드가 DB 조회 시 못 찾는 문제 방지
+        analysisRunner.run(analysis.getId(), projectId, project.getGithubRepoUrl());
         return analysis;
     }
 
