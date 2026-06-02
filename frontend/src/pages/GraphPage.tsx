@@ -430,9 +430,9 @@ function GraphPageInner() {
         <button
           onClick={toggleEdges}
           className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700"
-          title="연결선 표시/숨김"
+          title="IMPORT 엣지 표시/숨김"
         >
-          <span className={showEdges ? 'text-white' : 'text-gray-500'}>연결선</span>
+          <span className={showEdges ? 'text-white' : 'text-gray-500'}>IMPORT</span>
         </button>
         <button
           onClick={toggleCallEdges}
