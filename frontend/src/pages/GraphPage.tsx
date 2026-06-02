@@ -9,9 +9,8 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
-  Node,
-  Edge,
 } from '@xyflow/react'
+import type { Node, Edge } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
 interface RawNode {
