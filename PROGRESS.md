@@ -20,6 +20,7 @@
 | 그래프 API | ✅ | GET /api/projects/{id}/graph |
 | 분석 진행률 API | ✅ | GET /api/analyses/{id} |
 | 파일/함수 주석 추출 | ✅ | metadata.comment 저장, 어노테이션 건너뛰기, 제네릭 정규식 지원 |
+| 브랜치 선택 분석 | ✅ | GET /api/projects/{id}/branches, analyses.branch 컬럼, RepoCloner --branch |
 
 ### 프론트엔드
 
@@ -32,6 +33,7 @@
 | GraphPage | ✅ | React Flow 시각화, dagre 레이아웃, DDD 그룹핑 |
 | 이름/주석 토글 | ✅ | 노드 라벨을 파일명/함수명 ↔ 한국어 주석으로 전환 |
 | 엣지 호버 모달 | ✅ | 클릭 시 연결 상세 표시 |
+| 브랜치 선택 UI | ✅ | 분석 시작/재분석 클릭 시 드롭다운으로 브랜치 선택 |
 
 ### 인프라
 
@@ -64,41 +66,30 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재 브랜치: feat/graph-layout
-# 1. feat/graph-layout → main PR 머지
-# 2. 재분석으로 함수 주석 동작 최종 확인
-# 3. feat/branch-analysis 브랜치 생성 후 브랜치 선택 분석 구현
+# 현재 브랜치: feat/branch-analysis
+# 1. 백엔드+프론트 올려서 브랜치 선택 분석 E2E 동작 확인
+# 2. feat/branch-analysis → main PR 머지
+# 3. 노드 드래그 위치 저장 구현 (PUT /api/graphs/{graphId}/nodes/{nodeId}/position)
 ```
 
 ---
 
 ## 다음 작업 순서
 
-### 1단계: `feat/graph-layout` 마무리 (현재 브랜치)
-- PR 머지 → main
-- 머지 후 재분석으로 함수 주석 토글 최종 확인
+### 1단계: `feat/branch-analysis` (현재 브랜치) ✅
+- analyses.branch 컬럼, RepoCloner --branch, 브랜치 목록 API, 드롭다운 UI 구현 완료
+- E2E 확인 + PR 머지 대기
 
-### 2단계: `feat/branch-analysis`
-**백엔드**
-1. `analyses` 테이블 `branch` 컬럼 추가 (Flyway)
-2. `GET /api/projects/{id}/branches` — GitHub API 브랜치 목록 조회
-3. `RepoCloner` — `--branch` 옵션 추가
-4. 분석 시작 API에 `branch` 파라미터 추가
-
-**프론트엔드**
-5. 분석 시작/재분석 버튼 클릭 시 브랜치 목록 로딩
-6. 브랜치 선택 드롭다운 → 분석 시작
-
-### 3단계: 그래프 인터랙션
+### 2단계: 그래프 인터랙션
 - 노드 드래그 위치 저장 (`PUT /api/graphs/{graphId}/nodes/{nodeId}/position`)
 
-### 4단계: `feat/share`
+### 3단계: `feat/share`
 - 프로젝트 공개/비공개 토글
 - 공유 URL 생성
 - 이미지 내보내기 (html-to-image)
 - 커뮤니티 게시판 (Post, Comment)
 
-### 5단계: `feat/stripe`
+### 4단계: `feat/stripe`
 - Stripe 결제 연동
 - Free → Pro 업그레이드
 - 프로젝트 수 제한 해제
@@ -119,7 +110,7 @@ npm run dev
 | GitHub OAuth Client ID | 대문자 O로 시작 (`Ov23li9p7ck6LTB8bnqm`) — 숫자 0 아님 |
 | application-local.yml | gitignore 처리됨. OAuth Secret 포함, 공유 금지 |
 | Java 파일 인코딩 | UTF-8 BOM 없이 저장할 것 |
-| 함수 주석 미반영 | feat/graph-layout이 main 미머지 상태 — 다음 세션에서 PR 머지 후 해결 |
+| 브랜치 선택 E2E 미확인 | feat/branch-analysis 서버 올려서 실제 동작 확인 필요 |
 
 ---
 
@@ -127,8 +118,7 @@ npm run dev
 
 ```
 main                       ← 항상 배포 가능 상태
-└─ feat/graph-layout       ← 현재 (PR 머지 대기)
-└─ feat/branch-analysis    ← 다음
+└─ feat/branch-analysis    ← 현재 (PR 머지 대기)
 └─ feat/share
 └─ feat/stripe
 ```
