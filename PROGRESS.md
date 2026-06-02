@@ -63,33 +63,26 @@ docker compose down
 
 ```powershell
 # 현재 브랜치: feat/graph-layout
-# 1. 주석 추출 디버깅 — StaticCodeAnalyzer에 log 추가 후 재분석
-# 2. 주석 토글 동작 확인
-# 3. PR 머지
+# 1. feat/graph-layout → main PR 머지
+# 2. 재분석으로 함수 주석 동작 최종 확인
+# 3. feat/branch-analysis 브랜치 생성 후 브랜치 선택 분석 구현
 ```
 
 ---
 
 ## 다음 작업 순서 (Phase 1 완성)
 
-### 브랜치: `feat/project-api`
+### 브랜치: `feat/branch-analysis`
 
 **백엔드**
-1. `ProjectCommandService` — 프로젝트 생성 로직 구현
-   - GitHub 레포 URL 유효성 검증
-   - FREE 플랜 3개 제한 체크 (`ProjectLimit`)
-   - `POST /api/projects` 응답 DTO 정의
-2. `ProjectQueryService` — 프로젝트 목록/상세 조회
-   - `GET /api/projects` — 내 프로젝트 목록
-   - `GET /api/projects/{id}` — 프로젝트 상세
+1. `analyses` 테이블 `branch` 컬럼 추가 (Flyway V4 마이그레이션)
+2. `GET /api/projects/{id}/branches` — GitHub API로 브랜치 목록 조회
+3. `RepoCloner` — `--branch` 옵션 추가
+4. 분석 시작 API에 `branch` 파라미터 추가
 
 **프론트엔드**
-3. 프로젝트 목록 페이지 (`/dashboard` 개선)
-   - 프로젝트 카드 목록
-   - "새 프로젝트 추가" 버튼
-4. 프로젝트 생성 모달
-   - GitHub 레포 URL 입력
-   - 생성 요청 → 목록 갱신
+5. 분석 시작/재분석 버튼 클릭 시 브랜치 목록 로딩
+6. 브랜치 선택 드롭다운 → 분석 시작
 
 ---
 
