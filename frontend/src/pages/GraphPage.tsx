@@ -16,7 +16,7 @@ import type { Edge, EdgeMouseHandler, Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
 import { buildLayout, downloadTreeText } from '../utils/graphLayout'
-import type { RawNode, RawEdge, LabelMode } from '../utils/graphLayout'
+import type { RawNode, RawEdge, LabelMode, LayoutPreset } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 
 const nodeTypes = { groupNode: GroupNode }
@@ -46,6 +46,7 @@ function GraphPageInner() {
   const [error, setError] = useState<string | null>(null)
   const [edgeModal, setEdgeModal] = useState<EdgeModalInfo | null>(null)
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
+  const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -58,7 +59,7 @@ function GraphPageInner() {
       const res = await axios.get(`/api/projects/${projectId}/graph`, { headers: authHeaders() })
       const { graphId: gid, nodes: rn, edges: re } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[] }
       setGraphId(gid)
-      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode)
+      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset)
       setRawNodes(rn)
       setRawEdgesCache(re)
       setNodes(layoutNodes)
@@ -82,11 +83,23 @@ function GraphPageInner() {
     const next: LabelMode = labelMode === 'name' ? 'comment' : 'name'
     setLabelMode(next)
     if (rawNodes.length > 0) {
-      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, next)
+      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, next, layoutPreset)
       setNodes(layoutNodes)
       setEdges(layoutEdges)
     }
-  }, [labelMode, rawNodes, rawEdgesCache, setNodes, setEdges])
+  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges])
+
+  // 레이아웃 프리셋 전환 — 그래프를 재계산하여 적용
+  const toggleLayoutPreset = useCallback(() => {
+    const next: LayoutPreset = layoutPreset === 'layer' ? 'hub' : 'layer'
+    setLayoutPreset(next)
+    if (rawNodes.length > 0) {
+      const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next)
+      setNodes(ln)
+      setEdges(le)
+      setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
+    }
+  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView])
 
   // 전체 그래프를 원본 크기 PNG로 다운로드
   const handleExportImage = useCallback(async () => {
@@ -207,6 +220,15 @@ function GraphPageInner() {
         <span className="text-gray-400 text-sm">
           파일 {counts.files}개 · 함수 {counts.funcs}개 · 엣지 {counts.edges}개
         </span>
+        <button
+          onClick={toggleLayoutPreset}
+          className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700"
+          title={layoutPreset === 'layer' ? 'DDD 레이어별 컬럼 배치' : '연결 많은 그룹이 중앙으로'}
+        >
+          <span className={layoutPreset === 'layer' ? 'text-white' : 'text-gray-500'}>계층</span>
+          <span className="text-gray-600">/</span>
+          <span className={layoutPreset === 'hub' ? 'text-white' : 'text-gray-500'}>허브</span>
+        </button>
         <button
           onClick={toggleLabelMode}
           className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700"

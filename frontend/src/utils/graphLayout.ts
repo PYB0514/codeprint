@@ -91,6 +91,7 @@ function calcFileSize(funcCount: number): { w: number; h: number; cols: number }
 }
 
 export type LabelMode = 'name' | 'comment'
+export type LayoutPreset = 'layer' | 'hub'
 
 // 텍스트가 maxLen을 초과하면 말줄임표 + title tooltip이 있는 span 반환, 아니면 문자열 그대로
 function labelNode(full: string, maxLen: number): React.ReactNode {
@@ -99,8 +100,124 @@ function labelNode(full: string, maxLen: number): React.ReactNode {
   return React.createElement('span', { title: full, style: { cursor: 'default' } }, trimmed)
 }
 
-// 원시 노드/엣지 데이터를 dagre 레이아웃으로 변환하여 React Flow용 노드/엣지 반환
-export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode: LabelMode = 'name'): { nodes: Node[]; edges: Edge[] } {
+// DDD 레이어 컬럼 배치 — 같은 레이어끼리 같은 컬럼에 세로 정렬
+function buildLayerPositions(
+  groups: Map<string, RawNode[]>,
+  groupLayouts: Map<string, { files: Array<{ file: RawNode; x: number; y: number }>; w: number; h: number }>
+): Map<string, { x: number; y: number }> {
+  const COL_GAP = 64
+  const ROW_GAP = 40
+
+  const colGroups = new Map<number, string[]>()
+  groups.forEach((_, key) => {
+    const layer = key.indexOf('/') >= 0 ? key.slice(0, key.indexOf('/')) : key
+    const col = LAYER_COLUMN[layer] ?? 7
+    if (!colGroups.has(col)) colGroups.set(col, [])
+    colGroups.get(col)!.push(key)
+  })
+
+  const sortedCols = Array.from(colGroups.keys()).sort((a, b) => a - b)
+  const colMaxW = new Map<number, number>()
+  colGroups.forEach((keys, col) => {
+    colMaxW.set(col, Math.max(...keys.map((k) => groupLayouts.get(k)!.w)))
+  })
+
+  const colStartX = new Map<number, number>()
+  let xCursor = 0
+  sortedCols.forEach((col) => {
+    colStartX.set(col, xCursor)
+    xCursor += (colMaxW.get(col) ?? 0) + COL_GAP
+  })
+
+  const positions = new Map<string, { x: number; y: number }>()
+  colGroups.forEach((keys, col) => {
+    let y = 0
+    const x = colStartX.get(col) ?? 0
+    keys.forEach((key) => {
+      positions.set(key, { x, y })
+      y += groupLayouts.get(key)!.h + ROW_GAP
+    })
+  })
+  return positions
+}
+
+// 연결 허브 배치 — 그룹 간 연결이 많을수록 중앙, 16:9 비율 그리드
+function buildHubPositions(
+  groups: Map<string, RawNode[]>,
+  groupLayouts: Map<string, { files: Array<{ file: RawNode; x: number; y: number }>; w: number; h: number }>,
+  rawEdges: RawEdge[],
+  fileIdSet: Set<string>,
+  fileToGroup: Map<string, string>
+): Map<string, { x: number; y: number }> {
+  const COL_GAP = 64
+  const ROW_GAP = 48
+
+  // 그룹 간 연결 수 집계
+  const connCount = new Map<string, number>()
+  groups.forEach((_, k) => connCount.set(k, 0))
+  rawEdges
+    .filter((e) => fileIdSet.has(e.source) && fileIdSet.has(e.target))
+    .forEach((e) => {
+      const sg = fileToGroup.get(e.source)
+      const tg = fileToGroup.get(e.target)
+      if (sg && tg && sg !== tg) {
+        connCount.set(sg, (connCount.get(sg) ?? 0) + 1)
+        connCount.set(tg, (connCount.get(tg) ?? 0) + 1)
+      }
+    })
+
+  // 연결 많은 순 정렬
+  const sortedGroups = Array.from(groups.keys())
+    .sort((a, b) => (connCount.get(b) ?? 0) - (connCount.get(a) ?? 0) || a.localeCompare(b))
+
+  const n = sortedGroups.length
+  if (n === 0) return new Map()
+
+  // 16:9에 가까운 그리드 크기 계산
+  const allLayouts = Array.from(groupLayouts.values())
+  const avgW = allLayouts.reduce((s, l) => s + l.w, 0) / allLayouts.length + COL_GAP
+  const avgH = allLayouts.reduce((s, l) => s + l.h, 0) / allLayouts.length + ROW_GAP
+  const cols = Math.max(1, Math.round(Math.sqrt(n * (16 / 9) * (avgH / avgW))))
+  const rows = Math.ceil(n / cols)
+
+  // 셀 크기 — 최대 그룹 사이즈 기준
+  const maxW = Math.max(...allLayouts.map((l) => l.w))
+  const maxH = Math.max(...allLayouts.map((l) => l.h))
+  const cellW = maxW + COL_GAP
+  const cellH = maxH + ROW_GAP
+
+  // 중심에서 가까운 순으로 셀 정렬
+  const cx = (cols - 1) / 2
+  const cy = (rows - 1) / 2
+  const cells: { i: number; j: number; dist: number }[] = []
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      cells.push({ i, j, dist: Math.hypot(i - cx, j - cy) })
+    }
+  }
+  cells.sort((a, b) => a.dist - b.dist || a.j - b.j || a.i - b.i)
+
+  // 연결 많은 그룹 → 중앙 셀
+  const positions = new Map<string, { x: number; y: number }>()
+  sortedGroups.forEach((key, idx) => {
+    const cell = cells[idx]
+    if (!cell) return
+    const layout = groupLayouts.get(key)!
+    positions.set(key, {
+      x: cell.i * cellW + (maxW - layout.w) / 2,
+      y: cell.j * cellH + (maxH - layout.h) / 2,
+    })
+  })
+  return positions
+}
+
+// 원시 노드/엣지 데이터를 레이아웃으로 변환하여 React Flow용 노드/엣지 반환
+export function buildLayout(
+  rawNodes: RawNode[],
+  rawEdges: RawEdge[],
+  labelMode: LabelMode = 'name',
+  layoutPreset: LayoutPreset = 'layer'
+): { nodes: Node[]; edges: Edge[] } {
   // 노드 라벨 반환 — 초과 시 말줄임표 + hover tooltip
   const getLabel = (node: RawNode, maxLen = 999): React.ReactNode => {
     const raw = labelMode === 'comment' && node.comment ? node.comment : node.name
@@ -166,49 +283,14 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
     groupLayouts.set(key, { files: placed, w: gw, h: gh })
   })
 
-  // DDD 레이어 컬럼 기반 그룹 배치
-  // 같은 레이어(domain/user, domain/project 등)는 같은 컬럼에 세로로 쌓임
-  const COL_GAP = 64   // 컬럼 간 가로 간격
-  const ROW_GAP = 40   // 같은 컬럼 내 세로 간격
-
-  // 그룹을 컬럼별로 분류
-  const colGroups = new Map<number, string[]>()
-  groups.forEach((_, key) => {
-    const slashIdx = key.indexOf('/')
-    const layer = slashIdx >= 0 ? key.slice(0, slashIdx) : key
-    const col = LAYER_COLUMN[layer] ?? 7
-    if (!colGroups.has(col)) colGroups.set(col, [])
-    colGroups.get(col)!.push(key)
-  })
-
-  // 컬럼별 최대 너비 계산 → 각 컬럼의 x 시작 위치 산출
-  const sortedCols = Array.from(colGroups.keys()).sort((a, b) => a - b)
-  const colMaxW = new Map<number, number>()
-  colGroups.forEach((keys, col) => {
-    colMaxW.set(col, Math.max(...keys.map((k) => groupLayouts.get(k)!.w)))
-  })
-
-  const colStartX = new Map<number, number>()
-  let xCursor = 0
-  sortedCols.forEach((col) => {
-    colStartX.set(col, xCursor)
-    xCursor += (colMaxW.get(col) ?? 0) + COL_GAP
-  })
-
-  // 그룹별 최종 위치
-  const groupPositions = new Map<string, { x: number; y: number }>()
-  colGroups.forEach((keys, col) => {
-    let y = 0
-    const x = colStartX.get(col) ?? 0
-    keys.forEach((key) => {
-      groupPositions.set(key, { x, y })
-      y += groupLayouts.get(key)!.h + ROW_GAP
-    })
-  })
-
   const fileIdSet = new Set(fileNodes.map((f) => f.id))
   const fileToGroup = new Map<string, string>()
   fileNodes.forEach((f) => fileToGroup.set(f.id, getGroupKey(f.filePath, commonPrefix)))
+
+  // 레이아웃 프리셋에 따라 그룹 위치 계산
+  const groupPositions = layoutPreset === 'hub'
+    ? buildHubPositions(groups, groupLayouts, rawEdges, fileIdSet, fileToGroup)
+    : buildLayerPositions(groups, groupLayouts)
 
   const result: Node[] = []
 
