@@ -79,11 +79,12 @@ public class StaticCodeAnalyzer {
                 String funcName = extractFirstGroup(m);
                 if (funcName == null || isKeyword(funcName)) continue;
 
-                // 바로 위 줄에서 주석 찾기
+                // 바로 위 줄에서 주석 찾기 (어노테이션은 건너뜀)
                 String comment = null;
-                for (int j = i - 1; j >= Math.max(0, i - 3); j--) {
+                for (int j = i - 1; j >= Math.max(0, i - 8); j--) {
                     String prev = lines[j].trim();
                     if (prev.isEmpty()) continue;
+                    if (prev.startsWith("@")) continue; // 어노테이션 건너뜀
                     if (prev.startsWith("//")) {
                         comment = prev.substring(2).trim();
                     } else if (prev.startsWith("*") && !prev.startsWith("*/")) {
