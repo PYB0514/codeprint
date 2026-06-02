@@ -120,6 +120,12 @@ function GraphPageInner() {
   const [sidebar, setSidebar] = useState<SidebarContent | null>(null)
   const [rightCollapsed, setRightCollapsed] = useState(false)
   const [leftOpen, setLeftOpen] = useState(true)
+  const [leftWidth, setLeftWidth] = useState(220)
+  const [rightWidth, setRightWidth] = useState(320)
+  const leftResizing = useRef(false)
+  const rightResizing = useRef(false)
+  const dragStartX = useRef(0)
+  const dragStartWidth = useRef(0)
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
   const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
@@ -171,6 +177,24 @@ function GraphPageInner() {
   const openFileSidebar = useCallback((data: FileSidebarData) => {
     setSidebar({ kind: 'file', data })
     setRightCollapsed(false)
+  }, [])
+
+  // 사이드바 드래그 리사이즈 — 전역 mousemove/mouseup 처리
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (leftResizing.current) {
+        const delta = e.clientX - dragStartX.current
+        setLeftWidth(Math.min(420, Math.max(160, dragStartWidth.current + delta)))
+      }
+      if (rightResizing.current) {
+        const delta = dragStartX.current - e.clientX
+        setRightWidth(Math.min(520, Math.max(240, dragStartWidth.current + delta)))
+      }
+    }
+    const onUp = () => { leftResizing.current = false; rightResizing.current = false }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
   }, [])
 
   // 서버에서 그래프 데이터를 불러와 React Flow 레이아웃으로 변환
@@ -483,7 +507,7 @@ function GraphPageInner() {
     <div ref={flowRef} style={{ width: '100vw', height: '100vh', background: '#030712' }}>
 
       {/* 상단 바 — 내비 + 통계만 */}
-      <div className="absolute top-4 z-10 flex items-center gap-3" style={{ left: leftOpen ? '228px' : '20px' }}>
+      <div className="absolute top-4 z-10 flex items-center gap-3" style={{ left: leftOpen ? `${leftWidth + 8}px` : '20px' }}>
         <button
           onClick={() => navigate('/dashboard')}
           className="bg-gray-800 hover:bg-gray-700 text-white text-sm px-3 py-1.5 rounded-lg"
@@ -507,7 +531,7 @@ function GraphPageInner() {
 
       {/* 왼쪽 사이드바 */}
       {leftOpen && (
-        <aside className="absolute left-0 top-0 h-full z-20 flex flex-col bg-gray-950 border-r border-gray-800 shadow-xl overflow-y-auto" style={{ width: '220px' }}>
+        <aside className="absolute left-0 top-0 h-full z-20 flex flex-col bg-gray-950 border-r border-gray-800 shadow-xl overflow-y-auto" style={{ width: `${leftWidth}px` }}>
 
           {/* 사이드바 헤더 */}
           <div className="flex items-center justify-between px-3 py-3 border-b border-gray-800 flex-shrink-0">
@@ -625,6 +649,13 @@ function GraphPageInner() {
               </div>
             </LeftSection>
           </div>
+
+          {/* 왼쪽 사이드바 리사이즈 핸들 */}
+          <div
+            onMouseDown={(e) => { leftResizing.current = true; dragStartX.current = e.clientX; dragStartWidth.current = leftWidth; e.preventDefault() }}
+            className="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60 transition-colors"
+            style={{ userSelect: 'none' }}
+          />
         </aside>
       )}
 
@@ -658,7 +689,7 @@ function GraphPageInner() {
       {/* 우측 사이드바 — 항상 표시 */}
       <aside
         className="fixed right-0 top-0 h-full bg-gray-950 border-l border-gray-800 z-40 flex flex-col shadow-2xl transition-all duration-200"
-        style={{ width: rightCollapsed ? '40px' : '320px' }}
+        style={{ width: rightCollapsed ? '40px' : `${rightWidth}px` }}
       >
         {/* collapse 핸들 */}
         <button
@@ -849,6 +880,15 @@ function GraphPageInner() {
 
               </div>
           </>
+        )}
+
+        {/* 오른쪽 사이드바 리사이즈 핸들 — collapse 아닐 때만 */}
+        {!rightCollapsed && (
+          <div
+            onMouseDown={(e) => { rightResizing.current = true; dragStartX.current = e.clientX; dragStartWidth.current = rightWidth; e.preventDefault() }}
+            className="absolute top-0 left-0 h-full w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60 transition-colors"
+            style={{ userSelect: 'none' }}
+          />
         )}
       </aside>
     </div>
