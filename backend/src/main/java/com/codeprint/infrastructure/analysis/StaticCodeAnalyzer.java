@@ -4,6 +4,7 @@ package com.codeprint.infrastructure.analysis;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -14,7 +15,7 @@ import java.util.regex.Pattern;
 public class StaticCodeAnalyzer {
 
     public ParsedFile analyze(Path file, Path repoRoot, String language) throws IOException {
-        String content = Files.readString(file);
+        String content = Files.readString(file, StandardCharsets.UTF_8);
         String relativePath = repoRoot.relativize(file).toString().replace("\\", "/");
 
         List<String> functions = extractFunctions(content, language);
