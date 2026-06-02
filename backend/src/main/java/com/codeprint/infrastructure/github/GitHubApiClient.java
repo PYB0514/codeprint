@@ -22,17 +22,19 @@ public class GitHubApiClient {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // GitHub 레포 URL에서 브랜치 목록을 조회 (최대 100개)
-    public List<String> fetchBranches(String githubRepoUrl) {
+    public List<String> fetchBranches(String githubRepoUrl, String githubAccessToken) {
         String ownerRepo = extractOwnerRepo(githubRepoUrl);
         String apiUrl = "https://api.github.com/repos/" + ownerRepo + "/branches?per_page=100";
 
         try {
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(apiUrl))
                     .header("Accept", "application/vnd.github+json")
-                    .header("X-GitHub-Api-Version", "2022-11-28")
-                    .GET()
-                    .build();
+                    .header("X-GitHub-Api-Version", "2022-11-28");
+            if (githubAccessToken != null && !githubAccessToken.isBlank()) {
+                builder.header("Authorization", "Bearer " + githubAccessToken);
+            }
+            HttpRequest request = builder.GET().build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 

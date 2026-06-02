@@ -58,7 +58,7 @@ public class ProjectController {
             @PathVariable UUID projectId,
             @AuthenticationPrincipal User user) {
         var project = projectQueryService.getProject(projectId, user.getId());
-        return ResponseEntity.ok(gitHubApiClient.fetchBranches(project.getGithubRepoUrl()));
+        return ResponseEntity.ok(gitHubApiClient.fetchBranches(project.getGithubRepoUrl(), user.getGithubAccessToken()));
     }
 
     // 프로젝트 삭제

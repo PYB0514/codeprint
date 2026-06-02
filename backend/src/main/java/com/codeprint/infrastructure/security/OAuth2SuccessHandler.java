@@ -9,6 +9,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
@@ -23,6 +26,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
     private final JwtTokenProvider jwtTokenProvider;
     private final UserCommandService userCommandService;
+    private final OAuth2AuthorizedClientService authorizedClientService;
 
     @Value("${app.frontend-url:http://localhost:3000}")
     private String frontendUrl;
@@ -45,8 +49,17 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         }
 
         User user = userCommandService.getOrCreateUser(githubId, email, username);
-        String token = jwtTokenProvider.generateToken(user.getId(), user.getEmail());
 
+        // GitHub access token 추출 후 저장 (private 레포 API 접근용)
+        if (authentication instanceof OAuth2AuthenticationToken oauthToken) {
+            OAuth2AuthorizedClient client = authorizedClientService.loadAuthorizedClient(
+                    oauthToken.getAuthorizedClientRegistrationId(), oauthToken.getName());
+            if (client != null && client.getAccessToken() != null) {
+                userCommandService.saveGithubAccessToken(user.getId(), client.getAccessToken().getTokenValue());
+            }
+        }
+
+        String token = jwtTokenProvider.generateToken(user.getId(), user.getEmail());
         log.info("OAuth2 login success: userId={}, username={}", user.getId(), username);
 
         // 프론트엔드로 JWT 전달
