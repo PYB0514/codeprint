@@ -1,6 +1,7 @@
 // DDD 레이어별 색상과 헤더를 가진 커스텀 그룹 노드 — 최소화/불투명 토글 지원
 import { useState } from 'react'
-import { Handle, Position, EdgeLabelRenderer, useInternalNode, useReactFlow } from '@xyflow/react'
+import { createPortal } from 'react-dom'
+import { Handle, Position, useInternalNode, useReactFlow, useStore } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 
 interface GroupData {
@@ -10,7 +11,6 @@ interface GroupData {
   originalHeight: number
 }
 
-// DDD 레이어 → 색상 팔레트
 const LAYER_PALETTE: Record<string, { border: string; header: string; badge: string; text: string; bg: string; opaque: string }> = {
   domain:         { border: '#3b82f6', header: 'rgba(59,130,246,0.15)', badge: '#1d4ed8', text: '#93c5fd', bg: 'rgba(59,130,246,0.04)', opaque: 'rgba(15,30,60,0.93)'   },
   application:    { border: '#eab308', header: 'rgba(234,179,8,0.12)',  badge: '#a16207', text: '#fde047', bg: 'rgba(234,179,8,0.03)',  opaque: 'rgba(40,30,5,0.93)'    },
@@ -30,12 +30,13 @@ const LAYER_KO: Record<string, string> = {
 }
 
 const HEADER_H = 36
-// 버튼 2개 + gap: 버튼 22px * 2 + gap 4px + 우측 패딩 8px
-const BTN_AREA_W = 22 + 4 + 22 + 8
+const BTN_W = 20   // 버튼 하나의 너비 (화면 픽셀)
+const BTN_H = 20
+const BTN_GAP = 4
+const BTN_PAD_RIGHT = 8  // 헤더 우측 패딩
 
 // 그룹 노드 커스텀 렌더러
-// 버튼은 EdgeLabelRenderer(edges SVG 위 레이어)로 포탈링 — 선과 겹쳐도 클릭 보장
-// 헤더에는 공간 예약용 placeholder를 두어 시각적 레이아웃 동일하게 유지
+// 버튼은 document.body에 포탈 (position: fixed) — React Flow 모든 레이어 위에 렌더링됨
 export default function GroupNode({ id, data }: NodeProps) {
   const { layer, sub, fileCount, originalHeight } = data as unknown as GroupData
   const p = LAYER_PALETTE[layer] ?? DEFAULT_PALETTE
@@ -45,42 +46,46 @@ export default function GroupNode({ id, data }: NodeProps) {
   const [opaque, setOpaque] = useState(false)
   const { setNodes } = useReactFlow()
 
-  // 노드 절대 좌표 + 너비 — 버튼 포탈 위치 계산에 사용
+  // 뷰포트 transform [panX, panY, zoom] — pan/zoom 변경 시 버튼 위치 재계산
+  const transform = useStore((s) => s.transform)
+  const [tx, ty, zoom] = transform
+
+  // 노드 절대 위치 (flow 좌표계)
   const internalNode = useInternalNode(id)
   const absX = internalNode?.internals.positionAbsolute.x ?? 0
   const absY = internalNode?.internals.positionAbsolute.y ?? 0
   const nodeW = internalNode?.measured.width ?? 200
 
-  // 직계 자식(FILE) + 손자(FUNCTION) 모두 hidden 처리
+  // flow 좌표 → 화면(fixed) 좌표 변환
+  // 버튼은 화면에서 항상 BTN_W×BTN_H px로 고정, 헤더 우측에 위치
+  const btnAreaW = BTN_W * 2 + BTN_GAP
+  const screenRight = (absX + nodeW) * zoom + tx   // 노드 우측 끝 화면 x
+  const screenTop   = absY * zoom + ty              // 노드 상단 화면 y
+  const btnX = screenRight - BTN_PAD_RIGHT - btnAreaW
+  const btnY = screenTop + (HEADER_H * zoom - BTN_H) / 2  // 헤더 수직 중앙
+
+  // 직계 자식(FILE) + 손자(FUNCTION) hidden 처리
   const setDescendantsHidden = (hidden: boolean) => {
     setNodes((nodes) => {
-      const directChildIds = new Set(
-        nodes.filter((n) => n.parentId === id).map((n) => n.id)
-      )
+      const directChildIds = new Set(nodes.filter((n) => n.parentId === id).map((n) => n.id))
       return nodes.map((n) => {
-        if (n.parentId === id || (n.parentId != null && directChildIds.has(n.parentId))) {
+        if (n.parentId === id || (n.parentId != null && directChildIds.has(n.parentId)))
           return { ...n, hidden }
-        }
         return n
       })
     })
   }
 
-  // 최소화 토글
   const toggleCollapse = () => {
     const next = !collapsed
     setCollapsed(next)
     if (!next && opaque) {
       setNodes((nodes) =>
-        nodes.map((n) =>
-          n.id === id ? { ...n, style: { ...n.style, height: originalHeight } } : n
-        )
+        nodes.map((n) => n.id === id ? { ...n, style: { ...n.style, height: originalHeight } } : n)
       )
     } else {
       setNodes((nodes) => {
-        const directChildIds = new Set(
-          nodes.filter((n) => n.parentId === id).map((n) => n.id)
-        )
+        const directChildIds = new Set(nodes.filter((n) => n.parentId === id).map((n) => n.id))
         return nodes.map((n) => {
           if (n.id === id) return { ...n, style: { ...n.style, height: next ? HEADER_H : originalHeight } }
           if (n.parentId === id || (n.parentId != null && directChildIds.has(n.parentId))) return { ...n, hidden: next }
@@ -90,22 +95,20 @@ export default function GroupNode({ id, data }: NodeProps) {
     }
   }
 
-  // 불투명 토글
   const toggleOpaque = () => {
     const next = !opaque
     setOpaque(next)
     if (!collapsed) setDescendantsHidden(next)
   }
 
-  // 버튼 공통 스타일
   const btnStyle = (active: boolean): React.CSSProperties => ({
-    width: 20,
-    height: 20,
+    width: BTN_W,
+    height: BTN_H,
     borderRadius: 4,
     border: `1px solid ${p.border}66`,
     background: active ? `${p.badge}cc` : 'transparent',
     color: p.text,
-    fontSize: active ? 12 : 10,
+    fontSize: 10,
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
@@ -113,45 +116,31 @@ export default function GroupNode({ id, data }: NodeProps) {
     lineHeight: 1,
   })
 
-  // 버튼 포탈 위치: 헤더 우측 안쪽에 맞춤
-  // absX/absY는 flow 좌표 → EdgeLabelRenderer 컨테이너도 동일 좌표계이므로 그대로 사용
-  const btnLeft = absX + nodeW - BTN_AREA_W
-  const btnTop  = absY + (HEADER_H - 20) / 2  // 헤더 수직 중앙
-
   return (
     <>
-      {/* 실제 클릭 가능한 버튼 — EdgeLabelRenderer(edges 위 HTML 레이어)에 포탈 */}
-      {internalNode && (
-        <EdgeLabelRenderer>
-          <div
-            style={{
-              position: 'absolute',
-              left: btnLeft,
-              top: btnTop,
-              display: 'flex',
-              gap: 4,
-              pointerEvents: 'all',
-            }}
-            // pan 이벤트로 빨려들어가지 않도록 차단
-            onMouseDown={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={toggleOpaque}
-              title={opaque ? '내용 표시' : '내용 가리기'}
-              style={btnStyle(opaque)}
-            >
-              {opaque ? '◑' : '○'}
-            </button>
-            <button
-              onClick={toggleCollapse}
-              title={collapsed ? '펼치기' : '최소화'}
-              style={btnStyle(collapsed)}
-            >
-              {collapsed ? '+' : '−'}
-            </button>
-          </div>
-        </EdgeLabelRenderer>
+      {/* 버튼 — document.body에 fixed 포탈, React Flow 모든 레이어 위에 위치 */}
+      {internalNode && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            left: btnX,
+            top: btnY,
+            display: 'flex',
+            gap: BTN_GAP,
+            zIndex: 9999,
+            pointerEvents: 'all',
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <button onClick={toggleOpaque} title={opaque ? '내용 표시' : '내용 가리기'} style={btnStyle(opaque)}>
+            {opaque ? '◑' : '○'}
+          </button>
+          <button onClick={toggleCollapse} title={collapsed ? '펼치기' : '최소화'} style={btnStyle(collapsed)}>
+            {collapsed ? '+' : '−'}
+          </button>
+        </div>,
+        document.body
       )}
 
       {/* 그룹 박스 본체 */}
@@ -167,7 +156,6 @@ export default function GroupNode({ id, data }: NodeProps) {
           transition: 'background 0.15s',
         }}
       >
-        {/* 헤더 */}
         <div
           style={{
             position: 'absolute',
@@ -182,46 +170,24 @@ export default function GroupNode({ id, data }: NodeProps) {
             padding: '0 8px 0 12px',
           }}
         >
-          {/* 레이어 배지 */}
-          <span
-            style={{
-              background: p.badge,
-              color: p.text,
-              fontSize: 9,
-              fontWeight: 700,
-              padding: '1px 6px',
-              borderRadius: 4,
-              letterSpacing: '0.05em',
-              textTransform: 'uppercase',
-              flexShrink: 0,
-            }}
-          >
+          <span style={{
+            background: p.badge, color: p.text, fontSize: 9, fontWeight: 700,
+            padding: '1px 6px', borderRadius: 4, letterSpacing: '0.05em',
+            textTransform: 'uppercase', flexShrink: 0,
+          }}>
             {layerLabel}
           </span>
-
-          {/* 서브패키지 이름 */}
-          <span
-            style={{
-              color: p.text,
-              fontSize: 12,
-              fontWeight: 700,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              flex: 1,
-            }}
-            title={sub || layer}
-          >
+          <span style={{
+            color: p.text, fontSize: 12, fontWeight: 700,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+          }} title={sub || layer}>
             {sub || layer}
           </span>
-
-          {/* 파일 수 */}
           <span style={{ color: `${p.text}88`, fontSize: 9, fontWeight: 500, flexShrink: 0 }}>
             {fileCount}f
           </span>
-
-          {/* 버튼 자리 placeholder — 포탈된 버튼과 동일한 공간 예약 (시각 레이아웃 유지) */}
-          <div style={{ width: BTN_AREA_W - 8, height: 20, flexShrink: 0 }} />
+          {/* 버튼 자리 공간 예약 (포탈된 버튼과 동일 너비) */}
+          <div style={{ width: btnAreaW + BTN_PAD_RIGHT, flexShrink: 0 }} />
         </div>
 
         <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
