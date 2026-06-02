@@ -12,7 +12,7 @@ import {
 } from '@xyflow/react'
 import type { Edge, EdgeMouseHandler } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { buildLayout } from '../utils/graphLayout'
+import { buildLayout, downloadTreeText } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode } from '../utils/graphLayout'
 
 interface EdgeModalInfo {
@@ -126,6 +126,14 @@ export default function GraphPage() {
           <span className={labelMode === 'name' ? 'text-white' : 'text-gray-500'}>이름</span>
           <span className="text-gray-600">/</span>
           <span className={labelMode === 'comment' ? 'text-white' : 'text-gray-500'}>주석</span>
+        </button>
+        <button
+          onClick={() => downloadTreeText(rawNodes, labelMode)}
+          disabled={rawNodes.length === 0}
+          className="bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700 disabled:opacity-40"
+          title={labelMode === 'comment' ? '주석 기준 트리 다운로드' : '이름 기준 트리 다운로드'}
+        >
+          ↓ 트리
         </button>
       </div>
 
