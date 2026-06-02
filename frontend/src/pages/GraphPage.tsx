@@ -59,14 +59,22 @@ function GraphPageInner() {
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
   const [showIsoGroups, setShowIsoGroups] = useState(true)
-  const [showEdges, setShowEdges] = useState(true)
-  const [showCallEdges, setShowCallEdges] = useState(true)
-  const [showInstEdges, setShowInstEdges] = useState(true)
+  const [showEdges, setShowEdges] = useState(false)
+  const [showCallEdges, setShowCallEdges] = useState(false)
+  const [showInstEdges, setShowInstEdges] = useState(false)
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const flowRef = useRef<HTMLDivElement>(null)
   const { getNodes, fitView } = useReactFlow()
+
+  // 엣지 타입별 초기 hidden 상태 적용
+  const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean) =>
+    edges.map((e) => {
+      const t = (e.data as { type?: string })?.type
+      const hidden = t === 'IMPORT' ? !se : t === 'FUNCTION_CALL' ? !sc : t === 'INSTANTIATION' ? !si : false
+      return { ...e, hidden }
+    }), [])
 
   // 파일 연결 보기 — 사이드바 오픈 콜백
   const openFileSidebar = useCallback((data: FileSidebarData) => {
@@ -83,7 +91,7 @@ function GraphPageInner() {
       setRawNodes(rn)
       setRawEdgesCache(re)
       setNodes(layoutNodes)
-      setEdges(layoutEdges)
+      setEdges(applyEdgeVisibility(layoutEdges, false, false, false))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,
@@ -94,7 +102,7 @@ function GraphPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, setNodes, setEdges, openFileSidebar])
+  }, [projectId, setNodes, setEdges, openFileSidebar, applyEdgeVisibility])
 
   useEffect(() => { fetchGraph() }, [fetchGraph])
 
@@ -105,7 +113,7 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, next, layoutPreset, openFileSidebar)
       setNodes(layoutNodes)
-      setEdges(layoutEdges)
+      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges))
     }
   }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar])
 
@@ -170,7 +178,7 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
       setNodes(ln)
-      setEdges(le)
+      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
   }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar])
