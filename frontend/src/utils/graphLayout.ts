@@ -94,6 +94,22 @@ function calcFileSize(funcCount: number): { w: number; h: number; cols: number }
 export type LabelMode = 'name' | 'comment'
 export type LayoutPreset = 'layer' | 'hub'
 
+export interface FuncCallEntry {
+  callerName: string; callerLabel: string; callerNodeId: string
+  calleeName: string; calleeLabel: string; calleeNodeId: string
+}
+
+export interface ConnEntry {
+  nodeId: string; name: string; callChain: FuncCallEntry[]
+}
+
+export interface FileSidebarData {
+  name: string
+  comment?: string
+  incoming: ConnEntry[]
+  outgoing: ConnEntry[]
+}
+
 // 텍스트가 maxLen을 초과하면 말줄임표 + title tooltip이 있는 span 반환, 아니면 문자열 그대로
 function labelNode(full: string, maxLen: number): React.ReactNode {
   if (full.length <= maxLen) return full
@@ -290,7 +306,8 @@ export function buildLayout(
   rawNodes: RawNode[],
   rawEdges: RawEdge[],
   labelMode: LabelMode = 'name',
-  layoutPreset: LayoutPreset = 'layer'
+  layoutPreset: LayoutPreset = 'layer',
+  onOpenFileSidebar?: (data: FileSidebarData) => void
 ): { nodes: Node[]; edges: Edge[] } {
   // 노드 라벨 반환 — 초과 시 말줄임표 + hover tooltip
   const getLabel = (node: RawNode, maxLen = 999): React.ReactNode => {
@@ -361,28 +378,40 @@ export function buildLayout(
   const fileToGroup = new Map<string, string>()
   fileNodes.forEach((f) => fileToGroup.set(f.id, getGroupKey(f.filePath, commonPrefix)))
 
-  // 파일별 인/아웃 연결 집계 (모달 데이터용)
-  type ConnEntry = { nodeId: string; name: string; edgeType: string; funcLabel: string }
+  // 파일별 인/아웃 연결 집계 (사이드바 데이터용)
   const fileIncoming = new Map<string, ConnEntry[]>()
   const fileOutgoing = new Map<string, ConnEntry[]>()
   fileNodes.forEach((f) => { fileIncoming.set(f.id, []); fileOutgoing.set(f.id, []) })
+
+  // FUNCTION_CALL 엣지를 (출발filePath, 도착filePath) 키로 그룹핑
+  const funcCallMap = new Map<string, FuncCallEntry[]>()
+  rawEdges
+    .filter((e) => e.type === 'FUNCTION_CALL')
+    .forEach((e) => {
+      const srcFunc = funcNodes.find((fn) => fn.id === e.source)
+      const tgtFunc = funcNodes.find((fn) => fn.id === e.target)
+      if (!srcFunc || !tgtFunc) return
+      const key = srcFunc.filePath + '||' + tgtFunc.filePath
+      if (!funcCallMap.has(key)) funcCallMap.set(key, [])
+      funcCallMap.get(key)!.push({
+        callerName: srcFunc.name,
+        callerLabel: labelMode === 'comment' && srcFunc.comment ? srcFunc.comment : srcFunc.name,
+        callerNodeId: srcFunc.id,
+        calleeName: tgtFunc.name,
+        calleeLabel: labelMode === 'comment' && tgtFunc.comment ? tgtFunc.comment : tgtFunc.name,
+        calleeNodeId: tgtFunc.id,
+      })
+    })
 
   rawEdges
     .filter((e) => fileIdSet.has(e.source) && fileIdSet.has(e.target) && e.source !== e.target)
     .forEach((e) => {
       const src = fileNodes.find((f) => f.id === e.source)
       const tgt = fileNodes.find((f) => f.id === e.target)
-      // FUNCTION_CALL만 edgeIdentifier에서 함수명 파싱 — IMPORT 등은 파일명 기반
-      const funcName = e.type === 'FUNCTION_CALL' ? (e.edgeIdentifier.split('-').pop() ?? '') : ''
-      const funcNode = funcName
-        ? funcNodes.find((fn) => fn.filePath === src?.filePath && fn.name === funcName)
-        : null
-      const funcLabel = funcName
-        ? (labelMode === 'comment' && funcNode?.comment ? funcNode.comment : funcName)
-        : '—'
-
-      fileOutgoing.get(e.source)?.push({ nodeId: e.target, name: tgt?.name ?? e.target, edgeType: e.type, funcLabel })
-      fileIncoming.get(e.target)?.push({ nodeId: e.source, name: src?.name ?? e.source, edgeType: e.type, funcLabel })
+      if (!src || !tgt) return
+      const callChain = funcCallMap.get(src.filePath + '||' + tgt.filePath) ?? []
+      fileOutgoing.get(e.source)?.push({ nodeId: e.target, name: tgt.name, callChain })
+      fileIncoming.get(e.target)?.push({ nodeId: e.source, name: src.name, callChain })
     })
 
   // 레이아웃 프리셋에 따라 그룹 위치 계산
@@ -398,9 +427,6 @@ export function buildLayout(
 
   const result: Node[] = []
 
-  // 고립 그룹 키 셋 (isIso 플래그 부착용)
-  const isoKeySet = new Set(isoKeys)
-
   // 그룹 노드 + 파일 노드 + 함수 노드 생성
   groups.forEach((groupFiles, key) => {
     const layout = groupLayouts.get(key)!
@@ -408,7 +434,6 @@ export function buildLayout(
     if (!pos) return
     const gx = pos.x
     const gy = pos.y
-    const isIso = isoKeySet.has(key)
 
     // 그룹 키에서 layer / sub 분리 (예: "domain/user" → layer="domain", sub="user")
     const slashIdx = key.indexOf('/')
@@ -420,7 +445,7 @@ export function buildLayout(
       id: `group-${key}`,
       type: 'groupNode',
       position: { x: gx, y: gy },
-      data: { layer, sub, fileCount: groupFiles.length, originalHeight: layout.h, isIso },
+      data: { layer, sub, fileCount: groupFiles.length, originalHeight: layout.h },
       style: { width: layout.w, height: layout.h },
       draggable: true,
     })
@@ -440,9 +465,14 @@ export function buildLayout(
           label: getLabel(file, fileMaxLen),
           name: file.name,
           comment: file.comment,
-          isIso,
           incoming: fileIncoming.get(file.id) ?? [],
           outgoing: fileOutgoing.get(file.id) ?? [],
+          onOpenSidebar: onOpenFileSidebar ? () => onOpenFileSidebar({
+            name: file.name,
+            comment: file.comment,
+            incoming: fileIncoming.get(file.id) ?? [],
+            outgoing: fileOutgoing.get(file.id) ?? [],
+          }) : undefined,
         },
         style: {
           background: '#1e3a5f',
@@ -471,7 +501,7 @@ export function buildLayout(
             y: FILE_PAD_TOP + fr * (FUNC_H + FUNC_PAD),
           },
           // 함수 박스 너비 110px, 좌우 패딩 8px → 102px / ~6px per char ≈ 17자
-          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment, isIso },
+          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment },
           style: {
             background: '#064e3b',
             border: '1px solid #10b981',
@@ -491,34 +521,11 @@ export function buildLayout(
     })
   })
 
-  // 허브 레이아웃 — 고립 그룹들을 감싸는 섹션 박스
-  if (layoutPreset === 'hub' && isoKeys.length > 0) {
-    const PAD = 24
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    isoKeys.forEach((key) => {
-      const pos = groupPositions.get(key)
-      const l = groupLayouts.get(key)
-      if (!pos || !l) return
-      minX = Math.min(minX, pos.x)
-      minY = Math.min(minY, pos.y)
-      maxX = Math.max(maxX, pos.x + l.w)
-      maxY = Math.max(maxY, pos.y + l.h)
-    })
-    result.push({
-      id: '__iso-section__',
-      type: 'sectionNode',
-      position: { x: minX - PAD, y: minY - PAD - 28 },
-      data: { label: '연결 없는 그룹' },
-      style: { width: maxX - minX + PAD * 2, height: maxY - minY + PAD * 2 + 28 },
-      draggable: false,
-      selectable: false,
-      zIndex: -10,
-    } as Node)
-  }
-
-  // 엣지 — 파일 간만, 끊긴 연결 빨간색
+  // 엣지 — 파일 간 IMPORT 엣지, 끊긴 연결 빨간색
   const allNodeIds = new Set(result.map((n) => n.id))
-  const edges: Edge[] = rawEdges
+  const funcIdSet = new Set(funcNodes.map((f) => f.id))
+
+  const importEdges: Edge[] = rawEdges
     .filter((e) => fileIdSet.has(e.source) && fileIdSet.has(e.target))
     .filter((e) => e.source !== e.target)
     .map((e) => {
@@ -531,11 +538,40 @@ export function buildLayout(
         style: { stroke: broken ? '#ef4444' : '#4b5563', strokeWidth: broken ? 2 : 1.5 },
         markerEnd: { type: MarkerType.ArrowClosed, color: broken ? '#ef4444' : '#4b5563', width: 14, height: 14 },
         zIndex: 0,
-        interactionWidth: 0,  // 보이지 않는 넓은 hit area 제거 — 시각적 획 위에서만 클릭 가능
+        interactionWidth: 0,
       } as Edge
     })
 
-  return { nodes: result, edges }
+  // FUNCTION_CALL 엣지 — 함수 노드 간 호출 관계, amber 점선
+  const callEdges: Edge[] = rawEdges
+    .filter((e) => e.type === 'FUNCTION_CALL' && funcIdSet.has(e.source) && funcIdSet.has(e.target))
+    .filter((e) => e.source !== e.target)
+    .map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      data: { edgeIdentifier: e.edgeIdentifier, type: e.type },
+      style: { stroke: '#f59e0b', strokeWidth: 1.2, strokeDasharray: '5 4' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#f59e0b', width: 10, height: 10 },
+      zIndex: 1,
+    } as Edge))
+
+  // INSTANTIATION 엣지 — 파일 간 new ClassName() 관계, 보라색 점선
+  const instEdges: Edge[] = rawEdges
+    .filter((e) => e.type === 'INSTANTIATION' && fileIdSet.has(e.source) && fileIdSet.has(e.target))
+    .filter((e) => e.source !== e.target)
+    .map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      data: { edgeIdentifier: e.edgeIdentifier, type: e.type },
+      style: { stroke: '#a855f7', strokeWidth: 1.2, strokeDasharray: '3 4' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#a855f7', width: 10, height: 10 },
+      zIndex: 0,
+      interactionWidth: 0,
+    } as Edge))
+
+  return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges] }
 }
 
 // AI 컨텍스트용 트리 다운로드 — "파일명 — 주석" 형태로 이름과 역할을 함께 표시
