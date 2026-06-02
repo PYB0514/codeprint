@@ -1,5 +1,6 @@
-// 프로젝트 카드 — 분석 시작 버튼 및 진행률 표시 포함
-import { useState, useCallback } from 'react'
+// 프로젝트 카드 — 분석 시작/그래프 보기 버튼 및 진행률 표시 포함
+import { useState, useCallback, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAnalysisProgress } from '../hooks/useAnalysisProgress'
 
@@ -23,12 +24,22 @@ function authHeaders() {
 }
 
 export default function ProjectCard({ project, onDelete }: Props) {
+  const navigate = useNavigate()
+  const [hasGraph, setHasGraph] = useState(false)
   const [analysisId, setAnalysisId] = useState<string | null>(null)
   const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
 
+  useEffect(() => {
+    axios
+      .get(`/api/projects/${project.id}/graph`, { headers: authHeaders() })
+      .then(() => setHasGraph(true))
+      .catch(() => setHasGraph(false))
+  }, [project.id])
+
   const handleDone = useCallback(() => {
     setAnalysisId(null)
+    setHasGraph(true)
   }, [])
 
   const { progress, status } = useAnalysisProgress(analysisId, handleDone)
@@ -77,7 +88,6 @@ export default function ProjectCard({ project, onDelete }: Props) {
         {project.githubRepoUrl}
       </a>
 
-      {/* 분석 진행률 */}
       {isAnalyzing && (
         <div className="flex flex-col gap-1">
           <div className="flex justify-between text-xs text-gray-400">
@@ -96,7 +106,6 @@ export default function ProjectCard({ project, onDelete }: Props) {
       {status === 'FAILED' && (
         <p className="text-xs text-red-400">분석 실패. 다시 시도해주세요.</p>
       )}
-
       {analysisError && (
         <p className="text-xs text-red-400">{analysisError}</p>
       )}
@@ -108,13 +117,32 @@ export default function ProjectCard({ project, onDelete }: Props) {
           </span>
           <span className="text-xs text-gray-600">{project.isPublic ? '공개' : '비공개'}</span>
         </div>
-        <button
-          onClick={handleStartAnalysis}
-          disabled={isAnalyzing || starting}
-          className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {isAnalyzing ? '분석 중' : starting ? '시작 중...' : '분석 시작'}
-        </button>
+
+        {hasGraph && !isAnalyzing ? (
+          <div className="flex gap-2">
+            <button
+              onClick={handleStartAnalysis}
+              disabled={starting}
+              className="text-xs text-gray-500 hover:text-gray-300 disabled:opacity-40"
+            >
+              재분석
+            </button>
+            <button
+              onClick={() => navigate(`/projects/${project.id}/graph`)}
+              className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200"
+            >
+              그래프 보기
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleStartAnalysis}
+            disabled={isAnalyzing || starting}
+            className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isAnalyzing ? '분석 중' : starting ? '시작 중...' : '분석 시작'}
+          </button>
+        )}
       </div>
     </div>
   )
