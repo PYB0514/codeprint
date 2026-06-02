@@ -121,33 +121,38 @@ export default function GroupNode({ id, data }: NodeProps) {
   return (
     <>
       {/* 실제 클릭 가능한 버튼 — EdgeLabelRenderer(edges 위 HTML 레이어)에 포탈 */}
-      <EdgeLabelRenderer>
-        <div
-          style={{
-            position: 'absolute',
-            left: btnLeft,
-            top: btnTop,
-            display: 'flex',
-            gap: 4,
-            pointerEvents: 'all',
-          }}
-        >
-          <button
-            onClick={toggleOpaque}
-            title={opaque ? '내용 표시' : '내용 가리기'}
-            style={btnStyle(opaque)}
+      {internalNode && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              left: btnLeft,
+              top: btnTop,
+              display: 'flex',
+              gap: 4,
+              pointerEvents: 'all',
+            }}
+            // pan 이벤트로 빨려들어가지 않도록 차단
+            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
           >
-            {opaque ? '◑' : '○'}
-          </button>
-          <button
-            onClick={toggleCollapse}
-            title={collapsed ? '펼치기' : '최소화'}
-            style={btnStyle(collapsed)}
-          >
-            {collapsed ? '+' : '−'}
-          </button>
-        </div>
-      </EdgeLabelRenderer>
+            <button
+              onClick={toggleOpaque}
+              title={opaque ? '내용 표시' : '내용 가리기'}
+              style={btnStyle(opaque)}
+            >
+              {opaque ? '◑' : '○'}
+            </button>
+            <button
+              onClick={toggleCollapse}
+              title={collapsed ? '펼치기' : '최소화'}
+              style={btnStyle(collapsed)}
+            >
+              {collapsed ? '+' : '−'}
+            </button>
+          </div>
+        </EdgeLabelRenderer>
+      )}
 
       {/* 그룹 박스 본체 */}
       <div
