@@ -573,15 +573,15 @@ export function buildLayout(
     } as Edge))
 
   // DDD 레이어 상위 박스 — 같은 레이어의 그룹들을 감싸는 큰 섹션 박스
-  const LAYER_META: Record<string, { label: string; color: string }> = {
-    infrastructure: { label: 'Infrastructure', color: '#a855f7' },
-    domain:         { label: 'Domain',         color: '#3b82f6' },
-    application:    { label: 'Application',    color: '#eab308' },
-    interfaces:     { label: 'Interfaces',     color: '#10b981' },
-    pages:          { label: 'Pages',          color: '#06b6d4' },
-    components:     { label: 'Components',     color: '#06b6d4' },
-    hooks:          { label: 'Hooks',          color: '#06b6d4' },
-    utils:          { label: 'Utils',          color: '#06b6d4' },
+  const LAYER_META: Record<string, { label: string; color: string; opaqueColor: string }> = {
+    infrastructure: { label: 'Infrastructure', color: '#a855f7', opaqueColor: 'rgba(30,10,50,0.98)'  },
+    domain:         { label: 'Domain',         color: '#3b82f6', opaqueColor: 'rgba(15,30,60,0.98)'  },
+    application:    { label: 'Application',    color: '#eab308', opaqueColor: 'rgba(40,30,5,0.98)'   },
+    interfaces:     { label: 'Interfaces',     color: '#10b981', opaqueColor: 'rgba(5,30,20,0.98)'   },
+    pages:          { label: 'Pages',          color: '#06b6d4', opaqueColor: 'rgba(5,25,35,0.98)'   },
+    components:     { label: 'Components',     color: '#06b6d4', opaqueColor: 'rgba(5,25,35,0.98)'   },
+    hooks:          { label: 'Hooks',          color: '#f97316', opaqueColor: 'rgba(40,15,5,0.98)'   },
+    utils:          { label: 'Utils',          color: '#6b7280', opaqueColor: 'rgba(20,22,25,0.98)'  },
   }
   const LAYER_PAD = 20
 
@@ -612,7 +612,7 @@ export function buildLayout(
       id: `layer-section-${layer}`,
       type: 'sectionNode',
       position: { x: minX - LAYER_PAD, y: minY - LAYER_PAD - LABEL_H },
-      data: { label: meta.label, color: meta.color, layer },
+      data: { label: meta.label, color: meta.color, opaqueColor: meta.opaqueColor, layer },
       style: { width: maxX - minX + LAYER_PAD * 2, height: maxY - minY + LAYER_PAD * 2 + LABEL_H },
       draggable: false,
       selectable: false,

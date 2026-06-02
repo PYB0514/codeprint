@@ -89,7 +89,7 @@ function GraphPageInner() {
         if (n.id !== `layer-section-${layer}`) return n
         return {
           ...n,
-          zIndex: isOpaque ? 50 : -20,
+          zIndex: isOpaque ? 9999 : -20,
           data: { ...n.data, opaque: isOpaque },
         }
       }))
@@ -533,15 +533,13 @@ function GraphPageInner() {
                 const active = opaqueLayerSet.has(key)
                 return (
                   <div key={key} className="flex items-center gap-2 py-0.5">
-                    <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: `${color}22`, border: `1.5px solid ${color}` }} />
-                    <span className="text-gray-400 text-xs flex-1">{label}</span>
                     <button
                       onClick={() => toggleLayerOpaque(key)}
                       title={active ? '내용 표시' : '내용 가리기'}
                       style={{
                         width: 18, height: 18, borderRadius: 4,
-                        border: `1px solid ${color}66`,
-                        background: active ? `${color}99` : 'transparent',
+                        border: `1px solid ${color}88`,
+                        background: active ? color : `${color}22`,
                         color: active ? '#fff' : color,
                         fontSize: 10, cursor: 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -550,6 +548,7 @@ function GraphPageInner() {
                     >
                       {active ? '◑' : '○'}
                     </button>
+                    <span className="text-gray-400 text-xs">{label}</span>
                   </div>
                 )
               })}
