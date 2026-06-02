@@ -518,7 +518,9 @@ export function buildLayout(
 
   // 엣지 — 파일 간만, 끊긴 연결 빨간색
   const allNodeIds = new Set(result.map((n) => n.id))
-  const edges: Edge[] = rawEdges
+  const funcIdSet = new Set(funcNodes.map((f) => f.id))
+
+  const importEdges: Edge[] = rawEdges
     .filter((e) => fileIdSet.has(e.source) && fileIdSet.has(e.target))
     .filter((e) => e.source !== e.target)
     .map((e) => {
@@ -531,11 +533,34 @@ export function buildLayout(
         style: { stroke: broken ? '#ef4444' : '#4b5563', strokeWidth: broken ? 2 : 1.5 },
         markerEnd: { type: MarkerType.ArrowClosed, color: broken ? '#ef4444' : '#4b5563', width: 14, height: 14 },
         zIndex: 0,
-        interactionWidth: 0,  // 보이지 않는 넓은 hit area 제거 — 시각적 획 위에서만 클릭 가능
+        interactionWidth: 0,
       } as Edge
     })
 
-  return { nodes: result, edges }
+  // FUNCTION_CALL 엣지 — 함수 간 호출 관계, amber 점선
+  const callEdges: Edge[] = rawEdges
+    .filter((e) => e.type === 'FUNCTION_CALL' && funcIdSet.has(e.source) && funcIdSet.has(e.target))
+    .filter((e) => e.source !== e.target)
+    .map((e) => {
+      const srcFunc = funcNodes.find((f) => f.id === e.source)
+      const tgtFunc = funcNodes.find((f) => f.id === e.target)
+      const broken = !srcFunc || !tgtFunc
+      return {
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        data: { edgeIdentifier: e.edgeIdentifier, type: e.type, broken, srcFunc, tgtFunc },
+        style: {
+          stroke: broken ? '#ef4444' : '#f59e0b',
+          strokeWidth: 1.5,
+          strokeDasharray: '5 4',
+        },
+        markerEnd: { type: MarkerType.ArrowClosed, color: broken ? '#ef4444' : '#f59e0b', width: 12, height: 12 },
+        zIndex: 1,
+      } as Edge
+    })
+
+  return { nodes: result, edges: [...importEdges, ...callEdges] }
 }
 
 // AI 컨텍스트용 트리 다운로드 — "파일명 — 주석" 형태로 이름과 역할을 함께 표시

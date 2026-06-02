@@ -55,6 +55,7 @@ function GraphPageInner() {
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
   const [showIsoGroups, setShowIsoGroups] = useState(true)
   const [showEdges, setShowEdges] = useState(true)
+  const [showCallEdges, setShowCallEdges] = useState(true)
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -101,10 +102,26 @@ function GraphPageInner() {
   const toggleEdges = useCallback(() => {
     setShowEdges((prev) => {
       const next = !prev
-      setEdges((eds) => eds.map((e) => ({ ...e, hidden: !next })))
+      setEdges((eds) => eds.map((e) => ({
+        ...e,
+        hidden: !next || (!showCallEdges && (e.data as { type?: string })?.type === 'FUNCTION_CALL'),
+      })))
       return next
     })
-  }, [setEdges])
+  }, [setEdges, showCallEdges])
+
+  // FUNCTION_CALL 엣지 표시/숨김 토글
+  const toggleCallEdges = useCallback(() => {
+    setShowCallEdges((prev) => {
+      const next = !prev
+      setEdges((eds) => eds.map((e) =>
+        (e.data as { type?: string })?.type === 'FUNCTION_CALL'
+          ? { ...e, hidden: !next || !showEdges }
+          : e
+      ))
+      return next
+    })
+  }, [setEdges, showEdges])
 
   // 고립 그룹(연결 없는 그룹) 표시/숨김 토글
   const toggleIsoGroups = useCallback(() => {
@@ -191,20 +208,24 @@ function GraphPageInner() {
 
   // 엣지 마우스 진입 — 두껍고 밝게 강조
   const handleEdgeMouseEnter: EdgeMouseHandler<Edge> = useCallback((_evt, edge) => {
-    const broken = (edge.data as { broken?: boolean })?.broken
+    const data = edge.data as { broken?: boolean; type?: string } | undefined
+    const broken = data?.broken
+    const isCall = data?.type === 'FUNCTION_CALL'
     setEdges((es) => es.map((e) =>
       e.id === edge.id
-        ? { ...e, style: { ...e.style, strokeWidth: broken ? 3.5 : 3, stroke: broken ? '#fca5a5' : '#a1a1aa' } }
+        ? { ...e, style: { ...e.style, strokeWidth: broken ? 3.5 : 3, stroke: broken ? '#fca5a5' : isCall ? '#fcd34d' : '#a1a1aa' } }
         : e
     ))
   }, [setEdges])
 
   // 엣지 마우스 이탈 — 원래 스타일 복원
   const handleEdgeMouseLeave: EdgeMouseHandler<Edge> = useCallback((_evt, edge) => {
-    const broken = (edge.data as { broken?: boolean })?.broken
+    const data = edge.data as { broken?: boolean; type?: string } | undefined
+    const broken = data?.broken
+    const isCall = data?.type === 'FUNCTION_CALL'
     setEdges((es) => es.map((e) =>
       e.id === edge.id
-        ? { ...e, style: { ...e.style, strokeWidth: broken ? 2 : 1.5, stroke: broken ? '#ef4444' : '#4b5563' } }
+        ? { ...e, style: { ...e.style, strokeWidth: broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : '#4b5563' } }
         : e
     ))
   }, [setEdges])
@@ -212,27 +233,42 @@ function GraphPageInner() {
   // 엣지 클릭 시 상세 정보 모달을 표시
   const handleEdgeClick: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
     const data = edge.data as { edgeIdentifier?: string; type?: string } | undefined
-    const sourceNode = rawNodes.find((n) => n.id === edge.source && n.type === 'FILE')
-    const targetNode = rawNodes.find((n) => n.id === edge.target && n.type === 'FILE')
     const edgeId = data?.edgeIdentifier ?? edge.id
     const edgeType = data?.type ?? 'IMPORT'
-    // FUNCTION_CALL만 edgeIdentifier에서 함수명 파싱 — IMPORT 등은 파일명 기반이라 파싱 불가
-    const funcName = edgeType === 'FUNCTION_CALL' ? (edgeId.split('-').pop() ?? '') : ''
-    const funcNode = funcName
-      ? rawNodes.find((n) => n.type === 'FUNCTION' && n.filePath === sourceNode?.filePath && n.name === funcName)
-      : null
-    const funcLabel = funcName
-      ? (labelMode === 'comment' && funcNode?.comment ? funcNode.comment : funcName)
-      : '—'
+
+    if (edgeType === 'FUNCTION_CALL') {
+      // FUNCTION→FUNCTION 엣지: 출발/도착이 함수 노드
+      const srcFunc = rawNodes.find((n) => n.id === edge.source && n.type === 'FUNCTION')
+      const tgtFunc = rawNodes.find((n) => n.id === edge.target && n.type === 'FUNCTION')
+      const srcFile = rawNodes.find((n) => n.type === 'FILE' && n.filePath === srcFunc?.filePath)
+      const tgtFile = rawNodes.find((n) => n.type === 'FILE' && n.filePath === tgtFunc?.filePath)
+      const srcLabel = labelMode === 'comment' && srcFunc?.comment ? srcFunc.comment : (srcFunc?.name ?? edge.source)
+      const tgtLabel = labelMode === 'comment' && tgtFunc?.comment ? tgtFunc.comment : (tgtFunc?.name ?? edge.target)
+      setEdgeModal({
+        edgeIdentifier: edgeId,
+        type: edgeType,
+        sourceId: srcLabel,
+        targetId: tgtLabel,
+        sourceNodeId: srcFile?.id ?? edge.source,
+        targetNodeId: tgtFile?.id ?? edge.target,
+        funcLabel: srcLabel,
+        funcNodeId: srcFunc?.id ?? null,
+      })
+      return
+    }
+
+    // IMPORT 엣지: 출발/도착이 파일 노드
+    const sourceNode = rawNodes.find((n) => n.id === edge.source && n.type === 'FILE')
+    const targetNode = rawNodes.find((n) => n.id === edge.target && n.type === 'FILE')
     setEdgeModal({
       edgeIdentifier: edgeId,
-      type: data?.type ?? 'IMPORT',
+      type: edgeType,
       sourceId: sourceNode?.name ?? edge.source,
       targetId: targetNode?.name ?? edge.target,
       sourceNodeId: edge.source,
       targetNodeId: edge.target,
-      funcLabel,
-      funcNodeId: funcNode?.id ?? null,
+      funcLabel: '—',
+      funcNodeId: null,
     })
   }, [rawNodes, labelMode])
 
@@ -300,6 +336,13 @@ function GraphPageInner() {
           <span className={showEdges ? 'text-white' : 'text-gray-500'}>연결선</span>
         </button>
         <button
+          onClick={toggleCallEdges}
+          className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-amber-800/60"
+          title="함수 호출 체인 표시/숨김"
+        >
+          <span className={showCallEdges ? 'text-amber-400' : 'text-gray-500'}>콜 체인</span>
+        </button>
+        <button
           onClick={() => downloadTreeText(rawNodes)}
           disabled={rawNodes.length === 0}
           className="bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700 disabled:opacity-40"
@@ -346,6 +389,12 @@ function GraphPageInner() {
         <div className="flex items-center gap-2">
           <span className="w-3 h-0.5 flex-shrink-0" style={{ background: '#4b5563' }} />
           <span className="text-gray-400">IMPORT</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <svg width="12" height="4" className="flex-shrink-0">
+            <line x1="0" y1="2" x2="12" y2="2" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4 3" />
+          </svg>
+          <span className="text-amber-400">FUNCTION_CALL</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-0.5 flex-shrink-0" style={{ background: '#ef4444' }} />
