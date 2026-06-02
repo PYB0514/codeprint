@@ -149,8 +149,7 @@ function buildHubPositions(
   fileIdSet: Set<string>,
   fileToGroup: Map<string, string>
 ): Map<string, { x: number; y: number }> {
-  const COL_GAP = 64
-  const ROW_GAP = 48
+  const GAP = 24  // 그룹 간 여백
 
   // 그룹 간 연결 수 집계
   const connCount = new Map<string, number>()
@@ -173,18 +172,16 @@ function buildHubPositions(
   const n = sortedGroups.length
   if (n === 0) return new Map()
 
-  // 16:9에 가까운 그리드 크기 계산
+  // 실제 그룹 크기 기반 셀 크기 (최대 기준 → 빈 공간 최소화)
   const allLayouts = Array.from(groupLayouts.values())
-  const avgW = allLayouts.reduce((s, l) => s + l.w, 0) / allLayouts.length + COL_GAP
-  const avgH = allLayouts.reduce((s, l) => s + l.h, 0) / allLayouts.length + ROW_GAP
-  const cols = Math.max(1, Math.round(Math.sqrt(n * (16 / 9) * (avgH / avgW))))
-  const rows = Math.ceil(n / cols)
-
-  // 셀 크기 — 최대 그룹 사이즈 기준
   const maxW = Math.max(...allLayouts.map((l) => l.w))
   const maxH = Math.max(...allLayouts.map((l) => l.h))
-  const cellW = maxW + COL_GAP
-  const cellH = maxH + ROW_GAP
+  const cellW = maxW + GAP
+  const cellH = maxH + GAP
+
+  // 16:9에 가까운 그리드 크기 계산
+  const cols = Math.max(1, Math.round(Math.sqrt(n * (16 / 9) * (cellH / cellW))))
+  const rows = Math.ceil(n / cols)
 
   // 중심에서 가까운 순으로 셀 정렬
   const cx = (cols - 1) / 2
