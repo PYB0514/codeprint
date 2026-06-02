@@ -40,15 +40,16 @@ public class GraphBuilder {
             int dot = className.lastIndexOf('.');
             if (dot > 0) className = className.substring(0, dot);
 
-            // FUNCTION 노드 생성 (생성자 제외)
+            // FUNCTION 노드 생성 — 생성자는 "생성자"로 표시
             for (String funcName : pf.functions()) {
-                if (funcName.equals(className)) continue;
                 Node funcNode = Node.create(graphId, NodeType.FUNCTION,
                         funcName, pf.filePath(), pf.language());
 
                 Map<String, Object> meta = new HashMap<>();
                 meta.put("parentFile", pf.filePath());
-                String comment = pf.functionComments().get(funcName);
+                String comment = funcName.equals(className)
+                        ? "생성자"
+                        : pf.functionComments().get(funcName);
                 if (comment != null) meta.put("comment", comment);
                 funcNode.updateMetadata(meta);
                 graphRepository.saveNode(funcNode);
