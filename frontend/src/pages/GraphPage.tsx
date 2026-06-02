@@ -31,13 +31,75 @@ interface FuncCallChainEntry {
   fileNodeId: string
 }
 
+// 전체 흐름 추적 — 각 단계 노드 정보
+interface FlowStep {
+  nodeId: string
+  label: string        // 함수 주석 또는 파일명
+  subLabel?: string    // 함수일 경우 소속 파일명
+  subNodeId?: string   // 함수일 경우 파일 노드 ID
+  isSource: boolean    // 클릭한 엣지의 출발 노드
+  isTarget: boolean    // 클릭한 엣지의 도착 노드
+  altCount?: number    // 이 지점에서 다른 분기 수
+}
+
 // 사이드바 콘텐츠 — 엣지 클릭 / 파일 연결 보기 / 함수 노드 클릭 세 종류
 type SidebarContent =
-  | { kind: 'edge'; sourceId: string; targetId: string; sourceNodeId: string; targetNodeId: string; callChain: ConnEntry['callChain'] }
+  | { kind: 'edge'; sourceId: string; targetId: string; sourceNodeId: string; targetNodeId: string; callChain: ConnEntry['callChain']; flowChain: FlowStep[] }
   | { kind: 'file'; data: FileSidebarData }
   | { kind: 'func'; funcName: string; funcComment: string | null; parentFileName: string; parentFileNodeId: string; callers: FuncCallChainEntry[]; callees: FuncCallChainEntry[] }
-  | { kind: 'func-call'; callerName: string; callerComment: string | null; callerNodeId: string; callerFile: string; callerFileNodeId: string; calleeName: string; calleeComment: string | null; calleeNodeId: string; calleeFile: string; calleeFileNodeId: string }
-  | { kind: 'instantiation'; sourceFile: string; sourceNodeId: string; targetClass: string; targetNodeId: string }
+  | { kind: 'func-call'; callerName: string; callerComment: string | null; callerNodeId: string; callerFile: string; callerFileNodeId: string; calleeName: string; calleeComment: string | null; calleeNodeId: string; calleeFile: string; calleeFileNodeId: string; flowChain: FlowStep[] }
+  | { kind: 'instantiation'; sourceFile: string; sourceNodeId: string; targetClass: string; targetNodeId: string; flowChain: FlowStep[] }
+
+// 동일 타입 엣지를 따라 upstream·downstream을 추적하여 전체 흐름 반환
+function traceFlow(
+  sourceId: string,
+  targetId: string,
+  edgeType: string,
+  rawEdges: RawEdge[],
+  rawNodes: RawNode[],
+): FlowStep[] {
+  const MAX_DEPTH = 15
+
+  const makeStep = (id: string, isSource: boolean, isTarget: boolean, altCount?: number): FlowStep => {
+    const node = rawNodes.find((n) => n.id === id)
+    if (!node) return { nodeId: id, label: id, isSource, isTarget }
+    if (node.type === 'FUNCTION') {
+      const file = rawNodes.find((n) => n.type === 'FILE' && n.filePath === node.filePath)
+      return { nodeId: id, label: node.comment ?? node.name, subLabel: file?.name, subNodeId: file?.id, isSource, isTarget, altCount }
+    }
+    return { nodeId: id, label: node.comment ?? node.name, isSource, isTarget, altCount }
+  }
+
+  // 역방향 추적 — source에서 root로
+  const upstream: FlowStep[] = []
+  const visitedUp = new Set<string>([sourceId])
+  let cur = sourceId
+  for (let i = 0; i < MAX_DEPTH; i++) {
+    const incoming = rawEdges.filter((e) => e.type === edgeType && e.target === cur)
+    if (incoming.length === 0) break
+    const nextId = incoming[0].source
+    if (visitedUp.has(nextId)) break
+    visitedUp.add(nextId)
+    upstream.unshift(makeStep(nextId, false, false, incoming.length > 1 ? incoming.length - 1 : undefined))
+    cur = nextId
+  }
+
+  // 순방향 추적 — target에서 leaf로
+  const downstream: FlowStep[] = []
+  const visitedDown = new Set<string>([targetId])
+  cur = targetId
+  for (let i = 0; i < MAX_DEPTH; i++) {
+    const outgoing = rawEdges.filter((e) => e.type === edgeType && e.source === cur)
+    if (outgoing.length === 0) break
+    const nextId = outgoing[0].target
+    if (visitedDown.has(nextId)) break
+    visitedDown.add(nextId)
+    downstream.push(makeStep(nextId, false, false, outgoing.length > 1 ? outgoing.length - 1 : undefined))
+    cur = nextId
+  }
+
+  return [...upstream, makeStep(sourceId, true, false), makeStep(targetId, false, true), ...downstream]
+}
 
 // JWT 토큰을 Authorization 헤더로 반환
 function authHeaders() {
@@ -293,6 +355,7 @@ function GraphPageInner() {
         calleeNodeId: edge.target,
         calleeFile: tgtFile?.name ?? tgtFunc?.filePath ?? '',
         calleeFileNodeId: tgtFile?.id ?? '',
+        flowChain: traceFlow(edge.source, edge.target, 'FUNCTION_CALL', rawEdgesCache, rawNodes),
       })
       return
     }
@@ -306,6 +369,7 @@ function GraphPageInner() {
         sourceNodeId: edge.source,
         targetClass: tgtFile?.name ?? edge.target,
         targetNodeId: edge.target,
+        flowChain: traceFlow(edge.source, edge.target, 'INSTANTIATION', rawEdgesCache, rawNodes),
       })
       return
     }
@@ -330,6 +394,7 @@ function GraphPageInner() {
       sourceNodeId: edge.source,
       targetNodeId: edge.target,
       callChain,
+      flowChain: traceFlow(edge.source, edge.target, 'IMPORT', rawEdgesCache, rawNodes),
     })
   }, [rawNodes, rawEdgesCache])
 
@@ -664,6 +729,9 @@ function GraphPageInner() {
                       </div>
                     </div>
                     <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded self-start">FUNCTION_CALL</span>
+                    <FlowChainSection steps={sidebar.flowChain} edgeColor="#f59e0b"
+                      onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                    />
                   </div>
                 )}
 
@@ -686,6 +754,9 @@ function GraphPageInner() {
                       </div>
                     </div>
                     <span className="text-xs bg-purple-900/40 text-purple-400 px-2 py-0.5 rounded self-start">INSTANTIATION</span>
+                    <FlowChainSection steps={sidebar.flowChain} edgeColor="#a855f7"
+                      onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                    />
                   </div>
                 )}
 
@@ -703,6 +774,9 @@ function GraphPageInner() {
                         onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.targetNodeId }], duration: 500, padding: 0.3 }), 50) }}
                       >{sidebar.targetId}</span>
                     </div>
+                    <FlowChainSection steps={sidebar.flowChain} edgeColor="#4b5563"
+                      onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                    />
                     <SidebarSection title={`함수 호출 체인${sidebar.callChain.length > 0 ? ` (${sidebar.callChain.length})` : ''}`}>
                       {sidebar.callChain.length === 0
                         ? <p className="text-gray-700 text-xs">분석된 함수 호출 없음</p>
@@ -884,6 +958,65 @@ function FuncChainRow({ entry, direction, onNav }: {
         <span className="text-gray-600 font-mono text-[10px] cursor-pointer hover:text-gray-400 truncate"
           onClick={() => onNav(entry.fileNodeId)}
         >{entry.fileName}</span>
+      </div>
+    </div>
+  )
+}
+
+// 전체 흐름 — 업스트림·다운스트림 포함 체인 세로 목록
+function FlowChainSection({ steps, edgeColor, onNav }: {
+  steps: FlowStep[]
+  edgeColor: string
+  onNav: (id: string) => void
+}) {
+  if (steps.length <= 2) return null  // source·target만 있으면 표시 의미 없음
+  return (
+    <div>
+      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">전체 흐름</p>
+      <div className="flex flex-col">
+        {steps.map((step, i) => {
+          const isLast = i === steps.length - 1
+          const highlighted = step.isSource || step.isTarget
+          return (
+            <div key={step.nodeId} className="flex flex-col">
+              {/* 노드 카드 */}
+              <div
+                className={`flex flex-col px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors ${
+                  highlighted
+                    ? 'bg-gray-700/80 border border-gray-600'
+                    : 'bg-gray-900/60 hover:bg-gray-800/60'
+                }`}
+                onClick={() => onNav(step.nodeId)}
+              >
+                <span className={`font-mono text-xs truncate ${highlighted ? 'text-white font-semibold' : 'text-gray-300'}`}>
+                  {step.label}
+                  {highlighted && (
+                    <span className="ml-1.5 text-[9px] font-normal" style={{ color: edgeColor }}>
+                      {step.isSource ? '▶' : '◀'}
+                    </span>
+                  )}
+                </span>
+                {step.subLabel && (
+                  <span
+                    className="font-mono text-[10px] text-gray-600 truncate cursor-pointer hover:text-gray-400"
+                    onClick={(e) => { e.stopPropagation(); if (step.subNodeId) onNav(step.subNodeId) }}
+                  >
+                    {step.subLabel}
+                  </span>
+                )}
+                {step.altCount && (
+                  <span className="text-[9px] text-gray-600 mt-0.5">+{step.altCount}개 다른 경로</span>
+                )}
+              </div>
+              {/* 화살표 */}
+              {!isLast && (
+                <div className="flex items-center gap-1 py-0.5 pl-3">
+                  <span className="text-xs" style={{ color: edgeColor }}>↓</span>
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
