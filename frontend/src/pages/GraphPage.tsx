@@ -83,6 +83,7 @@ function GraphPageInner() {
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
   const [showIsoGroups, setShowIsoGroups] = useState(true)
   const [showEdges, setShowEdges] = useState(true)
+  const [showCallEdges, setShowCallEdges] = useState(true)
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -130,6 +131,19 @@ function GraphPageInner() {
     setShowEdges((prev) => {
       const next = !prev
       setEdges((eds) => eds.map((e) => ({ ...e, hidden: !next })))
+      return next
+    })
+  }, [setEdges])
+
+  // FUNCTION_CALL 엣지 표시/숨김 토글
+  const toggleCallEdges = useCallback(() => {
+    setShowCallEdges((prev) => {
+      const next = !prev
+      setEdges((eds) => eds.map((e) =>
+        (e.data as { type?: string })?.type === 'FUNCTION_CALL'
+          ? { ...e, hidden: !next }
+          : e
+      ))
       return next
     })
   }, [setEdges])
@@ -385,6 +399,13 @@ function GraphPageInner() {
           title="연결선 표시/숨김"
         >
           <span className={showEdges ? 'text-white' : 'text-gray-500'}>연결선</span>
+        </button>
+        <button
+          onClick={toggleCallEdges}
+          className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-amber-800/50"
+          title="함수 호출 체인 표시/숨김"
+        >
+          <span className={showCallEdges ? 'text-amber-400' : 'text-gray-500'}>콜 체인</span>
         </button>
         <button
           onClick={() => downloadTreeText(rawNodes)}
