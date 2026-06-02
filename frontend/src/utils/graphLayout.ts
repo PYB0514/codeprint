@@ -321,17 +321,13 @@ export function downloadTreeText(rawNodes: RawNode[], labelMode: LabelMode): voi
         const fileNode = fileNodes.find((n) => n.filePath === item)!
         const fileLabel = getLabel(fileNode)
         const fileFuncs = funcNodes.filter((fn) => fn.filePath === item)
-        const suffix = fileNode.comment && labelMode === 'name'
-          ? ` — ${fileNode.comment}`
-          : fileNode.name !== fileLabel ? ` (${fileNode.name})` : ''
-        lines.push(`${indent}${branch}${fileLabel}${suffix}`)
+        lines.push(`${indent}${branch}${fileLabel}`)
 
         fileFuncs.forEach((fn, fi) => {
           const isLastFn = fi === fileFuncs.length - 1
           const fnBranch = isLastFn ? '└── ' : '├── '
           const fnLabel = getLabel(fn)
-          const fnSuffix = fn.comment && labelMode === 'name' ? ` — ${fn.comment}` : ''
-          lines.push(`${childIndent}${fnBranch}${fnLabel}${fnSuffix}`)
+          lines.push(`${childIndent}${fnBranch}${fnLabel}`)
         })
       }
     })
