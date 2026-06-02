@@ -39,6 +39,8 @@
 | DECISIONS.md | ✅ | 기술 결정 및 trial-and-error 기록 |
 | 노드 드래그 위치 저장 | ✅ | PUT /api/graphs/{graphId}/nodes/{nodeId}/position |
 | 전체 함수 한글 주석 완전화 | ✅ | 멀티라인 파라미터 버그 수정 포함 |
+| 노드 라벨 말줄임표 + Hover Tooltip | ✅ | 박스 너비 초과 시 … + title 속성 |
+| 생성자 노드 한글화 | ✅ | VO 클래스 생성자 → "생성자" 라벨 |
 
 ### 인프라
 
@@ -71,12 +73,10 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재 브랜치: main (feat/node-position 머지 완료)
-# 1. 백엔드 재시작 + main 브랜치로 재분석 → 한글 주석 최종 확인
-# 2. feat/share 브랜치 시작
-#    - 프로젝트 공개/비공개 토글 (Project.makePublic / makePrivate)
-#    - 공유 URL 생성 및 공개 그래프 조회 API
-#    - 커뮤니티 게시판 (Post, Comment)
+# 현재 브랜치: main
+# 1. feat/group-layout 브랜치 생성
+# 2. 그룹 박스 구체화 — 레이아웃, 라벨, 시각적 계층 개선
+#    (현재: domain/user, infrastructure/persistence 등 DDD 레이어 기반 그룹핑)
 ```
 
 ---
