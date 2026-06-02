@@ -1,6 +1,8 @@
 // 언어별 정규식으로 함수 정의, import, 주석을 추출하는 정적 분석기
 package com.codeprint.infrastructure.analysis;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -14,6 +16,8 @@ import java.util.regex.Pattern;
 @Component
 public class StaticCodeAnalyzer {
 
+    private static final Logger log = LoggerFactory.getLogger(StaticCodeAnalyzer.class);
+
     public ParsedFile analyze(Path file, Path repoRoot, String language) throws IOException {
         String content = Files.readString(file, StandardCharsets.UTF_8);
         String relativePath = repoRoot.relativize(file).toString().replace("\\", "/");
@@ -22,6 +26,10 @@ public class StaticCodeAnalyzer {
         List<String> imports = extractImports(content, language);
         String fileComment = extractFileComment(content, language);
         Map<String, String> functionComments = extractFunctionComments(content, language);
+
+        if (fileComment != null || !functionComments.isEmpty()) {
+            log.debug("[주석추출] {} | 파일주석={} | 함수주석={}개", relativePath, fileComment, functionComments.size());
+        }
 
         return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments);
     }
