@@ -66,7 +66,7 @@ export default function ProjectCard({ project, onDelete, onAnalysisDone }: Props
     }
   }
 
-  const isAnalyzing = analysisId !== null && status !== 'DONE' && status !== 'FAILED'
+  const isAnalyzing = analysisId !== null && status !== 'FAILED'
 
   return (
     <div className="bg-gray-900 rounded-xl p-5 flex flex-col gap-3 hover:bg-gray-800 transition-colors">
