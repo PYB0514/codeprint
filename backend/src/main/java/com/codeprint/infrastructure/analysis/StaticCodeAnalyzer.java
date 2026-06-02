@@ -1,8 +1,6 @@
 // 언어별 정규식으로 함수 정의, import, 주석을 추출하는 정적 분석기
 package com.codeprint.infrastructure.analysis;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -16,8 +14,6 @@ import java.util.regex.Pattern;
 @Component
 public class StaticCodeAnalyzer {
 
-    private static final Logger log = LoggerFactory.getLogger(StaticCodeAnalyzer.class);
-
     // 단일 소스 파일을 분석하여 함수명, import, 주석 등을 추출
     public ParsedFile analyze(Path file, Path repoRoot, String language) throws IOException {
         String content = Files.readString(file, StandardCharsets.UTF_8);
@@ -28,28 +24,15 @@ public class StaticCodeAnalyzer {
         String fileComment = extractFileComment(content, language);
         Map<String, String> functionComments = extractFunctionComments(content, language);
 
-        if (fileComment != null || !functionComments.isEmpty()) {
-            log.debug("[주석추출] {} | 파일주석={} | 함수주석={}개", relativePath, fileComment, functionComments.size());
-        }
-
         return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments);
     }
 
     // 파일 상단 첫 번째 주석 추출
     private String extractFileComment(String content, String language) {
         String[] lines = content.split("\n");
-        boolean logged = false;
         for (String line : lines) {
             String trimmed = line.trim();
             if (trimmed.isEmpty()) continue;
-            if (!logged) {
-                logged = true;
-                String preview = trimmed.length() > 60 ? trimmed.substring(0, 60) : trimmed;
-                log.debug("[extractFileComment] lang={} | 첫char=U+{} | preview={}",
-                        language,
-                        String.format("%04X", (int) trimmed.charAt(0)),
-                        preview);
-            }
             if (language.equals("Python")) {
                 if (trimmed.startsWith("#")) return trimmed.substring(1).trim();
                 break;

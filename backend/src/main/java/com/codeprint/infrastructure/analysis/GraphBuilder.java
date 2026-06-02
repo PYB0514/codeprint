@@ -3,8 +3,6 @@ package com.codeprint.infrastructure.analysis;
 
 import com.codeprint.domain.graph.*;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -16,7 +14,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class GraphBuilder {
 
-    private static final Logger log = LoggerFactory.getLogger(GraphBuilder.class);
     private final GraphRepository graphRepository;
 
     // 분석된 파일 목록으로 그래프와 노드/엣지를 생성하여 저장
@@ -34,7 +31,6 @@ public class GraphBuilder {
 
             if (pf.fileComment() != null) {
                 fileNode.updateMetadata(Map.of("comment", pf.fileComment()));
-                log.debug("[GraphBuilder] 파일 주석 저장: {} → {}", pf.filePath(), pf.fileComment());
             }
             graphRepository.saveNode(fileNode);
             fileNodeIds.put(pf.filePath(), fileNode.getId());
