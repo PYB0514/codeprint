@@ -49,6 +49,7 @@ public class StaticCodeAnalyzer {
     }
 
     // 함수 바로 위 한 줄 주석 추출 (함수명 → 주석 맵)
+    // 전체 content에서 매칭하여 멀티라인 파라미터도 처리
     private Map<String, String> extractFunctionComments(String content, String language) {
         Map<String, String> result = new LinkedHashMap<>();
         String[] lines = content.split("\n");
@@ -56,33 +57,43 @@ public class StaticCodeAnalyzer {
         Pattern funcPattern = getFunctionPattern(language);
         if (funcPattern == null) return result;
 
-        for (int i = 0; i < lines.length; i++) {
-            Matcher m = funcPattern.matcher(lines[i]);
-            if (m.find()) {
-                String funcName = extractFirstGroup(m);
-                if (funcName == null || isKeyword(funcName)) continue;
+        Matcher m = funcPattern.matcher(content);
+        while (m.find()) {
+            String funcName = extractFirstGroup(m);
+            if (funcName == null || isKeyword(funcName) || result.containsKey(funcName)) continue;
 
-                // 바로 위 줄에서 주석 찾기 (어노테이션은 건너뜀)
-                String comment = null;
-                for (int j = i - 1; j >= Math.max(0, i - 8); j--) {
-                    String prev = lines[j].trim();
-                    if (prev.isEmpty()) continue;
-                    if (prev.startsWith("@")) continue; // 어노테이션 건너뜀
-                    if (prev.startsWith("//")) {
-                        comment = prev.substring(2).trim();
-                    } else if (prev.startsWith("*") && !prev.startsWith("*/")) {
-                        comment = prev.replaceAll("^\\*+\\s*", "").trim();
-                    } else if (prev.startsWith("#") && language.equals("Python")) {
-                        comment = prev.substring(1).trim();
-                    }
-                    break;
+            // 매칭 시작 위치로 줄 번호 역산
+            int lineIndex = countNewlines(content, m.start());
+
+            // 위로 탐색하며 주석 찾기 (어노테이션은 건너뜀)
+            String comment = null;
+            for (int j = lineIndex - 1; j >= Math.max(0, lineIndex - 8); j--) {
+                String prev = lines[j].trim();
+                if (prev.isEmpty()) continue;
+                if (prev.startsWith("@")) continue;
+                if (prev.startsWith("//")) {
+                    comment = prev.substring(2).trim();
+                } else if (prev.startsWith("*") && !prev.startsWith("*/")) {
+                    comment = prev.replaceAll("^\\*+\\s*", "").trim();
+                } else if (prev.startsWith("#") && language.equals("Python")) {
+                    comment = prev.substring(1).trim();
                 }
-                if (comment != null && !comment.isBlank()) {
-                    result.put(funcName, comment);
-                }
+                break;
+            }
+            if (comment != null && !comment.isBlank()) {
+                result.put(funcName, comment);
             }
         }
         return result;
+    }
+
+    // content의 offset 위치까지의 줄 번호(0-based) 계산
+    private int countNewlines(String content, int offset) {
+        int count = 0;
+        for (int i = 0; i < offset; i++) {
+            if (content.charAt(i) == '\n') count++;
+        }
+        return count;
     }
 
     // 소스 코드에서 함수/메서드 이름 목록을 추출
