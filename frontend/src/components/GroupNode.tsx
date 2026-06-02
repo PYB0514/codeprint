@@ -1,6 +1,6 @@
 // DDD 레이어별 색상과 헤더를 가진 커스텀 그룹 노드 — 최소화/불투명 토글 지원
 import { useState } from 'react'
-import { Handle, Position, NodeToolbar, useReactFlow } from '@xyflow/react'
+import { Handle, Position, EdgeLabelRenderer, useInternalNode, useReactFlow } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 
 interface GroupData {
@@ -30,9 +30,12 @@ const LAYER_KO: Record<string, string> = {
 }
 
 const HEADER_H = 36
+// 버튼 2개 + gap: 버튼 22px * 2 + gap 4px + 우측 패딩 8px
+const BTN_AREA_W = 22 + 4 + 22 + 8
 
-// 그룹 노드 커스텀 렌더러 — 최소화(헤더만) / 불투명(내용 가림) 토글
-// 버튼은 NodeToolbar(edges SVG 위 레이어)에 렌더링 — 선과 겹쳐도 클릭 보장
+// 그룹 노드 커스텀 렌더러
+// 버튼은 EdgeLabelRenderer(edges SVG 위 레이어)로 포탈링 — 선과 겹쳐도 클릭 보장
+// 헤더에는 공간 예약용 placeholder를 두어 시각적 레이아웃 동일하게 유지
 export default function GroupNode({ id, data }: NodeProps) {
   const { layer, sub, fileCount, originalHeight } = data as unknown as GroupData
   const p = LAYER_PALETTE[layer] ?? DEFAULT_PALETTE
@@ -41,6 +44,12 @@ export default function GroupNode({ id, data }: NodeProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [opaque, setOpaque] = useState(false)
   const { setNodes } = useReactFlow()
+
+  // 노드 절대 좌표 + 너비 — 버튼 포탈 위치 계산에 사용
+  const internalNode = useInternalNode(id)
+  const absX = internalNode?.internals.positionAbsolute.x ?? 0
+  const absY = internalNode?.internals.positionAbsolute.y ?? 0
+  const nodeW = internalNode?.measured.width ?? 200
 
   // 직계 자식(FILE) + 손자(FUNCTION) 모두 hidden 처리
   const setDescendantsHidden = (hidden: boolean) => {
@@ -62,7 +71,6 @@ export default function GroupNode({ id, data }: NodeProps) {
     const next = !collapsed
     setCollapsed(next)
     if (!next && opaque) {
-      // 불투명 켜진 채로 펼치기 → 높이만 복원, 자식은 여전히 숨김
       setNodes((nodes) =>
         nodes.map((n) =>
           n.id === id ? { ...n, style: { ...n.style, height: originalHeight } } : n
@@ -91,35 +99,37 @@ export default function GroupNode({ id, data }: NodeProps) {
 
   // 버튼 공통 스타일
   const btnStyle = (active: boolean): React.CSSProperties => ({
-    width: 22,
-    height: 22,
-    borderRadius: 5,
-    border: `1px solid ${p.border}99`,
-    background: active ? p.badge : `${p.badge}44`,
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    border: `1px solid ${p.border}66`,
+    background: active ? `${p.badge}cc` : 'transparent',
     color: p.text,
-    fontSize: 11,
-    fontWeight: 700,
+    fontSize: active ? 12 : 10,
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     lineHeight: 1,
-    transition: 'background 0.1s',
   })
+
+  // 버튼 포탈 위치: 헤더 우측 안쪽에 맞춤
+  // absX/absY는 flow 좌표 → EdgeLabelRenderer 컨테이너도 동일 좌표계이므로 그대로 사용
+  const btnLeft = absX + nodeW - BTN_AREA_W
+  const btnTop  = absY + (HEADER_H - 20) / 2  // 헤더 수직 중앙
 
   return (
     <>
-      {/* NodeToolbar: edges SVG 위 레이어(viewport portal)에 렌더링 — 선과 겹쳐도 클릭 보장 */}
-      <NodeToolbar isVisible position={Position.Top} align="end" offset={4}>
+      {/* 실제 클릭 가능한 버튼 — EdgeLabelRenderer(edges 위 HTML 레이어)에 포탈 */}
+      <EdgeLabelRenderer>
         <div
           style={{
+            position: 'absolute',
+            left: btnLeft,
+            top: btnTop,
             display: 'flex',
             gap: 4,
-            background: `${p.badge}cc`,
-            border: `1px solid ${p.border}88`,
-            borderRadius: 7,
-            padding: '3px 5px',
-            backdropFilter: 'blur(4px)',
+            pointerEvents: 'all',
           }}
         >
           <button
@@ -137,7 +147,7 @@ export default function GroupNode({ id, data }: NodeProps) {
             {collapsed ? '+' : '−'}
           </button>
         </div>
-      </NodeToolbar>
+      </EdgeLabelRenderer>
 
       {/* 그룹 박스 본체 */}
       <div
@@ -152,7 +162,7 @@ export default function GroupNode({ id, data }: NodeProps) {
           transition: 'background 0.15s',
         }}
       >
-        {/* 헤더 (시각용 — 버튼 없음) */}
+        {/* 헤더 */}
         <div
           style={{
             position: 'absolute',
@@ -164,9 +174,10 @@ export default function GroupNode({ id, data }: NodeProps) {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            padding: '0 12px',
+            padding: '0 8px 0 12px',
           }}
         >
+          {/* 레이어 배지 */}
           <span
             style={{
               background: p.badge,
@@ -182,6 +193,8 @@ export default function GroupNode({ id, data }: NodeProps) {
           >
             {layerLabel}
           </span>
+
+          {/* 서브패키지 이름 */}
           <span
             style={{
               color: p.text,
@@ -196,9 +209,14 @@ export default function GroupNode({ id, data }: NodeProps) {
           >
             {sub || layer}
           </span>
+
+          {/* 파일 수 */}
           <span style={{ color: `${p.text}88`, fontSize: 9, fontWeight: 500, flexShrink: 0 }}>
             {fileCount}f
           </span>
+
+          {/* 버튼 자리 placeholder — 포탈된 버튼과 동일한 공간 예약 (시각 레이아웃 유지) */}
+          <div style={{ width: BTN_AREA_W - 8, height: 20, flexShrink: 0 }} />
         </div>
 
         <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
