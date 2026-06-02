@@ -36,6 +36,8 @@ type SidebarContent =
   | { kind: 'edge'; sourceId: string; targetId: string; sourceNodeId: string; targetNodeId: string; callChain: ConnEntry['callChain'] }
   | { kind: 'file'; data: FileSidebarData }
   | { kind: 'func'; funcName: string; funcComment: string | null; parentFileName: string; parentFileNodeId: string; callers: FuncCallChainEntry[]; callees: FuncCallChainEntry[] }
+  | { kind: 'func-call'; callerName: string; callerComment: string | null; callerNodeId: string; callerFile: string; callerFileNodeId: string; calleeName: string; calleeComment: string | null; calleeNodeId: string; calleeFile: string; calleeFileNodeId: string }
+  | { kind: 'instantiation'; sourceFile: string; sourceNodeId: string; targetClass: string; targetNodeId: string }
 
 // JWT 토큰을 Authorization 헤더로 반환
 function authHeaders() {
@@ -260,7 +262,40 @@ function GraphPageInner() {
   // 엣지 클릭 시 사이드바에 연결 상세 표시
   const handleEdgeClick: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
     const data = edge.data as { type?: string } | undefined
-    if (data?.type === 'FUNCTION_CALL' || data?.type === 'INSTANTIATION') return
+
+    if (data?.type === 'FUNCTION_CALL') {
+      const srcFunc = rawNodes.find((n) => n.id === edge.source && n.type === 'FUNCTION')
+      const tgtFunc = rawNodes.find((n) => n.id === edge.target && n.type === 'FUNCTION')
+      const srcFile = rawNodes.find((n) => n.type === 'FILE' && n.filePath === srcFunc?.filePath)
+      const tgtFile = rawNodes.find((n) => n.type === 'FILE' && n.filePath === tgtFunc?.filePath)
+      setSidebar({
+        kind: 'func-call',
+        callerName: srcFunc?.name ?? edge.source,
+        callerComment: srcFunc?.comment ?? null,
+        callerNodeId: edge.source,
+        callerFile: srcFile?.name ?? srcFunc?.filePath ?? '',
+        callerFileNodeId: srcFile?.id ?? '',
+        calleeName: tgtFunc?.name ?? edge.target,
+        calleeComment: tgtFunc?.comment ?? null,
+        calleeNodeId: edge.target,
+        calleeFile: tgtFile?.name ?? tgtFunc?.filePath ?? '',
+        calleeFileNodeId: tgtFile?.id ?? '',
+      })
+      return
+    }
+
+    if (data?.type === 'INSTANTIATION') {
+      const srcFile = rawNodes.find((n) => n.id === edge.source && n.type === 'FILE')
+      const tgtFile = rawNodes.find((n) => n.id === edge.target && n.type === 'FILE')
+      setSidebar({
+        kind: 'instantiation',
+        sourceFile: srcFile?.name ?? edge.source,
+        sourceNodeId: edge.source,
+        targetClass: tgtFile?.name ?? edge.target,
+        targetNodeId: edge.target,
+      })
+      return
+    }
 
     const sourceFile = rawNodes.find((n) => n.id === edge.source && n.type === 'FILE')
     const targetFile = rawNodes.find((n) => n.id === edge.target && n.type === 'FILE')
@@ -504,12 +539,62 @@ function GraphPageInner() {
           {/* 사이드바 헤더 */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              {sidebar.kind === 'edge' ? '연결 상세' : sidebar.kind === 'file' ? '파일 연결' : '함수 상세'}
+              {sidebar.kind === 'edge' ? '연결 상세' : sidebar.kind === 'file' ? '파일 연결' : sidebar.kind === 'func' ? '함수 상세' : sidebar.kind === 'func-call' ? '함수 호출' : '인스턴스화'}
             </span>
             <button onClick={() => setSidebar(null)} className="text-gray-600 hover:text-white text-sm">✕</button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+
+            {/* ── FUNCTION_CALL 엣지 클릭 ── */}
+            {sidebar.kind === 'func-call' && (
+              <div className="flex flex-col gap-3">
+                <div className="bg-gray-800 rounded-lg p-3 flex flex-col gap-2">
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">호출하는 함수</p>
+                    <p className="text-emerald-400 font-mono text-sm font-semibold cursor-pointer hover:text-emerald-200"
+                      onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.callerNodeId }], duration: 500, padding: 0.4 }), 50) }}
+                    >{sidebar.callerComment ?? sidebar.callerName}</p>
+                    <p className="text-blue-400 font-mono text-xs cursor-pointer hover:text-blue-300 mt-0.5"
+                      onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.callerFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                    >{sidebar.callerFile}</p>
+                  </div>
+                  <div className="text-amber-500 text-sm text-center">↓</div>
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">호출받는 함수</p>
+                    <p className="text-emerald-400 font-mono text-sm font-semibold cursor-pointer hover:text-emerald-200"
+                      onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.calleeNodeId }], duration: 500, padding: 0.4 }), 50) }}
+                    >{sidebar.calleeComment ?? sidebar.calleeName}</p>
+                    <p className="text-blue-400 font-mono text-xs cursor-pointer hover:text-blue-300 mt-0.5"
+                      onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.calleeFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                    >{sidebar.calleeFile}</p>
+                  </div>
+                </div>
+                <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded self-start">FUNCTION_CALL</span>
+              </div>
+            )}
+
+            {/* ── INSTANTIATION 엣지 클릭 ── */}
+            {sidebar.kind === 'instantiation' && (
+              <div className="flex flex-col gap-3">
+                <div className="bg-gray-800 rounded-lg p-3 flex flex-col gap-2">
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">생성하는 파일</p>
+                    <p className="text-blue-300 font-mono text-sm font-semibold cursor-pointer hover:text-white"
+                      onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.sourceNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                    >{sidebar.sourceFile}</p>
+                  </div>
+                  <div className="text-purple-400 text-sm text-center">↓ new</div>
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">인스턴스화 대상</p>
+                    <p className="text-blue-300 font-mono text-sm font-semibold cursor-pointer hover:text-white"
+                      onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.targetNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                    >{sidebar.targetClass}</p>
+                  </div>
+                </div>
+                <span className="text-xs bg-purple-900/40 text-purple-400 px-2 py-0.5 rounded self-start">INSTANTIATION</span>
+              </div>
+            )}
 
             {/* ── 엣지 클릭: 파일→파일 + 콜 체인 ── */}
             {sidebar.kind === 'edge' && (
