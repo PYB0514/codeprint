@@ -25,6 +25,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
 
+    // JWT 필터, OAuth2, CORS, 세션리스 정책을 적용한 Security 필터 체인 구성
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -43,6 +44,7 @@ public class SecurityConfig {
         return http.build();
     }
 
+    // 허용 Origin, 메서드, 헤더를 설정한 CORS 정책 반환
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();

@@ -34,6 +34,9 @@
 | 이름/주석 토글 | ✅ | 노드 라벨을 파일명/함수명 ↔ 한국어 주석으로 전환 |
 | 엣지 호버 모달 | ✅ | 클릭 시 연결 상세 표시 |
 | 브랜치 선택 UI | ✅ | 분석 시작/재분석 클릭 시 드롭다운으로 브랜치 선택 |
+| 그래프 이미지 다운로드 | ✅ | 전체 그래프 원본 크기 PNG (html-to-image) |
+| AI 컨텍스트 트리 다운로드 | ✅ | 파일명/함수명 — 한국어 주석 형태 .txt |
+| DECISIONS.md | ✅ | 기술 결정 및 trial-and-error 기록 |
 
 ### 인프라
 
@@ -66,19 +69,20 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재 브랜치: feat/branch-analysis
-# 1. 백엔드+프론트 올려서 브랜치 선택 분석 E2E 동작 확인
-# 2. feat/branch-analysis → main PR 머지
+# 현재 브랜치: feat/export-image
+# 1. feat/export-image → main PR 머지
+# 2. 백엔드 재시작 + main 브랜치로 재분석 → 한글 주석 최종 확인
 # 3. 노드 드래그 위치 저장 구현 (PUT /api/graphs/{graphId}/nodes/{nodeId}/position)
+# 4. feat/share 브랜치 시작
 ```
 
 ---
 
 ## 다음 작업 순서
 
-### 1단계: `feat/branch-analysis` (현재 브랜치) ✅
-- analyses.branch 컬럼, RepoCloner --branch, 브랜치 목록 API, 드롭다운 UI 구현 완료
-- E2E 확인 + PR 머지 대기
+### 1단계: `feat/export-image` (현재 브랜치)
+- 이미지 다운로드, AI 컨텍스트 트리, 주석 소급 완료
+- PR 머지 대기
 
 ### 2단계: 그래프 인터랙션
 - 노드 드래그 위치 저장 (`PUT /api/graphs/{graphId}/nodes/{nodeId}/position`)
@@ -110,7 +114,7 @@ npm run dev
 | GitHub OAuth Client ID | 대문자 O로 시작 (`Ov23li9p7ck6LTB8bnqm`) — 숫자 0 아님 |
 | application-local.yml | gitignore 처리됨. OAuth Secret 포함, 공유 금지 |
 | Java 파일 인코딩 | UTF-8 BOM 없이 저장할 것 |
-| 브랜치 선택 E2E 미확인 | feat/branch-analysis 서버 올려서 실제 동작 확인 필요 |
+| feat/export-image 미머지 | 다음 세션에서 PR 머지 후 재분석 필요 |
 
 ---
 
@@ -118,7 +122,7 @@ npm run dev
 
 ```
 main                       ← 항상 배포 가능 상태
-└─ feat/branch-analysis    ← 현재 (PR 머지 대기)
+└─ feat/export-image       ← 현재 (PR 머지 대기)
 └─ feat/share
 └─ feat/stripe
 ```

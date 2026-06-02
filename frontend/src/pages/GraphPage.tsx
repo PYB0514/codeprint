@@ -1,5 +1,5 @@
 // 프로젝트 코드 구조를 React Flow로 시각화하는 그래프 페이지
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
@@ -9,9 +9,12 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
+  ReactFlowProvider,
 } from '@xyflow/react'
 import type { Edge, EdgeMouseHandler } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { toPng } from 'html-to-image'
 import { buildLayout, downloadTreeText } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode } from '../utils/graphLayout'
 
@@ -28,7 +31,7 @@ function authHeaders() {
   return { Authorization: `Bearer ${token}` }
 }
 
-export default function GraphPage() {
+function GraphPageInner() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [nodes, setNodes, onNodesChange] = useNodesState([])
@@ -40,6 +43,9 @@ export default function GraphPage() {
   const [edgeModal, setEdgeModal] = useState<EdgeModalInfo | null>(null)
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
+  const [exporting, setExporting] = useState(false)
+  const flowRef = useRef<HTMLDivElement>(null)
+  const { getNodes, fitView } = useReactFlow()
 
   // 서버에서 그래프 데이터를 불러와 React Flow 레이아웃으로 변환
   const fetchGraph = useCallback(async () => {
@@ -76,6 +82,51 @@ export default function GraphPage() {
     }
   }, [labelMode, rawNodes, rawEdgesCache, setNodes, setEdges])
 
+  // 전체 그래프를 원본 크기 PNG로 다운로드
+  const handleExportImage = useCallback(async () => {
+    const flowEl = flowRef.current?.querySelector('.react-flow__viewport') as HTMLElement | null
+    if (!flowEl) return
+
+    setExporting(true)
+    try {
+      // 전체 노드 바운딩 박스 계산
+      const allNodes = getNodes()
+      if (allNodes.length === 0) return
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      allNodes.forEach((n) => {
+        const w = (n.style?.width as number) ?? 150
+        const h = (n.style?.height as number) ?? 40
+        minX = Math.min(minX, n.position.x)
+        minY = Math.min(minY, n.position.y)
+        maxX = Math.max(maxX, n.position.x + w)
+        maxY = Math.max(maxY, n.position.y + h)
+      })
+
+      const PAD = 40
+      const fullW = maxX - minX + PAD * 2
+      const fullH = maxY - minY + PAD * 2
+
+      await fitView({ padding: 0.05, duration: 0 })
+
+      const dataUrl = await toPng(flowEl, {
+        backgroundColor: '#030712',
+        width: fullW,
+        height: fullH,
+        style: {
+          transform: `translate(${PAD - minX}px, ${PAD - minY}px)`,
+        },
+      })
+
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = `codeprint-graph.png`
+      a.click()
+    } finally {
+      setExporting(false)
+    }
+  }, [getNodes, fitView])
+
   // 엣지 클릭 시 상세 정보 모달을 표시
   const handleEdgeClick: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
     const data = edge.data as { edgeIdentifier?: string; type?: string } | undefined
@@ -107,7 +158,7 @@ export default function GraphPage() {
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#030712' }}>
+    <div ref={flowRef} style={{ width: '100vw', height: '100vh', background: '#030712' }}>
       {/* 상단 바 */}
       <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
         <button
@@ -134,6 +185,14 @@ export default function GraphPage() {
           title="파일명 — 한국어 주석 형태의 AI 컨텍스트용 트리 다운로드"
         >
           ↓ AI 컨텍스트
+        </button>
+        <button
+          onClick={handleExportImage}
+          disabled={exporting || rawNodes.length === 0}
+          className="bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700 disabled:opacity-40"
+          title="전체 그래프를 원본 크기 PNG로 저장"
+        >
+          {exporting ? '저장 중...' : '↓ 이미지'}
         </button>
       </div>
 
@@ -217,5 +276,14 @@ export default function GraphPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// useReactFlow은 ReactFlowProvider 안에서만 동작하므로 래핑
+export default function GraphPage() {
+  return (
+    <ReactFlowProvider>
+      <GraphPageInner />
+    </ReactFlowProvider>
   )
 }

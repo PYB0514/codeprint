@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @EnableAsync
 public class CodeprintApplication {
 
+    // 애플리케이션 진입점
     public static void main(String[] args) {
         SpringApplication.run(CodeprintApplication.class, args);
     }
