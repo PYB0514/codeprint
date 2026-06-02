@@ -12,11 +12,14 @@ import {
   useReactFlow,
   ReactFlowProvider,
 } from '@xyflow/react'
-import type { Edge, EdgeMouseHandler, NodeDragHandler } from '@xyflow/react'
+import type { Edge, EdgeMouseHandler, Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
 import { buildLayout, downloadTreeText } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode } from '../utils/graphLayout'
+import GroupNode from '../components/GroupNode'
+
+const nodeTypes = { groupNode: GroupNode }
 
 interface EdgeModalInfo {
   edgeIdentifier: string
@@ -35,8 +38,8 @@ function authHeaders() {
 function GraphPageInner() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const [nodes, setNodes, onNodesChange] = useNodesState([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [rawNodes, setRawNodes] = useState<RawNode[]>([])
   const [counts, setCounts] = useState({ files: 0, funcs: 0, edges: 0 })
   const [loading, setLoading] = useState(true)
@@ -131,7 +134,8 @@ function GraphPageInner() {
   }, [getNodes, fitView])
 
   // 노드 드래그 완료 시 서버에 위치를 저장
-  const handleNodeDragStop: NodeDragHandler = useCallback((_event, node) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleNodeDragStop = useCallback((_event: any, node: Node) => {
     if (!graphId) return
     axios.put(
       `/api/graphs/${graphId}/nodes/${node.id}/position`,
@@ -210,21 +214,37 @@ function GraphPageInner() {
       </div>
 
       {/* 범례 */}
-      <div className="absolute top-4 right-4 z-10 bg-gray-900 rounded-lg p-3 flex flex-col gap-1.5 text-xs">
+      <div className="absolute top-4 right-4 z-10 bg-gray-900/90 rounded-xl p-3 flex flex-col gap-2 text-xs border border-gray-700/50 backdrop-blur-sm">
+        <p className="text-gray-500 font-semibold text-[10px] uppercase tracking-widest mb-0.5">Legend</p>
+        <div className="flex flex-col gap-1 border-b border-gray-700/50 pb-2 mb-0.5">
+          <p className="text-gray-500 text-[9px] uppercase tracking-wider">DDD 레이어</p>
+          {[
+            { label: 'Domain',         color: '#3b82f6' },
+            { label: 'Application',    color: '#eab308' },
+            { label: 'Infrastructure', color: '#a855f7' },
+            { label: 'Interfaces',     color: '#10b981' },
+            { label: 'Pages/Components', color: '#06b6d4' },
+          ].map(({ label, color }) => (
+            <div key={label} className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: `${color}22`, border: `1.5px solid ${color}` }} />
+              <span className="text-gray-400">{label}</span>
+            </div>
+          ))}
+        </div>
         <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded" style={{ background: '#1e3a5f', border: '1.5px solid #3b82f6' }} />
+          <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#1e3a5f', border: '1.5px solid #3b82f6' }} />
           <span className="text-gray-400">FILE</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded" style={{ background: '#064e3b', border: '1px solid #10b981' }} />
+          <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#064e3b', border: '1px solid #10b981' }} />
           <span className="text-gray-400">FUNCTION</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5" style={{ background: '#4b5563' }} />
+          <span className="w-3 h-0.5 flex-shrink-0" style={{ background: '#4b5563' }} />
           <span className="text-gray-400">IMPORT</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5" style={{ background: '#ef4444' }} />
+          <span className="w-3 h-0.5 flex-shrink-0" style={{ background: '#ef4444' }} />
           <span className="text-gray-400">끊긴 연결</span>
         </div>
       </div>
@@ -232,6 +252,7 @@ function GraphPageInner() {
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onEdgeClick={handleEdgeClick}

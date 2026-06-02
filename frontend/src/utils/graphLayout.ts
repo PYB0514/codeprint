@@ -30,7 +30,7 @@ const FILE_PAD_TOP = 28
 const FILE_PAD_BOTTOM = 10
 const FILE_GAP = 20
 const GROUP_PAD = 24
-const GROUP_HEADER = 26
+const GROUP_HEADER = 36  // 커스텀 헤더 높이에 맞춤
 const GROUP_GAP = 48
 
 // 공통 prefix 제거 후 DDD 의미 있는 그룹 키 추출
@@ -121,7 +121,7 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
 
   groups.forEach((files, key) => {
     const COLS = 3
-    let col = 0, row = 0
+    let col = 0
     let colX = 0, rowY = 0
     let maxRowH = 0
     const placed: Array<{ file: RawNode; x: number; y: number }> = []
@@ -180,31 +180,25 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
   const result: Node[] = []
 
   // 그룹 노드 + 파일 노드 + 함수 노드 생성
-  groups.forEach((_, key) => {
+  groups.forEach((groupFiles, key) => {
     const layout = groupLayouts.get(key)!
     const gPos = gg.node(key)
     if (!gPos) return
     const gx = gPos.x - layout.w / 2
     const gy = gPos.y - layout.h / 2
 
-    // 그룹 박스
+    // 그룹 키에서 layer / sub 분리 (예: "domain/user" → layer="domain", sub="user")
+    const slashIdx = key.indexOf('/')
+    const layer = slashIdx >= 0 ? key.slice(0, slashIdx) : key
+    const sub = slashIdx >= 0 ? key.slice(slashIdx + 1) : ''
+
+    // 그룹 박스 (커스텀 groupNode 타입 사용)
     result.push({
       id: `group-${key}`,
-      type: 'group',
+      type: 'groupNode',
       position: { x: gx, y: gy },
-      data: { label: key },
-      style: {
-        width: layout.w,
-        height: layout.h,
-        background: 'rgba(255,255,255,0.02)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: 12,
-        fontSize: 11,
-        color: 'rgba(255,255,255,0.25)',
-        fontWeight: 600,
-        paddingTop: 8,
-        paddingLeft: 12,
-      },
+      data: { layer, sub, fileCount: groupFiles.length },
+      style: { width: layout.w, height: layout.h },
       draggable: true,
     })
 

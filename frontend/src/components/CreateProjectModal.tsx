@@ -1,5 +1,6 @@
 // 새 프로젝트 생성 모달 — GitHub 레포 URL 입력 및 제출
-import { useState, FormEvent } from 'react'
+import { useState } from 'react'
+import type { FormEvent } from 'react'
 import axios from 'axios'
 
 interface Project {

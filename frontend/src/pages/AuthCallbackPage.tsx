@@ -1,11 +1,8 @@
 // OAuth 로그인 후 JWT를 저장하고 대시보드로 이동하는 콜백 페이지
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 // OAuth 콜백 처리 — JWT 저장 후 대시보드로 이동
 export default function AuthCallbackPage() {
-  const navigate = useNavigate()
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const token = params.get('token')
