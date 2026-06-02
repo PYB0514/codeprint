@@ -41,14 +41,18 @@ public class AnalysisResult {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "branch", length = 200)
+    private String branch;
+
     // PENDING 상태로 새 분석 결과 인스턴스 생성
-    public static AnalysisResult create(UUID projectId) {
+    public static AnalysisResult create(UUID projectId, String branch) {
         AnalysisResult result = new AnalysisResult();
         result.id = UUID.randomUUID();
         result.projectId = projectId;
         result.status = AnalysisStatus.PENDING;
         result.progress = 0;
         result.createdAt = Instant.now();
+        result.branch = branch;
         return result;
     }
 

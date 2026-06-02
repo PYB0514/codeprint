@@ -24,7 +24,7 @@ public class AnalysisController {
     public ResponseEntity<Map<String, Object>> startAnalysis(
             @RequestBody StartAnalysisRequest request,
             @AuthenticationPrincipal User user) {
-        AnalysisResult result = analysisApplicationService.startAnalysis(request.projectId());
+        AnalysisResult result = analysisApplicationService.startAnalysis(request.projectId(), request.branch());
         return ResponseEntity.status(202).body(Map.of(
                 "analysisId", result.getId(),
                 "status", result.getStatus(),
@@ -46,5 +46,5 @@ public class AnalysisController {
         ));
     }
 
-    public record StartAnalysisRequest(UUID projectId) {}
+    public record StartAnalysisRequest(UUID projectId, String branch) {}
 }

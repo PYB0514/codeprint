@@ -21,15 +21,15 @@ public class AnalysisApplicationService {
     private final AnalysisRunner analysisRunner;
 
     // 분석 레코드를 생성하고 비동기 분석을 시작
-    public AnalysisResult startAnalysis(UUID projectId) {
+    public AnalysisResult startAnalysis(UUID projectId, String branch) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
 
-        AnalysisResult analysis = AnalysisResult.create(projectId);
+        AnalysisResult analysis = AnalysisResult.create(projectId, branch);
         analysisRepository.save(analysis);
 
         // URL을 미리 추출해서 넘김 — 트랜잭션 커밋 전 비동기 스레드가 DB 조회 시 못 찾는 문제 방지
-        analysisRunner.run(analysis.getId(), projectId, project.getGithubRepoUrl());
+        analysisRunner.run(analysis.getId(), projectId, project.getGithubRepoUrl(), branch);
         return analysis;
     }
 
