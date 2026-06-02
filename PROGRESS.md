@@ -57,6 +57,14 @@ npm run dev
 
 ---
 
+## 🚀 다음 세션 첫 번째 액션
+
+```powershell
+git checkout -b feat/project-api
+```
+
+---
+
 ## 다음 작업 순서 (Phase 1 완성)
 
 ### 브랜치: `feat/project-api`
