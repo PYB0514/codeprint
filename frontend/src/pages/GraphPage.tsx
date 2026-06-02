@@ -126,6 +126,7 @@ function GraphPageInner() {
   const [showEdges, setShowEdges] = useState(false)
   const [showCallEdges, setShowCallEdges] = useState(false)
   const [showInstEdges, setShowInstEdges] = useState(false)
+  const [showBrokenEdges, setShowBrokenEdges] = useState(true)
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -133,10 +134,17 @@ function GraphPageInner() {
   const { getNodes, fitView } = useReactFlow()
 
   // 엣지 타입별 초기 hidden 상태 적용
-  const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean) =>
+  const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean, sb: boolean) =>
     edges.map((e) => {
-      const t = (e.data as { type?: string })?.type
-      const hidden = t === 'IMPORT' ? !se : t === 'FUNCTION_CALL' ? !sc : t === 'INSTANTIATION' ? !si : false
+      const d = e.data as { type?: string; broken?: boolean } | undefined
+      const t = d?.type
+      const broken = d?.broken
+      const hidden =
+        t === 'IMPORT' && broken ? !sb :
+        t === 'IMPORT' ? !se :
+        t === 'FUNCTION_CALL' ? !sc :
+        t === 'INSTANTIATION' ? !si :
+        false
       return { ...e, hidden }
     }), [])
 
@@ -175,7 +183,7 @@ function GraphPageInner() {
       setRawNodes(rn)
       setRawEdgesCache(re)
       setNodes(layoutNodes)
-      setEdges(applyEdgeVisibility(layoutEdges, false, false, false))
+      setEdges(applyEdgeVisibility(layoutEdges, false, false, false, true))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,
@@ -197,9 +205,9 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, next, layoutPreset, openFileSidebar)
       setNodes(layoutNodes)
-      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges))
+      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges, showBrokenEdges))
     }
-  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showEdges, showCallEdges, showInstEdges, applyEdgeVisibility])
+  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, applyEdgeVisibility])
 
   // IMPORT 엣지 표시/숨김 토글
   const toggleEdges = useCallback(() => {
@@ -240,6 +248,19 @@ function GraphPageInner() {
     })
   }, [setEdges])
 
+  // 끊긴 연결 엣지 표시/숨김 토글
+  const toggleBrokenEdges = useCallback(() => {
+    setShowBrokenEdges((prev) => {
+      const next = !prev
+      setEdges((eds) => eds.map((e) =>
+        (e.data as { broken?: boolean })?.broken
+          ? { ...e, hidden: !next }
+          : e
+      ))
+      return next
+    })
+  }, [setEdges])
+
   // 레이아웃 프리셋 전환 — 그래프를 재계산하여 적용
   const toggleLayoutPreset = useCallback(() => {
     const next: LayoutPreset = layoutPreset === 'layer' ? 'hub' : 'layer'
@@ -247,10 +268,10 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
       setNodes(ln)
-      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges))
+      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges, showBrokenEdges))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
-  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, applyEdgeVisibility])
+  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, applyEdgeVisibility])
 
   // 전체 그래프를 원본 크기 PNG로 다운로드
   const handleExportImage = useCallback(async () => {
@@ -501,6 +522,18 @@ function GraphPageInner() {
 
           <div className="flex flex-col gap-0 flex-1">
 
+            {/* 내보내기 — 최상단 */}
+            <LeftSection title="내보내기">
+              <button onClick={() => downloadTreeText(rawNodes)} disabled={rawNodes.length === 0}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed">
+                ↓ AI 컨텍스트
+              </button>
+              <button onClick={handleExportImage} disabled={exporting || rawNodes.length === 0}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed mt-1">
+                {exporting ? '저장 중...' : '↓ 이미지'}
+              </button>
+            </LeftSection>
+
             {/* 레이아웃 */}
             <LeftSection title="레이아웃">
               <div className="flex items-center justify-between">
@@ -531,63 +564,26 @@ function GraphPageInner() {
               </div>
             </LeftSection>
 
-            {/* 엣지 토글 — 범례와 연동 */}
+            {/* 엣지 — 색인 + 토글 통합 */}
             <LeftSection title="엣지">
-              <button
-                onClick={toggleEdges}
-                className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60 group"
-              >
-                <span className="w-4 flex-shrink-0">
-                  <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />
-                </span>
-                <span className={`text-xs flex-1 ${showEdges ? 'text-gray-300' : 'text-gray-600'}`}>IMPORT</span>
-                <ToggleChip active={showEdges} onClick={toggleEdges} stopPropagation />
-              </button>
-              <button
-                onClick={toggleCallEdges}
-                className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60"
-              >
-                <span className="w-4 flex-shrink-0">
-                  <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="4 3" /></svg>
-                </span>
-                <span className={`text-xs flex-1 ${showCallEdges ? 'text-amber-400' : 'text-gray-600'}`}>콜 체인</span>
-                <ToggleChip active={showCallEdges} onClick={toggleCallEdges} stopPropagation />
-              </button>
-              <button
-                onClick={toggleInstEdges}
-                className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60"
-              >
-                <span className="w-4 flex-shrink-0">
-                  <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>
-                </span>
-                <span className={`text-xs flex-1 ${showInstEdges ? 'text-purple-400' : 'text-gray-600'}`}>생성</span>
-                <ToggleChip active={showInstEdges} onClick={toggleInstEdges} stopPropagation />
-              </button>
+              {[
+                { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: 'IMPORT',       textCls: showEdges ? 'text-gray-300' : 'text-gray-600',   active: showEdges,        onToggle: toggleEdges },
+                { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="4 3" /></svg>,                                label: '콜 체인',      textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600', active: showCallEdges,    onToggle: toggleCallEdges },
+                { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',         textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600', active: showInstEdges,  onToggle: toggleInstEdges },
+                { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결',    textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600', active: showBrokenEdges, onToggle: toggleBrokenEdges },
+              ].map(({ key, icon, label, textCls, active, onToggle }) => (
+                <button key={key} onClick={onToggle}
+                  className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60">
+                  <span className="w-4 flex-shrink-0">{icon}</span>
+                  <span className={`text-xs flex-1 ${textCls}`}>{label}</span>
+                  <ToggleChip active={active} onClick={onToggle} stopPropagation />
+                </button>
+              ))}
             </LeftSection>
 
-            {/* 내보내기 */}
-            <LeftSection title="내보내기">
-              <button
-                onClick={() => downloadTreeText(rawNodes)}
-                disabled={rawNodes.length === 0}
-                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
-                title="파일명 — 한국어 주석 형태의 AI 컨텍스트용 트리 다운로드"
-              >
-                ↓ AI 컨텍스트
-              </button>
-              <button
-                onClick={handleExportImage}
-                disabled={exporting || rawNodes.length === 0}
-                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed mt-1"
-                title="전체 그래프를 원본 크기 PNG로 저장"
-              >
-                {exporting ? '저장 중...' : '↓ 이미지'}
-              </button>
-            </LeftSection>
-
-            {/* 범례 */}
+            {/* 범례 — DDD 레이어 + 노드 */}
             <LeftSection title="범례">
-              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">DDD 레이어</p>
+              <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">DDD 레이어</p>
               {[
                 { label: 'Domain',           color: '#3b82f6', key: 'domain' },
                 { label: 'Application',      color: '#eab308', key: 'application' },
@@ -618,7 +614,7 @@ function GraphPageInner() {
                 )
               })}
               <div className="border-t border-gray-800 my-2" />
-              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">노드</p>
+              <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">노드</p>
               <div className="flex items-center gap-2 py-0.5">
                 <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#1e3a5f', border: '1.5px solid #3b82f6' }} />
                 <span className="text-gray-400 text-xs">FILE</span>
@@ -626,24 +622,6 @@ function GraphPageInner() {
               <div className="flex items-center gap-2 py-0.5">
                 <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#064e3b', border: '1px solid #10b981' }} />
                 <span className="text-gray-400 text-xs">FUNCTION</span>
-              </div>
-              <div className="border-t border-gray-800 my-2" />
-              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">엣지</p>
-              <div className="flex items-center gap-2 py-0.5">
-                <span className="w-4 h-0.5 flex-shrink-0" style={{ background: '#4b5563' }} />
-                <span className="text-gray-400 text-xs">IMPORT</span>
-              </div>
-              <div className="flex items-center gap-2 py-0.5">
-                <svg width="16" height="4" className="flex-shrink-0"><line x1="0" y1="2" x2="16" y2="2" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4 3" /></svg>
-                <span className="text-amber-400 text-xs">FUNCTION_CALL</span>
-              </div>
-              <div className="flex items-center gap-2 py-0.5">
-                <svg width="16" height="4" className="flex-shrink-0"><line x1="0" y1="2" x2="16" y2="2" stroke="#a855f7" strokeWidth="1.5" strokeDasharray="3 4" /></svg>
-                <span className="text-purple-400 text-xs">INSTANTIATION</span>
-              </div>
-              <div className="flex items-center gap-2 py-0.5">
-                <span className="w-4 h-0.5 flex-shrink-0" style={{ background: '#ef4444' }} />
-                <span className="text-gray-400 text-xs">끊긴 연결</span>
               </div>
             </LeftSection>
           </div>
@@ -677,32 +655,41 @@ function GraphPageInner() {
         />
       </ReactFlow>
 
-      {/* 우측 사이드바 */}
-      {sidebar && (
-        <aside
-          className="fixed right-0 top-0 h-full bg-gray-950 border-l border-gray-800 z-40 flex flex-col shadow-2xl transition-all duration-200"
-          style={{ width: rightCollapsed ? '40px' : '320px' }}
+      {/* 우측 사이드바 — 항상 표시 */}
+      <aside
+        className="fixed right-0 top-0 h-full bg-gray-950 border-l border-gray-800 z-40 flex flex-col shadow-2xl transition-all duration-200"
+        style={{ width: rightCollapsed ? '40px' : '320px' }}
+      >
+        {/* collapse 핸들 */}
+        <button
+          onClick={() => setRightCollapsed((v) => !v)}
+          className="absolute -left-3 top-1/2 -translate-y-1/2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10"
+          title={rightCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
         >
-          {/* 사이드바 collapse 핸들 */}
-          <button
-            onClick={() => setRightCollapsed((v) => !v)}
-            className="absolute -left-3 top-1/2 -translate-y-1/2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10"
-            title={rightCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
-          >
-            {rightCollapsed ? '‹' : '›'}
-          </button>
+          {rightCollapsed ? '‹' : '›'}
+        </button>
 
-          {!rightCollapsed && (
-            <>
-              {/* 사이드바 헤더 */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
-                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  {sidebar.kind === 'edge' ? '연결 상세' : sidebar.kind === 'file' ? '파일 연결' : sidebar.kind === 'func' ? '함수 상세' : sidebar.kind === 'func-call' ? '함수 호출' : '인스턴스화'}
-                </span>
-                <button onClick={() => setSidebar(null)} className="text-gray-600 hover:text-white text-sm">✕</button>
-              </div>
+        {!rightCollapsed && (
+          <>
+            {/* 사이드바 헤더 */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                {!sidebar ? '상세 정보' : sidebar.kind === 'edge' ? '연결 상세' : sidebar.kind === 'file' ? '파일 연결' : sidebar.kind === 'func' ? '함수 상세' : sidebar.kind === 'func-call' ? '함수 호출' : '인스턴스화'}
+              </span>
+              {sidebar && <button onClick={() => setSidebar(null)} className="text-gray-600 hover:text-white text-sm">✕</button>}
+            </div>
 
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+
+                {/* ── 기본 상태 — 아무것도 선택되지 않은 경우 ── */}
+                {!sidebar && (
+                  <div className="flex flex-col items-center justify-center h-full gap-3 text-center pb-10">
+                    <span className="text-3xl opacity-20">↗</span>
+                    <p className="text-gray-600 text-xs leading-relaxed">
+                      엣지나 노드를 클릭하면<br />상세 정보가 여기에 표시됩니다.
+                    </p>
+                  </div>
+                )}
 
                 {/* ── FUNCTION_CALL 엣지 클릭 ── */}
                 {sidebar.kind === 'func-call' && (
@@ -857,10 +844,9 @@ function GraphPageInner() {
                 )}
 
               </div>
-            </>
-          )}
-        </aside>
-      )}
+          </>
+        )}
+      </aside>
     </div>
   )
 }
@@ -869,7 +855,7 @@ function GraphPageInner() {
 function LeftSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="px-3 py-3 border-b border-gray-800/60">
-      <p className="text-[9px] font-semibold text-gray-600 uppercase tracking-widest mb-2">{title}</p>
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{title}</p>
       {children}
     </div>
   )
