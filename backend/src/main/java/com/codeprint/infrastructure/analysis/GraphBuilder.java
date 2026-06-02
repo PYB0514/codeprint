@@ -35,8 +35,14 @@ public class GraphBuilder {
             graphRepository.saveNode(fileNode);
             fileNodeIds.put(pf.filePath(), fileNode.getId());
 
-            // FUNCTION 노드 생성
+            // 클래스명(파일명 확장자 제거) — 생성자 필터링용
+            String className = extractFileName(pf.filePath());
+            int dot = className.lastIndexOf('.');
+            if (dot > 0) className = className.substring(0, dot);
+
+            // FUNCTION 노드 생성 (생성자 제외)
             for (String funcName : pf.functions()) {
+                if (funcName.equals(className)) continue;
                 Node funcNode = Node.create(graphId, NodeType.FUNCTION,
                         funcName, pf.filePath(), pf.language());
 
