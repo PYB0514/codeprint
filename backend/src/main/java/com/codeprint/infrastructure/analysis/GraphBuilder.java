@@ -22,12 +22,15 @@ public class GraphBuilder {
 
         UUID graphId = graph.getId();
         Map<String, UUID> fileNodeIds = new HashMap<>();
-        Map<String, UUID> functionNodeIds = new HashMap<>();
 
         // FILE 노드 생성
         for (ParsedFile pf : parsedFiles) {
             Node fileNode = Node.create(graphId, NodeType.FILE,
                     extractFileName(pf.filePath()), pf.filePath(), pf.language());
+
+            if (pf.fileComment() != null) {
+                fileNode.updateMetadata(Map.of("comment", pf.fileComment()));
+            }
             graphRepository.saveNode(fileNode);
             fileNodeIds.put(pf.filePath(), fileNode.getId());
 
@@ -35,12 +38,15 @@ public class GraphBuilder {
             for (String funcName : pf.functions()) {
                 Node funcNode = Node.create(graphId, NodeType.FUNCTION,
                         funcName, pf.filePath(), pf.language());
-                funcNode.updateMetadata(Map.of("parentFile", pf.filePath()));
-                graphRepository.saveNode(funcNode);
-                String funcKey = pf.filePath() + "#" + funcName;
-                functionNodeIds.put(funcKey, funcNode.getId());
 
-                // FILE → FUNCTION 엣지 (IMPORT 타입으로 파일-함수 포함 관계 표현)
+                Map<String, Object> meta = new HashMap<>();
+                meta.put("parentFile", pf.filePath());
+                String comment = pf.functionComments().get(funcName);
+                if (comment != null) meta.put("comment", comment);
+                funcNode.updateMetadata(meta);
+                graphRepository.saveNode(funcNode);
+
+                // FILE → FUNCTION 포함 관계 엣지
                 String edgeId = extractFileName(pf.filePath()) + "-" + funcName;
                 Edge containsEdge = Edge.create(graphId, edgeId, EdgeType.IMPORT,
                         fileNodeIds.get(pf.filePath()), funcNode.getId());
@@ -48,13 +54,12 @@ public class GraphBuilder {
             }
         }
 
-        // IMPORT 엣지 생성 (파일 간 import 관계)
+        // 파일 간 IMPORT 엣지 생성
         for (ParsedFile pf : parsedFiles) {
             UUID sourceFileId = fileNodeIds.get(pf.filePath());
             if (sourceFileId == null) continue;
 
             for (String importPath : pf.imports()) {
-                // import 경로와 파일 경로 매칭 시도
                 fileNodeIds.entrySet().stream()
                         .filter(e -> isImportMatch(importPath, e.getKey()))
                         .findFirst()

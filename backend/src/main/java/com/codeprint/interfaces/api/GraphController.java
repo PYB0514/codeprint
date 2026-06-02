@@ -34,15 +34,20 @@ public class GraphController {
 
                     List<Map<String, Object>> nodeData = nodes.stream()
                             .filter(n -> !n.isHidden())
-                            .map(n -> Map.<String, Object>of(
-                                    "id", n.getId().toString(),
-                                    "type", n.getType().name(),
-                                    "name", n.getName(),
-                                    "filePath", n.getFilePath() != null ? n.getFilePath() : "",
-                                    "language", n.getLanguage() != null ? n.getLanguage() : "",
-                                    "posX", n.getPosX(),
-                                    "posY", n.getPosY()
-                            ))
+                            .map(n -> {
+                                Map<String, Object> node = new java.util.LinkedHashMap<>();
+                                node.put("id", n.getId().toString());
+                                node.put("type", n.getType().name());
+                                node.put("name", n.getName());
+                                node.put("filePath", n.getFilePath() != null ? n.getFilePath() : "");
+                                node.put("language", n.getLanguage() != null ? n.getLanguage() : "");
+                                node.put("posX", n.getPosX());
+                                node.put("posY", n.getPosY());
+                                if (n.getMetadata() != null && n.getMetadata().containsKey("comment")) {
+                                    node.put("comment", n.getMetadata().get("comment"));
+                                }
+                                return node;
+                            })
                             .toList();
 
                     List<Map<String, Object>> edgeData = edges.stream()
