@@ -128,12 +128,12 @@ export default function GraphPage() {
           <span className={labelMode === 'comment' ? 'text-white' : 'text-gray-500'}>주석</span>
         </button>
         <button
-          onClick={() => downloadTreeText(rawNodes, labelMode)}
+          onClick={() => downloadTreeText(rawNodes)}
           disabled={rawNodes.length === 0}
           className="bg-gray-800 hover:bg-gray-700 text-sm px-3 py-1.5 rounded-lg border border-gray-700 disabled:opacity-40"
-          title={labelMode === 'comment' ? '주석 기준 트리 다운로드' : '이름 기준 트리 다운로드'}
+          title="파일명 — 한국어 주석 형태의 AI 컨텍스트용 트리 다운로드"
         >
-          ↓ 트리
+          ↓ AI 컨텍스트
         </button>
       </div>
 

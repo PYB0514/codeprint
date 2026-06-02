@@ -271,12 +271,11 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
   return { nodes: result, edges }
 }
 
-// 파일 노드를 경로 기반 트리 텍스트로 변환하여 다운로드
-export function downloadTreeText(rawNodes: RawNode[], labelMode: LabelMode): void {
+// AI 컨텍스트용 트리 다운로드 — "파일명 — 주석" 형태로 이름과 역할을 함께 표시
+export function downloadTreeText(rawNodes: RawNode[]): void {
   const fileNodes = rawNodes.filter((n) => n.type === 'FILE')
   const funcNodes = rawNodes.filter((n) => n.type === 'FUNCTION')
 
-  // 경로 트리 구조 구성
   const tree: Record<string, string[]> = {}
   fileNodes.forEach((f) => {
     const parts = f.filePath.replace(/\\/g, '/').split('/').filter(Boolean)
@@ -289,17 +288,15 @@ export function downloadTreeText(rawNodes: RawNode[], labelMode: LabelMode): voi
     tree[dir].push(f.filePath)
   })
 
-  const getLabel = (node: RawNode) =>
-    labelMode === 'comment' && node.comment ? node.comment : node.name
+  // 이름 — 주석 형태 (주석 없으면 이름만)
+  const label = (name: string, comment?: string) =>
+    comment ? `${name} — ${comment}` : name
 
   const lines: string[] = []
 
   const renderDir = (dirPath: string, indent: string) => {
-    const children = Object.keys(tree)
-      .filter((k) => {
-        const parent = k.substring(0, k.lastIndexOf('/'))
-        return parent === dirPath && k !== dirPath
-      })
+    const childDirs = Object.keys(tree)
+      .filter((k) => k.substring(0, k.lastIndexOf('/')) === dirPath && k !== dirPath)
       .sort()
 
     const files = (tree[dirPath] ?? [])
@@ -307,39 +304,36 @@ export function downloadTreeText(rawNodes: RawNode[], labelMode: LabelMode): voi
       .filter(Boolean)
       .sort((a, b) => a.name.localeCompare(b.name))
 
-    const allItems = [...children, ...files.map((f) => f.filePath)]
+    const allItems = [...childDirs, ...files.map((f) => f.filePath)]
     allItems.forEach((item, idx) => {
       const isLast = idx === allItems.length - 1
       const branch = isLast ? '└── ' : '├── '
       const childIndent = indent + (isLast ? '    ' : '│   ')
 
-      if (children.includes(item)) {
-        const dirName = item.substring(item.lastIndexOf('/') + 1)
-        lines.push(`${indent}${branch}${dirName}/`)
+      if (childDirs.includes(item)) {
+        lines.push(`${indent}${branch}${item.substring(item.lastIndexOf('/') + 1)}/`)
         renderDir(item, childIndent)
       } else {
-        const fileNode = fileNodes.find((n) => n.filePath === item)!
-        const fileLabel = getLabel(fileNode)
-        const fileFuncs = funcNodes.filter((fn) => fn.filePath === item)
-        lines.push(`${indent}${branch}${fileLabel}`)
+        const file = fileNodes.find((n) => n.filePath === item)!
+        lines.push(`${indent}${branch}${label(file.name, file.comment)}`)
 
-        fileFuncs.forEach((fn, fi) => {
-          const isLastFn = fi === fileFuncs.length - 1
-          const fnBranch = isLastFn ? '└── ' : '├── '
-          const fnLabel = getLabel(fn)
-          lines.push(`${childIndent}${fnBranch}${fnLabel}`)
-        })
+        funcNodes
+          .filter((fn) => fn.filePath === item)
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .forEach((fn, fi, arr) => {
+            const fnBranch = fi === arr.length - 1 ? '└── ' : '├── '
+            lines.push(`${childIndent}${fnBranch}${label(fn.name, fn.comment)}`)
+          })
       }
     })
   }
 
-  // 공통 루트 찾기
   const allPaths = fileNodes.map((f) => f.filePath.replace(/\\/g, '/'))
   const commonPrefix = findCommonPrefix(allPaths)
   const rootName = commonPrefix.replace(/\/$/, '').split('/').pop() ?? 'project'
   lines.push(`${rootName}/`)
 
-  const topDirs = Object.keys(tree)
+  Object.keys(tree)
     .filter((k) => {
       const rel = k.startsWith(commonPrefix.replace(/\/$/, ''))
         ? k.slice(commonPrefix.replace(/\/$/, '').length).replace(/^\//, '')
@@ -347,15 +341,13 @@ export function downloadTreeText(rawNodes: RawNode[], labelMode: LabelMode): voi
       return rel.split('/').length === 1 && rel !== ''
     })
     .sort()
-
-  topDirs.forEach((dir, idx) => {
-    const isLast = idx === topDirs.length - 1
-    const branch = isLast ? '└── ' : '├── '
-    const childIndent = isLast ? '    ' : '│   '
-    const dirName = dir.substring(dir.lastIndexOf('/') + 1)
-    lines.push(`${branch}${dirName}/`)
-    renderDir(dir, childIndent)
-  })
+    .forEach((dir, idx, arr) => {
+      const isLast = idx === arr.length - 1
+      const branch = isLast ? '└── ' : '├── '
+      const childIndent = isLast ? '    ' : '│   '
+      lines.push(`${branch}${dir.substring(dir.lastIndexOf('/') + 1)}/`)
+      renderDir(dir, childIndent)
+    })
 
   const text = lines.join('\n')
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
