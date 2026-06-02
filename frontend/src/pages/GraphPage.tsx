@@ -405,7 +405,12 @@ function GraphPageInner() {
 
           {/* 사이드바 헤더 */}
           <div className="flex items-center justify-between px-3 py-3 border-b border-gray-800 flex-shrink-0">
-            <span className="text-xs font-bold text-gray-300 tracking-widest uppercase">Codeprint</span>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="text-xs font-bold text-gray-300 hover:text-white tracking-widest uppercase transition-colors"
+            >
+              Codeprint
+            </button>
             <button onClick={() => setLeftOpen(false)} className="text-gray-600 hover:text-white text-sm leading-none" title="사이드바 접기">‹</button>
           </div>
 

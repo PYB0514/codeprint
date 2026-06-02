@@ -571,6 +571,54 @@ export function buildLayout(
       interactionWidth: 0,
     } as Edge))
 
+  // DDD 레이어 상위 박스 — 같은 레이어의 그룹들을 감싸는 큰 섹션 박스
+  const LAYER_META: Record<string, { label: string; color: string }> = {
+    infrastructure: { label: 'Infrastructure', color: '#a855f7' },
+    domain:         { label: 'Domain',         color: '#3b82f6' },
+    application:    { label: 'Application',    color: '#eab308' },
+    interfaces:     { label: 'Interfaces',     color: '#10b981' },
+    pages:          { label: 'Pages',          color: '#06b6d4' },
+    components:     { label: 'Components',     color: '#06b6d4' },
+    hooks:          { label: 'Hooks',          color: '#06b6d4' },
+    utils:          { label: 'Utils',          color: '#06b6d4' },
+  }
+  const LAYER_PAD = 20
+
+  // 레이어별 그룹 키 수집
+  const layerGroupKeys = new Map<string, string[]>()
+  groups.forEach((_, key) => {
+    const layer = key.indexOf('/') >= 0 ? key.slice(0, key.indexOf('/')) : key
+    if (!layerGroupKeys.has(layer)) layerGroupKeys.set(layer, [])
+    layerGroupKeys.get(layer)!.push(key)
+  })
+
+  layerGroupKeys.forEach((keys, layer) => {
+    const meta = LAYER_META[layer]
+    if (!meta) return
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    keys.forEach((key) => {
+      const pos = groupPositions.get(key)
+      const l = groupLayouts.get(key)
+      if (!pos || !l) return
+      minX = Math.min(minX, pos.x)
+      minY = Math.min(minY, pos.y)
+      maxX = Math.max(maxX, pos.x + l.w)
+      maxY = Math.max(maxY, pos.y + l.h)
+    })
+    if (minX === Infinity) return
+    const LABEL_H = 24
+    result.push({
+      id: `layer-section-${layer}`,
+      type: 'sectionNode',
+      position: { x: minX - LAYER_PAD, y: minY - LAYER_PAD - LABEL_H },
+      data: { label: meta.label, color: meta.color },
+      style: { width: maxX - minX + LAYER_PAD * 2, height: maxY - minY + LAYER_PAD * 2 + LABEL_H },
+      draggable: false,
+      selectable: false,
+      zIndex: -20,
+    } as Node)
+  })
+
   return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges] }
 }
 

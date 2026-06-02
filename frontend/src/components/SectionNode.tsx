@@ -1,15 +1,16 @@
-// 허브 레이아웃에서 고립 그룹들을 감싸는 섹션 배경 박스
+// 레이어 또는 그룹 섹션을 감싸는 배경 박스 — color prop으로 레이어별 색상 지원
 import type { NodeProps } from '@xyflow/react'
 
 export default function SectionNode({ data }: NodeProps) {
+  const color = (data?.color as string) ?? '#4b5563'
   return (
     <div
       style={{
         width: '100%',
         height: '100%',
-        border: '1.5px dashed #4b5563',
-        borderRadius: 12,
-        background: 'rgba(30, 41, 59, 0.35)',
+        border: `1.5px dashed ${color}55`,
+        borderRadius: 14,
+        background: `${color}08`,
         pointerEvents: 'none',
         position: 'relative',
       }}
@@ -20,9 +21,9 @@ export default function SectionNode({ data }: NodeProps) {
           top: 8,
           left: 14,
           fontSize: 11,
-          fontWeight: 600,
-          color: '#6b7280',
-          letterSpacing: '0.05em',
+          fontWeight: 700,
+          color: `${color}99`,
+          letterSpacing: '0.08em',
           textTransform: 'uppercase',
         }}
       >
