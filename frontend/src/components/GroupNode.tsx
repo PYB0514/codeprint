@@ -41,36 +41,72 @@ export default function GroupNode({ id, data }: NodeProps) {
   const [opaque, setOpaque] = useState(false)
   const { setNodes } = useReactFlow()
 
-  // 최소화 — 그룹 height를 헤더만 남기거나 원래 크기로 복원, 자식 노드 hidden 토글
-  const toggleCollapse = () => {
-    const next = !collapsed
-    setCollapsed(next)
-    setNodes((nodes) =>
-      nodes.map((n) => {
-        if (n.id === id) {
-          return { ...n, style: { ...n.style, height: next ? HEADER_H : originalHeight } }
-        }
-        if (n.parentId === id) {
-          return { ...n, hidden: next }
+  // 그룹의 직계 자식(FILE) + 손자(FUNCTION) ID를 한 번에 수집해서 hidden 처리
+  const setDescendantsHidden = (hidden: boolean) => {
+    setNodes((nodes) => {
+      const directChildIds = new Set(
+        nodes.filter((n) => n.parentId === id).map((n) => n.id)
+      )
+      return nodes.map((n) => {
+        if (n.parentId === id || (n.parentId != null && directChildIds.has(n.parentId))) {
+          return { ...n, hidden }
         }
         return n
       })
-    )
+    })
   }
 
-  // 불투명 — 내부 오버레이만 토글 (자식 노드는 그대로, 시각적으로만 가림)
-  const toggleOpaque = () => setOpaque((v) => !v)
+  // 최소화 — 헤더만 남기고 자식+손자 hidden, 복원 시 원래 높이와 함께 표시
+  const toggleCollapse = () => {
+    const next = !collapsed
+    setCollapsed(next)
+    // 불투명 상태였다면 최소화 해제 시 opaque 상태 유지해야 하므로 collapse 해제는 항상 hidden=false
+    if (!next && opaque) {
+      // 불투명이 켜진 상태에서 펼치기 → 자식은 여전히 숨김
+      setNodes((nodes) => {
+        return nodes.map((n) => {
+          if (n.id === id) return { ...n, style: { ...n.style, height: originalHeight } }
+          return n
+        })
+      })
+    } else {
+      setNodes((nodes) => {
+        const directChildIds = new Set(
+          nodes.filter((n) => n.parentId === id).map((n) => n.id)
+        )
+        return nodes.map((n) => {
+          if (n.id === id) {
+            return { ...n, style: { ...n.style, height: next ? HEADER_H : originalHeight } }
+          }
+          if (n.parentId === id || (n.parentId != null && directChildIds.has(n.parentId))) {
+            return { ...n, hidden: next }
+          }
+          return n
+        })
+      })
+    }
+  }
+
+  // 불투명 — 자식+손자를 hidden 처리 (그룹 배경이 채워지며 내용이 가려짐)
+  const toggleOpaque = () => {
+    const next = !opaque
+    setOpaque(next)
+    if (!collapsed) {
+      setDescendantsHidden(next)
+    }
+  }
 
   return (
     <div
       style={{
         width: '100%',
         height: '100%',
-        background: p.bg,
+        background: opaque && !collapsed ? p.opaque : p.bg,
         border: `1.5px solid ${p.border}`,
         borderRadius: 14,
         overflow: 'hidden',
         position: 'relative',
+        transition: 'background 0.15s',
       }}
     >
       {/* 헤더 */}
@@ -175,23 +211,6 @@ export default function GroupNode({ id, data }: NodeProps) {
           {collapsed ? '+' : '−'}
         </button>
       </div>
-
-      {/* 불투명 오버레이 — 헤더 아래 내용을 레이어 색상으로 덮음 */}
-      {opaque && !collapsed && (
-        <div
-          style={{
-            position: 'absolute',
-            top: HEADER_H,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: p.opaque,
-            borderRadius: '0 0 12px 12px',
-            zIndex: 5,
-            pointerEvents: 'none',
-          }}
-        />
-      )}
 
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
