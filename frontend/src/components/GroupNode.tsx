@@ -125,6 +125,7 @@ export default function GroupNode({ id, data }: NodeProps) {
           gap: 8,
           padding: '0 8px 0 12px',
           zIndex: 10,
+          pointerEvents: 'all',
         }}
       >
         {/* 레이어 배지 */}
@@ -167,7 +168,7 @@ export default function GroupNode({ id, data }: NodeProps) {
 
         {/* 불투명 토글 버튼 */}
         <button
-          onClick={(e) => { e.stopPropagation(); toggleOpaque() }}
+          onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); toggleOpaque() }}
           title={opaque ? '내용 표시' : '내용 가리기'}
           style={{
             flexShrink: 0,
@@ -183,6 +184,8 @@ export default function GroupNode({ id, data }: NodeProps) {
             alignItems: 'center',
             justifyContent: 'center',
             lineHeight: 1,
+            position: 'relative',
+            zIndex: 20,
           }}
         >
           {opaque ? '◑' : '○'}
@@ -190,7 +193,7 @@ export default function GroupNode({ id, data }: NodeProps) {
 
         {/* 최소화 토글 버튼 */}
         <button
-          onClick={(e) => { e.stopPropagation(); toggleCollapse() }}
+          onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); toggleCollapse() }}
           title={collapsed ? '펼치기' : '최소화'}
           style={{
             flexShrink: 0,
@@ -206,6 +209,8 @@ export default function GroupNode({ id, data }: NodeProps) {
             alignItems: 'center',
             justifyContent: 'center',
             lineHeight: 1,
+            position: 'relative',
+            zIndex: 20,
           }}
         >
           {collapsed ? '+' : '−'}

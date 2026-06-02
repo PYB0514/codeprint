@@ -273,6 +273,7 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
         target: e.target,
         data: { edgeIdentifier: e.edgeIdentifier, type: e.type },
         style: { stroke: broken ? '#ef4444' : '#4b5563', strokeWidth: broken ? 2 : 1.5 },
+        zIndex: 0,  // 노드(버튼) 위로 올라오지 않도록
       } as Edge
     })
 
