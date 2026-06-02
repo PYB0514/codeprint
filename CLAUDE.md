@@ -429,16 +429,32 @@ If you touched code, run the tests before saying "done".
 
 This is the step LLMs skip most often. Treat it as non-negotiable.
 
-### 9. Semantic Commits
-Commit when one logical change is complete. Don't wait for the user to ask.
-- The test: "Can I describe this commit in one sentence?" If yes, commit.
-- Good: "feat: JWT 인증 필터 추가". Bad: "auth 추가하고 UI도 고치고 버그도 수정" (split into 3).
-- Don't accumulate unrelated edits and lose the ability to roll back individually.
-- **기능 하나 완성할 때마다 즉시 커밋.** 세션 끝에 몰아서 커밋하지 않는다.
-- **커밋 메시지는 변경 내용을 구체적으로 요약.** 파일명, 추가된 기능, 수정 이유를 명시.
+### 9. Semantic Commits & Branch Strategy
+이 프로젝트는 취업 포트폴리오 겸용이므로 GitHub 히스토리가 곧 평가 대상이다.
+
+**브랜치 전략**
+```
+main                    ← 항상 배포 가능한 상태 유지
+└─ feat/기능명          ← 기능 개발 브랜치
+└─ fix/버그명           ← 버그 수정 브랜치
+└─ refactor/대상        ← 리팩토링 브랜치
+```
+- 작업 시작 전 반드시 브랜치 생성: `git checkout -b feat/project-api`
+- 기능 완성 후 PR 생성 → main 머지
+- main에 직접 커밋하지 않는다 (초기 세팅 제외)
+
+**커밋 규칙**
+- 기능 하나 완성할 때마다 즉시 커밋. 세션 끝에 몰아서 커밋하지 않는다.
+- 커밋 메시지는 변경 내용을 구체적으로 요약. 파일명, 추가된 기능, 수정 이유를 명시.
   - Bad: `fix: BOM 제거 및 기타 수정`
   - Good: `fix: Java 58개 파일 UTF-8 BOM 제거 — Windows 저장 시 발생한 컴파일 오류 수정`
-- **push는 작업 단위 완료 후 즉시.** 세션 마지막에 몰아서 push하지 않는다.
+- push는 작업 단위 완료 후 즉시. 세션 마지막에 몰아서 push하지 않는다.
+- The test: "Can I describe this commit in one sentence?" If yes, commit.
+
+**PR 규칙**
+- PR description에 무엇을(What), 왜(Why) 만들었는지 반드시 작성
+- PR 제목은 `feat: 프로젝트 생성/목록 API 구현` 형식
+- 면접관이 PR 목록만 봐도 개발 흐름을 이해할 수 있어야 함
 
 ### 10. Read Errors, Don't Guess
 Read the actual error/log line. Don't pattern-match from memory.
