@@ -127,11 +127,15 @@ function GraphPageInner() {
     }
   }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges])
 
-  // 엣지 전체 표시/숨김 토글
+  // IMPORT 엣지 표시/숨김 토글
   const toggleEdges = useCallback(() => {
     setShowEdges((prev) => {
       const next = !prev
-      setEdges((eds) => eds.map((e) => ({ ...e, hidden: !next })))
+      setEdges((eds) => eds.map((e) =>
+        (e.data as { type?: string })?.type === 'IMPORT'
+          ? { ...e, hidden: !next }
+          : e
+      ))
       return next
     })
   }, [setEdges])
