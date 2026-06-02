@@ -41,6 +41,14 @@
 | 전체 함수 한글 주석 완전화 | ✅ | 멀티라인 파라미터 버그 수정 포함 |
 | 노드 라벨 말줄임표 + Hover Tooltip | ✅ | 박스 너비 초과 시 … + title 속성 |
 | 생성자 노드 한글화 | ✅ | VO 클래스 생성자 → "생성자" 라벨 |
+| DDD 레이어별 색상 그룹 박스 | ✅ | GroupNode 커스텀 컴포넌트, 레이어별 색상 팔레트 |
+| 그룹 박스 최소화/불투명 토글 | ✅ | 헤더 버튼으로 접기·가리기, interactionWidth:0 |
+| 엣지 hover 강조 | ✅ | 마우스 올리면 두껍고 밝게, 이탈 시 복원 |
+| 레이아웃 프리셋 계층/허브 | ✅ | 상단 바 토글, dagre 제거 (~37KB 감소) |
+| 허브 레이아웃 — 중앙 그리드 + 고립 그룹 분리 | ✅ | 연결 수 순 중심 배치, DDD 레이어별 고립 그룹 섹션 박스 |
+| 엣지 화살표 + 파일 연결 모달 | ✅ | ArrowClosed, FileNode 커스텀, 함수명/주석 표시, 노드 이동 |
+| 연결선 토글 | ✅ | 상단 바 버튼으로 전체 엣지 표시/숨김 |
+| 고립 그룹 토글 | ✅ | 허브 모드 전용, 섹션 박스 포함 표시/숨김 |
 
 ### 인프라
 
@@ -63,7 +71,6 @@ docker compose up -d
 # 3. 프론트엔드
 cd C:\Dev\Codeprint\frontend
 npm run dev
-
 # 접속: http://localhost:3000
 # DB 종료: docker compose down
 ```
@@ -73,10 +80,13 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재 브랜치: main
-# 1. feat/group-layout 브랜치 생성
-# 2. 그룹 박스 구체화 — 레이아웃, 라벨, 시각적 계층 개선
-#    (현재: domain/user, infrastructure/persistence 등 DDD 레이어 기반 그룹핑)
+# 현재 브랜치: feat/group-layout (PR #5 오픈 상태)
+# 1. PR #5 머지 (feat/group-layout → main)
+# 2. feat/function-call 브랜치 생성
+# 3. FUNCTION_CALL 분석 엔진 구현
+#    - StaticCodeAnalyzer: 함수 호출 패턴 추출 추가
+#    - GraphBuilder: 파일 간 FUNCTION_CALL 엣지 생성 로직 추가
+#    - FILE→FUNCTION EdgeType.IMPORT 버그 수정
 ```
 
 ---

@@ -1,7 +1,22 @@
-// 그래프 노드/엣지 레이아웃 계산 — dagre 기반 방향 그래프 + DDD 폴더 그룹핑
+// 그래프 노드/엣지 레이아웃 계산 — DDD 레이어 컬럼 배치 + dagre 내부 레이아웃
 import React from 'react'
-import dagre from '@dagrejs/dagre'
+
 import type { Node, Edge } from '@xyflow/react'
+import { MarkerType } from '@xyflow/react'
+
+// DDD 레이어 → 컬럼 순서 (왼쪽=외부진입, 오른쪽=데이터)
+// 백엔드: infrastructure(0) → domain(1) → application(2) → interfaces(3)
+// 프론트: pages(4) → components/hooks(5) → utils(6)
+const LAYER_COLUMN: Record<string, number> = {
+  infrastructure: 0,
+  domain:         1,
+  application:    2,
+  interfaces:     3,
+  pages:          4,
+  components:     5,
+  hooks:          5,
+  utils:          6,
+}
 
 export interface RawNode {
   id: string
@@ -30,8 +45,9 @@ const FILE_PAD_TOP = 28
 const FILE_PAD_BOTTOM = 10
 const FILE_GAP = 20
 const GROUP_PAD = 24
-const GROUP_HEADER = 26
-const GROUP_GAP = 48
+const GROUP_HEADER = 36  // 커스텀 헤더 높이에 맞춤
+const _GROUP_GAP = 48  // 미사용 — 컬럼 레이아웃으로 교체됨
+void _GROUP_GAP
 
 // 공통 prefix 제거 후 DDD 의미 있는 그룹 키 추출
 function getGroupKey(filePath: string, commonPrefix: string): string {
@@ -76,6 +92,7 @@ function calcFileSize(funcCount: number): { w: number; h: number; cols: number }
 }
 
 export type LabelMode = 'name' | 'comment'
+export type LayoutPreset = 'layer' | 'hub'
 
 // 텍스트가 maxLen을 초과하면 말줄임표 + title tooltip이 있는 span 반환, 아니면 문자열 그대로
 function labelNode(full: string, maxLen: number): React.ReactNode {
@@ -84,8 +101,197 @@ function labelNode(full: string, maxLen: number): React.ReactNode {
   return React.createElement('span', { title: full, style: { cursor: 'default' } }, trimmed)
 }
 
-// 원시 노드/엣지 데이터를 dagre 레이아웃으로 변환하여 React Flow용 노드/엣지 반환
-export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode: LabelMode = 'name'): { nodes: Node[]; edges: Edge[] } {
+// DDD 레이어 컬럼 배치 — 같은 레이어끼리 같은 컬럼에 세로 정렬
+function buildLayerPositions(
+  groups: Map<string, RawNode[]>,
+  groupLayouts: Map<string, { files: Array<{ file: RawNode; x: number; y: number }>; w: number; h: number }>
+): Map<string, { x: number; y: number }> {
+  const COL_GAP = 64
+  const ROW_GAP = 40
+
+  const colGroups = new Map<number, string[]>()
+  groups.forEach((_, key) => {
+    const layer = key.indexOf('/') >= 0 ? key.slice(0, key.indexOf('/')) : key
+    const col = LAYER_COLUMN[layer] ?? 7
+    if (!colGroups.has(col)) colGroups.set(col, [])
+    colGroups.get(col)!.push(key)
+  })
+
+  const sortedCols = Array.from(colGroups.keys()).sort((a, b) => a - b)
+  const colMaxW = new Map<number, number>()
+  colGroups.forEach((keys, col) => {
+    colMaxW.set(col, Math.max(...keys.map((k) => groupLayouts.get(k)!.w)))
+  })
+
+  const colStartX = new Map<number, number>()
+  let xCursor = 0
+  sortedCols.forEach((col) => {
+    colStartX.set(col, xCursor)
+    xCursor += (colMaxW.get(col) ?? 0) + COL_GAP
+  })
+
+  const positions = new Map<string, { x: number; y: number }>()
+  colGroups.forEach((keys, col) => {
+    let y = 0
+    const x = colStartX.get(col) ?? 0
+    keys.forEach((key) => {
+      positions.set(key, { x, y })
+      y += groupLayouts.get(key)!.h + ROW_GAP
+    })
+  })
+  return positions
+}
+
+// 연결 허브 배치 — 그룹 간 연결이 많을수록 중앙, 16:9 비율 그리드
+function buildHubPositions(
+  groups: Map<string, RawNode[]>,
+  groupLayouts: Map<string, { files: Array<{ file: RawNode; x: number; y: number }>; w: number; h: number }>,
+  rawEdges: RawEdge[],
+  fileIdSet: Set<string>,
+  fileToGroup: Map<string, string>
+): { positions: Map<string, { x: number; y: number }>; isoKeys: string[] } {
+  const COL_GAP = 40  // 그룹 간 가로 여백
+  const ROW_GAP = 40  // 그룹 간 세로 여백
+
+  // 그룹 간 연결 수 집계
+  const connCount = new Map<string, number>()
+  groups.forEach((_, k) => connCount.set(k, 0))
+  rawEdges
+    .filter((e) => fileIdSet.has(e.source) && fileIdSet.has(e.target))
+    .forEach((e) => {
+      const sg = fileToGroup.get(e.source)
+      const tg = fileToGroup.get(e.target)
+      if (sg && tg && sg !== tg) {
+        connCount.set(sg, (connCount.get(sg) ?? 0) + 1)
+        connCount.set(tg, (connCount.get(tg) ?? 0) + 1)
+      }
+    })
+
+  // 연결 많은 순 정렬
+  const sortedGroups = Array.from(groups.keys())
+    .sort((a, b) => (connCount.get(b) ?? 0) - (connCount.get(a) ?? 0) || a.localeCompare(b))
+
+  if (sortedGroups.length === 0) return { positions: new Map(), isoKeys: [] }
+
+  // 연결 있는 그룹 vs 고립 그룹 분리
+  const hubGroups = sortedGroups.filter((k) => (connCount.get(k) ?? 0) > 0)
+  const isoGroups = sortedGroups
+    .filter((k) => (connCount.get(k) ?? 0) === 0)
+    .sort((a, b) => {
+      const layerOf = (key: string) => {
+        const layer = key.indexOf('/') >= 0 ? key.slice(0, key.indexOf('/')) : key
+        return LAYER_COLUMN[layer] ?? 99
+      }
+      return layerOf(a) - layerOf(b) || a.localeCompare(b)
+    })
+
+  // 그리드 배치 헬퍼 — 그룹 목록을 중심부터 채우는 그리드로 배치, 기준 좌표(ox,oy) 기준 반환
+  function placeGrid(keys: string[], ox: number, oy: number): Map<string, { x: number; y: number }> {
+    const n = keys.length
+    if (n === 0) return new Map()
+    const allL = keys.map((k) => groupLayouts.get(k)!)
+    const avgW2 = allL.reduce((s, l) => s + l.w, 0) / allL.length
+    const avgH2 = allL.reduce((s, l) => s + l.h, 0) / allL.length
+    const cols2 = Math.max(1, Math.round(Math.sqrt(n * (16 / 9) * (avgH2 / avgW2))))
+    const rows2 = Math.ceil(n / cols2)
+
+    const cx2 = (cols2 - 1) / 2, cy2 = (rows2 - 1) / 2
+    const cells2: { i: number; j: number }[] = []
+    for (let j = 0; j < rows2; j++)
+      for (let i = 0; i < cols2; i++)
+        cells2.push({ i, j })
+    cells2.sort((a, b) => Math.hypot(a.i - cx2, a.j - cy2) - Math.hypot(b.i - cx2, b.j - cy2) || a.j - b.j || a.i - b.i)
+
+    const assign = new Map<string, { i: number; j: number }>()
+    keys.forEach((key, idx) => { if (idx < cells2.length) assign.set(key, cells2[idx]) })
+
+    const colW2 = new Array(cols2).fill(0)
+    const rowH2 = new Array(rows2).fill(0)
+    keys.forEach((key) => {
+      const cell = assign.get(key)!
+      const l = groupLayouts.get(key)!
+      colW2[cell.i] = Math.max(colW2[cell.i], l.w)
+      rowH2[cell.j] = Math.max(rowH2[cell.j], l.h)
+    })
+
+    const colX2 = new Array(cols2).fill(0)
+    for (let i = 1; i < cols2; i++) colX2[i] = colX2[i - 1] + colW2[i - 1] + COL_GAP
+    const rowY2 = new Array(rows2).fill(0)
+    for (let j = 1; j < rows2; j++) rowY2[j] = rowY2[j - 1] + rowH2[j - 1] + ROW_GAP
+
+    const tw = colX2[cols2 - 1] + colW2[cols2 - 1]
+    const th = rowY2[rows2 - 1] + rowH2[rows2 - 1]
+
+    const pos = new Map<string, { x: number; y: number }>()
+    keys.forEach((key) => {
+      const cell = assign.get(key)!
+      const l = groupLayouts.get(key)!
+      pos.set(key, {
+        x: ox + colX2[cell.i] + (colW2[cell.i] - l.w) / 2 - tw / 2,
+        y: oy + rowY2[cell.j] + (rowH2[cell.j] - l.h) / 2 - th / 2,
+      })
+    })
+    return pos
+  }
+
+  // 허브 그룹을 (0,0) 중심으로 배치
+  const positions = placeGrid(hubGroups, 0, 0)
+
+  // 허브 그리드 전체 높이 계산 — 고립 그룹 블록 시작 y 결정
+  if (isoGroups.length > 0) {
+    let hubBottom = 0
+    positions.forEach((pos, key) => {
+      const l = groupLayouts.get(key)!
+      hubBottom = Math.max(hubBottom, pos.y + l.h)
+    })
+    const isoOriginY = hubBottom + ROW_GAP * 3
+
+      // 고립 그룹은 DDD 레이어 컬럼 기반 배치 (계층 레이아웃과 동일한 방식)
+    const isoColGroups = new Map<number, string[]>()
+    isoGroups.forEach((key) => {
+      const layer = key.indexOf('/') >= 0 ? key.slice(0, key.indexOf('/')) : key
+      const col = LAYER_COLUMN[layer] ?? 99
+      if (!isoColGroups.has(col)) isoColGroups.set(col, [])
+      isoColGroups.get(col)!.push(key)
+    })
+
+    const isoSortedCols = Array.from(isoColGroups.keys()).sort((a, b) => a - b)
+    const isoColMaxW = new Map<number, number>()
+    isoColGroups.forEach((keys, col) => {
+      isoColMaxW.set(col, Math.max(...keys.map((k) => groupLayouts.get(k)!.w)))
+    })
+
+    const isoColStartX = new Map<number, number>()
+    let isoCursor = 0
+    isoSortedCols.forEach((col) => {
+      isoColStartX.set(col, isoCursor)
+      isoCursor += (isoColMaxW.get(col) ?? 0) + COL_GAP
+    })
+
+    // 전체 폭 기준 중앙 정렬
+    const isoTotalW2 = isoCursor - COL_GAP
+    const isoOffsetX = -isoTotalW2 / 2
+
+    isoColGroups.forEach((keys, col) => {
+      let y = isoOriginY
+      const x = isoOffsetX + (isoColStartX.get(col) ?? 0)
+      keys.forEach((key) => {
+        positions.set(key, { x, y })
+        y += groupLayouts.get(key)!.h + ROW_GAP
+      })
+    })
+  }
+
+  return { positions, isoKeys: isoGroups }
+}
+
+// 원시 노드/엣지 데이터를 레이아웃으로 변환하여 React Flow용 노드/엣지 반환
+export function buildLayout(
+  rawNodes: RawNode[],
+  rawEdges: RawEdge[],
+  labelMode: LabelMode = 'name',
+  layoutPreset: LayoutPreset = 'layer'
+): { nodes: Node[]; edges: Edge[] } {
   // 노드 라벨 반환 — 초과 시 말줄임표 + hover tooltip
   const getLabel = (node: RawNode, maxLen = 999): React.ReactNode => {
     const raw = labelMode === 'comment' && node.comment ? node.comment : node.name
@@ -121,7 +327,7 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
 
   groups.forEach((files, key) => {
     const COLS = 3
-    let col = 0, row = 0
+    let col = 0
     let colX = 0, rowY = 0
     let maxRowH = 0
     const placed: Array<{ file: RawNode; x: number; y: number }> = []
@@ -130,6 +336,7 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
     files.forEach((f) => {
       const size = fileSizes.get(f.id)!
       placed.push({ file: f, x: colX, y: rowY })
+      totalW = Math.max(totalW, colX + size.w)  // 배치 직후 right edge 기록
       maxRowH = Math.max(maxRowH, size.h)
       col++
       if (col >= COLS) {
@@ -140,7 +347,6 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
       } else {
         colX += size.w + FILE_GAP
       }
-      totalW = Math.max(totalW, colX + size.w)
     })
     // 마지막 행
     if (col > 0) rowY += maxRowH
@@ -151,60 +357,71 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
     groupLayouts.set(key, { files: placed, w: gw, h: gh })
   })
 
-  // 그룹들을 dagre로 배치
-  const gg = new dagre.graphlib.Graph()
-  gg.setDefaultEdgeLabel(() => ({}))
-  gg.setGraph({ rankdir: 'LR', ranksep: GROUP_GAP, nodesep: GROUP_GAP })
-
-  groupLayouts.forEach((layout, key) => {
-    gg.setNode(key, { width: layout.w, height: layout.h })
-  })
-
-  // 그룹 간 연결 (파일 간 import 엣지 기반)
   const fileIdSet = new Set(fileNodes.map((f) => f.id))
   const fileToGroup = new Map<string, string>()
   fileNodes.forEach((f) => fileToGroup.set(f.id, getGroupKey(f.filePath, commonPrefix)))
 
+  // 파일별 인/아웃 연결 집계 (모달 데이터용)
+  type ConnEntry = { nodeId: string; name: string; edgeType: string; funcLabel: string }
+  const fileIncoming = new Map<string, ConnEntry[]>()
+  const fileOutgoing = new Map<string, ConnEntry[]>()
+  fileNodes.forEach((f) => { fileIncoming.set(f.id, []); fileOutgoing.set(f.id, []) })
+
   rawEdges
-    .filter((e) => fileIdSet.has(e.source) && fileIdSet.has(e.target))
+    .filter((e) => fileIdSet.has(e.source) && fileIdSet.has(e.target) && e.source !== e.target)
     .forEach((e) => {
-      const sg = fileToGroup.get(e.source)
-      const tg = fileToGroup.get(e.target)
-      if (sg && tg && sg !== tg) {
-        try { gg.setEdge(sg, tg) } catch {}
-      }
+      const src = fileNodes.find((f) => f.id === e.source)
+      const tgt = fileNodes.find((f) => f.id === e.target)
+      // FUNCTION_CALL만 edgeIdentifier에서 함수명 파싱 — IMPORT 등은 파일명 기반
+      const funcName = e.type === 'FUNCTION_CALL' ? (e.edgeIdentifier.split('-').pop() ?? '') : ''
+      const funcNode = funcName
+        ? funcNodes.find((fn) => fn.filePath === src?.filePath && fn.name === funcName)
+        : null
+      const funcLabel = funcName
+        ? (labelMode === 'comment' && funcNode?.comment ? funcNode.comment : funcName)
+        : '—'
+
+      fileOutgoing.get(e.source)?.push({ nodeId: e.target, name: tgt?.name ?? e.target, edgeType: e.type, funcLabel })
+      fileIncoming.get(e.target)?.push({ nodeId: e.source, name: src?.name ?? e.source, edgeType: e.type, funcLabel })
     })
 
-  dagre.layout(gg)
+  // 레이아웃 프리셋에 따라 그룹 위치 계산
+  let groupPositions: Map<string, { x: number; y: number }>
+  let isoKeys: string[] = []
+  if (layoutPreset === 'hub') {
+    const hubResult = buildHubPositions(groups, groupLayouts, rawEdges, fileIdSet, fileToGroup)
+    groupPositions = hubResult.positions
+    isoKeys = hubResult.isoKeys
+  } else {
+    groupPositions = buildLayerPositions(groups, groupLayouts)
+  }
 
   const result: Node[] = []
 
-  // 그룹 노드 + 파일 노드 + 함수 노드 생성
-  groups.forEach((_, key) => {
-    const layout = groupLayouts.get(key)!
-    const gPos = gg.node(key)
-    if (!gPos) return
-    const gx = gPos.x - layout.w / 2
-    const gy = gPos.y - layout.h / 2
+  // 고립 그룹 키 셋 (isIso 플래그 부착용)
+  const isoKeySet = new Set(isoKeys)
 
-    // 그룹 박스
+  // 그룹 노드 + 파일 노드 + 함수 노드 생성
+  groups.forEach((groupFiles, key) => {
+    const layout = groupLayouts.get(key)!
+    const pos = groupPositions.get(key)
+    if (!pos) return
+    const gx = pos.x
+    const gy = pos.y
+    const isIso = isoKeySet.has(key)
+
+    // 그룹 키에서 layer / sub 분리 (예: "domain/user" → layer="domain", sub="user")
+    const slashIdx = key.indexOf('/')
+    const layer = slashIdx >= 0 ? key.slice(0, slashIdx) : key
+    const sub = slashIdx >= 0 ? key.slice(slashIdx + 1) : ''
+
+    // 그룹 박스 (커스텀 groupNode 타입 사용)
     result.push({
       id: `group-${key}`,
-      type: 'group',
+      type: 'groupNode',
       position: { x: gx, y: gy },
-      data: { label: key },
-      style: {
-        width: layout.w,
-        height: layout.h,
-        background: 'rgba(255,255,255,0.02)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: 12,
-        fontSize: 11,
-        color: 'rgba(255,255,255,0.25)',
-        fontWeight: 600,
-        paddingTop: 8,
-        paddingLeft: 12,
-      },
+      data: { layer, sub, fileCount: groupFiles.length, originalHeight: layout.h, isIso },
+      style: { width: layout.w, height: layout.h },
       draggable: true,
     })
 
@@ -215,10 +432,18 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
       const fileMaxLen = Math.floor((size.w - FILE_PAD_X * 2) / 6)
       result.push({
         id: file.id,
+        type: 'fileNode',
         parentId: `group-${key}`,
         extent: 'parent',
         position: { x: GROUP_PAD + x, y: GROUP_HEADER + GROUP_PAD + y },
-        data: { label: getLabel(file, fileMaxLen), name: file.name, comment: file.comment },
+        data: {
+          label: getLabel(file, fileMaxLen),
+          name: file.name,
+          comment: file.comment,
+          isIso,
+          incoming: fileIncoming.get(file.id) ?? [],
+          outgoing: fileOutgoing.get(file.id) ?? [],
+        },
         style: {
           background: '#1e3a5f',
           border: '1.5px solid #3b82f6',
@@ -246,7 +471,7 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
             y: FILE_PAD_TOP + fr * (FUNC_H + FUNC_PAD),
           },
           // 함수 박스 너비 110px, 좌우 패딩 8px → 102px / ~6px per char ≈ 17자
-          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment },
+          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment, isIso },
           style: {
             background: '#064e3b',
             border: '1px solid #10b981',
@@ -266,6 +491,31 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
     })
   })
 
+  // 허브 레이아웃 — 고립 그룹들을 감싸는 섹션 박스
+  if (layoutPreset === 'hub' && isoKeys.length > 0) {
+    const PAD = 24
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    isoKeys.forEach((key) => {
+      const pos = groupPositions.get(key)
+      const l = groupLayouts.get(key)
+      if (!pos || !l) return
+      minX = Math.min(minX, pos.x)
+      minY = Math.min(minY, pos.y)
+      maxX = Math.max(maxX, pos.x + l.w)
+      maxY = Math.max(maxY, pos.y + l.h)
+    })
+    result.push({
+      id: '__iso-section__',
+      type: 'sectionNode',
+      position: { x: minX - PAD, y: minY - PAD - 28 },
+      data: { label: '연결 없는 그룹' },
+      style: { width: maxX - minX + PAD * 2, height: maxY - minY + PAD * 2 + 28 },
+      draggable: false,
+      selectable: false,
+      zIndex: -10,
+    } as Node)
+  }
+
   // 엣지 — 파일 간만, 끊긴 연결 빨간색
   const allNodeIds = new Set(result.map((n) => n.id))
   const edges: Edge[] = rawEdges
@@ -277,8 +527,11 @@ export function buildLayout(rawNodes: RawNode[], rawEdges: RawEdge[], labelMode:
         id: e.id,
         source: e.source,
         target: e.target,
-        data: { edgeIdentifier: e.edgeIdentifier, type: e.type },
+        data: { edgeIdentifier: e.edgeIdentifier, type: e.type, broken },
         style: { stroke: broken ? '#ef4444' : '#4b5563', strokeWidth: broken ? 2 : 1.5 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: broken ? '#ef4444' : '#4b5563', width: 14, height: 14 },
+        zIndex: 0,
+        interactionWidth: 0,  // 보이지 않는 넓은 hit area 제거 — 시각적 획 위에서만 클릭 가능
       } as Edge
     })
 
