@@ -330,7 +330,7 @@ export function downloadTreeText(rawNodes: RawNode[]): void {
 
   const allPaths = fileNodes.map((f) => f.filePath.replace(/\\/g, '/'))
   const commonPrefix = findCommonPrefix(allPaths)
-  const rootName = commonPrefix.replace(/\/$/, '').split('/').pop() ?? 'project'
+  const rootName = commonPrefix.replace(/\/$/, '').split('/').pop() || 'project'
   lines.push(`${rootName}/`)
 
   Object.keys(tree)
