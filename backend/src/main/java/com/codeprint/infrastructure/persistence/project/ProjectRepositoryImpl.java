@@ -1,4 +1,4 @@
-﻿// 프로젝트 도메인 Repository JPA 구현체
+// 프로젝트 도메인 Repository JPA 구현체
 package com.codeprint.infrastructure.persistence.project;
 
 import com.codeprint.domain.project.Project;

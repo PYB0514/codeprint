@@ -1,4 +1,4 @@
-﻿// 사용자 Aggregate Root 엔티티
+// 사용자 Aggregate Root 엔티티
 package com.codeprint.domain.user;
 
 import jakarta.persistence.*;

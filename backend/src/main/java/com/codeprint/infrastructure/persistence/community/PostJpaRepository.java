@@ -1,4 +1,4 @@
-﻿// 게시글 JPA Repository (Spring Data)
+// 게시글 JPA Repository (Spring Data)
 package com.codeprint.infrastructure.persistence.community;
 
 import com.codeprint.domain.community.Post;

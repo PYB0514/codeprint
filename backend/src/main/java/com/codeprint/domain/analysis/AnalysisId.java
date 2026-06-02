@@ -1,4 +1,4 @@
-﻿// 분석 ID Value Object
+// 분석 ID Value Object
 package com.codeprint.domain.analysis;
 
 import java.util.UUID;

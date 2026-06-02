@@ -1,4 +1,4 @@
-﻿// 노드 JPA Repository (Spring Data)
+// 노드 JPA Repository (Spring Data)
 package com.codeprint.infrastructure.persistence.graph;
 
 import com.codeprint.domain.graph.Node;

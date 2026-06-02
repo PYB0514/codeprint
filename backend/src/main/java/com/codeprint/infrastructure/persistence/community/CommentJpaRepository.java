@@ -1,4 +1,4 @@
-﻿// 댓글 JPA Repository (Spring Data)
+// 댓글 JPA Repository (Spring Data)
 package com.codeprint.infrastructure.persistence.community;
 
 import com.codeprint.domain.community.Comment;

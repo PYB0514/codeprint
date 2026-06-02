@@ -1,4 +1,4 @@
-﻿// 커뮤니티 게시글 도메인 Repository 인터페이스
+// 커뮤니티 게시글 도메인 Repository 인터페이스
 package com.codeprint.domain.community;
 
 import java.util.List;

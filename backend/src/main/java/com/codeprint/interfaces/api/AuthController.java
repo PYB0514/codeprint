@@ -1,4 +1,4 @@
-﻿// 인증 관련 REST API 컨트롤러
+// 인증 관련 REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
 import com.codeprint.domain.user.User;

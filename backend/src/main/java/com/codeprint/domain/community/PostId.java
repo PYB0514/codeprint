@@ -1,4 +1,4 @@
-﻿// 게시글 ID Value Object
+// 게시글 ID Value Object
 package com.codeprint.domain.community;
 
 import java.util.UUID;

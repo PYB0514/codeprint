@@ -1,4 +1,4 @@
-﻿// 사용자 도메인 Repository JPA 구현체
+// 사용자 도메인 Repository JPA 구현체
 package com.codeprint.infrastructure.persistence.user;
 
 import com.codeprint.domain.user.User;

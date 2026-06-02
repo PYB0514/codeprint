@@ -1,4 +1,4 @@
-﻿// GitHub OAuth2 로그인 성공 후 JWT를 발급하여 프론트로 리다이렉트하는 핸들러
+// GitHub OAuth2 로그인 성공 후 JWT를 발급하여 프론트로 리다이렉트하는 핸들러
 package com.codeprint.infrastructure.security;
 
 import com.codeprint.application.user.UserCommandService;

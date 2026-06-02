@@ -1,4 +1,4 @@
-﻿// 그래프 엣지 엔티티 (노드 간 관계)
+// 그래프 엣지 엔티티 (노드 간 관계)
 package com.codeprint.domain.graph;
 
 import jakarta.persistence.*;

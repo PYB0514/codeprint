@@ -1,4 +1,4 @@
-﻿// 언어별 분석 신뢰도 Value Object
+// 언어별 분석 신뢰도 Value Object
 package com.codeprint.domain.analysis;
 
 public record LanguageConfidence(String language, double confidence) {

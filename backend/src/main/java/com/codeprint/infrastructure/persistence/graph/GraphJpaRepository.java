@@ -1,4 +1,4 @@
-﻿// 그래프 JPA Repository (Spring Data)
+// 그래프 JPA Repository (Spring Data)
 package com.codeprint.infrastructure.persistence.graph;
 
 import com.codeprint.domain.graph.Graph;

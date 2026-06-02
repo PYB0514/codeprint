@@ -1,4 +1,4 @@
-﻿// Spring Security 설정 (JWT 필터, OAuth2, CORS)
+// Spring Security 설정 (JWT 필터, OAuth2, CORS)
 package com.codeprint.interfaces.api;
 
 import com.codeprint.infrastructure.security.JwtAuthenticationFilter;

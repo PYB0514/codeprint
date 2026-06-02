@@ -1,4 +1,4 @@
-﻿// 그래프 노드 엔티티 (FILE / FUNCTION / DB_TABLE / API_ENDPOINT)
+// 그래프 노드 엔티티 (FILE / FUNCTION / DB_TABLE / API_ENDPOINT)
 package com.codeprint.domain.graph;
 
 import jakarta.persistence.*;

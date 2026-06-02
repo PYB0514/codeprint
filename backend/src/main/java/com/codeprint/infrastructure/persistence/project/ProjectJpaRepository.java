@@ -1,4 +1,4 @@
-﻿// 프로젝트 JPA Repository (Spring Data)
+// 프로젝트 JPA Repository (Spring Data)
 package com.codeprint.infrastructure.persistence.project;
 
 import com.codeprint.domain.project.Project;

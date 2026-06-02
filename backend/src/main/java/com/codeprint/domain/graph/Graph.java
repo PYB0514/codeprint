@@ -1,4 +1,4 @@
-﻿// 그래프 Aggregate Root 엔티티
+// 그래프 Aggregate Root 엔티티
 package com.codeprint.domain.graph;
 
 import jakarta.persistence.*;
