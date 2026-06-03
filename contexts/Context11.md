@@ -64,15 +64,21 @@
 1. 로컬 전체 플로우 테스트 (Docker DB → 백엔드 → 프론트 → 사용자 직접 확인)
 2. 발견된 버그 수정
 
+### 🚨 feat/deploy 시작 전 최우선 (코드 전에 먼저)
+- **Railway 계정 생성** (미생성) — github.com 계정으로 가입, 10분
+- **Stripe 계정 생성** (미생성) — Secret Key, Pro Price ID, Webhook Secret 확보
+
 ### feat/deploy
 1. GitHub Actions CI 구성 (PR 빌드/테스트 자동화)
 2. Railway 백엔드 + PostgreSQL 배포
 3. Vercel 프론트엔드 배포
 4. 브랜치 보호 규칙 설정
 5. GitHub OAuth App 콜백 URL 업데이트
-6. Stripe 계정 생성 + 키 설정
 
-### feat/attach (배포 후)
+### 🚨 feat/attach 시작 전 최우선
+- **AWS 계정 생성** (미생성) — S3 버킷 리전/CORS는 배포 도메인 확정 후 설정
+
+### feat/attach
 - AWS S3 버킷 생성 + presigned URL API
 - 게시글 이미지/파일 첨부 UI
 

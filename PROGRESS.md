@@ -90,8 +90,19 @@ npm run dev
 # 현재 브랜치: feat/attach
 # 1. 로컬 전체 플로우 테스트 (Docker DB → 백엔드 → 프론트 → 사용자 확인)
 # 2. 버그 수정 후 feat/deploy 브랜치 생성
-# 3. GitHub Actions CI 구성 → Railway + Vercel 배포
+# 3. 🚨 feat/deploy 시작 전 최우선: Railway 계정 생성 (아직 없음)
+# 4. GitHub Actions CI 구성 → Railway + Vercel 배포
 ```
+
+## 🚨 외부 계정 생성 — 단계별 최우선 사항
+
+> 코드 작업보다 먼저다. 계정 없으면 해당 단계 진행 불가.
+
+| 단계 | 서비스 | 상태 | 필요 정보 |
+|---|---|---|---|
+| feat/deploy 시작 시 | **Railway** | ❌ 미생성 | GitHub 연동만 하면 됨 |
+| feat/deploy 시작 시 | **Stripe** | ❌ 미생성 | Secret Key, Pro Price ID, Webhook Secret |
+| feat/attach 시작 시 | **AWS** | ❌ 미생성 | Access Key, Secret Key, 버킷명, 리전 |
 
 ---
 
