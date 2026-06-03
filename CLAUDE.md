@@ -475,11 +475,21 @@ First line of every new source file: a one-line Korean comment stating its role.
 - 생성자(`constructor`)는 제외.
 - 이 주석은 그래프 시각화에서 노드 라벨로 표시되므로 15자 이내로 간결하게.
 
-### 7. Plan + Checklist + Context Notes
+### 7. Plan + Checklist + Context Notes + DECISIONS.md
 Before any non-trivial task, produce three artifacts. Don't start coding without them.
 - **Plan** — what we're building and why.
 - **Checklist** (`checklist.md`) — concrete tasks as checkboxes. Tick as you go.
 - **Context Notes** (`context-notes.md`) — decisions made during the work and the reasoning behind them. Append continuously.
+
+**DECISIONS.md 업데이트 규칙 (필수)**
+아래 상황이 발생하면 작업 완료 전에 반드시 `DECISIONS.md`에 기록한다.
+- 여러 구현 방법 중 하나를 선택했을 때 (탈락 이유 포함)
+- 버그 원인을 파악하고 수정했을 때
+- 기능을 추가했다가 제거했을 때
+- 설계 결정을 보류하거나 번복했을 때
+
+형식은 자유롭되 반드시 **문제 → 이유 → 결과** 세 가지를 포함한다.
+컨텍스트 끝에 몰아서 쓰지 말고, 결정이 생기는 즉시 추가한다.
 
 ### 8. PR 머지 전 테스트 필수
 
