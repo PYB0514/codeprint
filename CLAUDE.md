@@ -199,6 +199,32 @@ DB에 누적된 과거 그래프 버전이 깨지지 않도록 아래 규칙을 
 
 Tradeoff: These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
+---
+
+### ⚠️ 커밋 전 필수 3대 체크 (최우선 원칙)
+
+코드를 작성하고 커밋하기 전에 반드시 아래 세 가지를 순서대로 확인한다. 하나라도 통과하지 못하면 커밋하지 않는다.
+
+**① DDD 구조 준수 확인**
+- Bounded Context 위반 없는지: domain 계층 클래스가 다른 컨텍스트 클래스를 직접 import하지 않는지
+- Repository 패턴 준수: 인터페이스는 domain, 구현체는 infrastructure
+- Application Service가 도메인 로직을 직접 구현하지 않고 도메인 메서드에 위임하는지
+- 새 파일의 레이어 위치가 책임에 맞는지 (Controller → Service → Domain → Infrastructure 방향)
+
+**② 보안 체크**
+- 새 Controller 엔드포인트에 인증/인가 처리가 있는지
+- 다른 사용자 소유 리소스를 조작할 수 있는 소유권 검증 누락은 없는지
+- 외부 입력값(Request Body, Path Variable)에 @Valid 검증이 있는지
+- 민감 정보(토큰, 비밀번호)가 로그에 노출되지 않는지
+
+**③ 현업 수준 코드 품질 확인**
+- 200줄이 50줄로 줄여질 수 있다면 리팩토링 후 커밋
+- 단일 메서드가 3가지 이상 책임을 지고 있으면 분리 검토
+- 에러 처리가 적절한지 (불가능한 시나리오에 대한 불필요한 방어 코드 제거)
+- 주석이 코드가 하는 일(WHAT)이 아닌 이유(WHY)를 설명하는지
+
+---
+
 ### 1. Think Before Coding
 Don't assume. Don't hide confusion. Surface tradeoffs.
 Before implementing:

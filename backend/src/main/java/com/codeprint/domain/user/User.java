@@ -1,6 +1,7 @@
 // 사용자 Aggregate Root 엔티티
 package com.codeprint.domain.user;
 
+import com.codeprint.infrastructure.security.AesEncryptionConverter;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -38,7 +39,8 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @Column(name = "github_access_token", length = 255)
+    @Convert(converter = AesEncryptionConverter.class)
+    @Column(name = "github_access_token", length = 500)
     private String githubAccessToken;
 
     // GitHub 사용자 정보로 새 User 인스턴스 생성
