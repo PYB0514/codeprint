@@ -15,7 +15,7 @@ import {
 import type { Edge, EdgeMouseHandler, Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
-import { buildLayout, downloadTreeText } from '../utils/graphLayout'
+import { buildLayout, downloadTreeText, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
@@ -136,6 +136,17 @@ function GraphPageInner() {
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [showVersions, setShowVersions] = useState(false)
+  const [versions, setVersions] = useState<{ graphId: string; createdAt: string; branch: string }[]>([])
+  const [loadingVersions, setLoadingVersions] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [shareTitle, setShareTitle] = useState('')
+  const [shareContent, setShareContent] = useState('')
+  const [shareFeedbackType, setShareFeedbackType] = useState('GENERAL')
+  const [shareHiddenLayers, setShareHiddenLayers] = useState<Set<string>>(new Set())
+  const [shareHiddenGroups, setShareHiddenGroups] = useState<Set<string>>(new Set())
+  const [shareHiddenNodes, setShareHiddenNodes] = useState<Set<string>>(new Set())
+  const [shareSubmitting, setShareSubmitting] = useState(false)
   const flowRef = useRef<HTMLDivElement>(null)
   const { getNodes, fitView } = useReactFlow()
 
@@ -221,6 +232,86 @@ function GraphPageInner() {
   }, [projectId, setNodes, setEdges, openFileSidebar, applyEdgeVisibility])
 
   useEffect(() => { fetchGraph() }, [fetchGraph])
+
+  // 현재 그래프에서 그룹 키 목록 추출
+  const availableGroups = (() => {
+    const fileNodes = rawNodes.filter((n) => n.type === 'FILE' && n.filePath)
+    const commonPrefix = findCommonPrefix(fileNodes.map((n) => n.filePath))
+    const groups = new Set(fileNodes.map((n) => getGroupKey(n.filePath, commonPrefix)))
+    return Array.from(groups).sort()
+  })()
+
+  const availableLayers = ['domain', 'application', 'infrastructure', 'interfaces', 'pages', 'components', 'hooks', 'utils']
+
+  // 커뮤니티에 그래프 첨부 게시글 제출
+  const handleShareSubmit = async () => {
+    if (!shareTitle.trim() || !shareContent.trim() || !graphId) return
+    setShareSubmitting(true)
+    try {
+      await axios.post(
+        '/api/community/posts',
+        {
+          title: shareTitle,
+          content: shareContent,
+          feedbackType: shareFeedbackType,
+          graphId,
+          hiddenLayers: Array.from(shareHiddenLayers),
+          hiddenGroups: Array.from(shareHiddenGroups),
+          hiddenNodeNames: Array.from(shareHiddenNodes),
+        },
+        { headers: authHeaders() }
+      )
+      setShowShareModal(false)
+      setShareTitle('')
+      setShareContent('')
+      setShareHiddenLayers(new Set())
+      setShareHiddenGroups(new Set())
+      setShareHiddenNodes(new Set())
+      alert('커뮤니티에 게시글이 등록되었습니다.')
+    } catch {
+      alert('게시 실패. 다시 시도해주세요.')
+    } finally {
+      setShareSubmitting(false)
+    }
+  }
+
+  // 버전 목록을 서버에서 불러오는 함수
+  const handleLoadVersions = useCallback(async () => {
+    if (showVersions) { setShowVersions(false); return }
+    setLoadingVersions(true)
+    setShowVersions(true)
+    try {
+      const res = await axios.get(`/api/projects/${projectId}/graphs`, { headers: authHeaders() })
+      setVersions(res.data)
+    } finally {
+      setLoadingVersions(false)
+    }
+  }, [projectId, showVersions])
+
+  // 특정 버전의 그래프를 로드
+  const handleLoadVersion = useCallback(async (targetGraphId: string) => {
+    setLoading(true)
+    try {
+      const res = await axios.get(`/api/projects/${projectId}/graph?graphId=${targetGraphId}`, { headers: authHeaders() })
+      const { graphId: gid, nodes: rn, edges: re } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[] }
+      setGraphId(gid)
+      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebar)
+      setRawNodes(rn)
+      setRawEdgesCache(re)
+      setNodes(layoutNodes)
+      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges, showBrokenEdges))
+      setCounts({
+        files: rn.filter((n) => n.type === 'FILE').length,
+        funcs: rn.filter((n) => n.type === 'FUNCTION').length,
+        edges: re.length,
+      })
+      setShowVersions(false)
+    } catch {
+      setError('버전을 불러오지 못했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges])
 
   // 노드 라벨 표시 모드를 이름/주석 간 전환
   const toggleLabelMode = useCallback(() => {
@@ -517,6 +608,14 @@ function GraphPageInner() {
         <span className="text-gray-500 text-sm">
           파일 {counts.files} · 함수 {counts.funcs} · 엣지 {counts.edges}
         </span>
+        {graphId && (
+          <button
+            onClick={() => setShowShareModal(true)}
+            className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 py-1.5 rounded-lg"
+          >
+            커뮤니티에 공유
+          </button>
+        )}
       </div>
 
       {/* 왼쪽 사이드바 여는 탭 — 닫혔을 때만 표시 */}
@@ -556,6 +655,42 @@ function GraphPageInner() {
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed mt-1">
                 {exporting ? '저장 중...' : '↓ 이미지'}
               </button>
+            </LeftSection>
+
+            {/* 버전 기록 */}
+            <LeftSection title="버전 기록">
+              <button
+                onClick={handleLoadVersions}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300"
+              >
+                {showVersions ? '▲ 닫기' : '▼ 버전 목록 보기'}
+              </button>
+              {showVersions && (
+                <div className="mt-1 flex flex-col gap-1 max-h-48 overflow-y-auto">
+                  {loadingVersions ? (
+                    <p className="text-xs text-gray-500 px-1">불러오는 중...</p>
+                  ) : versions.length === 0 ? (
+                    <p className="text-xs text-gray-500 px-1">버전 없음</p>
+                  ) : (
+                    versions.map((v, i) => (
+                      <button
+                        key={v.graphId}
+                        onClick={() => handleLoadVersion(v.graphId)}
+                        className={`w-full text-left text-xs px-2 py-1.5 rounded hover:bg-gray-700 transition-colors ${
+                          v.graphId === graphId ? 'bg-gray-700 text-white' : 'bg-gray-800/40 text-gray-400'
+                        }`}
+                      >
+                        <span className="text-gray-300">{i === 0 ? '최신 ' : ''}</span>
+                        <span className="text-blue-400">{v.branch}</span>
+                        <br />
+                        <span className="text-gray-500">
+                          {new Date(v.createdAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </LeftSection>
 
             {/* 레이아웃 */}
@@ -891,6 +1026,144 @@ function GraphPageInner() {
           />
         )}
       </aside>
+
+      {/* 커뮤니티 공유 모달 */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-[560px] max-h-[85vh] overflow-y-auto flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-base">커뮤니티에 공유</h2>
+              <button onClick={() => setShowShareModal(false)} className="text-gray-500 hover:text-white text-lg leading-none">✕</button>
+            </div>
+
+            {/* 제목 */}
+            <input
+              value={shareTitle}
+              onChange={(e) => setShareTitle(e.target.value)}
+              placeholder="제목"
+              className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none"
+            />
+
+            {/* 피드백 타입 */}
+            <select
+              value={shareFeedbackType}
+              onChange={(e) => setShareFeedbackType(e.target.value)}
+              className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none"
+            >
+              <option value="GENERAL">일반</option>
+              <option value="ARCHITECTURE_REVIEW">아키텍처 리뷰</option>
+              <option value="DEBUG">디버그</option>
+            </select>
+
+            {/* 내용 */}
+            <textarea
+              value={shareContent}
+              onChange={(e) => setShareContent(e.target.value)}
+              placeholder="내용을 입력하세요"
+              rows={4}
+              className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none resize-none"
+            />
+
+            {/* 레이어 숨기기 */}
+            <div>
+              <p className="text-xs text-gray-400 mb-2 font-medium">레이어 숨기기</p>
+              <div className="flex flex-wrap gap-2">
+                {availableLayers.map((layer) => (
+                  <button
+                    key={layer}
+                    onClick={() => setShareHiddenLayers((prev) => {
+                      const next = new Set(prev)
+                      next.has(layer) ? next.delete(layer) : next.add(layer)
+                      return next
+                    })}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                      shareHiddenLayers.has(layer)
+                        ? 'bg-red-900/40 border-red-700 text-red-400'
+                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    {shareHiddenLayers.has(layer) ? '🚫 ' : ''}{layer}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 그룹 숨기기 */}
+            {availableGroups.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-400 mb-2 font-medium">그룹 숨기기</p>
+                <div className="flex flex-wrap gap-2">
+                  {availableGroups.map((group) => (
+                    <button
+                      key={group}
+                      onClick={() => setShareHiddenGroups((prev) => {
+                        const next = new Set(prev)
+                        next.has(group) ? next.delete(group) : next.add(group)
+                        return next
+                      })}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                        shareHiddenGroups.has(group)
+                          ? 'bg-red-900/40 border-red-700 text-red-400'
+                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                      }`}
+                    >
+                      {shareHiddenGroups.has(group) ? '🚫 ' : ''}{group}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 개별 노드 숨기기 */}
+            <div>
+              <p className="text-xs text-gray-400 mb-2 font-medium">개별 노드 숨기기 <span className="text-gray-600">({rawNodes.length}개)</span></p>
+              <div className="max-h-36 overflow-y-auto flex flex-col gap-1 bg-gray-800/40 rounded-lg p-2">
+                {rawNodes.filter((n) => n.type === 'FILE' || n.type === 'FUNCTION').map((n) => (
+                  <button
+                    key={n.id}
+                    onClick={() => setShareHiddenNodes((prev) => {
+                      const next = new Set(prev)
+                      next.has(n.name) ? next.delete(n.name) : next.add(n.name)
+                      return next
+                    })}
+                    className={`text-left text-xs px-2 py-1 rounded transition-colors ${
+                      shareHiddenNodes.has(n.name)
+                        ? 'bg-red-900/30 text-red-400'
+                        : 'text-gray-400 hover:bg-gray-700'
+                    }`}
+                  >
+                    {shareHiddenNodes.has(n.name) ? '🚫 ' : ''}
+                    <span className="text-gray-600 mr-1">{n.type === 'FILE' ? '📄' : 'ƒ'}</span>
+                    {n.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 숨김 요약 */}
+            {(shareHiddenLayers.size > 0 || shareHiddenGroups.size > 0 || shareHiddenNodes.size > 0) && (
+              <p className="text-xs text-yellow-500">
+                숨김: {[
+                  shareHiddenLayers.size > 0 && `레이어 ${shareHiddenLayers.size}개`,
+                  shareHiddenGroups.size > 0 && `그룹 ${shareHiddenGroups.size}개`,
+                  shareHiddenNodes.size > 0 && `노드 ${shareHiddenNodes.size}개`,
+                ].filter(Boolean).join(', ')}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-800">
+              <button onClick={() => setShowShareModal(false)} className="text-sm text-gray-500 hover:text-white px-4 py-2">취소</button>
+              <button
+                onClick={handleShareSubmit}
+                disabled={shareSubmitting || !shareTitle.trim() || !shareContent.trim()}
+                className="text-sm bg-white text-black font-medium px-4 py-2 rounded-lg hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {shareSubmitting ? '등록 중...' : '커뮤니티에 등록'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -30,6 +30,19 @@
         "panel": "dedicated"
       },
       "problemMatcher": []
+    },
+    {
+      "label": "프론트엔드 실행",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
     }
   ]
 }

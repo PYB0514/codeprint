@@ -1,0 +1,197 @@
+// 커뮤니티 게시글/댓글 REST API 컨트롤러
+package com.codeprint.interfaces.api;
+
+import com.codeprint.application.community.PostCommandService;
+import com.codeprint.application.graph.GraphQueryService;
+import com.codeprint.domain.community.Comment;
+import com.codeprint.domain.community.Post;
+import com.codeprint.domain.graph.Edge;
+import com.codeprint.domain.graph.Node;
+import com.codeprint.domain.user.User;
+import com.codeprint.domain.user.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/community")
+@RequiredArgsConstructor
+public class CommunityController {
+
+    private final PostCommandService postCommandService;
+    private final GraphQueryService graphQueryService;
+    private final UserRepository userRepository;
+
+    // 게시글 목록 조회 (페이지)
+    @GetMapping("/posts")
+    public ResponseEntity<List<PostResponse>> getPosts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        List<PostResponse> posts = postCommandService.getPosts(page, size).stream()
+                .map(p -> toPostResponse(p, null))
+                .toList();
+        return ResponseEntity.ok(posts);
+    }
+
+    // 게시글 단건 + 댓글 목록 조회
+    @GetMapping("/posts/{postId}")
+    public ResponseEntity<PostDetailResponse> getPost(@PathVariable UUID postId) {
+        Post post = postCommandService.getPosts(0, Integer.MAX_VALUE).stream()
+                .filter(p -> p.getId().equals(postId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
+        List<CommentResponse> comments = postCommandService.getComments(postId).stream()
+                .map(this::toCommentResponse)
+                .toList();
+        return ResponseEntity.ok(new PostDetailResponse(toPostResponse(post, null), comments));
+    }
+
+    // 새 게시글 작성
+    @PostMapping("/posts")
+    public ResponseEntity<PostResponse> createPost(
+            @RequestBody CreatePostRequest request,
+            @AuthenticationPrincipal User user) {
+        Post post = postCommandService.createPost(
+                user.getId(),
+                request.graphId(),
+                request.title(),
+                request.content(),
+                request.feedbackType(),
+                request.hiddenLayers(),
+                request.hiddenGroups(),
+                request.hiddenNodeNames());
+        return ResponseEntity.status(201).body(toPostResponse(post, user.getUsername()));
+    }
+
+    // 게시글에 첨부된 그래프를 숨김 필터 적용하여 반환
+    @GetMapping("/posts/{postId}/graph")
+    public ResponseEntity<?> getPostGraph(@PathVariable UUID postId) {
+        Post post = postCommandService.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
+        if (post.getGraphId() == null) return ResponseEntity.notFound().build();
+
+        return graphQueryService.findById(post.getGraphId())
+                .map(graph -> {
+                    List<Node> nodes = graphQueryService.getNodes(graph.getId());
+                    List<Edge> edges = graphQueryService.getEdges(graph.getId());
+
+                    List<Map<String, Object>> nodeData = nodes.stream()
+                            .filter(n -> !n.isHidden())
+                            .map(n -> {
+                                Map<String, Object> node = new java.util.LinkedHashMap<>();
+                                node.put("id", n.getId().toString());
+                                node.put("type", n.getType().name());
+                                node.put("name", n.getName());
+                                node.put("filePath", n.getFilePath() != null ? n.getFilePath() : "");
+                                node.put("language", n.getLanguage() != null ? n.getLanguage() : "");
+                                node.put("posX", n.getPosX());
+                                node.put("posY", n.getPosY());
+                                if (n.getMetadata() != null && n.getMetadata().containsKey("comment")) {
+                                    node.put("comment", n.getMetadata().get("comment"));
+                                }
+                                return node;
+                            })
+                            .toList();
+
+                    List<Map<String, Object>> edgeData = edges.stream()
+                            .filter(e -> !e.isHidden())
+                            .map(e -> Map.<String, Object>of(
+                                    "id", e.getId().toString(),
+                                    "type", e.getType().name(),
+                                    "source", e.getSourceNodeId().toString(),
+                                    "target", e.getTargetNodeId().toString(),
+                                    "edgeIdentifier", e.getEdgeIdentifier()
+                            ))
+                            .toList();
+
+                    return ResponseEntity.ok(Map.of(
+                            "graphId", graph.getId().toString(),
+                            "nodes", nodeData,
+                            "edges", edgeData,
+                            "hiddenLayers", post.getHiddenLayers(),
+                            "hiddenGroups", post.getHiddenGroups(),
+                            "hiddenNodeNames", post.getHiddenNodeNames()
+                    ));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    // 댓글 작성
+    @PostMapping("/posts/{postId}/comments")
+    public ResponseEntity<CommentResponse> addComment(
+            @PathVariable UUID postId,
+            @RequestBody CreateCommentRequest request,
+            @AuthenticationPrincipal User user) {
+        Comment comment = postCommandService.addComment(postId, user.getId(), request.content());
+        return ResponseEntity.status(201).body(toCommentResponse(comment));
+    }
+
+    // 게시글 삭제
+    @DeleteMapping("/posts/{postId}")
+    public ResponseEntity<Void> deletePost(
+            @PathVariable UUID postId,
+            @AuthenticationPrincipal User user) {
+        postCommandService.deletePost(postId, user.getId());
+        return ResponseEntity.noContent().build();
+    }
+
+    // Post 엔티티를 응답 DTO로 변환
+    private PostResponse toPostResponse(Post post, String authorUsername) {
+        String username = authorUsername;
+        if (username == null) {
+            username = userRepository.findById(post.getUserId())
+                    .map(User::getUsername)
+                    .orElse("unknown");
+        }
+        return new PostResponse(
+                post.getId(),
+                post.getTitle(),
+                post.getContent(),
+                post.getFeedbackType(),
+                post.getGraphId(),
+                post.getUserId(),
+                username,
+                post.getCreatedAt()
+        );
+    }
+
+    // Comment 엔티티를 응답 DTO로 변환
+    private CommentResponse toCommentResponse(Comment comment) {
+        String username = userRepository.findById(comment.getUserId())
+                .map(User::getUsername)
+                .orElse("unknown");
+        return new CommentResponse(
+                comment.getId(),
+                comment.getContent(),
+                comment.getUserId(),
+                username,
+                comment.getCreatedAt()
+        );
+    }
+
+    // 게시글 생성 요청 DTO
+    public record CreatePostRequest(
+            String title, String content, String feedbackType, UUID graphId,
+            List<String> hiddenLayers, List<String> hiddenGroups, List<String> hiddenNodeNames) {}
+
+    // 댓글 생성 요청 DTO
+    public record CreateCommentRequest(String content) {}
+
+    // 게시글 응답 DTO
+    public record PostResponse(
+            UUID id, String title, String content, String feedbackType,
+            UUID graphId, UUID userId, String authorUsername, Instant createdAt) {}
+
+    // 댓글 응답 DTO
+    public record CommentResponse(
+            UUID id, String content, UUID userId, String authorUsername, Instant createdAt) {}
+
+    // 게시글 + 댓글 목록 응답 DTO
+    public record PostDetailResponse(PostResponse post, List<CommentResponse> comments) {}
+}

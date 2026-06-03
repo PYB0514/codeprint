@@ -74,6 +74,11 @@ export default function DashboardPage() {
     setProjects((prev) => prev.filter((p) => p.id !== projectId))
   }
 
+  // 공개/비공개 상태 변경을 로컬 목록에 반영
+  const handleVisibilityChange = (projectId: string, isPublic: boolean) => {
+    setProjects((prev) => prev.map((p) => p.id === projectId ? { ...p, isPublic } : p))
+  }
+
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
@@ -136,6 +141,7 @@ export default function DashboardPage() {
                 key={project.id}
                 project={project}
                 onDelete={handleDeleteProject}
+                onVisibilityChange={handleVisibilityChange}
               />
             ))}
           </div>

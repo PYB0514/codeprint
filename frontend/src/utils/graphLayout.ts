@@ -50,7 +50,7 @@ const _GROUP_GAP = 48  // 미사용 — 컬럼 레이아웃으로 교체됨
 void _GROUP_GAP
 
 // 공통 prefix 제거 후 DDD 의미 있는 그룹 키 추출
-function getGroupKey(filePath: string, commonPrefix: string): string {
+export function getGroupKey(filePath: string, commonPrefix: string): string {
   const rel = filePath.startsWith(commonPrefix)
     ? filePath.slice(commonPrefix.length)
     : filePath
@@ -69,7 +69,7 @@ function getGroupKey(filePath: string, commonPrefix: string): string {
 }
 
 // 공통 prefix 계산
-function findCommonPrefix(paths: string[]): string {
+export function findCommonPrefix(paths: string[]): string {
   if (paths.length === 0) return ''
   const parts = paths[0].replace(/\\/g, '/').split('/')
   let prefix = ''

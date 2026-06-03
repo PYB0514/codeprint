@@ -31,4 +31,14 @@ public class ProjectQueryService {
         }
         return project;
     }
+
+    // 공개 프로젝트 조회 (비인증 허용)
+    public Project getPublicProject(UUID projectId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+        if (!project.isPublic()) {
+            throw new IllegalStateException("Project is not public");
+        }
+        return project;
+    }
 }

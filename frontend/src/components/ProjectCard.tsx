@@ -16,6 +16,7 @@ interface Project {
 interface Props {
   project: Project
   onDelete: (id: string) => void
+  onVisibilityChange: (id: string, isPublic: boolean) => void
 }
 
 // JWT 토큰을 Authorization 헤더로 반환
@@ -25,12 +26,13 @@ function authHeaders() {
 }
 
 // 프로젝트 카드 — 분석 시작/재분석, 진행률 표시, 그래프 이동
-export default function ProjectCard({ project, onDelete }: Props) {
+export default function ProjectCard({ project, onDelete, onVisibilityChange }: Props) {
   const navigate = useNavigate()
   const [hasGraph, setHasGraph] = useState(false)
   const [analysisId, setAnalysisId] = useState<string | null>(null)
   const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
+  const [copying, setCopying] = useState(false)
 
   // 브랜치 선택 상태
   const [branches, setBranches] = useState<string[]>([])
@@ -67,6 +69,25 @@ export default function ProjectCard({ project, onDelete }: Props) {
   }, [])
 
   const { progress, status } = useAnalysisProgress(analysisId, handleDone)
+
+  // 공개/비공개 상태를 서버에 반영
+  const handleToggleVisibility = async () => {
+    const next = !project.isPublic
+    await axios.patch(
+      `/api/projects/${project.id}/visibility`,
+      { isPublic: next },
+      { headers: authHeaders() }
+    )
+    onVisibilityChange(project.id, next)
+  }
+
+  // 공유 URL을 클립보드에 복사
+  const handleCopyLink = async () => {
+    const url = `${window.location.origin}/share/${project.id}`
+    await navigator.clipboard.writeText(url)
+    setCopying(true)
+    setTimeout(() => setCopying(false), 1500)
+  }
 
   // 분석 버튼 클릭 시 브랜치 목록 로딩 후 피커 표시
   const handleAnalysisButtonClick = async () => {
@@ -194,7 +215,20 @@ export default function ProjectCard({ project, onDelete }: Props) {
           <span className="text-xs text-gray-600">
             {new Date(project.createdAt).toLocaleDateString('ko-KR')}
           </span>
-          <span className="text-xs text-gray-600">{project.isPublic ? '공개' : '비공개'}</span>
+          <button
+            onClick={handleToggleVisibility}
+            className="text-xs text-gray-500 hover:text-gray-200 border border-gray-700 px-2 py-0.5 rounded"
+          >
+            {project.isPublic ? '공개' : '비공개'}
+          </button>
+          {project.isPublic && (
+            <button
+              onClick={handleCopyLink}
+              className="text-xs text-blue-400 hover:text-blue-300"
+            >
+              {copying ? '복사됨!' : '링크 복사'}
+            </button>
+          )}
         </div>
 
         {hasGraph && !isAnalyzing ? (

@@ -43,6 +43,21 @@ public class ProjectCommandService {
         return projectRepository.save(project);
     }
 
+    // 소유자 확인 후 공개/비공개 상태 전환
+    public Project toggleVisibility(UUID projectId, UUID requestingUserId, boolean makePublic) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+        if (!project.getUserId().equals(requestingUserId)) {
+            throw new IllegalStateException("Not authorized to modify this project");
+        }
+        if (makePublic) {
+            project.makePublic();
+        } else {
+            project.makePrivate();
+        }
+        return projectRepository.save(project);
+    }
+
     // 소유자 확인 후 프로젝트 삭제
     public void deleteProject(UUID projectId, UUID requestingUserId) {
         Project project = projectRepository.findById(projectId)

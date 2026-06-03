@@ -107,16 +107,26 @@ npm run dev
 - AppHeader 공통 컴포넌트, DDD 레이어 상위 박스, 범례 내용 가리기 버튼
 - 엣지 전체 흐름 추적 (traceFlow DFS), 사이드바 전면 개편, 드래그 리사이즈
 
-### 3단계: `feat/share`
-- 프로젝트 공개/비공개 토글
-- 공유 URL 생성
-- 이미지 내보내기 (html-to-image)
-- 커뮤니티 게시판 (Post, Comment)
+### 3단계: `feat/share` ← 현재 진행 중 (PR #8 오픈)
+- ✅ 프로젝트 공개/비공개 토글
+- ✅ 공유 URL 생성 + 읽기 전용 그래프 뷰어
+- ✅ 커뮤니티 게시판 (Post, Comment CRUD)
+- [ ] GraphPage → 커뮤니티 공유 버튼 (graphId 자동 첨부 + AI 컨텍스트 텍스트 삽입)
 
-### 4단계: `feat/stripe`
+### 4단계: `feat/attach`
+- 게시글 첨부 기능 — 그래프 이미지(PNG) + AI 컨텍스트(.txt) 파일 업로드
+- S3 또는 Cloudflare R2 연동 (배포 환경 확정 후 버킷/리전/CORS 설정)
+- 백엔드: presigned URL 발급 API, 첨부파일 메타데이터 저장
+- 프론트엔드: 파일 업로드 UI, 게시글 내 첨부파일 표시
+
+### 5단계: `feat/stripe`
 - Stripe 결제 연동
 - Free → Pro 업그레이드
 - 프로젝트 수 제한 해제
+
+### 6단계: `feat/deploy`
+- Railway(백엔드) + Vercel(프론트) 배포
+- 환경변수 설정, 도메인 연결
 
 ---
 
@@ -134,7 +144,6 @@ npm run dev
 | GitHub OAuth Client ID | 대문자 O로 시작 (`Ov23li9p7ck6LTB8bnqm`) — 숫자 0 아님 |
 | application-local.yml | gitignore 처리됨. OAuth Secret 포함, 공유 금지 |
 | Java 파일 인코딩 | UTF-8 BOM 없이 저장할 것 |
-| feat/export-image 미머지 | 다음 세션에서 PR 머지 후 재분석 필요 |
 
 ---
 
@@ -142,7 +151,8 @@ npm run dev
 
 ```
 main                       ← 항상 배포 가능 상태
-└─ feat/ui-polish          ← 현재 (PR #7 머지 대기)
-└─ feat/share
+└─ feat/share              ← 현재 (PR #8 오픈)
+└─ feat/attach             ← S3 파일 업로드 (배포 전)
 └─ feat/stripe
+└─ feat/deploy
 ```
