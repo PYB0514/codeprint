@@ -197,7 +197,7 @@ DB에 누적된 과거 그래프 버전이 깨지지 않도록 아래 규칙을 
 
 ## Behavioral Guidelines
 
-Tradeoff: These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+이 가이드라인들은 서로 충돌 없이 적용된다. 우선순위가 필요한 경우: **보안 > DDD 구조 > 코드 품질 > 단순성**.
 
 ---
 
@@ -221,7 +221,7 @@ Tradeoff: These guidelines bias toward caution over speed. For trivial tasks, us
 - 200줄이 50줄로 줄여질 수 있다면 리팩토링 후 커밋
 - 단일 메서드가 3가지 이상 책임을 지고 있으면 분리 검토
 - 에러 처리가 적절한지 (불가능한 시나리오에 대한 불필요한 방어 코드 제거)
-- 주석이 코드가 하는 일(WHAT)이 아닌 이유(WHY)를 설명하는지
+- 일반 주석이 코드가 하는 일(WHAT)이 아닌 이유(WHY)를 설명하는지 (§6 한국어 주석은 별도 규칙이므로 이 체크 대상 아님)
 
 ---
 
@@ -261,10 +261,12 @@ The test: Every changed line should trace directly to the user's request.
 ### 4. Goal-Driven Execution
 Define success criteria. Loop until verified.
 
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
+Transform tasks into verifiable goals. 이 프로젝트는 현재 자동화 테스트가 없으므로 런타임 검증으로 대체한다.
+- "Add validation" → "잘못된 입력값으로 API 호출해서 400 응답 확인"
+- "Fix the bug" → "버그 재현 조건 명시 → 수정 → 동일 조건으로 정상 동작 확인"
+- "Refactor X" → "리팩토링 전후 동일 API 응답 확인"
+
+> 자동화 테스트 도입 시점: 도메인 로직이 복잡해지거나 회귀 버그가 반복될 때. 그 전까지는 §8 런타임 검증이 테스트를 대신한다.
 
 For multi-step tasks, state a brief plan:
 ```
@@ -288,27 +290,37 @@ First line of every new source file: a one-line Korean comment stating its role.
 - Skip config files (`*.config.ts`, `build.gradle`, `package.json`, etc.).
 
 **함수/메서드 주석 (Function Comments in Korean)**
-모든 함수/메서드 정의 바로 위(어노테이션 블록 위)에 한 줄 한국어 `//` 주석을 추가한다.
+내가 신규 작성하거나 수정한 함수/메서드 정의 바로 위(어노테이션 블록 위)에 한 줄 한국어 `//` 주석을 추가한다. 건드리지 않은 기존 함수는 수정하지 않는다 (§3 Surgical Changes).
 - Java: `// 사용자 ID로 사용자 조회`
 - TypeScript: `// JWT 토큰을 헤더에 포함하여 반환`
 - 생성자(`constructor`)는 제외.
 - 이 주석은 그래프 시각화에서 노드 라벨로 표시되므로 15자 이내로 간결하게.
 
+> 이 규칙은 시스템 기본 지침("주석 금지")을 이 프로젝트에서 OVERRIDE한다. 한국어 주석은 그래프 시각화 데이터로 사용되는 도메인 요구사항이다.
+
 ### 7. Plan + Checklist + Context Notes + DECISIONS.md
-Before any non-trivial task, produce three artifacts. Don't start coding without them.
+
+**적용 기준 — 아래 조건 중 하나라도 해당하면 non-trivial로 판단한다.**
+- 3개 이상의 파일을 수정하는 작업
+- 새 도메인 모델(Entity, VO, Repository)이 추가되는 작업
+- DB 스키마 변경(Flyway 마이그레이션)이 포함되는 작업
+- 기존 API 계약(요청/응답 구조)이 바뀌는 작업
+
+해당하면 코딩 전에 세 가지를 만든다.
 - **Plan** — what we're building and why.
 - **Checklist** (`checklist.md`) — concrete tasks as checkboxes. Tick as you go.
 - **Context Notes** (`context-notes.md`) — decisions made during the work and the reasoning behind them. Append continuously.
 
+버그 수정 한 줄, 텍스트 변경, 설정 파일 수정 등 trivial 작업은 Plan 없이 바로 진행한다.
+
 **DECISIONS.md 업데이트 규칙 (필수)**
-아래 상황이 발생하면 작업 완료 전에 반드시 `DECISIONS.md`에 기록한다.
+아래 상황이 발생하면 해당 기능 커밋에 함께 포함한다. 별도 커밋하지 않는다.
 - 여러 구현 방법 중 하나를 선택했을 때 (탈락 이유 포함)
 - 버그 원인을 파악하고 수정했을 때
 - 기능을 추가했다가 제거했을 때
 - 설계 결정을 보류하거나 번복했을 때
 
 형식은 자유롭되 반드시 **문제 → 이유 → 결과** 세 가지를 포함한다.
-컨텍스트 끝에 몰아서 쓰지 말고, 결정이 생기는 즉시 추가한다.
 
 ### 8. PR 머지 전 테스트 필수
 
@@ -346,7 +358,7 @@ main                    ← 항상 배포 가능한 상태 유지
 ```
 - 작업 시작 전 반드시 브랜치 생성: `git checkout -b feat/project-api`
 - 기능 완성 후 PR 생성 → main 머지
-- main에 직접 커밋하지 않는다 (초기 세팅 제외)
+- main에 직접 커밋하지 않는다. **단, 문서 전용 커밋(Context 파일, PROGRESS.md, DECISIONS.md만 변경)은 main 직접 커밋 허용.** 코드 변경이 단 한 줄이라도 포함되면 브랜치 필수.
 
 **커밋 규칙**
 - 기능 하나 완성할 때마다 즉시 커밋. 세션 끝에 몰아서 커밋하지 않는다.
