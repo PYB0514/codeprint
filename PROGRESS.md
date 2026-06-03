@@ -63,6 +63,9 @@
 |---|---|
 | GitHub OAuth App 등록 (로컬용) | ✅ |
 | docker-compose.yml (PostgreSQL) | ✅ |
+| Railway 배포 (백엔드 + PostgreSQL) | ✅ | https://codeprint.up.railway.app |
+| Vercel 배포 (프론트엔드) | ✅ | https://codeprint-iota.vercel.app |
+| GitHub OAuth App 등록 (운영용) | ✅ |
 
 ---
 
@@ -88,30 +91,22 @@ npm run dev
 
 ```
 # 현재 브랜치: main
-# Railway 배포 마지막 시도 중 — DataSourceConfig URL 파싱 수정 push 완료 (5795595)
+# Railway + Vercel 배포 완료 (2026-06-03)
+# 백엔드: https://codeprint.up.railway.app
+# 프론트: https://codeprint-iota.vercel.app
 
-# 1. Railway 배포 결과 확인
-#    - 성공 시: Railway 도메인에서 API 응답 확인 → 도메인 확정
-#    - 실패 시: Deploy Logs 보고 원인 수정
+# 1. GitHub Actions CI 구성 (.github/workflows/ci.yml)
+#    - PR마다 백엔드 컴파일 + 프론트 타입체크 (npx tsc -b)
+#    - 브랜치 보호 규칙: CI 통과 없이 main 머지 불가
 
-# 2. Railway Settings → Domains에서 실제 도메인 확인 후:
-#    - GitHub OAuth App 콜백 URL이 올바른지 확인
-#      (현재: https://codeprint.up.railway.app/login/oauth2/code/github)
-#    - FRONTEND_URL 환경변수도 Vercel 도메인으로 추후 업데이트 필요
+# 2. Spring Boot Actuator 추가
+#    - Railway Healthcheck 설정
+#    - /actuator/health 엔드포인트
 
-# 3. Railway 서비스 도메인 노출 설정
-#    - 현재 "Unexposed service" 상태 → Settings → Networking → Generate Domain
-
-# 4. Vercel 프론트 배포
-#    - vercel.com → GitHub 연결 → frontend 루트 디렉토리
-#    - VITE_API_URL = Railway 도메인
-
-# 5. GitHub Actions CI 구성 (.github/workflows/ci.yml)
-#    - PR마다 백엔드 컴파일 + 프론트 타입체크
-
-# 6. Spring Boot Actuator + Micrometer 추가 (Healthcheck + 모니터링 기반)
-
-# 7. Stripe 계정 생성 → STRIPE_* 환경변수 추가
+# 3. 다음 기능 개발 — feat/attach (S3 파일 첨부)
+#    - AWS 계정 생성 필요 (Access Key, Secret Key, 버킷명)
+#    - presigned URL 발급 API
+#    - 게시글 이미지/파일 첨부 UI
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
@@ -120,7 +115,8 @@ npm run dev
 
 | 단계 | 서비스 | 상태 | 필요 정보 |
 |---|---|---|---|
-| feat/deploy 시작 시 | **Railway** | ✅ 생성 완료 | thorough-peace 프로젝트, 빌드 진행 중 |
+| feat/deploy 시작 시 | **Railway** | ✅ 배포 완료 | https://codeprint.up.railway.app |
+| feat/deploy 시작 시 | **Vercel** | ✅ 배포 완료 | https://codeprint-iota.vercel.app |
 | feat/deploy 시작 시 | **Stripe** | ❌ 미생성 | Secret Key, Pro Price ID, Webhook Secret |
 | feat/attach 시작 시 | **AWS** | ❌ 미생성 | Access Key, Secret Key, 버킷명, 리전 |
 
