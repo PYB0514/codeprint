@@ -3,6 +3,7 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
+import com.codeprint.infrastructure.stripe.StripeEventJpaRepository;
 import com.codeprint.infrastructure.stripe.StripePaymentService;
 import com.stripe.model.Event;
 import com.stripe.model.Subscription;
@@ -24,6 +25,7 @@ public class PaymentController {
 
     private final StripePaymentService stripePaymentService;
     private final UserRepository userRepository;
+    private final StripeEventJpaRepository stripeEventJpaRepository;
 
     // Pro 플랜 Checkout 세션을 생성하고 결제 URL 반환
     @PostMapping("/checkout")
@@ -49,6 +51,12 @@ public class PaymentController {
             log.warn("Webhook 서명 검증 실패: {}", e.getMessage());
             return ResponseEntity.badRequest().body("Invalid signature");
         }
+
+        if (stripeEventJpaRepository.existsById(event.getId())) {
+            log.debug("중복 Webhook 이벤트 무시: {}", event.getId());
+            return ResponseEntity.ok("ok");
+        }
+        stripeEventJpaRepository.save(StripeEventJpaRepository.StripeEventRecord.of(event.getId()));
 
         switch (event.getType()) {
             case "checkout.session.completed" -> {

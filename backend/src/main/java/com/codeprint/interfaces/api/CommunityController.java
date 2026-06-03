@@ -9,6 +9,8 @@ import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -42,9 +44,7 @@ public class CommunityController {
     // 게시글 단건 + 댓글 목록 조회
     @GetMapping("/posts/{postId}")
     public ResponseEntity<PostDetailResponse> getPost(@PathVariable UUID postId) {
-        Post post = postCommandService.getPosts(0, Integer.MAX_VALUE).stream()
-                .filter(p -> p.getId().equals(postId))
-                .findFirst()
+        Post post = postCommandService.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
         List<CommentResponse> comments = postCommandService.getComments(postId).stream()
                 .map(this::toCommentResponse)
@@ -55,7 +55,7 @@ public class CommunityController {
     // 새 게시글 작성
     @PostMapping("/posts")
     public ResponseEntity<PostResponse> createPost(
-            @RequestBody CreatePostRequest request,
+            @Valid @RequestBody CreatePostRequest request,
             @AuthenticationPrincipal User user) {
         Post post = postCommandService.createPost(
                 user.getId(),
@@ -126,7 +126,7 @@ public class CommunityController {
     @PostMapping("/posts/{postId}/comments")
     public ResponseEntity<CommentResponse> addComment(
             @PathVariable UUID postId,
-            @RequestBody CreateCommentRequest request,
+            @Valid @RequestBody CreateCommentRequest request,
             @AuthenticationPrincipal User user) {
         Comment comment = postCommandService.addComment(postId, user.getId(), request.content());
         return ResponseEntity.status(201).body(toCommentResponse(comment));
@@ -177,11 +177,11 @@ public class CommunityController {
 
     // 게시글 생성 요청 DTO
     public record CreatePostRequest(
-            String title, String content, String feedbackType, UUID graphId,
+            @NotBlank String title, String content, String feedbackType, UUID graphId,
             List<String> hiddenLayers, List<String> hiddenGroups, List<String> hiddenNodeNames) {}
 
     // 댓글 생성 요청 DTO
-    public record CreateCommentRequest(String content) {}
+    public record CreateCommentRequest(@NotBlank String content) {}
 
     // 게시글 응답 DTO
     public record PostResponse(

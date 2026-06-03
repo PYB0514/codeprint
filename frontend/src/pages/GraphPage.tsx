@@ -218,8 +218,8 @@ function GraphPageInner() {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebar)
       setRawNodes(rn)
       setRawEdgesCache(re)
-      setNodes(layoutNodes)
-      setEdges(applyEdgeVisibility(layoutEdges, false, false, false, true))
+      setNodes(layoutNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
+      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), false, false, false, true))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,
@@ -309,8 +309,8 @@ function GraphPageInner() {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebar)
       setRawNodes(rn)
       setRawEdgesCache(re)
-      setNodes(layoutNodes)
-      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges, showBrokenEdges))
+      setNodes(layoutNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
+      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), showEdges, showCallEdges, showInstEdges, showBrokenEdges))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,
@@ -760,12 +760,12 @@ function GraphPageInner() {
                 { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',         textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600', active: showInstEdges,  onToggle: toggleInstEdges },
                 { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결',    textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600', active: showBrokenEdges, onToggle: toggleBrokenEdges },
               ].map(({ key, icon, label, textCls, active, onToggle }) => (
-                <button key={key} onClick={onToggle}
-                  className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60">
+                <div key={key} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}
+                  className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60 cursor-pointer">
                   <span className="w-4 flex-shrink-0">{icon}</span>
                   <span className={`text-xs flex-1 ${textCls}`}>{label}</span>
                   <ToggleChip active={active} onClick={onToggle} stopPropagation />
-                </button>
+                </div>
               ))}
             </LeftSection>
 

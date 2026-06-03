@@ -17,10 +17,13 @@ public class JwtTokenProvider {
     private final SecretKey secretKey;
     private final long expirationMs;
 
-    // JWT 비밀키와 만료 시간을 초기화
+    // JWT 비밀키와 만료 시간을 초기화 — secret은 최소 32바이트(256bit) 필요
     public JwtTokenProvider(
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.expiration-ms}") long expirationMs) {
+        if (secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalArgumentException("JWT secret must be at least 32 bytes");
+        }
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
     }

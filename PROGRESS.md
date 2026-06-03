@@ -87,11 +87,29 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재 브랜치: feat/ui-polish (PR #7 오픈 상태)
-# 1. PR #7 머지 (feat/ui-polish → main)
-# 2. feat/share 브랜치 생성
-# 3. 공개/비공개 토글 → 공유 URL → 커뮤니티 게시판 순서로 구현
+# 현재 브랜치: feat/attach
+# 로컬 테스트에서 발견된 버그 3건 수정 후 feat/deploy로 이동
+
+# 버그 1: GraphPage LeftSection <p> → <div> 교체 (<button> 중첩 HTML 위반)
+# 버그 2: 재분석 후 중복 key (d100aae1...) — GraphBuilder 중복 엣지 확인
+# 버그 3: CommunityPage AxiosError Network Error — 백엔드 로그 확인 후 원인 파악
+
+# 버그 수정 완료 후:
+# 1. 🚨 feat/deploy 시작 전 최우선: Railway 계정 생성 (아직 없음)
+# 2. Stripe 계정 생성 (Secret Key, Pro Price ID, Webhook Secret)
+# 3. GitHub Actions CI 구성 → Railway + Vercel 배포
+# 4. ENCRYPTION_KEY 환경변수 Railway에 설정 필수
 ```
+
+## 🚨 외부 계정 생성 — 단계별 최우선 사항
+
+> 코드 작업보다 먼저다. 계정 없으면 해당 단계 진행 불가.
+
+| 단계 | 서비스 | 상태 | 필요 정보 |
+|---|---|---|---|
+| feat/deploy 시작 시 | **Railway** | ❌ 미생성 | GitHub 연동만 하면 됨 |
+| feat/deploy 시작 시 | **Stripe** | ❌ 미생성 | Secret Key, Pro Price ID, Webhook Secret |
+| feat/attach 시작 시 | **AWS** | ❌ 미생성 | Access Key, Secret Key, 버킷명, 리전 |
 
 ---
 
@@ -103,30 +121,45 @@ npm run dev
 - 멀티라인 파라미터 메서드 한글 주석 미추출 버그 수정 (extractFunctionComments 순방향 스캔으로 교체)
 - 전체 함수 한글 주석 완전화
 
-### ✅ 완료: `feat/ui-polish` (PR #7 오픈 — 머지 대기)
+### ✅ 완료: `feat/ui-polish` (PR #7 머지)
 - AppHeader 공통 컴포넌트, DDD 레이어 상위 박스, 범례 내용 가리기 버튼
 - 엣지 전체 흐름 추적 (traceFlow DFS), 사이드바 전면 개편, 드래그 리사이즈
 
-### 3단계: `feat/share` ← 현재 진행 중 (PR #8 오픈)
-- ✅ 프로젝트 공개/비공개 토글
-- ✅ 공유 URL 생성 + 읽기 전용 그래프 뷰어
-- ✅ 커뮤니티 게시판 (Post, Comment CRUD)
-- [ ] GraphPage → 커뮤니티 공유 버튼 (graphId 자동 첨부 + AI 컨텍스트 텍스트 삽입)
+### ✅ 완료: `feat/share` (PR #8 머지)
+- 프로젝트 공개/비공개 토글 + 공유 URL + 읽기 전용 그래프 뷰어
+- 커뮤니티 게시판 (Post, Comment CRUD)
+- 커뮤니티 공유 모달 — 레이어/그룹/노드 선택 숨김 + 게시글 그래프 뷰어
 
-### 4단계: `feat/attach`
-- 게시글 첨부 기능 — 그래프 이미지(PNG) + AI 컨텍스트(.txt) 파일 업로드
-- S3 또는 Cloudflare R2 연동 (배포 환경 확정 후 버킷/리전/CORS 설정)
-- 백엔드: presigned URL 발급 API, 첨부파일 메타데이터 저장
-- 프론트엔드: 파일 업로드 UI, 게시글 내 첨부파일 표시
+### ✅ 완료: `feat/graph-freshness` (PR #9 머지)
+- 재분석 필요 감지 배너 — GitHub 최신 커밋 SHA vs 저장된 SHA 비교
 
-### 5단계: `feat/stripe`
-- Stripe 결제 연동
-- Free → Pro 업그레이드
-- 프로젝트 수 제한 해제
+### ✅ 완료: `feat/stripe` (PR #10 머지)
+- Stripe Pro 플랜 Checkout + Webhook + 업그레이드 UI
+- 키 설정 필요: STRIPE_SECRET_KEY, STRIPE_PRO_PRICE_ID, STRIPE_WEBHOOK_SECRET
 
-### 6단계: `feat/deploy`
-- Railway(백엔드) + Vercel(프론트) 배포
-- 환경변수 설정, 도메인 연결
+### 3단계: `feat/deploy` ← 현재 진행 예정
+> **현업 방식**: 인프라 구축 → CI/CD 연결 → 코드 배포 순서로 진행
+
+1. **GitHub Actions CI 구성**
+   - PR 오픈 시 백엔드 `./gradlew test` + 프론트 `npm run build` 자동 실행
+   - 브랜치 보호 규칙: Actions 통과 없이 main 머지 불가
+
+2. **Railway 배포** (백엔드 + PostgreSQL)
+   - GitHub 레포 연결 → main 머지 시 자동 배포
+   - 환경변수: DB, OAuth, JWT, Stripe 키 설정
+
+3. **Vercel 배포** (프론트엔드)
+   - GitHub 레포 연결 → main 머지 시 자동 배포
+   - 환경변수: API URL 설정
+
+4. **도메인 + CORS 설정**
+   - GitHub OAuth App 콜백 URL 업데이트
+   - 백엔드 CORS allowedOrigins 업데이트
+
+### 4단계: `feat/attach` (배포 후)
+- S3/R2 버킷 생성 (배포 도메인 확정 후 리전/CORS 설정 가능)
+- presigned URL 발급 API
+- 게시글 이미지/파일 첨부 UI
 
 ---
 
@@ -147,12 +180,22 @@ npm run dev
 
 ---
 
-## 브랜치 전략
+## 브랜치 전략 (현업 방식)
 
 ```
-main                       ← 항상 배포 가능 상태
-└─ feat/share              ← 현재 (PR #8 오픈)
-└─ feat/attach             ← S3 파일 업로드 (배포 전)
-└─ feat/stripe
-└─ feat/deploy
+main                       ← 항상 배포 가능 상태 (브랜치 보호 규칙 적용 예정)
+                             GitHub Actions CI 통과 + 리뷰 없이 머지 불가
+└─ feat/attach             ← 현재 브랜치 (배포 후 S3 연동)
+└─ feat/deploy             ← Railway + Vercel + GitHub Actions CI
+```
+
+**CI/CD 파이프라인 (구축 예정)**
+```
+PR 오픈
+  → GitHub Actions: 백엔드 테스트 + 프론트 빌드
+  → 통과 시 머지 가능
+
+main 머지
+  → Railway: 백엔드 자동 배포
+  → Vercel: 프론트 자동 배포
 ```

@@ -9,6 +9,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -18,7 +19,9 @@ import java.util.regex.Pattern;
 public class GitHubApiClient {
 
     private static final Pattern REPO_PATTERN = Pattern.compile("github\\.com[/:]([^/]+)/([^/.]+?)(\\.git)?$");
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // GitHub 레포 URL에서 브랜치 목록을 조회 (최대 100개)

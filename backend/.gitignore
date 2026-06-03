@@ -1,12 +1,12 @@
 .gradle/
 build/
-!gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
 
 *.class
 *.jar
 *.war
+!gradle/wrapper/gradle-wrapper.jar
 
 .idea/
 *.iml

@@ -6,6 +6,8 @@ import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.user.User;
 import com.codeprint.infrastructure.github.GitHubApiClient;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -47,7 +49,7 @@ public class ProjectController {
     // 새 프로젝트 생성
     @PostMapping
     public ResponseEntity<ProjectResponse> createProject(
-            @RequestBody CreateProjectRequest request,
+            @Valid @RequestBody CreateProjectRequest request,
             @AuthenticationPrincipal User user) {
         ProjectResponse response = ProjectResponse.from(
                 projectCommandService.createProject(
@@ -117,7 +119,10 @@ public class ProjectController {
     }
 
     // 프로젝트 생성 요청 DTO (레포 URL, 이름, 설명)
-    public record CreateProjectRequest(String githubRepoUrl, String name, String description) {}
+    public record CreateProjectRequest(
+            @NotBlank String githubRepoUrl,
+            @NotBlank String name,
+            String description) {}
 
     // 공개/비공개 전환 요청 DTO
     public record VisibilityRequest(boolean isPublic) {}
