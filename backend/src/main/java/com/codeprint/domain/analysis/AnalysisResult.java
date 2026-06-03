@@ -44,6 +44,9 @@ public class AnalysisResult {
     @Column(name = "branch", length = 200)
     private String branch;
 
+    @Column(name = "last_commit_sha", length = 40)
+    private String lastCommitSha;
+
     // PENDING 상태로 새 분석 결과 인스턴스 생성
     public static AnalysisResult create(UUID projectId, String branch) {
         AnalysisResult result = new AnalysisResult();
@@ -67,11 +70,12 @@ public class AnalysisResult {
         this.progress = Math.min(100, Math.max(0, progress));
     }
 
-    // 분석을 DONE 상태로 완료 처리하고 종료 시각을 기록
-    public void complete() {
+    // 분석 완료 시 커밋 SHA를 함께 기록
+    public void complete(String lastCommitSha) {
         this.status = AnalysisStatus.DONE;
         this.progress = 100;
         this.finishedAt = Instant.now();
+        this.lastCommitSha = lastCommitSha;
     }
 
     // 분석을 FAILED 상태로 전환하고 오류 메시지를 저장

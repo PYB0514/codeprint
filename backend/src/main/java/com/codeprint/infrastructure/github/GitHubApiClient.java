@@ -51,6 +51,28 @@ public class GitHubApiClient {
         }
     }
 
+    // 특정 브랜치의 최신 커밋 SHA를 조회
+    public String fetchLatestCommitSha(String githubRepoUrl, String branch, String githubAccessToken) {
+        String ownerRepo = extractOwnerRepo(githubRepoUrl);
+        String apiUrl = "https://api.github.com/repos/" + ownerRepo + "/commits/" + branch;
+
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28");
+            if (githubAccessToken != null && !githubAccessToken.isBlank()) {
+                builder.header("Authorization", "Bearer " + githubAccessToken);
+            }
+            HttpRequest request = builder.GET().build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonNode root = objectMapper.readTree(response.body());
+            return root.get("sha").asText();
+        } catch (Exception e) {
+            throw new RuntimeException("GitHub 커밋 SHA 조회 실패: " + ownerRepo + " / " + branch, e);
+        }
+    }
+
     // GitHub URL에서 owner/repo 경로를 추출
     private String extractOwnerRepo(String githubRepoUrl) {
         Matcher m = REPO_PATTERN.matcher(githubRepoUrl);

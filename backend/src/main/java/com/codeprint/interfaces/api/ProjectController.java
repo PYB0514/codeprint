@@ -3,6 +3,7 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.application.project.ProjectCommandService;
 import com.codeprint.application.project.ProjectQueryService;
+import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.user.User;
 import com.codeprint.infrastructure.github.GitHubApiClient;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +12,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -21,6 +23,7 @@ public class ProjectController {
     private final ProjectCommandService projectCommandService;
     private final ProjectQueryService projectQueryService;
     private final GitHubApiClient gitHubApiClient;
+    private final AnalysisRepository analysisRepository;
 
     // 현재 사용자의 프로젝트 목록 조회
     @GetMapping
@@ -70,6 +73,38 @@ public class ProjectController {
         ProjectResponse response = ProjectResponse.from(
                 projectCommandService.toggleVisibility(projectId, user.getId(), request.isPublic()));
         return ResponseEntity.ok(response);
+    }
+
+    // 최신 분석 버전과 GitHub 최신 커밋을 비교하여 재분석 필요 여부 반환
+    @GetMapping("/{projectId}/freshness")
+    public ResponseEntity<Map<String, Object>> getFreshness(
+            @PathVariable UUID projectId,
+            @AuthenticationPrincipal User user) {
+        projectQueryService.getProject(projectId, user.getId());
+        var project = projectQueryService.getProject(projectId, user.getId());
+        var latestAnalysis = analysisRepository.findLatestByProjectId(projectId);
+
+        if (latestAnalysis.isEmpty() || latestAnalysis.get().getLastCommitSha() == null) {
+            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", "no_data"));
+        }
+
+        var analysis = latestAnalysis.get();
+        String branch = analysis.getBranch() != null ? analysis.getBranch() : "main";
+
+        try {
+            String latestSha = gitHubApiClient.fetchLatestCommitSha(
+                    project.getGithubRepoUrl(), branch, user.getGithubAccessToken());
+            boolean isOutdated = !latestSha.equals(analysis.getLastCommitSha());
+            return ResponseEntity.ok(Map.of(
+                    "isOutdated", isOutdated,
+                    "branch", branch,
+                    "lastAnalyzedAt", analysis.getFinishedAt().toString(),
+                    "lastCommitSha", analysis.getLastCommitSha(),
+                    "latestCommitSha", latestSha
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", "github_error"));
+        }
     }
 
     // 프로젝트 삭제
