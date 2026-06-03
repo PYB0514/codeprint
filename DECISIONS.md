@@ -9,7 +9,9 @@
 
 | 파일 | 내용 |
 |---|---|
-| [DECISIONS_DEV.md](DECISIONS_DEV.md) | 백엔드/프론트엔드 버그 원인·해결, 설계 결정 이유 |
+| [DECISIONS_BACKEND.md](DECISIONS_BACKEND.md) | Spring, DB, API 버그 및 설계 결정 |
+| [DECISIONS_FRONTEND.md](DECISIONS_FRONTEND.md) | React, UI 버그 및 설계 결정 |
+| [DECISIONS_ANALYSIS.md](DECISIONS_ANALYSIS.md) | 코드 분석 엔진, GraphBuilder 버그 및 설계 결정 |
 | [DECISIONS_RAILWAY.md](DECISIONS_RAILWAY.md) | Railway 배포 시행착오 9가지 + 올바른 배포 순서 |
 
 ---
