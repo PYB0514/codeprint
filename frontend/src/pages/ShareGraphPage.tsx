@@ -14,6 +14,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { buildLayout } from '../utils/graphLayout'
 import type { RawNode, RawEdge } from '../utils/graphLayout'
+import type { Node, Edge } from '@xyflow/react'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
@@ -24,11 +25,10 @@ const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: Fi
 function ShareGraphInner() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const [nodes, setNodes, onNodesChange] = useNodesState([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [projectName, setProjectName] = useState<string>('')
 
   useEffect(() => {
     if (!projectId) return
@@ -36,10 +36,9 @@ function ShareGraphInner() {
       .get(`/api/share/${projectId}/graph`)
       .then((res) => {
         const raw = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[] }
-        const { nodes: builtNodes, edges: builtEdges } = buildLayout(raw.nodes, raw.edges, 'hierarchical', 'name')
+        const { nodes: builtNodes, edges: builtEdges } = buildLayout(raw.nodes, raw.edges, 'name', 'layer')
         setNodes(builtNodes)
         setEdges(builtEdges)
-        setProjectName(projectId)
       })
       .catch(() => setError('프로젝트를 찾을 수 없거나 비공개 상태입니다.'))
       .finally(() => setLoading(false))

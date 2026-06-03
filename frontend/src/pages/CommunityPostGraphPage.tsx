@@ -14,6 +14,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { buildLayout, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
 import type { RawNode, RawEdge } from '../utils/graphLayout'
+import type { Node, Edge } from '@xyflow/react'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
@@ -55,8 +56,8 @@ function applyHiddenFilter(
 function CommunityPostGraphInner() {
   const { postId } = useParams<{ postId: string }>()
   const navigate = useNavigate()
-  const [nodes, setNodes, onNodesChange] = useNodesState([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [hiddenSummary, setHiddenSummary] = useState<string[]>([])
@@ -82,7 +83,7 @@ function CommunityPostGraphInner() {
           (e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target)
         )
 
-        const { nodes: builtNodes, edges: builtEdges } = buildLayout(filteredNodes, filteredEdges, 'hierarchical', 'name')
+        const { nodes: builtNodes, edges: builtEdges } = buildLayout(filteredNodes, filteredEdges, 'name', 'layer')
         setNodes(builtNodes)
         setEdges(builtEdges)
 

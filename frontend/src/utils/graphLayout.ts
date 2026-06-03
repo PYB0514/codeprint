@@ -416,11 +416,9 @@ export function buildLayout(
 
   // 레이아웃 프리셋에 따라 그룹 위치 계산
   let groupPositions: Map<string, { x: number; y: number }>
-  let isoKeys: string[] = []
   if (layoutPreset === 'hub') {
     const hubResult = buildHubPositions(groups, groupLayouts, rawEdges, fileIdSet, fileToGroup)
     groupPositions = hubResult.positions
-    isoKeys = hubResult.isoKeys
   } else {
     groupPositions = buildLayerPositions(groups, groupLayouts)
   }
