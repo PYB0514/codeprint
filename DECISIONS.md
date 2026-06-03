@@ -12,7 +12,15 @@
 | [DECISIONS_BACKEND.md](DECISIONS_BACKEND.md) | Spring, DB, API 버그 및 설계 결정 |
 | [DECISIONS_FRONTEND.md](DECISIONS_FRONTEND.md) | React, UI 버그 및 설계 결정 |
 | [DECISIONS_ANALYSIS.md](DECISIONS_ANALYSIS.md) | 코드 분석 엔진, GraphBuilder 버그 및 설계 결정 |
-| [DECISIONS_RAILWAY.md](DECISIONS_RAILWAY.md) | Railway 배포 시행착오 9가지 + 올바른 배포 순서 |
+| [DECISIONS_RAILWAY.md](DECISIONS_RAILWAY.md) | Railway 배포 시행착오 + 올바른 배포 순서 |
+| [DECISIONS_VERCEL.md](DECISIONS_VERCEL.md) | Vercel 배포 시행착오 + 올바른 배포 순서 |
+
+## 파일 구조 원칙
+
+- **통합 파일 없음** — 전체 내용을 하나로 모은 파일은 유지하지 않는다. 새 항목 추가 시 두 곳에 써야 하는 부담이 생기기 때문.
+- **분야별 분리** — 백엔드/프론트/분석엔진/인프라 각각 별도 파일.
+- **인프라는 플랫폼별 분리** — Railway와 Vercel처럼 플랫폼이 다르면 파일도 분리. 나중에 AWS 추가되면 `DECISIONS_AWS.md` 신규 생성.
+- **인덱스(이 파일)만 유지** — 어떤 파일에 뭐가 있는지 파악할 수 있도록 파일 목록만 여기서 관리.
 
 ---
 
