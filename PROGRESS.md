@@ -66,6 +66,10 @@
 | Railway 배포 (백엔드 + PostgreSQL) | ✅ | https://codeprint.up.railway.app |
 | Vercel 배포 (프론트엔드) | ✅ | https://codeprint-iota.vercel.app |
 | GitHub OAuth App 등록 (운영용) | ✅ |
+| GitHub Actions CI | ✅ | PR마다 백엔드 컴파일 + 프론트 타입체크 |
+| 브랜치 보호 규칙 | ✅ | CI 통과 없이 main 머지 불가 |
+| Spring Boot Actuator | ✅ | Railway Healthcheck /actuator/health |
+| AWS S3 연동 | ✅ | presigned URL 발급 + 커뮤니티 이미지 첨부 UI |
 
 ---
 
@@ -91,22 +95,11 @@ npm run dev
 
 ```
 # 현재 브랜치: main
-# Railway + Vercel 배포 완료 (2026-06-03)
-# 백엔드: https://codeprint.up.railway.app
-# 프론트: https://codeprint-iota.vercel.app
+# CI/CD + AWS S3 연동 완료 (2026-06-04)
 
-# 1. GitHub Actions CI 구성 (.github/workflows/ci.yml)
-#    - PR마다 백엔드 컴파일 + 프론트 타입체크 (npx tsc -b)
-#    - 브랜치 보호 규칙: CI 통과 없이 main 머지 불가
-
-# 2. Spring Boot Actuator 추가
-#    - Railway Healthcheck 설정
-#    - /actuator/health 엔드포인트
-
-# 3. 다음 기능 개발 — feat/attach (S3 파일 첨부)
-#    - AWS 계정 생성 필요 (Access Key, Secret Key, 버킷명)
-#    - presigned URL 발급 API
-#    - 게시글 이미지/파일 첨부 UI
+# 1. Railway 카드 등록 — Trial 30일 만료 전 Hobby 플랜 전환 필요
+# 2. 첨부 이미지 게시글 상세에서 표시 (현재 업로드만 되고 화면에 안 보임)
+# 3. 다음 기능 개발 논의
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
