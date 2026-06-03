@@ -88,10 +88,17 @@ npm run dev
 
 ```
 # 현재 브랜치: feat/attach
-# 1. 로컬 전체 플로우 테스트 (Docker DB → 백엔드 → 프론트 → 사용자 확인)
-# 2. 버그 수정 후 feat/deploy 브랜치 생성
-# 3. 🚨 feat/deploy 시작 전 최우선: Railway 계정 생성 (아직 없음)
-# 4. GitHub Actions CI 구성 → Railway + Vercel 배포
+# 로컬 테스트에서 발견된 버그 3건 수정 후 feat/deploy로 이동
+
+# 버그 1: GraphPage LeftSection <p> → <div> 교체 (<button> 중첩 HTML 위반)
+# 버그 2: 재분석 후 중복 key (d100aae1...) — GraphBuilder 중복 엣지 확인
+# 버그 3: CommunityPage AxiosError Network Error — 백엔드 로그 확인 후 원인 파악
+
+# 버그 수정 완료 후:
+# 1. 🚨 feat/deploy 시작 전 최우선: Railway 계정 생성 (아직 없음)
+# 2. Stripe 계정 생성 (Secret Key, Pro Price ID, Webhook Secret)
+# 3. GitHub Actions CI 구성 → Railway + Vercel 배포
+# 4. ENCRYPTION_KEY 환경변수 Railway에 설정 필수
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
