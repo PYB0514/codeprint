@@ -44,9 +44,7 @@ public class CommunityController {
     // 게시글 단건 + 댓글 목록 조회
     @GetMapping("/posts/{postId}")
     public ResponseEntity<PostDetailResponse> getPost(@PathVariable UUID postId) {
-        Post post = postCommandService.getPosts(0, Integer.MAX_VALUE).stream()
-                .filter(p -> p.getId().equals(postId))
-                .findFirst()
+        Post post = postCommandService.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
         List<CommentResponse> comments = postCommandService.getComments(postId).stream()
                 .map(this::toCommentResponse)

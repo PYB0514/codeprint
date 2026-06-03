@@ -93,13 +93,17 @@ export default function CommunityPage() {
   // 댓글 작성 후 목록에 추가
   const handleSubmitComment = async () => {
     if (!newComment.trim() || !selectedPost) return
-    const res = await axios.post<Comment>(
-      `/api/community/posts/${selectedPost.id}/comments`,
-      { content: newComment },
-      { headers: authHeaders() }
-    )
-    setComments((prev) => [...prev, res.data])
-    setNewComment('')
+    try {
+      const res = await axios.post<Comment>(
+        `/api/community/posts/${selectedPost.id}/comments`,
+        { content: newComment },
+        { headers: authHeaders() }
+      )
+      setComments((prev) => [...prev, res.data])
+      setNewComment('')
+    } catch {
+      alert('댓글 등록에 실패했습니다. 다시 시도해주세요.')
+    }
   }
 
   // 게시글 삭제

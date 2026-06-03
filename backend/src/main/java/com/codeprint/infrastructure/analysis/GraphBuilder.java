@@ -27,6 +27,7 @@ public class GraphBuilder {
         Map<String, UUID> fileNodeIds = new HashMap<>();
         // 함수명 → 노드ID (파일 경로 포함: "filePath::funcName" → nodeId)
         Map<String, UUID> funcNodeIds = new HashMap<>();
+        Set<String> usedContainsEdgeIds = new HashSet<>();
 
         // FILE 노드 생성
         for (ParsedFile pf : parsedFiles) {
@@ -59,8 +60,10 @@ public class GraphBuilder {
                 graphRepository.saveNode(funcNode);
                 funcNodeIds.put(pf.filePath() + "::" + funcName, funcNode.getId());
 
-                // FILE → FUNCTION 포함 관계 엣지
+                // FILE → FUNCTION 포함 관계 엣지 (동일 식별자 중복 방지)
                 String edgeId = extractFileName(pf.filePath()) + "-" + funcName;
+                if (usedContainsEdgeIds.contains(edgeId)) continue;
+                usedContainsEdgeIds.add(edgeId);
                 Edge containsEdge = Edge.create(graphId, edgeId, EdgeType.CONTAINS,
                         fileNodeIds.get(pf.filePath()), funcNode.getId());
                 graphRepository.saveEdge(containsEdge);

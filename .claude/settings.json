@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "prompt",
+            "if": "Bash(git commit *)",
+            "prompt": "커밋 직전 CLAUDE.md의 3대 체크를 수행한다.\n\n검토 대상 커밋 명령: $ARGUMENTS\n\n체크 항목:\n1. DDD 구조 — domain 계층이 다른 Bounded Context를 직접 import하지 않는지, Repository는 인터페이스(domain)/구현(infrastructure) 분리, Application Service가 도메인 메서드에 위임하는지\n2. 보안 — 새 Controller 엔드포인트에 인증/인가, 소유권 검증, @Valid 어노테이션, 민감정보(토큰/비밀번호) 로그 미노출\n3. 코드 품질 — 단일 메서드 책임 분리, 불필요한 방어 코드 없음, 주석은 WHY만\n\n최근 변경 파일을 확인하고 위반이 있으면 block하고 이유를 명시한다.\n모두 통과하면 allow한다.",
+            "statusMessage": "커밋 전 3대 체크 수행 중...",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}
