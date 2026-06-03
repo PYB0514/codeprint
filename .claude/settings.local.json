@@ -28,7 +28,13 @@
       "Bash(./gradlew.bat compileJava)",
       "Bash(npx tsc *)",
       "Bash(git restore *)",
-      "Bash(xargs grep -l \"public\\\\|private\\\\|protected\")"
+      "Bash(xargs grep -l \"public\\\\|private\\\\|protected\")",
+      "PowerShell(cmd /c \"gh pr create --title \"\"feat: DDD �׷� �ڽ� + ���̾ƿ� ������\\(����/���\\) + ���� hover ����\"\" --body-file C:\\\\Dev\\\\Codeprint\\\\pr_body.txt --base main\")",
+      "PowerShell(\\(Get-Command gh -ErrorAction SilentlyContinue\\).Source; $env:PATH -split ';' | Select-String -Pattern \"gh|GitHub\")",
+      "PowerShell(Get-ChildItem \"C:\\\\Program Files\\\\GitHub CLI\" -ErrorAction SilentlyContinue; Get-ChildItem \"$env:LOCALAPPDATA\\\\Programs\\\\GitHub CLI\" -ErrorAction SilentlyContinue; Get-ChildItem \"C:\\\\Users\\\\one\\\\AppData\\\\Local\\\\Programs\" -ErrorAction SilentlyContinue | Select-Object Name)",
+      "PowerShell(gh pr view 5 --json state,title,headRefName)",
+      "PowerShell($env:PATH = $env:PATH + \";C:\\\\Program Files\\\\GitHub CLI\"; gh pr view 5 --json state,title,headRefName)",
+      "PowerShell($env:PATH += \";C:\\\\Program Files\\\\GitHub CLI\"; gh pr merge 6 --squash --delete-branch)"
     ]
   }
 }

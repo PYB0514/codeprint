@@ -61,6 +61,17 @@ public class ProjectController {
         return ResponseEntity.ok(gitHubApiClient.fetchBranches(project.getGithubRepoUrl(), user.getGithubAccessToken()));
     }
 
+    // 프로젝트 공개/비공개 상태 전환
+    @PatchMapping("/{projectId}/visibility")
+    public ResponseEntity<ProjectResponse> updateVisibility(
+            @PathVariable UUID projectId,
+            @RequestBody VisibilityRequest request,
+            @AuthenticationPrincipal User user) {
+        ProjectResponse response = ProjectResponse.from(
+                projectCommandService.toggleVisibility(projectId, user.getId(), request.isPublic()));
+        return ResponseEntity.ok(response);
+    }
+
     // 프로젝트 삭제
     @DeleteMapping("/{projectId}")
     public ResponseEntity<Void> deleteProject(
@@ -72,4 +83,7 @@ public class ProjectController {
 
     // 프로젝트 생성 요청 DTO (레포 URL, 이름, 설명)
     public record CreateProjectRequest(String githubRepoUrl, String name, String description) {}
+
+    // 공개/비공개 전환 요청 DTO
+    public record VisibilityRequest(boolean isPublic) {}
 }

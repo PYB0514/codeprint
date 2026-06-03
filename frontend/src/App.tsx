@@ -4,6 +4,8 @@ import LoginPage from './pages/LoginPage'
 import AuthCallbackPage from './pages/AuthCallbackPage'
 import DashboardPage from './pages/DashboardPage'
 import GraphPage from './pages/GraphPage'
+import ShareGraphPage from './pages/ShareGraphPage'
+import CommunityPage from './pages/CommunityPage'
 
 // 앱 최상위 라우터 컴포넌트
 export default function App() {
@@ -14,6 +16,8 @@ export default function App() {
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/projects/:projectId/graph" element={<GraphPage />} />
+        <Route path="/share/:projectId" element={<ShareGraphPage />} />
+        <Route path="/community" element={<CommunityPage />} />
       </Routes>
     </BrowserRouter>
   )
