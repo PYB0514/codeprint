@@ -228,7 +228,7 @@ export default function CommunityPage() {
               <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{selectedPost.content}</p>
               {selectedPost.graphId && (
                 <button
-                  onClick={() => navigate(`/share/${selectedPost.graphId}`)}
+                  onClick={() => navigate(`/community/posts/${selectedPost.id}/graph`)}
                   className="mt-3 text-xs text-blue-400 hover:text-blue-300"
                 >
                   그래프 보기 →

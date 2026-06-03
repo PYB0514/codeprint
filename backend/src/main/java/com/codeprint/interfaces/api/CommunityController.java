@@ -2,8 +2,11 @@
 package com.codeprint.interfaces.api;
 
 import com.codeprint.application.community.PostCommandService;
+import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.domain.community.Comment;
 import com.codeprint.domain.community.Post;
+import com.codeprint.domain.graph.Edge;
+import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -21,6 +25,7 @@ import java.util.UUID;
 public class CommunityController {
 
     private final PostCommandService postCommandService;
+    private final GraphQueryService graphQueryService;
     private final UserRepository userRepository;
 
     // 게시글 목록 조회 (페이지)
@@ -57,8 +62,64 @@ public class CommunityController {
                 request.graphId(),
                 request.title(),
                 request.content(),
-                request.feedbackType());
+                request.feedbackType(),
+                request.hiddenLayers(),
+                request.hiddenGroups(),
+                request.hiddenNodeNames());
         return ResponseEntity.status(201).body(toPostResponse(post, user.getUsername()));
+    }
+
+    // 게시글에 첨부된 그래프를 숨김 필터 적용하여 반환
+    @GetMapping("/posts/{postId}/graph")
+    public ResponseEntity<?> getPostGraph(@PathVariable UUID postId) {
+        Post post = postCommandService.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
+        if (post.getGraphId() == null) return ResponseEntity.notFound().build();
+
+        return graphQueryService.findById(post.getGraphId())
+                .map(graph -> {
+                    List<Node> nodes = graphQueryService.getNodes(graph.getId());
+                    List<Edge> edges = graphQueryService.getEdges(graph.getId());
+
+                    List<Map<String, Object>> nodeData = nodes.stream()
+                            .filter(n -> !n.isHidden())
+                            .map(n -> {
+                                Map<String, Object> node = new java.util.LinkedHashMap<>();
+                                node.put("id", n.getId().toString());
+                                node.put("type", n.getType().name());
+                                node.put("name", n.getName());
+                                node.put("filePath", n.getFilePath() != null ? n.getFilePath() : "");
+                                node.put("language", n.getLanguage() != null ? n.getLanguage() : "");
+                                node.put("posX", n.getPosX());
+                                node.put("posY", n.getPosY());
+                                if (n.getMetadata() != null && n.getMetadata().containsKey("comment")) {
+                                    node.put("comment", n.getMetadata().get("comment"));
+                                }
+                                return node;
+                            })
+                            .toList();
+
+                    List<Map<String, Object>> edgeData = edges.stream()
+                            .filter(e -> !e.isHidden())
+                            .map(e -> Map.<String, Object>of(
+                                    "id", e.getId().toString(),
+                                    "type", e.getType().name(),
+                                    "source", e.getSourceNodeId().toString(),
+                                    "target", e.getTargetNodeId().toString(),
+                                    "edgeIdentifier", e.getEdgeIdentifier()
+                            ))
+                            .toList();
+
+                    return ResponseEntity.ok(Map.of(
+                            "graphId", graph.getId().toString(),
+                            "nodes", nodeData,
+                            "edges", edgeData,
+                            "hiddenLayers", post.getHiddenLayers(),
+                            "hiddenGroups", post.getHiddenGroups(),
+                            "hiddenNodeNames", post.getHiddenNodeNames()
+                    ));
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     // 댓글 작성
@@ -115,7 +176,9 @@ public class CommunityController {
     }
 
     // 게시글 생성 요청 DTO
-    public record CreatePostRequest(String title, String content, String feedbackType, UUID graphId) {}
+    public record CreatePostRequest(
+            String title, String content, String feedbackType, UUID graphId,
+            List<String> hiddenLayers, List<String> hiddenGroups, List<String> hiddenNodeNames) {}
 
     // 댓글 생성 요청 DTO
     public record CreateCommentRequest(String content) {}

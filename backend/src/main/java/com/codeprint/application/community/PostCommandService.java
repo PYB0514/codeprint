@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -19,9 +20,16 @@ public class PostCommandService {
     private final PostRepository postRepository;
 
     // 새 게시글을 생성하여 저장
-    public Post createPost(UUID userId, UUID graphId, String title, String content, String feedbackType) {
-        Post post = Post.create(userId, graphId, title, content, feedbackType);
+    public Post createPost(UUID userId, UUID graphId, String title, String content, String feedbackType,
+                           List<String> hiddenLayers, List<String> hiddenGroups, List<String> hiddenNodeNames) {
+        Post post = Post.create(userId, graphId, title, content, feedbackType, hiddenLayers, hiddenGroups, hiddenNodeNames);
         return postRepository.save(post);
+    }
+
+    // 게시글 ID로 단건 조회
+    @Transactional(readOnly = true)
+    public Optional<Post> findById(UUID postId) {
+        return postRepository.findById(postId);
     }
 
     // 게시글에 댓글을 추가

@@ -5,8 +5,11 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -34,6 +37,18 @@ public class Post {
     @Column(name = "feedback_type", length = 50)
     private String feedbackType;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "hidden_layers", columnDefinition = "jsonb")
+    private List<String> hiddenLayers;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "hidden_groups", columnDefinition = "jsonb")
+    private List<String> hiddenGroups;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "hidden_node_names", columnDefinition = "jsonb")
+    private List<String> hiddenNodeNames;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -41,7 +56,8 @@ public class Post {
     private Instant updatedAt;
 
     // 사용자 입력으로 새 게시글 인스턴스 생성
-    public static Post create(UUID userId, UUID graphId, String title, String content, String feedbackType) {
+    public static Post create(UUID userId, UUID graphId, String title, String content, String feedbackType,
+                              List<String> hiddenLayers, List<String> hiddenGroups, List<String> hiddenNodeNames) {
         Post post = new Post();
         post.id = UUID.randomUUID();
         post.userId = userId;
@@ -49,6 +65,9 @@ public class Post {
         post.title = title;
         post.content = content;
         post.feedbackType = feedbackType;
+        post.hiddenLayers = hiddenLayers != null ? hiddenLayers : List.of();
+        post.hiddenGroups = hiddenGroups != null ? hiddenGroups : List.of();
+        post.hiddenNodeNames = hiddenNodeNames != null ? hiddenNodeNames : List.of();
         post.createdAt = Instant.now();
         post.updatedAt = Instant.now();
         return post;
