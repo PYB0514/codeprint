@@ -205,6 +205,70 @@ GitHub API로 최신 커밋 SHA를 가져오다 실패해도 배너를 표시하
 
 ---
 
+## 2026-06-03 | button 중첩 — 접근성 오류
+
+**문제.**
+GraphPage 엣지 섹션에서 콘솔에 "button cannot appear as a descendant of button" 경고 발생. 일부 브라우저에서 클릭 이벤트가 씹혔다.
+
+**원인.**
+엣지 항목 전체를 감싸는 외부 `<button>` 안에 아이콘용 `<button>`이 중첩된 구조. HTML 스펙상 button 안에 button은 불가.
+
+**수정.**
+외부 `<button>`을 `<div role="button" tabIndex={0} onKeyDown={...}>`으로 교체. 키보드 접근성도 함께 유지.
+
+**결과.**
+경고 제거, 클릭 이벤트 정상 동작.
+
+---
+
+## 2026-06-03 | GraphBuilder CONTAINS 엣지 중복 생성
+
+**문제.**
+같은 FILE→FUNCTION 관계에 CONTAINS 엣지가 중복으로 생성되어 그래프 렌더링 시 엣지가 겹쳤다.
+
+**원인.**
+`usedContainsEdgeIds` 중복 방지 Set이 GraphBuilder에 누락된 상태였다. FUNCTION_CALL/INSTANTIATION 엣지에는 있었으나 CONTAINS만 빠져 있었다.
+
+**수정.**
+GraphBuilder에 `usedContainsEdgeIds` Set 추가. 프론트엔드에도 `edgeId` 기준 dedup 안전망 추가.
+
+**결과.**
+CONTAINS 엣지 중복 제거, 그래프 정상 렌더링.
+
+---
+
+## 2026-06-03 | CommunityController getPost — 전체 목록 조회로 단건 조회
+
+**문제.**
+게시글 상세 페이지 진입 시 500 오류 발생.
+
+**원인.**
+`getPost(id)` 핸들러 내부에서 `getPosts(0, Integer.MAX_VALUE)`로 전체 목록을 조회한 뒤 스트림으로 필터링하는 잘못된 구현이었다. 게시글 수가 많아지면 OOM 위험도 있었다.
+
+**수정.**
+`postRepository.findById(id)`로 교체. 프론트에서도 404 응답 시 "게시글을 찾을 수 없습니다" 처리 추가.
+
+**결과.**
+단건 조회 정상 동작, 불필요한 전체 목록 로딩 제거.
+
+---
+
+## 2026-06-03 | Railway 배포 순서 오류 — Dockerfile 없이 연결 먼저
+
+**문제.**
+Railway에 GitHub 레포를 먼저 연결했더니 빌드가 실패했다. Dockerfile이 없어서 Railway가 jar 파일 경로를 인식하지 못했다.
+
+**원인.**
+올바른 순서(Dockerfile 작성 → 로컬 빌드 확인 → CI 구성 → Railway 연결)를 지키지 않고 Railway 연결을 먼저 진행했다.
+
+**수정.**
+Dockerfile 작성 후 Railway 빌드 재트리거.
+
+**결과.**
+빌드 재시도 중. 이후 배포 작업은 반드시 "로컬 확인 → CI → 클라우드" 순서로 진행.
+
+---
+
 ## 2026-06-03 | 단일 에이전트 → 다중 에이전트 전환 시점 판단 기준
 
 **문제.**
