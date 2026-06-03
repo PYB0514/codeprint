@@ -88,10 +88,9 @@ npm run dev
 
 ```
 # 현재 브랜치: feat/attach
-# 1. Railway + Vercel 배포 환경 구축
-# 2. GitHub Actions CI 파이프라인 구성 (PR 빌드/테스트 자동화)
-# 3. 브랜치 보호 규칙 설정 (Actions 통과 없이 main 머지 불가)
-# 4. 배포 도메인 확정 후 feat/attach (S3 파일 업로드) 구현
+# 1. 로컬 전체 플로우 테스트 (Docker DB → 백엔드 → 프론트 → 사용자 확인)
+# 2. 버그 수정 후 feat/deploy 브랜치 생성
+# 3. GitHub Actions CI 구성 → Railway + Vercel 배포
 ```
 
 ---
