@@ -139,6 +139,7 @@ function GraphPageInner() {
   const [showVersions, setShowVersions] = useState(false)
   const [versions, setVersions] = useState<{ graphId: string; createdAt: string; branch: string }[]>([])
   const [loadingVersions, setLoadingVersions] = useState(false)
+  const [outdated, setOutdated] = useState<{ branch: string; lastAnalyzedAt: string } | null>(null)
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareTitle, setShareTitle] = useState('')
   const [shareContent, setShareContent] = useState('')
@@ -231,7 +232,17 @@ function GraphPageInner() {
     }
   }, [projectId, setNodes, setEdges, openFileSidebar, applyEdgeVisibility])
 
-  useEffect(() => { fetchGraph() }, [fetchGraph])
+  useEffect(() => {
+    fetchGraph().then(() => {
+      axios.get(`/api/projects/${projectId}/freshness`, { headers: authHeaders() })
+        .then((res) => {
+          if (res.data.isOutdated) {
+            setOutdated({ branch: res.data.branch, lastAnalyzedAt: res.data.lastAnalyzedAt })
+          }
+        })
+        .catch(() => {})
+    })
+  }, [fetchGraph, projectId])
 
   // 현재 그래프에서 그룹 키 목록 추출
   const availableGroups = (() => {
@@ -597,8 +608,26 @@ function GraphPageInner() {
   return (
     <div ref={flowRef} style={{ width: '100vw', height: '100vh', background: '#030712' }}>
 
+      {/* 최신 커밋 감지 배너 */}
+      {outdated && (
+        <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-2 bg-yellow-900/80 border-b border-yellow-700 text-yellow-300 text-xs backdrop-blur-sm">
+          <span>
+            ⚠️ <strong>{outdated.branch}</strong> 브랜치에 새 커밋이 있습니다. 마지막 분석: {new Date(outdated.lastAnalyzedAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate(`/dashboard`)}
+              className="underline hover:text-yellow-100"
+            >
+              재분석하기
+            </button>
+            <button onClick={() => setOutdated(null)} className="text-yellow-500 hover:text-yellow-200">✕</button>
+          </div>
+        </div>
+      )}
+
       {/* 상단 바 — 내비 + 통계만 */}
-      <div className="absolute top-4 z-10 flex items-center gap-3" style={{ left: leftOpen ? `${leftWidth + 8}px` : '20px' }}>
+      <div className="absolute z-10 flex items-center gap-3" style={{ top: outdated ? '44px' : '16px', left: leftOpen ? `${leftWidth + 8}px` : '20px' }}>
         <button
           onClick={() => navigate('/dashboard')}
           className="bg-gray-800 hover:bg-gray-700 text-white text-sm px-3 py-1.5 rounded-lg"

@@ -3,7 +3,12 @@ package com.codeprint.application.analysis;
 
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
+import com.codeprint.domain.project.Project;
+import com.codeprint.domain.project.ProjectRepository;
+import com.codeprint.domain.user.User;
+import com.codeprint.domain.user.UserRepository;
 import com.codeprint.infrastructure.analysis.*;
+import com.codeprint.infrastructure.github.GitHubApiClient;
 import com.codeprint.interfaces.websocket.AnalysisProgressHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +26,9 @@ import java.util.UUID;
 public class AnalysisRunner {
 
     private final AnalysisRepository analysisRepository;
+    private final ProjectRepository projectRepository;
+    private final UserRepository userRepository;
+    private final GitHubApiClient gitHubApiClient;
     private final RepoCloner repoCloner;
     private final SourceFileWalker sourceFileWalker;
     private final StaticCodeAnalyzer staticCodeAnalyzer;
@@ -69,7 +77,20 @@ public class AnalysisRunner {
             graphBuilder.build(projectId, analysisId, parsedFiles);
             progressHandler.sendProgress(analysisId, 95, "RUNNING");
 
-            analysis.complete();
+            // 분석 완료 시점의 브랜치 최신 커밋 SHA 저장
+            String commitSha = null;
+            try {
+                Project project = projectRepository.findById(projectId).orElse(null);
+                if (project != null && branch != null) {
+                    String accessToken = userRepository.findById(project.getUserId())
+                            .map(User::getGithubAccessToken).orElse(null);
+                    commitSha = gitHubApiClient.fetchLatestCommitSha(githubRepoUrl, branch, accessToken);
+                }
+            } catch (Exception e) {
+                log.warn("커밋 SHA 조회 실패 (무시): {}", e.getMessage());
+            }
+
+            analysis.complete(commitSha);
             analysisRepository.save(analysis);
             progressHandler.sendProgress(analysisId, 100, "DONE");
 
