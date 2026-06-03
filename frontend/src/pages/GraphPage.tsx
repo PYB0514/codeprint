@@ -136,6 +136,9 @@ function GraphPageInner() {
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [showVersions, setShowVersions] = useState(false)
+  const [versions, setVersions] = useState<{ graphId: string; createdAt: string; branch: string }[]>([])
+  const [loadingVersions, setLoadingVersions] = useState(false)
   const flowRef = useRef<HTMLDivElement>(null)
   const { getNodes, fitView } = useReactFlow()
 
@@ -221,6 +224,44 @@ function GraphPageInner() {
   }, [projectId, setNodes, setEdges, openFileSidebar, applyEdgeVisibility])
 
   useEffect(() => { fetchGraph() }, [fetchGraph])
+
+  // 버전 목록을 서버에서 불러오는 함수
+  const handleLoadVersions = useCallback(async () => {
+    if (showVersions) { setShowVersions(false); return }
+    setLoadingVersions(true)
+    setShowVersions(true)
+    try {
+      const res = await axios.get(`/api/projects/${projectId}/graphs`, { headers: authHeaders() })
+      setVersions(res.data)
+    } finally {
+      setLoadingVersions(false)
+    }
+  }, [projectId, showVersions])
+
+  // 특정 버전의 그래프를 로드
+  const handleLoadVersion = useCallback(async (targetGraphId: string) => {
+    setLoading(true)
+    try {
+      const res = await axios.get(`/api/projects/${projectId}/graph?graphId=${targetGraphId}`, { headers: authHeaders() })
+      const { graphId: gid, nodes: rn, edges: re } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[] }
+      setGraphId(gid)
+      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebar)
+      setRawNodes(rn)
+      setRawEdgesCache(re)
+      setNodes(layoutNodes)
+      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges, showBrokenEdges))
+      setCounts({
+        files: rn.filter((n) => n.type === 'FILE').length,
+        funcs: rn.filter((n) => n.type === 'FUNCTION').length,
+        edges: re.length,
+      })
+      setShowVersions(false)
+    } catch {
+      setError('버전을 불러오지 못했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges])
 
   // 노드 라벨 표시 모드를 이름/주석 간 전환
   const toggleLabelMode = useCallback(() => {
@@ -556,6 +597,42 @@ function GraphPageInner() {
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed mt-1">
                 {exporting ? '저장 중...' : '↓ 이미지'}
               </button>
+            </LeftSection>
+
+            {/* 버전 기록 */}
+            <LeftSection title="버전 기록">
+              <button
+                onClick={handleLoadVersions}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300"
+              >
+                {showVersions ? '▲ 닫기' : '▼ 버전 목록 보기'}
+              </button>
+              {showVersions && (
+                <div className="mt-1 flex flex-col gap-1 max-h-48 overflow-y-auto">
+                  {loadingVersions ? (
+                    <p className="text-xs text-gray-500 px-1">불러오는 중...</p>
+                  ) : versions.length === 0 ? (
+                    <p className="text-xs text-gray-500 px-1">버전 없음</p>
+                  ) : (
+                    versions.map((v, i) => (
+                      <button
+                        key={v.graphId}
+                        onClick={() => handleLoadVersion(v.graphId)}
+                        className={`w-full text-left text-xs px-2 py-1.5 rounded hover:bg-gray-700 transition-colors ${
+                          v.graphId === graphId ? 'bg-gray-700 text-white' : 'bg-gray-800/40 text-gray-400'
+                        }`}
+                      >
+                        <span className="text-gray-300">{i === 0 ? '최신 ' : ''}</span>
+                        <span className="text-blue-400">{v.branch}</span>
+                        <br />
+                        <span className="text-gray-500">
+                          {new Date(v.createdAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </LeftSection>
 
             {/* 레이아웃 */}

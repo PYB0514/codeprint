@@ -1,6 +1,7 @@
 // 그래프 조회 REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.analysis.AnalysisApplicationService;
 import com.codeprint.application.graph.GraphCommandService;
 import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.application.project.ProjectQueryService;
@@ -13,8 +14,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -24,15 +27,40 @@ public class GraphController {
     private final GraphQueryService graphQueryService;
     private final GraphCommandService graphCommandService;
     private final ProjectQueryService projectQueryService;
+    private final AnalysisApplicationService analysisApplicationService;
 
-    // 프로젝트의 최신 그래프(노드+엣지)를 조회
+    // 프로젝트의 그래프 버전 목록을 최신순으로 조회
+    @GetMapping("/api/projects/{projectId}/graphs")
+    public ResponseEntity<List<Map<String, Object>>> getGraphVersions(
+            @PathVariable UUID projectId,
+            @AuthenticationPrincipal User user) {
+        projectQueryService.getProject(projectId, user.getId());
+        List<Map<String, Object>> versions = graphQueryService.findAllByProject(projectId).stream()
+                .map(graph -> {
+                    String branch = analysisApplicationService.getAnalysis(graph.getAnalysisId())
+                            .getBranch();
+                    Map<String, Object> item = new java.util.LinkedHashMap<>();
+                    item.put("graphId", graph.getId().toString());
+                    item.put("createdAt", graph.getCreatedAt().toString());
+                    item.put("branch", branch != null ? branch : "default");
+                    return item;
+                })
+                .toList();
+        return ResponseEntity.ok(versions);
+    }
+
+    // 프로젝트의 최신 그래프(노드+엣지)를 조회 — graphId 지정 시 해당 버전 반환
     @GetMapping("/api/projects/{projectId}/graph")
     public ResponseEntity<?> getGraph(
             @PathVariable UUID projectId,
+            @RequestParam(required = false) UUID graphId,
             @AuthenticationPrincipal User user) {
 
-        return graphQueryService.findLatestByProject(projectId)
-                .map(graph -> {
+        Optional<Graph> graphOpt = graphId != null
+                ? graphQueryService.findById(graphId)
+                : graphQueryService.findLatestByProject(projectId);
+
+        return graphOpt.map(graph -> {
                     List<Node> nodes = graphQueryService.getNodes(graph.getId());
                     List<Edge> edges = graphQueryService.getEdges(graph.getId());
 

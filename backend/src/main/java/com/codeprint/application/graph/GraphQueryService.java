@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,10 +20,20 @@ public class GraphQueryService {
 
     // 프로젝트의 가장 최근 그래프를 조회
     public Optional<Graph> findLatestByProject(UUID projectId) {
-        List<Graph> graphs = graphRepository.findByProjectId(projectId);
-        if (graphs.isEmpty()) return Optional.empty();
-        return graphs.stream()
-                .max((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
+        return graphRepository.findByProjectId(projectId).stream()
+                .max(Comparator.comparing(Graph::getCreatedAt));
+    }
+
+    // 프로젝트의 모든 그래프를 최신순으로 조회
+    public List<Graph> findAllByProject(UUID projectId) {
+        return graphRepository.findByProjectId(projectId).stream()
+                .sorted(Comparator.comparing(Graph::getCreatedAt).reversed())
+                .toList();
+    }
+
+    // graphId로 특정 그래프를 조회
+    public Optional<Graph> findById(UUID graphId) {
+        return graphRepository.findById(graphId);
     }
 
     // 그래프 ID로 노드 목록 조회
