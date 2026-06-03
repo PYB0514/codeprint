@@ -79,6 +79,16 @@ export default function DashboardPage() {
     setProjects((prev) => prev.map((p) => p.id === projectId ? { ...p, isPublic } : p))
   }
 
+  // Stripe Checkout 세션 생성 후 결제 페이지로 이동
+  const handleUpgrade = async () => {
+    try {
+      const res = await axios.post<{ url: string }>('/api/payments/checkout', {}, { headers: authHeaders() })
+      window.location.href = res.data.url
+    } catch {
+      alert('결제 페이지 연결에 실패했습니다. 잠시 후 다시 시도해주세요.')
+    }
+  }
+
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
@@ -106,6 +116,23 @@ export default function DashboardPage() {
       <AppHeader username={user.username} plan={user.plan} onLogout={handleLogout} />
 
       <main className="max-w-4xl mx-auto px-6 py-10">
+
+        {/* Free 플랜 업그레이드 배너 */}
+        {user.plan === 'FREE' && (
+          <div className="flex items-center justify-between bg-gradient-to-r from-gray-900 to-gray-800 border border-gray-700 rounded-xl px-5 py-4 mb-6">
+            <div>
+              <p className="text-sm font-medium text-white">Pro 플랜으로 업그레이드</p>
+              <p className="text-xs text-gray-400 mt-0.5">프로젝트 무제한 + AI 기능 사용 가능</p>
+            </div>
+            <button
+              onClick={handleUpgrade}
+              className="bg-white text-black text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-200 shrink-0"
+            >
+              업그레이드
+            </button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold">내 프로젝트</h1>
           <div className="flex items-center gap-3">
