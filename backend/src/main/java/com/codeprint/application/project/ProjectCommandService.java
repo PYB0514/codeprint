@@ -33,7 +33,7 @@ public class ProjectCommandService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
 
-        ProjectLimit limit = ProjectLimit.of(user.getPlan());
+        ProjectLimit limit = ProjectLimit.of(user.getPlan().maxProjects());
         int currentCount = projectRepository.countByUserId(userId);
         if (limit.isExceeded(currentCount)) {
             throw new IllegalStateException("Project limit reached for plan: " + user.getPlan());

@@ -104,70 +104,6 @@ C:\Dev\codeprint\
 - ID (Value Object) 로만 참조
 - 예: Graph가 User를 참조할 때 → User 객체 직접 참조 X, UserId만 보관
 
-### 백엔드 폴더 구조
-
-```
-src/main/java/com/codeprint/
-├── domain/
-│   ├── user/
-│   │   ├── User.java                  ← Aggregate Root
-│   │   ├── UserId.java                ← Value Object
-│   │   ├── UserPlan.java              ← Value Object (FREE / PRO)
-│   │   ├── UserRepository.java        ← Repository 인터페이스
-│   │   └── UserDomainService.java
-│   ├── project/
-│   │   ├── Project.java               ← Aggregate Root
-│   │   ├── ProjectId.java
-│   │   ├── ProjectLimit.java          ← Value Object (플랜별 제한)
-│   │   └── ProjectRepository.java
-│   ├── graph/
-│   │   ├── Graph.java                 ← Aggregate Root
-│   │   ├── GraphId.java
-│   │   ├── Node.java                  ← Entity
-│   │   ├── NodeId.java
-│   │   ├── NodeType.java              ← Enum (FILE/FUNCTION/DB_TABLE/API_ENDPOINT)
-│   │   ├── Edge.java                  ← Entity
-│   │   ├── EdgeId.java                ← Value Object (식별자 체계)
-│   │   ├── EdgeType.java              ← Enum (IMPORT/FUNCTION_CALL/DB_READ/DB_WRITE/API_CALL)
-│   │   ├── NodeStyle.java             ← Value Object (커스터마이징)
-│   │   ├── EdgeStyle.java             ← Value Object (커스터마이징)
-│   │   └── GraphRepository.java
-│   ├── analysis/
-│   │   ├── AnalysisResult.java        ← Aggregate Root
-│   │   ├── AnalysisId.java
-│   │   ├── AnalysisStatus.java        ← Enum (PENDING/RUNNING/DONE/FAILED)
-│   │   ├── LanguageConfidence.java    ← Value Object (언어별 신뢰도)
-│   │   └── AnalysisRepository.java
-│   └── community/
-│       ├── Post.java                  ← Aggregate Root
-│       ├── PostId.java
-│       ├── Comment.java               ← Entity
-│       ├── CommentId.java
-│       └── PostRepository.java
-├── application/
-│   ├── user/
-│   │   └── UserCommandService.java
-│   ├── project/
-│   │   └── ProjectCommandService.java
-│   ├── analysis/
-│   │   └── AnalysisApplicationService.java
-│   ├── graph/
-│   │   └── GraphCommandService.java
-│   └── community/
-│       └── PostCommandService.java
-├── infrastructure/
-│   ├── persistence/                   ← JPA Repository 구현체
-│   ├── github/                        ← GitHub API 클라이언트
-│   ├── treesitter/                    ← Tree-sitter 연동
-│   ├── stripe/                        ← Stripe 연동
-│   └── ai/                            ← Anthropic API (추후)
-└── interfaces/
-    ├── api/                           ← REST Controller
-    └── websocket/                     ← WebSocket Handler (분석 진행률)
-```
-
----
-
 ## 그래프 데이터 모델
 
 ### 노드 타입
@@ -196,149 +132,6 @@ src/main/java/com/codeprint/
 }
 ```
 AI 호출 시 전체 그래프 대신 관련 노드 주변만 잘라서 컨텍스트로 넘긴다.
-
----
-
-## DB 스키마 설계
-
-### users
-```sql
-CREATE TABLE users (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    github_id   BIGINT UNIQUE NOT NULL,
-    email       VARCHAR(255) UNIQUE NOT NULL,
-    username    VARCHAR(100) NOT NULL,
-    plan        VARCHAR(20) NOT NULL DEFAULT 'FREE',  -- FREE | PRO
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-### projects
-```sql
-CREATE TABLE projects (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    github_repo_url VARCHAR(500) NOT NULL,
-    name            VARCHAR(200) NOT NULL,
-    description     TEXT,
-    is_public       BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-### analyses
-```sql
-CREATE TABLE analyses (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id  UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    status      VARCHAR(20) NOT NULL DEFAULT 'PENDING',  -- PENDING|RUNNING|DONE|FAILED
-    progress    INT NOT NULL DEFAULT 0,                  -- 0~100
-    error_msg   TEXT,
-    started_at  TIMESTAMPTZ,
-    finished_at TIMESTAMPTZ,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-### graphs
-```sql
-CREATE TABLE graphs (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id  UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    analysis_id UUID NOT NULL REFERENCES analyses(id),
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-### nodes
-```sql
-CREATE TABLE nodes (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    graph_id    UUID NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
-    type        VARCHAR(30) NOT NULL,   -- FILE|FUNCTION|DB_TABLE|API_ENDPOINT
-    name        VARCHAR(500) NOT NULL,
-    file_path   VARCHAR(1000),
-    language    VARCHAR(50),
-    metadata    JSONB,                  -- 함수 시그니처, 라인번호 등 타입별 추가 정보
-    pos_x       FLOAT NOT NULL DEFAULT 0,
-    pos_y       FLOAT NOT NULL DEFAULT 0,
-    is_hidden   BOOLEAN NOT NULL DEFAULT FALSE  -- 공유 시 비공개 토글
-);
-```
-
-### edges
-```sql
-CREATE TABLE edges (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    graph_id        UUID NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
-    edge_identifier VARCHAR(500) NOT NULL,  -- 엣지 식별자 (파일명-함수명 체계)
-    type            VARCHAR(30) NOT NULL,   -- IMPORT|FUNCTION_CALL|DB_READ|DB_WRITE|API_CALL
-    source_node_id  UUID NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
-    target_node_id  UUID NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
-    metadata        JSONB,                  -- 호출 라인번호, 루트 파일 등
-    is_hidden       BOOLEAN NOT NULL DEFAULT FALSE
-);
-```
-
-### node_styles / edge_styles (커스터마이징 — 3차)
-```sql
-CREATE TABLE node_styles (
-    id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    node_id   UUID NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
-    color     VARCHAR(20),
-    font_size INT,
-    icon      VARCHAR(100),
-    group_id  UUID
-);
-
-CREATE TABLE edge_styles (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    edge_id     UUID NOT NULL REFERENCES edges(id) ON DELETE CASCADE,
-    color       VARCHAR(20),
-    line_style  VARCHAR(20),  -- SOLID | DASHED
-    thickness   INT
-);
-```
-
-### posts
-```sql
-CREATE TABLE posts (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    graph_id    UUID REFERENCES graphs(id) ON DELETE SET NULL,
-    title       VARCHAR(300) NOT NULL,
-    content     TEXT,
-    feedback_type VARCHAR(50),  -- ARCHITECTURE_REVIEW | GENERAL | DEBUG
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-### comments
-```sql
-CREATE TABLE comments (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    post_id     UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    content     TEXT NOT NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-### 인덱스
-```sql
-CREATE INDEX idx_projects_user_id     ON projects(user_id);
-CREATE INDEX idx_analyses_project_id  ON analyses(project_id);
-CREATE INDEX idx_nodes_graph_id       ON nodes(graph_id);
-CREATE INDEX idx_edges_graph_id       ON edges(graph_id);
-CREATE INDEX idx_edges_source         ON edges(source_node_id);
-CREATE INDEX idx_edges_target         ON edges(target_node_id);
-CREATE INDEX idx_posts_user_id        ON posts(user_id);
-CREATE INDEX idx_comments_post_id     ON comments(post_id);
-```
 
 ---
 
@@ -570,6 +363,15 @@ main                    ← 항상 배포 가능한 상태 유지
    codeprint_{N+1}
    ```
 3. 커밋 + push
+
+### 12. DDD Bounded Context Enforcement
+Domain 계층 클래스는 다른 Bounded Context의 클래스를 직접 import하지 않는다.
+
+- **금지**: `domain/project/` 클래스가 `domain/user/UserPlan` 등을 import
+- **허용**: Application Service에서 여러 도메인을 조율하며 변환값을 넘김
+- **허용**: 다른 컨텍스트의 ID(UUID)만 필드로 보유
+
+위반 패턴을 발견하면 코딩 전에 Application Service에서 변환하는 방식으로 설계 변경.
 
 ### 10. Read Errors, Don't Guess
 Read the actual error/log line. Don't pattern-match from memory.

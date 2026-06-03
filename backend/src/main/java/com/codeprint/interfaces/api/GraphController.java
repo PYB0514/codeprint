@@ -149,13 +149,16 @@ public class GraphController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // 노드 드래그 후 위치를 저장
+    // 노드 드래그 후 위치를 저장 — 그래프 소유자만 가능
     @PutMapping("/api/graphs/{graphId}/nodes/{nodeId}/position")
     public ResponseEntity<Void> updateNodePosition(
             @PathVariable UUID graphId,
             @PathVariable UUID nodeId,
             @RequestBody Map<String, Double> body,
             @AuthenticationPrincipal User user) {
+
+        graphQueryService.findById(graphId)
+                .ifPresent(graph -> projectQueryService.getProject(graph.getProjectId(), user.getId()));
 
         double x = body.getOrDefault("x", 0.0);
         double y = body.getOrDefault("y", 0.0);
