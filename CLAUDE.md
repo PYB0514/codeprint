@@ -372,6 +372,23 @@ CREATE INDEX idx_comments_post_id     ON comments(post_id);
 - 커스터마이징 데이터(node_styles, edge_styles)는 초기부터 별도 테이블로 분리 저장
 - nodes.metadata, edges.metadata는 JSONB로 유연하게 확장 (타입별 추가 정보)
 
+### 그래프 하위 호환성 규칙
+
+DB에 누적된 과거 그래프 버전이 깨지지 않도록 아래 규칙을 반드시 지킨다.
+
+**변경 시 Flyway 마이그레이션 필수**
+- `NodeType` enum 값 이름 변경/삭제 → `UPDATE nodes SET type = '새이름' WHERE type = '구이름'`
+- `EdgeType` enum 값 이름 변경/삭제 → `UPDATE edges SET type = '새이름' WHERE type = '구이름'`
+- 엣지 식별자(`edge_identifier`) 체계 변경 → 기존 데이터 일괄 변환 스크립트 포함
+
+**추가는 자유, 변경/삭제는 마이그레이션 세트**
+- 새 타입 추가: 기존 데이터에 영향 없으므로 자유롭게 추가 가능
+- 기존 타입 이름 변경 또는 삭제: 반드시 같은 PR에 Flyway 마이그레이션 포함
+
+**프론트엔드 렌더러 변경 시**
+- `graphLayout.ts`의 핵심 그룹핑/레이아웃 로직이 크게 바뀌는 경우, `graphs` 테이블에 `schema_version` 컬럼 추가 후 버전별 렌더러를 분기하는 방식으로 대응
+- 현재 schema_version = 1 (미구현 — 실제 호환 문제가 발생하면 도입)
+
 ---
 
 ## Behavioral Guidelines
