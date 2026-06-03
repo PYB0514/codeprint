@@ -2,7 +2,8 @@
 export default function LoginPage() {
   // GitHub OAuth 로그인 페이지로 이동
   const handleLogin = () => {
-    window.location.href = 'http://localhost:8080/oauth2/authorization/github'
+    const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
+    window.location.href = `${apiUrl}/oauth2/authorization/github`
   }
 
   return (
