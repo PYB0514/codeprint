@@ -49,6 +49,9 @@ dependencies {
     // Stripe
     implementation 'com.stripe:stripe-java:24.10.0'
 
+    // Actuator
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'

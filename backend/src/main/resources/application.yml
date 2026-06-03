@@ -57,6 +57,15 @@ encryption:
   # 32바이트 AES-256 키를 Base64로 인코딩한 값. 운영 환경에서는 반드시 환경변수로 교체.
   key: ${ENCRYPTION_KEY:Y29kZXByaW50LWxvY2FsLWRldi1lbmNyeXB0LWtleSE=}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
 logging:
   level:
     com.codeprint: DEBUG
