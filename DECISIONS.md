@@ -14,6 +14,7 @@
 | [DECISIONS_ANALYSIS.md](DECISIONS_ANALYSIS.md) | 코드 분석 엔진, GraphBuilder 버그 및 설계 결정 |
 | [DECISIONS_RAILWAY.md](DECISIONS_RAILWAY.md) | Railway 배포 시행착오 + 올바른 배포 순서 |
 | [DECISIONS_VERCEL.md](DECISIONS_VERCEL.md) | Vercel 배포 시행착오 + 올바른 배포 순서 |
+| [DECISIONS_INFRA.md](DECISIONS_INFRA.md) | 인프라 기술 선택 — AWS S3 vs Supabase, Railway vs Supabase DB |
 
 ## 파일 구조 원칙
 
