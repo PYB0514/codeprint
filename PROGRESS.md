@@ -175,6 +175,8 @@ npm run dev
 ## 백로그 (Phase 2)
 - 분석 비교 기능 (브랜치 A vs B, 이전 분석 vs 최신)
 - 언어 지원 확장 (C#, Ruby, PHP, Swift 함수 추출 패턴 추가)
+- **모니터링** — 실사용자 생기면 도입. micrometer-registry-prometheus + Grafana Cloud 무료 플랜으로 JVM/HTTP 메트릭 시각화. Actuator 이미 있어서 의존성 추가만 하면 됨.
+- **에러 트래킹 (Sentry)** — 운영 중 에러 추적용. Sentry SDK 한 줄 추가로 설정 가능. 실사용자 생기면 도입.
 
 ---
 
