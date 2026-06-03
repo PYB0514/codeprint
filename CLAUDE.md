@@ -481,12 +481,27 @@ Before any non-trivial task, produce three artifacts. Don't start coding without
 - **Checklist** (`checklist.md`) — concrete tasks as checkboxes. Tick as you go.
 - **Context Notes** (`context-notes.md`) — decisions made during the work and the reasoning behind them. Append continuously.
 
-### 8. Run Tests Before Marking Complete
-If you touched code, run the tests before saying "done".
-- `./gradlew test`, `npm test`, `pytest` — run it.
-- If tests pass, report results. If they fail, fix and re-run.
-- No test setup? At minimum, verify the project builds/compiles.
-- Run tests proactively — not after the user signals done.
+### 8. PR 머지 전 테스트 필수
+
+PR을 머지하기 전에 반드시 아래 체크리스트를 순서대로 수행한다. 컴파일만 확인하고 머지하지 않는다.
+
+**1단계 — 정적 검증 (항상)**
+- `./gradlew compileJava` — 백엔드 컴파일 오류 없음
+- `npx tsc --noEmit` — 프론트 타입 오류 없음
+
+**2단계 — 런타임 검증 (코드 변경 시 항상)**
+- Docker DB 실행 중인지 확인 (`docker compose up -d`)
+- 백엔드 `bootRun` 후 서버 정상 기동 확인 (포트 8080)
+- 프론트 `npm run dev` 후 브라우저 접속 확인 (포트 3000)
+- 변경된 기능과 직접 연관된 API 또는 UI를 Claude in Chrome으로 직접 동작 확인
+
+**3단계 — 회귀 확인 (기존 기능 영향 범위)**
+- 변경이 기존 기능에 영향을 줄 수 있으면 해당 영역도 함께 확인
+- Flyway 마이그레이션 포함 시 실제 DB에 마이그레이션 적용 확인
+
+**OAuth 로그인이 필요한 플로우**
+- GitHub 로그인이 필요한 부분은 사용자에게 직접 테스트를 요청하고 결과를 확인한 뒤 머지
+- "구현 완료" 선언 전에 반드시 사용자 확인을 받는다
 
 This is the step LLMs skip most often. Treat it as non-negotiable.
 
