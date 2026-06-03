@@ -54,6 +54,7 @@ export default function CommunityPage() {
   const [newFeedbackType, setNewFeedbackType] = useState('GENERAL')
   const [newComment, setNewComment] = useState('')
   const [loading, setLoading] = useState(true)
+  const [attachedFiles, setAttachedFiles] = useState<{ file: File; s3Key: string; uploading: boolean }[]>([])
 
   useEffect(() => {
     const token = localStorage.getItem('jwt')
@@ -74,6 +75,30 @@ export default function CommunityPage() {
     setSelectedPost(post)
     const res = await axios.get<{ post: Post; comments: Comment[] }>(`/api/community/posts/${post.id}`)
     setComments(res.data.comments)
+  }
+
+  // 파일 선택 시 presigned URL 발급 후 S3 직접 업로드
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    for (const file of files) {
+      const entry = { file, s3Key: '', uploading: true }
+      setAttachedFiles((prev) => [...prev, entry])
+      const { data } = await axios.post<{ uploadUrl: string; s3Key: string }>(
+        '/api/attachments/presign',
+        { contentType: file.type, filename: file.name },
+        { headers: authHeaders() }
+      )
+      await fetch(data.uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+      setAttachedFiles((prev) =>
+        prev.map((f) => (f.file === file ? { ...f, s3Key: data.s3Key, uploading: false } : f))
+      )
+    }
+    e.target.value = ''
+  }
+
+  // 첨부파일 제거
+  const handleRemoveFile = (file: File) => {
+    setAttachedFiles((prev) => prev.filter((f) => f.file !== file))
   }
 
   // 새 게시글 작성 후 목록에 추가
@@ -162,9 +187,31 @@ export default function CommunityPage() {
                 rows={5}
                 className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none resize-none"
               />
+              {/* 파일 첨부 */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-gray-400 cursor-pointer hover:text-gray-200 w-fit">
+                  + 이미지 첨부
+                  <input type="file" accept="image/*" multiple onChange={handleFileChange} className="hidden" />
+                </label>
+                {attachedFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {attachedFiles.map(({ file, uploading }) => (
+                      <div key={file.name} className="flex items-center gap-1 bg-gray-800 px-2 py-1 rounded text-xs text-gray-300">
+                        <span>{file.name}</span>
+                        {uploading ? (
+                          <span className="text-gray-500">업로드 중...</span>
+                        ) : (
+                          <button onClick={() => handleRemoveFile(file)} className="text-gray-500 hover:text-red-400 ml-1">✕</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handleSubmitPost}
-                className="self-end text-sm bg-white text-black font-medium px-4 py-1.5 rounded-lg hover:bg-gray-200"
+                disabled={attachedFiles.some((f) => f.uploading)}
+                className="self-end text-sm bg-white text-black font-medium px-4 py-1.5 rounded-lg hover:bg-gray-200 disabled:opacity-50"
               >
                 등록
               </button>
