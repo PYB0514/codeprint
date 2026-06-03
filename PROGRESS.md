@@ -87,29 +87,31 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재 브랜치: main (feat/attach 머지 완료)
-# Railway 배포 진행 중 — Dockerfile 추가 후 빌드 재시도 중
+# 현재 브랜치: main
+# Railway 배포 마지막 시도 중 — DataSourceConfig URL 파싱 수정 push 완료 (5795595)
 
-# 1. Railway 빌드 결과 확인 (thorough-peace 프로젝트)
-#    - 성공 시: Railway 도메인 확인 → GitHub OAuth App 운영용 생성
-#    - 실패 시: 로그 보고 원인 수정
+# 1. Railway 배포 결과 확인
+#    - 성공 시: Railway 도메인에서 API 응답 확인 → 도메인 확정
+#    - 실패 시: Deploy Logs 보고 원인 수정
 
-# 2. GitHub OAuth App 운영용 생성 (github.com/settings/developers)
-#    - 콜백 URL: https://{railway-domain}/login/oauth2/code/github
-#    - GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET → Railway 환경변수 추가
+# 2. Railway Settings → Domains에서 실제 도메인 확인 후:
+#    - GitHub OAuth App 콜백 URL이 올바른지 확인
+#      (현재: https://codeprint.up.railway.app/login/oauth2/code/github)
+#    - FRONTEND_URL 환경변수도 Vercel 도메인으로 추후 업데이트 필요
 
-# 3. Vercel 프론트 배포
+# 3. Railway 서비스 도메인 노출 설정
+#    - 현재 "Unexposed service" 상태 → Settings → Networking → Generate Domain
+
+# 4. Vercel 프론트 배포
 #    - vercel.com → GitHub 연결 → frontend 루트 디렉토리
 #    - VITE_API_URL = Railway 도메인
 
-# 4. FRONTEND_URL Railway 환경변수 → Vercel 도메인으로 업데이트
-
 # 5. GitHub Actions CI 구성 (.github/workflows/ci.yml)
+#    - PR마다 백엔드 컴파일 + 프론트 타입체크
 
-# 6. Stripe 계정 생성 → STRIPE_* 환경변수 추가
+# 6. Spring Boot Actuator + Micrometer 추가 (Healthcheck + 모니터링 기반)
 
-# ⚠️ 다음 배포 작업 순서 원칙:
-# Dockerfile 작성 → 로컬 빌드 확인 → CI 구성 → Railway 연결 (이번에 순서 어긋남)
+# 7. Stripe 계정 생성 → STRIPE_* 환경변수 추가
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항

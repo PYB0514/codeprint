@@ -269,6 +269,79 @@ Dockerfile 작성 후 Railway 빌드 재트리거.
 
 ---
 
+## 2026-06-03 | CLAUDE.md 원칙 상충 해소
+
+**결정.**
+시스템 기본 지침("주석 금지")과 CLAUDE.md §6("모든 함수에 한국어 주석 필수")이 충돌하는 문제 외 5건의 상충을 발견하고 해소했다.
+
+**해소 내용.**
+- §6 한국어 주석은 그래프 시각화 데이터로 쓰이는 도메인 요구사항이므로 시스템 지침 OVERRIDE 명시
+- Surgical Changes vs. 함수 주석: "내가 수정한 함수에만 적용"으로 범위 명시
+- main 직접 커밋 금지 vs. 문서 커밋 관행: 문서 전용 커밋은 main 직접 허용
+- non-trivial 기준 없음: 3개+ 파일 수정, 새 도메인 모델, DB 스키마, API 계약 변경으로 구체화
+- 테스트 원칙 vs. 테스트 없음: 도메인 로직은 TDD, Controller/Repository는 런타임 검증으로 분리
+- DECISIONS.md 즉시 기록 vs. 커밋 단위: 해당 기능 커밋에 함께 포함으로 정리
+
+---
+
+## 2026-06-03 | Railway 배포 — SPRING_DATASOURCE_URL 환경변수 미읽음
+
+**문제.**
+application.yml에 `url: jdbc:postgresql://localhost:5432/codeprint`가 하드코딩되어 있어 Railway 환경변수 `SPRING_DATASOURCE_URL`을 아예 읽지 않았다.
+
+**수정.**
+`url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/codeprint}`로 교체.
+
+**결과.**
+환경변수를 읽기 시작했으나 URL 형식 문제로 다음 오류 발생 (아래 항목 참조).
+
+---
+
+## 2026-06-03 | Railway 배포 — postgresql:// vs jdbc:postgresql://
+
+**문제.**
+Railway가 주입하는 `DATABASE_URL`은 `postgresql://user:pass@host:port/db` 형식인데 Spring JDBC는 `jdbc:postgresql://` 형식만 허용한다.
+
+**수정.**
+`DataSourceConfig` Bean을 추가해 `DATABASE_URL`을 파싱하고 자동으로 변환.
+
+**결과.**
+형식 문제는 해결됐으나 user:password@host 전체를 호스트명으로 인식하는 다음 오류 발생 (아래 항목 참조).
+
+---
+
+## 2026-06-03 | Railway 배포 — JDBC URL에 자격증명 포함 시 UnknownHostException
+
+**문제.**
+`jdbc:postgresql://user:pass@host:port/db` 형식을 그대로 JDBC URL로 전달하면 PostgreSQL JDBC 드라이버가 `user:pass@host` 전체를 호스트명으로 해석해 `UnknownHostException` 발생.
+
+**원인.**
+PostgreSQL JDBC 드라이버는 URL에 자격증명을 포함하는 형식을 지원하지 않는다. username/password는 별도 파라미터로 전달해야 한다.
+
+**수정.**
+`DataSourceConfig`에서 URI 파싱으로 host, port, database, username, password를 분리한 뒤 `HikariDataSource`에 각각 설정.
+
+**결과.**
+Push 완료, 배포 결과 다음 세션에서 확인 예정.
+
+---
+
+## 2026-06-03 | Railway DB 연결 — 수동 변수 대신 참조 변수 사용
+
+**문제.**
+`SPRING_DATASOURCE_URL`, `DB_USERNAME`, `DB_PASSWORD`를 직접 입력하면 DB가 재생성될 때 깨진다.
+
+**선택.**
+Railway "Add Variable" 배너로 `DATABASE_URL = ${{Postgres.DATABASE_URL}}` 참조 변수를 자동 주입받는 방식으로 변경.
+
+**이유.**
+참조 변수는 PostgreSQL 서비스가 재생성되어도 자동으로 최신 값을 가져오므로 유지보수 불필요.
+
+**결과.**
+수동 변수 3개 삭제 → 참조 변수 1개로 대체. `DataSourceConfig`에서 형식 변환 자동 처리.
+
+---
+
 ## 2026-06-03 | 단일 에이전트 → 다중 에이전트 전환 시점 판단 기준
 
 **문제.**
