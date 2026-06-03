@@ -31,13 +31,75 @@ interface FuncCallChainEntry {
   fileNodeId: string
 }
 
+// 전체 흐름 추적 — 각 단계 노드 정보
+interface FlowStep {
+  nodeId: string
+  label: string        // 함수 주석 또는 파일명
+  subLabel?: string    // 함수일 경우 소속 파일명
+  subNodeId?: string   // 함수일 경우 파일 노드 ID
+  isSource: boolean    // 클릭한 엣지의 출발 노드
+  isTarget: boolean    // 클릭한 엣지의 도착 노드
+  altCount?: number    // 이 지점에서 다른 분기 수
+}
+
 // 사이드바 콘텐츠 — 엣지 클릭 / 파일 연결 보기 / 함수 노드 클릭 세 종류
 type SidebarContent =
-  | { kind: 'edge'; sourceId: string; targetId: string; sourceNodeId: string; targetNodeId: string; callChain: ConnEntry['callChain'] }
+  | { kind: 'edge'; sourceId: string; targetId: string; sourceNodeId: string; targetNodeId: string; callChain: ConnEntry['callChain']; flowChain: FlowStep[] }
   | { kind: 'file'; data: FileSidebarData }
   | { kind: 'func'; funcName: string; funcComment: string | null; parentFileName: string; parentFileNodeId: string; callers: FuncCallChainEntry[]; callees: FuncCallChainEntry[] }
-  | { kind: 'func-call'; callerName: string; callerComment: string | null; callerNodeId: string; callerFile: string; callerFileNodeId: string; calleeName: string; calleeComment: string | null; calleeNodeId: string; calleeFile: string; calleeFileNodeId: string }
-  | { kind: 'instantiation'; sourceFile: string; sourceNodeId: string; targetClass: string; targetNodeId: string }
+  | { kind: 'func-call'; callerName: string; callerComment: string | null; callerNodeId: string; callerFile: string; callerFileNodeId: string; calleeName: string; calleeComment: string | null; calleeNodeId: string; calleeFile: string; calleeFileNodeId: string; flowChain: FlowStep[] }
+  | { kind: 'instantiation'; sourceFile: string; sourceNodeId: string; targetClass: string; targetNodeId: string; flowChain: FlowStep[] }
+
+// 동일 타입 엣지를 따라 upstream·downstream을 추적하여 전체 흐름 반환
+function traceFlow(
+  sourceId: string,
+  targetId: string,
+  edgeType: string,
+  rawEdges: RawEdge[],
+  rawNodes: RawNode[],
+): FlowStep[] {
+  const MAX_DEPTH = 15
+
+  const makeStep = (id: string, isSource: boolean, isTarget: boolean, altCount?: number): FlowStep => {
+    const node = rawNodes.find((n) => n.id === id)
+    if (!node) return { nodeId: id, label: id, isSource, isTarget }
+    if (node.type === 'FUNCTION') {
+      const file = rawNodes.find((n) => n.type === 'FILE' && n.filePath === node.filePath)
+      return { nodeId: id, label: node.comment ?? node.name, subLabel: file?.name, subNodeId: file?.id, isSource, isTarget, altCount }
+    }
+    return { nodeId: id, label: node.comment ?? node.name, isSource, isTarget, altCount }
+  }
+
+  // 역방향 추적 — source에서 root로
+  const upstream: FlowStep[] = []
+  const visitedUp = new Set<string>([sourceId])
+  let cur = sourceId
+  for (let i = 0; i < MAX_DEPTH; i++) {
+    const incoming = rawEdges.filter((e) => e.type === edgeType && e.target === cur)
+    if (incoming.length === 0) break
+    const nextId = incoming[0].source
+    if (visitedUp.has(nextId)) break
+    visitedUp.add(nextId)
+    upstream.unshift(makeStep(nextId, false, false, incoming.length > 1 ? incoming.length - 1 : undefined))
+    cur = nextId
+  }
+
+  // 순방향 추적 — target에서 leaf로
+  const downstream: FlowStep[] = []
+  const visitedDown = new Set<string>([targetId])
+  cur = targetId
+  for (let i = 0; i < MAX_DEPTH; i++) {
+    const outgoing = rawEdges.filter((e) => e.type === edgeType && e.source === cur)
+    if (outgoing.length === 0) break
+    const nextId = outgoing[0].target
+    if (visitedDown.has(nextId)) break
+    visitedDown.add(nextId)
+    downstream.push(makeStep(nextId, false, false, outgoing.length > 1 ? outgoing.length - 1 : undefined))
+    cur = nextId
+  }
+
+  return [...upstream, makeStep(sourceId, true, false), makeStep(targetId, false, true), ...downstream]
+}
 
 // JWT 토큰을 Authorization 헤더로 반환
 function authHeaders() {
@@ -58,11 +120,19 @@ function GraphPageInner() {
   const [sidebar, setSidebar] = useState<SidebarContent | null>(null)
   const [rightCollapsed, setRightCollapsed] = useState(false)
   const [leftOpen, setLeftOpen] = useState(true)
+  const [leftWidth, setLeftWidth] = useState(220)
+  const [rightWidth, setRightWidth] = useState(320)
+  const leftResizing = useRef(false)
+  const rightResizing = useRef(false)
+  const dragStartX = useRef(0)
+  const dragStartWidth = useRef(0)
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
+  const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
   const [showEdges, setShowEdges] = useState(false)
   const [showCallEdges, setShowCallEdges] = useState(false)
   const [showInstEdges, setShowInstEdges] = useState(false)
+  const [showBrokenEdges, setShowBrokenEdges] = useState(true)
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -70,17 +140,61 @@ function GraphPageInner() {
   const { getNodes, fitView } = useReactFlow()
 
   // 엣지 타입별 초기 hidden 상태 적용
-  const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean) =>
+  const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean, sb: boolean) =>
     edges.map((e) => {
-      const t = (e.data as { type?: string })?.type
-      const hidden = t === 'IMPORT' ? !se : t === 'FUNCTION_CALL' ? !sc : t === 'INSTANTIATION' ? !si : false
+      const d = e.data as { type?: string; broken?: boolean } | undefined
+      const t = d?.type
+      const broken = d?.broken
+      const hidden =
+        t === 'IMPORT' && broken ? !sb :
+        t === 'IMPORT' ? !se :
+        t === 'FUNCTION_CALL' ? !sc :
+        t === 'INSTANTIATION' ? !si :
+        false
       return { ...e, hidden }
     }), [])
+
+  // 레이어 섹션 박스를 해당 색상으로 덮어 내용을 가리는 토글
+  const toggleLayerOpaque = useCallback((layer: string) => {
+    setOpaqueLayerSet((prev) => {
+      const next = new Set(prev)
+      if (next.has(layer)) next.delete(layer)
+      else next.add(layer)
+      const isOpaque = next.has(layer)
+      setNodes((nds) => nds.map((n) => {
+        if (n.id !== `layer-section-${layer}`) return n
+        return {
+          ...n,
+          zIndex: isOpaque ? 9999 : -20,
+          data: { ...n.data, opaque: isOpaque },
+        }
+      }))
+      return next
+    })
+  }, [setNodes])
 
   // 파일 연결 보기 — 사이드바 오픈 콜백
   const openFileSidebar = useCallback((data: FileSidebarData) => {
     setSidebar({ kind: 'file', data })
     setRightCollapsed(false)
+  }, [])
+
+  // 사이드바 드래그 리사이즈 — 전역 mousemove/mouseup 처리
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (leftResizing.current) {
+        const delta = e.clientX - dragStartX.current
+        setLeftWidth(Math.min(420, Math.max(160, dragStartWidth.current + delta)))
+      }
+      if (rightResizing.current) {
+        const delta = dragStartX.current - e.clientX
+        setRightWidth(Math.min(520, Math.max(240, dragStartWidth.current + delta)))
+      }
+    }
+    const onUp = () => { leftResizing.current = false; rightResizing.current = false }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
   }, [])
 
   // 서버에서 그래프 데이터를 불러와 React Flow 레이아웃으로 변환
@@ -93,7 +207,7 @@ function GraphPageInner() {
       setRawNodes(rn)
       setRawEdgesCache(re)
       setNodes(layoutNodes)
-      setEdges(applyEdgeVisibility(layoutEdges, false, false, false))
+      setEdges(applyEdgeVisibility(layoutEdges, false, false, false, true))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,
@@ -115,9 +229,9 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, next, layoutPreset, openFileSidebar)
       setNodes(layoutNodes)
-      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges))
+      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges, showBrokenEdges))
     }
-  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showEdges, showCallEdges, showInstEdges, applyEdgeVisibility])
+  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, applyEdgeVisibility])
 
   // IMPORT 엣지 표시/숨김 토글
   const toggleEdges = useCallback(() => {
@@ -158,6 +272,19 @@ function GraphPageInner() {
     })
   }, [setEdges])
 
+  // 끊긴 연결 엣지 표시/숨김 토글
+  const toggleBrokenEdges = useCallback(() => {
+    setShowBrokenEdges((prev) => {
+      const next = !prev
+      setEdges((eds) => eds.map((e) =>
+        (e.data as { broken?: boolean })?.broken
+          ? { ...e, hidden: !next }
+          : e
+      ))
+      return next
+    })
+  }, [setEdges])
+
   // 레이아웃 프리셋 전환 — 그래프를 재계산하여 적용
   const toggleLayoutPreset = useCallback(() => {
     const next: LayoutPreset = layoutPreset === 'layer' ? 'hub' : 'layer'
@@ -165,10 +292,10 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
       setNodes(ln)
-      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges))
+      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges, showBrokenEdges))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
-  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, applyEdgeVisibility])
+  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, applyEdgeVisibility])
 
   // 전체 그래프를 원본 크기 PNG로 다운로드
   const handleExportImage = useCallback(async () => {
@@ -273,6 +400,7 @@ function GraphPageInner() {
         calleeNodeId: edge.target,
         calleeFile: tgtFile?.name ?? tgtFunc?.filePath ?? '',
         calleeFileNodeId: tgtFile?.id ?? '',
+        flowChain: traceFlow(edge.source, edge.target, 'FUNCTION_CALL', rawEdgesCache, rawNodes),
       })
       return
     }
@@ -286,6 +414,7 @@ function GraphPageInner() {
         sourceNodeId: edge.source,
         targetClass: tgtFile?.name ?? edge.target,
         targetNodeId: edge.target,
+        flowChain: traceFlow(edge.source, edge.target, 'INSTANTIATION', rawEdgesCache, rawNodes),
       })
       return
     }
@@ -310,6 +439,7 @@ function GraphPageInner() {
       sourceNodeId: edge.source,
       targetNodeId: edge.target,
       callChain,
+      flowChain: traceFlow(edge.source, edge.target, 'IMPORT', rawEdgesCache, rawNodes),
     })
   }, [rawNodes, rawEdgesCache])
 
@@ -377,7 +507,7 @@ function GraphPageInner() {
     <div ref={flowRef} style={{ width: '100vw', height: '100vh', background: '#030712' }}>
 
       {/* 상단 바 — 내비 + 통계만 */}
-      <div className="absolute top-4 z-10 flex items-center gap-3" style={{ left: leftOpen ? '228px' : '20px' }}>
+      <div className="absolute top-4 z-10 flex items-center gap-3" style={{ left: leftOpen ? `${leftWidth + 8}px` : '20px' }}>
         <button
           onClick={() => navigate('/dashboard')}
           className="bg-gray-800 hover:bg-gray-700 text-white text-sm px-3 py-1.5 rounded-lg"
@@ -401,15 +531,32 @@ function GraphPageInner() {
 
       {/* 왼쪽 사이드바 */}
       {leftOpen && (
-        <aside className="absolute left-0 top-0 h-full z-20 flex flex-col bg-gray-950 border-r border-gray-800 shadow-xl overflow-y-auto" style={{ width: '220px' }}>
+        <aside className="absolute left-0 top-0 h-full z-20 flex flex-col bg-gray-950 border-r border-gray-800 shadow-xl overflow-y-auto" style={{ width: `${leftWidth}px` }}>
 
           {/* 사이드바 헤더 */}
           <div className="flex items-center justify-between px-3 py-3 border-b border-gray-800 flex-shrink-0">
-            <span className="text-xs font-bold text-gray-300 tracking-widest uppercase">Codeprint</span>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="text-xs font-bold text-gray-300 hover:text-white tracking-widest uppercase transition-colors"
+            >
+              Codeprint
+            </button>
             <button onClick={() => setLeftOpen(false)} className="text-gray-600 hover:text-white text-sm leading-none" title="사이드바 접기">‹</button>
           </div>
 
           <div className="flex flex-col gap-0 flex-1">
+
+            {/* 내보내기 — 최상단 */}
+            <LeftSection title="내보내기">
+              <button onClick={() => downloadTreeText(rawNodes)} disabled={rawNodes.length === 0}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed">
+                ↓ AI 컨텍스트
+              </button>
+              <button onClick={handleExportImage} disabled={exporting || rawNodes.length === 0}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed mt-1">
+                {exporting ? '저장 중...' : '↓ 이미지'}
+              </button>
+            </LeftSection>
 
             {/* 레이아웃 */}
             <LeftSection title="레이아웃">
@@ -441,77 +588,57 @@ function GraphPageInner() {
               </div>
             </LeftSection>
 
-            {/* 엣지 토글 — 범례와 연동 */}
+            {/* 엣지 — 색인 + 토글 통합 */}
             <LeftSection title="엣지">
-              <button
-                onClick={toggleEdges}
-                className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60 group"
-              >
-                <span className="w-4 flex-shrink-0">
-                  <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />
-                </span>
-                <span className={`text-xs flex-1 ${showEdges ? 'text-gray-300' : 'text-gray-600'}`}>IMPORT</span>
-                <ToggleChip active={showEdges} onClick={toggleEdges} stopPropagation />
-              </button>
-              <button
-                onClick={toggleCallEdges}
-                className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60"
-              >
-                <span className="w-4 flex-shrink-0">
-                  <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="4 3" /></svg>
-                </span>
-                <span className={`text-xs flex-1 ${showCallEdges ? 'text-amber-400' : 'text-gray-600'}`}>콜 체인</span>
-                <ToggleChip active={showCallEdges} onClick={toggleCallEdges} stopPropagation />
-              </button>
-              <button
-                onClick={toggleInstEdges}
-                className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60"
-              >
-                <span className="w-4 flex-shrink-0">
-                  <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>
-                </span>
-                <span className={`text-xs flex-1 ${showInstEdges ? 'text-purple-400' : 'text-gray-600'}`}>생성</span>
-                <ToggleChip active={showInstEdges} onClick={toggleInstEdges} stopPropagation />
-              </button>
-            </LeftSection>
-
-            {/* 내보내기 */}
-            <LeftSection title="내보내기">
-              <button
-                onClick={() => downloadTreeText(rawNodes)}
-                disabled={rawNodes.length === 0}
-                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
-                title="파일명 — 한국어 주석 형태의 AI 컨텍스트용 트리 다운로드"
-              >
-                ↓ AI 컨텍스트
-              </button>
-              <button
-                onClick={handleExportImage}
-                disabled={exporting || rawNodes.length === 0}
-                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed mt-1"
-                title="전체 그래프를 원본 크기 PNG로 저장"
-              >
-                {exporting ? '저장 중...' : '↓ 이미지'}
-              </button>
-            </LeftSection>
-
-            {/* 범례 */}
-            <LeftSection title="범례">
-              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">DDD 레이어</p>
               {[
-                { label: 'Domain',           color: '#3b82f6' },
-                { label: 'Application',      color: '#eab308' },
-                { label: 'Infrastructure',   color: '#a855f7' },
-                { label: 'Interfaces',       color: '#10b981' },
-                { label: 'Pages/Components', color: '#06b6d4' },
-              ].map(({ label, color }) => (
-                <div key={label} className="flex items-center gap-2 py-0.5">
-                  <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: `${color}22`, border: `1.5px solid ${color}` }} />
-                  <span className="text-gray-400 text-xs">{label}</span>
-                </div>
+                { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: 'IMPORT',       textCls: showEdges ? 'text-gray-300' : 'text-gray-600',   active: showEdges,        onToggle: toggleEdges },
+                { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="4 3" /></svg>,                                label: '콜 체인',      textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600', active: showCallEdges,    onToggle: toggleCallEdges },
+                { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',         textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600', active: showInstEdges,  onToggle: toggleInstEdges },
+                { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결',    textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600', active: showBrokenEdges, onToggle: toggleBrokenEdges },
+              ].map(({ key, icon, label, textCls, active, onToggle }) => (
+                <button key={key} onClick={onToggle}
+                  className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60">
+                  <span className="w-4 flex-shrink-0">{icon}</span>
+                  <span className={`text-xs flex-1 ${textCls}`}>{label}</span>
+                  <ToggleChip active={active} onClick={onToggle} stopPropagation />
+                </button>
               ))}
+            </LeftSection>
+
+            {/* 범례 — DDD 레이어 + 노드 */}
+            <LeftSection title="범례">
+              <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">DDD 레이어</p>
+              {[
+                { label: 'Domain',           color: '#3b82f6', key: 'domain' },
+                { label: 'Application',      color: '#eab308', key: 'application' },
+                { label: 'Infrastructure',   color: '#a855f7', key: 'infrastructure' },
+                { label: 'Interfaces',       color: '#10b981', key: 'interfaces' },
+                { label: 'Pages/Components', color: '#06b6d4', key: 'pages' },
+              ].map(({ label, color, key }) => {
+                const active = opaqueLayerSet.has(key)
+                return (
+                  <div key={key} className="flex items-center gap-2 py-0.5">
+                    <button
+                      onClick={() => toggleLayerOpaque(key)}
+                      title={active ? '내용 표시' : '내용 가리기'}
+                      style={{
+                        width: 18, height: 18, borderRadius: 4,
+                        border: `1px solid ${color}88`,
+                        background: active ? color : `${color}22`,
+                        color: active ? '#fff' : color,
+                        fontSize: 10, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {active ? '◑' : '○'}
+                    </button>
+                    <span className="text-gray-400 text-xs">{label}</span>
+                  </div>
+                )
+              })}
               <div className="border-t border-gray-800 my-2" />
-              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">노드</p>
+              <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">노드</p>
               <div className="flex items-center gap-2 py-0.5">
                 <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#1e3a5f', border: '1.5px solid #3b82f6' }} />
                 <span className="text-gray-400 text-xs">FILE</span>
@@ -520,26 +647,15 @@ function GraphPageInner() {
                 <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#064e3b', border: '1px solid #10b981' }} />
                 <span className="text-gray-400 text-xs">FUNCTION</span>
               </div>
-              <div className="border-t border-gray-800 my-2" />
-              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">엣지</p>
-              <div className="flex items-center gap-2 py-0.5">
-                <span className="w-4 h-0.5 flex-shrink-0" style={{ background: '#4b5563' }} />
-                <span className="text-gray-400 text-xs">IMPORT</span>
-              </div>
-              <div className="flex items-center gap-2 py-0.5">
-                <svg width="16" height="4" className="flex-shrink-0"><line x1="0" y1="2" x2="16" y2="2" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4 3" /></svg>
-                <span className="text-amber-400 text-xs">FUNCTION_CALL</span>
-              </div>
-              <div className="flex items-center gap-2 py-0.5">
-                <svg width="16" height="4" className="flex-shrink-0"><line x1="0" y1="2" x2="16" y2="2" stroke="#a855f7" strokeWidth="1.5" strokeDasharray="3 4" /></svg>
-                <span className="text-purple-400 text-xs">INSTANTIATION</span>
-              </div>
-              <div className="flex items-center gap-2 py-0.5">
-                <span className="w-4 h-0.5 flex-shrink-0" style={{ background: '#ef4444' }} />
-                <span className="text-gray-400 text-xs">끊긴 연결</span>
-              </div>
             </LeftSection>
           </div>
+
+          {/* 왼쪽 사이드바 리사이즈 핸들 */}
+          <div
+            onMouseDown={(e) => { leftResizing.current = true; dragStartX.current = e.clientX; dragStartWidth.current = leftWidth; e.preventDefault() }}
+            className="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60 transition-colors"
+            style={{ userSelect: 'none' }}
+          />
         </aside>
       )}
 
@@ -570,32 +686,43 @@ function GraphPageInner() {
         />
       </ReactFlow>
 
-      {/* 우측 사이드바 */}
-      {sidebar && (
-        <aside
-          className="fixed right-0 top-0 h-full bg-gray-950 border-l border-gray-800 z-40 flex flex-col shadow-2xl transition-all duration-200"
-          style={{ width: rightCollapsed ? '40px' : '320px' }}
+      {/* 우측 사이드바 — 항상 표시 */}
+      <aside
+        className="fixed right-0 top-0 h-full bg-gray-950 border-l border-gray-800 z-40 flex flex-col shadow-2xl transition-all duration-200"
+        style={{ width: rightCollapsed ? '40px' : `${rightWidth}px` }}
+      >
+        {/* collapse 핸들 */}
+        <button
+          onClick={() => setRightCollapsed((v) => !v)}
+          className="absolute -left-3 top-1/2 -translate-y-1/2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10"
+          title={rightCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
         >
-          {/* 사이드바 collapse 핸들 */}
-          <button
-            onClick={() => setRightCollapsed((v) => !v)}
-            className="absolute -left-3 top-1/2 -translate-y-1/2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10"
-            title={rightCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
-          >
-            {rightCollapsed ? '‹' : '›'}
-          </button>
+          {rightCollapsed ? '‹' : '›'}
+        </button>
 
-          {!rightCollapsed && (
-            <>
-              {/* 사이드바 헤더 */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
-                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  {sidebar.kind === 'edge' ? '연결 상세' : sidebar.kind === 'file' ? '파일 연결' : sidebar.kind === 'func' ? '함수 상세' : sidebar.kind === 'func-call' ? '함수 호출' : '인스턴스화'}
-                </span>
-                <button onClick={() => setSidebar(null)} className="text-gray-600 hover:text-white text-sm">✕</button>
-              </div>
+        {!rightCollapsed && (
+          <>
+            {/* 사이드바 헤더 */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                {!sidebar ? '상세 정보' : sidebar.kind === 'edge' ? '연결 상세' : sidebar.kind === 'file' ? '파일 연결' : sidebar.kind === 'func' ? '함수 상세' : sidebar.kind === 'func-call' ? '함수 호출' : '인스턴스화'}
+              </span>
+              {sidebar && <button onClick={() => setSidebar(null)} className="text-gray-600 hover:text-white text-sm">✕</button>}
+            </div>
 
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+
+                {/* ── 기본 상태 — 아무것도 선택되지 않은 경우 ── */}
+                {!sidebar && (
+                  <div className="flex flex-col items-center justify-center h-full gap-3 text-center pb-10">
+                    <span className="text-3xl opacity-20">↗</span>
+                    <p className="text-gray-600 text-xs leading-relaxed">
+                      엣지나 노드를 클릭하면<br />상세 정보가 여기에 표시됩니다.
+                    </p>
+                  </div>
+                )}
+
+                {sidebar && (<>
 
                 {/* ── FUNCTION_CALL 엣지 클릭 ── */}
                 {sidebar.kind === 'func-call' && (
@@ -622,6 +749,9 @@ function GraphPageInner() {
                       </div>
                     </div>
                     <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded self-start">FUNCTION_CALL</span>
+                    <FlowChainSection steps={sidebar.flowChain} edgeColor="#f59e0b"
+                      onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                    />
                   </div>
                 )}
 
@@ -644,6 +774,9 @@ function GraphPageInner() {
                       </div>
                     </div>
                     <span className="text-xs bg-purple-900/40 text-purple-400 px-2 py-0.5 rounded self-start">INSTANTIATION</span>
+                    <FlowChainSection steps={sidebar.flowChain} edgeColor="#a855f7"
+                      onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                    />
                   </div>
                 )}
 
@@ -661,6 +794,9 @@ function GraphPageInner() {
                         onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.targetNodeId }], duration: 500, padding: 0.3 }), 50) }}
                       >{sidebar.targetId}</span>
                     </div>
+                    <FlowChainSection steps={sidebar.flowChain} edgeColor="#4b5563"
+                      onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                    />
                     <SidebarSection title={`함수 호출 체인${sidebar.callChain.length > 0 ? ` (${sidebar.callChain.length})` : ''}`}>
                       {sidebar.callChain.length === 0
                         ? <p className="text-gray-700 text-xs">분석된 함수 호출 없음</p>
@@ -740,11 +876,21 @@ function GraphPageInner() {
                   </>
                 )}
 
+                </>)}
+
               </div>
-            </>
-          )}
-        </aside>
-      )}
+          </>
+        )}
+
+        {/* 오른쪽 사이드바 리사이즈 핸들 — collapse 아닐 때만 */}
+        {!rightCollapsed && (
+          <div
+            onMouseDown={(e) => { rightResizing.current = true; dragStartX.current = e.clientX; dragStartWidth.current = rightWidth; e.preventDefault() }}
+            className="absolute top-0 left-0 h-full w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60 transition-colors"
+            style={{ userSelect: 'none' }}
+          />
+        )}
+      </aside>
     </div>
   )
 }
@@ -753,7 +899,7 @@ function GraphPageInner() {
 function LeftSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="px-3 py-3 border-b border-gray-800/60">
-      <p className="text-[9px] font-semibold text-gray-600 uppercase tracking-widest mb-2">{title}</p>
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{title}</p>
       {children}
     </div>
   )
@@ -842,6 +988,65 @@ function FuncChainRow({ entry, direction, onNav }: {
         <span className="text-gray-600 font-mono text-[10px] cursor-pointer hover:text-gray-400 truncate"
           onClick={() => onNav(entry.fileNodeId)}
         >{entry.fileName}</span>
+      </div>
+    </div>
+  )
+}
+
+// 전체 흐름 — 업스트림·다운스트림 포함 체인 세로 목록
+function FlowChainSection({ steps, edgeColor, onNav }: {
+  steps: FlowStep[]
+  edgeColor: string
+  onNav: (id: string) => void
+}) {
+  if (steps.length <= 2) return null  // source·target만 있으면 표시 의미 없음
+  return (
+    <div>
+      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">전체 흐름</p>
+      <div className="flex flex-col">
+        {steps.map((step, i) => {
+          const isLast = i === steps.length - 1
+          const highlighted = step.isSource || step.isTarget
+          return (
+            <div key={step.nodeId} className="flex flex-col">
+              {/* 노드 카드 */}
+              <div
+                className={`flex flex-col px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors ${
+                  highlighted
+                    ? 'bg-gray-700/80 border border-gray-600'
+                    : 'bg-gray-900/60 hover:bg-gray-800/60'
+                }`}
+                onClick={() => onNav(step.nodeId)}
+              >
+                <span className={`font-mono text-xs truncate ${highlighted ? 'text-white font-semibold' : 'text-gray-300'}`}>
+                  {step.label}
+                  {highlighted && (
+                    <span className="ml-1.5 text-[9px] font-normal" style={{ color: edgeColor }}>
+                      {step.isSource ? '▶' : '◀'}
+                    </span>
+                  )}
+                </span>
+                {step.subLabel && (
+                  <span
+                    className="font-mono text-[10px] text-gray-600 truncate cursor-pointer hover:text-gray-400"
+                    onClick={(e) => { e.stopPropagation(); if (step.subNodeId) onNav(step.subNodeId) }}
+                  >
+                    {step.subLabel}
+                  </span>
+                )}
+                {step.altCount && (
+                  <span className="text-[9px] text-gray-600 mt-0.5">+{step.altCount}개 다른 경로</span>
+                )}
+              </div>
+              {/* 화살표 */}
+              {!isLast && (
+                <div className="flex items-center gap-1 py-0.5 pl-3">
+                  <span className="text-xs" style={{ color: edgeColor }}>↓</span>
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

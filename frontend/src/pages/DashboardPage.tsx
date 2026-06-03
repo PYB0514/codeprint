@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import CreateProjectModal from '../components/CreateProjectModal'
 import ProjectCard from '../components/ProjectCard'
+import AppHeader from '../components/AppHeader'
 
 interface UserInfo {
   id: string
@@ -97,16 +98,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <header className="flex items-center justify-between px-8 py-4 border-b border-gray-800">
-        <span className="font-bold text-lg tracking-tight">Codeprint</span>
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-gray-400">{user.username}</span>
-          <span className="bg-gray-800 px-2 py-0.5 rounded text-xs">{user.plan}</span>
-          <button onClick={handleLogout} className="text-gray-400 hover:text-white">
-            로그아웃
-          </button>
-        </div>
-      </header>
+      <AppHeader username={user.username} plan={user.plan} onLogout={handleLogout} />
 
       <main className="max-w-4xl mx-auto px-6 py-10">
         <div className="flex items-center justify-between mb-6">

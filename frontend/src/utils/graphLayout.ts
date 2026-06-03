@@ -465,6 +465,7 @@ export function buildLayout(
           label: getLabel(file, fileMaxLen),
           name: file.name,
           comment: file.comment,
+          layer,
           incoming: fileIncoming.get(file.id) ?? [],
           outgoing: fileOutgoing.get(file.id) ?? [],
           onOpenSidebar: onOpenFileSidebar ? () => onOpenFileSidebar({
@@ -501,7 +502,7 @@ export function buildLayout(
             y: FILE_PAD_TOP + fr * (FUNC_H + FUNC_PAD),
           },
           // 함수 박스 너비 110px, 좌우 패딩 8px → 102px / ~6px per char ≈ 17자
-          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment },
+          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment, layer },
           style: {
             background: '#064e3b',
             border: '1px solid #10b981',
@@ -570,6 +571,54 @@ export function buildLayout(
       zIndex: 0,
       interactionWidth: 0,
     } as Edge))
+
+  // DDD 레이어 상위 박스 — 같은 레이어의 그룹들을 감싸는 큰 섹션 박스
+  const LAYER_META: Record<string, { label: string; color: string; opaqueColor: string }> = {
+    infrastructure: { label: 'Infrastructure', color: '#a855f7', opaqueColor: 'rgba(30,10,50,0.98)'  },
+    domain:         { label: 'Domain',         color: '#3b82f6', opaqueColor: 'rgba(15,30,60,0.98)'  },
+    application:    { label: 'Application',    color: '#eab308', opaqueColor: 'rgba(40,30,5,0.98)'   },
+    interfaces:     { label: 'Interfaces',     color: '#10b981', opaqueColor: 'rgba(5,30,20,0.98)'   },
+    pages:          { label: 'Pages',          color: '#06b6d4', opaqueColor: 'rgba(5,25,35,0.98)'   },
+    components:     { label: 'Components',     color: '#06b6d4', opaqueColor: 'rgba(5,25,35,0.98)'   },
+    hooks:          { label: 'Hooks',          color: '#f97316', opaqueColor: 'rgba(40,15,5,0.98)'   },
+    utils:          { label: 'Utils',          color: '#6b7280', opaqueColor: 'rgba(20,22,25,0.98)'  },
+  }
+  const LAYER_PAD = 20
+
+  // 레이어별 그룹 키 수집
+  const layerGroupKeys = new Map<string, string[]>()
+  groups.forEach((_, key) => {
+    const layer = key.indexOf('/') >= 0 ? key.slice(0, key.indexOf('/')) : key
+    if (!layerGroupKeys.has(layer)) layerGroupKeys.set(layer, [])
+    layerGroupKeys.get(layer)!.push(key)
+  })
+
+  layerGroupKeys.forEach((keys, layer) => {
+    const meta = LAYER_META[layer]
+    if (!meta) return
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    keys.forEach((key) => {
+      const pos = groupPositions.get(key)
+      const l = groupLayouts.get(key)
+      if (!pos || !l) return
+      minX = Math.min(minX, pos.x)
+      minY = Math.min(minY, pos.y)
+      maxX = Math.max(maxX, pos.x + l.w)
+      maxY = Math.max(maxY, pos.y + l.h)
+    })
+    if (minX === Infinity) return
+    const LABEL_H = 24
+    result.push({
+      id: `layer-section-${layer}`,
+      type: 'sectionNode',
+      position: { x: minX - LAYER_PAD, y: minY - LAYER_PAD - LABEL_H },
+      data: { label: meta.label, color: meta.color, opaqueColor: meta.opaqueColor, layer },
+      style: { width: maxX - minX + LAYER_PAD * 2, height: maxY - minY + LAYER_PAD * 2 + LABEL_H },
+      draggable: false,
+      selectable: false,
+      zIndex: -20,
+    } as Node)
+  })
 
   return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges] }
 }

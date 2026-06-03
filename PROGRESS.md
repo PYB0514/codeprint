@@ -1,6 +1,6 @@
 # Codeprint 개발 현황
 
-> 마지막 업데이트: 2026-06-02
+> 마지막 업데이트: 2026-06-03
 
 ---
 
@@ -45,15 +45,17 @@
 | 그룹 박스 최소화/불투명 토글 | ✅ | 헤더 버튼으로 접기·가리기, interactionWidth:0 |
 | 엣지 hover 강조 | ✅ | 마우스 올리면 두껍고 밝게, 이탈 시 복원 |
 | 레이아웃 프리셋 계층/허브 | ✅ | 상단 바 토글, dagre 제거 (~37KB 감소) |
-| 허브 레이아웃 — 중앙 그리드 + 고립 그룹 분리 | ✅ | 연결 수 순 중심 배치, DDD 레이어별 고립 그룹 섹션 박스 |
 | 엣지 화살표 + 파일 연결 모달 | ✅ | ArrowClosed, FileNode 커스텀, 함수명/주석 표시, 노드 이동 |
-| 연결선 토글 | ✅ | 상단 바 버튼으로 전체 엣지 표시/숨김 |
-| 고립 그룹 토글 | ✅ | 허브 모드 전용, 섹션 박스 포함 표시/숨김 |
 | FUNCTION_CALL 분석 엔진 | ✅ | StaticCodeAnalyzer 함수 호출 추출 + GraphBuilder 엣지 생성 |
 | INSTANTIATION 분석 엔진 | ✅ | new ClassName() 패턴 감지, 파일 간 보라색 점선 |
 | EdgeType.CONTAINS 추가 | ✅ | FILE→FUNCTION 포함 관계를 IMPORT와 분리 |
 | 우측 사이드바 통합 | ✅ | 연결 상세/파일 연결/함수 상세/콜체인/인스턴스화 모두 우측 사이드바 |
-| 엣지 토글 기본값 off | ✅ | IMPORT/콜체인/생성 전부 버튼 눌러야 표시 |
+| AppHeader 공통 컴포넌트 | ✅ | 로고+대시보드 이동+사용자 정보+로그아웃 |
+| DDD 레이어 상위 박스 | ✅ | 레이어 전체를 감싸는 색상 섹션 박스, 내용 가리기 버튼 |
+| 엣지 전체 흐름 추적 | ✅ | traceFlow() DFS — upstream·downstream 체인 사이드바 표시 |
+| 좌측 사이드바 개편 | ✅ | 내보내기 최상단, 엣지+색인 통합, 끊긴 연결 토글 |
+| 우측 사이드바 항상 표시 | ✅ | 기본 상태 안내 텍스트, 항상 고정 |
+| 좌/우 사이드바 드래그 리사이즈 | ✅ | 엣지 핸들 드래그로 너비 조정 |
 
 ### 인프라
 
@@ -85,10 +87,10 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재 브랜치: feat/function-call (PR #6 오픈 상태)
-# 1. PR #6 머지 (feat/function-call → main)
-# 2. 백엔드 재시작 + 재분석으로 FUNCTION_CALL/INSTANTIATION 엣지 확인
-# 3. 다음 기능 브랜치 생성 (아래 백로그 참조)
+# 현재 브랜치: feat/ui-polish (PR #7 오픈 상태)
+# 1. PR #7 머지 (feat/ui-polish → main)
+# 2. feat/share 브랜치 생성
+# 3. 공개/비공개 토글 → 공유 URL → 커뮤니티 게시판 순서로 구현
 ```
 
 ---
@@ -100,6 +102,10 @@ npm run dev
 - 노드 드래그 위치 저장 (`PUT /api/graphs/{graphId}/nodes/{nodeId}/position`)
 - 멀티라인 파라미터 메서드 한글 주석 미추출 버그 수정 (extractFunctionComments 순방향 스캔으로 교체)
 - 전체 함수 한글 주석 완전화
+
+### ✅ 완료: `feat/ui-polish` (PR #7 오픈 — 머지 대기)
+- AppHeader 공통 컴포넌트, DDD 레이어 상위 박스, 범례 내용 가리기 버튼
+- 엣지 전체 흐름 추적 (traceFlow DFS), 사이드바 전면 개편, 드래그 리사이즈
 
 ### 3단계: `feat/share`
 - 프로젝트 공개/비공개 토글
@@ -136,7 +142,7 @@ npm run dev
 
 ```
 main                       ← 항상 배포 가능 상태
-└─ feat/export-image       ← 현재 (PR 머지 대기)
+└─ feat/ui-polish          ← 현재 (PR #7 머지 대기)
 └─ feat/share
 └─ feat/stripe
 ```
