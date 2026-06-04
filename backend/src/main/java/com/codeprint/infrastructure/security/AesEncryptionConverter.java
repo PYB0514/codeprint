@@ -64,7 +64,8 @@ public class AesEncryptionConverter implements AttributeConverter<String, String
             cipher.init(Cipher.DECRYPT_MODE, secretKey, new GCMParameterSpec(TAG_LENGTH, iv));
             return new String(cipher.doFinal(encrypted));
         } catch (Exception e) {
-            throw new RuntimeException("Token decryption failed", e);
+            // 구버전 미암호화 토큰(gho_xxx) — null 반환 후 다음 로그인 시 재암호화됨
+            return null;
         }
     }
 }
