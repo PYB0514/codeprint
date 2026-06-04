@@ -68,10 +68,17 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,prometheus
   endpoint:
     health:
       show-details: never
+    prometheus:
+      enabled: true
+
+sentry:
+  dsn: ${SENTRY_DSN:}
+  traces-sample-rate: 0.1
+  environment: ${SPRING_PROFILES_ACTIVE:local}
 
 logging:
   level:
