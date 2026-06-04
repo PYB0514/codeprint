@@ -75,8 +75,11 @@
 | 커뮤니티 첨부 이미지 표시 | ✅ | 게시글 상세에서 S3 presigned GET URL로 이미지 렌더링 |
 | 패치노트 페이지 | ✅ | /changelog — v1.0~v1.6 버전 히스토리, 타임라인 UI |
 | 그래프 버전 diff | ✅ | /projects/:id/diff — 추가/삭제/유지 색상 오버레이, 변경 요약 배지 |
-| Sentry 에러 트래킹 | ✅ (설정 완료, SDK 연동) | SENTRY_DSN 환경변수, Railway 등록 필요 |
-| Prometheus 메트릭 | ✅ | /actuator/prometheus 노출, Grafana Cloud 연동 대기 중 |
+| Sentry 백엔드 연동 | ✅ | sentry-spring-boot-starter, SENTRY_DSN Railway 등록 완료 |
+| Sentry 프론트 연동 | ✅ | @sentry/react, VITE_SENTRY_DSN Vercel 등록 필요 |
+| 보안 강화 Phase 1 | ✅ | AttachmentController 인증, AnalysisController 소유권, CORS, 로그 INFO |
+| 보안 헤더 필터 | ✅ | CSP/HSTS/X-Frame-Options 등 6종 |
+| SECURITY_POLICY.md | ✅ | 보안 정책 문서화, 단계별 TODO |
 
 ---
 
@@ -101,13 +104,15 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재 브랜치: main (v1.7)
-# PR #30 머지 완료
+# 현재 브랜치: feat/v1.8-monitoring (PR #35 — CI 대기 중)
+# v1.7.002 태그 (보안 강화 Phase 1)
 
-# Railway 배포 완료 후:
-# 1. Grafana Cloud "Save & test" 재시도 → 성공 시 JVM 대시보드 구성
-# 2. Railway에 SENTRY_DSN 환경변수 추가됐는지 확인
-# 3. ChangelogPage v1.7 항목 추가
+# 1. PR #35 CI 통과 확인 → 머지 → v1.8 태그
+# 2. Vercel에 VITE_SENTRY_DSN 환경변수 추가
+#    값: https://20b6d7132d559b401afeae6894b0c6ee@o4511506158649344.ingest.us.sentry.io/4511506182569985
+# 3. Grafana Cloud 연동 — push 방식(micrometer-registry-otlp)으로 재설계
+# 4. ChangelogPage v1.8 항목 추가
+# 5. 다음 기능: 보안 Phase 2(레이트리미팅/S3검증) 또는 새 기능
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
