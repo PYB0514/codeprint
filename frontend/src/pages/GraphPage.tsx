@@ -151,6 +151,12 @@ function GraphPageInner() {
   const flowRef = useRef<HTMLDivElement>(null)
   const { getNodes, fitView } = useReactFlow()
 
+  // 노드 코멘트 상태
+  const [nodeComments, setNodeComments] = useState<{ id: string; userId: string; content: string; createdAt: number }[]>([])
+  const [commentInput, setCommentInput] = useState('')
+  const [commentNodeId, setCommentNodeId] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
   // 엣지 타입별 초기 hidden 상태 적용
   const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean, sb: boolean) =>
     edges.map((e) => {
@@ -231,6 +237,12 @@ function GraphPageInner() {
       setLoading(false)
     }
   }, [projectId, setNodes, setEdges, openFileSidebar, applyEdgeVisibility])
+
+  useEffect(() => {
+    axios.get<{ id: string }>('/api/auth/me', { headers: authHeaders() })
+      .then((res) => setCurrentUserId(res.data.id))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     fetchGraph().then(() => {
@@ -585,8 +597,15 @@ function GraphPageInner() {
       callers,
       callees,
     })
+    setCommentNodeId(rawFunc.id)
+    setCommentInput('')
+    if (graphId) {
+      axios.get(`/api/graphs/${graphId}/nodes/${rawFunc.id}/comments`, { headers: authHeaders() })
+        .then((res) => setNodeComments(res.data))
+        .catch(() => setNodeComments([]))
+    }
     setRightCollapsed(false)
-  }, [rawNodes, rawEdgesCache])
+  }, [rawNodes, rawEdgesCache, graphId])
 
   if (loading) {
     return (
@@ -1046,6 +1065,54 @@ function GraphPageInner() {
                           />
                         ))
                       }
+                    </SidebarSection>
+
+                    {/* 노드 코멘트 */}
+                    <SidebarSection title={`코멘트${nodeComments.length > 0 ? ` (${nodeComments.length})` : ''}`}>
+                      <div className="flex flex-col gap-2">
+                        {nodeComments.map((c) => (
+                          <div key={c.id} className="bg-gray-800 rounded-lg px-3 py-2 flex flex-col gap-1">
+                            <p className="text-gray-200 text-xs leading-relaxed">{c.content}</p>
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-600 text-[10px]">{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span>
+                              {currentUserId === c.userId && (
+                                <button
+                                  onClick={() => {
+                                    if (!graphId || !commentNodeId) return
+                                    axios.delete(`/api/graphs/${graphId}/nodes/${commentNodeId}/comments/${c.id}`, { headers: authHeaders() })
+                                      .then(() => setNodeComments((prev) => prev.filter((x) => x.id !== c.id)))
+                                      .catch(() => {})
+                                  }}
+                                  className="text-gray-600 hover:text-red-400 text-[10px]"
+                                >삭제</button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {nodeComments.length === 0 && <p className="text-gray-700 text-xs">코멘트 없음</p>}
+                        <div className="flex gap-2 mt-1">
+                          <input
+                            value={commentInput}
+                            onChange={(e) => setCommentInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault()
+                                if (!commentInput.trim() || !graphId || !commentNodeId) return
+                                axios.post(
+                                  `/api/graphs/${graphId}/nodes/${commentNodeId}/comments`,
+                                  { content: commentInput.trim() },
+                                  { headers: authHeaders() }
+                                ).then((res) => {
+                                  setNodeComments((prev) => [...prev, res.data])
+                                  setCommentInput('')
+                                }).catch(() => {})
+                              }
+                            }}
+                            placeholder="코멘트 입력 후 Enter"
+                            className="flex-1 bg-gray-800 text-white text-xs px-2 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-gray-500"
+                          />
+                        </div>
+                      </div>
                     </SidebarSection>
                   </>
                 )}
