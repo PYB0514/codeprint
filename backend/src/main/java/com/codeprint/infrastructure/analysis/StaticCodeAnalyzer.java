@@ -35,7 +35,7 @@ public class StaticCodeAnalyzer {
         for (String line : lines) {
             String trimmed = line.trim();
             if (trimmed.isEmpty()) continue;
-            if (language.equals("Python")) {
+            if (language.equals("Python") || language.equals("Ruby")) {
                 if (trimmed.startsWith("#")) return trimmed.substring(1).trim();
                 break;
             }
@@ -64,7 +64,7 @@ public class StaticCodeAnalyzer {
                 candidate = line.substring(2).trim();
             } else if (line.startsWith("*") && !line.startsWith("*/")) {
                 candidate = line.replaceAll("^\\*+\\s*", "").trim();
-            } else if (line.startsWith("#") && language.equals("Python")) {
+            } else if (line.startsWith("#") && (language.equals("Python") || language.equals("Ruby"))) {
                 candidate = line.substring(1).trim();
             }
             if (candidate == null || candidate.isBlank()) continue;
@@ -127,6 +127,14 @@ public class StaticCodeAnalyzer {
                 Pattern.compile("^func\\s+(?:\\(\\w+\\s+\\*?\\w+\\)\\s+)?(\\w+)\\s*\\(", Pattern.MULTILINE);
             case "Rust" ->
                 Pattern.compile("^\\s*(?:pub\\s+)?(?:async\\s+)?fn\\s+(\\w+)\\s*\\(", Pattern.MULTILINE);
+            case "Ruby" ->
+                Pattern.compile("^\\s*def\\s+(\\w+[?!]?)", Pattern.MULTILINE);
+            case "PHP" ->
+                Pattern.compile("^\\s*(?:(?:public|private|protected|static|abstract|final)\\s+)*function\\s+(\\w+)\\s*\\(",
+                        Pattern.MULTILINE);
+            case "Swift" ->
+                Pattern.compile("^\\s*(?:(?:public|private|internal|open|fileprivate|static|override|class)\\s+)*func\\s+(\\w+)\\s*[(<]",
+                        Pattern.MULTILINE);
             default -> null;
         };
     }
@@ -150,6 +158,10 @@ public class StaticCodeAnalyzer {
                 Pattern.compile("^(?:from\\s+([\\w.]+)\\s+import|import\\s+([\\w.,\\s]+))", Pattern.MULTILINE);
             case "Go" -> Pattern.compile("\"([\\w./]+)\"", Pattern.MULTILINE);
             case "Rust" -> Pattern.compile("^\\s*use\\s+([\\w:]+)", Pattern.MULTILINE);
+            case "C#" -> Pattern.compile("^using\\s+([\\w.]+);", Pattern.MULTILINE);
+            case "Ruby" -> Pattern.compile("^\\s*require(?:_relative)?\\s+['\"]([^'\"]+)['\"]", Pattern.MULTILINE);
+            case "PHP" -> Pattern.compile("^\\s*(?:use|namespace)\\s+([\\w\\\\]+)", Pattern.MULTILINE);
+            case "Swift" -> Pattern.compile("^import\\s+(\\w+)", Pattern.MULTILINE);
             default -> null;
         };
 
