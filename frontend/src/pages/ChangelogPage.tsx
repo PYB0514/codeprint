@@ -11,6 +11,21 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v1.10',
+    date: '2026-06-04',
+    title: 'GitHub 레포 피커 & Primary Branch 추적',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '프로젝트 생성 시 GitHub 레포 드롭다운 선택 — OAuth 연동 레포 자동 불러오기, 이름/설명 자동 채움' },
+      { category: '프론트', desc: 'Primary branch 설정 — ★ 버튼으로 주요 브랜치 지정, 카드에 항상 freshness 뱃지 표시 (main ✓ / main ↑)' },
+      { category: '프론트', desc: '재분석 / 다른 브랜치 버튼 분리 — 재분석은 같은 브랜치 즉시 실행, 다른 브랜치는 피커 선택' },
+      { category: '백엔드', desc: 'GET /api/projects/github-repos — 인증된 사용자의 GitHub 레포 목록 반환' },
+      { category: '백엔드', desc: 'PATCH /api/projects/{id}/primary-branch + GET /api/projects/{id}/primary-freshness 엔드포인트 추가' },
+      { category: '백엔드', desc: 'V9 마이그레이션 — AES 도입 전 평문 github_access_token 일괄 NULL 처리 (로그인 시 자동 재암호화)' },
+      { category: '백엔드', desc: 'CORS allowedMethods에 PATCH 추가' },
+    ],
+  },
+  {
     version: 'v1.9',
     date: '2026-06-04',
     title: '레이트 리미팅 & 노드 코멘트',
