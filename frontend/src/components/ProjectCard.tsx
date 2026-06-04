@@ -29,6 +29,7 @@ function authHeaders() {
 export default function ProjectCard({ project, onDelete, onVisibilityChange }: Props) {
   const navigate = useNavigate()
   const [hasGraph, setHasGraph] = useState(false)
+  const [isOutdated, setIsOutdated] = useState(false)
   const [analysisId, setAnalysisId] = useState<string | null>(null)
   const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
@@ -44,7 +45,13 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
   useEffect(() => {
     axios
       .get(`/api/projects/${project.id}/graph`, { headers: authHeaders() })
-      .then(() => setHasGraph(true))
+      .then(() => {
+        setHasGraph(true)
+        // 그래프 있으면 freshness 체크
+        axios.get(`/api/projects/${project.id}/freshness`, { headers: authHeaders() })
+          .then(res => setIsOutdated(res.data.isOutdated === true))
+          .catch(() => {})
+      })
       .catch(() => setHasGraph(false))
   }, [project.id])
 
@@ -62,9 +69,10 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showBranchPicker])
 
-  // 분석 완료 시 게이지 애니메이션 후 상태 초기화
+  // 분석 완료 시 게이지 애니메이션 후 상태 초기화 + outdated 해제
   const handleDone = useCallback(() => {
     setHasGraph(true)
+    setIsOutdated(false)
     setTimeout(() => setAnalysisId(null), 800)
   }, [])
 
@@ -131,7 +139,14 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
   return (
     <div className="bg-gray-900 rounded-xl p-5 flex flex-col gap-3 hover:bg-gray-800 transition-colors">
       <div className="flex items-start justify-between gap-2">
-        <h2 className="font-semibold text-base leading-snug">{project.name}</h2>
+        <div className="flex items-center gap-2 min-w-0">
+          <h2 className="font-semibold text-base leading-snug truncate">{project.name}</h2>
+          {isOutdated && !isAnalyzing && (
+            <span className="shrink-0 text-xs bg-yellow-900/60 text-yellow-400 border border-yellow-700/60 px-1.5 py-0.5 rounded">
+              새 커밋
+            </span>
+          )}
+        </div>
         <button
           onClick={() => onDelete(project.id)}
           className="text-gray-600 hover:text-red-400 text-xs shrink-0 mt-0.5"
@@ -236,7 +251,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
             <button
               onClick={handleAnalysisButtonClick}
               disabled={starting || showBranchPicker}
-              className="text-xs text-gray-500 hover:text-gray-300 disabled:opacity-40"
+              className={`text-xs disabled:opacity-40 ${isOutdated ? 'text-yellow-400 hover:text-yellow-200' : 'text-gray-500 hover:text-gray-300'}`}
             >
               재분석
             </button>
