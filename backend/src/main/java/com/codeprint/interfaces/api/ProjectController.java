@@ -61,7 +61,13 @@ public class ProjectController {
     // 현재 사용자의 GitHub 레포 목록 조회 (프로젝트 생성 시 선택용)
     @GetMapping("/github-repos")
     public ResponseEntity<List<GitHubRepoDto>> getGithubRepos(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(gitHubApiClient.fetchUserRepos(user.getGithubAccessToken()));
+        String token = user.getGithubAccessToken();
+        if (token == null || token.isBlank()) return ResponseEntity.ok(List.of());
+        try {
+            return ResponseEntity.ok(gitHubApiClient.fetchUserRepos(token));
+        } catch (Exception e) {
+            return ResponseEntity.ok(List.of());
+        }
     }
 
     // 프로젝트 레포의 GitHub 브랜치 목록 조회
