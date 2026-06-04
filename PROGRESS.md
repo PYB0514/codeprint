@@ -74,6 +74,9 @@
 | AWS S3 연동 | ✅ | presigned URL 발급 + 커뮤니티 이미지 첨부 UI |
 | 커뮤니티 첨부 이미지 표시 | ✅ | 게시글 상세에서 S3 presigned GET URL로 이미지 렌더링 |
 | 패치노트 페이지 | ✅ | /changelog — v1.0~v1.6 버전 히스토리, 타임라인 UI |
+| 그래프 버전 diff | ✅ | /projects/:id/diff — 추가/삭제/유지 색상 오버레이, 변경 요약 배지 |
+| Sentry 에러 트래킹 | ✅ (설정 완료, SDK 연동) | SENTRY_DSN 환경변수, Railway 등록 필요 |
+| Prometheus 메트릭 | ✅ | /actuator/prometheus 노출, Grafana Cloud 연동 대기 중 |
 
 ---
 
@@ -98,13 +101,13 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재 브랜치: main (v1.6)
-# 모든 PR 머지 완료
+# 현재 브랜치: main (v1.7)
+# PR #30 머지 완료
 
-# 다음 작업 후보:
-# 1. 후원 기능 (토스페이먼츠 계정 필요)
-# 2. 광고 배너 실제 연동 (Google AdSense 신청 필요)
-# 3. 모니터링/에러 트래킹 (실사용자 생기면)
+# Railway 배포 완료 후:
+# 1. Grafana Cloud "Save & test" 재시도 → 성공 시 JVM 대시보드 구성
+# 2. Railway에 SENTRY_DSN 환경변수 추가됐는지 확인
+# 3. ChangelogPage v1.7 항목 추가
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
@@ -174,7 +177,7 @@ npm run dev
 - 분석 비교 기능 (브랜치 A vs B, 이전 분석 vs 최신)
 - 언어 지원 확장 (C#, Ruby, PHP, Swift 함수 추출 패턴 추가)
 - **모니터링** — 실사용자 생기면 도입. micrometer-registry-prometheus + Grafana Cloud 무료 플랜으로 JVM/HTTP 메트릭 시각화. Actuator 이미 있어서 의존성 추가만 하면 됨.
-- **에러 트래킹 (Sentry)** — 운영 중 에러 추적용. Sentry SDK 한 줄 추가로 설정 가능. 실사용자 생기면 도입.
+- **에러 트래킹 (Sentry)** — 계정 생성 완료 (Error monitoring만 활성화). SDK 연동 미완료. 실사용자 생기거나 운영 에러 추적이 필요해지면 진행. 그 시점에 Logging/Tracing/Profiling도 필요 여부 재검토 (Sentry Settings → Projects에서 활성화 가능).
 - **브랜치 버전 태깅** — 기능 완성 단위로 `v1.0`, `v1.1` 형식의 Git 태그 생성. 서비스 버전 히스토리를 명확히 관리.
 - **패치노트 페이지** — `/changelog` 경로로 공개 접근 가능. 버전별 업데이트 내용을 이용자에게 노출. Context 파일 내용 기반으로 항목 작성.
 - **후원 기능** — 이용자가 직접 개발자(서비스 운영자)를 후원할 수 있는 기능. 토스페이먼츠 또는 카카오페이 단건 결제로 구현. 후원 금액은 운영자 계좌로 직접 입금. 후원자 닉네임을 랜딩 페이지 또는 별도 후원자 명단에 표시하는 옵션 추가 검토.
