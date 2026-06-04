@@ -108,8 +108,12 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
     try {
       const res = await axios.get(`/api/projects/${project.id}/branches`, { headers: authHeaders() })
       const list: string[] = res.data
-      setBranches(list)
-      setSelectedBranch(list[0] ?? '')
+      const sorted = [
+        ...['main', 'master'].filter(b => list.includes(b)),
+        ...list.filter(b => b !== 'main' && b !== 'master'),
+      ]
+      setBranches(sorted)
+      setSelectedBranch(sorted[0] ?? '')
     } catch {
       setAnalysisError('브랜치 목록을 불러오지 못했습니다.')
       setShowBranchPicker(false)
