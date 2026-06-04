@@ -31,7 +31,6 @@ export default function CreateProjectModal({ onClose, onCreated }: Props) {
   const [reposLoading, setReposLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null)
 
   const [githubRepoUrl, setGithubRepoUrl] = useState('')
   const [name, setName] = useState('')
@@ -63,7 +62,6 @@ export default function CreateProjectModal({ onClose, onCreated }: Props) {
 
   // 레포 선택 시 필드 자동 채움
   const handleSelectRepo = (repo: GitHubRepo) => {
-    setSelectedRepo(repo)
     setGithubRepoUrl(repo.htmlUrl)
     setName(repo.name)
     setDescription(repo.description ?? '')
@@ -115,7 +113,7 @@ export default function CreateProjectModal({ onClose, onCreated }: Props) {
               <input
                 type="text"
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setDropdownOpen(true); setSelectedRepo(null) }}
+                onChange={(e) => { setSearch(e.target.value); setDropdownOpen(true) }}
                 onFocus={() => setDropdownOpen(true)}
                 placeholder={reposLoading ? '레포 불러오는 중...' : '레포 검색...'}
                 disabled={reposLoading}
