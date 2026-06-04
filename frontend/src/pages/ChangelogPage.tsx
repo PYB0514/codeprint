@@ -11,6 +11,27 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v1.8',
+    date: '2026-06-04',
+    title: '보안 헤더 & Sentry React SDK',
+    type: 'infra',
+    items: [
+      { category: '백엔드', desc: '보안 헤더 필터 추가 — X-Frame-Options, X-Content-Type-Options, HSTS, CSP, Referrer-Policy, Permissions-Policy' },
+      { category: '인프라', desc: 'Sentry React SDK 연동 — 프론트엔드 런타임 에러 자동 수집 (VITE_SENTRY_DSN 환경변수로 활성화)' },
+    ],
+  },
+  {
+    version: 'v1.7.002',
+    date: '2026-06-04',
+    title: '보안 강화 Phase 1',
+    type: 'infra',
+    items: [
+      { category: '백엔드', desc: 'AttachmentController 인증 강화 — 이미지 타입 화이트리스트(jpeg/png/gif/webp), 경로 트래버설 방어' },
+      { category: '백엔드', desc: 'AnalysisController 소유권 검증 추가 — 타 사용자 분석 접근 차단' },
+      { category: '인프라', desc: 'CORS allowedOrigins 운영 도메인으로 한정, 로그 레벨 INFO로 상향' },
+    ],
+  },
+  {
     version: 'v1.7',
     date: '2026-06-04',
     title: '그래프 버전 diff & 모니터링',
