@@ -722,6 +722,16 @@ function GraphPageInner() {
               )}
             </LeftSection>
 
+            {/* 버전 비교 */}
+            <LeftSection title="버전 비교">
+              <button
+                onClick={() => navigate(`/projects/${projectId}/diff`)}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300"
+              >
+                🔀 버전 diff 보기
+              </button>
+            </LeftSection>
+
             {/* 레이아웃 */}
             <LeftSection title="레이아웃">
               <div className="flex items-center justify-between">
