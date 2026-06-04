@@ -2,6 +2,29 @@
 
 ---
 
+## 보안 결정 (2026-06-04)
+
+### 보안 정책 수준 상향 — 항상 실사용자 가정
+
+**문제.** 개발 단계라는 이유로 `/actuator/prometheus` 공개, AttachmentController 비인증 등을 허용하고 있었음.
+
+**이유.** 보안은 실사용자 수와 무관하게 동일한 기준을 적용해야 한다. 개발 단계 허용 → 배포 후 방치되는 패턴이 실제 사고로 이어짐.
+
+**결과.**
+- `SECURITY_POLICY.md` 신설 — 보안 원칙, 엔드포인트 기준, 단계별 TODO
+- `CLAUDE.md` 보안 체크에 "항상 실사용자 가정" 명시
+- Phase 1 즉시 적용: AttachmentController 인증, AnalysisController 소유권, CORS 정확한 도메인, 로그 INFO, prometheus 비공개
+
+### /actuator/prometheus 공개 → 비공개 결정
+
+**문제.** Grafana Cloud scrape을 위해 `/actuator/prometheus`를 permitAll로 열었으나, JVM/HTTP 내부 지표가 공격자 reconnaissance에 악용될 수 있음.
+
+**이유.** Railway는 IP 화이트리스트 미지원이라 scrape 방식은 구조적으로 보안과 상충. push 방식(micrometer-registry-otlp)으로 전환하면 엔드포인트 공개 불필요.
+
+**결과.** `/actuator/prometheus` 비공개 복구. push 방식 Grafana 연동은 Phase 2에서 구현.
+
+---
+
 ## 버그
 
 ### Spring @Async 자기 호출 문제
