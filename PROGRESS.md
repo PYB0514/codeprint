@@ -170,6 +170,8 @@ npm run dev
 - 언어 지원 확장 (C#, Ruby, PHP, Swift 함수 추출 패턴 추가)
 - **모니터링** — 실사용자 생기면 도입. micrometer-registry-prometheus + Grafana Cloud 무료 플랜으로 JVM/HTTP 메트릭 시각화. Actuator 이미 있어서 의존성 추가만 하면 됨.
 - **에러 트래킹 (Sentry)** — 운영 중 에러 추적용. Sentry SDK 한 줄 추가로 설정 가능. 실사용자 생기면 도입.
+- **브랜치 버전 태깅** — 기능 완성 단위로 `v1.0`, `v1.1` 형식의 Git 태그 생성. 서비스 버전 히스토리를 명확히 관리.
+- **패치노트 페이지** — `/changelog` 경로로 공개 접근 가능. 버전별 업데이트 내용을 이용자에게 노출. Context 파일 내용 기반으로 항목 작성.
 
 ---
 
