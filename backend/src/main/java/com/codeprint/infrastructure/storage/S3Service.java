@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
@@ -38,6 +40,20 @@ public class S3Service {
                  .putObjectRequest(putRequest));
 
         return new PresignedUploadResult(presigned.url().toString(), key);
+    }
+
+    // 조회용 presigned GET URL 발급 (유효 시간 1시간)
+    public String generatePresignedDownloadUrl(String key) {
+        GetObjectRequest getRequest = GetObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .build();
+
+        PresignedGetObjectRequest presigned = s3Presigner.presignGetObject(r ->
+                r.signatureDuration(Duration.ofHours(1))
+                 .getObjectRequest(getRequest));
+
+        return presigned.url().toString();
     }
 
     // S3 객체 삭제

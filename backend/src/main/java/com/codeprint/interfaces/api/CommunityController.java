@@ -41,7 +41,7 @@ public class CommunityController {
         return ResponseEntity.ok(posts);
     }
 
-    // 게시글 단건 + 댓글 목록 조회
+    // 게시글 단건 + 댓글 + 첨부파일 목록 조회
     @GetMapping("/posts/{postId}")
     public ResponseEntity<PostDetailResponse> getPost(@PathVariable UUID postId) {
         Post post = postCommandService.findById(postId)
@@ -49,10 +49,13 @@ public class CommunityController {
         List<CommentResponse> comments = postCommandService.getComments(postId).stream()
                 .map(this::toCommentResponse)
                 .toList();
-        return ResponseEntity.ok(new PostDetailResponse(toPostResponse(post, null), comments));
+        List<AttachmentResponse> attachments = postCommandService.getAttachmentsWithUrls(postId).stream()
+                .map(a -> new AttachmentResponse(a.id(), a.originalFilename(), a.contentType(), a.url()))
+                .toList();
+        return ResponseEntity.ok(new PostDetailResponse(toPostResponse(post, null), comments, attachments));
     }
 
-    // 새 게시글 작성
+    // 새 게시글 작성 (첨부파일 메타데이터 포함)
     @PostMapping("/posts")
     public ResponseEntity<PostResponse> createPost(
             @Valid @RequestBody CreatePostRequest request,
@@ -66,6 +69,12 @@ public class CommunityController {
                 request.hiddenLayers(),
                 request.hiddenGroups(),
                 request.hiddenNodeNames());
+        if (request.attachments() != null && !request.attachments().isEmpty()) {
+            List<PostCommandService.AttachmentInfo> infos = request.attachments().stream()
+                    .map(a -> new PostCommandService.AttachmentInfo(a.s3Key(), a.originalFilename(), a.contentType()))
+                    .toList();
+            postCommandService.saveAttachments(post.getId(), infos);
+        }
         return ResponseEntity.status(201).body(toPostResponse(post, user.getUsername()));
     }
 
@@ -178,7 +187,14 @@ public class CommunityController {
     // 게시글 생성 요청 DTO
     public record CreatePostRequest(
             @NotBlank String title, String content, String feedbackType, UUID graphId,
-            List<String> hiddenLayers, List<String> hiddenGroups, List<String> hiddenNodeNames) {}
+            List<String> hiddenLayers, List<String> hiddenGroups, List<String> hiddenNodeNames,
+            List<AttachmentRequest> attachments) {}
+
+    // 첨부파일 요청 DTO
+    public record AttachmentRequest(String s3Key, String originalFilename, String contentType) {}
+
+    // 첨부파일 응답 DTO
+    public record AttachmentResponse(UUID id, String originalFilename, String contentType, String url) {}
 
     // 댓글 생성 요청 DTO
     public record CreateCommentRequest(@NotBlank String content) {}
@@ -192,6 +208,7 @@ public class CommunityController {
     public record CommentResponse(
             UUID id, String content, UUID userId, String authorUsername, Instant createdAt) {}
 
-    // 게시글 + 댓글 목록 응답 DTO
-    public record PostDetailResponse(PostResponse post, List<CommentResponse> comments) {}
+    // 게시글 + 댓글 + 첨부파일 목록 응답 DTO
+    public record PostDetailResponse(PostResponse post, List<CommentResponse> comments,
+                                     List<AttachmentResponse> attachments) {}
 }

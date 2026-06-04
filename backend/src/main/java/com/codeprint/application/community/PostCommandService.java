@@ -3,7 +3,9 @@ package com.codeprint.application.community;
 
 import com.codeprint.domain.community.Comment;
 import com.codeprint.domain.community.Post;
+import com.codeprint.domain.community.PostAttachment;
 import com.codeprint.domain.community.PostRepository;
+import com.codeprint.infrastructure.storage.S3Service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +20,7 @@ import java.util.UUID;
 public class PostCommandService {
 
     private final PostRepository postRepository;
+    private final S3Service s3Service;
 
     // 새 게시글을 생성하여 저장
     public Post createPost(UUID userId, UUID graphId, String title, String content, String feedbackType,
@@ -49,6 +52,32 @@ public class PostCommandService {
         }
         postRepository.deleteById(postId);
     }
+
+    // S3 키 목록을 받아 게시글 첨부파일로 저장
+    public void saveAttachments(UUID postId, List<AttachmentInfo> attachments) {
+        for (AttachmentInfo info : attachments) {
+            PostAttachment attachment = PostAttachment.create(
+                    postId, info.s3Key(), info.originalFilename(), info.contentType());
+            postRepository.saveAttachment(attachment);
+        }
+    }
+
+    // 게시글 첨부파일 목록과 presigned GET URL을 함께 반환
+    @Transactional(readOnly = true)
+    public List<AttachmentView> getAttachmentsWithUrls(UUID postId) {
+        return postRepository.findAttachmentsByPostId(postId).stream()
+                .map(a -> new AttachmentView(a.getId(), a.getS3Key(),
+                        a.getOriginalFilename(), a.getContentType(),
+                        s3Service.generatePresignedDownloadUrl(a.getS3Key())))
+                .toList();
+    }
+
+    // 첨부파일 저장에 필요한 정보
+    public record AttachmentInfo(String s3Key, String originalFilename, String contentType) {}
+
+    // 첨부파일 조회 뷰 (presigned URL 포함)
+    public record AttachmentView(java.util.UUID id, String s3Key, String originalFilename,
+                                 String contentType, String url) {}
 
     // 최신순으로 게시글 목록을 페이지 조회
     @Transactional(readOnly = true)
