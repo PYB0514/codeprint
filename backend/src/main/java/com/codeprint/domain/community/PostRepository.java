@@ -20,4 +20,8 @@ public interface PostRepository {
     List<Comment> findCommentsByPostId(UUID postId);
 
     void deleteById(UUID id);
+
+    PostAttachment saveAttachment(PostAttachment attachment);
+
+    List<PostAttachment> findAttachmentsByPostId(UUID postId);
 }

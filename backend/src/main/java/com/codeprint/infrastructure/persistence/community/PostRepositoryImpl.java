@@ -3,6 +3,7 @@ package com.codeprint.infrastructure.persistence.community;
 
 import com.codeprint.domain.community.Comment;
 import com.codeprint.domain.community.Post;
+import com.codeprint.domain.community.PostAttachment;
 import com.codeprint.domain.community.PostRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -18,6 +19,7 @@ public class PostRepositoryImpl implements PostRepository {
 
     private final PostJpaRepository postJpa;
     private final CommentJpaRepository commentJpa;
+    private final PostAttachmentJpaRepository attachmentJpa;
 
     // 게시글 엔티티를 저장하고 반환
     @Override
@@ -59,5 +61,17 @@ public class PostRepositoryImpl implements PostRepository {
     @Override
     public void deleteById(UUID id) {
         postJpa.deleteById(id);
+    }
+
+    // 첨부파일 메타데이터 저장
+    @Override
+    public PostAttachment saveAttachment(PostAttachment attachment) {
+        return attachmentJpa.save(attachment);
+    }
+
+    // 게시글 ID로 첨부파일 목록 조회
+    @Override
+    public List<PostAttachment> findAttachmentsByPostId(UUID postId) {
+        return attachmentJpa.findByPostIdOrderByCreatedAtAsc(postId);
     }
 }

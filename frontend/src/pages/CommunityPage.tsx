@@ -29,6 +29,13 @@ interface Comment {
   createdAt: string
 }
 
+interface Attachment {
+  id: string
+  originalFilename: string
+  contentType: string
+  url: string
+}
+
 // JWT 토큰을 Authorization 헤더로 반환
 function authHeaders() {
   const token = localStorage.getItem('jwt')
@@ -48,6 +55,7 @@ export default function CommunityPage() {
   const [posts, setPosts] = useState<Post[]>([])
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const [comments, setComments] = useState<Comment[]>([])
+  const [postAttachments, setPostAttachments] = useState<Attachment[]>([])
   const [showWriteForm, setShowWriteForm] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newContent, setNewContent] = useState('')
@@ -70,11 +78,14 @@ export default function CommunityPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  // 게시글 클릭 시 상세 및 댓글 로드
+  // 게시글 클릭 시 상세, 댓글, 첨부파일 로드
   const handleSelectPost = async (post: Post) => {
     setSelectedPost(post)
-    const res = await axios.get<{ post: Post; comments: Comment[] }>(`/api/community/posts/${post.id}`)
+    const res = await axios.get<{ post: Post; comments: Comment[]; attachments: Attachment[] }>(
+      `/api/community/posts/${post.id}`
+    )
     setComments(res.data.comments)
+    setPostAttachments(res.data.attachments ?? [])
   }
 
   // 파일 선택 시 presigned URL 발급 후 S3 직접 업로드
@@ -104,14 +115,18 @@ export default function CommunityPage() {
   // 새 게시글 작성 후 목록에 추가
   const handleSubmitPost = async () => {
     if (!newTitle.trim() || !newContent.trim()) return
+    const attachments = attachedFiles
+      .filter((f) => f.s3Key)
+      .map((f) => ({ s3Key: f.s3Key, originalFilename: f.file.name, contentType: f.file.type }))
     const res = await axios.post<Post>(
       '/api/community/posts',
-      { title: newTitle, content: newContent, feedbackType: newFeedbackType, graphId: null },
+      { title: newTitle, content: newContent, feedbackType: newFeedbackType, graphId: null, attachments },
       { headers: authHeaders() }
     )
     setPosts((prev) => [res.data, ...prev])
     setNewTitle('')
     setNewContent('')
+    setAttachedFiles([])
     setShowWriteForm(false)
   }
 
@@ -277,6 +292,33 @@ export default function CommunityPage() {
                 {selectedPost.authorUsername} · {new Date(selectedPost.createdAt).toLocaleDateString('ko-KR')}
               </p>
               <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{selectedPost.content}</p>
+
+              {/* 첨부 이미지 */}
+              {postAttachments.length > 0 && (
+                <div className="mt-3 flex flex-col gap-2">
+                  {postAttachments.map((att) => (
+                    att.contentType.startsWith('image/') ? (
+                      <img
+                        key={att.id}
+                        src={att.url}
+                        alt={att.originalFilename}
+                        className="w-full rounded-lg border border-gray-700 object-contain max-h-80"
+                      />
+                    ) : (
+                      <a
+                        key={att.id}
+                        href={att.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-400 hover:text-blue-300 underline"
+                      >
+                        {att.originalFilename}
+                      </a>
+                    )
+                  ))}
+                </div>
+              )}
+
               {selectedPost.graphId && (
                 <button
                   onClick={() => navigate(`/community/posts/${selectedPost.id}/graph`)}
