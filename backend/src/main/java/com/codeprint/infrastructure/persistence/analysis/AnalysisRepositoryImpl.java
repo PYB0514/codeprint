@@ -39,4 +39,10 @@ public class AnalysisRepositoryImpl implements AnalysisRepository {
     public Optional<AnalysisResult> findLatestByProjectId(UUID projectId) {
         return jpa.findLatestByProjectId(projectId);
     }
+
+    // 특정 브랜치의 가장 최근 분석 결과 조회
+    @Override
+    public Optional<AnalysisResult> findLatestByProjectIdAndBranch(UUID projectId, String branch) {
+        return jpa.findLatestByProjectIdAndBranch(projectId, branch);
+    }
 }

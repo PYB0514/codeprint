@@ -11,6 +11,7 @@ interface Project {
   githubRepoUrl: string
   isPublic: boolean
   createdAt: string
+  primaryBranch: string | null
 }
 
 interface Props {
@@ -30,54 +31,87 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
   const navigate = useNavigate()
   const [hasGraph, setHasGraph] = useState(false)
   const [freshnessStatus, setFreshnessStatus] = useState<'latest' | 'outdated' | null>(null)
+  const [lastAnalyzedBranch, setLastAnalyzedBranch] = useState<string | null>(null)
+
+  // primary branch 상태
+  const [primaryBranch, setPrimaryBranch] = useState<string | null>(project.primaryBranch ?? null)
+  const [primaryFreshness, setPrimaryFreshness] = useState<'latest' | 'outdated' | null>(null)
+
   const [analysisId, setAnalysisId] = useState<string | null>(null)
   const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [copying, setCopying] = useState(false)
 
-  // 브랜치 선택 상태
+  // 브랜치 선택 상태 (다른 브랜치 분석용)
   const [branches, setBranches] = useState<string[]>([])
   const [loadingBranches, setLoadingBranches] = useState(false)
   const [showBranchPicker, setShowBranchPicker] = useState(false)
   const [selectedBranch, setSelectedBranch] = useState<string>('')
+
+  // primary branch 설정 피커
+  const [showPrimaryPicker, setShowPrimaryPicker] = useState(false)
+
   const pickerRef = useRef<HTMLDivElement>(null)
+  const primaryPickerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     axios
       .get(`/api/projects/${project.id}/graph`, { headers: authHeaders() })
       .then(() => {
         setHasGraph(true)
-        // 그래프 있으면 freshness 체크 (no_data/github_error는 상태 미설정)
+        // 마지막 분석 기준 freshness
         axios.get(`/api/projects/${project.id}/freshness`, { headers: authHeaders() })
           .then(res => {
-            if (res.data.reason) return  // no_data 또는 github_error — 판단 불가
-            setFreshnessStatus(res.data.isOutdated ? 'outdated' : 'latest')
+            if (!res.data.reason) {
+              setFreshnessStatus(res.data.isOutdated ? 'outdated' : 'latest')
+              setLastAnalyzedBranch(res.data.branch ?? null)
+            }
           })
           .catch(() => {})
       })
       .catch(() => setHasGraph(false))
   }, [project.id])
 
+  // primary branch freshness 별도 조회
+  useEffect(() => {
+    if (!primaryBranch) { setPrimaryFreshness(null); return }
+    axios.get(`/api/projects/${project.id}/primary-freshness`, { headers: authHeaders() })
+      .then(res => {
+        if (!res.data.reason) {
+          setPrimaryFreshness(res.data.isOutdated ? 'outdated' : 'latest')
+        } else {
+          setPrimaryFreshness(null)
+        }
+      })
+      .catch(() => setPrimaryFreshness(null))
+  }, [project.id, primaryBranch])
+
   // 피커 외부 클릭 시 닫기
   useEffect(() => {
-    // 브랜치 피커 외부 클릭 감지 핸들러
     const handleClickOutside = (e: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
         setShowBranchPicker(false)
       }
+      if (primaryPickerRef.current && !primaryPickerRef.current.contains(e.target as Node)) {
+        setShowPrimaryPicker(false)
+      }
     }
-    if (showBranchPicker) {
+    if (showBranchPicker || showPrimaryPicker) {
       document.addEventListener('mousedown', handleClickOutside)
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showBranchPicker])
+  }, [showBranchPicker, showPrimaryPicker])
 
-  // 분석 완료 시 게이지 애니메이션 후 상태 초기화 + freshness 갱신
+  // 분석 완료 시 freshness 갱신
   const handleDone = useCallback(() => {
     setHasGraph(true)
     setFreshnessStatus('latest')
+    // primary branch가 방금 재분석한 브랜치이면 primary freshness도 갱신
+    if (primaryBranch && primaryBranch === lastAnalyzedBranch) {
+      setPrimaryFreshness('latest')
+    }
     setTimeout(() => setAnalysisId(null), 800)
-  }, [])
+  }, [primaryBranch, lastAnalyzedBranch])
 
   const { progress, status } = useAnalysisProgress(analysisId, handleDone)
 
@@ -100,10 +134,8 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
     setTimeout(() => setCopying(false), 1500)
   }
 
-  // 분석 버튼 클릭 시 브랜치 목록 로딩 후 피커 표시
-  const handleAnalysisButtonClick = async () => {
-    setAnalysisError(null)
-    setShowBranchPicker(true)
+  // 브랜치 목록 로드 (다른 브랜치 분석 / primary 설정 공용)
+  const loadBranches = async () => {
     setLoadingBranches(true)
     try {
       const res = await axios.get(`/api/projects/${project.id}/branches`, { headers: authHeaders() })
@@ -114,23 +146,38 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
       ]
       setBranches(sorted)
       setSelectedBranch(sorted[0] ?? '')
+      return sorted
     } catch {
       setAnalysisError('브랜치 목록을 불러오지 못했습니다.')
-      setShowBranchPicker(false)
+      return []
     } finally {
       setLoadingBranches(false)
     }
   }
 
+  // 다른 브랜치 분석 버튼 클릭
+  const handleOtherBranchClick = async () => {
+    setAnalysisError(null)
+    setShowBranchPicker(true)
+    await loadBranches()
+  }
+
+  // primary branch 설정 버튼 클릭
+  const handlePrimaryPickerOpen = async () => {
+    setShowPrimaryPicker(true)
+    if (branches.length === 0) await loadBranches()
+  }
+
   // 선택된 브랜치로 분석 시작
-  const handleStartAnalysis = async () => {
+  const handleStartAnalysis = async (branch: string) => {
     setShowBranchPicker(false)
     setStarting(true)
     setAnalysisError(null)
+    setLastAnalyzedBranch(branch)
     try {
       const res = await axios.post(
         '/api/analyses',
-        { projectId: project.id, branch: selectedBranch || null },
+        { projectId: project.id, branch: branch || null },
         { headers: authHeaders() }
       )
       setAnalysisId(res.data.analysisId)
@@ -141,13 +188,37 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
     }
   }
 
+  // 마지막 분석 브랜치로 즉시 재분석
+  const handleReanalyze = async () => {
+    await handleStartAnalysis(lastAnalyzedBranch ?? 'main')
+  }
+
+  // primary branch 설정 저장
+  const handleSetPrimaryBranch = async (branch: string | null) => {
+    setShowPrimaryPicker(false)
+    try {
+      await axios.patch(
+        `/api/projects/${project.id}/primary-branch`,
+        { branch },
+        { headers: authHeaders() }
+      )
+      setPrimaryBranch(branch)
+      setPrimaryFreshness(null)
+    } catch {
+      setAnalysisError('주요 브랜치 설정에 실패했습니다.')
+    }
+  }
+
   const isAnalyzing = analysisId !== null && status !== 'FAILED'
 
   return (
     <div className="bg-gray-900 rounded-xl p-5 flex flex-col gap-3 hover:bg-gray-800 transition-colors">
+      {/* 프로젝트 이름 + 뱃지 */}
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <h2 className="font-semibold text-base leading-snug truncate">{project.name}</h2>
+
+          {/* 마지막 분석 freshness 뱃지 */}
           {freshnessStatus && !isAnalyzing && (
             <span className={`shrink-0 text-xs px-1.5 py-0.5 rounded border ${
               freshnessStatus === 'outdated'
@@ -156,6 +227,31 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
             }`}>
               {freshnessStatus === 'outdated' ? '새 커밋' : '최신'}
             </span>
+          )}
+
+          {/* primary branch 뱃지 */}
+          {primaryBranch && !isAnalyzing && (
+            <div className="flex items-center gap-1 shrink-0">
+              <span className={`text-xs px-1.5 py-0.5 rounded border ${
+                primaryFreshness === 'outdated'
+                  ? 'bg-yellow-900/60 text-yellow-400 border-yellow-700/60'
+                  : primaryFreshness === 'latest'
+                  ? 'bg-blue-900/60 text-blue-400 border-blue-700/60'
+                  : 'bg-gray-800 text-gray-500 border-gray-700'
+              }`}>
+                {primaryBranch} {primaryFreshness === 'outdated' ? '↑' : primaryFreshness === 'latest' ? '✓' : ''}
+              </span>
+              {/* primary branch가 outdated면 즉시 재분석 버튼 */}
+              {primaryFreshness === 'outdated' && (
+                <button
+                  onClick={() => handleStartAnalysis(primaryBranch)}
+                  disabled={isAnalyzing || starting}
+                  className="text-xs text-yellow-400 hover:text-yellow-200 disabled:opacity-40"
+                >
+                  재분석
+                </button>
+              )}
+            </div>
           )}
         </div>
         <button
@@ -179,10 +275,11 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
         {project.githubRepoUrl}
       </a>
 
+      {/* 분석 진행률 */}
       {isAnalyzing && (
         <div className="flex flex-col gap-1">
           <div className="flex justify-between text-xs text-gray-400">
-            <span>분석 중{selectedBranch ? ` (${selectedBranch})` : ''}...</span>
+            <span>분석 중{lastAnalyzedBranch ? ` (${lastAnalyzedBranch})` : ''}...</span>
             <span>{progress}%</span>
           </div>
           <div className="w-full bg-gray-700 rounded-full h-1.5">
@@ -194,7 +291,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
         </div>
       )}
 
-      {/* 브랜치 선택 피커 */}
+      {/* 다른 브랜치 분석 피커 */}
       {showBranchPicker && (
         <div ref={pickerRef} className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
           {loadingBranches ? (
@@ -218,10 +315,54 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
                   취소
                 </button>
                 <button
-                  onClick={handleStartAnalysis}
+                  onClick={() => handleStartAnalysis(selectedBranch)}
                   className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200"
                 >
                   분석 시작
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* primary branch 설정 피커 */}
+      {showPrimaryPicker && (
+        <div ref={primaryPickerRef} className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
+          <p className="text-xs text-gray-400">항상 추적할 주요 브랜치</p>
+          {loadingBranches ? (
+            <p className="text-xs text-gray-400">브랜치 로딩 중...</p>
+          ) : (
+            <>
+              <select
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="w-full bg-gray-700 text-white text-xs rounded px-2 py-1.5 border border-gray-600 focus:outline-none"
+              >
+                {branches.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+              <div className="flex gap-2 justify-end">
+                {primaryBranch && (
+                  <button
+                    onClick={() => handleSetPrimaryBranch(null)}
+                    className="text-xs text-gray-500 hover:text-red-400 px-2 py-1"
+                  >
+                    해제
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowPrimaryPicker(false)}
+                  className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={() => handleSetPrimaryBranch(selectedBranch)}
+                  className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200"
+                >
+                  설정
                 </button>
               </div>
             </>
@@ -236,6 +377,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
         <p className="text-xs text-red-400">{analysisError}</p>
       )}
 
+      {/* 하단 버튼 영역 */}
       <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-800">
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-600">
@@ -258,9 +400,24 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
         </div>
 
         {hasGraph && !isAnalyzing ? (
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleAnalysisButtonClick}
+              onClick={handlePrimaryPickerOpen}
+              disabled={showPrimaryPicker}
+              className="text-xs text-gray-600 hover:text-gray-400 disabled:opacity-40"
+              title="주요 브랜치 설정"
+            >
+              ★
+            </button>
+            <button
+              onClick={handleOtherBranchClick}
+              disabled={starting || showBranchPicker}
+              className="text-xs text-gray-500 hover:text-gray-300 disabled:opacity-40"
+            >
+              다른 브랜치
+            </button>
+            <button
+              onClick={handleReanalyze}
               disabled={starting || showBranchPicker}
               className={`text-xs disabled:opacity-40 ${freshnessStatus === 'outdated' ? 'text-yellow-400 hover:text-yellow-200' : 'text-gray-500 hover:text-gray-300'}`}
             >
@@ -275,7 +432,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
           </div>
         ) : (
           <button
-            onClick={handleAnalysisButtonClick}
+            onClick={handleOtherBranchClick}
             disabled={isAnalyzing || starting || showBranchPicker}
             className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
           >

@@ -58,6 +58,17 @@ public class ProjectCommandService {
         return projectRepository.save(project);
     }
 
+    // 소유자 확인 후 주요 브랜치 설정 (null이면 해제)
+    public Project setPrimaryBranch(UUID projectId, UUID requestingUserId, String branch) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+        if (!project.getUserId().equals(requestingUserId)) {
+            throw new IllegalStateException("Not authorized to modify this project");
+        }
+        project.setPrimaryBranch(branch);
+        return projectRepository.save(project);
+    }
+
     // 소유자 확인 후 프로젝트 삭제
     public void deleteProject(UUID projectId, UUID requestingUserId) {
         Project project = projectRepository.findById(projectId)

@@ -10,6 +10,7 @@ interface Project {
   githubRepoUrl: string
   isPublic: boolean
   createdAt: string
+  primaryBranch: string | null
 }
 
 interface GitHubRepo {

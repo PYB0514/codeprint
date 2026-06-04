@@ -12,7 +12,8 @@ public record ProjectResponse(
         String description,
         String githubRepoUrl,
         boolean isPublic,
-        Instant createdAt
+        Instant createdAt,
+        String primaryBranch
 ) {
     // 프로젝트 도메인 객체를 응답 DTO로 변환
     public static ProjectResponse from(Project project) {
@@ -22,7 +23,8 @@ public record ProjectResponse(
                 project.getDescription(),
                 project.getGithubRepoUrl(),
                 project.isPublic(),
-                project.getCreatedAt()
+                project.getCreatedAt(),
+                project.getPrimaryBranch()
         );
     }
 }

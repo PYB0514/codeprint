@@ -122,6 +122,49 @@ public class ProjectController {
         }
     }
 
+    // 주요 브랜치 설정 (null이면 해제)
+    @PatchMapping("/{projectId}/primary-branch")
+    public ResponseEntity<ProjectResponse> setPrimaryBranch(
+            @PathVariable UUID projectId,
+            @RequestBody PrimaryBranchRequest request,
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(ProjectResponse.from(
+                projectCommandService.setPrimaryBranch(projectId, user.getId(), request.branch())));
+    }
+
+    // 주요 브랜치 freshness 조회 (primary branch 기준)
+    @GetMapping("/{projectId}/primary-freshness")
+    public ResponseEntity<Map<String, Object>> getPrimaryFreshness(
+            @PathVariable UUID projectId,
+            @AuthenticationPrincipal User user) {
+        var project = projectQueryService.getProject(projectId, user.getId());
+        String primaryBranch = project.getPrimaryBranch();
+        if (primaryBranch == null) {
+            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", "not_set"));
+        }
+
+        var latestAnalysis = analysisRepository.findLatestByProjectIdAndBranch(projectId, primaryBranch);
+        if (latestAnalysis.isEmpty() || latestAnalysis.get().getLastCommitSha() == null) {
+            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", "no_data", "branch", primaryBranch));
+        }
+
+        var analysis = latestAnalysis.get();
+        try {
+            String latestSha = gitHubApiClient.fetchLatestCommitSha(
+                    project.getGithubRepoUrl(), primaryBranch, user.getGithubAccessToken());
+            boolean isOutdated = !latestSha.equals(analysis.getLastCommitSha());
+            return ResponseEntity.ok(Map.of(
+                    "isOutdated", isOutdated,
+                    "branch", primaryBranch,
+                    "lastAnalyzedAt", analysis.getFinishedAt().toString(),
+                    "lastCommitSha", analysis.getLastCommitSha(),
+                    "latestCommitSha", latestSha
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", "github_error", "branch", primaryBranch));
+        }
+    }
+
     // 프로젝트 삭제
     @DeleteMapping("/{projectId}")
     public ResponseEntity<Void> deleteProject(
@@ -139,4 +182,7 @@ public class ProjectController {
 
     // 공개/비공개 전환 요청 DTO
     public record VisibilityRequest(boolean isPublic) {}
+
+    // 주요 브랜치 설정 요청 DTO (null이면 해제)
+    public record PrimaryBranchRequest(String branch) {}
 }
