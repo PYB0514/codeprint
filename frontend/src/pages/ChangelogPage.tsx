@@ -11,6 +11,18 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v1.9',
+    date: '2026-06-04',
+    title: '레이트 리미팅 & 노드 코멘트',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: '레이트 리미팅 — Bucket4j IP별 요청 제한 (분석 10회/분, 첨부 20회/분), 초과 시 429' },
+      { category: '백엔드', desc: '노드 코멘트 API — 함수 노드에 코멘트 작성/조회/삭제 (소유자만 삭제)' },
+      { category: '백엔드', desc: '보안 Phase 2 — JWT 만료 24h→1h, S3 다운로드 URL 1h→15min, 업로드 파일 10MB 제한' },
+      { category: '프론트', desc: '그래프 우측 사이드바 — 함수 노드 클릭 시 코멘트 목록 + Enter 입력' },
+    ],
+  },
+  {
     version: 'v1.8',
     date: '2026-06-04',
     title: '보안 헤더 & Sentry React SDK',
