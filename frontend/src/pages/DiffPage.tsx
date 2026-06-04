@@ -91,10 +91,13 @@ function applyDiffEdgeStyles(edges: Edge[], diffEdges: RawDiffEdge[]): Edge[] {
     const status = identifier ? statusMap.get(identifier) : undefined
     if (!status) return e
     const color = EDGE_STATUS_COLOR[status]
+    const markerEnd = typeof e.markerEnd === 'object' && e.markerEnd !== null
+      ? { ...e.markerEnd, color }
+      : { color }
     return {
       ...e,
       style: { ...e.style, stroke: color, strokeWidth: status === 'unchanged' ? 1 : 2 },
-      markerEnd: { ...(typeof e.markerEnd === 'object' ? e.markerEnd : {}), color },
+      markerEnd,
       animated: status === 'added',
     }
   })
