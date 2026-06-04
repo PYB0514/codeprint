@@ -1,4 +1,16 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew compileJava *)",
+      "Bash(./gradlew compileJava)",
+      "Bash(npx tsc --noEmit *)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(docker compose ps)",
+      "Bash(docker compose logs *)",
+      "Bash(docker ps *)",
+      "Bash(git branch --show-current)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
