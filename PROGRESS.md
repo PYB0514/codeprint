@@ -21,6 +21,7 @@
 | 분석 진행률 API | ✅ | GET /api/analyses/{id} |
 | 파일/함수 주석 추출 | ✅ | metadata.comment 저장, 어노테이션 건너뛰기, 제네릭 정규식 지원 |
 | 브랜치 선택 분석 | ✅ | GET /api/projects/{id}/branches, analyses.branch 컬럼, RepoCloner --branch |
+| 언어 지원 확장 | ✅ | C#, Ruby, PHP, Swift 추가 — 총 11개 언어 지원 |
 
 ### 프론트엔드
 
