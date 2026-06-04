@@ -72,6 +72,7 @@
 | Spring Boot Actuator | ✅ | Railway Healthcheck /actuator/health |
 | AWS S3 연동 | ✅ | presigned URL 발급 + 커뮤니티 이미지 첨부 UI |
 | 커뮤니티 첨부 이미지 표시 | ✅ | 게시글 상세에서 S3 presigned GET URL로 이미지 렌더링 |
+| 패치노트 페이지 | ✅ | /changelog — v1.0~v1.6 버전 히스토리, 타임라인 UI |
 
 ---
 

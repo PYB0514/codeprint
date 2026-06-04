@@ -81,6 +81,12 @@ export default function LandingPage() {
           >
             커뮤니티
           </button>
+          <button
+            onClick={() => navigate('/changelog')}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            패치노트
+          </button>
           {loggedIn ? (
             <button
               onClick={() => navigate('/dashboard')}
@@ -212,8 +218,11 @@ export default function LandingPage() {
 
       </div>
 
-      <footer className="py-5 text-center text-gray-700 text-xs border-t border-gray-800">
-        © 2025 Codeprint
+      <footer className="py-5 text-center text-gray-700 text-xs border-t border-gray-800 flex items-center justify-center gap-4">
+        <span>© 2025 Codeprint</span>
+        <button onClick={() => navigate('/changelog')} className="hover:text-gray-400 transition-colors">
+          패치노트
+        </button>
       </footer>
     </div>
   )
