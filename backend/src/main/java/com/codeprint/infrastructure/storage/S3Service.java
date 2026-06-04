@@ -42,7 +42,7 @@ public class S3Service {
         return new PresignedUploadResult(presigned.url().toString(), key);
     }
 
-    // 조회용 presigned GET URL 발급 (유효 시간 1시간)
+    // 조회용 presigned GET URL 발급 (유효 시간 15분)
     public String generatePresignedDownloadUrl(String key) {
         GetObjectRequest getRequest = GetObjectRequest.builder()
                 .bucket(bucket)
@@ -50,7 +50,7 @@ public class S3Service {
                 .build();
 
         PresignedGetObjectRequest presigned = s3Presigner.presignGetObject(r ->
-                r.signatureDuration(Duration.ofHours(1))
+                r.signatureDuration(Duration.ofMinutes(15))
                  .getObjectRequest(getRequest));
 
         return presigned.url().toString();

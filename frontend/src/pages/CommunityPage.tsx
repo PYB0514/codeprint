@@ -96,7 +96,7 @@ export default function CommunityPage() {
       setAttachedFiles((prev) => [...prev, entry])
       const { data } = await axios.post<{ uploadUrl: string; s3Key: string }>(
         '/api/attachments/presign',
-        { contentType: file.type, filename: file.name },
+        { contentType: file.type, filename: file.name, fileSize: String(file.size) },
         { headers: authHeaders() }
       )
       await fetch(data.uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
