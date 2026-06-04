@@ -33,7 +33,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**", "/api/share/**", "/api/community/posts", "/api/community/posts/*/graph", "/api/payments/webhook", "/ws/**", "/login/**", "/oauth2/**", "/actuator/health", "/actuator/prometheus").permitAll()
+                .requestMatchers("/api/auth/**", "/api/share/**", "/api/community/posts", "/api/community/posts/*/graph", "/api/payments/webhook", "/ws/**", "/login/**", "/oauth2/**", "/actuator/health").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth2 -> oauth2
@@ -48,7 +48,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("http://localhost:3000", "https://*.vercel.app"));
+        config.setAllowedOriginPatterns(List.of("http://localhost:3000", "https://codeprint-iota.vercel.app"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

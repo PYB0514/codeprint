@@ -68,12 +68,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,prometheus
+        include: health
   endpoint:
     health:
       show-details: never
-    prometheus:
-      enabled: true
 
 sentry:
   dsn: ${SENTRY_DSN:}
@@ -82,5 +80,5 @@ sentry:
 
 logging:
   level:
-    com.codeprint: DEBUG
-    org.springframework.security: INFO
+    com.codeprint: INFO
+    org.springframework.security: WARN
