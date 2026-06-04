@@ -14,4 +14,7 @@ public interface AnalysisRepository {
     List<AnalysisResult> findByProjectId(UUID projectId);
 
     Optional<AnalysisResult> findLatestByProjectId(UUID projectId);
+
+    // 특정 브랜치의 가장 최근 완료 분석 조회
+    Optional<AnalysisResult> findLatestByProjectIdAndBranch(UUID projectId, String branch);
 }

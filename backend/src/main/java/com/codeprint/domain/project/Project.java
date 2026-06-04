@@ -40,6 +40,9 @@ public class Project {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "primary_branch", length = 255)
+    private String primaryBranch;
+
     // 사용자 ID와 GitHub URL로 새 프로젝트 인스턴스 생성
     public static Project create(UUID userId, String githubRepoUrl, String name, String description) {
         Project project = new Project();
@@ -52,6 +55,12 @@ public class Project {
         project.createdAt = Instant.now();
         project.updatedAt = Instant.now();
         return project;
+    }
+
+    // 주요 브랜치 설정 (null 허용 — 해제 시 null)
+    public void setPrimaryBranch(String branch) {
+        this.primaryBranch = (branch != null && branch.isBlank()) ? null : branch;
+        this.updatedAt = Instant.now();
     }
 
     // 프로젝트를 공개 상태로 전환

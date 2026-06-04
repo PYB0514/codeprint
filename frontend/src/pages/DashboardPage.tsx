@@ -20,6 +20,7 @@ interface Project {
   githubRepoUrl: string
   isPublic: boolean
   createdAt: string
+  primaryBranch: string | null
 }
 
 // JWT 토큰을 Authorization 헤더로 반환

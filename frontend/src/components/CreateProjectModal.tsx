@@ -1,5 +1,5 @@
-// 새 프로젝트 생성 모달 — GitHub 레포 URL 입력 및 제출
-import { useState } from 'react'
+// 새 프로젝트 생성 모달 — GitHub 레포 선택 또는 직접 URL 입력
+import { useState, useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
 import axios from 'axios'
 
@@ -10,6 +10,15 @@ interface Project {
   githubRepoUrl: string
   isPublic: boolean
   createdAt: string
+  primaryBranch: string | null
+}
+
+interface GitHubRepo {
+  name: string
+  fullName: string
+  htmlUrl: string
+  description: string | null
+  isPrivate: boolean
 }
 
 interface Props {
@@ -19,11 +28,51 @@ interface Props {
 
 // 새 프로젝트 생성 모달 컴포넌트
 export default function CreateProjectModal({ onClose, onCreated }: Props) {
+  const [repos, setRepos] = useState<GitHubRepo[]>([])
+  const [reposLoading, setReposLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+
   const [githubRepoUrl, setGithubRepoUrl] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const token = localStorage.getItem('jwt')
+    axios.get<GitHubRepo[]>('/api/projects/github-repos', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => setRepos(res.data))
+      .catch(() => setRepos([]))
+      .finally(() => setReposLoading(false))
+  }, [])
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  // 레포 선택 시 필드 자동 채움
+  const handleSelectRepo = (repo: GitHubRepo) => {
+    setGithubRepoUrl(repo.htmlUrl)
+    setName(repo.name)
+    setDescription(repo.description ?? '')
+    setSearch(repo.fullName)
+    setDropdownOpen(false)
+  }
+
+  const filtered = repos.filter(r =>
+    r.fullName.toLowerCase().includes(search.toLowerCase())
+  )
 
   // 폼 제출 시 프로젝트 생성 API 호출
   const handleSubmit = async (e: FormEvent) => {
@@ -58,6 +107,38 @@ export default function CreateProjectModal({ onClose, onCreated }: Props) {
         <h2 className="text-xl font-semibold mb-6">새 프로젝트</h2>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {/* 레포 선택 드롭다운 */}
+          <div ref={dropdownRef}>
+            <label className="block text-sm text-gray-400 mb-1">GitHub 레포 선택</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setDropdownOpen(true) }}
+                onFocus={() => setDropdownOpen(true)}
+                placeholder={reposLoading ? '레포 불러오는 중...' : '레포 검색...'}
+                disabled={reposLoading}
+                className="w-full bg-gray-800 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-white/20 disabled:opacity-50"
+              />
+              {dropdownOpen && filtered.length > 0 && (
+                <ul className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-h-52 overflow-y-auto">
+                  {filtered.map(repo => (
+                    <li
+                      key={repo.fullName}
+                      onMouseDown={() => handleSelectRepo(repo)}
+                      className="px-4 py-2.5 text-sm hover:bg-gray-700 cursor-pointer flex items-center justify-between gap-2"
+                    >
+                      <span className="truncate">{repo.fullName}</span>
+                      {repo.isPrivate && (
+                        <span className="text-xs text-gray-500 shrink-0">비공개</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm text-gray-400 mb-1">GitHub 레포 URL</label>
             <input

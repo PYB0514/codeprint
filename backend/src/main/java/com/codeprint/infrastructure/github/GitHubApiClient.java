@@ -76,6 +76,38 @@ public class GitHubApiClient {
         }
     }
 
+    // 인증된 사용자의 GitHub 레포 목록 조회 (최대 100개, 최근 업데이트 순)
+    public List<GitHubRepoDto> fetchUserRepos(String githubAccessToken) {
+        String apiUrl = "https://api.github.com/user/repos?per_page=100&sort=updated&type=all";
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Accept", "application/vnd.github+json")
+                    .header("Authorization", "Bearer " + githubAccessToken)
+                    .header("X-GitHub-Api-Version", "2022-11-28")
+                    .GET().build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            List<GitHubRepoDto> repos = new ArrayList<>();
+            JsonNode nodes = objectMapper.readTree(response.body());
+            if (nodes.isArray()) {
+                for (JsonNode node : nodes) {
+                    String desc = (node.has("description") && !node.get("description").isNull())
+                            ? node.get("description").asText() : null;
+                    repos.add(new GitHubRepoDto(
+                            node.get("name").asText(),
+                            node.get("full_name").asText(),
+                            node.get("html_url").asText(),
+                            desc,
+                            node.get("private").asBoolean()
+                    ));
+                }
+            }
+            return repos;
+        } catch (Exception e) {
+            throw new RuntimeException("GitHub 레포 목록 조회 실패", e);
+        }
+    }
+
     // GitHub URL에서 owner/repo 경로를 추출
     private String extractOwnerRepo(String githubRepoUrl) {
         Matcher m = REPO_PATTERN.matcher(githubRepoUrl);

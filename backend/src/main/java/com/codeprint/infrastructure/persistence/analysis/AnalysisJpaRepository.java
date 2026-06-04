@@ -15,4 +15,7 @@ public interface AnalysisJpaRepository extends JpaRepository<AnalysisResult, UUI
 
     @Query("SELECT a FROM AnalysisResult a WHERE a.projectId = :projectId ORDER BY a.createdAt DESC LIMIT 1")
     Optional<AnalysisResult> findLatestByProjectId(UUID projectId);
+
+    @Query("SELECT a FROM AnalysisResult a WHERE a.projectId = :projectId AND a.branch = :branch ORDER BY a.createdAt DESC LIMIT 1")
+    Optional<AnalysisResult> findLatestByProjectIdAndBranch(UUID projectId, String branch);
 }
