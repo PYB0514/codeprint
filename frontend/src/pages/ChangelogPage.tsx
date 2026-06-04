@@ -24,7 +24,7 @@ const RELEASES: Release[] = [
     ],
   },
   {
-    version: 'v1.501',
+    version: 'v1.5.001',
     date: '2026-06-04',
     title: '패치노트 페이지 & 버전 관리 체계 도입',
     type: 'feature',
