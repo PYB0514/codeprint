@@ -15,6 +15,7 @@
 | [DECISIONS_RAILWAY.md](DECISIONS_RAILWAY.md) | Railway 배포 시행착오 + 올바른 배포 순서 |
 | [DECISIONS_VERCEL.md](DECISIONS_VERCEL.md) | Vercel 배포 시행착오 + 올바른 배포 순서 |
 | [DECISIONS_INFRA.md](DECISIONS_INFRA.md) | 인프라 기술 선택 — AWS S3 vs Supabase, Railway vs Supabase DB |
+| [DECISIONS_VERSIONING.md](DECISIONS_VERSIONING.md) | 버전 체계 결정 — v1.x.00n 3단계 확정 과정 |
 
 ## 파일 구조 원칙
 
