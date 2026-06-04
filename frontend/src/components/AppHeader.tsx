@@ -7,14 +7,14 @@ interface Props {
   onLogout?: () => void
 }
 
-// 공통 앱 헤더 — 로고(대시보드 이동) + 사용자 정보 + 로그아웃
+// 공통 앱 헤더 — 로고(메인 이동) + 사용자 정보 + 로그아웃
 export default function AppHeader({ username, plan, onLogout }: Props) {
   const navigate = useNavigate()
 
   return (
     <header className="flex items-center justify-between px-8 py-4 border-b border-gray-800 flex-shrink-0">
       <button
-        onClick={() => navigate('/dashboard')}
+        onClick={() => navigate('/')}
         className="font-bold text-lg tracking-tight hover:text-gray-300 transition-colors"
       >
         Codeprint
