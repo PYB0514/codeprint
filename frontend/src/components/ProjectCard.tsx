@@ -110,7 +110,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
       const list: string[] = res.data
       const sorted = [
         ...['main', 'master'].filter(b => list.includes(b)),
-        ...list.filter(b => b !== 'main' && b !== 'master'),
+        ...list.filter(b => b !== 'main' && b !== 'master').sort(),
       ]
       setBranches(sorted)
       setSelectedBranch(sorted[0] ?? '')
