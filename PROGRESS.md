@@ -1,6 +1,6 @@
 # Codeprint 개발 현황
 
-> 마지막 업데이트: 2026-06-03
+> 마지막 업데이트: 2026-06-04
 
 ---
 
@@ -80,6 +80,9 @@
 | 보안 강화 Phase 1 | ✅ | AttachmentController 인증, AnalysisController 소유권, CORS, 로그 INFO |
 | 보안 헤더 필터 | ✅ | CSP/HSTS/X-Frame-Options 등 6종 |
 | SECURITY_POLICY.md | ✅ | 보안 정책 문서화, 단계별 TODO |
+| 보안 Phase 2 | ✅ | JWT 1h, S3 URL 15min, 파일 10MB 제한 |
+| 레이트 리미팅 | ✅ | Bucket4j IP별 제한 — 분석 10회/분, 첨부 20회/분 |
+| 노드 코멘트 | ✅ | 함수 노드 클릭 시 코멘트 작성/조회/삭제, V8 마이그레이션 |
 
 ---
 
@@ -104,15 +107,14 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재 브랜치: feat/v1.8-monitoring (PR #35 — CI 대기 중)
-# v1.7.002 태그 (보안 강화 Phase 1)
+# 현재: main — v1.9 태그 완료
+# 배포 대기: Railway(백엔드) + Vercel(프론트) 자동 배포 중
 
-# 1. PR #35 CI 통과 확인 → 머지 → v1.8 태그
-# 2. Vercel에 VITE_SENTRY_DSN 환경변수 추가
+# 1. Vercel에 VITE_SENTRY_DSN 환경변수 추가 (사용자 직접)
 #    값: https://20b6d7132d559b401afeae6894b0c6ee@o4511506158649344.ingest.us.sentry.io/4511506182569985
-# 3. Grafana Cloud 연동 — push 방식(micrometer-registry-otlp)으로 재설계
-# 4. ChangelogPage v1.8 항목 추가
-# 5. 다음 기능: 보안 Phase 2(레이트리미팅/S3검증) 또는 새 기능
+# 2. ChangelogPage v1.9 항목 추가
+# 3. 노드 코멘트 배포 후 실제 동작 확인 (Vercel)
+# 4. 다음 기능 후보: 커뮤니티 팔로우 / AI 분석 연동 / Grafana OTLP
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
