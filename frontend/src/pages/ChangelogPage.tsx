@@ -11,7 +11,18 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
-    version: 'v1.6',
+    version: 'v1.001',
+    date: '2026-06-04',
+    title: '패치노트 페이지 & 버전 관리 체계 도입',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '패치노트 페이지 추가 (/changelog) — v1.0~v1.5 히스토리 타임라인 표시' },
+      { category: '프론트', desc: '랜딩 페이지 헤더/푸터에 패치노트 링크 추가' },
+      { category: '인프라', desc: 'Git 버전 태깅 체계 도입 — 일반 업데이트 v1.00x, 주요 기능 변경 시 v1.x' },
+    ],
+  },
+  {
+    version: 'v1.5',
     date: '2026-06-04',
     title: '메인 랜딩 페이지 & 첨부 이미지',
     type: 'feature',
@@ -24,7 +35,7 @@ const RELEASES: Release[] = [
   },
   {
     version: 'v1.5',
-    date: '2026-06-04',
+    date: '2026-06-03',
     title: 'CI/CD 자동화 & AWS S3 연동',
     type: 'infra',
     items: [
