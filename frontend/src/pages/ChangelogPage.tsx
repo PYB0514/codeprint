@@ -11,6 +11,19 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v1.6',
+    date: '2026-06-04',
+    title: '언어 지원 확장 — C#, Ruby, PHP, Swift',
+    type: 'feature',
+    items: [
+      { category: '분석', desc: 'C#, Ruby, PHP, Swift 정적 분석 지원 추가 — 총 11개 언어' },
+      { category: '분석', desc: 'Ruby: def method / def method? / # 주석 추출' },
+      { category: '분석', desc: 'PHP: 접근제어자 조합 function 패턴 + use/namespace import' },
+      { category: '분석', desc: 'Swift: func + 접근제어자 패턴 + import ModuleName' },
+      { category: '분석', desc: 'C#: using System.Xxx; import 패턴 추가 (함수 패턴은 Java와 공유)' },
+    ],
+  },
+  {
     version: 'v1.501',
     date: '2026-06-04',
     title: '패치노트 페이지 & 버전 관리 체계 도입',
