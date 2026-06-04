@@ -72,9 +72,9 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
       .catch(() => setHasGraph(false))
   }, [project.id])
 
-  // primary branch freshness 별도 조회
+  // primary branch freshness 별도 조회 (hasGraph 확인 후 실행)
   useEffect(() => {
-    if (!primaryBranch) { setPrimaryFreshness(null); return }
+    if (!primaryBranch || !hasGraph) { setPrimaryFreshness(null); return }
     axios.get(`/api/projects/${project.id}/primary-freshness`, { headers: authHeaders() })
       .then(res => {
         if (!res.data.reason) {
@@ -84,7 +84,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
         }
       })
       .catch(() => setPrimaryFreshness(null))
-  }, [project.id, primaryBranch])
+  }, [project.id, primaryBranch, hasGraph])
 
   // 피커 외부 클릭 시 닫기
   useEffect(() => {
