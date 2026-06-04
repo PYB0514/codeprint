@@ -86,18 +86,17 @@ function applyDiffStyles(nodes: Node[], diffNodes: RawDiffNode[]): Node[] {
 // diff 상태에 따라 엣지 색상을 오버레이
 function applyDiffEdgeStyles(edges: Edge[], diffEdges: RawDiffEdge[]): Edge[] {
   const statusMap = new Map(diffEdges.map((e) => [e.edgeIdentifier, e.status]))
-  return edges.map((e) => {
+  return edges.map((e): Edge => {
     const identifier = (e.data as { edgeIdentifier?: string } | undefined)?.edgeIdentifier
     const status = identifier ? statusMap.get(identifier) : undefined
     if (!status) return e
     const color = EDGE_STATUS_COLOR[status]
-    const markerEnd = typeof e.markerEnd === 'object' && e.markerEnd !== null
-      ? { ...e.markerEnd, color }
-      : { color }
     return {
       ...e,
       style: { ...e.style, stroke: color, strokeWidth: status === 'unchanged' ? 1 : 2 },
-      markerEnd,
+      markerEnd: typeof e.markerEnd === 'object' && e.markerEnd !== null
+        ? { ...e.markerEnd, color }
+        : e.markerEnd,
       animated: status === 'added',
     }
   })
