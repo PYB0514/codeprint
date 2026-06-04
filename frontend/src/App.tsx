@@ -11,6 +11,7 @@ import CommunityPostGraphPage from './pages/CommunityPostGraphPage'
 import PaymentSuccessPage from './pages/PaymentSuccessPage'
 import PaymentCancelPage from './pages/PaymentCancelPage'
 import ChangelogPage from './pages/ChangelogPage'
+import DiffPage from './pages/DiffPage'
 
 // 앱 최상위 라우터 컴포넌트
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/payment/success" element={<PaymentSuccessPage />} />
         <Route path="/payment/cancel" element={<PaymentCancelPage />} />
         <Route path="/changelog" element={<ChangelogPage />} />
+        <Route path="/projects/:projectId/diff" element={<DiffPage />} />
       </Routes>
     </BrowserRouter>
   )
