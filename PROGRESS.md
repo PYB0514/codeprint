@@ -98,12 +98,13 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재 브랜치: feat/landing-page (PR #18), feat/post-attachments (PR #19)
-# 두 PR 모두 CI 통과 후 main 머지 필요
+# 현재 브랜치: main (v1.6)
+# 모든 PR 머지 완료
 
-# 1. PR #18 (feat/landing-page) 머지 — 메인 랜딩 페이지
-# 2. PR #19 (feat/post-attachments) 머지 — 첨부 이미지 상세 표시
-# 3. 다음 기능 개발 논의 (백로그: 브랜치 버전 태깅, 패치노트 페이지 등)
+# 다음 작업 후보:
+# 1. 후원 기능 (토스페이먼츠 계정 필요)
+# 2. 광고 배너 실제 연동 (Google AdSense 신청 필요)
+# 3. 모니터링/에러 트래킹 (실사용자 생기면)
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
