@@ -11,6 +11,18 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v1.7',
+    date: '2026-06-04',
+    title: '그래프 버전 diff & 모니터링',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '그래프 버전 비교 페이지 (/diff) — 추가된 노드/엣지 초록, 삭제된 항목 빨강으로 시각화' },
+      { category: '백엔드', desc: 'GraphDiffService — 두 분석 결과의 노드/엣지 집합 비교 API (GET /api/projects/{id}/diff)' },
+      { category: '인프라', desc: 'Sentry 에러 트래킹 연동 — 운영 예외 자동 수집' },
+      { category: '인프라', desc: 'Prometheus 메트릭 노출 (/actuator/prometheus) + Grafana Cloud 연동' },
+    ],
+  },
+  {
     version: 'v1.6',
     date: '2026-06-04',
     title: '언어 지원 확장 — C#, Ruby, PHP, Swift',
