@@ -228,6 +228,24 @@ DB에 누적된 과거 그래프 버전이 깨지지 않도록 아래 규칙을 
 
 ---
 
+### 0. Tool Usage — Claude in Chrome & Cowork
+
+**Claude in Chrome — 언제 쓸지.**
+- 프론트엔드 코드를 변경할 때마다 반드시 `http://localhost:3000`을 직접 열어서 동작 확인
+- API 연동 결과(응답 JSON, 에러 메시지)를 눈으로 확인해야 할 때
+- §8 런타임 검증 단계에서 "Claude in Chrome으로 직접 동작 확인"이 명시된 경우
+- UI 버그·레이아웃 이슈를 추측으로 수정하지 말고 먼저 스크린샷 찍어서 확인
+- 혼자 추측하고 "잘 됩니다"라고 선언하지 않는다. 눈으로 확인한 뒤 선언한다.
+
+**Cowork — 언제 쓸지.**
+- 독립적으로 병렬 실행 가능한 작업이 2개 이상일 때 (예: 백엔드 API 구현 + 프론트 컴포넌트 작업)
+- 대규모 리팩토링에서 파일 단위로 분리 가능한 작업
+- 코드 리뷰나 보안 감사처럼 독립적인 분석이 필요한 경우
+
+이 두 도구를 쓰지 않고 혼자 모든 것을 처리하려 하지 않는다. 특히 UI 변경은 반드시 Chrome으로 확인한다.
+
+---
+
 ### 1. Think Before Coding
 Don't assume. Don't hide confusion. Surface tradeoffs.
 Before implementing:
