@@ -62,7 +62,7 @@
 | 항목 | 현재 | 목표 |
 |---|---|---|
 | 저장 위치 | localStorage (XSS 취약) | HttpOnly 쿠키 (Phase 3) |
-| 만료 시간 | 24시간 | 1시간 (Phase 2) |
+| 만료 시간 | ~~24시간~~ → **1시간** ✅ | HttpOnly 쿠키 전환 시 재검토 (Phase 3) |
 | 전달 방식 | URL 쿼리파라미터 | 쿠키 (Phase 3) |
 | Refresh token | 없음 | Phase 3 도입 |
 
@@ -73,9 +73,9 @@
 | 항목 | 현재 | 목표 |
 |---|---|---|
 | 업로드 presigned URL 만료 | 5분 | 유지 |
-| 다운로드 presigned URL 만료 | 1시간 | 15분 (Phase 2) |
-| 파일 타입 검증 | 없음 | 이미지 화이트리스트만 허용 (Phase 2) |
-| 파일 크기 제한 | 없음 | 10MB (Phase 2) |
+| 다운로드 presigned URL 만료 | ~~1시간~~ → **15분** ✅ | |
+| 파일 타입 검증 | ~~없음~~ → **이미지 화이트리스트** ✅ | Phase 1에서 완료 |
+| 파일 크기 제한 | ~~없음~~ → **10MB** ✅ | |
 
 ---
 
@@ -117,11 +117,11 @@
 - [ ] 프로덕션 로그 레벨 INFO
 - [ ] `/actuator/prometheus` 제거 + push 방식 전환
 
-### Phase 2 — v1.8 (1~2주 내)
+### Phase 2 — v1.9
 - [ ] 레이트 리미팅 (Bucket4j)
-- [ ] S3 파일 타입/크기 검증
-- [ ] JWT 만료 1시간 단축
-- [ ] S3 다운로드 presigned URL 15분
+- [x] S3 파일 타입/크기 검증 (Phase 1 + 10MB 제한 추가)
+- [x] JWT 만료 1시간 단축
+- [x] S3 다운로드 presigned URL 15분
 - [ ] Stripe Webhook race condition 방어
 
 ### Phase 3 — 유료화 전 필수
