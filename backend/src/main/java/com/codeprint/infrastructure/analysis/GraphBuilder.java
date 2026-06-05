@@ -124,6 +124,43 @@ public class GraphBuilder {
             }
         }
 
+        // 인터페이스 → 구현체 FUNCTION_CALL 엣지 생성
+        // 인터페이스 심플명 → 구현체 ParsedFile 인덱스
+        Map<String, ParsedFile> interfaceToImplFile = new HashMap<>();
+        for (ParsedFile pf : parsedFiles) {
+            for (String iface : pf.implementedInterfaces()) {
+                interfaceToImplFile.put(iface, pf);
+            }
+        }
+        // 인터페이스 심플명 → 인터페이스 ParsedFile 인덱스
+        Map<String, ParsedFile> ifaceNameToFile = new HashMap<>();
+        for (ParsedFile pf : parsedFiles) {
+            String simpleName = extractFileNameWithoutExt(pf.filePath());
+            if (interfaceToImplFile.containsKey(simpleName)) {
+                ifaceNameToFile.put(simpleName, pf);
+            }
+        }
+        for (Map.Entry<String, ParsedFile> entry : ifaceNameToFile.entrySet()) {
+            String ifaceName = entry.getKey();
+            ParsedFile ifaceFile = entry.getValue();
+            ParsedFile implFile = interfaceToImplFile.get(ifaceName);
+            for (String funcName : ifaceFile.functions()) {
+                UUID ifaceFuncId = funcNodeIds.get(ifaceFile.filePath() + "::" + funcName);
+                UUID implFuncId = funcNodeIds.get(implFile.filePath() + "::" + funcName);
+                if (ifaceFuncId == null || implFuncId == null) continue;
+                String edgeId = ifaceName + "-" + funcName + "-impl-" + extractFileNameWithoutExt(implFile.filePath());
+                if (usedEdgeIds.contains(edgeId)) continue;
+                usedEdgeIds.add(edgeId);
+                Edge implEdge = Edge.create(graphId, edgeId, EdgeType.FUNCTION_CALL, ifaceFuncId, implFuncId);
+                Map<String, Object> meta = new HashMap<>();
+                meta.put("callerFile", ifaceFile.filePath());
+                meta.put("calleeFile", implFile.filePath());
+                meta.put("isInterfaceImpl", true);
+                implEdge.updateMetadata(meta);
+                graphRepository.saveEdge(implEdge);
+            }
+        }
+
         // DB_TABLE 노드 생성 + Repository → DB_TABLE 엣지 생성
         // 엔티티 클래스명 → DB_TABLE 노드 ID 인덱스
         Map<String, UUID> entityClassToTableNodeId = new HashMap<>();

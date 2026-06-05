@@ -30,8 +30,9 @@ public class StaticCodeAnalyzer {
         List<ColumnInfo> entityColumns = extractEntityColumns(content, language);
         List<String> apiCalls = extractApiCalls(content, language);
         List<String> controllerMappings = extractControllerMappings(content, language);
+        List<String> implementedInterfaces = extractImplementedInterfaces(content, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces);
     }
 
     // 파일 상단 첫 번째 주석 추출
@@ -287,6 +288,24 @@ public class StaticCodeAnalyzer {
         // extends JpaRepository<EntityName, ID> 또는 CrudRepository, PagingAndSortingRepository
         Matcher m = Pattern.compile("extends\\s+(?:Jpa|Crud|PagingAndSorting)?Repository\\s*<\\s*(\\w+)\\s*,").matcher(content);
         return m.find() ? m.group(1) : null;
+    }
+
+    // "class Foo implements Bar, Baz" 패턴에서 구현 인터페이스명 목록 추출
+    private List<String> extractImplementedInterfaces(String content, String language) {
+        if (!language.equals("Java") && !language.equals("Kotlin")
+                && !language.equals("TypeScript") && !language.equals("JavaScript")) {
+            return List.of();
+        }
+        Matcher m = Pattern.compile(
+                "\\bclass\\s+\\w[\\w<>]*(?:\\s+extends\\s+[\\w<>,.\\s]+)?\\s+implements\\s+([\\w<>,.\\s]+?)\\s*\\{"
+        ).matcher(content);
+        if (!m.find()) return List.of();
+        List<String> result = new ArrayList<>();
+        for (String part : m.group(1).split(",")) {
+            String name = part.trim().replaceAll("<[^>]*>", "").trim();
+            if (!name.isEmpty()) result.add(name);
+        }
+        return result;
     }
 
     // @Entity 클래스에서 private 필드를 칼럼 정보로 추출 — @Column(name=) 우선, 없으면 snake_case 변환
