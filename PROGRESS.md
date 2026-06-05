@@ -1,6 +1,6 @@
 # Codeprint 개발 현황
 
-> 마지막 업데이트: 2026-06-05 (v1.18 — 주석 모드 사이드바 헤더 + API_CALL 전체 흐름 추적)
+> 마지막 업데이트: 2026-06-06 (v1.21 — 흐름 재생 UX 버그 수정)
 
 ---
 
@@ -97,6 +97,9 @@
 | API_CALL 버그 수정 + 사이드바 색인 | ✅ | v1.17.001 — importEdges 타입 필터, 컨트롤러 prefix+suffix 합성, dasharray 수정 (#58) |
 | 사이드바 탐색 유지 + 재생 패널 고정 | ✅ | v1.17.002 — 링크 클릭 시 사이드바 유지, 흐름 재생 패널 상단 고정 (#59) |
 | 주석 모드 사이드바 + API_CALL 흐름 | ✅ | v1.18 — 함수 상세 주석 우선 표시, API_CALL→컨트롤러→서비스→DB 체인 (#60) |
+| 흐름 자동 시각화 프로토타입 개선 | ✅ | v1.19 — 재생 컨트롤 고도화, 전체 흐름 추적 UI |
+| 그래프 뷰포트 줌 버그 수정 | ✅ | v1.20 — 노드 클릭 시 줌 초기화 방지, 재생 중 뷰포트 자동 추적 (#66) |
+| 흐름 재생 UX 버그 수정 | ✅ | v1.21 — CONTAINS 제거, resetPlayback, openFuncNode 헬퍼, labelMode, DB_TABLE 재생 (#67) |
 
 ---
 
@@ -121,12 +124,11 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재: main 브랜치 (v1.18)
-# 다음: feat/interface-mapping 브랜치 생성 후 작업
-#   - StaticCodeAnalyzer: implements XxxRepository 패턴 감지
-#   - GraphBuilder: 인터페이스 ID → 구현체 ID 치환 로직
-#   - FUNCTION_CALL 체인이 인터페이스에서 끊기는 문제 해소
-#   - 테스트: Codeprint 프로젝트 재분석 후 Repository 체인 확인
+# 현재: main 브랜치 (v1.21)
+# 다음 선택지 (우선순위 순):
+#   A. test/domain-unit 브랜치 — AnalysisResult 상태 전이 + UserPlan 경계 조건 테스트 (빠름, 50분)
+#   B. test/analyzer 브랜치 — StaticCodeAnalyzer + GraphBuilder 테스트 (임팩트 최고, 5~6시간)
+#   C. feat/interface-mapping 브랜치 — 인터페이스→구현체 매핑 (코어 기능 보완)
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
@@ -143,6 +145,19 @@ npm run dev
 ---
 
 ## 백로그 (Phase 2)
+
+### TDD 테스트 커버리지 (우선순위 순)
+
+> CLAUDE.md §4 기준: 상태 전이·경계 조건·이미 버그난 코드 → TDD 필수. Application Service는 런타임 검증으로 대체.
+
+| 항목 | 예상 시간 | 우선순위 이유 |
+|---|---|---|
+| **AnalysisResult 상태 전이 테스트** (PENDING→RUNNING→COMPLETED/FAILED) | 30분 | 상태 전이 로직, TDD 기준 해당 |
+| **UserPlan + ProjectLimit 경계 조건 테스트** (Free 3개 제한, null, 0) | 20분 | 경계 조건 비즈니스 규칙, TDD 기준 해당 |
+| **StaticCodeAnalyzer 언어별 샘플 테스트** (Java/TS/Python 등) | 2~3시간 | 이미 버그 다수 발생한 코드 — 회귀 방지 임팩트 최고 |
+| **GraphBuilder 엣지 타입 생성 테스트** (FUNCTION_CALL/CONTAINS/API_CALL) | 2~3시간 | 이미 버그 다수 발생 (CONTAINS 중복, isInterfaceImpl no-op) |
+
+> ProjectCommandService 목킹 테스트는 Application Service 계층이므로 TDD 불필요 — 런타임 검증으로 대체.
 
 ### 코어 기능
 - **인터페이스 → 구현체 자동 매핑** — `implements XxxRepository` 패턴 감지 → FUNCTION_CALL 체인이 인터페이스에서 끊기는 문제 해소 (방향 A 다음 작업)
@@ -218,9 +233,11 @@ npm run dev
 ## 브랜치 전략
 
 ```
-main (v1.18)               ← 항상 배포 가능 상태
+main (v1.21)               ← 항상 배포 가능 상태
                              GitHub Actions CI 통과 필수
-└─ feat/interface-mapping  ← 다음 작업 (인터페이스→구현체 매핑)
+└─ test/domain-unit        ← 다음 작업 옵션 A (빠른 도메인 테스트)
+└─ test/analyzer           ← 다음 작업 옵션 B (분석 엔진 테스트)
+└─ feat/interface-mapping  ← 다음 작업 옵션 C (인터페이스→구현체 매핑)
 ```
 
 **CI/CD 파이프라인 (운영 중)**
