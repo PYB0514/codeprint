@@ -1091,7 +1091,7 @@ function GraphPageInner() {
             {/* 엣지 — 색인 + 토글 통합 */}
             <LeftSection title="엣지">
               {[
-                { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: 'IMPORT',       textCls: showEdges ? 'text-gray-300' : 'text-gray-600',   active: showEdges,        onToggle: toggleEdges },
+                { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: '의존성',       textCls: showEdges ? 'text-gray-300' : 'text-gray-600',   active: showEdges,        onToggle: toggleEdges },
                 { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="4 3" /></svg>,                                label: '콜 체인',      textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600', active: showCallEdges,    onToggle: toggleCallEdges },
                 { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',         textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600', active: showInstEdges,  onToggle: toggleInstEdges },
                 { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결',    textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600', active: showBrokenEdges, onToggle: toggleBrokenEdges },
@@ -1328,21 +1328,21 @@ function GraphPageInner() {
                       <p className="text-white font-mono font-semibold text-sm">{sidebar.data.name}</p>
                       {sidebar.data.comment && <p className="text-gray-500 text-xs mt-0.5">{sidebar.data.comment}</p>}
                     </div>
-                    <SidebarSection title={`들어오는 연결 (${sidebar.data.incoming.length})`}>
-                      {sidebar.data.incoming.length === 0
+                    <SidebarSection title={`의존하는 파일 — import${sidebar.data.outgoing.length > 0 ? ` (${sidebar.data.outgoing.length})` : ''}`}>
+                      {sidebar.data.outgoing.length === 0
                         ? <p className="text-gray-700 text-xs">없음</p>
-                        : sidebar.data.incoming.map((c, i) => (
-                          <FileConnGroup key={i} entry={c} direction="in"
+                        : sidebar.data.outgoing.map((c, i) => (
+                          <FileConnGroup key={i} entry={c} direction="out"
                             onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                           />
                         ))
                       }
                     </SidebarSection>
-                    <SidebarSection title={`나가는 연결 (${sidebar.data.outgoing.length})`}>
-                      {sidebar.data.outgoing.length === 0
+                    <SidebarSection title={`이 파일을 import하는 곳${sidebar.data.incoming.length > 0 ? ` (${sidebar.data.incoming.length})` : ''}`}>
+                      {sidebar.data.incoming.length === 0
                         ? <p className="text-gray-700 text-xs">없음</p>
-                        : sidebar.data.outgoing.map((c, i) => (
-                          <FileConnGroup key={i} entry={c} direction="out"
+                        : sidebar.data.incoming.map((c, i) => (
+                          <FileConnGroup key={i} entry={c} direction="in"
                             onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                           />
                         ))
