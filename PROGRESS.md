@@ -1,6 +1,6 @@
 # Codeprint 개발 현황
 
-> 마지막 업데이트: 2026-06-05 (v1.17.002 — 사이드바 탐색 초기화 방지, 흐름 재생 패널 상단 고정)
+> 마지막 업데이트: 2026-06-05 (v1.18 — 주석 모드 사이드바 헤더 + API_CALL 전체 흐름 추적)
 
 ---
 
@@ -96,6 +96,7 @@
 | API_CALL 엣지 분석 | ✅ | v1.17 — 프론트 axios 호출 → 백엔드 컨트롤러 API_CALL 엣지 생성 (#57) |
 | API_CALL 버그 수정 + 사이드바 색인 | ✅ | v1.17.001 — importEdges 타입 필터, 컨트롤러 prefix+suffix 합성, dasharray 수정 (#58) |
 | 사이드바 탐색 유지 + 재생 패널 고정 | ✅ | v1.17.002 — 링크 클릭 시 사이드바 유지, 흐름 재생 패널 상단 고정 (#59) |
+| 주석 모드 사이드바 + API_CALL 흐름 | ✅ | v1.18 — 함수 상세 주석 우선 표시, API_CALL→컨트롤러→서비스→DB 체인 (#60) |
 
 ---
 
@@ -120,10 +121,12 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재: main 브랜치 (v1.17.002)
-# 다음: 인터페이스 → 구현체 자동 매핑 (DDD Repository 체인 연결)
+# 현재: main 브랜치 (v1.18)
+# 다음: feat/interface-mapping 브랜치 생성 후 작업
 #   - StaticCodeAnalyzer: implements XxxRepository 패턴 감지
+#   - GraphBuilder: 인터페이스 ID → 구현체 ID 치환 로직
 #   - FUNCTION_CALL 체인이 인터페이스에서 끊기는 문제 해소
+#   - 테스트: Codeprint 프로젝트 재분석 후 Repository 체인 확인
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
@@ -139,71 +142,15 @@ npm run dev
 
 ---
 
-## 다음 작업 순서
-
-### ✅ 완료: `feat/export-image` → main 머지
-### ✅ 완료: `feat/node-position` → main 머지
-- 노드 드래그 위치 저장 (`PUT /api/graphs/{graphId}/nodes/{nodeId}/position`)
-- 멀티라인 파라미터 메서드 한글 주석 미추출 버그 수정 (extractFunctionComments 순방향 스캔으로 교체)
-- 전체 함수 한글 주석 완전화
-
-### ✅ 완료: `feat/ui-polish` (PR #7 머지)
-- AppHeader 공통 컴포넌트, DDD 레이어 상위 박스, 범례 내용 가리기 버튼
-- 엣지 전체 흐름 추적 (traceFlow DFS), 사이드바 전면 개편, 드래그 리사이즈
-
-### ✅ 완료: `feat/share` (PR #8 머지)
-- 프로젝트 공개/비공개 토글 + 공유 URL + 읽기 전용 그래프 뷰어
-- 커뮤니티 게시판 (Post, Comment CRUD)
-- 커뮤니티 공유 모달 — 레이어/그룹/노드 선택 숨김 + 게시글 그래프 뷰어
-
-### ✅ 완료: `feat/graph-freshness` (PR #9 머지)
-- 재분석 필요 감지 배너 — GitHub 최신 커밋 SHA vs 저장된 SHA 비교
-
-### ✅ 완료: `feat/stripe` (PR #10 머지)
-- Stripe Pro 플랜 Checkout + Webhook + 업그레이드 UI
-- 키 설정 필요: STRIPE_SECRET_KEY, STRIPE_PRO_PRICE_ID, STRIPE_WEBHOOK_SECRET
-
-### 3단계: `feat/deploy` ← 현재 진행 예정
-> **현업 방식**: 인프라 구축 → CI/CD 연결 → 코드 배포 순서로 진행
-
-1. **GitHub Actions CI 구성**
-   - PR 오픈 시 백엔드 `./gradlew test` + 프론트 `npm run build` 자동 실행
-   - 브랜치 보호 규칙: Actions 통과 없이 main 머지 불가
-
-2. **Railway 배포** (백엔드 + PostgreSQL)
-   - GitHub 레포 연결 → main 머지 시 자동 배포
-   - 환경변수: DB, OAuth, JWT, Stripe 키 설정
-
-3. **Vercel 배포** (프론트엔드)
-   - GitHub 레포 연결 → main 머지 시 자동 배포
-   - 환경변수: API URL 설정
-
-4. **도메인 + CORS 설정**
-   - GitHub OAuth App 콜백 URL 업데이트
-   - 백엔드 CORS allowedOrigins 업데이트
-
-### 4단계: `feat/attach` (배포 후)
-- S3/R2 버킷 생성 (배포 도메인 확정 후 리전/CORS 설정 가능)
-- presigned URL 발급 API
-- 게시글 이미지/파일 첨부 UI
-
----
-
 ## 백로그 (Phase 2)
-- 분석 비교 기능 (브랜치 A vs B, 이전 분석 vs 최신)
-- 언어 지원 확장 (C#, Ruby, PHP, Swift 함수 추출 패턴 추가)
-- **모니터링** — 실사용자 생기면 도입. micrometer-registry-prometheus + Grafana Cloud 무료 플랜으로 JVM/HTTP 메트릭 시각화. Actuator 이미 있어서 의존성 추가만 하면 됨.
-- **에러 트래킹 (Sentry)** — 계정 생성 완료 (Error monitoring만 활성화). SDK 연동 미완료. 실사용자 생기거나 운영 에러 추적이 필요해지면 진행. 그 시점에 Logging/Tracing/Profiling도 필요 여부 재검토 (Sentry Settings → Projects에서 활성화 가능).
-- **브랜치 버전 태깅** — 기능 완성 단위로 `v1.0`, `v1.1` 형식의 Git 태그 생성. 서비스 버전 히스토리를 명확히 관리.
-- **패치노트 페이지** — `/changelog` 경로로 공개 접근 가능. 버전별 업데이트 내용을 이용자에게 노출. Context 파일 내용 기반으로 항목 작성.
-- **후원 기능** — 이용자가 직접 개발자(서비스 운영자)를 후원할 수 있는 기능. 토스페이먼츠 또는 카카오페이 단건 결제로 구현. 후원 금액은 운영자 계좌로 직접 입금. 후원자 닉네임을 랜딩 페이지 또는 별도 후원자 명단에 표시하는 옵션 추가 검토.
-- **랜딩 페이지 광고 배너 실제 연동** — 현재 플레이스홀더 상태. Google AdSense 또는 직접 광고 계약으로 수익화. 상단(728×90), 좌우(160×240), 하단(728×90) 슬롯 준비됨.
-- **흐름 자동 시각화 (Flow Playback)** — 실제 분석된 그래프를 바탕으로 "요청이 시스템 안에서 어떻게 흐르는지"를 애니메이션으로 자동 재생하는 기능. 예: API 요청 → Controller → Service → Domain → Repository → DB 순서로 엣지와 노드가 순차 하이라이트됨. 구체 설계:
-  - GraphPage 우측 사이드바에 "흐름 재생" 패널 추가
-  - 엣지 타입 순서 (API_CALL → FUNCTION_CALL/CONTAINS → DB_READ/DB_WRITE) 기반으로 자동 경로 탐색
-  - 재생 속도 조절 (0.5×/1×/2×), 일시정지/재생 컨트롤
-  - 랜딩 페이지 히어로 섹션에 데모 미리보기로 활용 가능 — 서비스 설명 없이 보는 것만으로 이해 가능
-  - 구현 위치: `graphLayout.ts` 경로 탐색 + `GraphPage.tsx` 재생 UI + CSS 트랜지션 애니메이션
+- **인터페이스 → 구현체 자동 매핑** — `implements XxxRepository` 패턴 감지 → FUNCTION_CALL 체인이 인터페이스에서 끊기는 문제 해소 (방향 A 다음 작업)
+- **AI 기능** — 선택 노드/엣지 설명 (Claude API), 누락 연결 감지 (4차 MVP 핵심, 유료화 연동)
+- **커뮤니티 팔로우/알림** — 사용자 기반 확보 후 도입
+- **분석 비교 기능** — 브랜치 A vs B, 이전 분석 vs 최신
+- **모니터링** — 실사용자 생기면 도입. micrometer-registry-prometheus + Grafana Cloud. Actuator 이미 있어서 의존성 추가만 하면 됨.
+- **에러 트래킹 (Sentry)** — SDK 연동 미완료. 실사용자 생기면 진행.
+- **후원 기능** — 토스페이먼츠/카카오페이 단건 결제, 후원자 명단 표시
+- **랜딩 페이지 광고 배너 실제 연동** — 현재 플레이스홀더. Google AdSense 또는 직접 계약.
 
 ---
 
@@ -218,22 +165,16 @@ npm run dev
 
 ---
 
-## 브랜치 전략 (현업 방식)
+## 브랜치 전략
 
 ```
-main                       ← 항상 배포 가능 상태 (브랜치 보호 규칙 적용 예정)
-                             GitHub Actions CI 통과 + 리뷰 없이 머지 불가
-└─ feat/attach             ← 현재 브랜치 (배포 후 S3 연동)
-└─ feat/deploy             ← Railway + Vercel + GitHub Actions CI
+main (v1.18)               ← 항상 배포 가능 상태
+                             GitHub Actions CI 통과 필수
+└─ feat/interface-mapping  ← 다음 작업 (인터페이스→구현체 매핑)
 ```
 
-**CI/CD 파이프라인 (구축 예정)**
+**CI/CD 파이프라인 (운영 중)**
 ```
-PR 오픈
-  → GitHub Actions: 백엔드 테스트 + 프론트 빌드
-  → 통과 시 머지 가능
-
-main 머지
-  → Railway: 백엔드 자동 배포
-  → Vercel: 프론트 자동 배포
+PR 오픈 → GitHub Actions: 백엔드 compileJava + 프론트 tsc → 통과 시 머지
+main 머지 → Railway 백엔드 자동 배포 → Vercel 프론트 자동 배포
 ```

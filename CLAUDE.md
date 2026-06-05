@@ -305,7 +305,7 @@ PR 머지를 제안할 때 반드시 아래 블록을 출력한다. 브라우저
 
 ---
 
-### 0. Tool Usage — Claude in Chrome & Cowork
+### 0b. Tool Usage — Claude in Chrome & Cowork
 
 **Claude in Chrome — 언제 쓸지.**
 - 프론트엔드 코드를 변경할 때마다 반드시 `http://localhost:3000`을 직접 열어서 동작 확인
