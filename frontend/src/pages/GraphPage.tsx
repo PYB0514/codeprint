@@ -181,6 +181,7 @@ function GraphPageInner() {
   const [showCallEdges, setShowCallEdges] = useState(false)
   const [showInstEdges, setShowInstEdges] = useState(false)
   const [showBrokenEdges, setShowBrokenEdges] = useState(true)
+  const [showDbEdges, setShowDbEdges] = useState(false)
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -213,7 +214,7 @@ function GraphPageInner() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // 엣지 타입별 초기 hidden 상태 적용
-  const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean, sb: boolean) =>
+  const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean, sb: boolean, sdb: boolean) =>
     edges.map((e) => {
       const d = e.data as { type?: string; broken?: boolean } | undefined
       const t = d?.type
@@ -223,6 +224,7 @@ function GraphPageInner() {
         t === 'IMPORT' ? !se :
         t === 'FUNCTION_CALL' ? !sc :
         t === 'INSTANTIATION' ? !si :
+        (t === 'DB_READ' || t === 'DB_WRITE') ? !sdb :
         false
       return { ...e, hidden }
     }), [])
@@ -364,8 +366,8 @@ function GraphPageInner() {
       const isInst = d?.type === 'INSTANTIATION'
       const broken = d?.broken
       return { ...e, animated: false, style: { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : '#4b5563' } }
-    }), showEdges, showCallEdges, showInstEdges, showBrokenEdges))
-  }, [setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges])
+    }), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges))
+  }, [setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges])
 
   // 서버에서 그래프 데이터를 불러와 React Flow 레이아웃으로 변환
   const fetchGraph = useCallback(async () => {
@@ -377,7 +379,7 @@ function GraphPageInner() {
       setRawNodes(rn)
       setRawEdgesCache(re)
       setNodes(layoutNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
-      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), false, false, false, true))
+      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), false, false, false, true, false))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,
@@ -475,7 +477,7 @@ function GraphPageInner() {
       setRawNodes(rn)
       setRawEdgesCache(re)
       setNodes(layoutNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
-      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), showEdges, showCallEdges, showInstEdges, showBrokenEdges))
+      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,
@@ -487,7 +489,7 @@ function GraphPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges])
+  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges])
 
   // 노드 라벨 표시 모드를 이름/주석 간 전환
   const toggleLabelMode = useCallback(() => {
@@ -496,9 +498,9 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, next, layoutPreset, openFileSidebar)
       setNodes(layoutNodes)
-      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges, showBrokenEdges))
+      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges))
     }
-  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, applyEdgeVisibility])
+  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, applyEdgeVisibility])
 
   // IMPORT 엣지 표시/숨김 토글
   const toggleEdges = useCallback(() => {
@@ -552,6 +554,18 @@ function GraphPageInner() {
     })
   }, [setEdges])
 
+  // DB_READ / DB_WRITE 엣지 표시/숨김 토글
+  const toggleDbEdges = useCallback(() => {
+    setShowDbEdges((prev) => {
+      const next = !prev
+      setEdges((eds) => eds.map((e) => {
+        const t = (e.data as { type?: string })?.type
+        return t === 'DB_READ' || t === 'DB_WRITE' ? { ...e, hidden: !next } : e
+      }))
+      return next
+    })
+  }, [setEdges])
+
   // 레이아웃 프리셋 전환 — 그래프를 재계산하여 적용
   const toggleLayoutPreset = useCallback(() => {
     const next: LayoutPreset = layoutPreset === 'layer' ? 'hub' : 'layer'
@@ -559,10 +573,10 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
       setNodes(ln)
-      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges, showBrokenEdges))
+      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
-  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, applyEdgeVisibility])
+  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, applyEdgeVisibility])
 
   // 전체 그래프를 원본 크기 PNG로 다운로드
   const handleExportImage = useCallback(async () => {
@@ -942,6 +956,7 @@ function GraphPageInner() {
                 { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="4 3" /></svg>,                                label: '콜 체인',      textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600', active: showCallEdges,    onToggle: toggleCallEdges },
                 { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',         textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600', active: showInstEdges,  onToggle: toggleInstEdges },
                 { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결',    textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600', active: showBrokenEdges, onToggle: toggleBrokenEdges },
+                { key: 'db',      icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showDbEdges ? '#22d3ee' : '#164e63'} strokeWidth="1.5" strokeDasharray="5 4" /></svg>,                                    label: 'DB 연결',      textCls: showDbEdges ? 'text-cyan-400' : 'text-gray-600',    active: showDbEdges,     onToggle: toggleDbEdges },
               ].map(({ key, icon, label, textCls, active, onToggle }) => (
                 <div key={key} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}
                   className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60 cursor-pointer">
@@ -961,6 +976,7 @@ function GraphPageInner() {
                 { label: 'Infrastructure',   color: '#a855f7', key: 'infrastructure' },
                 { label: 'Interfaces',       color: '#10b981', key: 'interfaces' },
                 { label: 'Pages/Components', color: '#06b6d4', key: 'pages' },
+                { label: 'Database',         color: '#ef4444', key: 'database' },
               ].map(({ label, color, key }) => {
                 const active = opaqueLayerSet.has(key)
                 return (

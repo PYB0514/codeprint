@@ -520,39 +520,77 @@ export function buildLayout(
     })
   })
 
-  // DB_TABLE 노드 — 기존 그래프 우측에 수직 배치
+  // DB_TABLE 노드 배치
+  // 계층: 그래프 상단 가로 행 / 허브: 전체 그룹 오른쪽 세로 열
   const dbTableNodes = rawNodes.filter((n) => n.type === 'DB_TABLE')
   if (dbTableNodes.length > 0) {
-    let maxX = 0
-    groupPositions.forEach((pos, key) => {
-      const l = groupLayouts.get(key)
-      if (l) maxX = Math.max(maxX, pos.x + l.w)
-    })
-    const DB_SECTION_X = maxX + 80
     const DB_W = 160
     const DB_H = 48
     const DB_GAP = 16
     const DB_SECTION_LABEL_H = 28
 
+    let dbSectionX: number
+    let dbSectionY: number
+    let horizontal: boolean  // true = 가로 행, false = 세로 열
+
+    if (layoutPreset === 'layer') {
+      // 계층: 전체 그래프 상단 중앙에 가로 행 배치 (section bottom ≈ minY - 80)
+      let minY = Infinity, totalW = 0
+      groupPositions.forEach((pos, key) => {
+        const l = groupLayouts.get(key)
+        if (l) {
+          minY = Math.min(minY, pos.y)
+          totalW = Math.max(totalW, pos.x + l.w)
+        }
+      })
+      if (minY === Infinity) minY = 0
+      const totalDbW = dbTableNodes.length * (DB_W + DB_GAP) - DB_GAP
+      dbSectionX = Math.max(0, (totalW - totalDbW) / 2)
+      dbSectionY = minY - DB_H - 104  // section bottom = dbSectionY + DB_H + 24 = minY - 80
+      horizontal = true
+    } else {
+      // 허브: 전체 그룹 경계 오른쪽에 세로 열 배치 (겹침 방지)
+      let allGroupsMaxX = 0
+      let allMinY = Infinity, allMaxY = -Infinity
+      groupPositions.forEach((pos, key) => {
+        const l = groupLayouts.get(key)
+        if (!l) return
+        allGroupsMaxX = Math.max(allGroupsMaxX, pos.x + l.w)
+        allMinY = Math.min(allMinY, pos.y)
+        allMaxY = Math.max(allMaxY, pos.y + l.h)
+      })
+      const allCenterY = allMinY !== Infinity ? (allMinY + allMaxY) / 2 : 0
+      dbSectionX = allGroupsMaxX + 80
+      dbSectionY = allCenterY - (dbTableNodes.length * (DB_H + DB_GAP)) / 2
+      horizontal = false
+    }
+
     // DB 섹션 배경 박스
-    const sectionH = DB_SECTION_LABEL_H + dbTableNodes.length * (DB_H + DB_GAP) + DB_GAP
+    const sectionW = horizontal
+      ? dbTableNodes.length * (DB_W + DB_GAP) - DB_GAP + 40
+      : DB_W + 40
+    const sectionH = horizontal
+      ? DB_H + DB_SECTION_LABEL_H + 24
+      : DB_SECTION_LABEL_H + dbTableNodes.length * (DB_H + DB_GAP) + DB_GAP
     result.push({
       id: 'layer-section-database',
       type: 'sectionNode',
-      position: { x: DB_SECTION_X - 20, y: -20 - DB_SECTION_LABEL_H },
+      position: { x: dbSectionX - 20, y: dbSectionY - DB_SECTION_LABEL_H - 20 },
       data: { label: 'Database', color: '#ef4444', opaqueColor: 'rgba(40,5,5,0.98)', layer: 'database' },
-      width: DB_W + 40,
+      width: sectionW,
       height: sectionH + 20,
-      style: { width: DB_W + 40, height: sectionH + 20 },
+      style: { width: sectionW, height: sectionH + 20 },
       draggable: false,
       selectable: false,
       zIndex: -20,
     } as Node)
 
     dbTableNodes.forEach((dbNode, i) => {
+      const nx = horizontal ? dbSectionX + i * (DB_W + DB_GAP) : dbSectionX
+      const ny = horizontal ? dbSectionY : dbSectionY + i * (DB_H + DB_GAP)
       result.push({
         id: dbNode.id,
-        position: { x: DB_SECTION_X, y: i * (DB_H + DB_GAP) },
+        position: { x: nx, y: ny },
         data: { label: dbNode.name },
         width: DB_W,
         height: DB_H,
