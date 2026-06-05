@@ -430,7 +430,69 @@ export function buildLayout(
     groupPositions = buildLayerPositions(groups, groupLayouts)
   }
 
+  // DDD 레이어 상위 박스 메타 — 섹션 기준점 사전 계산용
+  const LAYER_META_PRE: Record<string, { label: string; color: string; opaqueColor: string }> = {
+    infrastructure: { label: 'Infrastructure', color: '#a855f7', opaqueColor: 'rgba(30,10,50,0.98)'  },
+    domain:         { label: 'Domain',         color: '#3b82f6', opaqueColor: 'rgba(15,30,60,0.98)'  },
+    application:    { label: 'Application',    color: '#eab308', opaqueColor: 'rgba(40,30,5,0.98)'   },
+    interfaces:     { label: 'Interfaces',     color: '#10b981', opaqueColor: 'rgba(5,30,20,0.98)'   },
+    pages:          { label: 'Pages',          color: '#06b6d4', opaqueColor: 'rgba(5,25,35,0.98)'   },
+    components:     { label: 'Components',     color: '#06b6d4', opaqueColor: 'rgba(5,25,35,0.98)'   },
+    hooks:          { label: 'Hooks',          color: '#f97316', opaqueColor: 'rgba(40,15,5,0.98)'   },
+    utils:          { label: 'Utils',          color: '#6b7280', opaqueColor: 'rgba(20,22,25,0.98)'  },
+  }
+  const LAYER_PAD_PRE = 20
+  const LAYER_LABEL_H = 24
+
+  // 레이어별 그룹 키 수집 (섹션 기준점 계산용)
+  const layerGroupKeysPre = new Map<string, string[]>()
+  groups.forEach((_, key) => {
+    const layer = key.indexOf('/') >= 0 ? key.slice(0, key.indexOf('/')) : key
+    if (!layerGroupKeysPre.has(layer)) layerGroupKeysPre.set(layer, [])
+    layerGroupKeysPre.get(layer)!.push(key)
+  })
+
+  // 레이어별 섹션 기준점 (좌상단 절대 좌표) — 그룹 노드 상대 좌표 변환용
+  const layerSectionOrigins = new Map<string, { x: number; y: number; w: number; h: number }>()
+  if (layoutPreset === 'layer') {
+    layerGroupKeysPre.forEach((keys, layer) => {
+      if (!LAYER_META_PRE[layer]) return
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      keys.forEach((key) => {
+        const p = groupPositions.get(key); const l = groupLayouts.get(key)
+        if (!p || !l) return
+        minX = Math.min(minX, p.x); minY = Math.min(minY, p.y)
+        maxX = Math.max(maxX, p.x + l.w); maxY = Math.max(maxY, p.y + l.h)
+      })
+      if (minX === Infinity) return
+      layerSectionOrigins.set(layer, {
+        x: minX - LAYER_PAD_PRE,
+        y: minY - LAYER_PAD_PRE - LAYER_LABEL_H,
+        w: maxX - minX + LAYER_PAD_PRE * 2,
+        h: maxY - minY + LAYER_PAD_PRE * 2 + LAYER_LABEL_H,
+      })
+    })
+  }
+
   const result: Node[] = []
+
+  // 섹션 노드를 먼저 삽입 — React Flow는 parentId 노드보다 부모가 먼저 있어야 올바르게 렌더링
+  if (layoutPreset === 'layer') {
+    layerSectionOrigins.forEach((bounds, layer) => {
+      const meta = LAYER_META_PRE[layer]
+      if (!meta) return
+      result.push({
+        id: `layer-section-${layer}`,
+        type: 'sectionNode',
+        position: { x: bounds.x, y: bounds.y },
+        data: { label: meta.label, color: meta.color, opaqueColor: meta.opaqueColor, layer },
+        style: { width: bounds.w, height: bounds.h },
+        draggable: true,
+        selectable: false,
+        zIndex: -20,
+      } as Node)
+    })
+  }
 
   // 그룹 노드 + 파일 노드 + 함수 노드 생성
   groups.forEach((groupFiles, key) => {
@@ -445,11 +507,18 @@ export function buildLayout(
     const layer = slashIdx >= 0 ? key.slice(0, slashIdx) : key
     const sub = slashIdx >= 0 ? key.slice(slashIdx + 1) : ''
 
+    // layer 모드에서 섹션 기준점이 있으면 상대 좌표로 변환 + parentId 설정
+    const sectionOrigin = layerSectionOrigins.get(layer)
+    const groupPos = sectionOrigin
+      ? { x: gx - sectionOrigin.x, y: gy - sectionOrigin.y }
+      : { x: gx, y: gy }
+
     // 그룹 박스 (커스텀 groupNode 타입 사용)
     result.push({
       id: `group-${key}`,
       type: 'groupNode',
-      position: { x: gx, y: gy },
+      ...(sectionOrigin ? { parentId: `layer-section-${layer}` } : {}),
+      position: groupPos,
       data: { layer, sub, fileCount: groupFiles.length, originalHeight: layout.h },
       style: { width: layout.w, height: layout.h },
       draggable: true,
@@ -735,53 +804,31 @@ export function buildLayout(
       } as Edge
     })
 
-  // DDD 레이어 상위 박스 — 같은 레이어의 그룹들을 감싸는 큰 섹션 박스
-  const LAYER_META: Record<string, { label: string; color: string; opaqueColor: string }> = {
-    infrastructure: { label: 'Infrastructure', color: '#a855f7', opaqueColor: 'rgba(30,10,50,0.98)'  },
-    domain:         { label: 'Domain',         color: '#3b82f6', opaqueColor: 'rgba(15,30,60,0.98)'  },
-    application:    { label: 'Application',    color: '#eab308', opaqueColor: 'rgba(40,30,5,0.98)'   },
-    interfaces:     { label: 'Interfaces',     color: '#10b981', opaqueColor: 'rgba(5,30,20,0.98)'   },
-    pages:          { label: 'Pages',          color: '#06b6d4', opaqueColor: 'rgba(5,25,35,0.98)'   },
-    components:     { label: 'Components',     color: '#06b6d4', opaqueColor: 'rgba(5,25,35,0.98)'   },
-    hooks:          { label: 'Hooks',          color: '#f97316', opaqueColor: 'rgba(40,15,5,0.98)'   },
-    utils:          { label: 'Utils',          color: '#6b7280', opaqueColor: 'rgba(20,22,25,0.98)'  },
-  }
-  const LAYER_PAD = 20
-
-  // 레이어별 그룹 키 수집
-  const layerGroupKeys = new Map<string, string[]>()
-  groups.forEach((_, key) => {
-    const layer = key.indexOf('/') >= 0 ? key.slice(0, key.indexOf('/')) : key
-    if (!layerGroupKeys.has(layer)) layerGroupKeys.set(layer, [])
-    layerGroupKeys.get(layer)!.push(key)
-  })
-
-  layerGroupKeys.forEach((keys, layer) => {
-    const meta = LAYER_META[layer]
-    if (!meta) return
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    keys.forEach((key) => {
-      const pos = groupPositions.get(key)
-      const l = groupLayouts.get(key)
-      if (!pos || !l) return
-      minX = Math.min(minX, pos.x)
-      minY = Math.min(minY, pos.y)
-      maxX = Math.max(maxX, pos.x + l.w)
-      maxY = Math.max(maxY, pos.y + l.h)
+  // hub 모드에서만 레이어 섹션 박스 추가 — layer 모드는 앞에서 이미 생성 + parentId 적용
+  if (layoutPreset !== 'layer') {
+    layerGroupKeysPre.forEach((keys, layer) => {
+      const meta = LAYER_META_PRE[layer]
+      if (!meta) return
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      keys.forEach((key) => {
+        const pos = groupPositions.get(key); const l = groupLayouts.get(key)
+        if (!pos || !l) return
+        minX = Math.min(minX, pos.x); minY = Math.min(minY, pos.y)
+        maxX = Math.max(maxX, pos.x + l.w); maxY = Math.max(maxY, pos.y + l.h)
+      })
+      if (minX === Infinity) return
+      result.push({
+        id: `layer-section-${layer}`,
+        type: 'sectionNode',
+        position: { x: minX - LAYER_PAD_PRE, y: minY - LAYER_PAD_PRE - LAYER_LABEL_H },
+        data: { label: meta.label, color: meta.color, opaqueColor: meta.opaqueColor, layer },
+        style: { width: maxX - minX + LAYER_PAD_PRE * 2, height: maxY - minY + LAYER_PAD_PRE * 2 + LAYER_LABEL_H },
+        draggable: false,
+        selectable: false,
+        zIndex: -20,
+      } as Node)
     })
-    if (minX === Infinity) return
-    const LABEL_H = 24
-    result.push({
-      id: `layer-section-${layer}`,
-      type: 'sectionNode',
-      position: { x: minX - LAYER_PAD, y: minY - LAYER_PAD - LABEL_H },
-      data: { label: meta.label, color: meta.color, opaqueColor: meta.opaqueColor, layer },
-      style: { width: maxX - minX + LAYER_PAD * 2, height: maxY - minY + LAYER_PAD * 2 + LABEL_H },
-      draggable: false,
-      selectable: false,
-      zIndex: -20,
-    } as Node)
-  })
+  }
 
   return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges, ...dbReadEdges, ...dbWriteEdges, ...dbCrudEdges] }
 }
