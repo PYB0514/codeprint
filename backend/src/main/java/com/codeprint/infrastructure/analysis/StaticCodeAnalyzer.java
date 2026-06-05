@@ -25,8 +25,10 @@ public class StaticCodeAnalyzer {
         Map<String, String> functionComments = extractFunctionComments(content, language);
         Map<String, List<String>> functionCalls = extractFunctionCalls(content, language, functions);
         List<String> instantiatedClasses = extractInstantiatedClasses(content);
+        List<DbTableInfo> dbTables = extractDbTables(content, language, relativePath);
+        String repositoryEntityClass = extractRepositoryEntityClass(content, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass);
     }
 
     // 파일 상단 첫 번째 주석 추출
@@ -243,6 +245,54 @@ public class StaticCodeAnalyzer {
         "IllegalStateException", "UnsupportedOperationException", "NullPointerException",
         "Thread", "Runnable", "Random", "Scanner", "File", "Path"
     );
+
+    // @Entity / Prisma model 블록에서 DB 테이블 정보 추출
+    private List<DbTableInfo> extractDbTables(String content, String language, String filePath) {
+        List<DbTableInfo> result = new ArrayList<>();
+
+        // Java/Kotlin: @Entity 어노테이션이 있는 클래스
+        if ((language.equals("Java") || language.equals("Kotlin")) && content.contains("@Entity")) {
+            String tableName = null;
+            // @Table(name = "table_name") 우선
+            Matcher tableMatcher = Pattern.compile("@Table\\s*\\([^)]*name\\s*=\\s*[\"']([^\"']+)[\"']").matcher(content);
+            if (tableMatcher.find()) tableName = tableMatcher.group(1);
+            // 없으면 클래스명 사용
+            if (tableName == null) {
+                Matcher classMatcher = Pattern.compile("\\bclass\\s+(\\w+)").matcher(content);
+                if (classMatcher.find()) tableName = classMatcher.group(1);
+            }
+            if (tableName != null) {
+                String className = extractFileNameWithoutExt(filePath);
+                result.add(new DbTableInfo(tableName, className));
+            }
+        }
+
+        // Prisma schema.prisma: model 블록
+        if (filePath.endsWith("schema.prisma")) {
+            Matcher m = Pattern.compile("^model\\s+(\\w+)\\s*\\{", Pattern.MULTILINE).matcher(content);
+            while (m.find()) {
+                result.add(new DbTableInfo(m.group(1), m.group(1)));
+            }
+        }
+
+        return result;
+    }
+
+    // JPA Repository 인터페이스 확장에서 엔티티 클래스명 추출
+    private String extractRepositoryEntityClass(String content, String language) {
+        if (!language.equals("Java") && !language.equals("Kotlin")) return null;
+        // extends JpaRepository<EntityName, ID> 또는 CrudRepository, PagingAndSortingRepository
+        Matcher m = Pattern.compile("extends\\s+(?:Jpa|Crud|PagingAndSorting)?Repository\\s*<\\s*(\\w+)\\s*,").matcher(content);
+        return m.find() ? m.group(1) : null;
+    }
+
+    // 파일 경로에서 확장자 제거 후 파일명만 추출
+    private String extractFileNameWithoutExt(String filePath) {
+        int slash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+        String name = slash >= 0 ? filePath.substring(slash + 1) : filePath;
+        int dot = name.lastIndexOf('.');
+        return dot > 0 ? name.substring(0, dot) : name;
+    }
 
     // 식별자가 언어 예약어인지 확인
     private boolean isKeyword(String name) {
