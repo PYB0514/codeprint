@@ -50,7 +50,7 @@ type SidebarContent =
   | { kind: 'func-call'; callerName: string; callerComment: string | null; callerNodeId: string; callerFile: string; callerFileNodeId: string; calleeName: string; calleeComment: string | null; calleeNodeId: string; calleeFile: string; calleeFileNodeId: string; flowChain: FlowStep[] }
   | { kind: 'instantiation'; sourceFile: string; sourceNodeId: string; targetClass: string; targetNodeId: string; flowChain: FlowStep[] }
 
-// 동일 타입 엣지를 따라 upstream·downstream을 추적하여 전체 흐름 반환
+// 엣지 타입 경계를 넘어 전체 데이터 흐름을 추적 (프론트엔드 API_CALL ~ FUNCTION_CALL ~ DB까지)
 function traceFlow(
   sourceId: string,
   targetId: string,
@@ -70,7 +70,87 @@ function traceFlow(
     return { nodeId: id, label: node.comment ?? node.name, isSource, isTarget, altCount }
   }
 
-  // 역방향 추적 — source에서 root로
+  // FUNCTION 노드의 부모 FILE 반환
+  const parentFileOf = (nodeId: string): RawNode | undefined => {
+    const n = rawNodes.find((n) => n.id === nodeId)
+    if (!n || n.type !== 'FUNCTION') return undefined
+    return rawNodes.find((f) => f.type === 'FILE' && f.filePath === n.filePath)
+  }
+
+  // FUNCTION_CALL 역방향 추적 — 끝에서 부모 FILE에 API_CALL이 있으면 프론트엔드까지 연결
+  const traceFuncCallUp = (startId: string, seed: Set<string>): FlowStep[] => {
+    const steps: FlowStep[] = []
+    const visited = new Set(seed)
+    let cur = startId
+    for (let i = 0; i < MAX_DEPTH; i++) {
+      const incoming = rawEdges.filter((e) => e.type === 'FUNCTION_CALL' && e.target === cur)
+      if (incoming.length === 0) {
+        const pf = parentFileOf(cur)
+        if (pf) {
+          const apiEdge = rawEdges.find((e) => e.type === 'API_CALL' && e.target === pf.id)
+          if (apiEdge && !visited.has(apiEdge.source)) steps.unshift(makeStep(apiEdge.source, false, false))
+        }
+        break
+      }
+      const nextId = incoming[0].source
+      if (visited.has(nextId)) break
+      visited.add(nextId)
+      steps.unshift(makeStep(nextId, false, false, incoming.length > 1 ? incoming.length - 1 : undefined))
+      cur = nextId
+    }
+    return steps
+  }
+
+  // FUNCTION_CALL 순방향 추적 — 끝에서 부모 FILE에 DB 엣지가 있으면 DB_TABLE까지 연결
+  const traceFuncCallDown = (startId: string, seed: Set<string>): FlowStep[] => {
+    const steps: FlowStep[] = []
+    const visited = new Set(seed)
+    let cur = startId
+    for (let i = 0; i < MAX_DEPTH; i++) {
+      const outgoing = rawEdges.filter((e) => e.type === 'FUNCTION_CALL' && e.source === cur)
+      if (outgoing.length === 0) {
+        const pf = parentFileOf(cur)
+        if (pf) {
+          const dbEdge = rawEdges.find((e) => (e.type === 'DB_READ' || e.type === 'DB_WRITE') && e.source === pf.id)
+          if (dbEdge && !visited.has(dbEdge.target)) steps.push(makeStep(dbEdge.target, false, false))
+        }
+        break
+      }
+      const nextId = outgoing[0].target
+      if (visited.has(nextId)) break
+      visited.add(nextId)
+      steps.push(makeStep(nextId, false, false, outgoing.length > 1 ? outgoing.length - 1 : undefined))
+      cur = nextId
+    }
+    return steps
+  }
+
+  // DB 엣지: sourceId=Repository FILE → 이 파일 함수의 FUNCTION_CALL 호출자를 역추적
+  if (edgeType === 'DB_READ' || edgeType === 'DB_WRITE') {
+    const repoFile = rawNodes.find((n) => n.id === sourceId && n.type === 'FILE')
+    const upstreamSteps: FlowStep[] = []
+    if (repoFile) {
+      const repoFuncIds = new Set(
+        rawNodes.filter((n) => n.type === 'FUNCTION' && n.filePath === repoFile.filePath).map((n) => n.id)
+      )
+      const callerEdge = rawEdges.find((e) => e.type === 'FUNCTION_CALL' && repoFuncIds.has(e.target))
+      if (callerEdge) {
+        const seed = new Set([sourceId, targetId, callerEdge.target, callerEdge.source])
+        const above = traceFuncCallUp(callerEdge.source, seed)
+        upstreamSteps.push(...above, makeStep(callerEdge.source, false, false), makeStep(callerEdge.target, false, false))
+      }
+    }
+    return [...upstreamSteps, makeStep(sourceId, true, false), makeStep(targetId, false, true)]
+  }
+
+  // FUNCTION_CALL: upstream은 API_CALL 경계까지, downstream은 DB 경계까지
+  if (edgeType === 'FUNCTION_CALL') {
+    const upstream = traceFuncCallUp(sourceId, new Set([sourceId, targetId]))
+    const downstream = traceFuncCallDown(targetId, new Set([sourceId, targetId]))
+    return [...upstream, makeStep(sourceId, true, false), makeStep(targetId, false, true), ...downstream]
+  }
+
+  // IMPORT / INSTANTIATION / API_CALL / 기타: 동일 타입 엣지만 따라감
   const upstream: FlowStep[] = []
   const visitedUp = new Set<string>([sourceId])
   let cur = sourceId
@@ -83,8 +163,6 @@ function traceFlow(
     upstream.unshift(makeStep(nextId, false, false, incoming.length > 1 ? incoming.length - 1 : undefined))
     cur = nextId
   }
-
-  // 순방향 추적 — target에서 leaf로
   const downstream: FlowStep[] = []
   const visitedDown = new Set<string>([targetId])
   cur = targetId
@@ -97,7 +175,6 @@ function traceFlow(
     downstream.push(makeStep(nextId, false, false, outgoing.length > 1 ? outgoing.length - 1 : undefined))
     cur = nextId
   }
-
   return [...upstream, makeStep(sourceId, true, false), makeStep(targetId, false, true), ...downstream]
 }
 
@@ -181,6 +258,7 @@ function GraphPageInner() {
   const [showCallEdges, setShowCallEdges] = useState(false)
   const [showInstEdges, setShowInstEdges] = useState(false)
   const [showBrokenEdges, setShowBrokenEdges] = useState(true)
+  const [showDbEdges, setShowDbEdges] = useState(false)
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -213,7 +291,7 @@ function GraphPageInner() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // 엣지 타입별 초기 hidden 상태 적용
-  const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean, sb: boolean) =>
+  const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean, sb: boolean, sdb: boolean) =>
     edges.map((e) => {
       const d = e.data as { type?: string; broken?: boolean } | undefined
       const t = d?.type
@@ -223,6 +301,7 @@ function GraphPageInner() {
         t === 'IMPORT' ? !se :
         t === 'FUNCTION_CALL' ? !sc :
         t === 'INSTANTIATION' ? !si :
+        (t === 'DB_READ' || t === 'DB_WRITE') ? !sdb :
         false
       return { ...e, hidden }
     }), [])
@@ -364,8 +443,8 @@ function GraphPageInner() {
       const isInst = d?.type === 'INSTANTIATION'
       const broken = d?.broken
       return { ...e, animated: false, style: { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : '#4b5563' } }
-    }), showEdges, showCallEdges, showInstEdges, showBrokenEdges))
-  }, [setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges])
+    }), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges))
+  }, [setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges])
 
   // 서버에서 그래프 데이터를 불러와 React Flow 레이아웃으로 변환
   const fetchGraph = useCallback(async () => {
@@ -377,7 +456,7 @@ function GraphPageInner() {
       setRawNodes(rn)
       setRawEdgesCache(re)
       setNodes(layoutNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
-      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), false, false, false, true))
+      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), false, false, false, true, false))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,
@@ -475,7 +554,7 @@ function GraphPageInner() {
       setRawNodes(rn)
       setRawEdgesCache(re)
       setNodes(layoutNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
-      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), showEdges, showCallEdges, showInstEdges, showBrokenEdges))
+      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,
@@ -487,7 +566,7 @@ function GraphPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges])
+  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges])
 
   // 노드 라벨 표시 모드를 이름/주석 간 전환
   const toggleLabelMode = useCallback(() => {
@@ -496,9 +575,9 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, next, layoutPreset, openFileSidebar)
       setNodes(layoutNodes)
-      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges, showBrokenEdges))
+      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges))
     }
-  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, applyEdgeVisibility])
+  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, applyEdgeVisibility])
 
   // IMPORT 엣지 표시/숨김 토글
   const toggleEdges = useCallback(() => {
@@ -552,6 +631,18 @@ function GraphPageInner() {
     })
   }, [setEdges])
 
+  // DB_READ / DB_WRITE 엣지 표시/숨김 토글
+  const toggleDbEdges = useCallback(() => {
+    setShowDbEdges((prev) => {
+      const next = !prev
+      setEdges((eds) => eds.map((e) => {
+        const t = (e.data as { type?: string })?.type
+        return t === 'DB_READ' || t === 'DB_WRITE' ? { ...e, hidden: !next } : e
+      }))
+      return next
+    })
+  }, [setEdges])
+
   // 레이아웃 프리셋 전환 — 그래프를 재계산하여 적용
   const toggleLayoutPreset = useCallback(() => {
     const next: LayoutPreset = layoutPreset === 'layer' ? 'hub' : 'layer'
@@ -559,10 +650,10 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
       setNodes(ln)
-      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges, showBrokenEdges))
+      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
-  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, applyEdgeVisibility])
+  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, applyEdgeVisibility])
 
   // 전체 그래프를 원본 크기 PNG로 다운로드
   const handleExportImage = useCallback(async () => {
@@ -706,7 +797,7 @@ function GraphPageInner() {
       sourceNodeId: edge.source,
       targetNodeId: edge.target,
       callChain,
-      flowChain: traceFlow(edge.source, edge.target, 'IMPORT', rawEdgesCache, rawNodes),
+      flowChain: traceFlow(edge.source, edge.target, data?.type ?? 'IMPORT', rawEdgesCache, rawNodes),
     })
   }, [rawNodes, rawEdgesCache])
 
@@ -942,6 +1033,7 @@ function GraphPageInner() {
                 { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="4 3" /></svg>,                                label: '콜 체인',      textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600', active: showCallEdges,    onToggle: toggleCallEdges },
                 { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',         textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600', active: showInstEdges,  onToggle: toggleInstEdges },
                 { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결',    textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600', active: showBrokenEdges, onToggle: toggleBrokenEdges },
+                { key: 'db',      icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showDbEdges ? '#22d3ee' : '#164e63'} strokeWidth="1.5" strokeDasharray="5 4" /></svg>,                                    label: 'DB 연결',      textCls: showDbEdges ? 'text-cyan-400' : 'text-gray-600',    active: showDbEdges,     onToggle: toggleDbEdges },
               ].map(({ key, icon, label, textCls, active, onToggle }) => (
                 <div key={key} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}
                   className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60 cursor-pointer">
@@ -961,6 +1053,7 @@ function GraphPageInner() {
                 { label: 'Infrastructure',   color: '#a855f7', key: 'infrastructure' },
                 { label: 'Interfaces',       color: '#10b981', key: 'interfaces' },
                 { label: 'Pages/Components', color: '#06b6d4', key: 'pages' },
+                { label: 'Database',         color: '#ef4444', key: 'database' },
               ].map(({ label, color, key }) => {
                 const active = opaqueLayerSet.has(key)
                 return (
