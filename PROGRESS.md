@@ -1,6 +1,6 @@
 # Codeprint 개발 현황
 
-> 마지막 업데이트: 2026-06-05 (v1.11 + feat/flow-playback WIP)
+> 마지막 업데이트: 2026-06-05 (v1.13 — DB_TABLE 노드 시각화 완료)
 
 ---
 
@@ -89,6 +89,7 @@
 | AES 토큰 마이그레이션 | ✅ | V9 — 구버전 평문 토큰 NULL 처리, CLAUDE.md 규칙 추가 |
 | GitHub 재연결 UX | ✅ | 토큰 null 시 노란 배너 + 1클릭 재연결 버튼 (v1.11) |
 | 흐름 자동 시각화 | ✅ | v1.12 — 재생 컨트롤, 경로 엣지 즉시 표시, fitView 자동 맞춤 |
+| DB 구조 시각화 | ✅ | v1.13 — @Entity/Prisma 추출, DB_TABLE 노드 + DB_READ/DB_WRITE 엣지 |
 
 ---
 
@@ -113,12 +114,10 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재: main 브랜치 (v1.12 — 흐름 자동 시각화 완료)
-# 다음: DB 구조 시각화
-#   - JPA @Entity 클래스에서 테이블명 + 관계 추출
-#   - Prisma schema.prisma model 블록 파싱
-#   - DB_TABLE 노드로 그래프에 포함 → 흐름이 DB까지 이어짐
-#   - 브랜치: feat/db-table-nodes
+# 현재: main 브랜치 (v1.13 — DB_TABLE 노드 시각화 완료)
+# 다음: 공유/비공개 토글 + 커뮤니티 게시판 (2차 MVP)
+#   - 그래프 공개/비공개 설정 API + UI 토글
+#   - 커뮤니티 게시판 개선 (그래프 임베드, 피드 정렬)
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
