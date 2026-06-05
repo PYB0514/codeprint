@@ -9,6 +9,7 @@ import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.Node;
+import com.codeprint.domain.graph.NodeType;
 import com.codeprint.domain.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -77,8 +78,13 @@ public class GraphController {
                                 node.put("language", n.getLanguage() != null ? n.getLanguage() : "");
                                 node.put("posX", n.getPosX());
                                 node.put("posY", n.getPosY());
-                                if (n.getMetadata() != null && n.getMetadata().containsKey("comment")) {
-                                    node.put("comment", n.getMetadata().get("comment"));
+                                if (n.getMetadata() != null) {
+                                    if (n.getMetadata().containsKey("comment")) {
+                                        node.put("comment", n.getMetadata().get("comment"));
+                                    }
+                                    if (n.getType() == NodeType.DB_TABLE && n.getMetadata().containsKey("columns")) {
+                                        node.put("columns", n.getMetadata().get("columns"));
+                                    }
                                 }
                                 return node;
                             })
@@ -124,8 +130,13 @@ public class GraphController {
                                 node.put("language", n.getLanguage() != null ? n.getLanguage() : "");
                                 node.put("posX", n.getPosX());
                                 node.put("posY", n.getPosY());
-                                if (n.getMetadata() != null && n.getMetadata().containsKey("comment")) {
-                                    node.put("comment", n.getMetadata().get("comment"));
+                                if (n.getMetadata() != null) {
+                                    if (n.getMetadata().containsKey("comment")) {
+                                        node.put("comment", n.getMetadata().get("comment"));
+                                    }
+                                    if (n.getType() == NodeType.DB_TABLE && n.getMetadata().containsKey("columns")) {
+                                        node.put("columns", n.getMetadata().get("columns"));
+                                    }
                                 }
                                 return node;
                             })

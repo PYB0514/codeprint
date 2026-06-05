@@ -27,8 +27,9 @@ public class StaticCodeAnalyzer {
         List<String> instantiatedClasses = extractInstantiatedClasses(content);
         List<DbTableInfo> dbTables = extractDbTables(content, language, relativePath);
         String repositoryEntityClass = extractRepositoryEntityClass(content, language);
+        List<ColumnInfo> entityColumns = extractEntityColumns(content, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns);
     }
 
     // 파일 상단 첫 번째 주석 추출
@@ -284,6 +285,46 @@ public class StaticCodeAnalyzer {
         // extends JpaRepository<EntityName, ID> 또는 CrudRepository, PagingAndSortingRepository
         Matcher m = Pattern.compile("extends\\s+(?:Jpa|Crud|PagingAndSorting)?Repository\\s*<\\s*(\\w+)\\s*,").matcher(content);
         return m.find() ? m.group(1) : null;
+    }
+
+    // @Entity 클래스에서 private 필드를 칼럼 정보로 추출 — @Column(name=) 우선, 없으면 snake_case 변환
+    private List<ColumnInfo> extractEntityColumns(String content, String language) {
+        if ((!language.equals("Java") && !language.equals("Kotlin")) || !content.contains("@Entity")) {
+            return List.of();
+        }
+        List<ColumnInfo> result = new ArrayList<>();
+        String[] lines = content.split("\n");
+        String pendingColumnName = null;
+
+        for (String line : lines) {
+            String t = line.trim();
+            if (t.startsWith("@Column")) {
+                Matcher m = Pattern.compile("name\\s*=\\s*[\"']([^\"']+)[\"']").matcher(t);
+                pendingColumnName = m.find() ? m.group(1) : "";
+            } else if (t.startsWith("private ")) {
+                // private <type> <name>; — 제네릭 타입 포함
+                Matcher m = Pattern.compile("private\\s+([\\w<>\\[\\]?,\\s]+?)\\s+(\\w+)\\s*;").matcher(t);
+                if (m.find()) {
+                    String javaType = m.group(1).trim();
+                    String fieldName = m.group(2);
+                    if (!fieldName.equals("serialVersionUID") && !javaType.contains("static")) {
+                        String colName = (pendingColumnName != null && !pendingColumnName.isEmpty())
+                                ? pendingColumnName
+                                : toSnakeCase(fieldName);
+                        result.add(new ColumnInfo(fieldName, colName, javaType));
+                    }
+                }
+                pendingColumnName = null;
+            } else if (!t.startsWith("@") && !t.isEmpty()) {
+                pendingColumnName = null;
+            }
+        }
+        return result;
+    }
+
+    // camelCase → snake_case 변환
+    private String toSnakeCase(String camel) {
+        return camel.replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase();
     }
 
     // 파일 경로에서 확장자 제거 후 파일명만 추출

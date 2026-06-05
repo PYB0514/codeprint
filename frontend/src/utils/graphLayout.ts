@@ -18,6 +18,12 @@ const LAYER_COLUMN: Record<string, number> = {
   utils:          6,
 }
 
+export interface ColumnInfo {
+  fieldName: string
+  columnName: string
+  javaType: string
+}
+
 export interface RawNode {
   id: string
   type: string
@@ -27,6 +33,7 @@ export interface RawNode {
   posX: number
   posY: number
   comment?: string
+  columns?: ColumnInfo[]
 }
 
 export interface RawEdge {
@@ -676,7 +683,17 @@ export function buildLayout(
       interactionWidth: 0,
     } as Edge))
 
-  // DB_READ / DB_WRITE 엣지 — Repository → DB_TABLE
+  // DB 엣지 색상 맵 — 타입별 CRUD 구분
+  const DB_EDGE_COLORS: Record<string, string> = {
+    DB_READ:   '#22d3ee', // cyan  — 읽기
+    DB_CREATE: '#4ade80', // green — 생성
+    DB_UPDATE: '#facc15', // yellow — 수정
+    DB_DELETE: '#f87171', // light red — 삭제
+    DB_WRITE:  '#f97316', // orange — 레거시 (기존 데이터 호환)
+  }
+
+  const DB_EDGE_TYPES = new Set(['DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE'])
+
   const dbReadEdges: Edge[] = rawEdges
     .filter((e) => e.type === 'DB_READ' && fileIdSet.has(e.source) && dbTableIdSet.has(e.target))
     .map((e) => ({
@@ -700,6 +717,23 @@ export function buildLayout(
       markerEnd: { type: MarkerType.ArrowClosed, color: '#f97316', width: 10, height: 10 },
       zIndex: 0,
     } as Edge))
+
+  // DB_CREATE / DB_UPDATE / DB_DELETE 엣지
+  const dbCrudEdges: Edge[] = rawEdges
+    .filter((e) => DB_EDGE_TYPES.has(e.type) && e.type !== 'DB_READ' && e.type !== 'DB_WRITE'
+      && fileIdSet.has(e.source) && dbTableIdSet.has(e.target))
+    .map((e) => {
+      const color = DB_EDGE_COLORS[e.type] ?? '#22d3ee'
+      return {
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        data: { edgeIdentifier: e.edgeIdentifier, type: e.type },
+        style: { stroke: color, strokeWidth: 1.5, strokeDasharray: '5 4' },
+        markerEnd: { type: MarkerType.ArrowClosed, color, width: 10, height: 10 },
+        zIndex: 0,
+      } as Edge
+    })
 
   // DDD 레이어 상위 박스 — 같은 레이어의 그룹들을 감싸는 큰 섹션 박스
   const LAYER_META: Record<string, { label: string; color: string; opaqueColor: string }> = {
@@ -749,7 +783,7 @@ export function buildLayout(
     } as Node)
   })
 
-  return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges, ...dbReadEdges, ...dbWriteEdges] }
+  return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges, ...dbReadEdges, ...dbWriteEdges, ...dbCrudEdges] }
 }
 
 // AI 컨텍스트용 트리 다운로드 — "파일명 — 주석" 형태로 이름과 역할을 함께 표시

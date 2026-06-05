@@ -16,7 +16,7 @@ import type { Edge, EdgeMouseHandler, Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
 import { buildLayout, downloadTreeText, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
-import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry } from '../utils/graphLayout'
+import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry, ColumnInfo } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
@@ -49,6 +49,23 @@ type SidebarContent =
   | { kind: 'func'; funcName: string; funcComment: string | null; parentFileName: string; parentFileNodeId: string; callers: FuncCallChainEntry[]; callees: FuncCallChainEntry[] }
   | { kind: 'func-call'; callerName: string; callerComment: string | null; callerNodeId: string; callerFile: string; callerFileNodeId: string; calleeName: string; calleeComment: string | null; calleeNodeId: string; calleeFile: string; calleeFileNodeId: string; flowChain: FlowStep[] }
   | { kind: 'instantiation'; sourceFile: string; sourceNodeId: string; targetClass: string; targetNodeId: string; flowChain: FlowStep[] }
+  | { kind: 'db-table'; tableName: string; nodeId: string; columns: ColumnInfo[]; repos: { name: string; id: string; crudTypes: string[] }[] }
+  | { kind: 'db-edge'; crudType: string; repoFile: string; repoFileNodeId: string; tableName: string; tableNodeId: string; flowChain: FlowStep[] }
+
+// DB 엣지 타입 판별 — 신규 CRUD 타입 + 레거시 DB_WRITE 포함
+const DB_EDGE_TYPES = new Set(['DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE'])
+function isDbEdgeType(t: string | undefined): boolean {
+  return DB_EDGE_TYPES.has(t ?? '')
+}
+
+// CRUD 타입별 색상 — graphLayout.ts의 DB_EDGE_COLORS와 동기화
+const DB_CRUD_COLOR: Record<string, string> = {
+  DB_READ:   '#22d3ee',
+  DB_CREATE: '#4ade80',
+  DB_UPDATE: '#facc15',
+  DB_DELETE: '#f87171',
+  DB_WRITE:  '#f97316',
+}
 
 // 엣지 타입 경계를 넘어 전체 데이터 흐름을 추적 (프론트엔드 API_CALL ~ FUNCTION_CALL ~ DB까지)
 function traceFlow(
@@ -111,7 +128,7 @@ function traceFlow(
       if (outgoing.length === 0) {
         const pf = parentFileOf(cur)
         if (pf) {
-          const dbEdge = rawEdges.find((e) => (e.type === 'DB_READ' || e.type === 'DB_WRITE') && e.source === pf.id)
+          const dbEdge = rawEdges.find((e) => isDbEdgeType(e.type) && e.source === pf.id)
           if (dbEdge && !visited.has(dbEdge.target)) steps.push(makeStep(dbEdge.target, false, false))
         }
         break
@@ -126,7 +143,7 @@ function traceFlow(
   }
 
   // DB 엣지: sourceId=Repository FILE → 이 파일 함수의 FUNCTION_CALL 호출자를 역추적
-  if (edgeType === 'DB_READ' || edgeType === 'DB_WRITE') {
+  if (isDbEdgeType(edgeType)) {
     const repoFile = rawNodes.find((n) => n.id === sourceId && n.type === 'FILE')
     const upstreamSteps: FlowStep[] = []
     if (repoFile) {
@@ -183,7 +200,7 @@ function buildFlowPath(
   nodeId: string,
   rawEdges: RawEdge[],
 ): { items: { type: 'node' | 'edge'; id: string }[] } {
-  const FLOW_TYPES = ['FUNCTION_CALL', 'DB_READ', 'DB_WRITE', 'API_CALL', 'CONTAINS']
+  const FLOW_TYPES = ['FUNCTION_CALL', 'DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE', 'API_CALL', 'CONTAINS']
   const MAX_DEPTH = 15
 
   // upstream 역방향 추적
@@ -301,7 +318,7 @@ function GraphPageInner() {
         t === 'IMPORT' ? !se :
         t === 'FUNCTION_CALL' ? !sc :
         t === 'INSTANTIATION' ? !si :
-        (t === 'DB_READ' || t === 'DB_WRITE') ? !sdb :
+        isDbEdgeType(t) ? !sdb :
         false
       return { ...e, hidden }
     }), [])
@@ -383,7 +400,8 @@ function GraphPageInner() {
       const isCall = d?.type === 'FUNCTION_CALL'
       const isInst = d?.type === 'INSTANTIATION'
       const broken = d?.broken
-      const baseStyle = { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : '#4b5563' }
+      const isDb = isDbEdgeType(d?.type)
+      const baseStyle = { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : isDb ? (DB_CRUD_COLOR[d?.type ?? ''] ?? '#22d3ee') : '#4b5563' }
       if (!pathEdgeIds.has(e.id)) {
         return { ...e, animated: false, style: baseStyle }
       }
@@ -637,7 +655,7 @@ function GraphPageInner() {
       const next = !prev
       setEdges((eds) => eds.map((e) => {
         const t = (e.data as { type?: string })?.type
-        return t === 'DB_READ' || t === 'DB_WRITE' ? { ...e, hidden: !next } : e
+        return isDbEdgeType(t) ? { ...e, hidden: !next } : e
       }))
       return next
     })
@@ -714,7 +732,9 @@ function GraphPageInner() {
     const broken = data?.broken
     const isCall = data?.type === 'FUNCTION_CALL'
     const isInst = data?.type === 'INSTANTIATION'
-    const hoverColor = broken ? '#fca5a5' : isCall ? '#fcd34d' : isInst ? '#d8b4fe' : '#a1a1aa'
+    const isDb = isDbEdgeType(data?.type)
+    const dbBaseColor = DB_CRUD_COLOR[data?.type ?? ''] ?? '#22d3ee'
+    const hoverColor = broken ? '#fca5a5' : isCall ? '#fcd34d' : isInst ? '#d8b4fe' : isDb ? dbBaseColor + 'cc' : '#a1a1aa'
     setEdges((es) => es.map((e) =>
       e.id === edge.id
         ? { ...e, style: { ...e.style, strokeWidth: (isCall || isInst) ? 2.5 : broken ? 3.5 : 3, stroke: hoverColor } }
@@ -728,7 +748,9 @@ function GraphPageInner() {
     const broken = data?.broken
     const isCall = data?.type === 'FUNCTION_CALL'
     const isInst = data?.type === 'INSTANTIATION'
-    const baseColor = broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : '#4b5563'
+    const isDb = isDbEdgeType(data?.type)
+    const baseColor = broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7'
+      : isDb ? (DB_CRUD_COLOR[data?.type ?? ''] ?? '#22d3ee') : '#4b5563'
     setEdges((es) => es.map((e) =>
       e.id === edge.id
         ? { ...e, style: { ...e.style, strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: baseColor } }
@@ -777,6 +799,21 @@ function GraphPageInner() {
       return
     }
 
+    if (isDbEdgeType(data?.type)) {
+      const repoFile = rawNodes.find((n) => n.id === edge.source && n.type === 'FILE')
+      const dbTable = rawNodes.find((n) => n.id === edge.target && n.type === 'DB_TABLE')
+      setSidebar({
+        kind: 'db-edge',
+        crudType: data?.type ?? 'DB_READ',
+        repoFile: repoFile?.name ?? edge.source,
+        repoFileNodeId: edge.source,
+        tableName: dbTable?.name ?? edge.target,
+        tableNodeId: edge.target,
+        flowChain: traceFlow(edge.source, edge.target, data?.type ?? 'DB_READ', rawEdgesCache, rawNodes),
+      })
+      return
+    }
+
     const sourceFile = rawNodes.find((n) => n.id === edge.source && n.type === 'FILE')
     const targetFile = rawNodes.find((n) => n.id === edge.target && n.type === 'FILE')
 
@@ -804,6 +841,31 @@ function GraphPageInner() {
   // 함수 노드 클릭 시 사이드바에 콜 체인 표시
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     if (node.type === 'fileNode' || node.type === 'groupNode' || node.type === 'sectionNode') return
+
+    // DB_TABLE 노드 클릭 — 칼럼 목록 + 연결된 Repository 표시
+    const rawTable = rawNodes.find((n) => n.id === node.id && n.type === 'DB_TABLE')
+    if (rawTable) {
+      const repoEdges = rawEdgesCache.filter((e) => isDbEdgeType(e.type) && e.target === node.id)
+      const repoMap = new Map<string, string[]>()
+      repoEdges.forEach((e) => {
+        if (!repoMap.has(e.source)) repoMap.set(e.source, [])
+        repoMap.get(e.source)!.push(e.type)
+      })
+      const repos = Array.from(repoMap.entries()).map(([srcId, types]) => {
+        const n = rawNodes.find((n) => n.id === srcId)
+        return { name: n?.name ?? srcId, id: srcId, crudTypes: types }
+      })
+      setSidebar({
+        kind: 'db-table',
+        tableName: rawTable.name,
+        nodeId: node.id,
+        columns: rawTable.columns ?? [],
+        repos,
+      })
+      setRightCollapsed(false)
+      return
+    }
+
     const rawFunc = rawNodes.find((n) => n.id === node.id && n.type === 'FUNCTION')
     if (!rawFunc) return
 
@@ -1029,7 +1091,7 @@ function GraphPageInner() {
             {/* 엣지 — 색인 + 토글 통합 */}
             <LeftSection title="엣지">
               {[
-                { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: 'IMPORT',       textCls: showEdges ? 'text-gray-300' : 'text-gray-600',   active: showEdges,        onToggle: toggleEdges },
+                { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: '의존성',       textCls: showEdges ? 'text-gray-300' : 'text-gray-600',   active: showEdges,        onToggle: toggleEdges },
                 { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="4 3" /></svg>,                                label: '콜 체인',      textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600', active: showCallEdges,    onToggle: toggleCallEdges },
                 { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',         textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600', active: showInstEdges,  onToggle: toggleInstEdges },
                 { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결',    textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600', active: showBrokenEdges, onToggle: toggleBrokenEdges },
@@ -1145,7 +1207,14 @@ function GraphPageInner() {
             {/* 사이드바 헤더 */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                {!sidebar ? '상세 정보' : sidebar.kind === 'edge' ? '연결 상세' : sidebar.kind === 'file' ? '파일 연결' : sidebar.kind === 'func' ? '함수 상세' : sidebar.kind === 'func-call' ? '함수 호출' : '인스턴스화'}
+                {!sidebar ? '상세 정보'
+                  : sidebar.kind === 'edge' ? '연결 상세'
+                  : sidebar.kind === 'file' ? '파일 연결'
+                  : sidebar.kind === 'func' ? '함수 상세'
+                  : sidebar.kind === 'func-call' ? '함수 호출'
+                  : sidebar.kind === 'db-table' ? 'DB 테이블'
+                  : sidebar.kind === 'db-edge' ? 'DB 연결'
+                  : '인스턴스화'}
               </span>
               {sidebar && <button onClick={() => setSidebar(null)} className="text-gray-600 hover:text-white text-sm">✕</button>}
             </div>
@@ -1259,21 +1328,21 @@ function GraphPageInner() {
                       <p className="text-white font-mono font-semibold text-sm">{sidebar.data.name}</p>
                       {sidebar.data.comment && <p className="text-gray-500 text-xs mt-0.5">{sidebar.data.comment}</p>}
                     </div>
-                    <SidebarSection title={`들어오는 연결 (${sidebar.data.incoming.length})`}>
-                      {sidebar.data.incoming.length === 0
+                    <SidebarSection title={`의존하는 파일 — import${sidebar.data.outgoing.length > 0 ? ` (${sidebar.data.outgoing.length})` : ''}`}>
+                      {sidebar.data.outgoing.length === 0
                         ? <p className="text-gray-700 text-xs">없음</p>
-                        : sidebar.data.incoming.map((c, i) => (
-                          <FileConnGroup key={i} entry={c} direction="in"
+                        : sidebar.data.outgoing.map((c, i) => (
+                          <FileConnGroup key={i} entry={c} direction="out"
                             onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                           />
                         ))
                       }
                     </SidebarSection>
-                    <SidebarSection title={`나가는 연결 (${sidebar.data.outgoing.length})`}>
-                      {sidebar.data.outgoing.length === 0
+                    <SidebarSection title={`이 파일을 import하는 곳${sidebar.data.incoming.length > 0 ? ` (${sidebar.data.incoming.length})` : ''}`}>
+                      {sidebar.data.incoming.length === 0
                         ? <p className="text-gray-700 text-xs">없음</p>
-                        : sidebar.data.outgoing.map((c, i) => (
-                          <FileConnGroup key={i} entry={c} direction="out"
+                        : sidebar.data.incoming.map((c, i) => (
+                          <FileConnGroup key={i} entry={c} direction="in"
                             onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                           />
                         ))
@@ -1424,6 +1493,83 @@ function GraphPageInner() {
                       </div>
                     </SidebarSection>
                   </>
+                )}
+
+                {/* ── DB_TABLE 노드 클릭 ── */}
+                {sidebar.kind === 'db-table' && (
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <p className="text-white font-mono font-semibold text-sm">{sidebar.tableName}</p>
+                      <p className="text-gray-500 text-xs mt-0.5">DB 테이블</p>
+                    </div>
+
+                    {/* 연결된 Repository */}
+                    <SidebarSection title={`Repository (${sidebar.repos.length})`}>
+                      {sidebar.repos.length === 0
+                        ? <p className="text-gray-700 text-xs">연결 없음</p>
+                        : sidebar.repos.map((r, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <span
+                              className="text-blue-400 font-mono text-xs cursor-pointer hover:text-blue-200 flex-1 truncate"
+                              onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: r.id }], duration: 500, padding: 0.3 }), 50) }}
+                            >{r.name}</span>
+                            <div className="flex gap-1 flex-shrink-0">
+                              {r.crudTypes.map((t) => (
+                                <span key={t} className="text-[9px] px-1 py-0.5 rounded font-bold"
+                                  style={{ background: (DB_CRUD_COLOR[t] ?? '#22d3ee') + '33', color: DB_CRUD_COLOR[t] ?? '#22d3ee' }}
+                                >{t.replace('DB_', '')}</span>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      }
+                    </SidebarSection>
+
+                    {/* 칼럼 목록 */}
+                    <SidebarSection title={`칼럼${sidebar.columns.length > 0 ? ` (${sidebar.columns.length})` : ''}`}>
+                      {sidebar.columns.length === 0
+                        ? <p className="text-gray-700 text-xs">칼럼 정보 없음</p>
+                        : <div className="flex flex-col gap-0.5">
+                            {sidebar.columns.map((col, i) => (
+                              <div key={i} className="flex items-baseline gap-2 py-0.5">
+                                <span className="text-cyan-400 font-mono text-xs flex-shrink-0">{col.columnName}</span>
+                                <span className="text-gray-600 text-[10px] truncate">{col.javaType}</span>
+                              </div>
+                            ))}
+                          </div>
+                      }
+                    </SidebarSection>
+                  </div>
+                )}
+
+                {/* ── DB 엣지 클릭 ── */}
+                {sidebar.kind === 'db-edge' && (
+                  <div className="flex flex-col gap-3">
+                    <div className="bg-gray-800 rounded-lg p-3 flex flex-col gap-2">
+                      <div>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Repository</p>
+                        <p className="text-blue-300 font-mono text-sm font-semibold cursor-pointer hover:text-white"
+                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.repoFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                        >{sidebar.repoFile}</p>
+                      </div>
+                      <div className="text-center text-sm" style={{ color: DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee' }}>
+                        ↓ {sidebar.crudType.replace('DB_', '')}
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">DB 테이블</p>
+                        <p className="text-cyan-400 font-mono text-sm font-semibold cursor-pointer hover:text-white"
+                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.tableNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                        >{sidebar.tableName}</p>
+                      </div>
+                    </div>
+                    <span
+                      className="text-xs px-2 py-0.5 rounded self-start font-semibold"
+                      style={{ background: (DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee') + '22', color: DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee' }}
+                    >{sidebar.crudType}</span>
+                    <FlowChainSection steps={sidebar.flowChain} edgeColor={DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee'}
+                      onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                    />
+                  </div>
                 )}
 
                 </>)}
