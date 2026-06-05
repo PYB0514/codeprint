@@ -715,16 +715,17 @@ function GraphPageInner() {
     }
   }, [getNodes, fitView])
 
-  // 노드 드래그 완료 시 서버에 위치를 저장
+  // 노드 드래그 완료 시 서버에 위치를 저장 — sectionNode/groupNode는 DB 노드 아니므로 제외
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleNodeDragStop = useCallback((_event: any, node: Node) => {
     if (!graphId) return
+    if (!rawNodes.some((n) => n.id === node.id)) return
     axios.put(
       `/api/graphs/${graphId}/nodes/${node.id}/position`,
       { x: node.position.x, y: node.position.y },
       { headers: authHeaders() }
     ).catch(() => {})
-  }, [graphId])
+  }, [graphId, rawNodes])
 
   // 엣지 마우스 진입 — 두껍고 밝게 강조
   const handleEdgeMouseEnter: EdgeMouseHandler<Edge> = useCallback((_evt, edge) => {
