@@ -123,6 +123,40 @@ public class GraphBuilder {
             }
         }
 
+        // DB_TABLE 노드 생성 + Repository → DB_TABLE 엣지 생성
+        // 엔티티 클래스명 → DB_TABLE 노드 ID 인덱스
+        Map<String, UUID> entityClassToTableNodeId = new HashMap<>();
+
+        for (ParsedFile pf : parsedFiles) {
+            for (DbTableInfo table : pf.dbTables()) {
+                Node tableNode = Node.create(graphId, NodeType.DB_TABLE, table.tableName(), pf.filePath(), pf.language());
+                tableNode.updateMetadata(Map.of("entityClass", table.className()));
+                graphRepository.saveNode(tableNode);
+                entityClassToTableNodeId.put(table.className(), tableNode.getId());
+            }
+        }
+
+        // Repository 파일 → DB_TABLE 엣지 (DB_READ + DB_WRITE)
+        Set<String> usedDbEdgeIds = new HashSet<>();
+        for (ParsedFile pf : parsedFiles) {
+            if (pf.repositoryEntityClass() == null) continue;
+            UUID repoFileId = fileNodeIds.get(pf.filePath());
+            UUID tableNodeId = entityClassToTableNodeId.get(pf.repositoryEntityClass());
+            if (repoFileId == null || tableNodeId == null) continue;
+
+            String readEdgeId = extractFileName(pf.filePath()) + "-db_read-" + pf.repositoryEntityClass();
+            String writeEdgeId = extractFileName(pf.filePath()) + "-db_write-" + pf.repositoryEntityClass();
+
+            if (!usedDbEdgeIds.contains(readEdgeId)) {
+                usedDbEdgeIds.add(readEdgeId);
+                graphRepository.saveEdge(Edge.create(graphId, readEdgeId, EdgeType.DB_READ, repoFileId, tableNodeId));
+            }
+            if (!usedDbEdgeIds.contains(writeEdgeId)) {
+                usedDbEdgeIds.add(writeEdgeId);
+                graphRepository.saveEdge(Edge.create(graphId, writeEdgeId, EdgeType.DB_WRITE, repoFileId, tableNodeId));
+            }
+        }
+
         // 파일 간 INSTANTIATION 엣지 생성 — new ClassName() 패턴으로 인스턴스화된 클래스의 파일과 연결
         // 클래스명(확장자 제거 파일명) → 파일 노드 ID 인덱스
         Map<String, UUID> classNameToFileId = new HashMap<>();

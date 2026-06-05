@@ -520,9 +520,61 @@ export function buildLayout(
     })
   })
 
+  // DB_TABLE 노드 — 기존 그래프 우측에 수직 배치
+  const dbTableNodes = rawNodes.filter((n) => n.type === 'DB_TABLE')
+  if (dbTableNodes.length > 0) {
+    let maxX = 0
+    groupPositions.forEach((pos, key) => {
+      const l = groupLayouts.get(key)
+      if (l) maxX = Math.max(maxX, pos.x + l.w)
+    })
+    const DB_SECTION_X = maxX + 80
+    const DB_W = 160
+    const DB_H = 48
+    const DB_GAP = 16
+    const DB_SECTION_LABEL_H = 28
+
+    // DB 섹션 배경 박스
+    const sectionH = DB_SECTION_LABEL_H + dbTableNodes.length * (DB_H + DB_GAP) + DB_GAP
+    result.push({
+      id: 'layer-section-database',
+      type: 'sectionNode',
+      position: { x: DB_SECTION_X - 20, y: -20 - DB_SECTION_LABEL_H },
+      data: { label: 'Database', color: '#ef4444', opaqueColor: 'rgba(40,5,5,0.98)', layer: 'database' },
+      style: { width: DB_W + 40, height: sectionH + 20 },
+      draggable: false,
+      selectable: false,
+      zIndex: -20,
+    } as Node)
+
+    dbTableNodes.forEach((dbNode, i) => {
+      result.push({
+        id: dbNode.id,
+        position: { x: DB_SECTION_X, y: i * (DB_H + DB_GAP) },
+        data: { label: dbNode.name },
+        style: {
+          background: '#3b0a0a',
+          border: '1.5px solid #ef4444',
+          borderRadius: 8,
+          color: '#fca5a5',
+          fontSize: 11,
+          fontWeight: 700,
+          width: DB_W,
+          height: DB_H,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '0 8px',
+          textAlign: 'center',
+        },
+      })
+    })
+  }
+
   // 엣지 — 파일 간 IMPORT 엣지, 끊긴 연결 빨간색
   const allNodeIds = new Set(result.map((n) => n.id))
   const funcIdSet = new Set(funcNodes.map((f) => f.id))
+  const dbTableIdSet = new Set(dbTableNodes.map((n) => n.id))
 
   const importEdges: Edge[] = rawEdges
     .filter((e) => fileIdSet.has(e.source) && fileIdSet.has(e.target))
@@ -568,6 +620,31 @@ export function buildLayout(
       markerEnd: { type: MarkerType.ArrowClosed, color: '#a855f7', width: 10, height: 10 },
       zIndex: 0,
       interactionWidth: 0,
+    } as Edge))
+
+  // DB_READ / DB_WRITE 엣지 — Repository → DB_TABLE
+  const dbReadEdges: Edge[] = rawEdges
+    .filter((e) => e.type === 'DB_READ' && fileIdSet.has(e.source) && dbTableIdSet.has(e.target))
+    .map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      data: { edgeIdentifier: e.edgeIdentifier, type: e.type },
+      style: { stroke: '#22d3ee', strokeWidth: 1.5, strokeDasharray: '5 4' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#22d3ee', width: 10, height: 10 },
+      zIndex: 0,
+    } as Edge))
+
+  const dbWriteEdges: Edge[] = rawEdges
+    .filter((e) => e.type === 'DB_WRITE' && fileIdSet.has(e.source) && dbTableIdSet.has(e.target))
+    .map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      data: { edgeIdentifier: e.edgeIdentifier, type: e.type },
+      style: { stroke: '#f97316', strokeWidth: 1.5, strokeDasharray: '5 4' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#f97316', width: 10, height: 10 },
+      zIndex: 0,
     } as Edge))
 
   // DDD 레이어 상위 박스 — 같은 레이어의 그룹들을 감싸는 큰 섹션 박스
@@ -618,7 +695,7 @@ export function buildLayout(
     } as Node)
   })
 
-  return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges] }
+  return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges, ...dbReadEdges, ...dbWriteEdges] }
 }
 
 // AI 컨텍스트용 트리 다운로드 — "파일명 — 주석" 형태로 이름과 역할을 함께 표시
