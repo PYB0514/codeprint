@@ -534,20 +534,32 @@ export function buildLayout(
     let horizontal: boolean  // true = 가로 행, false = 세로 열
 
     if (layoutPreset === 'layer') {
-      // 계층: 전체 그래프 상단 중앙에 가로 행 배치 (section bottom ≈ minY - 80)
-      let minY = Infinity, totalW = 0
-      groupPositions.forEach((pos, key) => {
-        const l = groupLayouts.get(key)
-        if (l) {
-          minY = Math.min(minY, pos.y)
-          totalW = Math.max(totalW, pos.x + l.w)
-        }
-      })
-      if (minY === Infinity) minY = 0
-      const totalDbW = dbTableNodes.length * (DB_W + DB_GAP) - DB_GAP
-      dbSectionX = Math.max(0, (totalW - totalDbW) / 2)
-      dbSectionY = minY - DB_H - 104  // section bottom = dbSectionY + DB_H + 24 = minY - 80
-      horizontal = true
+      // 계층: infrastructure/persistence 그룹 왼쪽에 세로 열 배치
+      // persistence만 DB와 직접 연결되는 DDD 구조를 시각적으로 반영
+      const persKey = Array.from(groupPositions.keys())
+        .find(k => k === 'infrastructure/persistence' || k.includes('persistence'))
+        ?? Array.from(groupPositions.keys()).find(k => k.startsWith('infrastructure/'))
+      const persPos = persKey ? groupPositions.get(persKey) : undefined
+      const persLayout = persKey ? groupLayouts.get(persKey) : undefined
+
+      if (persPos && persLayout) {
+        const dbTotalH = dbTableNodes.length * (DB_H + DB_GAP) - DB_GAP
+        dbSectionX = persPos.x - DB_W - 60
+        dbSectionY = persPos.y + (persLayout.h - dbTotalH) / 2
+      } else {
+        // fallback: 전체 그룹 중 가장 왼쪽 기준
+        let minX = Infinity, midY = 0, cnt = 0
+        groupPositions.forEach((pos, key) => {
+          const l = groupLayouts.get(key)
+          if (!l) return
+          minX = Math.min(minX, pos.x)
+          midY += pos.y + l.h / 2
+          cnt++
+        })
+        dbSectionX = (minX === Infinity ? 0 : minX) - DB_W - 60
+        dbSectionY = cnt > 0 ? midY / cnt - (dbTableNodes.length * (DB_H + DB_GAP)) / 2 : 0
+      }
+      horizontal = false
     } else {
       // 허브: 전체 그룹 경계 오른쪽에 세로 열 배치 (겹침 방지)
       let allGroupsMaxX = 0
