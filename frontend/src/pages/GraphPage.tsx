@@ -50,7 +50,7 @@ type SidebarContent =
   | { kind: 'func-call'; callerName: string; callerComment: string | null; callerNodeId: string; callerFile: string; callerFileNodeId: string; calleeName: string; calleeComment: string | null; calleeNodeId: string; calleeFile: string; calleeFileNodeId: string; flowChain: FlowStep[] }
   | { kind: 'instantiation'; sourceFile: string; sourceNodeId: string; targetClass: string; targetNodeId: string; flowChain: FlowStep[] }
 
-// 동일 타입 엣지를 따라 upstream·downstream을 추적하여 전체 흐름 반환
+// 엣지 타입 경계를 넘어 전체 데이터 흐름을 추적 (프론트엔드 API_CALL ~ FUNCTION_CALL ~ DB까지)
 function traceFlow(
   sourceId: string,
   targetId: string,
@@ -70,7 +70,87 @@ function traceFlow(
     return { nodeId: id, label: node.comment ?? node.name, isSource, isTarget, altCount }
   }
 
-  // 역방향 추적 — source에서 root로
+  // FUNCTION 노드의 부모 FILE 반환
+  const parentFileOf = (nodeId: string): RawNode | undefined => {
+    const n = rawNodes.find((n) => n.id === nodeId)
+    if (!n || n.type !== 'FUNCTION') return undefined
+    return rawNodes.find((f) => f.type === 'FILE' && f.filePath === n.filePath)
+  }
+
+  // FUNCTION_CALL 역방향 추적 — 끝에서 부모 FILE에 API_CALL이 있으면 프론트엔드까지 연결
+  const traceFuncCallUp = (startId: string, seed: Set<string>): FlowStep[] => {
+    const steps: FlowStep[] = []
+    const visited = new Set(seed)
+    let cur = startId
+    for (let i = 0; i < MAX_DEPTH; i++) {
+      const incoming = rawEdges.filter((e) => e.type === 'FUNCTION_CALL' && e.target === cur)
+      if (incoming.length === 0) {
+        const pf = parentFileOf(cur)
+        if (pf) {
+          const apiEdge = rawEdges.find((e) => e.type === 'API_CALL' && e.target === pf.id)
+          if (apiEdge && !visited.has(apiEdge.source)) steps.unshift(makeStep(apiEdge.source, false, false))
+        }
+        break
+      }
+      const nextId = incoming[0].source
+      if (visited.has(nextId)) break
+      visited.add(nextId)
+      steps.unshift(makeStep(nextId, false, false, incoming.length > 1 ? incoming.length - 1 : undefined))
+      cur = nextId
+    }
+    return steps
+  }
+
+  // FUNCTION_CALL 순방향 추적 — 끝에서 부모 FILE에 DB 엣지가 있으면 DB_TABLE까지 연결
+  const traceFuncCallDown = (startId: string, seed: Set<string>): FlowStep[] => {
+    const steps: FlowStep[] = []
+    const visited = new Set(seed)
+    let cur = startId
+    for (let i = 0; i < MAX_DEPTH; i++) {
+      const outgoing = rawEdges.filter((e) => e.type === 'FUNCTION_CALL' && e.source === cur)
+      if (outgoing.length === 0) {
+        const pf = parentFileOf(cur)
+        if (pf) {
+          const dbEdge = rawEdges.find((e) => (e.type === 'DB_READ' || e.type === 'DB_WRITE') && e.source === pf.id)
+          if (dbEdge && !visited.has(dbEdge.target)) steps.push(makeStep(dbEdge.target, false, false))
+        }
+        break
+      }
+      const nextId = outgoing[0].target
+      if (visited.has(nextId)) break
+      visited.add(nextId)
+      steps.push(makeStep(nextId, false, false, outgoing.length > 1 ? outgoing.length - 1 : undefined))
+      cur = nextId
+    }
+    return steps
+  }
+
+  // DB 엣지: sourceId=Repository FILE → 이 파일 함수의 FUNCTION_CALL 호출자를 역추적
+  if (edgeType === 'DB_READ' || edgeType === 'DB_WRITE') {
+    const repoFile = rawNodes.find((n) => n.id === sourceId && n.type === 'FILE')
+    const upstreamSteps: FlowStep[] = []
+    if (repoFile) {
+      const repoFuncIds = new Set(
+        rawNodes.filter((n) => n.type === 'FUNCTION' && n.filePath === repoFile.filePath).map((n) => n.id)
+      )
+      const callerEdge = rawEdges.find((e) => e.type === 'FUNCTION_CALL' && repoFuncIds.has(e.target))
+      if (callerEdge) {
+        const seed = new Set([sourceId, targetId, callerEdge.target, callerEdge.source])
+        const above = traceFuncCallUp(callerEdge.source, seed)
+        upstreamSteps.push(...above, makeStep(callerEdge.source, false, false), makeStep(callerEdge.target, false, false))
+      }
+    }
+    return [...upstreamSteps, makeStep(sourceId, true, false), makeStep(targetId, false, true)]
+  }
+
+  // FUNCTION_CALL: upstream은 API_CALL 경계까지, downstream은 DB 경계까지
+  if (edgeType === 'FUNCTION_CALL') {
+    const upstream = traceFuncCallUp(sourceId, new Set([sourceId, targetId]))
+    const downstream = traceFuncCallDown(targetId, new Set([sourceId, targetId]))
+    return [...upstream, makeStep(sourceId, true, false), makeStep(targetId, false, true), ...downstream]
+  }
+
+  // IMPORT / INSTANTIATION / API_CALL / 기타: 동일 타입 엣지만 따라감
   const upstream: FlowStep[] = []
   const visitedUp = new Set<string>([sourceId])
   let cur = sourceId
@@ -83,8 +163,6 @@ function traceFlow(
     upstream.unshift(makeStep(nextId, false, false, incoming.length > 1 ? incoming.length - 1 : undefined))
     cur = nextId
   }
-
-  // 순방향 추적 — target에서 leaf로
   const downstream: FlowStep[] = []
   const visitedDown = new Set<string>([targetId])
   cur = targetId
@@ -97,7 +175,6 @@ function traceFlow(
     downstream.push(makeStep(nextId, false, false, outgoing.length > 1 ? outgoing.length - 1 : undefined))
     cur = nextId
   }
-
   return [...upstream, makeStep(sourceId, true, false), makeStep(targetId, false, true), ...downstream]
 }
 
@@ -720,7 +797,7 @@ function GraphPageInner() {
       sourceNodeId: edge.source,
       targetNodeId: edge.target,
       callChain,
-      flowChain: traceFlow(edge.source, edge.target, 'IMPORT', rawEdgesCache, rawNodes),
+      flowChain: traceFlow(edge.source, edge.target, data?.type ?? 'IMPORT', rawEdgesCache, rawNodes),
     })
   }, [rawNodes, rawEdgesCache])
 
