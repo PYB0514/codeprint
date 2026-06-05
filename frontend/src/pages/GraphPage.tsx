@@ -341,7 +341,15 @@ function GraphPageInner() {
     setPlaybackItems(items)
     setPlaybackCursor(0)
     setPlaybackPlaying(false)
-  }, [rawEdgesCache])
+    // 경로 엣지 on/off 상태 무관하게 즉시 표시
+    const pathEdgeIds = new Set(items.filter((it) => it.type === 'edge').map((it) => it.id))
+    setEdges((eds) => eds.map((e) => pathEdgeIds.has(e.id) ? { ...e, hidden: false } : e))
+    // 경로 노드 전체가 화면에 들어오도록 맞춤
+    const pathNodeIds = items.filter((it) => it.type === 'node').map((it) => ({ id: it.id }))
+    if (pathNodeIds.length > 0) {
+      setTimeout(() => fitView({ nodes: pathNodeIds, duration: 400, padding: 0.2 }), 50)
+    }
+  }, [rawEdgesCache, setEdges, fitView])
 
   // 흐름 재생 초기화
   const resetPlayback = useCallback(() => {
