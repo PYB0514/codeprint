@@ -168,7 +168,30 @@ function traceFlow(
     return [...upstream, makeStep(sourceId, true, false), makeStep(targetId, false, true), ...downstream]
   }
 
-  // IMPORT / INSTANTIATION / API_CALL / 기타: 동일 타입 엣지만 따라감
+  // API_CALL: 프론트 파일 → 컨트롤러 파일 → FUNCTION_CALL 체인 → DB까지
+  if (edgeType === 'API_CALL') {
+    const ctrlNode = rawNodes.find((n) => n.id === targetId && n.type === 'FILE')
+    const ctrlFuncs = ctrlNode
+      ? rawNodes.filter((n) => n.type === 'FUNCTION' && n.filePath === ctrlNode.filePath)
+      : []
+    const seed = new Set([sourceId, targetId])
+    // 컨트롤러 함수 중 가장 긴 downstream 체인 선택
+    let bestFuncId: string | null = null
+    let bestDownstream: FlowStep[] = []
+    for (const f of ctrlFuncs) {
+      const chain = traceFuncCallDown(f.id, new Set(seed))
+      if (chain.length > bestDownstream.length) {
+        bestDownstream = chain
+        bestFuncId = f.id
+      }
+    }
+    const funcSteps: FlowStep[] = bestFuncId
+      ? [makeStep(bestFuncId, false, false), ...bestDownstream]
+      : []
+    return [makeStep(sourceId, true, false), makeStep(targetId, false, false), ...funcSteps]
+  }
+
+  // IMPORT / INSTANTIATION / 기타: 동일 타입 엣지만 따라감
   const upstream: FlowStep[] = []
   const visitedUp = new Set<string>([sourceId])
   let cur = sourceId
@@ -1446,8 +1469,12 @@ function GraphPageInner() {
                 {sidebar.kind === 'func' && (
                   <>
                     <div>
-                      <p className="text-white font-mono font-semibold text-sm">{sidebar.funcName}</p>
-                      {sidebar.funcComment && <p className="text-gray-500 text-xs mt-0.5">{sidebar.funcComment}</p>}
+                      <p className="text-white font-mono font-semibold text-sm">
+                        {labelMode === 'comment' && sidebar.funcComment ? sidebar.funcComment : sidebar.funcName}
+                      </p>
+                      <p className="text-gray-500 font-mono text-xs mt-0.5">
+                        {labelMode === 'comment' && sidebar.funcComment ? sidebar.funcName : sidebar.funcComment}
+                      </p>
                       <p
                         className="text-blue-400 font-mono text-xs mt-1 cursor-pointer hover:text-blue-300 underline decoration-gray-700"
                         onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.parentFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
