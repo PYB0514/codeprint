@@ -50,3 +50,28 @@
 - 알림이 필요할 만큼 분석 시간이 길지 않음 (보통 5~30초)
 
 **결과.** 알림 코드 전체 제거. 게이지 애니메이션으로 완료 피드백 대체.
+
+---
+
+### GitHub 재연결 버튼 버그 2건 (2026-06-05)
+
+**문제 1.** 재연결 버튼 클릭 시 빈 페이지.
+**원인.** `<a href="/oauth2/authorization/github">`로 상대경로 작성 → 프론트(3000포트)로 요청이 가서 404.
+**결과.** `window.location.href = apiUrl + '/oauth2/authorization/github'` 절대경로로 수정. LandingPage/LoginPage와 동일한 패턴 사용.
+
+**문제 2.** 배너가 토큰 있는 사용자에게도 항상 표시.
+**원인.** `!user.hasGithubToken` 조건 — 백엔드 응답에 필드가 없으면 `undefined` → `!undefined === true`로 배너 항상 표시.
+**결과.** `user.hasGithubToken === false` 명시적 체크로 수정.
+
+**교훈.** 두 버그 모두 PR 전에 버튼 한 번 클릭했으면 즉시 발견. 런타임 검증 생략의 직접적 결과.
+
+---
+
+### 흐름 자동 시각화 — 노드 하이라이트 방식 결정 (2026-06-05)
+
+**문제.** FUNCTION 노드는 React Flow 기본 노드 타입 (FileNode/GroupNode 아님) → `data` prop으로 스타일을 전달해도 기본 렌더러가 무시함.
+**이유.** `nodeTypes`에 등록된 컴포넌트(FileNode, GroupNode)는 `data`를 직접 읽지만, 기본 노드는 React Flow 내부 렌더러 사용.
+**결과.** `setNodes`로 `style` prop 직접 업데이트 (`outline`, `boxShadow`). FileNode에는 `data.playbackActive` 오버레이도 추가해서 두 방식 병행.
+
+**문제 2.** 경로 엣지 `hidden: true` 상태를 재생 중 해제해야 하는데, 전체 경로를 한 번에 unhide하면 모든 FUNCTION_CALL 엣지가 동시에 표시됨 (시각적 혼잡).
+**결과.** `visitedItems = playbackItems.slice(0, cursor + 1)` — 커서까지 지나온 항목만 unhide. 스텝별로 엣지가 순차 등장하는 효과.

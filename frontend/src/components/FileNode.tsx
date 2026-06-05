@@ -6,13 +6,23 @@ export default function FileNode({ data }: NodeProps) {
   const hasConn = (data.incoming as unknown[])?.length > 0 || (data.outgoing as unknown[])?.length > 0
   const handleStyle = { opacity: 0, width: 6, height: 6 }
 
+  // 흐름 재생 하이라이트 스타일
+  const playbackActive = data.playbackActive as boolean | undefined
+  const playbackInPath = data.playbackInPath as boolean | undefined
+  const overlayStyle: React.CSSProperties = playbackActive
+    ? { position: 'absolute', inset: 0, borderRadius: 6, border: '2px solid #fbbf24', boxShadow: '0 0 10px #fbbf2488', pointerEvents: 'none', zIndex: 1 }
+    : playbackInPath
+    ? { position: 'absolute', inset: 0, borderRadius: 6, border: '1px solid #22d3ee66', pointerEvents: 'none', zIndex: 1 }
+    : {}
+
   return (
     <>
       <Handle type="target" position={Position.Top} style={handleStyle} />
       <Handle type="target" position={Position.Left} style={handleStyle} />
       <Handle type="source" position={Position.Bottom} style={handleStyle} />
       <Handle type="source" position={Position.Right} style={handleStyle} />
-      <div style={{ width: '100%', height: '100%' }}>
+      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+        {(playbackActive || playbackInPath) && <div style={overlayStyle} />}
         <div style={{
           height: 28,
           display: 'flex',

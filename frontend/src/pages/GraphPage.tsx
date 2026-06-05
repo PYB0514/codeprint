@@ -101,6 +101,54 @@ function traceFlow(
   return [...upstream, makeStep(sourceId, true, false), makeStep(targetId, false, true), ...downstream]
 }
 
+// 노드를 중심으로 upstream·downstream 흐름 경로를 탐색하여 순서 배열로 반환
+function buildFlowPath(
+  nodeId: string,
+  rawEdges: RawEdge[],
+): { items: { type: 'node' | 'edge'; id: string }[] } {
+  const FLOW_TYPES = ['FUNCTION_CALL', 'DB_READ', 'DB_WRITE', 'API_CALL', 'CONTAINS']
+  const MAX_DEPTH = 15
+
+  // upstream 역방향 추적
+  const upstreamNodes: string[] = []
+  const upstreamEdgeIds: string[] = []
+  const visitedUp = new Set([nodeId])
+  let cur = nodeId
+  for (let i = 0; i < MAX_DEPTH; i++) {
+    const edge = rawEdges.find((e) => FLOW_TYPES.includes(e.type) && e.target === cur)
+    if (!edge || visitedUp.has(edge.source)) break
+    visitedUp.add(edge.source)
+    upstreamNodes.unshift(edge.source)
+    upstreamEdgeIds.unshift(edge.id)
+    cur = edge.source
+  }
+
+  // downstream 순방향 추적
+  const downstreamNodes: string[] = []
+  const downstreamEdgeIds: string[] = []
+  const visitedDown = new Set([nodeId])
+  cur = nodeId
+  for (let i = 0; i < MAX_DEPTH; i++) {
+    const edge = rawEdges.find((e) => FLOW_TYPES.includes(e.type) && e.source === cur)
+    if (!edge || visitedDown.has(edge.target)) break
+    visitedDown.add(edge.target)
+    downstreamNodes.push(edge.target)
+    downstreamEdgeIds.push(edge.id)
+    cur = edge.target
+  }
+
+  const nodeIds = [...upstreamNodes, nodeId, ...downstreamNodes]
+  const edgeIds = [...upstreamEdgeIds, ...downstreamEdgeIds]
+
+  // 노드와 엣지를 교차 배치: [node, edge, node, edge, ..., node]
+  const items: { type: 'node' | 'edge'; id: string }[] = []
+  for (let i = 0; i < nodeIds.length; i++) {
+    items.push({ type: 'node', id: nodeIds[i] })
+    if (i < edgeIds.length) items.push({ type: 'edge', id: edgeIds[i] })
+  }
+  return { items }
+}
+
 // JWT 토큰을 Authorization 헤더로 반환
 function authHeaders() {
   const token = localStorage.getItem('jwt')
@@ -150,6 +198,13 @@ function GraphPageInner() {
   const [shareSubmitting, setShareSubmitting] = useState(false)
   const flowRef = useRef<HTMLDivElement>(null)
   const { getNodes, fitView } = useReactFlow()
+
+  // 흐름 재생 상태
+  const [playbackItems, setPlaybackItems] = useState<{ type: 'node' | 'edge'; id: string }[]>([])
+  const [playbackCursor, setPlaybackCursor] = useState(-1)
+  const [playbackPlaying, setPlaybackPlaying] = useState(false)
+  const [playbackSpeed, setPlaybackSpeed] = useState(600)
+  const playbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 노드 코멘트 상태
   const [nodeComments, setNodeComments] = useState<{ id: string; userId: string; content: string; createdAt: number }[]>([])
@@ -214,6 +269,103 @@ function GraphPageInner() {
     document.addEventListener('mouseup', onUp)
     return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
   }, [])
+
+  // 흐름 재생 — 커서 이동 시 노드/엣지 하이라이트 적용
+  useEffect(() => {
+    if (playbackItems.length === 0) return
+
+    // 커서까지 지나온 항목만 하이라이트 (미도달 항목은 숨김 유지)
+    const visitedItems = playbackItems.slice(0, playbackCursor + 1)
+    const pathNodeIds = new Set(visitedItems.filter((it) => it.type === 'node').map((it) => it.id))
+    const activeNodeId = playbackItems[playbackCursor]?.type === 'node' ? playbackItems[playbackCursor].id : null
+    const pathEdgeIds = new Set(visitedItems.filter((it) => it.type === 'edge').map((it) => it.id))
+    const activeEdgeId = playbackItems[playbackCursor]?.type === 'edge' ? playbackItems[playbackCursor].id : null
+
+    // 노드 스타일 업데이트 — FileNode(data prop) + 기본 노드(style 직접)
+    setNodes((nds) => nds.map((n) => {
+      if (!pathNodeIds.has(n.id)) {
+        return { ...n, data: { ...n.data, playbackActive: false, playbackInPath: false } }
+      }
+      const isActive = n.id === activeNodeId
+      const isInPath = !isActive
+      // 기본 React Flow 노드 (FUNCTION) — style로 직접 테두리 적용
+      const baseStyle = n.style ?? {}
+      const playbackStyle = isActive
+        ? { ...baseStyle, outline: '2px solid #fbbf24', outlineOffset: '2px', boxShadow: '0 0 10px #fbbf2488' }
+        : isInPath
+        ? { ...baseStyle, outline: '1px solid #22d3ee66', outlineOffset: '2px' }
+        : baseStyle
+      return { ...n, style: playbackStyle, data: { ...n.data, playbackActive: isActive, playbackInPath: isInPath } }
+    }))
+
+    // 엣지 — 경로 엣지는 hidden 해제 + 색상 강조
+    setEdges((eds) => eds.map((e) => {
+      const d = e.data as { type?: string; broken?: boolean } | undefined
+      const isCall = d?.type === 'FUNCTION_CALL'
+      const isInst = d?.type === 'INSTANTIATION'
+      const broken = d?.broken
+      const baseStyle = { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : '#4b5563' }
+      if (!pathEdgeIds.has(e.id)) {
+        return { ...e, animated: false, style: baseStyle }
+      }
+      const isActive = e.id === activeEdgeId
+      return {
+        ...e,
+        hidden: false, // 경로 엣지는 숨김 해제
+        animated: isActive,
+        style: {
+          strokeWidth: isActive ? 3.5 : 2,
+          stroke: isActive ? '#fbbf24' : '#22d3ee',
+        },
+      }
+    }))
+  }, [playbackCursor, playbackItems, setNodes, setEdges])
+
+  // 흐름 재생 — 자동 진행 타이머
+  useEffect(() => {
+    if (playbackTimerRef.current) clearTimeout(playbackTimerRef.current)
+    if (!playbackPlaying || playbackCursor >= playbackItems.length - 1) {
+      if (playbackCursor >= playbackItems.length - 1 && playbackPlaying) setPlaybackPlaying(false)
+      return
+    }
+    playbackTimerRef.current = setTimeout(() => {
+      setPlaybackCursor((c) => c + 1)
+    }, playbackSpeed)
+    return () => { if (playbackTimerRef.current) clearTimeout(playbackTimerRef.current) }
+  }, [playbackPlaying, playbackCursor, playbackItems.length, playbackSpeed])
+
+  // 흐름 재생 시작 — 선택된 노드 기준으로 경로 계산 후 첫 스텝으로 이동
+  const startPlayback = useCallback((nodeId: string) => {
+    if (playbackTimerRef.current) clearTimeout(playbackTimerRef.current)
+    const { items } = buildFlowPath(nodeId, rawEdgesCache)
+    setPlaybackItems(items)
+    setPlaybackCursor(0)
+    setPlaybackPlaying(false)
+    // 경로 엣지 on/off 상태 무관하게 즉시 표시
+    const pathEdgeIds = new Set(items.filter((it) => it.type === 'edge').map((it) => it.id))
+    setEdges((eds) => eds.map((e) => pathEdgeIds.has(e.id) ? { ...e, hidden: false } : e))
+    // 경로 노드 전체가 화면에 들어오도록 맞춤
+    const pathNodeIds = items.filter((it) => it.type === 'node').map((it) => ({ id: it.id }))
+    if (pathNodeIds.length > 0) {
+      setTimeout(() => fitView({ nodes: pathNodeIds, duration: 400, padding: 0.2 }), 50)
+    }
+  }, [rawEdgesCache, setEdges, fitView])
+
+  // 흐름 재생 초기화
+  const resetPlayback = useCallback(() => {
+    if (playbackTimerRef.current) clearTimeout(playbackTimerRef.current)
+    setPlaybackPlaying(false)
+    setPlaybackCursor(-1)
+    setPlaybackItems([])
+    setNodes((nds) => nds.map((n) => ({ ...n, style: { ...n.style, outline: 'none', boxShadow: 'none' }, data: { ...n.data, playbackActive: false, playbackInPath: false } })))
+    setEdges((eds) => applyEdgeVisibility(eds.map((e) => {
+      const d = e.data as { type?: string; broken?: boolean } | undefined
+      const isCall = d?.type === 'FUNCTION_CALL'
+      const isInst = d?.type === 'INSTANTIATION'
+      const broken = d?.broken
+      return { ...e, animated: false, style: { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : '#4b5563' } }
+    }), showEdges, showCallEdges, showInstEdges, showBrokenEdges))
+  }, [setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges])
 
   // 서버에서 그래프 데이터를 불러와 React Flow 레이아웃으로 변환
   const fetchGraph = useCallback(async () => {
@@ -597,6 +749,7 @@ function GraphPageInner() {
       callers,
       callees,
     })
+    startPlayback(rawFunc.id)
     setCommentNodeId(rawFunc.id)
     setCommentInput('')
     if (graphId) {
@@ -1038,6 +1191,68 @@ function GraphPageInner() {
                 {/* ── 함수 노드 클릭 ── */}
                 {sidebar.kind === 'func' && (
                   <>
+                    {/* 흐름 재생 컨트롤 */}
+                    {playbackItems.length > 1 && (
+                      <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-gray-400 uppercase tracking-wider">흐름 재생</span>
+                          <span className="text-[10px] text-gray-600">
+                            {playbackCursor < 0 ? '-' : `${playbackCursor + 1} / ${playbackItems.length}`}
+                          </span>
+                        </div>
+                        {/* 진행 바 */}
+                        <div className="w-full h-1 bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-amber-400 rounded-full transition-all duration-300"
+                            style={{ width: playbackCursor < 0 ? '0%' : `${((playbackCursor + 1) / playbackItems.length) * 100}%` }}
+                          />
+                        </div>
+                        {/* 컨트롤 버튼 */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setPlaybackCursor((c) => Math.max(0, c - 1))}
+                            disabled={playbackCursor <= 0}
+                            className="text-xs text-gray-400 hover:text-white disabled:opacity-30 px-1"
+                          >⏮</button>
+                          <button
+                            onClick={() => {
+                              if (playbackCursor >= playbackItems.length - 1) {
+                                setPlaybackCursor(0)
+                                setPlaybackPlaying(true)
+                              } else {
+                                setPlaybackPlaying((p) => !p)
+                              }
+                            }}
+                            className="flex-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-700/40 rounded px-2 py-1"
+                          >
+                            {playbackPlaying ? '⏸ 일시정지' : playbackCursor >= playbackItems.length - 1 ? '↺ 다시 재생' : '▶ 재생'}
+                          </button>
+                          <button
+                            onClick={() => setPlaybackCursor((c) => Math.min(playbackItems.length - 1, c + 1))}
+                            disabled={playbackCursor >= playbackItems.length - 1}
+                            className="text-xs text-gray-400 hover:text-white disabled:opacity-30 px-1"
+                          >⏭</button>
+                          <button onClick={resetPlayback} className="text-xs text-gray-600 hover:text-gray-400 px-1" title="초기화">✕</button>
+                        </div>
+                        {/* 속도 조절 */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-gray-600">속도</span>
+                          {[['빠름', 300], ['보통', 600], ['느림', 1000]].map(([label, ms]) => (
+                            <button
+                              key={ms}
+                              onClick={() => setPlaybackSpeed(ms as number)}
+                              className={`text-[10px] px-1.5 py-0.5 rounded ${playbackSpeed === ms ? 'bg-gray-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                            >{label}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {playbackItems.length <= 1 && (
+                      <div className="bg-gray-800/40 rounded-lg px-3 py-2">
+                        <p className="text-[10px] text-gray-600">이 함수는 연결된 흐름이 없습니다.</p>
+                      </div>
+                    )}
+
                     <div>
                       <p className="text-white font-mono font-semibold text-sm">{sidebar.funcName}</p>
                       {sidebar.funcComment && <p className="text-gray-500 text-xs mt-0.5">{sidebar.funcComment}</p>}
