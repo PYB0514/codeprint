@@ -26,7 +26,8 @@ public class AuthController {
                 "id", user.getId(),
                 "email", user.getEmail(),
                 "username", user.getUsername(),
-                "plan", user.getPlan()
+                "plan", user.getPlan(),
+                "hasGithubToken", user.getGithubAccessToken() != null
         ));
     }
 }

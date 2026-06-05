@@ -11,6 +11,7 @@ interface UserInfo {
   email: string
   username: string
   plan: string
+  hasGithubToken: boolean
 }
 
 interface Project {
@@ -117,6 +118,22 @@ export default function DashboardPage() {
       <AppHeader username={user.username} plan={user.plan} onLogout={handleLogout} />
 
       <main className="max-w-4xl mx-auto px-6 py-10">
+
+        {/* GitHub 토큰 만료 — 재연결 배너 */}
+        {!user.hasGithubToken && (
+          <div className="flex items-center justify-between bg-yellow-900/30 border border-yellow-700/60 rounded-xl px-5 py-4 mb-6">
+            <div>
+              <p className="text-sm font-medium text-yellow-300">GitHub 재연결이 필요합니다</p>
+              <p className="text-xs text-yellow-500 mt-0.5">브랜치 조회·분석을 사용하려면 GitHub 계정을 다시 연결해주세요.</p>
+            </div>
+            <a
+              href="/oauth2/authorization/github"
+              className="bg-yellow-400 text-black text-sm font-medium px-4 py-2 rounded-lg hover:bg-yellow-300 shrink-0"
+            >
+              GitHub 재연결
+            </a>
+          </div>
+        )}
 
         {/* Free 플랜 업그레이드 배너 */}
         {user.plan === 'FREE' && (

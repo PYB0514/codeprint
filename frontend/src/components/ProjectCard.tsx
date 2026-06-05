@@ -140,6 +140,11 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
     try {
       const res = await axios.get(`/api/projects/${project.id}/branches`, { headers: authHeaders() })
       const list: string[] = res.data
+      if (list.length === 0) {
+        // 빈 배열 응답 = 토큰 null 가능성이 높음
+        setAnalysisError('GitHub 연결이 필요합니다. 대시보드에서 재연결해주세요.')
+        return []
+      }
       const sorted = [
         ...['main', 'master'].filter(b => list.includes(b)),
         ...list.filter(b => b !== 'main' && b !== 'master').sort(),
@@ -148,7 +153,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
       setSelectedBranch(sorted[0] ?? '')
       return sorted
     } catch {
-      setAnalysisError('브랜치 목록을 불러오지 못했습니다.')
+      setAnalysisError('브랜치 목록을 불러오지 못했습니다. GitHub 연결을 확인해주세요.')
       return []
     } finally {
       setLoadingBranches(false)
