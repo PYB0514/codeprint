@@ -100,7 +100,7 @@
 | 흐름 자동 시각화 프로토타입 개선 | ✅ | v1.19 — 재생 컨트롤 고도화, 전체 흐름 추적 UI |
 | 그래프 뷰포트 줌 버그 수정 | ✅ | v1.20 — 노드 클릭 시 줌 초기화 방지, 재생 중 뷰포트 자동 추적 (#66) |
 | 흐름 재생 UX 버그 수정 | ✅ | v1.21 — CONTAINS 제거, resetPlayback, openFuncNode 헬퍼, labelMode, DB_TABLE 재생 (#67) |
-| 인터페이스 추상 메서드 추출 + 회귀 테스트 | 🔄 PR #71 리뷰 중 | StaticCodeAnalyzer 인터페이스 패턴, StaticCodeAnalyzerTest+GraphBuilderTest 추가 |
+| 인터페이스 추상 메서드 추출 + 회귀 테스트 | ✅ | v1.21.002 — StaticCodeAnalyzer 인터페이스 패턴, 테스트 추가 (#71) |
 
 ---
 
@@ -125,11 +125,10 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재: feat/interface-mapping 브랜치 (PR #71 CI 대기 중)
+# 현재: main 브랜치 (v1.21.002)
 # 다음 선택지 (우선순위 순):
-#   1. PR #71 CI 통과 확인 → main 머지 → v1.21.001 태그
-#   2. test/domain-unit 브랜치 — AnalysisResult 상태 전이 + UserPlan 경계 조건 테스트 (빠름, 50분)
-#   3. 신규 기능 — PROGRESS.md 아래 백로그 참고
+#   A. test/domain-unit 브랜치 — AnalysisResult 상태 전이 + UserPlan 경계 조건 테스트 (빠름, 50분)
+#   B. 신규 기능 — PROGRESS.md 아래 백로그 참고
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
