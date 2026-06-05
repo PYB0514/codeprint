@@ -1258,6 +1258,60 @@ function GraphPageInner() {
 
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
 
+                {/* ── 흐름 재생 패널 — 함수 선택 시 항상 상단 고정 ── */}
+                {playbackItems.length > 1 && (
+                  <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-400 uppercase tracking-wider">흐름 재생</span>
+                      <span className="text-[10px] text-gray-600">
+                        {playbackCursor < 0 ? '-' : `${playbackCursor + 1} / ${playbackItems.length}`}
+                      </span>
+                    </div>
+                    <div className="w-full h-1 bg-gray-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-amber-400 rounded-full transition-all duration-300"
+                        style={{ width: playbackCursor < 0 ? '0%' : `${((playbackCursor + 1) / playbackItems.length) * 100}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setPlaybackCursor((c) => Math.max(0, c - 1))}
+                        disabled={playbackCursor <= 0}
+                        className="text-xs text-gray-400 hover:text-white disabled:opacity-30 px-1"
+                      >⏮</button>
+                      <button
+                        onClick={() => {
+                          if (playbackCursor >= playbackItems.length - 1) {
+                            setPlaybackCursor(0)
+                            setPlaybackPlaying(true)
+                          } else {
+                            setPlaybackPlaying((p) => !p)
+                          }
+                        }}
+                        className="flex-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-700/40 rounded px-2 py-1"
+                      >
+                        {playbackPlaying ? '⏸ 일시정지' : playbackCursor >= playbackItems.length - 1 ? '↺ 다시 재생' : '▶ 재생'}
+                      </button>
+                      <button
+                        onClick={() => setPlaybackCursor((c) => Math.min(playbackItems.length - 1, c + 1))}
+                        disabled={playbackCursor >= playbackItems.length - 1}
+                        className="text-xs text-gray-400 hover:text-white disabled:opacity-30 px-1"
+                      >⏭</button>
+                      <button onClick={resetPlayback} className="text-xs text-gray-600 hover:text-gray-400 px-1" title="초기화">✕</button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-600">속도</span>
+                      {[['빠름', 300], ['보통', 600], ['느림', 1000]].map(([label, ms]) => (
+                        <button
+                          key={ms}
+                          onClick={() => setPlaybackSpeed(ms as number)}
+                          className={`text-[10px] px-1.5 py-0.5 rounded ${playbackSpeed === ms ? 'bg-gray-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                        >{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* ── 기본 상태 — 아무것도 선택되지 않은 경우 ── */}
                 {!sidebar && (
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-center pb-10">
@@ -1277,26 +1331,26 @@ function GraphPageInner() {
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">호출하는 함수</p>
                         <p className="text-emerald-400 font-mono text-sm font-semibold cursor-pointer hover:text-emerald-200"
-                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.callerNodeId }], duration: 500, padding: 0.4 }), 50) }}
+                          onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.callerNodeId }], duration: 500, padding: 0.4 }), 50) }}
                         >{sidebar.callerComment ?? sidebar.callerName}</p>
                         <p className="text-blue-400 font-mono text-xs cursor-pointer hover:text-blue-300 mt-0.5"
-                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.callerFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                          onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.callerFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
                         >{sidebar.callerFile}</p>
                       </div>
                       <div className="text-amber-500 text-sm text-center">↓</div>
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">호출받는 함수</p>
                         <p className="text-emerald-400 font-mono text-sm font-semibold cursor-pointer hover:text-emerald-200"
-                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.calleeNodeId }], duration: 500, padding: 0.4 }), 50) }}
+                          onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.calleeNodeId }], duration: 500, padding: 0.4 }), 50) }}
                         >{sidebar.calleeComment ?? sidebar.calleeName}</p>
                         <p className="text-blue-400 font-mono text-xs cursor-pointer hover:text-blue-300 mt-0.5"
-                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.calleeFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                          onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.calleeFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
                         >{sidebar.calleeFile}</p>
                       </div>
                     </div>
                     <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded self-start">FUNCTION_CALL</span>
                     <FlowChainSection steps={sidebar.flowChain} edgeColor="#f59e0b"
-                      onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                      onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
                     />
                   </div>
                 )}
@@ -1308,20 +1362,20 @@ function GraphPageInner() {
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">생성하는 파일</p>
                         <p className="text-blue-300 font-mono text-sm font-semibold cursor-pointer hover:text-white"
-                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.sourceNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                          onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.sourceNodeId }], duration: 500, padding: 0.3 }), 50) }}
                         >{sidebar.sourceFile}</p>
                       </div>
                       <div className="text-purple-400 text-sm text-center">↓ new</div>
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">인스턴스화 대상</p>
                         <p className="text-blue-300 font-mono text-sm font-semibold cursor-pointer hover:text-white"
-                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.targetNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                          onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.targetNodeId }], duration: 500, padding: 0.3 }), 50) }}
                         >{sidebar.targetClass}</p>
                       </div>
                     </div>
                     <span className="text-xs bg-purple-900/40 text-purple-400 px-2 py-0.5 rounded self-start">INSTANTIATION</span>
                     <FlowChainSection steps={sidebar.flowChain} edgeColor="#a855f7"
-                      onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                      onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                     />
                   </div>
                 )}
@@ -1332,16 +1386,16 @@ function GraphPageInner() {
                     <div className="bg-gray-800/60 rounded-lg p-3 flex items-center gap-2">
                       <span
                         className="text-blue-300 font-mono text-xs cursor-pointer hover:text-white truncate flex-1"
-                        onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.sourceNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                        onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.sourceNodeId }], duration: 500, padding: 0.3 }), 50) }}
                       >{sidebar.sourceId}</span>
                       <span className="text-gray-600 text-xs flex-shrink-0">→</span>
                       <span
                         className="text-blue-300 font-mono text-xs cursor-pointer hover:text-white truncate flex-1 text-right"
-                        onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.targetNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                        onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.targetNodeId }], duration: 500, padding: 0.3 }), 50) }}
                       >{sidebar.targetId}</span>
                     </div>
                     <FlowChainSection steps={sidebar.flowChain} edgeColor="#4b5563"
-                      onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                      onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                     />
                     <SidebarSection title={`함수 호출 체인${sidebar.callChain.length > 0 ? ` (${sidebar.callChain.length})` : ''}`}>
                       {sidebar.callChain.length === 0
@@ -1350,7 +1404,7 @@ function GraphPageInner() {
                           <CallChainRow key={i}
                             leftLabel={e.callerLabel} leftNodeId={e.callerNodeId}
                             rightLabel={e.calleeLabel} rightNodeId={e.calleeNodeId}
-                            onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                            onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
                           />
                         ))
                       }
@@ -1370,7 +1424,7 @@ function GraphPageInner() {
                         ? <p className="text-gray-700 text-xs">없음</p>
                         : sidebar.data.outgoing.map((c, i) => (
                           <FileConnGroup key={i} entry={c} direction="out"
-                            onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                            onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                           />
                         ))
                       }
@@ -1380,7 +1434,7 @@ function GraphPageInner() {
                         ? <p className="text-gray-700 text-xs">없음</p>
                         : sidebar.data.incoming.map((c, i) => (
                           <FileConnGroup key={i} entry={c} direction="in"
-                            onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                            onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                           />
                         ))
                       }
@@ -1391,74 +1445,12 @@ function GraphPageInner() {
                 {/* ── 함수 노드 클릭 ── */}
                 {sidebar.kind === 'func' && (
                   <>
-                    {/* 흐름 재생 컨트롤 */}
-                    {playbackItems.length > 1 && (
-                      <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-gray-400 uppercase tracking-wider">흐름 재생</span>
-                          <span className="text-[10px] text-gray-600">
-                            {playbackCursor < 0 ? '-' : `${playbackCursor + 1} / ${playbackItems.length}`}
-                          </span>
-                        </div>
-                        {/* 진행 바 */}
-                        <div className="w-full h-1 bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-amber-400 rounded-full transition-all duration-300"
-                            style={{ width: playbackCursor < 0 ? '0%' : `${((playbackCursor + 1) / playbackItems.length) * 100}%` }}
-                          />
-                        </div>
-                        {/* 컨트롤 버튼 */}
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setPlaybackCursor((c) => Math.max(0, c - 1))}
-                            disabled={playbackCursor <= 0}
-                            className="text-xs text-gray-400 hover:text-white disabled:opacity-30 px-1"
-                          >⏮</button>
-                          <button
-                            onClick={() => {
-                              if (playbackCursor >= playbackItems.length - 1) {
-                                setPlaybackCursor(0)
-                                setPlaybackPlaying(true)
-                              } else {
-                                setPlaybackPlaying((p) => !p)
-                              }
-                            }}
-                            className="flex-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-700/40 rounded px-2 py-1"
-                          >
-                            {playbackPlaying ? '⏸ 일시정지' : playbackCursor >= playbackItems.length - 1 ? '↺ 다시 재생' : '▶ 재생'}
-                          </button>
-                          <button
-                            onClick={() => setPlaybackCursor((c) => Math.min(playbackItems.length - 1, c + 1))}
-                            disabled={playbackCursor >= playbackItems.length - 1}
-                            className="text-xs text-gray-400 hover:text-white disabled:opacity-30 px-1"
-                          >⏭</button>
-                          <button onClick={resetPlayback} className="text-xs text-gray-600 hover:text-gray-400 px-1" title="초기화">✕</button>
-                        </div>
-                        {/* 속도 조절 */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-gray-600">속도</span>
-                          {[['빠름', 300], ['보통', 600], ['느림', 1000]].map(([label, ms]) => (
-                            <button
-                              key={ms}
-                              onClick={() => setPlaybackSpeed(ms as number)}
-                              className={`text-[10px] px-1.5 py-0.5 rounded ${playbackSpeed === ms ? 'bg-gray-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                            >{label}</button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {playbackItems.length <= 1 && (
-                      <div className="bg-gray-800/40 rounded-lg px-3 py-2">
-                        <p className="text-[10px] text-gray-600">이 함수는 연결된 흐름이 없습니다.</p>
-                      </div>
-                    )}
-
                     <div>
                       <p className="text-white font-mono font-semibold text-sm">{sidebar.funcName}</p>
                       {sidebar.funcComment && <p className="text-gray-500 text-xs mt-0.5">{sidebar.funcComment}</p>}
                       <p
                         className="text-blue-400 font-mono text-xs mt-1 cursor-pointer hover:text-blue-300 underline decoration-gray-700"
-                        onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.parentFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                        onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.parentFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
                       >{sidebar.parentFileName}</p>
                     </div>
                     <SidebarSection title={`호출하는 함수${sidebar.callers.length > 0 ? ` (${sidebar.callers.length})` : ''}`}>
@@ -1466,7 +1458,7 @@ function GraphPageInner() {
                         ? <p className="text-gray-700 text-xs">없음</p>
                         : sidebar.callers.map((c, i) => (
                           <FuncChainRow key={i} entry={c} direction="caller"
-                            onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                            onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
                           />
                         ))
                       }
@@ -1476,7 +1468,7 @@ function GraphPageInner() {
                         ? <p className="text-gray-700 text-xs">없음</p>
                         : sidebar.callees.map((c, i) => (
                           <FuncChainRow key={i} entry={c} direction="callee"
-                            onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                            onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
                           />
                         ))
                       }
@@ -1548,7 +1540,7 @@ function GraphPageInner() {
                           <div key={i} className="flex items-center gap-2">
                             <span
                               className="text-blue-400 font-mono text-xs cursor-pointer hover:text-blue-200 flex-1 truncate"
-                              onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: r.id }], duration: 500, padding: 0.3 }), 50) }}
+                              onClick={() => { setTimeout(() => fitView({ nodes: [{ id: r.id }], duration: 500, padding: 0.3 }), 50) }}
                             >{r.name}</span>
                             <div className="flex gap-1 flex-shrink-0">
                               {r.crudTypes.map((t) => (
@@ -1586,7 +1578,7 @@ function GraphPageInner() {
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Repository</p>
                         <p className="text-blue-300 font-mono text-sm font-semibold cursor-pointer hover:text-white"
-                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.repoFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                          onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.repoFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
                         >{sidebar.repoFile}</p>
                       </div>
                       <div className="text-center text-sm" style={{ color: DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee' }}>
@@ -1595,7 +1587,7 @@ function GraphPageInner() {
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">DB 테이블</p>
                         <p className="text-cyan-400 font-mono text-sm font-semibold cursor-pointer hover:text-white"
-                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.tableNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                          onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.tableNodeId }], duration: 500, padding: 0.3 }), 50) }}
                         >{sidebar.tableName}</p>
                       </div>
                     </div>
@@ -1604,7 +1596,7 @@ function GraphPageInner() {
                       style={{ background: (DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee') + '22', color: DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee' }}
                     >{sidebar.crudType}</span>
                     <FlowChainSection steps={sidebar.flowChain} edgeColor={DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee'}
-                      onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                      onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                     />
                   </div>
                 )}
@@ -1616,21 +1608,21 @@ function GraphPageInner() {
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">프론트 파일</p>
                         <p className="text-fuchsia-400 font-mono text-sm font-semibold cursor-pointer hover:text-white"
-                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.frontFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                          onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.frontFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
                         >{sidebar.frontFile}</p>
                       </div>
                       <div className="text-gray-500 mt-5">→</div>
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">컨트롤러</p>
                         <p className="text-fuchsia-400 font-mono text-sm font-semibold cursor-pointer hover:text-white"
-                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.ctrlFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                          onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.ctrlFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
                         >{sidebar.ctrlFile}</p>
                       </div>
                     </div>
                     <span className="text-xs px-2 py-0.5 rounded self-start font-semibold"
                       style={{ background: '#e879f922', color: '#e879f9' }}>API_CALL</span>
                     <FlowChainSection steps={sidebar.flowChain} edgeColor="#e879f9"
-                      onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                      onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                     />
                   </div>
                 )}
