@@ -51,6 +51,7 @@ type SidebarContent =
   | { kind: 'instantiation'; sourceFile: string; sourceNodeId: string; targetClass: string; targetNodeId: string; flowChain: FlowStep[] }
   | { kind: 'db-table'; tableName: string; nodeId: string; columns: ColumnInfo[]; repos: { name: string; id: string; crudTypes: string[] }[] }
   | { kind: 'db-edge'; crudType: string; repoFile: string; repoFileNodeId: string; tableName: string; tableNodeId: string; flowChain: FlowStep[] }
+  | { kind: 'api-call'; frontFile: string; frontFileNodeId: string; ctrlFile: string; ctrlFileNodeId: string; flowChain: FlowStep[] }
 
 // DB 엣지 타입 판별 — 신규 CRUD 타입 + 레거시 DB_WRITE 포함
 const DB_EDGE_TYPES = new Set(['DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE'])
@@ -276,6 +277,7 @@ function GraphPageInner() {
   const [showInstEdges, setShowInstEdges] = useState(false)
   const [showBrokenEdges, setShowBrokenEdges] = useState(true)
   const [showDbEdges, setShowDbEdges] = useState(false)
+  const [showApiCallEdges, setShowApiCallEdges] = useState(true)
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -308,7 +310,7 @@ function GraphPageInner() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // 엣지 타입별 초기 hidden 상태 적용
-  const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean, sb: boolean, sdb: boolean) =>
+  const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean, sb: boolean, sdb: boolean, sapi: boolean) =>
     edges.map((e) => {
       const d = e.data as { type?: string; broken?: boolean } | undefined
       const t = d?.type
@@ -319,6 +321,7 @@ function GraphPageInner() {
         t === 'FUNCTION_CALL' ? !sc :
         t === 'INSTANTIATION' ? !si :
         isDbEdgeType(t) ? !sdb :
+        t === 'API_CALL' ? !sapi :
         false
       return { ...e, hidden }
     }), [])
@@ -401,7 +404,8 @@ function GraphPageInner() {
       const isInst = d?.type === 'INSTANTIATION'
       const broken = d?.broken
       const isDb = isDbEdgeType(d?.type)
-      const baseStyle = { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : isDb ? (DB_CRUD_COLOR[d?.type ?? ''] ?? '#22d3ee') : '#4b5563' }
+      const isApiCall = d?.type === 'API_CALL'
+      const baseStyle = { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : isApiCall ? '#e879f9' : isDb ? (DB_CRUD_COLOR[d?.type ?? ''] ?? '#22d3ee') : '#4b5563' }
       if (!pathEdgeIds.has(e.id)) {
         return { ...e, animated: false, style: baseStyle }
       }
@@ -461,8 +465,8 @@ function GraphPageInner() {
       const isInst = d?.type === 'INSTANTIATION'
       const broken = d?.broken
       return { ...e, animated: false, style: { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : '#4b5563' } }
-    }), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges))
-  }, [setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges])
+    }), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
+  }, [setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges])
 
   // 서버에서 그래프 데이터를 불러와 React Flow 레이아웃으로 변환
   const fetchGraph = useCallback(async () => {
@@ -474,7 +478,7 @@ function GraphPageInner() {
       setRawNodes(rn)
       setRawEdgesCache(re)
       setNodes(layoutNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
-      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), false, false, false, true, false))
+      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), false, false, false, true, false, true))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,
@@ -572,7 +576,7 @@ function GraphPageInner() {
       setRawNodes(rn)
       setRawEdgesCache(re)
       setNodes(layoutNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
-      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges))
+      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,
@@ -584,7 +588,7 @@ function GraphPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges])
+  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges])
 
   // 노드 라벨 표시 모드를 이름/주석 간 전환
   const toggleLabelMode = useCallback(() => {
@@ -593,7 +597,7 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, next, layoutPreset, openFileSidebar)
       setNodes(layoutNodes)
-      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges))
+      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
     }
   }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, applyEdgeVisibility])
 
@@ -661,6 +665,18 @@ function GraphPageInner() {
     })
   }, [setEdges])
 
+  // API_CALL 엣지 표시/숨김 토글
+  const toggleApiCallEdges = useCallback(() => {
+    setShowApiCallEdges((prev) => {
+      const next = !prev
+      setEdges((eds) => eds.map((e) => {
+        const t = (e.data as { type?: string })?.type
+        return t === 'API_CALL' ? { ...e, hidden: !next } : e
+      }))
+      return next
+    })
+  }, [setEdges])
+
   // 레이아웃 프리셋 전환 — 그래프를 재계산하여 적용
   const toggleLayoutPreset = useCallback(() => {
     const next: LayoutPreset = layoutPreset === 'layer' ? 'hub' : 'layer'
@@ -668,7 +684,7 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
       setNodes(ln)
-      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges))
+      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
   }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, applyEdgeVisibility])
@@ -811,6 +827,20 @@ function GraphPageInner() {
         tableName: dbTable?.name ?? edge.target,
         tableNodeId: edge.target,
         flowChain: traceFlow(edge.source, edge.target, data?.type ?? 'DB_READ', rawEdgesCache, rawNodes),
+      })
+      return
+    }
+
+    if (data?.type === 'API_CALL') {
+      const frontFile = rawNodes.find((n) => n.id === edge.source && n.type === 'FILE')
+      const ctrlFile = rawNodes.find((n) => n.id === edge.target && n.type === 'FILE')
+      setSidebar({
+        kind: 'api-call',
+        frontFile: frontFile?.name ?? edge.source,
+        frontFileNodeId: edge.source,
+        ctrlFile: ctrlFile?.name ?? edge.target,
+        ctrlFileNodeId: edge.target,
+        flowChain: traceFlow(edge.source, edge.target, 'API_CALL', rawEdgesCache, rawNodes),
       })
       return
     }
@@ -1097,6 +1127,7 @@ function GraphPageInner() {
                 { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',         textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600', active: showInstEdges,  onToggle: toggleInstEdges },
                 { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결',    textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600', active: showBrokenEdges, onToggle: toggleBrokenEdges },
                 { key: 'db',      icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showDbEdges ? '#22d3ee' : '#164e63'} strokeWidth="1.5" strokeDasharray="5 4" /></svg>,                                    label: 'DB 연결',      textCls: showDbEdges ? 'text-cyan-400' : 'text-gray-600',    active: showDbEdges,     onToggle: toggleDbEdges },
+                { key: 'api',     icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showApiCallEdges ? '#e879f9' : '#701a75'} strokeWidth="1.5" strokeDasharray="6 3" /></svg>,                              label: 'API 호출',     textCls: showApiCallEdges ? 'text-fuchsia-400' : 'text-gray-600', active: showApiCallEdges, onToggle: toggleApiCallEdges },
               ].map(({ key, icon, label, textCls, active, onToggle }) => (
                 <div key={key} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}
                   className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60 cursor-pointer">
@@ -1215,6 +1246,7 @@ function GraphPageInner() {
                   : sidebar.kind === 'func-call' ? '함수 호출'
                   : sidebar.kind === 'db-table' ? 'DB 테이블'
                   : sidebar.kind === 'db-edge' ? 'DB 연결'
+                  : sidebar.kind === 'api-call' ? 'API 호출'
                   : '인스턴스화'}
               </span>
               {sidebar && <button onClick={() => setSidebar(null)} className="text-gray-600 hover:text-white text-sm">✕</button>}
@@ -1568,6 +1600,32 @@ function GraphPageInner() {
                       style={{ background: (DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee') + '22', color: DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee' }}
                     >{sidebar.crudType}</span>
                     <FlowChainSection steps={sidebar.flowChain} edgeColor={DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee'}
+                      onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                    />
+                  </div>
+                )}
+
+                {/* ── API 호출 엣지 상세 ── */}
+                {sidebar?.kind === 'api-call' && (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex gap-4 items-start">
+                      <div>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">프론트 파일</p>
+                        <p className="text-fuchsia-400 font-mono text-sm font-semibold cursor-pointer hover:text-white"
+                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.frontFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                        >{sidebar.frontFile}</p>
+                      </div>
+                      <div className="text-gray-500 mt-5">→</div>
+                      <div>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">컨트롤러</p>
+                        <p className="text-fuchsia-400 font-mono text-sm font-semibold cursor-pointer hover:text-white"
+                          onClick={() => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id: sidebar.ctrlFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                        >{sidebar.ctrlFile}</p>
+                      </div>
+                    </div>
+                    <span className="text-xs px-2 py-0.5 rounded self-start font-semibold"
+                      style={{ background: '#e879f922', color: '#e879f9' }}>API_CALL</span>
+                    <FlowChainSection steps={sidebar.flowChain} edgeColor="#e879f9"
                       onNav={(id) => { setSidebar(null); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                     />
                   </div>

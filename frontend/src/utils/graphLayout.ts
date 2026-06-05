@@ -804,6 +804,19 @@ export function buildLayout(
       } as Edge
     })
 
+  // 프론트 파일 → 백엔드 컨트롤러 API_CALL 엣지
+  const apiCallEdges: Edge[] = rawEdges
+    .filter((e) => e.type === 'API_CALL' && fileIdSet.has(e.source) && fileIdSet.has(e.target))
+    .map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      data: { edgeIdentifier: e.edgeIdentifier, type: e.type },
+      style: { stroke: '#e879f9', strokeWidth: 1.5, strokeDasharray: '6 3' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#e879f9', width: 10, height: 10 },
+      zIndex: 0,
+    } as Edge))
+
   // hub 모드에서만 레이어 섹션 박스 추가 — layer 모드는 앞에서 이미 생성 + parentId 적용
   if (layoutPreset !== 'layer') {
     layerGroupKeysPre.forEach((keys, layer) => {
@@ -830,7 +843,7 @@ export function buildLayout(
     })
   }
 
-  return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges, ...dbReadEdges, ...dbWriteEdges, ...dbCrudEdges] }
+  return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges, ...dbReadEdges, ...dbWriteEdges, ...dbCrudEdges, ...apiCallEdges] }
 }
 
 // AI 컨텍스트용 트리 다운로드 — "파일명 — 주석" 형태로 이름과 역할을 함께 표시

@@ -209,6 +209,56 @@ public class GraphBuilder {
             }
         }
 
+        // 프론트엔드 axios 호출 → 백엔드 컨트롤러 API_CALL 엣지 생성
+        // 컨트롤러 경로 정규화 인덱스: {pathVar} → * 글로브 패턴 → fileNodeId
+        Map<String, UUID> controllerGlobIndex = new java.util.LinkedHashMap<>();
+        for (ParsedFile pf : parsedFiles) {
+            if (pf.controllerMappings().isEmpty()) continue;
+            UUID fileId = fileNodeIds.get(pf.filePath());
+            if (fileId == null) continue;
+            for (String mapping : pf.controllerMappings()) {
+                String glob = mapping.replaceAll("\\{[^}]+}", "*");
+                controllerGlobIndex.put(glob, fileId);
+            }
+        }
+
+        Set<String> usedApiCallEdgeIds = new HashSet<>();
+        for (ParsedFile pf : parsedFiles) {
+            if (pf.apiCalls().isEmpty()) continue;
+            UUID frontFileId = fileNodeIds.get(pf.filePath());
+            if (frontFileId == null) continue;
+
+            for (String apiCall : pf.apiCalls()) {
+                // "METHOD:/path" 형식에서 경로만 추출 (이미 extractApiCalls에서 ${...} → * 처리됨)
+                int colon = apiCall.indexOf(':');
+                if (colon < 0) continue;
+                String frontPath = apiCall.substring(colon + 1);
+                // 쿼리스트링 제거
+                int q = frontPath.indexOf('?');
+                if (q >= 0) frontPath = frontPath.substring(0, q);
+
+                UUID controllerFileId = null;
+                for (Map.Entry<String, UUID> entry : controllerGlobIndex.entrySet()) {
+                    if (globPathMatches(entry.getKey(), frontPath)) {
+                        controllerFileId = entry.getValue();
+                        break;
+                    }
+                }
+                if (controllerFileId == null || controllerFileId.equals(frontFileId)) continue;
+
+                UUID finalControllerFileId = controllerFileId;
+                String targetFileName = parsedFiles.stream()
+                        .filter(f -> finalControllerFileId.equals(fileNodeIds.get(f.filePath())))
+                        .map(f -> extractFileName(f.filePath()))
+                        .findFirst().orElse("unknown");
+                String edgeId = extractFileName(pf.filePath()) + "-apicall-" + targetFileName;
+                if (!usedApiCallEdgeIds.contains(edgeId)) {
+                    usedApiCallEdgeIds.add(edgeId);
+                    graphRepository.saveEdge(Edge.create(graphId, edgeId, EdgeType.API_CALL, frontFileId, controllerFileId));
+                }
+            }
+        }
+
         return graph;
     }
 
@@ -238,6 +288,17 @@ public class GraphBuilder {
             types.add(EdgeType.DB_WRITE);
         }
         return types;
+    }
+
+    // 글로브 패턴(* = 단일 세그먼트)과 경로 일치 여부 확인
+    private boolean globPathMatches(String pattern, String path) {
+        String[] pp = pattern.split("/");
+        String[] ip = path.split("/");
+        if (pp.length != ip.length) return false;
+        for (int i = 0; i < pp.length; i++) {
+            if (!pp[i].equals("*") && !pp[i].equals(ip[i])) return false;
+        }
+        return true;
     }
 
     // 파일 경로에서 파일명만 추출
