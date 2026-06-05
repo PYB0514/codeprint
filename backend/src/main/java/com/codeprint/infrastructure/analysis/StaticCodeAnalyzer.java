@@ -359,17 +359,38 @@ public class StaticCodeAnalyzer {
     }
 
     // Java 컨트롤러에서 @*Mapping 경로 목록 추출
+    // 클래스 레벨 @RequestMapping prefix + 메서드 레벨 suffix 합성 지원
     private List<String> extractControllerMappings(String content, String language) {
         if (!language.equals("Java") && !language.equals("Kotlin")) return List.of();
         List<String> result = new ArrayList<>();
-        // @GetMapping("/api/..."), @PostMapping(value = "/api/..."), @RequestMapping("/api/...")
-        Pattern p = Pattern.compile(
-            "@(?:Get|Post|Put|Delete|Patch|Request)Mapping\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']+)[\"']"
-        );
-        Matcher m = p.matcher(content);
-        while (m.find()) {
-            result.add(m.group(1));
+
+        // 1단계: 클래스 레벨 @RequestMapping prefix 추출 (파일 내 첫 번째 값)
+        String classPrefix = "";
+        Matcher cm = Pattern.compile(
+            "@RequestMapping\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']+)[\"']"
+        ).matcher(content);
+        if (cm.find()) classPrefix = cm.group(1);
+
+        // 2단계: 메서드 레벨 어노테이션 추출 + prefix 합성
+        // @GetMapping, @PostMapping(경로 없음), @GetMapping("/path") 모두 처리
+        Matcher mm = Pattern.compile(
+            "@(?:Get|Post|Put|Delete|Patch)Mapping(?:\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']*)[\"']\\s*\\))?",
+            Pattern.CASE_INSENSITIVE
+        ).matcher(content);
+        while (mm.find()) {
+            String methodPath = mm.group(1); // null이면 괄호 없는 어노테이션
+            if (methodPath == null) {
+                // @GetMapping 처럼 경로 없음 → 클래스 prefix만 사용
+                if (!classPrefix.isEmpty()) result.add(classPrefix);
+            } else {
+                String full = classPrefix + methodPath;
+                if (!full.isEmpty()) result.add(full);
+            }
         }
+
+        // 메서드 어노테이션 없고 클래스 prefix만 있는 경우
+        if (result.isEmpty() && !classPrefix.isEmpty()) result.add(classPrefix);
+
         return result;
     }
 
