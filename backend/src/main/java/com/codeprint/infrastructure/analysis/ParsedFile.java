@@ -17,5 +17,6 @@ public record ParsedFile(
         String repositoryEntityClass,            // extends JpaRepository<EntityName> 에서 추출한 엔티티 클래스명 (null이면 Repository 아님)
         List<ColumnInfo> entityColumns,          // @Entity 클래스의 칼럼 목록 (null이면 Entity 아님)
         List<String> apiCalls,                   // 프론트 axios 호출 경로 목록 ("GET:/api/projects" 형식)
-        List<String> controllerMappings          // 백엔드 @*Mapping 경로 목록 ("/api/projects/{projectId}" 형식)
+        List<String> controllerMappings,         // 백엔드 @*Mapping 경로 목록 ("/api/projects/{projectId}" 형식)
+        List<String> implementedInterfaces       // "class Foo implements Bar" 에서 추출한 인터페이스명 목록
 ) {}
