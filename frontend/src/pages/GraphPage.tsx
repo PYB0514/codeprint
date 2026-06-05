@@ -445,6 +445,15 @@ function GraphPageInner() {
     }))
   }, [playbackCursor, playbackItems, setNodes, setEdges])
 
+  // 흐름 재생 — 재생 중에만 커서 노드를 화면 중앙으로 이동 (노드 클릭 시 줌 초기화 방지)
+  useEffect(() => {
+    if (!playbackPlaying || playbackItems.length === 0 || playbackCursor < 0) return
+    const current = playbackItems[playbackCursor]
+    if (current?.type === 'node') {
+      fitView({ nodes: [{ id: current.id }], duration: 300, padding: 0.5, maxZoom: 1.5 })
+    }
+  }, [playbackCursor, playbackItems, playbackPlaying, fitView])
+
   // 흐름 재생 — 자동 진행 타이머
   useEffect(() => {
     if (playbackTimerRef.current) clearTimeout(playbackTimerRef.current)
@@ -468,12 +477,7 @@ function GraphPageInner() {
     // 경로 엣지 on/off 상태 무관하게 즉시 표시
     const pathEdgeIds = new Set(items.filter((it) => it.type === 'edge').map((it) => it.id))
     setEdges((eds) => eds.map((e) => pathEdgeIds.has(e.id) ? { ...e, hidden: false } : e))
-    // 경로 노드 전체가 화면에 들어오도록 맞춤
-    const pathNodeIds = items.filter((it) => it.type === 'node').map((it) => ({ id: it.id }))
-    if (pathNodeIds.length > 0) {
-      setTimeout(() => fitView({ nodes: pathNodeIds, duration: 400, padding: 0.2 }), 50)
-    }
-  }, [rawEdgesCache, setEdges, fitView])
+  }, [rawEdgesCache, setEdges])
 
   // 흐름 재생 초기화
   const resetPlayback = useCallback(() => {

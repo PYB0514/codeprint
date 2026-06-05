@@ -4,6 +4,18 @@
 
 ## 버그
 
+### 그래프 노드 클릭 시 뷰포트 줌 초기화 (2026-06-05)
+
+**문제.** 노드를 클릭하면 화면 배율이 초기화되어 전체 그래프 줌아웃 상태로 돌아갔다.
+
+**원인.** `startPlayback` 호출 → `setPlaybackCursor(0)` → playbackCursor useEffect 발동 → `fitView({ nodes: [...] })` 실행. playbackPlaying 여부와 무관하게 항상 fitView가 발동됐다.
+
+**해결.** playbackCursor useEffect에 `!playbackPlaying` 조건 추가. 재생 중(playbackPlaying=true)일 때만 뷰포트 추적 fitView를 실행하도록 변경.
+
+**결과.** 노드 클릭 시 줌 유지. 재생 버튼을 누를 때만 현재 노드로 뷰포트 이동.
+
+---
+
 ### 사이드바 null 접근 오류 — 블랙 화면
 
 **문제.** 그래프 페이지 전체가 블랙 화면으로 렌더링됐다.
