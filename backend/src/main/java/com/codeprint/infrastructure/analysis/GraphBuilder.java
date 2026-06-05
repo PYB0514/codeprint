@@ -5,6 +5,7 @@ import com.codeprint.domain.graph.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -126,17 +127,42 @@ public class GraphBuilder {
         // DB_TABLE 노드 생성 + Repository → DB_TABLE 엣지 생성
         // 엔티티 클래스명 → DB_TABLE 노드 ID 인덱스
         Map<String, UUID> entityClassToTableNodeId = new HashMap<>();
+        // 엔티티 클래스명 → 칼럼 목록 인덱스 (DB_TABLE 노드 메타데이터용)
+        Map<String, List<ColumnInfo>> entityClassToColumns = new HashMap<>();
+
+        for (ParsedFile pf : parsedFiles) {
+            // @Entity 파일의 칼럼 정보를 엔티티 클래스명으로 인덱싱
+            if (!pf.entityColumns().isEmpty()) {
+                String className = extractFileNameWithoutExt(pf.filePath());
+                entityClassToColumns.put(className, pf.entityColumns());
+            }
+        }
 
         for (ParsedFile pf : parsedFiles) {
             for (DbTableInfo table : pf.dbTables()) {
                 Node tableNode = Node.create(graphId, NodeType.DB_TABLE, table.tableName(), pf.filePath(), pf.language());
-                tableNode.updateMetadata(Map.of("entityClass", table.className()));
+                Map<String, Object> tableMeta = new HashMap<>();
+                tableMeta.put("entityClass", table.className());
+                List<ColumnInfo> cols = entityClassToColumns.get(table.className());
+                if (cols != null && !cols.isEmpty()) {
+                    // 칼럼을 Map 목록으로 직렬화하여 JSONB에 저장
+                    List<Map<String, String>> colData = new ArrayList<>();
+                    for (ColumnInfo col : cols) {
+                        Map<String, String> c = new HashMap<>();
+                        c.put("fieldName", col.fieldName());
+                        c.put("columnName", col.columnName());
+                        c.put("javaType", col.javaType());
+                        colData.add(c);
+                    }
+                    tableMeta.put("columns", colData);
+                }
+                tableNode.updateMetadata(tableMeta);
                 graphRepository.saveNode(tableNode);
                 entityClassToTableNodeId.put(table.className(), tableNode.getId());
             }
         }
 
-        // Repository 파일 → DB_TABLE 엣지 (DB_READ + DB_WRITE)
+        // Repository 파일 → DB_TABLE 엣지 (CRUD 타입별 분류)
         Set<String> usedDbEdgeIds = new HashSet<>();
         for (ParsedFile pf : parsedFiles) {
             if (pf.repositoryEntityClass() == null) continue;
@@ -144,16 +170,14 @@ public class GraphBuilder {
             UUID tableNodeId = entityClassToTableNodeId.get(pf.repositoryEntityClass());
             if (repoFileId == null || tableNodeId == null) continue;
 
-            String readEdgeId = extractFileName(pf.filePath()) + "-db_read-" + pf.repositoryEntityClass();
-            String writeEdgeId = extractFileName(pf.filePath()) + "-db_write-" + pf.repositoryEntityClass();
-
-            if (!usedDbEdgeIds.contains(readEdgeId)) {
-                usedDbEdgeIds.add(readEdgeId);
-                graphRepository.saveEdge(Edge.create(graphId, readEdgeId, EdgeType.DB_READ, repoFileId, tableNodeId));
-            }
-            if (!usedDbEdgeIds.contains(writeEdgeId)) {
-                usedDbEdgeIds.add(writeEdgeId);
-                graphRepository.saveEdge(Edge.create(graphId, writeEdgeId, EdgeType.DB_WRITE, repoFileId, tableNodeId));
+            Set<EdgeType> crudTypes = detectCrudTypes(pf.functions());
+            String fileBase = extractFileName(pf.filePath());
+            for (EdgeType crudType : crudTypes) {
+                String edgeId = fileBase + "-" + crudType.name().toLowerCase() + "-" + pf.repositoryEntityClass();
+                if (!usedDbEdgeIds.contains(edgeId)) {
+                    usedDbEdgeIds.add(edgeId);
+                    graphRepository.saveEdge(Edge.create(graphId, edgeId, crudType, repoFileId, tableNodeId));
+                }
             }
         }
 
@@ -188,10 +212,45 @@ public class GraphBuilder {
         return graph;
     }
 
+    // Repository 메서드명 목록에서 수행하는 CRUD 타입 집합 반환
+    private Set<EdgeType> detectCrudTypes(List<String> methods) {
+        Set<EdgeType> types = new java.util.LinkedHashSet<>();
+        for (String method : methods) {
+            String m = method.toLowerCase();
+            if (m.startsWith("find") || m.startsWith("get") || m.startsWith("count")
+                    || m.startsWith("exists") || m.startsWith("load") || m.startsWith("fetch")
+                    || m.startsWith("read") || m.startsWith("list") || m.startsWith("search")) {
+                types.add(EdgeType.DB_READ);
+            } else if (m.startsWith("save") || m.startsWith("create") || m.startsWith("insert")
+                    || m.startsWith("add") || m.startsWith("persist")) {
+                types.add(EdgeType.DB_CREATE);
+            } else if (m.startsWith("update") || m.startsWith("modify") || m.startsWith("edit")
+                    || m.startsWith("change") || m.startsWith("set") || m.startsWith("patch")) {
+                types.add(EdgeType.DB_UPDATE);
+            } else if (m.startsWith("delete") || m.startsWith("remove") || m.startsWith("purge")
+                    || m.startsWith("clear") || m.startsWith("drop")) {
+                types.add(EdgeType.DB_DELETE);
+            }
+        }
+        // 메서드가 없거나 분류 불가 시 기본 READ+WRITE로 폴백
+        if (types.isEmpty()) {
+            types.add(EdgeType.DB_READ);
+            types.add(EdgeType.DB_WRITE);
+        }
+        return types;
+    }
+
     // 파일 경로에서 파일명만 추출
     private String extractFileName(String filePath) {
         int slash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
         return slash >= 0 ? filePath.substring(slash + 1) : filePath;
+    }
+
+    // 파일 경로에서 확장자 제거 후 파일명 추출
+    private String extractFileNameWithoutExt(String filePath) {
+        String name = extractFileName(filePath);
+        int dot = name.lastIndexOf('.');
+        return dot > 0 ? name.substring(0, dot) : name;
     }
 
     // import 경로가 실제 파일 경로와 일치하는지 확인
