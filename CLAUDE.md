@@ -385,6 +385,7 @@ Define success criteria. Loop until verified.
 - 상태 전이 로직 (예: 분석 PENDING → RUNNING → COMPLETED/FAILED)
 - 경계 조건이 있는 비즈니스 규칙 (예: limit, 0, null, 소유권 없음)
 - 이미 한 번 버그가 난 코드 (회귀 방지)
+- **같은 클래스/함수에서 버그가 2회 이상 발생했다면 → 즉시 테스트 코드 작성. 선택이 아닌 의무.**
 
 TDD 대상 클래스 예시: `ProjectDomainService`, `GraphBuilder`, `AnalysisService`, `StripeWebhookHandler`
 
