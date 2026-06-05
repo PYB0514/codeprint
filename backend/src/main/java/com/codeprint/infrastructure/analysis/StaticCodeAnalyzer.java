@@ -115,8 +115,31 @@ public class StaticCodeAnalyzer {
             String name = extractFirstGroup(m);
             if (name != null && !isKeyword(name)) result.add(name);
         }
+
+        // Java/Kotlin 인터페이스 추상 메서드 추가 추출 (접근 제어자 없이 세미콜론으로 끝나는 메서드)
+        if ((language.equals("Java") || language.equals("Kotlin")) && isJavaInterface(content)) {
+            Matcher ifaceMatcher = INTERFACE_METHOD_PATTERN.matcher(content);
+            while (ifaceMatcher.find()) {
+                String name = ifaceMatcher.group(1);
+                if (name != null && !isKeyword(name) && !result.contains(name)) {
+                    result.add(name);
+                }
+            }
+        }
+
         return result;
     }
+
+    // 인터페이스 선언 여부 확인
+    private boolean isJavaInterface(String content) {
+        return Pattern.compile("\\binterface\\s+\\w+").matcher(content).find();
+    }
+
+    // 접근 제어자 없이 세미콜론으로 끝나는 인터페이스 추상 메서드 패턴
+    private static final Pattern INTERFACE_METHOD_PATTERN = Pattern.compile(
+        "^\\s*(?:[\\w<>\\[\\]?,]+\\s+)+(\\w+)\\s*\\([^)]*\\)\\s*(?:throws[^;{]+)?;",
+        Pattern.MULTILINE
+    );
 
     // 언어별 함수 정의 정규식 패턴 반환
     private Pattern getFunctionPattern(String language) {

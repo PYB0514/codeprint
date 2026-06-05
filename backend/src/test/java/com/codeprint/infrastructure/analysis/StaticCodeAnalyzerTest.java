@@ -157,6 +157,65 @@ class StaticCodeAnalyzerTest {
         assertThat(result.fileComment()).isEqualTo("GitHub OAuth2 로그인 성공 후 JWT를 발급하는 핸들러");
     }
 
+    // ── 회귀: Java 인터페이스 메서드 추출 ──────────────────────────────────
+
+    @Test
+    @DisplayName("Java 인터페이스의 추상 메서드를 추출한다")
+    void Java_인터페이스_추상_메서드_추출() throws IOException {
+        // DECISIONS_ANALYSIS.md: 인터페이스 메서드는 public 키워드 없음 → getFunctionPattern 미인식으로 isInterfaceImpl 0개 버그
+        Path file = writeJavaFile("""
+                package com.codeprint.domain.graph;
+                import java.util.List;
+                import java.util.Optional;
+                import java.util.UUID;
+                public interface GraphRepository {
+                    Graph save(Graph graph);
+                    Optional<Graph> findById(UUID id);
+                    List<Node> findNodesByGraphId(UUID graphId);
+                    void deleteById(UUID id);
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functions())
+                .containsExactlyInAnyOrder("save", "findById", "findNodesByGraphId", "deleteById");
+    }
+
+    @Test
+    @DisplayName("Java 인터페이스의 default 메서드도 추출한다")
+    void Java_인터페이스_default_메서드_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public interface UserRepository {
+                    User findById(Long id);
+                    default boolean exists(Long id) {
+                        return findById(id) != null;
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functions()).contains("findById", "exists");
+    }
+
+    @Test
+    @DisplayName("일반 클래스에서는 인터페이스 메서드 패턴이 추가 적용되지 않는다")
+    void 일반_클래스는_인터페이스_패턴_미적용() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class UserServiceImpl {
+                    public User findById(Long id) { return null; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        // 정상적으로 하나만 추출 (중복 없음)
+        assertThat(result.functions()).containsExactly("findById");
+    }
+
     // ── import 추출 ─────────────────────────────────────────────────────────
 
     @Test
