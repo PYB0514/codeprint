@@ -224,7 +224,7 @@ function buildFlowPath(
   nodeId: string,
   rawEdges: RawEdge[],
 ): { items: { type: 'node' | 'edge'; id: string }[] } {
-  const FLOW_TYPES = ['FUNCTION_CALL', 'DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE', 'API_CALL', 'CONTAINS']
+  const FLOW_TYPES = ['FUNCTION_CALL', 'DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE', 'API_CALL']
   const MAX_DEPTH = 15
 
   // upstream 역방향 추적
@@ -809,6 +809,7 @@ function GraphPageInner() {
   // 엣지 클릭 시 사이드바에 연결 상세 표시
   const handleEdgeClick: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
     setRightCollapsed(false)
+    resetPlayback()
     const data = edge.data as { type?: string } | undefined
 
     if (data?.type === 'FUNCTION_CALL') {
@@ -898,37 +899,11 @@ function GraphPageInner() {
       callChain,
       flowChain: traceFlow(edge.source, edge.target, data?.type ?? 'IMPORT', rawEdgesCache, rawNodes),
     })
-  }, [rawNodes, rawEdgesCache])
+  }, [rawNodes, rawEdgesCache, resetPlayback])
 
-  // 함수 노드 클릭 시 사이드바에 콜 체인 표시
-  const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
-    if (node.type === 'fileNode' || node.type === 'groupNode' || node.type === 'sectionNode') return
-
-    // DB_TABLE 노드 클릭 — 칼럼 목록 + 연결된 Repository 표시
-    const rawTable = rawNodes.find((n) => n.id === node.id && n.type === 'DB_TABLE')
-    if (rawTable) {
-      const repoEdges = rawEdgesCache.filter((e) => isDbEdgeType(e.type) && e.target === node.id)
-      const repoMap = new Map<string, string[]>()
-      repoEdges.forEach((e) => {
-        if (!repoMap.has(e.source)) repoMap.set(e.source, [])
-        repoMap.get(e.source)!.push(e.type)
-      })
-      const repos = Array.from(repoMap.entries()).map(([srcId, types]) => {
-        const n = rawNodes.find((n) => n.id === srcId)
-        return { name: n?.name ?? srcId, id: srcId, crudTypes: types }
-      })
-      setSidebar({
-        kind: 'db-table',
-        tableName: rawTable.name,
-        nodeId: node.id,
-        columns: rawTable.columns ?? [],
-        repos,
-      })
-      setRightCollapsed(false)
-      return
-    }
-
-    const rawFunc = rawNodes.find((n) => n.id === node.id && n.type === 'FUNCTION')
+  // 함수 노드 선택 — 사이드바 갱신 + 흐름 재생 시작. 사이드바 링크 클릭(onNav)에서도 재사용
+  const openFuncNode = useCallback((nodeId: string) => {
+    const rawFunc = rawNodes.find((n) => n.id === nodeId && n.type === 'FUNCTION')
     if (!rawFunc) return
 
     const parentFile = rawNodes.find((n) => n.type === 'FILE' && n.filePath === rawFunc.filePath)
@@ -974,7 +949,41 @@ function GraphPageInner() {
         .catch(() => setNodeComments([]))
     }
     setRightCollapsed(false)
-  }, [rawNodes, rawEdgesCache, graphId])
+  }, [rawNodes, rawEdgesCache, graphId, startPlayback])
+
+  const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    if (node.type === 'fileNode' || node.type === 'groupNode' || node.type === 'sectionNode') {
+      resetPlayback()
+      return
+    }
+
+    // DB_TABLE 노드 클릭 — 칼럼 목록 + 연결된 Repository 표시 + 흐름 재생
+    const rawTable = rawNodes.find((n) => n.id === node.id && n.type === 'DB_TABLE')
+    if (rawTable) {
+      const repoEdges = rawEdgesCache.filter((e) => isDbEdgeType(e.type) && e.target === node.id)
+      const repoMap = new Map<string, string[]>()
+      repoEdges.forEach((e) => {
+        if (!repoMap.has(e.source)) repoMap.set(e.source, [])
+        repoMap.get(e.source)!.push(e.type)
+      })
+      const repos = Array.from(repoMap.entries()).map(([srcId, types]) => {
+        const n = rawNodes.find((n) => n.id === srcId)
+        return { name: n?.name ?? srcId, id: srcId, crudTypes: types }
+      })
+      setSidebar({
+        kind: 'db-table',
+        tableName: rawTable.name,
+        nodeId: node.id,
+        columns: rawTable.columns ?? [],
+        repos,
+      })
+      startPlayback(node.id)
+      setRightCollapsed(false)
+      return
+    }
+
+    openFuncNode(node.id)
+  }, [rawNodes, rawEdgesCache, openFuncNode, startPlayback, resetPlayback])
 
   if (loading) {
     return (
@@ -1377,7 +1386,7 @@ function GraphPageInner() {
                     </div>
                     <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded self-start">FUNCTION_CALL</span>
                     <FlowChainSection steps={sidebar.flowChain} edgeColor="#f59e0b"
-                      onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                      onNav={(id) => { openFuncNode(id); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
                     />
                   </div>
                 )}
@@ -1402,7 +1411,7 @@ function GraphPageInner() {
                     </div>
                     <span className="text-xs bg-purple-900/40 text-purple-400 px-2 py-0.5 rounded self-start">INSTANTIATION</span>
                     <FlowChainSection steps={sidebar.flowChain} edgeColor="#a855f7"
-                      onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                      onNav={(id) => { openFuncNode(id); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                     />
                   </div>
                 )}
@@ -1422,7 +1431,7 @@ function GraphPageInner() {
                       >{sidebar.targetId}</span>
                     </div>
                     <FlowChainSection steps={sidebar.flowChain} edgeColor="#4b5563"
-                      onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                      onNav={(id) => { openFuncNode(id); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                     />
                     <SidebarSection title={`함수 호출 체인${sidebar.callChain.length > 0 ? ` (${sidebar.callChain.length})` : ''}`}>
                       {sidebar.callChain.length === 0
@@ -1431,7 +1440,7 @@ function GraphPageInner() {
                           <CallChainRow key={i}
                             leftLabel={e.callerLabel} leftNodeId={e.callerNodeId}
                             rightLabel={e.calleeLabel} rightNodeId={e.calleeNodeId}
-                            onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                            onNav={(id) => { openFuncNode(id); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
                           />
                         ))
                       }
@@ -1488,8 +1497,9 @@ function GraphPageInner() {
                       {sidebar.callers.length === 0
                         ? <p className="text-gray-700 text-xs">없음</p>
                         : sidebar.callers.map((c, i) => (
-                          <FuncChainRow key={i} entry={c} direction="caller"
+                          <FuncChainRow key={i} entry={c} direction="caller" labelMode={labelMode}
                             onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                            onNodeClick={(id) => { openFuncNode(id); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
                           />
                         ))
                       }
@@ -1498,8 +1508,9 @@ function GraphPageInner() {
                       {sidebar.callees.length === 0
                         ? <p className="text-gray-700 text-xs">없음</p>
                         : sidebar.callees.map((c, i) => (
-                          <FuncChainRow key={i} entry={c} direction="callee"
+                          <FuncChainRow key={i} entry={c} direction="callee" labelMode={labelMode}
                             onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
+                            onNodeClick={(id) => { openFuncNode(id); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
                           />
                         ))
                       }
@@ -1627,7 +1638,7 @@ function GraphPageInner() {
                       style={{ background: (DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee') + '22', color: DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee' }}
                     >{sidebar.crudType}</span>
                     <FlowChainSection steps={sidebar.flowChain} edgeColor={DB_CRUD_COLOR[sidebar.crudType] ?? '#22d3ee'}
-                      onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                      onNav={(id) => { openFuncNode(id); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                     />
                   </div>
                 )}
@@ -1653,7 +1664,7 @@ function GraphPageInner() {
                     <span className="text-xs px-2 py-0.5 rounded self-start font-semibold"
                       style={{ background: '#e879f922', color: '#e879f9' }}>API_CALL</span>
                     <FlowChainSection steps={sidebar.flowChain} edgeColor="#e879f9"
-                      onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
+                      onNav={(id) => { openFuncNode(id); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                     />
                   </div>
                 )}
@@ -1895,16 +1906,21 @@ function CallChainRow({ leftLabel, leftNodeId, rightLabel, rightNodeId, onNav }:
 }
 
 // 함수 콜 체인 한 줄
-function FuncChainRow({ entry, direction, onNav }: {
-  entry: FuncCallChainEntry; direction: 'caller' | 'callee'; onNav: (id: string) => void
+function FuncChainRow({ entry, direction, labelMode, onNav, onNodeClick }: {
+  entry: FuncCallChainEntry
+  direction: 'caller' | 'callee'
+  labelMode?: 'name' | 'comment'
+  onNav: (id: string) => void
+  onNodeClick?: (nodeId: string) => void
 }) {
+  const funcLabel = labelMode === 'comment' && entry.funcComment ? entry.funcComment : entry.funcName
   return (
     <div className="flex items-center gap-2 bg-gray-900 rounded-lg px-2.5 py-2 text-xs">
       <span className="text-amber-500 flex-shrink-0">{direction === 'caller' ? '←' : '→'}</span>
       <div className="flex flex-col min-w-0 flex-1">
         <span className="text-emerald-400 font-mono cursor-pointer hover:text-emerald-200 truncate"
-          onClick={() => onNav(entry.funcNodeId)}
-        >{entry.funcComment ?? entry.funcName}</span>
+          onClick={() => { onNodeClick ? onNodeClick(entry.funcNodeId) : onNav(entry.funcNodeId) }}
+        >{funcLabel}</span>
         <span className="text-gray-600 font-mono text-[10px] cursor-pointer hover:text-gray-400 truncate"
           onClick={() => onNav(entry.fileNodeId)}
         >{entry.fileName}</span>
