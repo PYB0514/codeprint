@@ -79,6 +79,25 @@
 
 ---
 
+### 흐름 재생 UX 버그 다수 (2026-06-05 → 06-06)
+
+**문제 1.** `buildFlowPath`의 `FLOW_TYPES`에 `CONTAINS`가 포함돼 있어, 파일 노드가 흐름 경로의 upstream 슬롯을 차지 → 실제 caller가 표시 안 됨.
+**결과.** `FLOW_TYPES`에서 `CONTAINS` 제거. FILE→FUNCTION 포함 관계는 흐름 경로 탐색 대상이 아님.
+
+**문제 2.** 엣지/파일/그룹 노드 클릭 시 이전 흐름 재생 상태가 유지됨.
+**결과.** `handleEdgeClick` 상단, `handleNodeClick`의 fileNode/groupNode/sectionNode 분기에 `resetPlayback()` 추가.
+
+**문제 3.** 사이드바의 caller/callee 링크 클릭 시 사이드바가 해당 함수로 업데이트되지 않음. `FlowChainSection`, `FuncChainRow`, `CallChainRow` 각각 별도의 로직이 중복돼 있었고 사이드바 업데이트가 누락된 곳이 많았음.
+**결과.** `openFuncNode(nodeId)` 헬퍼 함수 추출 — setSidebar + startPlayback + setCommentNodeId + 코멘트 조회를 한 곳에서 처리. 모든 onNav 콜백이 이를 호출하도록 통일.
+
+**문제 4.** 표시 모드(이름/주석)가 우측 사이드바 FuncChainRow에 반영되지 않음.
+**결과.** `FuncChainRow`에 `labelMode` prop 추가. 주석 모드일 때 `funcComment`가 있으면 그것을 라벨로 표시.
+
+**문제 5.** DB_TABLE 노드 클릭 시 흐름 재생이 시작되지 않음.
+**결과.** `handleNodeClick`의 DB_TABLE 분기에 `startPlayback(node.id)` 추가.
+
+---
+
 ### 흐름 자동 시각화 — 노드 하이라이트 방식 결정 (2026-06-05)
 
 **문제.** FUNCTION 노드는 React Flow 기본 노드 타입 (FileNode/GroupNode 아님) → `data` prop으로 스타일을 전달해도 기본 렌더러가 무시함.
