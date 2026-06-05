@@ -28,8 +28,10 @@ public class StaticCodeAnalyzer {
         List<DbTableInfo> dbTables = extractDbTables(content, language, relativePath);
         String repositoryEntityClass = extractRepositoryEntityClass(content, language);
         List<ColumnInfo> entityColumns = extractEntityColumns(content, language);
+        List<String> apiCalls = extractApiCalls(content, language);
+        List<String> controllerMappings = extractControllerMappings(content, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings);
     }
 
     // 파일 상단 첫 번째 주석 추출
@@ -333,6 +335,42 @@ public class StaticCodeAnalyzer {
         String name = slash >= 0 ? filePath.substring(slash + 1) : filePath;
         int dot = name.lastIndexOf('.');
         return dot > 0 ? name.substring(0, dot) : name;
+    }
+
+    // TypeScript/JS 파일에서 axios HTTP 호출 경로 추출 ("METHOD:/path" 형식)
+    private List<String> extractApiCalls(String content, String language) {
+        if (!language.equals("TypeScript") && !language.equals("JavaScript")) return List.of();
+        List<String> result = new ArrayList<>();
+        // axios.get('/api/...'), api.post(`/api/${id}/...`), apiClient.delete('/api/...') 등
+        Pattern p = Pattern.compile(
+            "\\.(get|post|put|delete|patch)\\s*\\(\\s*['\"`]([^'\"`\\n]+)['\"`]",
+            Pattern.CASE_INSENSITIVE
+        );
+        Matcher m = p.matcher(content);
+        while (m.find()) {
+            String method = m.group(1).toUpperCase();
+            // 템플릿 리터럴의 ${...} 부분을 * 로 정규화
+            String path = m.group(2).replaceAll("\\$\\{[^}]+}", "*");
+            if (path.startsWith("/")) {
+                result.add(method + ":" + path);
+            }
+        }
+        return result;
+    }
+
+    // Java 컨트롤러에서 @*Mapping 경로 목록 추출
+    private List<String> extractControllerMappings(String content, String language) {
+        if (!language.equals("Java") && !language.equals("Kotlin")) return List.of();
+        List<String> result = new ArrayList<>();
+        // @GetMapping("/api/..."), @PostMapping(value = "/api/..."), @RequestMapping("/api/...")
+        Pattern p = Pattern.compile(
+            "@(?:Get|Post|Put|Delete|Patch|Request)Mapping\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']+)[\"']"
+        );
+        Matcher m = p.matcher(content);
+        while (m.find()) {
+            result.add(m.group(1));
+        }
+        return result;
     }
 
     // 식별자가 언어 예약어인지 확인

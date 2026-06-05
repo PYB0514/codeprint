@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.regex.Pattern;
 
 @Component
 @RequiredArgsConstructor
@@ -206,6 +207,57 @@ public class GraphBuilder {
                 Edge instEdge = Edge.create(graphId, edgeIdentifier, EdgeType.INSTANTIATION,
                         sourceFileId, targetFileId);
                 graphRepository.saveEdge(instEdge);
+            }
+        }
+
+        // 프론트엔드 axios 호출 → 백엔드 컨트롤러 API_CALL 엣지 생성
+        // 컨트롤러 경로 패턴 인덱스: 정규화된 regex 패턴 → fileNodeId
+        List<Map.Entry<Pattern, UUID>> controllerPathIndex = new ArrayList<>();
+        for (ParsedFile pf : parsedFiles) {
+            if (pf.controllerMappings().isEmpty()) continue;
+            UUID fileId = fileNodeIds.get(pf.filePath());
+            if (fileId == null) continue;
+            for (String mapping : pf.controllerMappings()) {
+                // {pathVar} → [^/]+ 로 변환하여 regex 패턴 생성
+                String pattern = mapping
+                        .replaceAll("\\{[^}]+}", "[^/]+")
+                        .replace("/", "\\/");
+                controllerPathIndex.add(Map.entry(
+                        Pattern.compile("^" + pattern + "(?:\\?.*)?$"),
+                        fileId
+                ));
+            }
+        }
+
+        Set<String> usedApiCallEdgeIds = new HashSet<>();
+        for (ParsedFile pf : parsedFiles) {
+            if (pf.apiCalls().isEmpty()) continue;
+            UUID frontFileId = fileNodeIds.get(pf.filePath());
+            if (frontFileId == null) continue;
+
+            for (String apiCall : pf.apiCalls()) {
+                // "METHOD:/path" 형식에서 경로만 추출, * 를 [^/]+ 로 치환
+                int colon = apiCall.indexOf(':');
+                if (colon < 0) continue;
+                String rawPath = apiCall.substring(colon + 1).replaceAll("\\*", "[^/]+");
+
+                for (Map.Entry<Pattern, UUID> entry : controllerPathIndex) {
+                    if (entry.getKey().matcher(rawPath).matches()
+                            || rawPath.startsWith(entry.getKey().pattern().replaceAll("\\^|\\(\\?.*|\\$", ""))) {
+                        UUID controllerFileId = entry.getValue();
+                        if (controllerFileId.equals(frontFileId)) continue;
+                        String edgeId = extractFileName(pf.filePath()) + "-apicall-" + extractFileName(
+                                parsedFiles.stream()
+                                        .filter(f -> controllerFileId.equals(fileNodeIds.get(f.filePath())))
+                                        .map(ParsedFile::filePath)
+                                        .findFirst().orElse("unknown"));
+                        if (!usedApiCallEdgeIds.contains(edgeId)) {
+                            usedApiCallEdgeIds.add(edgeId);
+                            graphRepository.saveEdge(Edge.create(graphId, edgeId, EdgeType.API_CALL, frontFileId, controllerFileId));
+                        }
+                        break;
+                    }
+                }
             }
         }
 
