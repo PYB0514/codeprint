@@ -133,6 +133,34 @@ class GraphBuilderTest {
         assertThat(hasNoApiCallForImport).isTrue();
     }
 
+    // ── 인터페이스 → 구현체 FUNCTION_CALL 엣지 ─────────────────────────────
+
+    @Test
+    @DisplayName("인터페이스 메서드 노드와 구현체 메서드 노드 사이에 isInterfaceImpl FUNCTION_CALL 엣지가 생성된다")
+    void 인터페이스_구현체_FUNCTION_CALL_엣지_생성() {
+        // GraphRepository (인터페이스) → GraphRepositoryImpl (구현체)
+        ParsedFile ifaceFile = parsedFile("src/domain/graph/GraphRepository.java", "Java",
+                List.of("save", "findById"), Map.of());
+        ParsedFile implFile = new ParsedFile(
+                "src/infrastructure/graph/GraphRepositoryImpl.java", "Java",
+                List.of("save", "findById"), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
+                List.of("GraphRepository") // implementedInterfaces
+        );
+
+        graphBuilder.build(projectId, analysisId, List.of(ifaceFile, implFile));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasInterfaceImplEdge = edgeCaptor.getAllValues().stream()
+                .anyMatch(e -> e.getType() == EdgeType.FUNCTION_CALL
+                        && e.getMetadata() != null
+                        && Boolean.TRUE.equals(e.getMetadata().get("isInterfaceImpl")));
+
+        assertThat(hasInterfaceImplEdge).isTrue();
+    }
+
     // ── FILE/FUNCTION 노드 기본 생성 ────────────────────────────────────────
 
     @Test
