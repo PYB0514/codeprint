@@ -707,7 +707,7 @@ export function buildLayout(
   const dbTableIdSet = new Set(dbTableNodes.map((n) => n.id))
 
   const importEdges: Edge[] = rawEdges
-    .filter((e) => fileIdSet.has(e.source) && fileIdSet.has(e.target))
+    .filter((e) => e.type === 'IMPORT' && fileIdSet.has(e.source) && fileIdSet.has(e.target))
     .filter((e) => e.source !== e.target)
     .map((e) => {
       const broken = !allNodeIds.has(e.source) || !allNodeIds.has(e.target)

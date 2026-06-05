@@ -463,8 +463,10 @@ function GraphPageInner() {
       const d = e.data as { type?: string; broken?: boolean } | undefined
       const isCall = d?.type === 'FUNCTION_CALL'
       const isInst = d?.type === 'INSTANTIATION'
+      const isApiCall = d?.type === 'API_CALL'
+      const isDb = isDbEdgeType(d?.type)
       const broken = d?.broken
-      return { ...e, animated: false, style: { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : '#4b5563' } }
+      return { ...e, animated: false, style: { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : isApiCall ? '#e879f9' : isDb ? (DB_CRUD_COLOR[d?.type ?? ''] ?? '#22d3ee') : '#4b5563' } }
     }), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
   }, [setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges])
 
@@ -749,9 +751,10 @@ function GraphPageInner() {
     const broken = data?.broken
     const isCall = data?.type === 'FUNCTION_CALL'
     const isInst = data?.type === 'INSTANTIATION'
+    const isApiCall = data?.type === 'API_CALL'
     const isDb = isDbEdgeType(data?.type)
     const dbBaseColor = DB_CRUD_COLOR[data?.type ?? ''] ?? '#22d3ee'
-    const hoverColor = broken ? '#fca5a5' : isCall ? '#fcd34d' : isInst ? '#d8b4fe' : isDb ? dbBaseColor + 'cc' : '#a1a1aa'
+    const hoverColor = broken ? '#fca5a5' : isCall ? '#fcd34d' : isInst ? '#d8b4fe' : isApiCall ? '#f0abfc' : isDb ? dbBaseColor + 'cc' : '#a1a1aa'
     setEdges((es) => es.map((e) =>
       e.id === edge.id
         ? { ...e, style: { ...e.style, strokeWidth: (isCall || isInst) ? 2.5 : broken ? 3.5 : 3, stroke: hoverColor } }
@@ -766,8 +769,9 @@ function GraphPageInner() {
     const isCall = data?.type === 'FUNCTION_CALL'
     const isInst = data?.type === 'INSTANTIATION'
     const isDb = isDbEdgeType(data?.type)
+    const isApiCall = data?.type === 'API_CALL'
     const baseColor = broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7'
-      : isDb ? (DB_CRUD_COLOR[data?.type ?? ''] ?? '#22d3ee') : '#4b5563'
+      : isApiCall ? '#e879f9' : isDb ? (DB_CRUD_COLOR[data?.type ?? ''] ?? '#22d3ee') : '#4b5563'
     setEdges((es) => es.map((e) =>
       e.id === edge.id
         ? { ...e, style: { ...e.style, strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: baseColor } }
@@ -1123,10 +1127,10 @@ function GraphPageInner() {
             <LeftSection title="엣지">
               {[
                 { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: '의존성',       textCls: showEdges ? 'text-gray-300' : 'text-gray-600',   active: showEdges,        onToggle: toggleEdges },
-                { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="4 3" /></svg>,                                label: '콜 체인',      textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600', active: showCallEdges,    onToggle: toggleCallEdges },
+                { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="5 4" /></svg>,                                label: '콜 체인',      textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600', active: showCallEdges,    onToggle: toggleCallEdges },
                 { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',         textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600', active: showInstEdges,  onToggle: toggleInstEdges },
                 { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결',    textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600', active: showBrokenEdges, onToggle: toggleBrokenEdges },
-                { key: 'db',      icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showDbEdges ? '#22d3ee' : '#164e63'} strokeWidth="1.5" strokeDasharray="5 4" /></svg>,                                    label: 'DB 연결',      textCls: showDbEdges ? 'text-cyan-400' : 'text-gray-600',    active: showDbEdges,     onToggle: toggleDbEdges },
+                { key: 'db',      icon: <svg width="16" height="4"><line x1="0" y1="2" x2="3.5" y2="2" stroke={showDbEdges ? '#22d3ee' : '#374151'} strokeWidth="1.5"/><line x1="4.5" y1="2" x2="8" y2="2" stroke={showDbEdges ? '#4ade80' : '#374151'} strokeWidth="1.5"/><line x1="9" y1="2" x2="12.5" y2="2" stroke={showDbEdges ? '#facc15' : '#374151'} strokeWidth="1.5"/><line x1="13.5" y1="2" x2="16" y2="2" stroke={showDbEdges ? '#f87171' : '#374151'} strokeWidth="1.5"/></svg>, label: 'DB 연결',      textCls: showDbEdges ? 'text-cyan-400' : 'text-gray-600',    active: showDbEdges,     onToggle: toggleDbEdges },
                 { key: 'api',     icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showApiCallEdges ? '#e879f9' : '#701a75'} strokeWidth="1.5" strokeDasharray="6 3" /></svg>,                              label: 'API 호출',     textCls: showApiCallEdges ? 'text-fuchsia-400' : 'text-gray-600', active: showApiCallEdges, onToggle: toggleApiCallEdges },
               ].map(({ key, icon, label, textCls, active, onToggle }) => (
                 <div key={key} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}
