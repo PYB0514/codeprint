@@ -541,6 +541,8 @@ export function buildLayout(
       type: 'sectionNode',
       position: { x: DB_SECTION_X - 20, y: -20 - DB_SECTION_LABEL_H },
       data: { label: 'Database', color: '#ef4444', opaqueColor: 'rgba(40,5,5,0.98)', layer: 'database' },
+      width: DB_W + 40,
+      height: sectionH + 20,
       style: { width: DB_W + 40, height: sectionH + 20 },
       draggable: false,
       selectable: false,
@@ -552,6 +554,8 @@ export function buildLayout(
         id: dbNode.id,
         position: { x: DB_SECTION_X, y: i * (DB_H + DB_GAP) },
         data: { label: dbNode.name },
+        width: DB_W,
+        height: DB_H,
         style: {
           background: '#3b0a0a',
           border: '1.5px solid #ef4444',

@@ -383,12 +383,13 @@ function GraphPageInner() {
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,
         edges: re.length,
       })
+      setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
     } catch {
       setError('그래프를 불러오지 못했습니다.')
     } finally {
       setLoading(false)
     }
-  }, [projectId, setNodes, setEdges, openFileSidebar, applyEdgeVisibility])
+  }, [projectId, setNodes, setEdges, openFileSidebar, applyEdgeVisibility, fitView])
 
   useEffect(() => {
     axios.get<{ id: string }>('/api/auth/me', { headers: authHeaders() })
