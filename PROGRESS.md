@@ -1,6 +1,6 @@
 # Codeprint 개발 현황
 
-> 마지막 업데이트: 2026-06-06 (v1.24.002 — 어드민 공지 관리 UI, changelog 업데이트)
+> 마지막 업데이트: 2026-06-06 (v1.30 — FUNCTION_CALL 인터페이스→구현체 우선 매핑 + 북마크/유저 프로필)
 
 ---
 
@@ -118,6 +118,7 @@
 | ShareGraphPage 프리셋 연동 | ✅ | v1.28 — ?preset={slot}&userId={userId} 파라미터로 저장 프리셋 뷰 공유 (#88) |
 | 게시글 북마크/스크랩 | ✅ | v1.29 — post_bookmarks 테이블, 북마크 추가/취소/목록 API, ☆/★ 버튼, /bookmarks 페이지 (#89) |
 | 유저 프로필 페이지 | ✅ | v1.29 — /users/:id, GitHub 아바타, 게시글 목록, 작성자명 클릭 이동 (#89) |
+| FUNCTION_CALL 인터페이스→구현체 우선 매핑 | ✅ | v1.30 — interfaceToImplFiles 맵 루프 이전 빌드, break→bestMatch 패턴, 회귀 테스트 2개 (#91) |
 
 ---
 
@@ -142,12 +143,12 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# v1.29 완료 (PR #89 머지, 태그 push 완료)
+# v1.30 완료 (PR #91 머지, 태그 push 완료)
 # 다음 기능 선택지 (우선순위 순):
 #   A. 게시글 상세 페이지 개선 — 북마크 수/작성자 프로필 링크 상세 뷰 반영
 #   B. 온보딩 투어 — 첫 로그인 시 주요 기능 안내 (React Joyride)
 #   C. 검색 기능 — 커뮤니티 게시글 검색
-#   D. 인터페이스 → 구현체 자동 매핑 (코어 분석 엔진 개선)
+#   D. AI 기능 — 선택 노드/엣지 설명 (Claude API)
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
@@ -179,7 +180,7 @@ npm run dev
 > ProjectCommandService 목킹 테스트는 Application Service 계층이므로 TDD 불필요 — 런타임 검증으로 대체.
 
 ### 코어 기능
-- **인터페이스 → 구현체 자동 매핑** — `implements XxxRepository` 패턴 감지 → FUNCTION_CALL 체인이 인터페이스에서 끊기는 문제 해소 (방향 A 다음 작업)
+- **인터페이스 → 구현체 자동 매핑** — ✅ v1.30에서 완료
 - **AI 기능** — 선택 노드/엣지 설명 (Claude API), 누락 연결 감지 (4차 MVP 핵심, 유료화 연동)
 - **분석 비교 기능** — 브랜치 A vs B, 이전 분석 vs 최신
 
