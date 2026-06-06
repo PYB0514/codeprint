@@ -59,7 +59,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             }
         }
 
-        String token = jwtTokenProvider.generateToken(user.getId(), user.getEmail());
+        String token = jwtTokenProvider.generateToken(user.getId(), user.getEmail(), user.getRole().name());
         log.info("OAuth2 login success: userId={}, username={}", user.getId(), username);
 
         // 프론트엔드로 JWT 전달

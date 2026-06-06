@@ -16,4 +16,7 @@ public interface ProjectRepository {
     int countByUserId(UUID userId);
 
     void deleteById(UUID id);
+
+    // 어드민 전용 — 전체 프로젝트 수 조회
+    long count();
 }

@@ -28,14 +28,15 @@ public class JwtTokenProvider {
         this.expirationMs = expirationMs;
     }
 
-    // 사용자 ID와 이메일을 담은 JWT 토큰 발급
-    public String generateToken(UUID userId, String email) {
+    // 사용자 ID, 이메일, 역할을 담은 JWT 토큰 발급
+    public String generateToken(UUID userId, String email, String role) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
 
         return Jwts.builder()
                 .subject(userId.toString())
                 .claim("email", email)
+                .claim("role", role)
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(secretKey)
