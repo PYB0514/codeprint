@@ -136,6 +136,44 @@ class GraphBuilderTest {
     // ── 인터페이스 → 구현체 FUNCTION_CALL 엣지 ─────────────────────────────
 
     @Test
+    @DisplayName("인터페이스 하나에 구현체 2개 — 각 구현체마다 isInterfaceImpl 엣지가 생성된다")
+    void 여러_구현체_각각_FUNCTION_CALL_엣지_생성() {
+        // domain/NoticeRepository.java (인터페이스)
+        ParsedFile ifaceFile = parsedFile("src/domain/NoticeRepository.java", "Java",
+                List.of("save"), Map.of());
+
+        // NoticeRepositoryImpl (첫 번째 구현체)
+        ParsedFile impl1 = new ParsedFile(
+                "src/infra/NoticeRepositoryImpl.java", "Java",
+                List.of("save"), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
+                List.of("NoticeRepository")
+        );
+
+        // CachedNoticeRepositoryImpl (두 번째 구현체)
+        ParsedFile impl2 = new ParsedFile(
+                "src/infra/CachedNoticeRepositoryImpl.java", "Java",
+                List.of("save"), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
+                List.of("NoticeRepository")
+        );
+
+        graphBuilder.build(projectId, analysisId, List.of(ifaceFile, impl1, impl2));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        long implEdgeCount = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .filter(e -> e.getMetadata() != null
+                        && Boolean.TRUE.equals(e.getMetadata().get("isInterfaceImpl")))
+                .count();
+
+        // 구현체 2개 × save 1개 = isInterfaceImpl 엣지 2개
+        assertThat(implEdgeCount).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("인터페이스 메서드 노드와 구현체 메서드 노드 사이에 isInterfaceImpl FUNCTION_CALL 엣지가 생성된다")
     void 인터페이스_구현체_FUNCTION_CALL_엣지_생성() {
         // GraphRepository (인터페이스) → GraphRepositoryImpl (구현체)

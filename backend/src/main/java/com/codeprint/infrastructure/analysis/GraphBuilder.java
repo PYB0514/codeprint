@@ -125,39 +125,42 @@ public class GraphBuilder {
         }
 
         // 인터페이스 → 구현체 FUNCTION_CALL 엣지 생성
-        // 인터페이스 심플명 → 구현체 ParsedFile 인덱스
-        Map<String, ParsedFile> interfaceToImplFile = new HashMap<>();
+        // 인터페이스 심플명 → 구현체 ParsedFile 목록 (구현체 여러 개 지원)
+        Map<String, List<ParsedFile>> interfaceToImplFiles = new HashMap<>();
         for (ParsedFile pf : parsedFiles) {
             for (String iface : pf.implementedInterfaces()) {
-                interfaceToImplFile.put(iface, pf);
+                interfaceToImplFiles.computeIfAbsent(iface, k -> new ArrayList<>()).add(pf);
             }
         }
         // 인터페이스 심플명 → 인터페이스 ParsedFile 인덱스
         Map<String, ParsedFile> ifaceNameToFile = new HashMap<>();
         for (ParsedFile pf : parsedFiles) {
             String simpleName = extractFileNameWithoutExt(pf.filePath());
-            if (interfaceToImplFile.containsKey(simpleName)) {
+            if (interfaceToImplFiles.containsKey(simpleName)) {
                 ifaceNameToFile.put(simpleName, pf);
             }
         }
         for (Map.Entry<String, ParsedFile> entry : ifaceNameToFile.entrySet()) {
             String ifaceName = entry.getKey();
             ParsedFile ifaceFile = entry.getValue();
-            ParsedFile implFile = interfaceToImplFile.get(ifaceName);
-            for (String funcName : ifaceFile.functions()) {
-                UUID ifaceFuncId = funcNodeIds.get(ifaceFile.filePath() + "::" + funcName);
-                UUID implFuncId = funcNodeIds.get(implFile.filePath() + "::" + funcName);
-                if (ifaceFuncId == null || implFuncId == null) continue;
-                String edgeId = ifaceName + "-" + funcName + "-impl-" + extractFileNameWithoutExt(implFile.filePath());
-                if (usedEdgeIds.contains(edgeId)) continue;
-                usedEdgeIds.add(edgeId);
-                Edge implEdge = Edge.create(graphId, edgeId, EdgeType.FUNCTION_CALL, ifaceFuncId, implFuncId);
-                Map<String, Object> meta = new HashMap<>();
-                meta.put("callerFile", ifaceFile.filePath());
-                meta.put("calleeFile", implFile.filePath());
-                meta.put("isInterfaceImpl", true);
-                implEdge.updateMetadata(meta);
-                graphRepository.saveEdge(implEdge);
+            List<ParsedFile> implFiles = interfaceToImplFiles.get(ifaceName);
+            if (implFiles == null) continue;
+            for (ParsedFile implFile : implFiles) {
+                for (String funcName : ifaceFile.functions()) {
+                    UUID ifaceFuncId = funcNodeIds.get(ifaceFile.filePath() + "::" + funcName);
+                    UUID implFuncId = funcNodeIds.get(implFile.filePath() + "::" + funcName);
+                    if (ifaceFuncId == null || implFuncId == null) continue;
+                    String edgeId = ifaceName + "-" + funcName + "-impl-" + extractFileNameWithoutExt(implFile.filePath());
+                    if (usedEdgeIds.contains(edgeId)) continue;
+                    usedEdgeIds.add(edgeId);
+                    Edge implEdge = Edge.create(graphId, edgeId, EdgeType.FUNCTION_CALL, ifaceFuncId, implFuncId);
+                    Map<String, Object> meta = new HashMap<>();
+                    meta.put("callerFile", ifaceFile.filePath());
+                    meta.put("calleeFile", implFile.filePath());
+                    meta.put("isInterfaceImpl", true);
+                    implEdge.updateMetadata(meta);
+                    graphRepository.saveEdge(implEdge);
+                }
             }
         }
 
