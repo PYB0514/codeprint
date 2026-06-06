@@ -356,21 +356,26 @@ function GraphPageInner() {
       return { ...e, hidden }
     }), [])
 
-  // 레이어 섹션 박스를 해당 색상으로 덮어 내용을 가리는 토글
+  // 레이어 섹션 박스 opaque 토글 — zIndex 대신 자식 노드 hidden 처리 (React Flow v12에서 parentId 자식이 부모 위에 렌더링되는 문제 우회)
   const toggleLayerOpaque = useCallback((layer: string) => {
     setOpaqueLayerSet((prev) => {
       const next = new Set(prev)
       if (next.has(layer)) next.delete(layer)
       else next.add(layer)
       const isOpaque = next.has(layer)
-      setNodes((nds) => nds.map((n) => {
-        if (n.id !== `layer-section-${layer}`) return n
-        return {
-          ...n,
-          zIndex: isOpaque ? 9999 : -20,
-          data: { ...n.data, opaque: isOpaque },
-        }
-      }))
+      const sectionId = `layer-section-${layer}`
+      setNodes((nds) => {
+        // section → group → file → function 3단계 자손 모두 수집
+        const groupIds = new Set(nds.filter((n) => n.parentId === sectionId).map((n) => n.id))
+        const fileIds  = new Set(nds.filter((n) => n.parentId != null && groupIds.has(n.parentId!)).map((n) => n.id))
+        const descendantIds = new Set([...groupIds, ...fileIds,
+          ...nds.filter((n) => n.parentId != null && fileIds.has(n.parentId!)).map((n) => n.id)])
+        return nds.map((n) => {
+          if (n.id === sectionId) return { ...n, data: { ...n.data, opaque: isOpaque } }
+          if (descendantIds.has(n.id)) return { ...n, hidden: isOpaque }
+          return n
+        })
+      })
       return next
     })
   }, [setNodes])
@@ -634,13 +639,29 @@ function GraphPageInner() {
 
     if (rawNodes.length > 0) {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, lm, lp, openFileSidebar)
-      setNodes(layoutNodes.map((n) => {
-        if (!n.id.startsWith('layer-section-')) return n
-        if (lp === 'hub') return { ...n, hidden: true }
-        const layer = n.id.replace('layer-section-', '')
-        const isOpaque = newOpaqueSet.has(layer)
-        return { ...n, hidden: false, zIndex: isOpaque ? 9999 : -20, data: { ...n.data, opaque: isOpaque } }
-      }))
+      setNodes(() => {
+        if (lp === 'hub') {
+          return layoutNodes.map((n) => n.id.startsWith('layer-section-') ? { ...n, hidden: true } : n)
+        }
+        // layer 모드: opaque 섹션의 자손 노드(group→file→function 3단계) hidden 처리
+        const opaqueSectionIds = new Set(
+          layoutNodes
+            .filter((n) => n.id.startsWith('layer-section-') && newOpaqueSet.has(n.id.replace('layer-section-', '')))
+            .map((n) => n.id)
+        )
+        const groupIds = new Set(layoutNodes.filter((n) => n.parentId && opaqueSectionIds.has(n.parentId!)).map((n) => n.id))
+        const fileIds  = new Set(layoutNodes.filter((n) => n.parentId && groupIds.has(n.parentId!)).map((n) => n.id))
+        const hiddenIds = new Set([...groupIds, ...fileIds,
+          ...layoutNodes.filter((n) => n.parentId && fileIds.has(n.parentId!)).map((n) => n.id)])
+        return layoutNodes.map((n) => {
+          if (n.id.startsWith('layer-section-')) {
+            const isOpaque = newOpaqueSet.has(n.id.replace('layer-section-', ''))
+            return { ...n, hidden: false, data: { ...n.data, opaque: isOpaque } }
+          }
+          if (hiddenIds.has(n.id)) return { ...n, hidden: true }
+          return n
+        })
+      })
       setEdges(applyEdgeVisibility(layoutEdges, se, sc, si, sb, sdb, sapi))
     }
   }, [rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, applyEdgeVisibility])
