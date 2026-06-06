@@ -1310,38 +1310,42 @@ function GraphPageInner() {
 
             {/* 범례 — DDD 레이어 + 노드 */}
             <LeftSection title="범례">
-              <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">DDD 레이어</p>
-              {[
-                { label: 'Domain',           color: '#3b82f6', key: 'domain' },
-                { label: 'Application',      color: '#eab308', key: 'application' },
-                { label: 'Infrastructure',   color: '#a855f7', key: 'infrastructure' },
-                { label: 'Interfaces',       color: '#10b981', key: 'interfaces' },
-                { label: 'Pages/Components', color: '#06b6d4', key: 'pages' },
-                { label: 'Database',         color: '#ef4444', key: 'database' },
-              ].map(({ label, color, key }) => {
-                const active = opaqueLayerSet.has(key)
-                return (
-                  <div key={key} className="flex items-center gap-2 py-0.5">
-                    <button
-                      onClick={() => toggleLayerOpaque(key)}
-                      title={active ? '내용 표시' : '내용 가리기'}
-                      style={{
-                        width: 18, height: 18, borderRadius: 4,
-                        border: `1px solid ${color}88`,
-                        background: active ? color : `${color}22`,
-                        color: active ? '#fff' : color,
-                        fontSize: 10, cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {active ? '◑' : '○'}
-                    </button>
-                    <span className="text-gray-400 text-xs">{label}</span>
-                  </div>
-                )
-              })}
-              <div className="border-t border-gray-800 my-2" />
+              {layoutPreset === 'layer' && (
+                <>
+                  <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">DDD 레이어</p>
+                  {[
+                    { label: 'Domain',           color: '#3b82f6', key: 'domain' },
+                    { label: 'Application',      color: '#eab308', key: 'application' },
+                    { label: 'Infrastructure',   color: '#a855f7', key: 'infrastructure' },
+                    { label: 'Interfaces',       color: '#10b981', key: 'interfaces' },
+                    { label: 'Pages/Components', color: '#06b6d4', key: 'pages' },
+                    { label: 'Database',         color: '#ef4444', key: 'database' },
+                  ].map(({ label, color, key }) => {
+                    const active = opaqueLayerSet.has(key)
+                    return (
+                      <div key={key} className="flex items-center gap-2 py-0.5">
+                        <button
+                          onClick={() => toggleLayerOpaque(key)}
+                          title={active ? '내용 표시' : '내용 가리기'}
+                          style={{
+                            width: 18, height: 18, borderRadius: 4,
+                            border: `1px solid ${color}88`,
+                            background: active ? color : `${color}22`,
+                            color: active ? '#fff' : color,
+                            fontSize: 10, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {active ? '◑' : '○'}
+                        </button>
+                        <span className="text-gray-400 text-xs">{label}</span>
+                      </div>
+                    )
+                  })}
+                  <div className="border-t border-gray-800 my-2" />
+                </>
+              )}
               <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">노드</p>
               <div className="flex items-center gap-2 py-0.5">
                 <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#1e3a5f', border: '1.5px solid #3b82f6' }} />
