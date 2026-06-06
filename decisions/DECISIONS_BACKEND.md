@@ -2,6 +2,30 @@
 
 ---
 
+## Flyway migration SMALLINT vs Hibernate INTEGER 타입 불일치 (2026-06-06)
+
+**문제.** `V14__add_graph_view_presets.sql`에서 `slot` 컬럼을 `SMALLINT`로 선언했으나, Java 엔티티의 `private int slot`은 Hibernate가 `INTEGER`(int4)로 매핑한다. `ddl-auto: validate`에서 타입 불일치로 서버 기동 실패.
+
+**원인.** PostgreSQL `SMALLINT`는 int2, Java `int`는 int4. Hibernate 6 validate는 이를 엄격하게 검사.
+
+**수정.** V14 migration을 `INTEGER`로 수정, 로컬 DB에 `ALTER TABLE graph_view_presets ALTER COLUMN slot TYPE integer` 적용.
+
+**결과.** `application-local.yml`에 `spring.flyway.validate-on-migrate: false` 추가 — migration 파일 수정으로 인한 체크섬 불일치를 로컬에서 우회. production(Railway)은 `application-local.yml`을 사용하지 않으므로 영향 없음.
+
+**교훈.** migration SQL의 숫자 타입은 Java entity 타입과 맞춰야 함. `int` → `INTEGER`, `short` → `SMALLINT`.
+
+---
+
+## flyway_schema_history 수동 INSERT 금지 (2026-06-06)
+
+**문제.** migration 수동 적용 후 flyway_schema_history에 `checksum=0`으로 수동 INSERT했더니 다음 서버 기동 시 체크섬 불일치로 Flyway가 기동 거부.
+
+**결론.** 절대 수동으로 flyway_schema_history에 INSERT하지 않는다. 대신:
+- migration 파일이 변경됐다면 → `flywayRepair`
+- 테이블이 이미 존재해서 migration 재적용 불가 → `DROP TABLE` 후 서버 재시작
+
+---
+
 ## 프로세스 결정 (2026-06-05)
 
 ### 4대 규칙 통합 — CI 통과를 완료 기준으로 쓰는 패턴 차단

@@ -109,6 +109,8 @@
 | GraphBuilder 여러 구현체 isInterfaceImpl 버그 수정 | ✅ | v1.25 — Map<String,List> 변경, 회귀 테스트(7/7 PASS), 41개 엣지 확인 (#81) |
 | Spring Boot DevTools 자동 재시작 | ✅ | v1.25 — developmentOnly 스코프, 저장 시 자동 컴파일 연동 (#81) |
 | StaticCodeAnalyzer 언어별 커버리지 테스트 + Kotlin 버그 수정 | ✅ | v1.25.001 — 19개 신규 테스트(기능별+언어별), Kotlin fun 패턴 분리, 37/37 PASS |
+| 커뮤니티 게시글 내 그래프 연결 | ✅ | 이전 세션 — 게시글 작성 시 내 프로젝트 연결, graphId 전송, 커뮤니티 목록 배지 |
+| 그래프 뷰 프리셋 (4슬롯) | ✅ | v1.26 — V14 migration, GraphViewPreset entity, GET/PUT /api/graphs/{id}/presets, 프론트 프리셋 패널 + 저장 모달 |
 
 ---
 
@@ -133,10 +135,12 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재: test/analyzer-language-coverage 브랜치 → PR 후 main 머지 예정
-# 다음 선택지 (우선순위 순):
-#   A. AI 기능 — 선택 노드/엣지 설명 (Claude API), 유료화 핵심
-#   B. 분석 비교 기능 — 브랜치 A vs B, 이전 분석 vs 최신
+# 현재: PR #85 열려있음 (feat/graph-view-presets)
+#   → CI 통과 확인 → main 머지 → v1.26 태그
+# 다음 기능 선택지 (우선순위 순):
+#   A. 북마크/스크랩 기능 — 커뮤니티 게시글 저장 (좋아요 대체)
+#   B. 유저 프로필 페이지 — /users/:id 공개 프로필 + 공유 그래프 목록
+#   C. ShareGraphPage 프리셋 연동 — ?preset={slot}&userId={userId} 쿼리 파라미터 지원
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
