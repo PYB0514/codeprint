@@ -233,6 +233,388 @@ class StaticCodeAnalyzerTest {
         assertThat(result.imports()).contains("com.codeprint.domain.user.User", "java.util.List");
     }
 
+    // ── functionCalls 추출 ─────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Java 메서드 내 함수 호출을 추출한다")
+    void Java_함수_호출_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class UserService {
+                    public User createUser(String name) {
+                        validate(name);
+                        return save(new User(name));
+                    }
+                    private void validate(String name) {}
+                    private User save(User user) { return user; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionCalls()).containsKey("createUser");
+        assertThat(result.functionCalls().get("createUser")).contains("validate", "save");
+    }
+
+    @Test
+    @DisplayName("같은 파일 내 호출이라도 functionCalls에 포함된다")
+    void Java_내부_호출_포함() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class GraphBuilder {
+                    public void build() {
+                        createNodes();
+                        createEdges();
+                    }
+                    private void createNodes() {}
+                    private void createEdges() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionCalls()).containsKey("build");
+        assertThat(result.functionCalls().get("build")).contains("createNodes", "createEdges");
+    }
+
+    // ── implements 추출 ────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Java class implements 인터페이스 목록을 추출한다")
+    void Java_implements_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                import lombok.RequiredArgsConstructor;
+                @Repository
+                @RequiredArgsConstructor
+                public class UserRepositoryImpl implements UserRepository {
+                    public User save(User user) { return user; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.implementedInterfaces()).containsExactly("UserRepository");
+    }
+
+    @Test
+    @DisplayName("Java class implements 여러 인터페이스를 추출한다")
+    void Java_implements_복수_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class MyFilter implements Filter, Ordered {
+                    public void doFilter() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.implementedInterfaces()).containsExactlyInAnyOrder("Filter", "Ordered");
+    }
+
+    @Test
+    @DisplayName("implements 없는 클래스는 빈 목록을 반환한다")
+    void Java_implements_없음() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class UserService {
+                    public void create() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.implementedInterfaces()).isEmpty();
+    }
+
+    // ── TypeScript API 호출 추출 ──────────────────────────────────────────
+
+    @Test
+    @DisplayName("TypeScript axios API 호출 경로를 추출한다")
+    void TypeScript_axios_API_호출_추출() throws IOException {
+        Path file = writeTsFile("""
+                import axios from 'axios';
+                export const getProjects = () => axios.get('/api/projects');
+                export const createProject = (data) => axios.post('/api/projects', data);
+                export const deleteProject = (id) => axios.delete(`/api/projects/${id}`);
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.apiCalls()).contains("GET:/api/projects", "POST:/api/projects");
+        // 템플릿 리터럴 ${id} → * 정규화
+        assertThat(result.apiCalls()).anyMatch(c -> c.startsWith("DELETE:/api/projects/"));
+    }
+
+    @Test
+    @DisplayName("TypeScript axios PATCH/PUT 호출도 추출한다")
+    void TypeScript_axios_PATCH_호출_추출() throws IOException {
+        Path file = writeTsFile("""
+                const updateUser = (id, data) => api.patch(`/api/admin/users/${id}/disable`, data);
+                const replaceUser = (id, data) => api.put(`/api/users/${id}`, data);
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.apiCalls()).anyMatch(c -> c.startsWith("PATCH:"));
+        assertThat(result.apiCalls()).anyMatch(c -> c.startsWith("PUT:"));
+    }
+
+    // ── DB 테이블 추출 ─────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Java @Entity @Table(name=) 어노테이션에서 테이블명을 추출한다")
+    void Java_Entity_Table_어노테이션_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                import jakarta.persistence.*;
+                @Entity
+                @Table(name = "users")
+                public class User {
+                    @Id private Long id;
+                    private String email;
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.dbTables()).hasSize(1);
+        assertThat(result.dbTables().get(0).tableName()).isEqualTo("users");
+    }
+
+    @Test
+    @DisplayName("Java @Entity만 있고 @Table 없으면 클래스명을 테이블명으로 사용한다")
+    void Java_Entity_클래스명_폴백() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                import jakarta.persistence.*;
+                @Entity
+                public class Project {
+                    @Id private Long id;
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.dbTables()).hasSize(1);
+        assertThat(result.dbTables().get(0).tableName()).isEqualTo("Project");
+    }
+
+    // ── JpaRepository 엔티티 추출 ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("JpaRepository<EntityName, ID>에서 엔티티 클래스명을 추출한다")
+    void Java_JpaRepository_엔티티_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                import org.springframework.data.jpa.repository.JpaRepository;
+                public interface UserJpaRepository extends JpaRepository<User, Long> {
+                    User findByEmail(String email);
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.repositoryEntityClass()).isEqualTo("User");
+    }
+
+    // ── 컨트롤러 매핑 추출 ────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Java @RequestMapping + @GetMapping 조합으로 전체 경로를 합성한다")
+    void Java_컨트롤러_매핑_합성() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                @RestController
+                @RequestMapping("/api/projects")
+                public class ProjectController {
+                    @GetMapping
+                    public List<Project> list() { return null; }
+                    @PostMapping
+                    public Project create() { return null; }
+                    @DeleteMapping("/{id}")
+                    public void delete() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.controllerMappings()).contains("/api/projects");
+        assertThat(result.controllerMappings()).contains("/api/projects/{id}");
+    }
+
+    // ── 나머지 언어 함수 추출 ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Kotlin 파일에서 fun 함수명을 추출한다")
+    void Kotlin_함수_추출() throws IOException {
+        Path file = tempDir.resolve("UserService.kt");
+        Files.writeString(file, """
+                class UserService {
+                    fun createUser(name: String): User {
+                        return User(name)
+                    }
+                    private fun validate(name: String) {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Kotlin");
+
+        assertThat(result.functions()).containsExactlyInAnyOrder("createUser", "validate");
+    }
+
+    @Test
+    @DisplayName("Go 파일에서 func 함수명을 추출한다")
+    void Go_함수_추출() throws IOException {
+        Path file = tempDir.resolve("user.go");
+        Files.writeString(file, """
+                package main
+
+                func CreateUser(name string) *User {
+                    return &User{Name: name}
+                }
+
+                func (u *User) Validate() bool {
+                    return u.Name != ""
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.functions()).contains("CreateUser", "Validate");
+    }
+
+    @Test
+    @DisplayName("Rust 파일에서 fn 함수명을 추출한다")
+    void Rust_함수_추출() throws IOException {
+        Path file = tempDir.resolve("lib.rs");
+        Files.writeString(file, """
+                pub fn create_user(name: &str) -> User {
+                    User { name: name.to_string() }
+                }
+
+                fn validate_name(name: &str) -> bool {
+                    !name.is_empty()
+                }
+
+                pub async fn fetch_data() -> Vec<u8> {
+                    vec![]
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Rust");
+
+        assertThat(result.functions()).containsExactlyInAnyOrder("create_user", "validate_name", "fetch_data");
+    }
+
+    @Test
+    @DisplayName("Ruby 파일에서 def 메서드명을 추출한다")
+    void Ruby_함수_추출() throws IOException {
+        Path file = tempDir.resolve("user_service.rb");
+        Files.writeString(file, """
+                class UserService
+                  def create_user(name)
+                    save(name)
+                  end
+
+                  def valid?(name)
+                    !name.nil?
+                  end
+
+                  private
+
+                  def save(name)
+                    name
+                  end
+                end
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Ruby");
+
+        assertThat(result.functions()).containsExactlyInAnyOrder("create_user", "valid?", "save");
+    }
+
+    @Test
+    @DisplayName("PHP 파일에서 function 메서드명을 추출한다")
+    void PHP_함수_추출() throws IOException {
+        Path file = tempDir.resolve("UserService.php");
+        Files.writeString(file, """
+                <?php
+                class UserService {
+                    public function createUser($name) {
+                        return $this->save($name);
+                    }
+                    private function save($name) {
+                        return $name;
+                    }
+                    protected static function validate($name) {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "PHP");
+
+        assertThat(result.functions()).containsExactlyInAnyOrder("createUser", "save", "validate");
+    }
+
+    @Test
+    @DisplayName("Swift 파일에서 func 함수명을 추출한다")
+    void Swift_함수_추출() throws IOException {
+        Path file = tempDir.resolve("UserService.swift");
+        Files.writeString(file, """
+                class UserService {
+                    func createUser(name: String) -> User {
+                        return User(name: name)
+                    }
+                    private func validate(name: String) -> Bool {
+                        return !name.isEmpty
+                    }
+                    static func shared() -> UserService {
+                        return UserService()
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Swift");
+
+        assertThat(result.functions()).containsExactlyInAnyOrder("createUser", "validate", "shared");
+    }
+
+    @Test
+    @DisplayName("C# 파일에서 메서드명을 추출한다")
+    void CSharp_함수_추출() throws IOException {
+        Path file = tempDir.resolve("UserService.cs");
+        Files.writeString(file, """
+                public class UserService {
+                    public User CreateUser(string name) {
+                        return Save(name);
+                    }
+                    private User Save(string name) {
+                        return new User(name);
+                    }
+                    protected virtual void Validate(string name) {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.functions()).containsExactlyInAnyOrder("CreateUser", "Save", "Validate");
+    }
+
+    @Test
+    @DisplayName("JavaScript 파일에서 함수명을 추출한다")
+    void JavaScript_함수_추출() throws IOException {
+        Path file = tempDir.resolve("api.js");
+        Files.writeString(file, """
+                const fetchData = async () => { return []; };
+                function buildGraph(nodes) {}
+                const handleSubmit = (e) => { e.preventDefault(); };
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "JavaScript");
+
+        assertThat(result.functions()).contains("fetchData", "buildGraph", "handleSubmit");
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {
