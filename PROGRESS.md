@@ -135,8 +135,9 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재: feat/graph-view-presets 브랜치 → PR 후 main 머지
-# 다음 선택지 (우선순위 순):
+# 현재: PR #85 열려있음 (feat/graph-view-presets)
+#   → CI 통과 확인 → main 머지 → v1.26 태그
+# 다음 기능 선택지 (우선순위 순):
 #   A. 북마크/스크랩 기능 — 커뮤니티 게시글 저장 (좋아요 대체)
 #   B. 유저 프로필 페이지 — /users/:id 공개 프로필 + 공유 그래프 목록
 #   C. ShareGraphPage 프리셋 연동 — ?preset={slot}&userId={userId} 쿼리 파라미터 지원
