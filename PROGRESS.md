@@ -111,6 +111,10 @@
 | StaticCodeAnalyzer 언어별 커버리지 테스트 + Kotlin 버그 수정 | ✅ | v1.25.001 — 19개 신규 테스트(기능별+언어별), Kotlin fun 패턴 분리, 37/37 PASS |
 | 커뮤니티 게시글 내 그래프 연결 | ✅ | 이전 세션 — 게시글 작성 시 내 프로젝트 연결, graphId 전송, 커뮤니티 목록 배지 |
 | 그래프 뷰 프리셋 (4슬롯) | ✅ | v1.26 — V14 migration, GraphViewPreset entity, GET/PUT /api/graphs/{id}/presets, 프론트 프리셋 패널 + 저장 모달 |
+| 허브 모드 레이어 박스 숨김 | ✅ | v1.26 — hub 전환 시 layer-section-* 노드 hidden, DDD 범례 숨김 (#85) |
+| 계층 프리셋 상위레이어 감추기 버그 수정 | ✅ | v1.27 — zIndex 방식 → hidden 자손 처리 방식으로 교체 (React Flow v12 z-order 우회) |
+| 계층 프리셋 레이아웃 방향 변경 | ✅ | v1.27 — pages/components → interfaces → application → domain → infrastructure (요청 흐름 방향) |
+| 흐름 재생 호출 트리 리디자인 | ✅ | v1.27 — buildCallTree, 분기 트리 패널, 분기점 자동 일시정지(B), 분기 클릭 전환(C) |
 
 ---
 
@@ -135,12 +139,12 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재: PR #85 열려있음 (feat/graph-view-presets)
-#   → CI 통과 확인 → main 머지 → v1.26 태그
+# fix/layer-section-opaque 브랜치에 v1.27 작업 완료, PR 생성 후 머지
 # 다음 기능 선택지 (우선순위 순):
 #   A. 북마크/스크랩 기능 — 커뮤니티 게시글 저장 (좋아요 대체)
 #   B. 유저 프로필 페이지 — /users/:id 공개 프로필 + 공유 그래프 목록
 #   C. ShareGraphPage 프리셋 연동 — ?preset={slot}&userId={userId} 쿼리 파라미터 지원
+# 규칙 4: 흐름 재생은 실제 프로젝트 데이터가 있어야 테스트 가능 — 사용자가 직접 런타임 확인 필요
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
