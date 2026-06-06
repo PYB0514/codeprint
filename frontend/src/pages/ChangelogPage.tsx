@@ -11,6 +11,45 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v1.24',
+    date: '2026-06-06',
+    title: '공지사항 시스템',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'V12 Flyway 마이그레이션 — notices 테이블 생성 (title/content/is_active/timestamps)' },
+      { category: '백엔드', desc: 'Notice 도메인 엔티티 + activate()/deactivate() 상태 전환 메서드' },
+      { category: '백엔드', desc: 'GET /api/notices (공개), GET /api/notices/all (ADMIN), POST/PATCH/DELETE (ADMIN 전용)' },
+      { category: '프론트', desc: 'NoticeBanner — 활성 공지 상단 고정 노란 배너, X 클릭 시 닫기, localStorage로 닫은 공지 ID 기억' },
+      { category: '프론트', desc: '어드민 대시보드에 공지 관리 섹션 추가 — 공지 등록 폼, 활성화/비활성화 토글, 삭제 버튼' },
+    ],
+  },
+  {
+    version: 'v1.23',
+    date: '2026-06-06',
+    title: '관리자 역할 시스템 & 어드민 대시보드',
+    type: 'infra',
+    items: [
+      { category: '백엔드', desc: 'UserRole enum(USER/ADMIN) + V11 마이그레이션 — users 테이블에 role/enabled 컬럼 추가' },
+      { category: '백엔드', desc: 'JWT에 role 클레임 포함, JwtAuthenticationFilter에서 DB role 적용 및 정지 계정 인증 차단' },
+      { category: '백엔드', desc: '/api/admin/** → hasRole(ADMIN) 보호, @EnableMethodSecurity 활성화' },
+      { category: '백엔드', desc: 'GET /api/admin/stats — 전체 사용자/프로젝트/분석 통계, GET /api/admin/users 페이징, PATCH disable/enable' },
+      { category: '프론트', desc: '/admin 페이지 — 통계 카드 3개 + 사용자 목록 테이블 + 페이지네이션 + 정지/복구 버튼' },
+    ],
+  },
+  {
+    version: 'v1.22',
+    date: '2026-06-06',
+    title: '법적 필수 페이지 & 쿠키 배너',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '/terms — 이용약관 11개 조항, 한국어 전문' },
+      { category: '프론트', desc: '/privacy — 개인정보처리방침 9개 조항 (GitHub 계정 수집 명시)' },
+      { category: '프론트', desc: '/contact — 이메일 + GitHub Issues 문의 안내' },
+      { category: '프론트', desc: 'CookieBanner — GDPR/개보법 대응, 동의/거부 선택, localStorage 기억, body paddingBottom 오프셋' },
+      { category: '프론트', desc: 'Footer 공통 컴포넌트 — /terms, /privacy, /contact, /changelog 링크' },
+    ],
+  },
+  {
     version: 'v1.10',
     date: '2026-06-04',
     title: 'GitHub 레포 피커 & Primary Branch 추적',
