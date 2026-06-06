@@ -115,6 +115,7 @@
 | 계층 프리셋 상위레이어 감추기 버그 수정 | ✅ | v1.27 — zIndex 방식 → hidden 자손 처리 방식으로 교체 (React Flow v12 z-order 우회) |
 | 계층 프리셋 레이아웃 방향 변경 | ✅ | v1.27 — pages/components → interfaces → application → domain → infrastructure (요청 흐름 방향) |
 | 흐름 재생 호출 트리 리디자인 | ✅ | v1.27 — buildCallTree, 분기 트리 패널, 분기점 자동 일시정지(B), 분기 클릭 전환(C) |
+| ShareGraphPage 프리셋 연동 | ✅ | v1.28 — ?preset={slot}&userId={userId} 파라미터로 저장 프리셋 뷰 공유 (#88) |
 
 ---
 
@@ -139,12 +140,10 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# v1.27 완료 (PR #86 머지, 태그 push 완료)
+# v1.28 — PR #88 CI 통과 후 머지 + 태그 예정
 # 다음 기능 선택지 (우선순위 순):
 #   A. 북마크/스크랩 기능 — 커뮤니티 게시글 저장 (좋아요 대체)
 #   B. 유저 프로필 페이지 — /users/:id 공개 프로필 + 공유 그래프 목록
-#   C. ShareGraphPage 프리셋 연동 — ?preset={slot}&userId={userId} 쿼리 파라미터 지원
-# 사용자가 다음 세션 시작 시 A/B/C 중 선택
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항

@@ -1,6 +1,6 @@
 // 공개 프로젝트 읽기 전용 그래프 뷰어 (비인증 접근 허용)
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import {
   ReactFlow,
@@ -13,7 +13,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { buildLayout } from '../utils/graphLayout'
-import type { RawNode, RawEdge } from '../utils/graphLayout'
+import type { RawNode, RawEdge, LabelMode, LayoutPreset } from '../utils/graphLayout'
 import type { Node, Edge } from '@xyflow/react'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
@@ -21,10 +21,58 @@ import FileNode from '../components/FileNode'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
+// DB 엣지 타입 판별
+function isDbEdgeType(t: string | undefined): boolean {
+  return t === 'DB_READ' || t === 'DB_WRITE' || t === 'DB_CREATE' || t === 'DB_UPDATE' || t === 'DB_DELETE'
+}
+
+// 엣지 타입별 hidden 여부 적용
+function applyEdgeVisibility(
+  edges: Edge[],
+  se: boolean, sc: boolean, si: boolean, sb: boolean, sdb: boolean, sapi: boolean
+): Edge[] {
+  return edges.map((e) => {
+    const d = e.data as { type?: string; broken?: boolean } | undefined
+    const t = d?.type
+    const broken = d?.broken
+    const hidden =
+      t === 'IMPORT' && broken ? !sb :
+      t === 'IMPORT' ? !se :
+      t === 'FUNCTION_CALL' ? !sc :
+      t === 'INSTANTIATION' ? !si :
+      isDbEdgeType(t) ? !sdb :
+      t === 'API_CALL' ? !sapi :
+      false
+    return { ...e, hidden }
+  })
+}
+
+// layer 모드에서 opaque 섹션의 자손 노드(group→file→function 3단계) hidden 처리
+function applyOpaqueLayerSet(nodes: Node[], opaqueLayerSet: Set<string>): Node[] {
+  const opaqueSectionIds = new Set(
+    nodes
+      .filter((n) => n.id.startsWith('layer-section-') && opaqueLayerSet.has(n.id.replace('layer-section-', '')))
+      .map((n) => n.id)
+  )
+  const groupIds = new Set(nodes.filter((n) => n.parentId && opaqueSectionIds.has(n.parentId!)).map((n) => n.id))
+  const fileIds  = new Set(nodes.filter((n) => n.parentId && groupIds.has(n.parentId!)).map((n) => n.id))
+  const hiddenIds = new Set([...groupIds, ...fileIds,
+    ...nodes.filter((n) => n.parentId && fileIds.has(n.parentId!)).map((n) => n.id)])
+  return nodes.map((n) => {
+    if (n.id.startsWith('layer-section-')) {
+      const isOpaque = opaqueLayerSet.has(n.id.replace('layer-section-', ''))
+      return { ...n, hidden: false, data: { ...n.data, opaque: isOpaque } }
+    }
+    if (hiddenIds.has(n.id)) return { ...n, hidden: true }
+    return n
+  })
+}
+
 // 공개 프로젝트 그래프를 읽기 전용으로 표시하는 페이지
 function ShareGraphInner() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [error, setError] = useState<string | null>(null)
@@ -32,17 +80,46 @@ function ShareGraphInner() {
 
   useEffect(() => {
     if (!projectId) return
-    axios
-      .get(`/api/share/${projectId}/graph`)
-      .then((res) => {
-        const raw = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[] }
-        const { nodes: builtNodes, edges: builtEdges } = buildLayout(raw.nodes, raw.edges, 'name', 'layer')
-        setNodes(builtNodes)
-        setEdges(builtEdges)
+
+    const presetSlot = searchParams.get('preset')
+    const userId = searchParams.get('userId')
+    const hasPreset = presetSlot && userId
+
+    const graphPromise = axios.get(`/api/share/${projectId}/graph`)
+    const presetPromise = hasPreset
+      ? axios.get(`/api/share/${projectId}/presets/${presetSlot}?userId=${userId}`).catch(() => null)
+      : Promise.resolve(null)
+
+    Promise.all([graphPromise, presetPromise])
+      .then(([graphRes, presetRes]) => {
+        const raw = graphRes.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[] }
+
+        // 프리셋 config 파싱 (없으면 기본값)
+        const cfg = (presetRes?.data?.config ?? {}) as Record<string, unknown>
+        const lp = (cfg.layoutPreset as LayoutPreset) ?? 'layer'
+        const lm = (cfg.labelMode as LabelMode) ?? 'name'
+        const edgeCfg = (cfg.edges as Record<string, boolean>) ?? {}
+        const se  = edgeCfg.import ?? false
+        const sc  = edgeCfg.call   ?? false
+        const si  = edgeCfg.inst   ?? false
+        const sb  = edgeCfg.broken ?? true
+        const sdb = edgeCfg.db     ?? false
+        const sapi = edgeCfg.api   ?? true
+        const opaqueLayerSet = new Set((cfg.opaqueLayerSet as string[]) ?? [])
+
+        const { nodes: builtNodes, edges: builtEdges } = buildLayout(raw.nodes, raw.edges, lm, lp)
+
+        // hub 모드: layer-section 노드 hidden / layer 모드: opaqueLayerSet 처리
+        const finalNodes = lp === 'hub'
+          ? builtNodes.map((n) => n.id.startsWith('layer-section-') ? { ...n, hidden: true } : n)
+          : applyOpaqueLayerSet(builtNodes, opaqueLayerSet)
+
+        setNodes(finalNodes)
+        setEdges(applyEdgeVisibility(builtEdges, se, sc, si, sb, sdb, sapi))
       })
       .catch(() => setError('프로젝트를 찾을 수 없거나 비공개 상태입니다.'))
       .finally(() => setLoading(false))
-  }, [projectId])
+  }, [projectId, searchParams])
 
   if (loading) {
     return (
