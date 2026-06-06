@@ -45,4 +45,10 @@ public class AnalysisRepositoryImpl implements AnalysisRepository {
     public Optional<AnalysisResult> findLatestByProjectIdAndBranch(UUID projectId, String branch) {
         return jpa.findLatestByProjectIdAndBranch(projectId, branch);
     }
+
+    // 전체 분석 횟수 반환
+    @Override
+    public long count() {
+        return jpa.count();
+    }
 }

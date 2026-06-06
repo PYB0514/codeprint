@@ -15,6 +15,7 @@ import DiffPage from './pages/DiffPage'
 import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
 import ContactPage from './pages/ContactPage'
+import AdminPage from './pages/AdminPage'
 import CookieBanner from './components/CookieBanner'
 
 // 앱 최상위 라우터 컴포넌트
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/contact" element={<ContactPage />} />
+        <Route path="/admin" element={<AdminPage />} />
       </Routes>
       <CookieBanner />
     </BrowserRouter>

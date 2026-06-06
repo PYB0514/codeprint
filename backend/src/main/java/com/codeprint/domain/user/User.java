@@ -33,6 +33,13 @@ public class User {
     @Column(nullable = false, length = 20)
     private UserPlan plan;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UserRole role;
+
+    @Column(nullable = false)
+    private boolean enabled;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -51,6 +58,8 @@ public class User {
         user.email = email;
         user.username = username;
         user.plan = UserPlan.FREE;
+        user.role = UserRole.USER;
+        user.enabled = true;
         user.createdAt = Instant.now();
         user.updatedAt = Instant.now();
         return user;
@@ -71,6 +80,18 @@ public class User {
     // 사용자 플랜을 FREE로 다운그레이드
     public void downgradeToFree() {
         this.plan = UserPlan.FREE;
+        this.updatedAt = Instant.now();
+    }
+
+    // 계정을 정지 상태로 변경
+    public void disable() {
+        this.enabled = false;
+        this.updatedAt = Instant.now();
+    }
+
+    // 계정을 활성 상태로 복구
+    public void enable() {
+        this.enabled = true;
         this.updatedAt = Instant.now();
     }
 
