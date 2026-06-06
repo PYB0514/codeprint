@@ -142,7 +142,7 @@ export default function UserProfilePage() {
               {posts.map((post) => (
                 <div
                   key={post.id}
-                  onClick={() => navigate('/community')}
+                  onClick={() => navigate(`/community?postId=${post.id}`)}
                   className="bg-gray-900 rounded-xl p-4 cursor-pointer hover:bg-gray-800 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-2">

@@ -1,6 +1,6 @@
 // 커뮤니티 게시판 — 게시글 목록/상세/작성 통합 페이지
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
 
@@ -58,6 +58,7 @@ const FEEDBACK_LABELS: Record<string, string> = {
 // 커뮤니티 게시판 페이지
 export default function CommunityPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [user, setUser] = useState<UserInfo | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
@@ -88,9 +89,16 @@ export default function CommunityPage() {
         .then((res) => setMyProjects(res.data))
         .catch(() => {})
     }
+    const initialPostId = searchParams.get('postId')
     axios
       .get<Post[]>('/api/community/posts')
-      .then((res) => setPosts(res.data))
+      .then((res) => {
+        setPosts(res.data)
+        if (initialPostId) {
+          const target = res.data.find((p) => p.id === initialPostId)
+          if (target) handleSelectPost(target)
+        }
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -404,9 +412,28 @@ export default function CommunityPage() {
                 )}
               </div>
               <h2 className="font-semibold text-base mb-1">{selectedPost.title}</h2>
-              <p className="text-xs text-gray-500 mb-3">
-                {selectedPost.authorUsername} · {new Date(selectedPost.createdAt).toLocaleDateString('ko-KR')}
-              </p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs text-gray-500">
+                  <button
+                    onClick={() => navigate(`/users/${selectedPost.userId}`)}
+                    className="hover:text-gray-300 underline underline-offset-2"
+                  >
+                    {selectedPost.authorUsername}
+                  </button>
+                  {' · '}{new Date(selectedPost.createdAt).toLocaleDateString('ko-KR')}
+                </p>
+                <button
+                  onClick={(e) => handleToggleBookmark(e, selectedPost)}
+                  className={`text-sm flex items-center gap-1 ${
+                    selectedPost.bookmarkedByMe ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'
+                  }`}
+                >
+                  <span>{selectedPost.bookmarkedByMe ? '★' : '☆'}</span>
+                  {selectedPost.bookmarkCount > 0 && (
+                    <span className="text-xs">{selectedPost.bookmarkCount}</span>
+                  )}
+                </button>
+              </div>
               <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{selectedPost.content}</p>
 
               {/* 첨부 이미지 */}
