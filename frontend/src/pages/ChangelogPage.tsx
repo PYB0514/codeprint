@@ -11,6 +11,123 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v1.33.001',
+    date: '2026-06-07',
+    title: 'Railway 배포 분석 실패 수정',
+    type: 'infra',
+    items: [
+      { category: '인프라', desc: 'Dockerfile 런타임 스테이지에 git 설치 추가 — eclipse-temurin:21-jre 이미지에 git 미포함으로 배포 환경 분석 전체 실패 수정' },
+    ],
+  },
+  {
+    version: 'v1.33',
+    date: '2026-06-07',
+    title: 'AI 설명 기능 — Claude / ChatGPT / Gemini 다중 제공자',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'V16 Flyway 마이그레이션 — user_ai_keys 테이블 (provider/api_key_encrypted, 복합 유니크)' },
+      { category: '백엔드', desc: 'UserAiKey 엔티티 — AES-GCM 암호화 저장 (AesEncryptionConverter 적용)' },
+      { category: '백엔드', desc: 'ClaudeAiService / OpenAiService / GeminiAiService — RestClient HTTP 직접 호출, SDK 의존성 없음' },
+      { category: '백엔드', desc: 'GET /api/ai/keys, PUT/DELETE /api/ai/keys/{provider}, POST /api/ai/explain' },
+      { category: '프론트', desc: '/settings 페이지 — Claude/ChatGPT/Gemini API 키 등록·교체·삭제 카드 UI' },
+      { category: '프론트', desc: 'AppHeader에 설정 버튼 추가, GraphPage 함수 노드 사이드바에 AI 설명 섹션' },
+    ],
+  },
+  {
+    version: 'v1.32',
+    date: '2026-06-06',
+    title: '커뮤니티 게시글 검색',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'GET /api/community/posts?q= — 제목/본문 대소문자 무시 검색 (ILIKE)' },
+      { category: '프론트', desc: '커뮤니티 헤더에 검색 입력창 추가, 300ms 디바운스 적용' },
+    ],
+  },
+  {
+    version: 'v1.31',
+    date: '2026-06-06',
+    title: '그래프 페이지 온보딩 투어',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: 'react-joyride v3 기반 5단계 온보딩 투어 — 그래프 로드 후 자동 시작, localStorage로 완료 기억' },
+      { category: '프론트', desc: '내보내기·레이아웃·엣지 색인·흐름 재생·AI 설명 순서로 주요 기능 안내' },
+    ],
+  },
+  {
+    version: 'v1.30.001',
+    date: '2026-06-06',
+    title: '커뮤니티 게시글 상세 패널 개선',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '게시글 상세 패널에 북마크 토글(☆/★) 및 카운트 표시' },
+      { category: '프론트', desc: '작성자 이름 클릭 시 /users/{id} 프로필 이동' },
+      { category: '프론트', desc: '?postId= 쿼리 파라미터로 특정 게시글 자동 선택' },
+    ],
+  },
+  {
+    version: 'v1.30',
+    date: '2026-06-06',
+    title: 'FUNCTION_CALL 인터페이스→구현체 우선 매핑',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'GraphBuilder — interfaceToImplFiles 맵을 루프 이전에 빌드, 인터페이스보다 구현체를 우선 선택하는 bestMatch 패턴 적용' },
+      { category: '백엔드', desc: '회귀 테스트 2개 추가 — 구현체 우선 선택 / 구현체 없으면 인터페이스 유지' },
+    ],
+  },
+  {
+    version: 'v1.29',
+    date: '2026-06-05',
+    title: '게시글 북마크 & 유저 프로필 페이지',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'V15 마이그레이션 — post_bookmarks 테이블, POST/DELETE /api/community/posts/{id}/bookmark, GET /api/community/bookmarks' },
+      { category: '프론트', desc: '/bookmarks 페이지 — 북마크한 게시글 목록' },
+      { category: '프론트', desc: '/users/:id 프로필 페이지 — GitHub 아바타, 작성 게시글 목록' },
+    ],
+  },
+  {
+    version: 'v1.28',
+    date: '2026-06-05',
+    title: '공유 그래프 프리셋 연동',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: 'ShareGraphPage — ?preset={slot}&userId={userId} 파라미터로 저장 프리셋 뷰 공유' },
+    ],
+  },
+  {
+    version: 'v1.27',
+    date: '2026-06-05',
+    title: '흐름 재생 호출 트리 리디자인 & 계층 레이아웃 개선',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: 'buildCallTree — 분기 트리 패널, 분기점 자동 일시정지(B), 분기 클릭 전환(C)' },
+      { category: '프론트', desc: '계층 프리셋 레이아웃 방향 변경 — pages/components → interfaces → application → domain → infrastructure (요청 흐름 방향)' },
+      { category: '프론트', desc: '상위레이어 감추기 버그 수정 — zIndex 방식 → hidden 자손 처리 방식 교체 (React Flow v12 z-order 우회)' },
+    ],
+  },
+  {
+    version: 'v1.26',
+    date: '2026-06-05',
+    title: '그래프 뷰 프리셋 (4슬롯)',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'V14 마이그레이션 — graph_view_presets 테이블, GET/PUT /api/graphs/{id}/presets' },
+      { category: '프론트', desc: '프리셋 패널 + 저장 모달 — 현재 뷰포트/노드 위치를 4개 슬롯 중 하나에 저장·불러오기' },
+      { category: '프론트', desc: '허브 모드 전환 시 레이어 섹션 박스 자동 숨김' },
+    ],
+  },
+  {
+    version: 'v1.25',
+    date: '2026-06-04',
+    title: 'GraphBuilder 버그 수정 & DevTools & 테스트 커버리지',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'GraphBuilder isInterfaceImpl 다중 구현체 버그 수정 — Map<String,List> 변경, 회귀 테스트 7개 추가' },
+      { category: '백엔드', desc: 'StaticCodeAnalyzer 언어별 커버리지 테스트 19개 추가, Kotlin fun 패턴 분리' },
+      { category: '인프라', desc: 'Spring Boot DevTools 자동 재시작 — developmentOnly 스코프 적용' },
+    ],
+  },
+  {
     version: 'v1.24',
     date: '2026-06-06',
     title: '공지사항 시스템',
