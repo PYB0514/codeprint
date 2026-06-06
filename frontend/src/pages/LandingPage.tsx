@@ -1,6 +1,7 @@
 // 서비스 메인 랜딩 페이지 — 로그인, 대시보드, 커뮤니티 진입점
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import Footer from '../components/Footer'
 
 // JWT 보유 여부로 로그인 상태 판단
 function isLoggedIn() {
@@ -218,12 +219,7 @@ export default function LandingPage() {
 
       </div>
 
-      <footer className="py-5 text-center text-gray-700 text-xs border-t border-gray-800 flex items-center justify-center gap-4">
-        <span>© 2025 Codeprint</span>
-        <button onClick={() => navigate('/changelog')} className="hover:text-gray-400 transition-colors">
-          패치노트
-        </button>
-      </footer>
+      <Footer />
     </div>
   )
 }
