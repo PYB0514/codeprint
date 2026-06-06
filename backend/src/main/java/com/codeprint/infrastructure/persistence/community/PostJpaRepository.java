@@ -13,4 +13,8 @@ public interface PostJpaRepository extends JpaRepository<Post, UUID> {
     List<Post> findByUserId(UUID userId);
 
     List<Post> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    // 제목 또는 본문에 키워드가 포함된 게시글 검색 (대소문자 무시)
+    List<Post> findByTitleContainingIgnoreCaseOrContentContainingIgnoreCaseOrderByCreatedAtDesc(
+            String title, String content, Pageable pageable);
 }
