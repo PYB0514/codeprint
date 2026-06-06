@@ -4,6 +4,8 @@ package com.codeprint.infrastructure.persistence.user;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -43,5 +45,17 @@ public class UserRepositoryImpl implements UserRepository {
     @Override
     public boolean existsByGithubId(Long githubId) {
         return jpa.existsByGithubId(githubId);
+    }
+
+    // 전체 사용자 수 반환
+    @Override
+    public long count() {
+        return jpa.count();
+    }
+
+    // 페이지 단위 사용자 목록 반환
+    @Override
+    public Page<User> findAll(Pageable pageable) {
+        return jpa.findAll(pageable);
     }
 }

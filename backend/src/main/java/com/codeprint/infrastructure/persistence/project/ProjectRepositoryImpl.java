@@ -45,4 +45,10 @@ public class ProjectRepositoryImpl implements ProjectRepository {
     public void deleteById(UUID id) {
         jpa.deleteById(id);
     }
+
+    // 전체 프로젝트 수 반환
+    @Override
+    public long count() {
+        return jpa.count();
+    }
 }
