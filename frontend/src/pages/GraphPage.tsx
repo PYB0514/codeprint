@@ -636,9 +636,10 @@ function GraphPageInner() {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, lm, lp, openFileSidebar)
       setNodes(layoutNodes.map((n) => {
         if (!n.id.startsWith('layer-section-')) return n
+        if (lp === 'hub') return { ...n, hidden: true }
         const layer = n.id.replace('layer-section-', '')
         const isOpaque = newOpaqueSet.has(layer)
-        return { ...n, zIndex: isOpaque ? 9999 : -20, data: { ...n.data, opaque: isOpaque } }
+        return { ...n, hidden: false, zIndex: isOpaque ? 9999 : -20, data: { ...n.data, opaque: isOpaque } }
       }))
       setEdges(applyEdgeVisibility(layoutEdges, se, sc, si, sb, sdb, sapi))
     }
@@ -812,7 +813,7 @@ function GraphPageInner() {
     setLayoutPreset(next)
     if (rawNodes.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
-      setNodes(ln)
+      setNodes(ln.map((n) => n.id.startsWith('layer-section-') ? { ...n, hidden: next === 'hub' } : n))
       setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
