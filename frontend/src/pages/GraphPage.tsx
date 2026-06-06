@@ -332,6 +332,13 @@ function GraphPageInner() {
   const [commentNodeId, setCommentNodeId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
+  // 뷰 프리셋 상태
+  const [presets, setPresets] = useState<{ slot: number; name: string; config: Record<string, unknown>; isDefault: boolean }[]>([])
+  const [showSavePresetModal, setShowSavePresetModal] = useState(false)
+  const [presetSaving, setPresetSaving] = useState(false)
+  const [pendingSaveSlot, setPendingSaveSlot] = useState<number | null>(null)
+  const [presetSaveName, setPresetSaveName] = useState('')
+
   // 엣지 타입별 초기 hidden 상태 적용
   const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean, sb: boolean, sdb: boolean, sapi: boolean) =>
     edges.map((e) => {
@@ -581,6 +588,100 @@ function GraphPageInner() {
     }
   }
 
+  // 현재 뷰 상태를 프리셋 config로 직렬화
+  const buildCurrentConfig = useCallback(() => ({
+    layoutPreset,
+    labelMode,
+    edges: {
+      import: showEdges,
+      call: showCallEdges,
+      inst: showInstEdges,
+      broken: showBrokenEdges,
+      db: showDbEdges,
+      api: showApiCallEdges,
+    },
+    opaqueLayerSet: Array.from(opaqueLayerSet),
+    hiddenLayers: Array.from(shareHiddenLayers),
+    hiddenGroups: Array.from(shareHiddenGroups),
+    hiddenNodes: Array.from(shareHiddenNodes),
+  }), [layoutPreset, labelMode, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges, opaqueLayerSet, shareHiddenLayers, shareHiddenGroups, shareHiddenNodes])
+
+  // 프리셋 config를 현재 뷰 상태에 적용
+  const applyPresetConfig = useCallback((config: Record<string, unknown>) => {
+    const lp = (config.layoutPreset as LayoutPreset) ?? 'layer'
+    const lm = (config.labelMode as LabelMode) ?? 'name'
+    const edgeConfig = (config.edges as Record<string, boolean>) ?? {}
+    const se = edgeConfig.import ?? false
+    const sc = edgeConfig.call ?? false
+    const si = edgeConfig.inst ?? false
+    const sb = edgeConfig.broken ?? true
+    const sdb = edgeConfig.db ?? false
+    const sapi = edgeConfig.api ?? true
+    const newOpaqueSet = new Set((config.opaqueLayerSet as string[]) ?? [])
+
+    setLayoutPreset(lp)
+    setLabelMode(lm)
+    setShowEdges(se)
+    setShowCallEdges(sc)
+    setShowInstEdges(si)
+    setShowBrokenEdges(sb)
+    setShowDbEdges(sdb)
+    setShowApiCallEdges(sapi)
+    setOpaqueLayerSet(newOpaqueSet)
+    setShareHiddenLayers(new Set((config.hiddenLayers as string[]) ?? []))
+    setShareHiddenGroups(new Set((config.hiddenGroups as string[]) ?? []))
+    setShareHiddenNodes(new Set((config.hiddenNodes as string[]) ?? []))
+
+    if (rawNodes.length > 0) {
+      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, lm, lp, openFileSidebar)
+      setNodes(layoutNodes.map((n) => {
+        if (!n.id.startsWith('layer-section-')) return n
+        if (lp === 'hub') return { ...n, hidden: true }
+        const layer = n.id.replace('layer-section-', '')
+        const isOpaque = newOpaqueSet.has(layer)
+        return { ...n, hidden: false, zIndex: isOpaque ? 9999 : -20, data: { ...n.data, opaque: isOpaque } }
+      }))
+      setEdges(applyEdgeVisibility(layoutEdges, se, sc, si, sb, sdb, sapi))
+    }
+  }, [rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, applyEdgeVisibility])
+
+  // 그래프의 프리셋 목록 로드
+  const loadPresets = useCallback(async (gid: string) => {
+    try {
+      const res = await axios.get(`/api/graphs/${gid}/presets`, { headers: authHeaders() })
+      setPresets(res.data)
+    } catch {
+      // 프리셋 로드 실패 무시
+    }
+  }, [])
+
+  // graphId 변경 시 프리셋 로드
+  useEffect(() => {
+    if (graphId) loadPresets(graphId)
+  }, [graphId, loadPresets])
+
+  // 슬롯에 현재 뷰 저장
+  const handleSavePreset = useCallback(async () => {
+    if (!graphId || pendingSaveSlot === null || !presetSaveName.trim()) return
+    setPresetSaving(true)
+    try {
+      const config = buildCurrentConfig()
+      await axios.put(
+        `/api/graphs/${graphId}/presets/${pendingSaveSlot}`,
+        { name: presetSaveName.trim(), config },
+        { headers: authHeaders() }
+      )
+      await loadPresets(graphId)
+      setShowSavePresetModal(false)
+      setPendingSaveSlot(null)
+      setPresetSaveName('')
+    } catch {
+      alert('저장 실패. 다시 시도해주세요.')
+    } finally {
+      setPresetSaving(false)
+    }
+  }, [graphId, pendingSaveSlot, presetSaveName, buildCurrentConfig, loadPresets])
+
   // 버전 목록을 서버에서 불러오는 함수
   const handleLoadVersions = useCallback(async () => {
     if (showVersions) { setShowVersions(false); return }
@@ -712,7 +813,7 @@ function GraphPageInner() {
     setLayoutPreset(next)
     if (rawNodes.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
-      setNodes(ln)
+      setNodes(ln.map((n) => n.id.startsWith('layer-section-') ? { ...n, hidden: next === 'hub' } : n))
       setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
@@ -1129,6 +1230,36 @@ function GraphPageInner() {
               </button>
             </LeftSection>
 
+            {/* 뷰 프리셋 */}
+            <LeftSection title="뷰 프리셋">
+              <div className="flex flex-col gap-1">
+                {presets.map((p) => (
+                  <div key={p.slot} className="flex items-center gap-1">
+                    <button
+                      onClick={() => applyPresetConfig(p.config)}
+                      title={`슬롯 ${p.slot} 불러오기`}
+                      className="flex-1 text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 truncate"
+                    >
+                      <span className="text-gray-500 mr-1">{p.slot}.</span>
+                      {p.name}
+                      {p.isDefault && <span className="ml-1 text-gray-600 text-[10px]">기본</span>}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPendingSaveSlot(p.slot)
+                        setPresetSaveName(p.name)
+                        setShowSavePresetModal(true)
+                      }}
+                      title={`슬롯 ${p.slot}에 현재 뷰 저장`}
+                      className="text-gray-600 hover:text-gray-300 text-xs px-1.5 py-1 rounded hover:bg-gray-800 flex-shrink-0"
+                    >
+                      💾
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </LeftSection>
+
             {/* 레이아웃 */}
             <LeftSection title="레이아웃">
               <div className="flex items-center justify-between">
@@ -1180,38 +1311,42 @@ function GraphPageInner() {
 
             {/* 범례 — DDD 레이어 + 노드 */}
             <LeftSection title="범례">
-              <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">DDD 레이어</p>
-              {[
-                { label: 'Domain',           color: '#3b82f6', key: 'domain' },
-                { label: 'Application',      color: '#eab308', key: 'application' },
-                { label: 'Infrastructure',   color: '#a855f7', key: 'infrastructure' },
-                { label: 'Interfaces',       color: '#10b981', key: 'interfaces' },
-                { label: 'Pages/Components', color: '#06b6d4', key: 'pages' },
-                { label: 'Database',         color: '#ef4444', key: 'database' },
-              ].map(({ label, color, key }) => {
-                const active = opaqueLayerSet.has(key)
-                return (
-                  <div key={key} className="flex items-center gap-2 py-0.5">
-                    <button
-                      onClick={() => toggleLayerOpaque(key)}
-                      title={active ? '내용 표시' : '내용 가리기'}
-                      style={{
-                        width: 18, height: 18, borderRadius: 4,
-                        border: `1px solid ${color}88`,
-                        background: active ? color : `${color}22`,
-                        color: active ? '#fff' : color,
-                        fontSize: 10, cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {active ? '◑' : '○'}
-                    </button>
-                    <span className="text-gray-400 text-xs">{label}</span>
-                  </div>
-                )
-              })}
-              <div className="border-t border-gray-800 my-2" />
+              {layoutPreset === 'layer' && (
+                <>
+                  <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">DDD 레이어</p>
+                  {[
+                    { label: 'Domain',           color: '#3b82f6', key: 'domain' },
+                    { label: 'Application',      color: '#eab308', key: 'application' },
+                    { label: 'Infrastructure',   color: '#a855f7', key: 'infrastructure' },
+                    { label: 'Interfaces',       color: '#10b981', key: 'interfaces' },
+                    { label: 'Pages/Components', color: '#06b6d4', key: 'pages' },
+                    { label: 'Database',         color: '#ef4444', key: 'database' },
+                  ].map(({ label, color, key }) => {
+                    const active = opaqueLayerSet.has(key)
+                    return (
+                      <div key={key} className="flex items-center gap-2 py-0.5">
+                        <button
+                          onClick={() => toggleLayerOpaque(key)}
+                          title={active ? '내용 표시' : '내용 가리기'}
+                          style={{
+                            width: 18, height: 18, borderRadius: 4,
+                            border: `1px solid ${color}88`,
+                            background: active ? color : `${color}22`,
+                            color: active ? '#fff' : color,
+                            fontSize: 10, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {active ? '◑' : '○'}
+                        </button>
+                        <span className="text-gray-400 text-xs">{label}</span>
+                      </div>
+                    )
+                  })}
+                  <div className="border-t border-gray-800 my-2" />
+                </>
+              )}
               <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">노드</p>
               <div className="flex items-center gap-2 py-0.5">
                 <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#1e3a5f', border: '1.5px solid #3b82f6' }} />
@@ -1684,6 +1819,44 @@ function GraphPageInner() {
           />
         )}
       </aside>
+
+      {/* 뷰 프리셋 저장 모달 */}
+      {showSavePresetModal && pendingSaveSlot !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-80 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-sm">슬롯 {pendingSaveSlot}에 저장</h2>
+              <button
+                onClick={() => { setShowSavePresetModal(false); setPendingSaveSlot(null); setPresetSaveName('') }}
+                className="text-gray-500 hover:text-white text-lg leading-none"
+              >✕</button>
+            </div>
+            <p className="text-xs text-gray-400">현재 레이아웃, 라벨, 엣지 설정을 이 슬롯에 저장합니다.</p>
+            <input
+              value={presetSaveName}
+              onChange={(e) => setPresetSaveName(e.target.value)}
+              placeholder="프리셋 이름 (최대 30자)"
+              maxLength={30}
+              autoFocus
+              className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none"
+              onKeyDown={(e) => { if (e.key === 'Enter' && !presetSaving && presetSaveName.trim()) handleSavePreset() }}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => { setShowSavePresetModal(false); setPendingSaveSlot(null); setPresetSaveName('') }}
+                className="text-sm text-gray-500 hover:text-white px-3 py-1.5"
+              >취소</button>
+              <button
+                onClick={handleSavePreset}
+                disabled={presetSaving || !presetSaveName.trim()}
+                className="text-sm bg-white text-black font-medium px-4 py-1.5 rounded-lg hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {presetSaving ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 커뮤니티 공유 모달 */}
       {showShareModal && (
