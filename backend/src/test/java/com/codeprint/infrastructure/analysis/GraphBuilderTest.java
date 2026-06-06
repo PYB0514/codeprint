@@ -222,6 +222,62 @@ class GraphBuilderTest {
         assertThat(fileNodeCount).isEqualTo(3);
     }
 
+    // ── 인터페이스 → 구현체 우선 매핑 ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("FUNCTION_CALL 매칭 시 인터페이스보다 구현체를 우선 선택한다")
+    void FUNCTION_CALL_구현체_우선_선택() {
+        // ServiceA.doWork() → save() 호출, 후보: Repository(인터페이스) vs RepositoryImpl(구현체)
+        // 인터페이스가 파일 목록에 먼저 오더라도 구현체로 연결되어야 한다
+        ParsedFile service = parsedFileWithCalls("src/ServiceA.java", "Java",
+                List.of("doWork"), Map.of("doWork", List.of("save")));
+        ParsedFile repo = parsedFile("src/Repository.java", "Java",
+                List.of("save"), Map.of()); // 인터페이스 (구현체가 implements Repository)
+        ParsedFile repoImpl = parsedFileWithImpl("src/RepositoryImpl.java", "Java",
+                List.of("save"), "Repository"); // 구현체
+
+        // 인터페이스(repo)가 먼저 오는 순서로 입력
+        graphBuilder.build(projectId, analysisId, List.of(service, repo, repoImpl));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        List<Edge> callEdges = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .collect(Collectors.toList());
+
+        // doWork → save FUNCTION_CALL 엣지는 RepositoryImpl의 save를 target으로 해야 한다
+        boolean hasDirectImplEdge = callEdges.stream()
+                .filter(e -> e.getEdgeIdentifier().contains("doWork") && e.getEdgeIdentifier().contains("save"))
+                .anyMatch(e -> {
+                    Object calleeFile = e.getMetadata() != null ? e.getMetadata().get("calleeFile") : null;
+                    return calleeFile != null && calleeFile.toString().contains("RepositoryImpl");
+                });
+
+        assertThat(hasDirectImplEdge).isTrue();
+    }
+
+    @Test
+    @DisplayName("구현체가 없는 인터페이스 메서드 호출은 기존대로 인터페이스로 연결된다")
+    void FUNCTION_CALL_구현체_없으면_인터페이스_그대로() {
+        // 구현체가 없는 경우: 인터페이스로 연결
+        ParsedFile service = parsedFileWithCalls("src/ServiceA.java", "Java",
+                List.of("doWork"), Map.of("doWork", List.of("query")));
+        ParsedFile repo = parsedFile("src/ExternalClient.java", "Java",
+                List.of("query"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(service, repo));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasCallEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("doWork") && e.getEdgeIdentifier().contains("query"));
+
+        assertThat(hasCallEdge).isTrue();
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private ParsedFile parsedFile(String path, String lang, List<String> functions, Map<String, String> comments) {
@@ -238,5 +294,11 @@ class GraphBuilderTest {
     private ParsedFile parsedFileWithImports(String path, String lang, List<String> imports) {
         return new ParsedFile(path, lang, List.of(), imports, null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of());
+    }
+
+    // 구현체 파일 생성 헬퍼 — implementedInterfaces 포함
+    private ParsedFile parsedFileWithImpl(String path, String lang, List<String> functions, String implementedInterface) {
+        return new ParsedFile(path, lang, functions, List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(implementedInterface));
     }
 }
