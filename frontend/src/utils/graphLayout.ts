@@ -4,18 +4,17 @@ import React from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { MarkerType } from '@xyflow/react'
 
-// DDD 레이어 → 컬럼 순서 (왼쪽=외부진입, 오른쪽=데이터)
-// 백엔드: infrastructure(0) → domain(1) → application(2) → interfaces(3)
-// 프론트: pages(4) → components/hooks(5) → utils(6)
+// DDD 레이어 → 컬럼 순서 (왼쪽=프론트, 오른쪽=DB) — 요청 흐름 방향
+// pages/components → interfaces(컨트롤러) → application → domain → infrastructure → database
 const LAYER_COLUMN: Record<string, number> = {
-  infrastructure: 0,
-  domain:         1,
-  application:    2,
-  interfaces:     3,
-  pages:          4,
-  components:     5,
-  hooks:          5,
-  utils:          6,
+  pages:          0,
+  components:     0,
+  hooks:          1,
+  utils:          1,
+  interfaces:     2,
+  application:    3,
+  domain:         4,
+  infrastructure: 5,
 }
 
 export interface ColumnInfo {

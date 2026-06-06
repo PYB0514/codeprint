@@ -126,3 +126,20 @@
 
 **문제 2.** 경로 엣지 `hidden: true` 상태를 재생 중 해제해야 하는데, 전체 경로를 한 번에 unhide하면 모든 FUNCTION_CALL 엣지가 동시에 표시됨 (시각적 혼잡).
 **결과.** `visitedItems = playbackItems.slice(0, cursor + 1)` — 커서까지 지나온 항목만 unhide. 스텝별로 엣지가 순차 등장하는 효과.
+
+---
+
+### 흐름 재생 — 선형 경로에서 호출 트리로 전환 (2026-06-06)
+
+**문제.** 기존 `buildFlowPath`는 함수 호출이 분기될 때 첫 번째 자식만 따라가는 선형 탐색 → 다른 분기가 숨겨짐. 사용자가 "분기가 생기면 하위흐름으로" 요구.
+
+**이유.** 실제 백엔드 흐름은 A→B, A→C 같은 분기 구조가 흔함. 선형 경로로는 전체 그림을 전달할 수 없음.
+
+**결과.**
+- `buildCallTree(nodeId, rawEdges, rawNodes)` 재귀 트리 빌드 함수 도입 — upstream 추적 → 루트 함수 탐색 → 전체 downstream 트리.
+- `CallTreePanel` 컴포넌트 — 트리를 인덴트 레이아웃으로 렌더링. 분기점에 ⑂ 아이콘 표시. 현재 경로는 amber로 강조.
+- B 기능: 분기점 도달 시 자동 일시정지 — 플레이어가 분기를 선택하도록 유도.
+- C 기능: `selectBranch(nodeId)` — 트리 노드 클릭 시 해당 노드까지의 경로로 재생 전환. `findPathInTree` + `extendToDefaultLeaf`로 경로 재계산.
+- API_CALL 진입점 prepend: 루트 함수 소속 컨트롤러 파일에 API_CALL이 있으면 프론트엔드 FILE 노드를 트리 최상단에 추가.
+
+**계층 레이아웃 방향 변경.** `LAYER_COLUMN`을 `infrastructure(0)…pages(4)`에서 `pages(0)…infrastructure(5)`로 뒤집음. 요청 흐름(프론트→백엔드→DB) 방향과 일치시키기 위함.
