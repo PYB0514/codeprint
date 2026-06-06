@@ -106,6 +106,8 @@
 | 공지사항 시스템 | ✅ | v1.24 — V12 마이그레이션, Notice 도메인, NoticeController, NoticeBanner (#76) |
 | 도메인 단위 테스트 | ✅ | v1.24.001 — AnalysisResult 7개 + User 6개 + UserPlan 4개, 총 17개 PASSED (#78) |
 | 어드민 공지 관리 UI + changelog 업데이트 | ✅ | v1.24.002 — AdminPage 공지 관리 섹션, changelog v1.22~v1.24 (#79) |
+| GraphBuilder 여러 구현체 isInterfaceImpl 버그 수정 | ✅ | v1.25 — Map<String,List> 변경, 회귀 테스트(7/7 PASS), 41개 엣지 확인 (#81) |
+| Spring Boot DevTools 자동 재시작 | ✅ | v1.25 — developmentOnly 스코프, 저장 시 자동 컴파일 연동 (#81) |
 
 ---
 
@@ -130,10 +132,11 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재: main 브랜치 (v1.24.002)
+# 현재: main 브랜치 (v1.25)
 # 다음 선택지 (우선순위 순):
-#   A. 신규 기능 백로그 — feat/interface-impl, AI 기능, 분석 비교 등
-#   B. StaticCodeAnalyzer 언어별 샘플 테스트 (이미 버그 다수 발생 — 회귀 방지 임팩트 최고)
+#   A. StaticCodeAnalyzer 언어별 샘플 테스트 (이미 버그 다수 발생 — 회귀 방지 임팩트 최고)
+#   B. AI 기능 — 선택 노드/엣지 설명 (Claude API), 유료화 핵심
+#   C. 분석 비교 기능 — 브랜치 A vs B, 이전 분석 vs 최신
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
