@@ -1,6 +1,6 @@
 # Codeprint 개발 현황
 
-> 마지막 업데이트: 2026-06-06 (v1.24 — 공지사항 시스템)
+> 마지막 업데이트: 2026-06-06 (v1.24.002 — 어드민 공지 관리 UI, changelog 업데이트)
 
 ---
 
@@ -104,6 +104,8 @@
 | 법적 필수 페이지 + CookieBanner + Footer | ✅ | v1.22 — /terms, /privacy, /contact, CookieBanner, Footer (#73) |
 | 관리자 역할 시스템 및 어드민 대시보드 | ✅ | v1.23 — UserRole, V11 마이그레이션, AdminController, AdminPage (#74) |
 | 공지사항 시스템 | ✅ | v1.24 — V12 마이그레이션, Notice 도메인, NoticeController, NoticeBanner (#76) |
+| 도메인 단위 테스트 | ✅ | v1.24.001 — AnalysisResult 7개 + User 6개 + UserPlan 4개, 총 17개 PASSED (#78) |
+| 어드민 공지 관리 UI + changelog 업데이트 | ✅ | v1.24.002 — AdminPage 공지 관리 섹션, changelog v1.22~v1.24 (#79) |
 
 ---
 
@@ -128,11 +130,10 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재: main 브랜치 (v1.24)
+# 현재: main 브랜치 (v1.24.002)
 # 다음 선택지 (우선순위 순):
-#   A. test/domain-unit — AnalysisResult 상태 전이 + UserPlan 경계 조건 테스트
-#   B. feat/admin-notices — 어드민 대시보드에 공지 관리 UI 추가 (공지 생성/활성화/삭제)
-#   C. 신규 기능 백로그 참고
+#   A. 신규 기능 백로그 — feat/interface-impl, AI 기능, 분석 비교 등
+#   B. StaticCodeAnalyzer 언어별 샘플 테스트 (이미 버그 다수 발생 — 회귀 방지 임팩트 최고)
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
