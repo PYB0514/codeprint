@@ -1,4 +1,4 @@
-// 관리자 대시보드 — 서비스 통계 및 사용자 관리
+// 관리자 대시보드 — 서비스 통계, 사용자 관리, 공지사항 관리
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -19,6 +19,14 @@ interface UserItem {
   createdAt: string
 }
 
+interface NoticeItem {
+  id: string
+  title: string
+  content: string
+  active: boolean
+  createdAt: string
+}
+
 // 관리자 대시보드 페이지
 export default function AdminPage() {
   const navigate = useNavigate()
@@ -27,17 +35,19 @@ export default function AdminPage() {
   const [totalElements, setTotalElements] = useState(0)
   const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
+  const [notices, setNotices] = useState<NoticeItem[]>([])
+  const [noticeTitle, setNoticeTitle] = useState('')
+  const [noticeContent, setNoticeContent] = useState('')
+  const [noticeLoading, setNoticeLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const token = localStorage.getItem('jwt')
+  const headers = { Authorization: `Bearer ${token}` }
+
   // 통계 및 사용자 목록 로드
   useEffect(() => {
-    const token = localStorage.getItem('jwt')
-    if (!token) {
-      navigate('/login')
-      return
-    }
-    const headers = { Authorization: `Bearer ${token}` }
+    if (!token) { navigate('/login'); return }
 
     Promise.all([
       axios.get('/api/admin/stats', { headers }),
@@ -50,30 +60,66 @@ export default function AdminPage() {
         setTotalPages(usersRes.data.totalPages)
       })
       .catch((err) => {
-        if (err.response?.status === 403) {
-          setError('관리자 권한이 없습니다.')
-        } else {
-          setError('데이터를 불러오지 못했습니다.')
-        }
+        if (err.response?.status === 403) setError('관리자 권한이 없습니다.')
+        else setError('데이터를 불러오지 못했습니다.')
       })
       .finally(() => setLoading(false))
-  }, [page, navigate])
+  }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 공지사항 목록 로드
+  useEffect(() => {
+    if (!token) return
+    axios.get('/api/notices/all', { headers })
+      .then((res) => setNotices(res.data))
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 계정 정지 또는 복구 처리
   const toggleUser = async (user: UserItem) => {
-    const token = localStorage.getItem('jwt')
     const action = user.enabled ? 'disable' : 'enable'
     try {
-      await axios.patch(`/api/admin/users/${user.id}/${action}`, null, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === user.id ? { ...u, enabled: !u.enabled } : u
-        )
-      )
+      await axios.patch(`/api/admin/users/${user.id}/${action}`, null, { headers })
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, enabled: !u.enabled } : u))
     } catch {
       alert('처리에 실패했습니다.')
+    }
+  }
+
+  // 공지사항 생성
+  const createNotice = async () => {
+    if (!noticeTitle.trim() || !noticeContent.trim()) return
+    setNoticeLoading(true)
+    try {
+      const res = await axios.post('/api/notices', { title: noticeTitle, content: noticeContent }, { headers })
+      setNotices((prev) => [res.data, ...prev])
+      setNoticeTitle('')
+      setNoticeContent('')
+    } catch {
+      alert('공지 생성에 실패했습니다.')
+    } finally {
+      setNoticeLoading(false)
+    }
+  }
+
+  // 공지사항 활성화/비활성화 토글
+  const toggleNotice = async (notice: NoticeItem) => {
+    const action = notice.active ? 'deactivate' : 'activate'
+    try {
+      await axios.patch(`/api/notices/${notice.id}/${action}`, null, { headers })
+      setNotices((prev) => prev.map((n) => n.id === notice.id ? { ...n, active: !n.active } : n))
+    } catch {
+      alert('처리에 실패했습니다.')
+    }
+  }
+
+  // 공지사항 삭제
+  const deleteNotice = async (id: string) => {
+    if (!confirm('공지사항을 삭제하시겠습니까?')) return
+    try {
+      await axios.delete(`/api/notices/${id}`, { headers })
+      setNotices((prev) => prev.filter((n) => n.id !== id))
+    } catch {
+      alert('삭제에 실패했습니다.')
     }
   }
 
@@ -95,17 +141,103 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 p-8">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-2xl font-bold mb-8">관리자 대시보드</h1>
+      <div className="max-w-6xl mx-auto space-y-10">
+        <h1 className="text-2xl font-bold">관리자 대시보드</h1>
 
         {/* 통계 카드 */}
         {stats && (
-          <div className="grid grid-cols-3 gap-4 mb-10">
+          <div className="grid grid-cols-3 gap-4">
             <StatCard label="전체 사용자" value={stats.totalUsers} />
             <StatCard label="전체 프로젝트" value={stats.totalProjects} />
             <StatCard label="전체 분석" value={stats.totalAnalyses} />
           </div>
         )}
+
+        {/* 공지사항 관리 */}
+        <div className="bg-gray-900 rounded-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-800">
+            <h2 className="text-lg font-semibold">공지사항 관리</h2>
+          </div>
+
+          {/* 새 공지 작성 */}
+          <div className="px-6 py-4 border-b border-gray-800 space-y-3">
+            <input
+              type="text"
+              placeholder="제목 (최대 200자)"
+              maxLength={200}
+              value={noticeTitle}
+              onChange={(e) => setNoticeTitle(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+            />
+            <textarea
+              placeholder="내용"
+              rows={3}
+              value={noticeContent}
+              onChange={(e) => setNoticeContent(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+            />
+            <button
+              onClick={createNotice}
+              disabled={noticeLoading || !noticeTitle.trim() || !noticeContent.trim()}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm rounded transition-colors"
+            >
+              {noticeLoading ? '등록 중...' : '공지 등록'}
+            </button>
+          </div>
+
+          {/* 공지 목록 */}
+          {notices.length === 0 ? (
+            <p className="px-6 py-4 text-sm text-gray-500">등록된 공지사항이 없습니다.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-gray-400 border-b border-gray-800">
+                  <th className="text-left px-6 py-3">제목</th>
+                  <th className="text-left px-6 py-3">내용</th>
+                  <th className="text-left px-6 py-3">상태</th>
+                  <th className="text-left px-6 py-3">등록일</th>
+                  <th className="text-left px-6 py-3">액션</th>
+                </tr>
+              </thead>
+              <tbody>
+                {notices.map((notice) => (
+                  <tr key={notice.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                    <td className="px-6 py-3 font-medium max-w-[200px] truncate">{notice.title}</td>
+                    <td className="px-6 py-3 text-gray-400 max-w-[300px] truncate">{notice.content}</td>
+                    <td className="px-6 py-3">
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                        notice.active
+                          ? 'bg-green-900/60 text-green-300'
+                          : 'bg-gray-700 text-gray-400'
+                      }`}>
+                        {notice.active ? '활성' : '비활성'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3 text-gray-400">{notice.createdAt.slice(0, 10)}</td>
+                    <td className="px-6 py-3 flex gap-2">
+                      <button
+                        onClick={() => toggleNotice(notice)}
+                        className={`text-xs px-3 py-1 rounded transition-colors ${
+                          notice.active
+                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                            : 'bg-green-900/60 hover:bg-green-800 text-green-300'
+                        }`}
+                      >
+                        {notice.active ? '비활성화' : '활성화'}
+                      </button>
+                      <button
+                        onClick={() => deleteNotice(notice.id)}
+                        className="text-xs px-3 py-1 rounded bg-red-900/60 hover:bg-red-800 text-red-300 transition-colors"
+                      >
+                        삭제
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
 
         {/* 사용자 목록 */}
         <div className="bg-gray-900 rounded-lg overflow-hidden">
@@ -132,34 +264,20 @@ export default function AdminPage() {
                   <td className="px-6 py-3 text-gray-400">{user.email}</td>
                   <td className="px-6 py-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                      user.plan === 'PRO'
-                        ? 'bg-purple-900/60 text-purple-300'
-                        : 'bg-gray-700 text-gray-300'
-                    }`}>
-                      {user.plan}
-                    </span>
+                      user.plan === 'PRO' ? 'bg-purple-900/60 text-purple-300' : 'bg-gray-700 text-gray-300'
+                    }`}>{user.plan}</span>
                   </td>
                   <td className="px-6 py-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                      user.role === 'ADMIN'
-                        ? 'bg-yellow-900/60 text-yellow-300'
-                        : 'bg-gray-700 text-gray-300'
-                    }`}>
-                      {user.role}
-                    </span>
+                      user.role === 'ADMIN' ? 'bg-yellow-900/60 text-yellow-300' : 'bg-gray-700 text-gray-300'
+                    }`}>{user.role}</span>
                   </td>
                   <td className="px-6 py-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                      user.enabled
-                        ? 'bg-green-900/60 text-green-300'
-                        : 'bg-red-900/60 text-red-300'
-                    }`}>
-                      {user.enabled ? '활성' : '정지'}
-                    </span>
+                      user.enabled ? 'bg-green-900/60 text-green-300' : 'bg-red-900/60 text-red-300'
+                    }`}>{user.enabled ? '활성' : '정지'}</span>
                   </td>
-                  <td className="px-6 py-3 text-gray-400">
-                    {user.createdAt.slice(0, 10)}
-                  </td>
+                  <td className="px-6 py-3 text-gray-400">{user.createdAt.slice(0, 10)}</td>
                   <td className="px-6 py-3">
                     {user.role !== 'ADMIN' && (
                       <button
@@ -179,26 +297,13 @@ export default function AdminPage() {
             </tbody>
           </table>
 
-          {/* 페이지네이션 */}
           {totalPages > 1 && (
             <div className="px-6 py-4 flex items-center gap-2 justify-center">
-              <button
-                disabled={page === 0}
-                onClick={() => setPage((p) => p - 1)}
-                className="px-3 py-1 rounded bg-gray-800 text-gray-300 disabled:opacity-40 hover:bg-gray-700 text-sm"
-              >
-                이전
-              </button>
-              <span className="text-sm text-gray-400">
-                {page + 1} / {totalPages}
-              </span>
-              <button
-                disabled={page + 1 >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1 rounded bg-gray-800 text-gray-300 disabled:opacity-40 hover:bg-gray-700 text-sm"
-              >
-                다음
-              </button>
+              <button disabled={page === 0} onClick={() => setPage((p) => p - 1)}
+                className="px-3 py-1 rounded bg-gray-800 text-gray-300 disabled:opacity-40 hover:bg-gray-700 text-sm">이전</button>
+              <span className="text-sm text-gray-400">{page + 1} / {totalPages}</span>
+              <button disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}
+                className="px-3 py-1 rounded bg-gray-800 text-gray-300 disabled:opacity-40 hover:bg-gray-700 text-sm">다음</button>
             </div>
           )}
         </div>
