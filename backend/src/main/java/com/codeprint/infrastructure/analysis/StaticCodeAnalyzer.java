@@ -144,8 +144,12 @@ public class StaticCodeAnalyzer {
     // 언어별 함수 정의 정규식 패턴 반환
     private Pattern getFunctionPattern(String language) {
         return switch (language) {
-            case "Java", "Kotlin", "C#" ->
+            case "Java", "C#" ->
                 Pattern.compile("(?:(?:public|private|protected|static|final|synchronized|abstract|default|native)\\s+)+(?:[\\w<>\\[\\]?,]+\\s+)*(\\w+)\\s*\\([^)]*\\)\\s*(?:throws[^{]+)?\\{",
+                        Pattern.MULTILINE);
+            // Kotlin: public/private 등 접근 제어자 없이 fun 키워드만으로 함수 정의 가능
+            case "Kotlin" ->
+                Pattern.compile("^\\s*(?:(?:public|private|protected|internal|override|open|abstract|suspend|inline|operator|external)\\s+)*fun\\s+(\\w+)\\s*[(<]",
                         Pattern.MULTILINE);
             case "TypeScript", "JavaScript" ->
                 Pattern.compile("(?:function\\s+(\\w+)|(?:const|let|var)\\s+(\\w+)\\s*=\\s*(?:async\\s*)?(?:\\([^)]*\\)|\\w+)\\s*=>|(?:async\\s+)?function\\s*\\*?\\s*(\\w+))",
