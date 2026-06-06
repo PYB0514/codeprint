@@ -4,6 +4,16 @@
 
 ---
 
+## v1.33.001 — Railway 배포 분석 실패 (git 미설치)
+
+**문제.** 배포 환경에서 "분석 실패. 다시 시도해주세요." 오류 발생.
+
+**이유.** `eclipse-temurin:21-jre` 베이스 이미지에 git이 포함되어 있지 않음. `RepoCloner.clone()`이 `ProcessBuilder`로 `git clone`을 실행하는데, git 바이너리가 없어 즉시 실패. AnalysisRunner catch 블록에서 FAILED 상태로 저장됨.
+
+**결과.** Dockerfile 런타임 스테이지에 `apt-get install -y --no-install-recommends git` 추가. Railway 재배포 후 해결.
+
+---
+
 ## v1.33 — AI 설명 기능 (다중 제공자)
 
 **문제.** 그래프 노드 AI 설명 기능을 어떤 방식으로 구현할지 결정 필요.
