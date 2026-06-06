@@ -16,6 +16,8 @@ import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
 import ContactPage from './pages/ContactPage'
 import AdminPage from './pages/AdminPage'
+import BookmarksPage from './pages/BookmarksPage'
+import UserProfilePage from './pages/UserProfilePage'
 import CookieBanner from './components/CookieBanner'
 import NoticeBanner from './components/NoticeBanner'
 
@@ -40,6 +42,8 @@ export default function App() {
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/bookmarks" element={<BookmarksPage />} />
+        <Route path="/users/:userId" element={<UserProfilePage />} />
       </Routes>
       <NoticeBanner />
       <CookieBanner />
