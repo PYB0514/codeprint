@@ -14,6 +14,16 @@
 
 ---
 
+### 상위레이어 감추기 zIndex 방식 실패 → hidden 방식으로 교체 (2026-06-06)
+
+**문제.** DDD 범례의 ○ 버튼을 클릭해도 layer-section 노드가 시각적으로 자식 노드들을 가리지 않았다. 버튼 상태(◑)는 변하지만 캔버스에는 변화 없음.
+
+**이유.** 기존 구현은 `layer-section-*` 노드에 `zIndex: 9999`를 설정하고 `data.opaque: true`로 SectionNode가 어두운 배경을 렌더링하도록 했다. 그러나 React Flow v12에서 `parentId`를 가진 자식 노드(group/file/function)들은 DOM 상에서 부모 섹션 노드의 형제로 렌더링되며, React Flow 내부 로직이 자식 노드를 부모 위에 그리도록 z-order를 관리해 zIndex: 9999가 실질적으로 무효화됐다.
+
+**결과.** GroupNode의 `toggleOpaque` 방식을 본보기로 삼아, section이 opaque 상태가 될 때 자손 노드(group → file → function 3단계)에 `hidden: true`를 설정하는 방식으로 교체. `applyPresetConfig`에서 프리셋 복원 시도 동일하게 처리.
+
+---
+
 ### 그래프 노드 클릭 시 뷰포트 줌 초기화 (2026-06-05)
 
 **문제.** 노드를 클릭하면 화면 배율이 초기화되어 전체 그래프 줌아웃 상태로 돌아갔다.
@@ -116,3 +126,20 @@
 
 **문제 2.** 경로 엣지 `hidden: true` 상태를 재생 중 해제해야 하는데, 전체 경로를 한 번에 unhide하면 모든 FUNCTION_CALL 엣지가 동시에 표시됨 (시각적 혼잡).
 **결과.** `visitedItems = playbackItems.slice(0, cursor + 1)` — 커서까지 지나온 항목만 unhide. 스텝별로 엣지가 순차 등장하는 효과.
+
+---
+
+### 흐름 재생 — 선형 경로에서 호출 트리로 전환 (2026-06-06)
+
+**문제.** 기존 `buildFlowPath`는 함수 호출이 분기될 때 첫 번째 자식만 따라가는 선형 탐색 → 다른 분기가 숨겨짐. 사용자가 "분기가 생기면 하위흐름으로" 요구.
+
+**이유.** 실제 백엔드 흐름은 A→B, A→C 같은 분기 구조가 흔함. 선형 경로로는 전체 그림을 전달할 수 없음.
+
+**결과.**
+- `buildCallTree(nodeId, rawEdges, rawNodes)` 재귀 트리 빌드 함수 도입 — upstream 추적 → 루트 함수 탐색 → 전체 downstream 트리.
+- `CallTreePanel` 컴포넌트 — 트리를 인덴트 레이아웃으로 렌더링. 분기점에 ⑂ 아이콘 표시. 현재 경로는 amber로 강조.
+- B 기능: 분기점 도달 시 자동 일시정지 — 플레이어가 분기를 선택하도록 유도.
+- C 기능: `selectBranch(nodeId)` — 트리 노드 클릭 시 해당 노드까지의 경로로 재생 전환. `findPathInTree` + `extendToDefaultLeaf`로 경로 재계산.
+- API_CALL 진입점 prepend: 루트 함수 소속 컨트롤러 파일에 API_CALL이 있으면 프론트엔드 FILE 노드를 트리 최상단에 추가.
+
+**계층 레이아웃 방향 변경.** `LAYER_COLUMN`을 `infrastructure(0)…pages(4)`에서 `pages(0)…infrastructure(5)`로 뒤집음. 요청 흐름(프론트→백엔드→DB) 방향과 일치시키기 위함.

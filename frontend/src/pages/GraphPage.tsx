@@ -219,58 +219,173 @@ function traceFlow(
   return [...upstream, makeStep(sourceId, true, false), makeStep(targetId, false, true), ...downstream]
 }
 
-// 노드를 중심으로 upstream·downstream 흐름 경로를 탐색하여 순서 배열로 반환
-function buildFlowPath(
-  nodeId: string,
-  rawEdges: RawEdge[],
-): { items: { type: 'node' | 'edge'; id: string }[] } {
-  const FLOW_TYPES = ['FUNCTION_CALL', 'DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE', 'API_CALL']
-  const MAX_DEPTH = 15
+// ── 호출 트리 (흐름 재생용) ─────────────────────────────────────────
+interface CallTreeNode {
+  nodeId: string
+  edgeId?: string
+  edgeType?: string
+  label: string
+  subLabel?: string   // 함수 노드일 때 소속 파일명
+  nodeType?: string
+  children: CallTreeNode[]
+}
 
-  // upstream 역방향 추적
-  const upstreamNodes: string[] = []
-  const upstreamEdgeIds: string[] = []
-  const visitedUp = new Set([nodeId])
-  let cur = nodeId
-  for (let i = 0; i < MAX_DEPTH; i++) {
-    const edge = rawEdges.find((e) => FLOW_TYPES.includes(e.type) && e.target === cur)
-    if (!edge || visitedUp.has(edge.source)) break
-    visitedUp.add(edge.source)
-    upstreamNodes.unshift(edge.source)
-    upstreamEdgeIds.unshift(edge.id)
-    cur = edge.source
+const CALL_FLOW_TYPES = ['FUNCTION_CALL', 'DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE', 'API_CALL']
+
+// 트리에서 nodeId 검색
+function findTreeNode(root: CallTreeNode, nodeId: string): CallTreeNode | null {
+  if (root.nodeId === nodeId) return root
+  for (const c of root.children) { const f = findTreeNode(c, nodeId); if (f) return f }
+  return null
+}
+
+// 루트에서 targetId까지 경로 반환
+function findPathInTree(root: CallTreeNode, targetId: string): { nodeIds: string[]; edgeIds: string[] } | null {
+  if (root.nodeId === targetId) return { nodeIds: [root.nodeId], edgeIds: [] }
+  for (const child of root.children) {
+    const r = findPathInTree(child, targetId)
+    if (r) return { nodeIds: [root.nodeId, ...r.nodeIds], edgeIds: [child.edgeId ?? '', ...r.edgeIds] }
   }
+  return null
+}
 
-  // downstream 순방향 추적
-  const downstreamNodes: string[] = []
-  const downstreamEdgeIds: string[] = []
-  const visitedDown = new Set([nodeId])
-  cur = nodeId
-  for (let i = 0; i < MAX_DEPTH; i++) {
-    const edge = rawEdges.find((e) => FLOW_TYPES.includes(e.type) && e.source === cur)
-    if (!edge || visitedDown.has(edge.target)) break
-    visitedDown.add(edge.target)
-    downstreamNodes.push(edge.target)
-    downstreamEdgeIds.push(edge.id)
-    cur = edge.target
+// startId 노드부터 첫 번째 자식을 따라 리프까지 경로 확장
+function extendToDefaultLeaf(root: CallTreeNode, startId: string, nodeIds: string[], edgeIds: string[]) {
+  let cur = findTreeNode(root, startId)
+  while (cur && cur.children.length > 0) {
+    const child = cur.children[0]
+    nodeIds.push(child.nodeId)
+    edgeIds.push(child.edgeId ?? '')
+    cur = child
   }
+}
 
-  const nodeIds = [...upstreamNodes, nodeId, ...downstreamNodes]
-  const edgeIds = [...upstreamEdgeIds, ...downstreamEdgeIds]
-
-  // 노드와 엣지를 교차 배치: [node, edge, node, edge, ..., node]
+// nodeIds/edgeIds → playbackItems 변환
+function pathToPlaybackItems(nodeIds: string[], edgeIds: string[]): { type: 'node' | 'edge'; id: string }[] {
   const items: { type: 'node' | 'edge'; id: string }[] = []
   for (let i = 0; i < nodeIds.length; i++) {
     items.push({ type: 'node', id: nodeIds[i] })
-    if (i < edgeIds.length) items.push({ type: 'edge', id: edgeIds[i] })
+    if (edgeIds[i]) items.push({ type: 'edge', id: edgeIds[i] })
   }
-  return { items }
+  return items
+}
+
+// CallTreeNode 생성 헬퍼
+function makeCallTreeNode(nodeId: string, rawNodes: RawNode[], edgeId?: string, edgeType?: string): CallTreeNode {
+  const raw = rawNodes.find((n) => n.id === nodeId)
+  const label = raw?.comment ?? raw?.name ?? nodeId
+  let subLabel: string | undefined
+  if (raw?.type === 'FUNCTION') {
+    const file = rawNodes.find((f) => f.type === 'FILE' && f.filePath === raw.filePath)
+    subLabel = file?.name
+  }
+  return { nodeId, edgeId, edgeType, label, subLabel, nodeType: raw?.type, children: [] }
+}
+
+// 자손 트리 재귀 빌드
+function buildDownstreamTree(nodeId: string, rawEdges: RawEdge[], rawNodes: RawNode[], visited: Set<string>, depth: number): CallTreeNode[] {
+  if (depth >= 12) return []
+  return rawEdges
+    .filter((e) => CALL_FLOW_TYPES.includes(e.type) && e.source === nodeId && !visited.has(e.target))
+    .map((e) => {
+      const child = makeCallTreeNode(e.target, rawNodes, e.id, e.type)
+      const next = new Set(visited); next.add(e.target)
+      child.children = buildDownstreamTree(e.target, rawEdges, rawNodes, next, depth + 1)
+      return child
+    })
+}
+
+// 호출 트리 전체 빌드 — upstream 추적 후 전체 트리 생성 + 기본 경로 반환
+function buildCallTree(
+  nodeId: string, rawEdges: RawEdge[], rawNodes: RawNode[],
+): { tree: CallTreeNode; defaultNodeIds: string[]; defaultEdgeIds: string[] } {
+  // 1. FUNCTION_CALL upstream 추적 → 최상위 호출자 탐색
+  const upChain: { nodeId: string; edgeId: string }[] = []
+  const visitedUp = new Set([nodeId])
+  let cur = nodeId
+  for (let i = 0; i < 12; i++) {
+    const e = rawEdges.find((e) => e.type === 'FUNCTION_CALL' && e.target === cur && !visitedUp.has(e.source))
+    if (!e) break
+    visitedUp.add(e.source)
+    upChain.unshift({ nodeId: e.source, edgeId: e.id })
+    cur = e.source
+  }
+  const rootFuncId = upChain.length > 0 ? upChain[0].nodeId : nodeId
+
+  // 2. 프론트엔드 진입점 탐색 (루트 함수 소속 파일에 API_CALL이 오면 프론트가 entry)
+  const rootFuncRaw = rawNodes.find((n) => n.id === rootFuncId && n.type === 'FUNCTION')
+  let frontendNodeId: string | undefined
+  let frontendEdgeId: string | undefined
+  if (rootFuncRaw) {
+    const parentFile = rawNodes.find((f) => f.type === 'FILE' && f.filePath === rootFuncRaw.filePath)
+    if (parentFile) {
+      const apiEdge = rawEdges.find((e) => e.type === 'API_CALL' && e.target === parentFile.id)
+      if (apiEdge) { frontendNodeId = apiEdge.source; frontendEdgeId = apiEdge.id }
+    }
+  }
+
+  // 3. 루트 함수부터 전체 트리 빌드
+  const rootNode = makeCallTreeNode(rootFuncId, rawNodes)
+  rootNode.children = buildDownstreamTree(rootFuncId, rawEdges, rawNodes, new Set([rootFuncId]), 0)
+
+  // 4. 기본 경로: upstream chain → nodeId → 첫 번째 자식 따라 리프까지
+  const defaultNodeIds: string[] = upChain.map((u) => u.nodeId).concat([nodeId])
+  const defaultEdgeIds: string[] = upChain.map((u) => u.edgeId)
+  extendToDefaultLeaf(rootNode, nodeId, defaultNodeIds, defaultEdgeIds)
+
+  // 5. 프론트엔드 진입점 prepend (컨트롤러 FILE 중간 노드 생략, 직접 연결)
+  if (frontendNodeId) {
+    const frontendNode = makeCallTreeNode(frontendNodeId, rawNodes)
+    rootNode.edgeId = frontendEdgeId; rootNode.edgeType = 'API_CALL'
+    frontendNode.children = [rootNode]
+    return {
+      tree: frontendNode,
+      defaultNodeIds: [frontendNodeId, ...defaultNodeIds],
+      defaultEdgeIds: [frontendEdgeId ?? '', ...defaultEdgeIds],
+    }
+  }
+  return { tree: rootNode, defaultNodeIds, defaultEdgeIds }
 }
 
 // JWT 토큰을 Authorization 헤더로 반환
 function authHeaders() {
   const token = localStorage.getItem('jwt')
   return { Authorization: `Bearer ${token}` }
+}
+
+// 호출 트리 패널 — 분기 포함 흐름 트리 표시
+function CallTreePanel({ root, activeNodeIds, onSelectBranch }: {
+  root: CallTreeNode
+  activeNodeIds: Set<string>
+  onSelectBranch: (nodeId: string) => void
+}) {
+  const EDGE_LABEL: Record<string, string> = {
+    API_CALL: 'API', FUNCTION_CALL: '호출',
+    DB_READ: 'READ', DB_CREATE: 'CREATE', DB_UPDATE: 'UPDATE', DB_DELETE: 'DELETE', DB_WRITE: 'WRITE',
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function renderNode(node: CallTreeNode, depth: number): any {
+    const isActive = activeNodeIds.has(node.nodeId)
+    const hasBranches = node.children.length > 1
+    return (
+      <div key={node.nodeId}>
+        <button
+          className={`w-full text-left flex items-center gap-1 py-0.5 rounded text-[11px] transition-colors ${
+            isActive ? 'text-amber-300' : 'text-gray-500 hover:text-gray-300'
+          }`}
+          style={{ paddingLeft: `${depth * 10 + 4}px` }}
+          onClick={() => onSelectBranch(node.nodeId)}
+          title={node.subLabel}
+        >
+          {node.edgeType && <span className="text-[9px] text-gray-600 flex-shrink-0 mr-0.5">{EDGE_LABEL[node.edgeType] ?? '→'}</span>}
+          {hasBranches && <span className="text-blue-400 flex-shrink-0 text-[10px] mr-0.5">⑂</span>}
+          <span className={`truncate ${isActive ? 'font-medium' : ''}`}>{node.label}</span>
+        </button>
+        <div>{node.children.map((child) => renderNode(child, depth + 1))}</div>
+      </div>
+    )
+  }
+  return <div className="flex flex-col max-h-52 overflow-y-auto">{renderNode(root, 0)}</div>
 }
 
 // 그래프 페이지 내부 컴포넌트 (ReactFlow 훅 사용)
@@ -325,6 +440,8 @@ function GraphPageInner() {
   const [playbackPlaying, setPlaybackPlaying] = useState(false)
   const [playbackSpeed, setPlaybackSpeed] = useState(600)
   const playbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [callTree, setCallTree] = useState<CallTreeNode | null>(null)
+  const [activePath, setActivePath] = useState<{ nodeIds: string[]; edgeIds: string[] }>({ nodeIds: [], edgeIds: [] })
 
   // 노드 코멘트 상태
   const [nodeComments, setNodeComments] = useState<{ id: string; userId: string; content: string; createdAt: number }[]>([])
@@ -356,21 +473,26 @@ function GraphPageInner() {
       return { ...e, hidden }
     }), [])
 
-  // 레이어 섹션 박스를 해당 색상으로 덮어 내용을 가리는 토글
+  // 레이어 섹션 박스 opaque 토글 — zIndex 대신 자식 노드 hidden 처리 (React Flow v12에서 parentId 자식이 부모 위에 렌더링되는 문제 우회)
   const toggleLayerOpaque = useCallback((layer: string) => {
     setOpaqueLayerSet((prev) => {
       const next = new Set(prev)
       if (next.has(layer)) next.delete(layer)
       else next.add(layer)
       const isOpaque = next.has(layer)
-      setNodes((nds) => nds.map((n) => {
-        if (n.id !== `layer-section-${layer}`) return n
-        return {
-          ...n,
-          zIndex: isOpaque ? 9999 : -20,
-          data: { ...n.data, opaque: isOpaque },
-        }
-      }))
+      const sectionId = `layer-section-${layer}`
+      setNodes((nds) => {
+        // section → group → file → function 3단계 자손 모두 수집
+        const groupIds = new Set(nds.filter((n) => n.parentId === sectionId).map((n) => n.id))
+        const fileIds  = new Set(nds.filter((n) => n.parentId != null && groupIds.has(n.parentId!)).map((n) => n.id))
+        const descendantIds = new Set([...groupIds, ...fileIds,
+          ...nds.filter((n) => n.parentId != null && fileIds.has(n.parentId!)).map((n) => n.id)])
+        return nds.map((n) => {
+          if (n.id === sectionId) return { ...n, data: { ...n.data, opaque: isOpaque } }
+          if (descendantIds.has(n.id)) return { ...n, hidden: isOpaque }
+          return n
+        })
+      })
       return next
     })
   }, [setNodes])
@@ -461,30 +583,41 @@ function GraphPageInner() {
     }
   }, [playbackCursor, playbackItems, playbackPlaying, fitView])
 
-  // 흐름 재생 — 자동 진행 타이머
+  // 흐름 재생 — 자동 진행 타이머 (분기점에서 자동 일시정지)
   useEffect(() => {
     if (playbackTimerRef.current) clearTimeout(playbackTimerRef.current)
     if (!playbackPlaying || playbackCursor >= playbackItems.length - 1) {
       if (playbackCursor >= playbackItems.length - 1 && playbackPlaying) setPlaybackPlaying(false)
       return
     }
+    // B: 현재 노드가 분기점이면 자동 일시정지
+    const current = playbackItems[playbackCursor]
+    if (callTree && current?.type === 'node') {
+      const treeNode = findTreeNode(callTree, current.id)
+      if (treeNode && treeNode.children.length > 1) {
+        setPlaybackPlaying(false)
+        return
+      }
+    }
     playbackTimerRef.current = setTimeout(() => {
       setPlaybackCursor((c) => c + 1)
     }, playbackSpeed)
     return () => { if (playbackTimerRef.current) clearTimeout(playbackTimerRef.current) }
-  }, [playbackPlaying, playbackCursor, playbackItems.length, playbackSpeed])
+  }, [playbackPlaying, playbackCursor, playbackItems, playbackSpeed, callTree])
 
-  // 흐름 재생 시작 — 선택된 노드 기준으로 경로 계산 후 첫 스텝으로 이동
+  // 흐름 재생 시작 — 호출 트리 빌드 후 기본 경로로 재생 시작
   const startPlayback = useCallback((nodeId: string) => {
     if (playbackTimerRef.current) clearTimeout(playbackTimerRef.current)
-    const { items } = buildFlowPath(nodeId, rawEdgesCache)
+    const { tree, defaultNodeIds, defaultEdgeIds } = buildCallTree(nodeId, rawEdgesCache, rawNodes)
+    const items = pathToPlaybackItems(defaultNodeIds, defaultEdgeIds)
+    setCallTree(tree)
+    setActivePath({ nodeIds: defaultNodeIds, edgeIds: defaultEdgeIds })
     setPlaybackItems(items)
     setPlaybackCursor(0)
     setPlaybackPlaying(false)
-    // 경로 엣지 on/off 상태 무관하게 즉시 표시
     const pathEdgeIds = new Set(items.filter((it) => it.type === 'edge').map((it) => it.id))
     setEdges((eds) => eds.map((e) => pathEdgeIds.has(e.id) ? { ...e, hidden: false } : e))
-  }, [rawEdgesCache, setEdges])
+  }, [rawEdgesCache, rawNodes, setEdges])
 
   // 흐름 재생 초기화
   const resetPlayback = useCallback(() => {
@@ -492,6 +625,8 @@ function GraphPageInner() {
     setPlaybackPlaying(false)
     setPlaybackCursor(-1)
     setPlaybackItems([])
+    setCallTree(null)
+    setActivePath({ nodeIds: [], edgeIds: [] })
     setNodes((nds) => nds.map((n) => ({ ...n, style: { ...n.style, outline: 'none', boxShadow: 'none' }, data: { ...n.data, playbackActive: false, playbackInPath: false } })))
     setEdges((eds) => applyEdgeVisibility(eds.map((e) => {
       const d = e.data as { type?: string; broken?: boolean } | undefined
@@ -503,6 +638,21 @@ function GraphPageInner() {
       return { ...e, animated: false, style: { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : isApiCall ? '#e879f9' : isDb ? (DB_CRUD_COLOR[d?.type ?? ''] ?? '#22d3ee') : '#4b5563' } }
     }), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
   }, [setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges])
+
+  // 트리에서 분기 선택 — 해당 노드까지의 경로로 재생 전환
+  const selectBranch = useCallback((nodeId: string) => {
+    if (!callTree) return
+    const path = findPathInTree(callTree, nodeId)
+    if (!path) return
+    extendToDefaultLeaf(callTree, nodeId, path.nodeIds, path.edgeIds)
+    const items = pathToPlaybackItems(path.nodeIds, path.edgeIds)
+    setActivePath(path)
+    setPlaybackItems(items)
+    setPlaybackCursor(0)
+    setPlaybackPlaying(false)
+    const pathEdgeIds = new Set(items.filter((it) => it.type === 'edge').map((it) => it.id))
+    setEdges((eds) => eds.map((e) => pathEdgeIds.has(e.id) ? { ...e, hidden: false } : e))
+  }, [callTree, setEdges])
 
   // 서버에서 그래프 데이터를 불러와 React Flow 레이아웃으로 변환
   const fetchGraph = useCallback(async () => {
@@ -634,13 +784,29 @@ function GraphPageInner() {
 
     if (rawNodes.length > 0) {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, lm, lp, openFileSidebar)
-      setNodes(layoutNodes.map((n) => {
-        if (!n.id.startsWith('layer-section-')) return n
-        if (lp === 'hub') return { ...n, hidden: true }
-        const layer = n.id.replace('layer-section-', '')
-        const isOpaque = newOpaqueSet.has(layer)
-        return { ...n, hidden: false, zIndex: isOpaque ? 9999 : -20, data: { ...n.data, opaque: isOpaque } }
-      }))
+      setNodes(() => {
+        if (lp === 'hub') {
+          return layoutNodes.map((n) => n.id.startsWith('layer-section-') ? { ...n, hidden: true } : n)
+        }
+        // layer 모드: opaque 섹션의 자손 노드(group→file→function 3단계) hidden 처리
+        const opaqueSectionIds = new Set(
+          layoutNodes
+            .filter((n) => n.id.startsWith('layer-section-') && newOpaqueSet.has(n.id.replace('layer-section-', '')))
+            .map((n) => n.id)
+        )
+        const groupIds = new Set(layoutNodes.filter((n) => n.parentId && opaqueSectionIds.has(n.parentId!)).map((n) => n.id))
+        const fileIds  = new Set(layoutNodes.filter((n) => n.parentId && groupIds.has(n.parentId!)).map((n) => n.id))
+        const hiddenIds = new Set([...groupIds, ...fileIds,
+          ...layoutNodes.filter((n) => n.parentId && fileIds.has(n.parentId!)).map((n) => n.id)])
+        return layoutNodes.map((n) => {
+          if (n.id.startsWith('layer-section-')) {
+            const isOpaque = newOpaqueSet.has(n.id.replace('layer-section-', ''))
+            return { ...n, hidden: false, data: { ...n.data, opaque: isOpaque } }
+          }
+          if (hiddenIds.has(n.id)) return { ...n, hidden: true }
+          return n
+        })
+      })
       setEdges(applyEdgeVisibility(layoutEdges, se, sc, si, sb, sdb, sapi))
     }
   }, [rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, applyEdgeVisibility])
@@ -1429,57 +1595,68 @@ function GraphPageInner() {
 
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
 
-                {/* ── 흐름 재생 패널 — 함수 선택 시 항상 상단 고정 ── */}
-                {playbackItems.length > 1 && (
+                {/* ── 흐름 재생 패널 — 호출 트리 + 재생 컨트롤 ── */}
+                {callTree && (
                   <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] text-gray-400 uppercase tracking-wider">흐름 재생</span>
-                      <span className="text-[10px] text-gray-600">
-                        {playbackCursor < 0 ? '-' : `${playbackCursor + 1} / ${playbackItems.length}`}
-                      </span>
+                      <button onClick={resetPlayback} className="text-gray-600 hover:text-gray-400 text-xs" title="초기화">✕</button>
                     </div>
-                    <div className="w-full h-1 bg-gray-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-amber-400 rounded-full transition-all duration-300"
-                        style={{ width: playbackCursor < 0 ? '0%' : `${((playbackCursor + 1) / playbackItems.length) * 100}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setPlaybackCursor((c) => Math.max(0, c - 1))}
-                        disabled={playbackCursor <= 0}
-                        className="text-xs text-gray-400 hover:text-white disabled:opacity-30 px-1"
-                      >⏮</button>
-                      <button
-                        onClick={() => {
-                          if (playbackCursor >= playbackItems.length - 1) {
-                            setPlaybackCursor(0)
-                            setPlaybackPlaying(true)
-                          } else {
-                            setPlaybackPlaying((p) => !p)
-                          }
-                        }}
-                        className="flex-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-700/40 rounded px-2 py-1"
-                      >
-                        {playbackPlaying ? '⏸ 일시정지' : playbackCursor >= playbackItems.length - 1 ? '↺ 다시 재생' : '▶ 재생'}
-                      </button>
-                      <button
-                        onClick={() => setPlaybackCursor((c) => Math.min(playbackItems.length - 1, c + 1))}
-                        disabled={playbackCursor >= playbackItems.length - 1}
-                        className="text-xs text-gray-400 hover:text-white disabled:opacity-30 px-1"
-                      >⏭</button>
-                      <button onClick={resetPlayback} className="text-xs text-gray-600 hover:text-gray-400 px-1" title="초기화">✕</button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-600">속도</span>
-                      {[['빠름', 300], ['보통', 600], ['느림', 1000]].map(([label, ms]) => (
-                        <button
-                          key={ms}
-                          onClick={() => setPlaybackSpeed(ms as number)}
-                          className={`text-[10px] px-1.5 py-0.5 rounded ${playbackSpeed === ms ? 'bg-gray-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                        >{label}</button>
-                      ))}
-                    </div>
+                    <CallTreePanel
+                      root={callTree}
+                      activeNodeIds={new Set(activePath.nodeIds)}
+                      onSelectBranch={selectBranch}
+                    />
+                    {playbackItems.length > 1 && (
+                      <div className="border-t border-gray-700/50 pt-2 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-gray-600">
+                            {playbackCursor < 0 ? '-' : `${playbackCursor + 1} / ${playbackItems.length}`}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-gray-600">속도</span>
+                            {[['빠름', 300], ['보통', 600], ['느림', 1000]].map(([label, ms]) => (
+                              <button
+                                key={ms}
+                                onClick={() => setPlaybackSpeed(ms as number)}
+                                className={`text-[10px] px-1.5 py-0.5 rounded ${playbackSpeed === ms ? 'bg-gray-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                              >{label}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="w-full h-1 bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-amber-400 rounded-full transition-all duration-300"
+                            style={{ width: playbackCursor < 0 ? '0%' : `${((playbackCursor + 1) / playbackItems.length) * 100}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setPlaybackCursor((c) => Math.max(0, c - 1))}
+                            disabled={playbackCursor <= 0}
+                            className="text-xs text-gray-400 hover:text-white disabled:opacity-30 px-1"
+                          >⏮</button>
+                          <button
+                            onClick={() => {
+                              if (playbackCursor >= playbackItems.length - 1) {
+                                setPlaybackCursor(0)
+                                setPlaybackPlaying(true)
+                              } else {
+                                setPlaybackPlaying((p) => !p)
+                              }
+                            }}
+                            className="flex-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-700/40 rounded px-2 py-1"
+                          >
+                            {playbackPlaying ? '⏸ 일시정지' : playbackCursor >= playbackItems.length - 1 ? '↺ 다시 재생' : '▶ 재생'}
+                          </button>
+                          <button
+                            onClick={() => setPlaybackCursor((c) => Math.min(playbackItems.length - 1, c + 1))}
+                            disabled={playbackCursor >= playbackItems.length - 1}
+                            className="text-xs text-gray-400 hover:text-white disabled:opacity-30 px-1"
+                          >⏭</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
