@@ -1,5 +1,5 @@
 // 커뮤니티 게시판 — 게시글 목록/상세/작성 통합 페이지
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
@@ -70,6 +70,8 @@ export default function CommunityPage() {
   const [newFeedbackType, setNewFeedbackType] = useState('GENERAL')
   const [newComment, setNewComment] = useState('')
   const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [attachedFiles, setAttachedFiles] = useState<{ file: File; s3Key: string; uploading: boolean }[]>([])
   const [myProjects, setMyProjects] = useState<MyProject[]>([])
   const [linkedGraphId, setLinkedGraphId] = useState<string | null>(null)
@@ -91,7 +93,7 @@ export default function CommunityPage() {
     }
     const initialPostId = searchParams.get('postId')
     axios
-      .get<Post[]>('/api/community/posts')
+      .get<Post[]>('/api/community/posts', { params: initialPostId ? {} : undefined })
       .then((res) => {
         setPosts(res.data)
         if (initialPostId) {
@@ -101,6 +103,15 @@ export default function CommunityPage() {
       })
       .finally(() => setLoading(false))
   }, [])
+
+  // 검색어 변경 시 300ms 디바운스 후 게시글 재조회
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => {
+      const params = searchQuery.trim() ? { q: searchQuery.trim() } : {}
+      axios.get<Post[]>('/api/community/posts', { params }).then((res) => setPosts(res.data))
+    }, 300)
+  }, [searchQuery])
 
   // 게시글 클릭 시 상세, 댓글, 첨부파일 로드
   const handleSelectPost = async (post: Post) => {
@@ -232,6 +243,13 @@ export default function CommunityPage() {
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-semibold">커뮤니티</h1>
             <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="게시글 검색..."
+                className="bg-gray-800 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-gray-500 w-44 placeholder-gray-500"
+              />
               {user && (
                 <button
                   onClick={() => navigate('/bookmarks')}

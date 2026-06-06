@@ -36,13 +36,21 @@ public class CommunityController {
     private final PostBookmarkJpaRepository bookmarkRepository;
     private final PostJpaRepository postJpaRepository;
 
-    // 게시글 목록 조회 (페이지) — 로그인 시 내 북마크 여부 포함
+    // 게시글 목록 조회 (페이지, 검색) — 로그인 시 내 북마크 여부 포함
     @GetMapping("/posts")
     public ResponseEntity<List<PostResponse>> getPosts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String q,
             @AuthenticationPrincipal User user) {
-        List<PostResponse> posts = postCommandService.getPosts(page, size).stream()
+        List<Post> raw;
+        if (q != null && !q.isBlank()) {
+            org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+            raw = postJpaRepository.findByTitleContainingIgnoreCaseOrContentContainingIgnoreCaseOrderByCreatedAtDesc(q, q, pageable);
+        } else {
+            raw = postCommandService.getPosts(page, size);
+        }
+        List<PostResponse> posts = raw.stream()
                 .map(p -> toPostResponse(p, null, user))
                 .toList();
         return ResponseEntity.ok(posts);
