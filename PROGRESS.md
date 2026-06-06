@@ -236,6 +236,14 @@ npm run dev
 - **후원 기능** — 토스페이먼츠/카카오페이 단건 결제, 후원자 명단 표시
 - **랜딩 페이지 광고 배너 실제 연동** — 현재 플레이스홀더. Google AdSense 또는 직접 계약.
 
+### AI 통합
+- **MCP 서버** — Codeprint를 Claude MCP 서버로 제공. Claude Desktop/claude.ai에서 그래프 조회·분석 도구로 연결. `get_graph`, `analyze_repo`, `trace_flow` 등 도구 노출. (SaaS 완성 후 추가 기능으로 도입 예정)
+- **서버 AI 내장 (Pro 플랜)** — Stripe 연동 완료 후 Pro 사용자에게 Codeprint 서버 키로 AI 제공. 그래프 전체 컨텍스트 기반 아키텍처 진단, 누락 연결 감지.
+
+### 플랫폼 확장
+- **데스크탑 앱** — Electron 기반 Windows/Mac 앱. 로컬 레포 직접 분석 (GitHub 연동 없이), 오프라인 사용, 시스템 트레이 상주. 웹앱 코드 재사용 가능.
+- **모바일 앱** — React Native 기반 iOS/Android. 그래프 조회·커뮤니티 탐색 중심 (분석은 서버). 웹앱 로직 일부 재사용 가능. (Stripe 유료화 이후 도입 검토)
+
 ### 개발자·기술
 - **에러 트래킹 (Sentry)** — SDK 연동 미완료. 실사용자 생기면 진행.
 - **공개 API 문서** — /api-docs, 외부 개발자가 그래프 데이터를 가져갈 수 있는 REST API + Swagger
