@@ -1,6 +1,6 @@
 # Codeprint 개발 현황
 
-> 마지막 업데이트: 2026-06-06 (v1.21 — 흐름 재생 UX 버그 수정)
+> 마지막 업데이트: 2026-06-06 (v1.23 — 관리자 역할 시스템 및 어드민 대시보드)
 
 ---
 
@@ -101,6 +101,8 @@
 | 그래프 뷰포트 줌 버그 수정 | ✅ | v1.20 — 노드 클릭 시 줌 초기화 방지, 재생 중 뷰포트 자동 추적 (#66) |
 | 흐름 재생 UX 버그 수정 | ✅ | v1.21 — CONTAINS 제거, resetPlayback, openFuncNode 헬퍼, labelMode, DB_TABLE 재생 (#67) |
 | 인터페이스 추상 메서드 추출 + 회귀 테스트 | ✅ | v1.21.002 — StaticCodeAnalyzer 인터페이스 패턴, 테스트 추가 (#71) |
+| 법적 필수 페이지 + CookieBanner + Footer | ✅ | v1.22 — /terms, /privacy, /contact, CookieBanner, Footer (#73) |
+| 관리자 역할 시스템 및 어드민 대시보드 | ✅ | v1.23 — UserRole, V11 마이그레이션, AdminController, AdminPage (#74) |
 
 ---
 
@@ -125,10 +127,10 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재: main 브랜치 (v1.21.002)
+# 현재: main 브랜치 (v1.23)
 # 다음 선택지 (우선순위 순):
-#   A. test/domain-unit 브랜치 — AnalysisResult 상태 전이 + UserPlan 경계 조건 테스트 (빠름, 50분)
-#   B. 신규 기능 — PROGRESS.md 아래 백로그 참고
+#   A. feat/notices — 공지사항 테이블, CRUD API, 프론트 배너 (운영 필수)
+#   B. test/domain-unit — AnalysisResult 상태 전이 + UserPlan 경계 조건 테스트
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
