@@ -12,6 +12,10 @@ import PaymentSuccessPage from './pages/PaymentSuccessPage'
 import PaymentCancelPage from './pages/PaymentCancelPage'
 import ChangelogPage from './pages/ChangelogPage'
 import DiffPage from './pages/DiffPage'
+import TermsPage from './pages/TermsPage'
+import PrivacyPage from './pages/PrivacyPage'
+import ContactPage from './pages/ContactPage'
+import CookieBanner from './components/CookieBanner'
 
 // 앱 최상위 라우터 컴포넌트
 export default function App() {
@@ -30,7 +34,11 @@ export default function App() {
         <Route path="/payment/cancel" element={<PaymentCancelPage />} />
         <Route path="/changelog" element={<ChangelogPage />} />
         <Route path="/projects/:projectId/diff" element={<DiffPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/contact" element={<ContactPage />} />
       </Routes>
+      <CookieBanner />
     </BrowserRouter>
   )
 }
