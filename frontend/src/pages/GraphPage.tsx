@@ -20,6 +20,7 @@ import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEn
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
+import OnboardingTour, { isTourDone } from '../components/OnboardingTour'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -397,6 +398,7 @@ function GraphPageInner() {
   const [rawNodes, setRawNodes] = useState<RawNode[]>([])
   const [counts, setCounts] = useState({ files: 0, funcs: 0, edges: 0 })
   const [loading, setLoading] = useState(true)
+  const [tourRunning, setTourRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sidebar, setSidebar] = useState<SidebarContent | null>(null)
   const [rightCollapsed, setRightCollapsed] = useState(false)
@@ -671,6 +673,7 @@ function GraphPageInner() {
         edges: re.length,
       })
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
+      if (!isTourDone()) setTimeout(() => setTourRunning(true), 800)
     } catch {
       setError('그래프를 불러오지 못했습니다.')
     } finally {
@@ -1272,6 +1275,8 @@ function GraphPageInner() {
   return (
     <div ref={flowRef} style={{ width: '100vw', height: '100vh', background: '#030712' }}>
 
+      <OnboardingTour run={tourRunning} onFinish={() => setTourRunning(false)} />
+
       {/* 최신 커밋 감지 배너 */}
       {outdated && (
         <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-2 bg-yellow-900/80 border-b border-yellow-700 text-yellow-300 text-xs backdrop-blur-sm">
@@ -1344,7 +1349,7 @@ function GraphPageInner() {
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed">
                 ↓ AI 컨텍스트
               </button>
-              <button onClick={handleExportImage} disabled={exporting || rawNodes.length === 0}
+              <button id="tour-export" onClick={handleExportImage} disabled={exporting || rawNodes.length === 0}
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed mt-1">
                 {exporting ? '저장 중...' : '↓ 이미지'}
               </button>
@@ -1427,7 +1432,7 @@ function GraphPageInner() {
             </LeftSection>
 
             {/* 레이아웃 */}
-            <LeftSection title="레이아웃">
+            <LeftSection title="레이아웃" id="tour-layout">
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 text-xs">프리셋</span>
                 <button
@@ -1457,7 +1462,7 @@ function GraphPageInner() {
             </LeftSection>
 
             {/* 엣지 — 색인 + 토글 통합 */}
-            <LeftSection title="엣지">
+            <LeftSection title="엣지" id="tour-edges">
               {[
                 { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: '의존성',       textCls: showEdges ? 'text-gray-300' : 'text-gray-600',   active: showEdges,        onToggle: toggleEdges },
                 { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="5 4" /></svg>,                                label: '콜 체인',      textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600', active: showCallEdges,    onToggle: toggleCallEdges },
@@ -2177,9 +2182,9 @@ function GraphPageInner() {
 }
 
 // 왼쪽 사이드바 섹션
-function LeftSection({ title, children }: { title: string; children: React.ReactNode }) {
+function LeftSection({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
   return (
-    <div className="px-3 py-3 border-b border-gray-800/60">
+    <div id={id} className="px-3 py-3 border-b border-gray-800/60">
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{title}</p>
       {children}
     </div>
