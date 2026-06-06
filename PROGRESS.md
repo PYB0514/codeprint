@@ -1,6 +1,6 @@
 # Codeprint 개발 현황
 
-> 마지막 업데이트: 2026-06-07 (v1.31 — 그래프 페이지 온보딩 투어)
+> 마지막 업데이트: 2026-06-07 (v1.33 — AI 설명 기능 다중 제공자)
 
 ---
 
@@ -121,6 +121,8 @@
 | FUNCTION_CALL 인터페이스→구현체 우선 매핑 | ✅ | v1.30 — interfaceToImplFiles 맵 루프 이전 빌드, break→bestMatch 패턴, 회귀 테스트 2개 (#91) |
 | 커뮤니티 게시글 상세 패널 개선 | ✅ | v1.30.001 — 북마크 토글, 작성자명 클릭→프로필, ?postId= 쿼리 파라미터 자동 선택 (#93) |
 | 그래프 페이지 온보딩 투어 | ✅ | v1.31 — react-joyride v3, 5단계, 로드 성공 후 자동 시작, localStorage 완료 기록 (#94) |
+| 커뮤니티 게시글 검색 | ✅ | v1.32 — GET /api/community/posts?q=, 제목/본문 대소문자 무시, 300ms 디바운스 (#96) |
+| AI 설명 기능 (다중 제공자) | ✅ | v1.33 — Claude/ChatGPT/Gemini API 키 등록·관리, 함수 노드 AI 설명 요청, AES 암호화 저장 |
 
 ---
 
@@ -145,11 +147,11 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# v1.31 완료 (PR #94 머지, 태그 push 완료)
+# v1.33 완료 (feat/ai-explain-multi-provider 브랜치, PR 생성 후 머지 대기)
 # 다음 기능 선택지 (우선순위 순):
-#   A. 검색 기능 — 커뮤니티 게시글 검색
-#   B. AI 기능 — 선택 노드/엣지 설명 (Claude API)
-#   C. 결제 연동 — Stripe Pro 플랜
+#   A. 패치노트 페이지 업데이트 — v1.27~v1.33 changelog 추가
+#   B. 결제 연동 — Stripe Pro 플랜 (계정 생성 필요)
+#   C. TDD 테스트 커버리지 — GraphBuilder/StaticCodeAnalyzer 회귀 테스트
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항

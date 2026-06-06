@@ -32,6 +32,12 @@ export default function AppHeader({ username, plan, onLogout }: Props) {
             {plan && (
               <span className="bg-gray-800 px-2 py-0.5 rounded text-xs text-gray-300">{plan}</span>
             )}
+            <button
+              onClick={() => navigate('/settings')}
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              설정
+            </button>
             {onLogout && (
               <button onClick={onLogout} className="text-gray-400 hover:text-white transition-colors">
                 로그아웃

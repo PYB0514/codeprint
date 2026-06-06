@@ -399,6 +399,10 @@ function GraphPageInner() {
   const [counts, setCounts] = useState({ files: 0, funcs: 0, edges: 0 })
   const [loading, setLoading] = useState(true)
   const [tourRunning, setTourRunning] = useState(false)
+  const [aiProviders, setAiProviders] = useState<{ provider: string; registered: boolean }[]>([])
+  const [selectedAiProvider, setSelectedAiProvider] = useState<string>('')
+  const [aiExplaining, setAiExplaining] = useState(false)
+  const [aiExplanation, setAiExplanation] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [sidebar, setSidebar] = useState<SidebarContent | null>(null)
   const [rightCollapsed, setRightCollapsed] = useState(false)
@@ -621,6 +625,37 @@ function GraphPageInner() {
     setEdges((eds) => eds.map((e) => pathEdgeIds.has(e.id) ? { ...e, hidden: false } : e))
   }, [rawEdgesCache, rawNodes, setEdges])
 
+  // 사이드바 노드 변경 시 AI 설명 초기화
+  useEffect(() => { setAiExplanation(null) }, [sidebar])
+
+  // 선택한 AI 제공자로 함수 노드 설명 요청
+  const handleAiExplain = async () => {
+    if (!selectedAiProvider || sidebar?.kind !== 'func') return
+    setAiExplaining(true)
+    setAiExplanation(null)
+    try {
+      const s = sidebar
+      const res = await axios.post<{ explanation: string }>(
+        '/api/ai/explain',
+        {
+          provider: selectedAiProvider,
+          nodeId: s.funcName,
+          nodeName: s.funcName,
+          nodeType: 'FUNCTION',
+          comment: s.funcComment ?? '',
+          callers: s.callers.map((c: { funcName: string }) => c.funcName).join(', '),
+          callees: s.callees.map((c: { funcName: string }) => c.funcName).join(', '),
+        },
+        { headers: authHeaders() }
+      )
+      setAiExplanation(res.data.explanation)
+    } catch {
+      setAiExplanation('AI 설명을 가져오지 못했습니다. API 키를 확인해주세요.')
+    } finally {
+      setAiExplaining(false)
+    }
+  }
+
   // 흐름 재생 초기화
   const resetPlayback = useCallback(() => {
     if (playbackTimerRef.current) clearTimeout(playbackTimerRef.current)
@@ -684,6 +719,13 @@ function GraphPageInner() {
   useEffect(() => {
     axios.get<{ id: string }>('/api/auth/me', { headers: authHeaders() })
       .then((res) => setCurrentUserId(res.data.id))
+      .catch(() => {})
+    axios.get<{ provider: string; registered: boolean }[]>('/api/ai/keys', { headers: authHeaders() })
+      .then((res) => {
+        setAiProviders(res.data)
+        const first = res.data.find((p) => p.registered)
+        if (first) setSelectedAiProvider(first.provider)
+      })
       .catch(() => {})
   }, [])
 
@@ -1832,6 +1874,40 @@ function GraphPageInner() {
                         ))
                       }
                     </SidebarSection>
+
+                    {/* AI 설명 */}
+                    {aiProviders.some((p) => p.registered) && (
+                      <SidebarSection title="AI 설명">
+                        <div className="flex items-center gap-2 mb-2">
+                          <select
+                            value={selectedAiProvider}
+                            onChange={(e) => setSelectedAiProvider(e.target.value)}
+                            className="flex-1 bg-gray-800 text-white text-xs px-2 py-1.5 rounded border border-gray-700 focus:outline-none"
+                          >
+                            {aiProviders.filter((p) => p.registered).map((p) => (
+                              <option key={p.provider} value={p.provider}>
+                                {p.provider === 'CLAUDE' ? 'Claude' : p.provider === 'OPENAI' ? 'ChatGPT' : 'Gemini'}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={handleAiExplain}
+                            disabled={aiExplaining}
+                            className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1.5 rounded disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                          >
+                            {aiExplaining ? '생성 중...' : '설명'}
+                          </button>
+                        </div>
+                        {aiExplanation && (
+                          <p className="text-xs text-gray-300 leading-relaxed bg-gray-800 rounded-lg px-3 py-2">
+                            {aiExplanation}
+                          </p>
+                        )}
+                        {!aiExplanation && !aiExplaining && (
+                          <p className="text-xs text-gray-600">버튼을 눌러 이 함수의 역할을 설명받으세요.</p>
+                        )}
+                      </SidebarSection>
+                    )}
 
                     {/* 노드 코멘트 */}
                     <SidebarSection title={`코멘트${nodeComments.length > 0 ? ` (${nodeComments.length})` : ''}`}>

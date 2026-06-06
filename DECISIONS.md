@@ -1,0 +1,26 @@
+# DECISIONS.md
+
+기술 결정 기록 — 문제 → 이유 → 결과 형식.
+
+---
+
+## v1.33 — AI 설명 기능 (다중 제공자)
+
+**문제.** 그래프 노드 AI 설명 기능을 어떤 방식으로 구현할지 결정 필요.
+
+**선택지.**
+1. 서버가 Anthropic API 키를 보유, 비용은 서버 부담
+2. 사용자가 각자 API 키를 등록, 비용은 사용자 부담
+3. Claude Plugin/Skill 방식 (MCP 서버 등록)
+
+**이유.**
+- 옵션 1: 초기 서비스에서 AI 비용 무제한 부담 불가. 무료 플랜 사용자 남용 우려.
+- 옵션 3: Claude Plugin은 Anthropic 심사 필요, 타 제공자 연동 불가.
+- 옵션 2 선택: 사용자 키 사용 → 비용 전가, 동시에 Claude/OpenAI/Gemini 세 제공자 동시 지원 가능.
+
+**SDK vs RestClient.**
+- Anthropic SDK, OpenAI SDK, Gemini SDK 각각 의존성 추가 시 build.gradle 복잡도 증가.
+- 세 API 모두 단순 JSON POST → RestClient 직접 HTTP 호출로 충분.
+- SDK 없이 구현 → 의존성 최소화, 각 서비스 클래스 구조 일관성 유지.
+
+**결과.** `ClaudeAiService`, `OpenAiService`, `GeminiAiService` 각각 RestClient로 구현. `UserAiKey` 엔티티에 AES-GCM 암호화(`AesEncryptionConverter`)로 저장. V16 Flyway 마이그레이션으로 `user_ai_keys` 테이블 추가.
