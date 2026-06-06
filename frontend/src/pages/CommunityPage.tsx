@@ -10,6 +10,11 @@ interface UserInfo {
   plan: string
 }
 
+interface MyProject {
+  id: string
+  name: string
+}
+
 interface Post {
   id: string
   title: string
@@ -63,13 +68,22 @@ export default function CommunityPage() {
   const [newComment, setNewComment] = useState('')
   const [loading, setLoading] = useState(true)
   const [attachedFiles, setAttachedFiles] = useState<{ file: File; s3Key: string; uploading: boolean }[]>([])
+  const [myProjects, setMyProjects] = useState<MyProject[]>([])
+  const [linkedGraphId, setLinkedGraphId] = useState<string | null>(null)
+  const [linkedProjectName, setLinkedProjectName] = useState<string | null>(null)
+  const [linkingGraph, setLinkingGraph] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem('jwt')
     if (token) {
       axios
         .get<UserInfo>('/api/auth/me', { headers: authHeaders() })
-        .then((res) => setUser(res.data))
+        .then((res) => {
+          setUser(res.data)
+          // 로그인 상태면 내 프로젝트 목록도 로드
+          return axios.get<MyProject[]>('/api/projects', { headers: authHeaders() })
+        })
+        .then((res) => setMyProjects(res.data))
         .catch(() => {})
     }
     axios
@@ -86,6 +100,28 @@ export default function CommunityPage() {
     )
     setComments(res.data.comments)
     setPostAttachments(res.data.attachments ?? [])
+  }
+
+  // 프로젝트 선택 시 최신 그래프 ID 조회 후 연결
+  const handleLinkProject = async (projectId: string) => {
+    if (!projectId) {
+      setLinkedGraphId(null)
+      setLinkedProjectName(null)
+      return
+    }
+    setLinkingGraph(true)
+    try {
+      const res = await axios.get<{ graphId: string }>(`/api/projects/${projectId}/graph`, { headers: authHeaders() })
+      const project = myProjects.find((p) => p.id === projectId)
+      setLinkedGraphId(res.data.graphId)
+      setLinkedProjectName(project?.name ?? null)
+    } catch {
+      alert('그래프를 불러오지 못했습니다. 먼저 분석을 완료해주세요.')
+      setLinkedGraphId(null)
+      setLinkedProjectName(null)
+    } finally {
+      setLinkingGraph(false)
+    }
   }
 
   // 파일 선택 시 presigned URL 발급 후 S3 직접 업로드
@@ -120,13 +156,15 @@ export default function CommunityPage() {
       .map((f) => ({ s3Key: f.s3Key, originalFilename: f.file.name, contentType: f.file.type }))
     const res = await axios.post<Post>(
       '/api/community/posts',
-      { title: newTitle, content: newContent, feedbackType: newFeedbackType, graphId: null, attachments },
+      { title: newTitle, content: newContent, feedbackType: newFeedbackType, graphId: linkedGraphId, attachments },
       { headers: authHeaders() }
     )
     setPosts((prev) => [res.data, ...prev])
     setNewTitle('')
     setNewContent('')
     setAttachedFiles([])
+    setLinkedGraphId(null)
+    setLinkedProjectName(null)
     setShowWriteForm(false)
   }
 
@@ -202,6 +240,36 @@ export default function CommunityPage() {
                 rows={5}
                 className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none resize-none"
               />
+              {/* 그래프 연결 */}
+              {myProjects.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-gray-400">그래프 연결 (선택)</label>
+                  {linkedProjectName ? (
+                    <div className="flex items-center gap-2 bg-gray-800 px-3 py-2 rounded-lg border border-blue-600/40">
+                      <span className="text-xs text-blue-400 flex-1">📊 {linkedProjectName}</span>
+                      <button
+                        onClick={() => { setLinkedGraphId(null); setLinkedProjectName(null) }}
+                        className="text-xs text-gray-500 hover:text-red-400"
+                      >
+                        해제
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      defaultValue=""
+                      onChange={(e) => handleLinkProject(e.target.value)}
+                      disabled={linkingGraph}
+                      className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="">— 그래프 선택 안 함 —</option>
+                      {myProjects.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
               {/* 파일 첨부 */}
               <div className="flex flex-col gap-2">
                 <label className="text-xs text-gray-400 cursor-pointer hover:text-gray-200 w-fit">
@@ -249,10 +317,15 @@ export default function CommunityPage() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         {post.feedbackType && (
                           <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">
                             {FEEDBACK_LABELS[post.feedbackType] ?? post.feedbackType}
+                          </span>
+                        )}
+                        {post.graphId && (
+                          <span className="text-xs text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded">
+                            📊 그래프
                           </span>
                         )}
                         <span className="font-medium text-sm">{post.title}</span>
