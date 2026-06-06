@@ -17,6 +17,7 @@ import PrivacyPage from './pages/PrivacyPage'
 import ContactPage from './pages/ContactPage'
 import AdminPage from './pages/AdminPage'
 import CookieBanner from './components/CookieBanner'
+import NoticeBanner from './components/NoticeBanner'
 
 // 앱 최상위 라우터 컴포넌트
 export default function App() {
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/admin" element={<AdminPage />} />
       </Routes>
+      <NoticeBanner />
       <CookieBanner />
     </BrowserRouter>
   )
