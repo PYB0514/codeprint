@@ -108,6 +108,7 @@
 | 어드민 공지 관리 UI + changelog 업데이트 | ✅ | v1.24.002 — AdminPage 공지 관리 섹션, changelog v1.22~v1.24 (#79) |
 | GraphBuilder 여러 구현체 isInterfaceImpl 버그 수정 | ✅ | v1.25 — Map<String,List> 변경, 회귀 테스트(7/7 PASS), 41개 엣지 확인 (#81) |
 | Spring Boot DevTools 자동 재시작 | ✅ | v1.25 — developmentOnly 스코프, 저장 시 자동 컴파일 연동 (#81) |
+| StaticCodeAnalyzer 언어별 커버리지 테스트 + Kotlin 버그 수정 | ✅ | v1.25.001 — 19개 신규 테스트(기능별+언어별), Kotlin fun 패턴 분리, 37/37 PASS |
 
 ---
 
@@ -132,11 +133,10 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# 현재: main 브랜치 (v1.25)
+# 현재: test/analyzer-language-coverage 브랜치 → PR 후 main 머지 예정
 # 다음 선택지 (우선순위 순):
-#   A. StaticCodeAnalyzer 언어별 샘플 테스트 (이미 버그 다수 발생 — 회귀 방지 임팩트 최고)
-#   B. AI 기능 — 선택 노드/엣지 설명 (Claude API), 유료화 핵심
-#   C. 분석 비교 기능 — 브랜치 A vs B, 이전 분석 vs 최신
+#   A. AI 기능 — 선택 노드/엣지 설명 (Claude API), 유료화 핵심
+#   B. 분석 비교 기능 — 브랜치 A vs B, 이전 분석 vs 최신
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
