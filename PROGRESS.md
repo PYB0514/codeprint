@@ -147,11 +147,11 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# v1.33 완료 (feat/ai-explain-multi-provider 브랜치, PR 생성 후 머지 대기)
+# v1.33.001 완료 (모든 브랜치 머지, main 최신)
 # 다음 기능 선택지 (우선순위 순):
-#   A. 패치노트 페이지 업데이트 — v1.27~v1.33 changelog 추가
-#   B. 결제 연동 — Stripe Pro 플랜 (계정 생성 필요)
-#   C. TDD 테스트 커버리지 — GraphBuilder/StaticCodeAnalyzer 회귀 테스트
+#   A. 결제 연동 — Stripe Pro 플랜 (계정 생성 필요)
+#   B. 그래프 스킨 — 레고/회로도 테마 구현
+#   C. 서버 AI 내장 — Stripe 연동 후 Pro 사용자에게 서버 키로 AI 제공
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
