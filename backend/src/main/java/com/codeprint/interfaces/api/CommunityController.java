@@ -1,17 +1,21 @@
-// 커뮤니티 게시글/댓글 REST API 컨트롤러
+// 커뮤니티 게시글/댓글/북마크 REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
 import com.codeprint.application.community.PostCommandService;
 import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.domain.community.Comment;
 import com.codeprint.domain.community.Post;
+import com.codeprint.domain.community.PostBookmark;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
+import com.codeprint.infrastructure.persistence.community.PostBookmarkJpaRepository;
+import com.codeprint.infrastructure.persistence.community.PostJpaRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -29,21 +33,26 @@ public class CommunityController {
     private final PostCommandService postCommandService;
     private final GraphQueryService graphQueryService;
     private final UserRepository userRepository;
+    private final PostBookmarkJpaRepository bookmarkRepository;
+    private final PostJpaRepository postJpaRepository;
 
-    // 게시글 목록 조회 (페이지)
+    // 게시글 목록 조회 (페이지) — 로그인 시 내 북마크 여부 포함
     @GetMapping("/posts")
     public ResponseEntity<List<PostResponse>> getPosts(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal User user) {
         List<PostResponse> posts = postCommandService.getPosts(page, size).stream()
-                .map(p -> toPostResponse(p, null))
+                .map(p -> toPostResponse(p, null, user))
                 .toList();
         return ResponseEntity.ok(posts);
     }
 
     // 게시글 단건 + 댓글 + 첨부파일 목록 조회
     @GetMapping("/posts/{postId}")
-    public ResponseEntity<PostDetailResponse> getPost(@PathVariable UUID postId) {
+    public ResponseEntity<PostDetailResponse> getPost(
+            @PathVariable UUID postId,
+            @AuthenticationPrincipal User user) {
         Post post = postCommandService.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
         List<CommentResponse> comments = postCommandService.getComments(postId).stream()
@@ -52,7 +61,7 @@ public class CommunityController {
         List<AttachmentResponse> attachments = postCommandService.getAttachmentsWithUrls(postId).stream()
                 .map(a -> new AttachmentResponse(a.id(), a.originalFilename(), a.contentType(), a.url()))
                 .toList();
-        return ResponseEntity.ok(new PostDetailResponse(toPostResponse(post, null), comments, attachments));
+        return ResponseEntity.ok(new PostDetailResponse(toPostResponse(post, null, user), comments, attachments));
     }
 
     // 새 게시글 작성 (첨부파일 메타데이터 포함)
@@ -75,7 +84,7 @@ public class CommunityController {
                     .toList();
             postCommandService.saveAttachments(post.getId(), infos);
         }
-        return ResponseEntity.status(201).body(toPostResponse(post, user.getUsername()));
+        return ResponseEntity.status(201).body(toPostResponse(post, user.getUsername(), user));
     }
 
     // 게시글에 첨부된 그래프를 숨김 필터 적용하여 반환
@@ -150,14 +159,49 @@ public class CommunityController {
         return ResponseEntity.noContent().build();
     }
 
-    // Post 엔티티를 응답 DTO로 변환
-    private PostResponse toPostResponse(Post post, String authorUsername) {
+    // 게시글 북마크 추가
+    @PostMapping("/posts/{postId}/bookmark")
+    public ResponseEntity<Void> addBookmark(
+            @PathVariable UUID postId,
+            @AuthenticationPrincipal User user) {
+        if (!bookmarkRepository.existsByUserIdAndPostId(user.getId(), postId)) {
+            bookmarkRepository.save(PostBookmark.of(user.getId(), postId));
+        }
+        return ResponseEntity.ok().build();
+    }
+
+    // 게시글 북마크 취소
+    @DeleteMapping("/posts/{postId}/bookmark")
+    public ResponseEntity<Void> removeBookmark(
+            @PathVariable UUID postId,
+            @AuthenticationPrincipal User user) {
+        bookmarkRepository.deleteByUserIdAndPostId(user.getId(), postId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // 내 북마크 목록 조회 (최신순, 최대 50개)
+    @GetMapping("/bookmarks")
+    public ResponseEntity<List<PostResponse>> getMyBookmarks(@AuthenticationPrincipal User user) {
+        List<PostResponse> posts = bookmarkRepository
+                .findByUserIdOrderByCreatedAtDesc(user.getId(), PageRequest.of(0, 50))
+                .getContent().stream()
+                .flatMap(bm -> postJpaRepository.findById(bm.getPostId()).stream())
+                .map(p -> toPostResponse(p, null, user))
+                .toList();
+        return ResponseEntity.ok(posts);
+    }
+
+    // Post 엔티티를 응답 DTO로 변환 (북마크 수, 내 북마크 여부 포함)
+    private PostResponse toPostResponse(Post post, String authorUsername, User currentUser) {
         String username = authorUsername;
         if (username == null) {
             username = userRepository.findById(post.getUserId())
                     .map(User::getUsername)
                     .orElse("unknown");
         }
+        long bookmarkCount = bookmarkRepository.countByPostId(post.getId());
+        boolean bookmarkedByMe = currentUser != null &&
+                bookmarkRepository.existsByUserIdAndPostId(currentUser.getId(), post.getId());
         return new PostResponse(
                 post.getId(),
                 post.getTitle(),
@@ -166,7 +210,9 @@ public class CommunityController {
                 post.getGraphId(),
                 post.getUserId(),
                 username,
-                post.getCreatedAt()
+                post.getCreatedAt(),
+                bookmarkCount,
+                bookmarkedByMe
         );
     }
 
@@ -202,7 +248,8 @@ public class CommunityController {
     // 게시글 응답 DTO
     public record PostResponse(
             UUID id, String title, String content, String feedbackType,
-            UUID graphId, UUID userId, String authorUsername, Instant createdAt) {}
+            UUID graphId, UUID userId, String authorUsername, Instant createdAt,
+            long bookmarkCount, boolean bookmarkedByMe) {}
 
     // 댓글 응답 DTO
     public record CommentResponse(

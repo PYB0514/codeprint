@@ -24,6 +24,8 @@ interface Post {
   userId: string
   authorUsername: string
   createdAt: string
+  bookmarkCount: number
+  bookmarkedByMe: boolean
 }
 
 interface Comment {
@@ -184,6 +186,22 @@ export default function CommunityPage() {
     }
   }
 
+  // 게시글 북마크 토글
+  const handleToggleBookmark = async (e: React.MouseEvent, post: Post) => {
+    e.stopPropagation()
+    if (!user) return
+    if (post.bookmarkedByMe) {
+      await axios.delete(`/api/community/posts/${post.id}/bookmark`, { headers: authHeaders() })
+    } else {
+      await axios.post(`/api/community/posts/${post.id}/bookmark`, {}, { headers: authHeaders() })
+    }
+    setPosts((prev) => prev.map((p) =>
+      p.id === post.id
+        ? { ...p, bookmarkedByMe: !p.bookmarkedByMe, bookmarkCount: p.bookmarkCount + (p.bookmarkedByMe ? -1 : 1) }
+        : p
+    ))
+  }
+
   // 게시글 삭제
   const handleDeletePost = async (postId: string) => {
     if (!confirm('게시글을 삭제할까요?')) return
@@ -205,14 +223,24 @@ export default function CommunityPage() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-semibold">커뮤니티</h1>
-            {user && (
-              <button
-                onClick={() => setShowWriteForm((v) => !v)}
-                className="text-sm bg-white text-black font-medium px-3 py-1.5 rounded-lg hover:bg-gray-200"
-              >
-                {showWriteForm ? '취소' : '글쓰기'}
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {user && (
+                <button
+                  onClick={() => navigate('/bookmarks')}
+                  className="text-sm text-gray-400 hover:text-white px-3 py-1.5 rounded-lg"
+                >
+                  ★ 북마크
+                </button>
+              )}
+              {user && (
+                <button
+                  onClick={() => setShowWriteForm((v) => !v)}
+                  className="text-sm bg-white text-black font-medium px-3 py-1.5 rounded-lg hover:bg-gray-200"
+                >
+                  {showWriteForm ? '취소' : '글쓰기'}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* 글쓰기 폼 */}
@@ -331,17 +359,32 @@ export default function CommunityPage() {
                         <span className="font-medium text-sm">{post.title}</span>
                       </div>
                       <p className="text-xs text-gray-500">
-                        {post.authorUsername} · {new Date(post.createdAt).toLocaleDateString('ko-KR')}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/users/${post.userId}`) }}
+                          className="hover:text-gray-300"
+                        >
+                          {post.authorUsername}
+                        </button>
+                        {' · '}{new Date(post.createdAt).toLocaleDateString('ko-KR')}
                       </p>
                     </div>
-                    {user?.id === post.userId && (
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id) }}
-                        className="text-xs text-gray-600 hover:text-red-400 shrink-0"
+                        onClick={(e) => handleToggleBookmark(e, post)}
+                        className={`text-xs flex items-center gap-1 ${post.bookmarkedByMe ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'}`}
                       >
-                        삭제
+                        <span>{post.bookmarkedByMe ? '★' : '☆'}</span>
+                        {post.bookmarkCount > 0 && <span>{post.bookmarkCount}</span>}
                       </button>
-                    )}
+                      {user?.id === post.userId && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id) }}
+                          className="text-xs text-gray-600 hover:text-red-400"
+                        >
+                          삭제
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
