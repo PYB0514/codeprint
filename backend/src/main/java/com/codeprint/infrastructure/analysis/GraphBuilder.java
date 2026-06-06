@@ -89,8 +89,16 @@ public class GraphBuilder {
             }
         }
 
-        // 파일 간 FUNCTION_CALL 엣지 생성
-        // 각 함수의 호출 목록에서 다른 파일의 함수를 호출하는 경우에만 엣지 생성
+        // 인터페이스 심플명 → 구현체 ParsedFile 목록 (FUNCTION_CALL 매칭 전에 먼저 빌드)
+        // FUNCTION_CALL 매칭 시 인터페이스보다 구현체를 우선 선택하기 위해 사용
+        Map<String, List<ParsedFile>> interfaceToImplFiles = new HashMap<>();
+        for (ParsedFile pf : parsedFiles) {
+            for (String iface : pf.implementedInterfaces()) {
+                interfaceToImplFiles.computeIfAbsent(iface, k -> new ArrayList<>()).add(pf);
+            }
+        }
+
+        // 파일 간 FUNCTION_CALL 엣지 생성 — 구현체가 있으면 인터페이스보다 구현체로 연결
         Set<String> usedEdgeIds = new HashSet<>();
         for (ParsedFile callerFile : parsedFiles) {
             for (Map.Entry<String, List<String>> entry : callerFile.functionCalls().entrySet()) {
@@ -99,37 +107,40 @@ public class GraphBuilder {
                 if (callerFuncId == null) continue;
 
                 for (String calleeFunc : entry.getValue()) {
-                    // 같은 파일 내 호출은 제외 — 다른 파일의 함수를 찾는다
+                    // 후보 callee 파일 중 구현체를 인터페이스보다 우선 선택
+                    ParsedFile bestMatch = null;
+                    boolean bestIsInterface = false;
                     for (ParsedFile calleeFile : parsedFiles) {
                         if (calleeFile.filePath().equals(callerFile.filePath())) continue;
                         if (!calleeFile.functions().contains(calleeFunc)) continue;
-
-                        UUID calleeFuncId = funcNodeIds.get(calleeFile.filePath() + "::" + calleeFunc);
-                        if (calleeFuncId == null) continue;
-
-                        String edgeIdentifier = extractFileName(callerFile.filePath()) + "-" + callerFunc + "-calls-" + calleeFunc;
-                        if (usedEdgeIds.contains(edgeIdentifier)) continue;
-                        usedEdgeIds.add(edgeIdentifier);
-
-                        Edge callEdge = Edge.create(graphId, edgeIdentifier, EdgeType.FUNCTION_CALL,
-                                callerFuncId, calleeFuncId);
-                        Map<String, Object> meta = new HashMap<>();
-                        meta.put("callerFile", callerFile.filePath());
-                        meta.put("calleeFile", calleeFile.filePath());
-                        callEdge.updateMetadata(meta);
-                        graphRepository.saveEdge(callEdge);
-                        break; // 첫 번째 매칭 파일만 사용
+                        String calleeClassName = extractFileNameWithoutExt(calleeFile.filePath());
+                        boolean calleeIsInterface = interfaceToImplFiles.containsKey(calleeClassName);
+                        if (bestMatch == null) {
+                            bestMatch = calleeFile;
+                            bestIsInterface = calleeIsInterface;
+                        } else if (bestIsInterface && !calleeIsInterface) {
+                            // 구현체로 업그레이드
+                            bestMatch = calleeFile;
+                            bestIsInterface = false;
+                        }
                     }
-                }
-            }
-        }
+                    if (bestMatch == null) continue;
 
-        // 인터페이스 → 구현체 FUNCTION_CALL 엣지 생성
-        // 인터페이스 심플명 → 구현체 ParsedFile 목록 (구현체 여러 개 지원)
-        Map<String, List<ParsedFile>> interfaceToImplFiles = new HashMap<>();
-        for (ParsedFile pf : parsedFiles) {
-            for (String iface : pf.implementedInterfaces()) {
-                interfaceToImplFiles.computeIfAbsent(iface, k -> new ArrayList<>()).add(pf);
+                    UUID calleeFuncId = funcNodeIds.get(bestMatch.filePath() + "::" + calleeFunc);
+                    if (calleeFuncId == null) continue;
+
+                    String edgeIdentifier = extractFileName(callerFile.filePath()) + "-" + callerFunc + "-calls-" + calleeFunc;
+                    if (usedEdgeIds.contains(edgeIdentifier)) continue;
+                    usedEdgeIds.add(edgeIdentifier);
+
+                    Edge callEdge = Edge.create(graphId, edgeIdentifier, EdgeType.FUNCTION_CALL,
+                            callerFuncId, calleeFuncId);
+                    Map<String, Object> meta = new HashMap<>();
+                    meta.put("callerFile", callerFile.filePath());
+                    meta.put("calleeFile", bestMatch.filePath());
+                    callEdge.updateMetadata(meta);
+                    graphRepository.saveEdge(callEdge);
+                }
             }
         }
         // 인터페이스 심플명 → 인터페이스 ParsedFile 인덱스
