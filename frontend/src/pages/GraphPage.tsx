@@ -1051,17 +1051,6 @@ function GraphPageInner() {
     })
   }, [setEdges])
 
-  // 레이아웃 프리셋 전환 — 그래프를 재계산하여 적용
-  const toggleLayoutPreset = useCallback(() => {
-    const next: LayoutPreset = layoutPreset === 'layer' ? 'hub' : 'layer'
-    setLayoutPreset(next)
-    if (rawNodes.length > 0) {
-      const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
-      setNodes(ln.map((n) => n.id.startsWith('layer-section-') ? { ...n, hidden: next === 'hub' } : n))
-      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
-      setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
-    }
-  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, applyEdgeVisibility])
 
   // 전체 그래프를 원본 크기 PNG로 다운로드
   const handleExportImage = useCallback(async () => {
@@ -1512,15 +1501,13 @@ function GraphPageInner() {
             {/* 레이아웃 */}
             <LeftSection title="레이아웃" id="tour-layout">
               <div className="flex items-center justify-between">
-                <span className="text-gray-400 text-xs">프리셋</span>
-                <button
-                  onClick={toggleLayoutPreset}
-                  className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2 py-1 rounded border border-gray-700"
-                >
-                  <span className={layoutPreset === 'layer' ? 'text-white' : 'text-gray-500'}>계층</span>
+                <span className="text-gray-400 text-xs">뷰</span>
+                <div className="flex items-center gap-1 bg-gray-800 text-xs px-2 py-1 rounded border border-gray-700">
+                  <span className="text-white">계층형</span>
                   <span className="text-gray-600">/</span>
-                  <span className={layoutPreset === 'hub' ? 'text-white' : 'text-gray-500'}>허브</span>
-                </button>
+                  <span className="text-gray-500">도메인</span>
+                  <span className="text-gray-700 text-[10px] ml-0.5">(준비중)</span>
+                </div>
               </div>
             </LeftSection>
 
@@ -1559,11 +1546,11 @@ function GraphPageInner() {
               </div>
             </LeftSection>
 
-            {/* 범례 — DDD 레이어 + 노드 */}
+            {/* 범례 — 계층형 레이어 + 노드 */}
             <LeftSection title="범례">
               {layoutPreset === 'layer' && (
                 <>
-                  <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">DDD 레이어</p>
+                  <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">계층형 레이어</p>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
                   {[
                     { label: 'Domain',        color: '#3b82f6', key: 'domain' },
