@@ -1,6 +1,7 @@
 // 서비스 메인 랜딩 페이지 — 로그인, 대시보드, 커뮤니티 진입점
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import AppHeader from '../components/AppHeader'
 import Footer from '../components/Footer'
 
 // JWT 보유 여부로 로그인 상태 판단
@@ -67,51 +68,8 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-950 text-white">
 
-      {/* 상단 광고 배너 */}
-      <div className="w-full bg-gray-900 border-b border-gray-800 flex items-center justify-center py-2 px-4 text-xs text-gray-600 min-h-[40px]">
-        [광고 배너 영역 — 728×90]
-      </div>
-
       {/* 상단 내비게이션 */}
-      <header className="flex items-center justify-between px-8 py-5 border-b border-gray-800">
-        <span className="font-bold text-lg tracking-tight">Codeprint</span>
-        <nav className="flex items-center gap-6 text-sm">
-          <button
-            onClick={() => navigate('/community')}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
-            커뮤니티
-          </button>
-          <button
-            onClick={() => navigate('/changelog')}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
-            패치노트
-          </button>
-          <button
-            onClick={() => navigate('/donate')}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
-            ☕ 후원
-          </button>
-          {loggedIn ? (
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="px-4 py-1.5 bg-white text-black rounded-md font-medium hover:bg-gray-100 transition-colors"
-            >
-              대시보드
-            </button>
-          ) : (
-            <button
-              onClick={handleLogin}
-              className="flex items-center gap-2 px-4 py-1.5 bg-white text-black rounded-md font-medium hover:bg-gray-100 transition-colors"
-            >
-              <GithubIcon />
-              GitHub 로그인
-            </button>
-          )}
-        </nav>
-      </header>
+      <AppHeader onLogin={handleLogin} />
 
       {/* 본문 — 양옆 광고 + 중앙 콘텐츠 */}
       <div className="flex flex-1">
@@ -119,10 +77,10 @@ export default function LandingPage() {
         {/* 좌측 광고 배너 */}
         <aside className="hidden lg:flex w-36 shrink-0 items-start justify-center pt-10 border-r border-gray-800/50">
           <div
-            className="w-28 bg-gray-900 border border-gray-800 rounded-lg flex items-center justify-center text-xs text-gray-600 sticky top-10 text-center leading-loose"
-            style={{ height: 240 }}
+            className="w-32 bg-gray-900 border border-gray-800 rounded-lg flex items-center justify-center text-xs text-gray-600 sticky top-10 text-center leading-loose"
+            style={{ height: 600 }}
           >
-            광고<br />160×240
+            광고<br />128×600
           </div>
         </aside>
 
@@ -216,10 +174,10 @@ export default function LandingPage() {
         {/* 우측 광고 배너 */}
         <aside className="hidden lg:flex w-36 shrink-0 items-start justify-center pt-10 border-l border-gray-800/50">
           <div
-            className="w-28 bg-gray-900 border border-gray-800 rounded-lg flex items-center justify-center text-xs text-gray-600 sticky top-10 text-center leading-loose"
-            style={{ height: 240 }}
+            className="w-32 bg-gray-900 border border-gray-800 rounded-lg flex items-center justify-center text-xs text-gray-600 sticky top-10 text-center leading-loose"
+            style={{ height: 600 }}
           >
-            광고<br />160×240
+            광고<br />128×600
           </div>
         </aside>
 

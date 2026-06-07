@@ -1,6 +1,6 @@
 // 프로젝트 코드 구조를 React Flow로 시각화하는 그래프 페이지
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import {
   ReactFlow,
@@ -10,6 +10,7 @@ import {
   useNodesState,
   useEdgesState,
   useReactFlow,
+  useViewport,
   ReactFlowProvider,
 } from '@xyflow/react'
 import type { Edge, EdgeMouseHandler, Node } from '@xyflow/react'
@@ -21,6 +22,10 @@ import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
 import OnboardingTour, { isTourDone } from '../components/OnboardingTour'
+import CollaborationPanel from '../components/CollaborationPanel'
+import CursorOverlay from '../components/CursorOverlay'
+import { useCollaboration } from '../hooks/useCollaboration'
+import AppHeader from '../components/AppHeader'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -390,9 +395,32 @@ function CallTreePanel({ root, activeNodeIds, onSelectBranch }: {
 }
 
 // 그래프 페이지 내부 컴포넌트 (ReactFlow 훅 사용)
+// JWT payload에서 userId 추출
+function getMyUserId(): string | null {
+  const token = localStorage.getItem('jwt')
+  if (!token) return null
+  try {
+    // JWT는 base64url — atob()용으로 표준 base64로 변환 후 디코딩
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(b64))
+    return payload.sub ?? null
+  } catch { return null }
+}
+
 function GraphPageInner() {
   const { projectId } = useParams<{ projectId: string }>()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+
+  // 협업 세션 상태
+  const [collabSessionId, setCollabSessionId] = useState<string | null>(searchParams.get('collab'))
+  const [collabInviteCode, setCollabInviteCode] = useState<string | null>(searchParams.get('code'))
+  const myUserId = getMyUserId()
+  const { state: collabState, publishCursor, publishSelection } = useCollaboration(collabSessionId, myUserId)
+
+  // 커서 throttle — 50ms마다 발행
+  const cursorThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastCursorRef = useRef<{ x: number; y: number } | null>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [rawNodes, setRawNodes] = useState<RawNode[]>([])
@@ -438,7 +466,29 @@ function GraphPageInner() {
   const [shareHiddenNodes, setShareHiddenNodes] = useState<Set<string>>(new Set())
   const [shareSubmitting, setShareSubmitting] = useState(false)
   const flowRef = useRef<HTMLDivElement>(null)
-  const { getNodes, fitView } = useReactFlow()
+  const { getNodes, fitView, screenToFlowPosition } = useReactFlow()
+  const viewport = useViewport()
+
+  // 그래프 좌표 → 화면 픽셀 변환 (다른 사용자 커서 위치 렌더링용)
+  const flowToScreen = useCallback((x: number, y: number) => ({
+    x: x * viewport.zoom + viewport.x,
+    y: y * viewport.zoom + viewport.y,
+  }), [viewport])
+
+  // ReactFlow 위 마우스 이동 시 협업 커서 발행 (50ms throttle, 화면→그래프 좌표 변환)
+  const handleCollabMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!collabSessionId) return
+    lastCursorRef.current = { x: e.clientX, y: e.clientY }
+    if (cursorThrottleRef.current) return
+    cursorThrottleRef.current = setTimeout(() => {
+      cursorThrottleRef.current = null
+      const pos = lastCursorRef.current
+      if (pos) {
+        const flowPos = screenToFlowPosition({ x: pos.x, y: pos.y })
+        publishCursor(flowPos.x, flowPos.y)
+      }
+    }, 50)
+  }, [collabSessionId, screenToFlowPosition, publishCursor])
 
   // 흐름 재생 상태
   const [playbackItems, setPlaybackItems] = useState<{ type: 'node' | 'edge'; id: string }[]>([])
@@ -479,7 +529,7 @@ function GraphPageInner() {
       return { ...e, hidden }
     }), [])
 
-  // 레이어 섹션 박스 opaque 토글 — zIndex 대신 자식 노드 hidden 처리 (React Flow v12에서 parentId 자식이 부모 위에 렌더링되는 문제 우회)
+  // 레이어 섹션 박스 opaque 토글 — 섹션은 원래 크기 유지 + opaqueColor로 덮고, 내부 노드 전부 hidden
   const toggleLayerOpaque = useCallback((layer: string) => {
     setOpaqueLayerSet((prev) => {
       const next = new Set(prev)
@@ -488,14 +538,16 @@ function GraphPageInner() {
       const isOpaque = next.has(layer)
       const sectionId = `layer-section-${layer}`
       setNodes((nds) => {
-        // section → group → file → function 3단계 자손 모두 수집
         const groupIds = new Set(nds.filter((n) => n.parentId === sectionId).map((n) => n.id))
-        const fileIds  = new Set(nds.filter((n) => n.parentId != null && groupIds.has(n.parentId!)).map((n) => n.id))
-        const descendantIds = new Set([...groupIds, ...fileIds,
-          ...nds.filter((n) => n.parentId != null && fileIds.has(n.parentId!)).map((n) => n.id)])
+        const fileIds = new Set(nds.filter((n) => n.parentId && groupIds.has(n.parentId)).map((n) => n.id))
+        const funcIds = new Set(nds.filter((n) => n.parentId && fileIds.has(n.parentId)).map((n) => n.id))
         return nds.map((n) => {
-          if (n.id === sectionId) return { ...n, data: { ...n.data, opaque: isOpaque } }
-          if (descendantIds.has(n.id)) return { ...n, hidden: isOpaque }
+          if (n.id === sectionId) {
+            return { ...n, data: { ...n.data, opaque: isOpaque } }
+          }
+          if (groupIds.has(n.id) || fileIds.has(n.id) || funcIds.has(n.id)) {
+            return { ...n, hidden: isOpaque }
+          }
           return n
         })
       })
@@ -1264,6 +1316,7 @@ function GraphPageInner() {
   }, [rawNodes, rawEdgesCache, graphId, startPlayback])
 
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    publishSelection(node.id)
     if (node.type === 'fileNode' || node.type === 'groupNode' || node.type === 'sectionNode') {
       resetPlayback()
       return
@@ -1315,9 +1368,22 @@ function GraphPageInner() {
   }
 
   return (
-    <div ref={flowRef} style={{ width: '100vw', height: '100vh', background: '#030712' }}>
+    <div style={{ width: '100vw', height: '100vh', background: '#030712', display: 'flex', flexDirection: 'column' }}>
+      <AppHeader />
+    <div ref={flowRef} style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
       <OnboardingTour run={tourRunning} onFinish={() => setTourRunning(false)} />
+
+
+      {/* 다른 참가자 커서 오버레이 */}
+      <CursorOverlay
+        cursors={Object.fromEntries(
+          Object.entries(collabState.cursors).map(([uid, c]) => {
+            const screen = flowToScreen(c.x, c.y)
+            return [uid, { ...c, x: screen.x, y: screen.y }]
+          })
+        )}
+      />
 
       {/* 최신 커밋 감지 배너 */}
       {outdated && (
@@ -1355,6 +1421,17 @@ function GraphPageInner() {
           >
             커뮤니티에 공유
           </button>
+        )}
+        {myUserId && projectId && (
+          <CollaborationPanel
+            graphId={graphId ?? projectId}
+            myUserId={myUserId}
+            participants={collabState.participants}
+            connected={collabState.connected}
+            sessionId={collabSessionId}
+            inviteCode={collabInviteCode}
+            onSessionReady={(sid, code) => { setCollabSessionId(sid); setCollabInviteCode(code) }}
+          />
         )}
       </div>
 
@@ -1505,21 +1582,22 @@ function GraphPageInner() {
 
             {/* 엣지 — 색인 + 토글 통합 */}
             <LeftSection title="엣지" id="tour-edges">
+              <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
               {[
-                { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: '의존성',       textCls: showEdges ? 'text-gray-300' : 'text-gray-600',   active: showEdges,        onToggle: toggleEdges },
-                { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="5 4" /></svg>,                                label: '콜 체인',      textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600', active: showCallEdges,    onToggle: toggleCallEdges },
-                { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',         textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600', active: showInstEdges,  onToggle: toggleInstEdges },
-                { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결',    textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600', active: showBrokenEdges, onToggle: toggleBrokenEdges },
-                { key: 'db',      icon: <svg width="16" height="4"><line x1="0" y1="2" x2="3.5" y2="2" stroke={showDbEdges ? '#22d3ee' : '#374151'} strokeWidth="1.5"/><line x1="4.5" y1="2" x2="8" y2="2" stroke={showDbEdges ? '#4ade80' : '#374151'} strokeWidth="1.5"/><line x1="9" y1="2" x2="12.5" y2="2" stroke={showDbEdges ? '#facc15' : '#374151'} strokeWidth="1.5"/><line x1="13.5" y1="2" x2="16" y2="2" stroke={showDbEdges ? '#f87171' : '#374151'} strokeWidth="1.5"/></svg>, label: 'DB 연결',      textCls: showDbEdges ? 'text-cyan-400' : 'text-gray-600',    active: showDbEdges,     onToggle: toggleDbEdges },
-                { key: 'api',     icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showApiCallEdges ? '#e879f9' : '#701a75'} strokeWidth="1.5" strokeDasharray="6 3" /></svg>,                              label: 'API 호출',     textCls: showApiCallEdges ? 'text-fuchsia-400' : 'text-gray-600', active: showApiCallEdges, onToggle: toggleApiCallEdges },
+                { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: '의존성',    textCls: showEdges ? 'text-gray-300' : 'text-gray-600',        active: showEdges,        onToggle: toggleEdges },
+                { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="5 4" /></svg>,                                label: '콜 체인',   textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600',    active: showCallEdges,    onToggle: toggleCallEdges },
+                { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',      textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600',   active: showInstEdges,    onToggle: toggleInstEdges },
+                { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결', textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600',   active: showBrokenEdges,  onToggle: toggleBrokenEdges },
+                { key: 'db',      icon: <svg width="16" height="4"><line x1="0" y1="2" x2="3.5" y2="2" stroke={showDbEdges ? '#22d3ee' : '#374151'} strokeWidth="1.5"/><line x1="4.5" y1="2" x2="8" y2="2" stroke={showDbEdges ? '#4ade80' : '#374151'} strokeWidth="1.5"/><line x1="9" y1="2" x2="12.5" y2="2" stroke={showDbEdges ? '#facc15' : '#374151'} strokeWidth="1.5"/><line x1="13.5" y1="2" x2="16" y2="2" stroke={showDbEdges ? '#f87171' : '#374151'} strokeWidth="1.5"/></svg>, label: 'DB 연결',   textCls: showDbEdges ? 'text-cyan-400' : 'text-gray-600',       active: showDbEdges,      onToggle: toggleDbEdges },
+                { key: 'api',     icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showApiCallEdges ? '#e879f9' : '#701a75'} strokeWidth="1.5" strokeDasharray="6 3" /></svg>,                              label: 'API 호출',  textCls: showApiCallEdges ? 'text-fuchsia-400' : 'text-gray-600', active: showApiCallEdges, onToggle: toggleApiCallEdges },
               ].map(({ key, icon, label, textCls, active, onToggle }) => (
                 <div key={key} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}
-                  className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded hover:bg-gray-800/60 cursor-pointer">
+                  className={`flex items-center gap-1.5 px-1.5 py-1 rounded cursor-pointer hover:bg-gray-800/60 ${active ? '' : 'opacity-40'}`}>
                   <span className="w-4 flex-shrink-0">{icon}</span>
-                  <span className={`text-xs flex-1 ${textCls}`}>{label}</span>
-                  <ToggleChip active={active} onClick={onToggle} stopPropagation />
+                  <span className={`text-xs truncate ${textCls}`}>{label}</span>
                 </div>
               ))}
+              </div>
             </LeftSection>
 
             {/* 범례 — DDD 레이어 + 노드 */}
@@ -1527,47 +1605,53 @@ function GraphPageInner() {
               {layoutPreset === 'layer' && (
                 <>
                   <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">DDD 레이어</p>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
                   {[
-                    { label: 'Domain',           color: '#3b82f6', key: 'domain' },
-                    { label: 'Application',      color: '#eab308', key: 'application' },
-                    { label: 'Infrastructure',   color: '#a855f7', key: 'infrastructure' },
-                    { label: 'Interfaces',       color: '#10b981', key: 'interfaces' },
-                    { label: 'Pages/Components', color: '#06b6d4', key: 'pages' },
-                    { label: 'Database',         color: '#ef4444', key: 'database' },
+                    { label: 'Domain',        color: '#3b82f6', key: 'domain' },
+                    { label: 'Application',   color: '#eab308', key: 'application' },
+                    { label: 'Infra',         color: '#a855f7', key: 'infrastructure' },
+                    { label: 'Interfaces',    color: '#10b981', key: 'interfaces' },
+                    { label: 'Pages',         color: '#06b6d4', key: 'pages' },
+                    { label: 'Components',    color: '#0ea5e9', key: 'components' },
+                    { label: 'Hooks/Utils',   color: '#f97316', key: 'hooks' },
+                    { label: 'Database',      color: '#ef4444', key: 'database' },
                   ].map(({ label, color, key }) => {
                     const active = opaqueLayerSet.has(key)
                     return (
-                      <div key={key} className="flex items-center gap-2 py-0.5">
+                      <div key={key} className="flex items-center gap-1.5 py-0.5">
                         <button
                           onClick={() => toggleLayerOpaque(key)}
                           title={active ? '내용 표시' : '내용 가리기'}
                           style={{
-                            width: 18, height: 18, borderRadius: 4,
+                            width: 16, height: 16, borderRadius: 3,
                             border: `1px solid ${color}88`,
                             background: active ? color : `${color}22`,
                             color: active ? '#fff' : color,
-                            fontSize: 10, cursor: 'pointer',
+                            fontSize: 9, cursor: 'pointer',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             flexShrink: 0,
                           }}
                         >
                           {active ? '◑' : '○'}
                         </button>
-                        <span className="text-gray-400 text-xs">{label}</span>
+                        <span className="text-gray-400 text-xs truncate">{label}</span>
                       </div>
                     )
                   })}
+                  </div>
                   <div className="border-t border-gray-800 my-2" />
                 </>
               )}
               <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">노드</p>
-              <div className="flex items-center gap-2 py-0.5">
-                <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#1e3a5f', border: '1.5px solid #3b82f6' }} />
-                <span className="text-gray-400 text-xs">FILE</span>
-              </div>
-              <div className="flex items-center gap-2 py-0.5">
-                <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#064e3b', border: '1px solid #10b981' }} />
-                <span className="text-gray-400 text-xs">FUNCTION</span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#1e3a5f', border: '1.5px solid #3b82f6' }} />
+                  <span className="text-gray-400 text-xs">FILE</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#064e3b', border: '1px solid #10b981' }} />
+                  <span className="text-gray-400 text-xs">FUNCTION</span>
+                </div>
               </div>
             </LeftSection>
           </div>
@@ -1592,6 +1676,7 @@ function GraphPageInner() {
         onEdgeClick={handleEdgeClick}
         onNodeClick={handleNodeClick}
         onNodeDragStop={handleNodeDragStop}
+        onMouseMove={handleCollabMouseMove}
         fitView
         fitViewOptions={{ padding: 0.1 }}
         minZoom={0.05}
@@ -1605,12 +1690,13 @@ function GraphPageInner() {
             return bg ?? '#374151'
           }}
           style={{ background: '#111827' }}
+          position="bottom-center"
         />
       </ReactFlow>
 
       {/* 우측 사이드바 — 항상 표시 */}
       <aside
-        className="fixed right-0 top-0 h-full bg-gray-950 border-l border-gray-800 z-40 flex flex-col shadow-2xl transition-all duration-200"
+        className="absolute right-0 top-0 h-full bg-gray-950 border-l border-gray-800 z-40 flex flex-col shadow-2xl transition-all duration-200"
         style={{ width: rightCollapsed ? '40px' : `${rightWidth}px` }}
       >
         {/* collapse 핸들 */}
@@ -2254,6 +2340,7 @@ function GraphPageInner() {
         </div>
       )}
     </div>
+    </div>
   )
 }
 
@@ -2267,17 +2354,6 @@ function LeftSection({ title, children, id }: { title: string; children: React.R
   )
 }
 
-// on/off 상태 표시 칩
-function ToggleChip({ active, onClick, stopPropagation }: { active: boolean; onClick: () => void; stopPropagation?: boolean }) {
-  return (
-    <button
-      onClick={(e) => { if (stopPropagation) e.stopPropagation(); onClick() }}
-      className={`text-[10px] px-1.5 py-0.5 rounded font-mono flex-shrink-0 ${active ? 'bg-emerald-900/60 text-emerald-400' : 'bg-gray-800 text-gray-600'}`}
-    >
-      {active ? 'ON' : 'OFF'}
-    </button>
-  )
-}
 
 // 우측 사이드바 섹션 헤더
 function SidebarSection({ title, children }: { title: string; children: React.ReactNode }) {

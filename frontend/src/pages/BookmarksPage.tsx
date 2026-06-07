@@ -4,12 +4,6 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
 
-interface UserInfo {
-  id: string
-  username: string
-  plan: string
-}
-
 interface Post {
   id: string
   title: string
@@ -38,7 +32,6 @@ const FEEDBACK_LABELS: Record<string, string> = {
 // 내 북마크 목록 페이지
 export default function BookmarksPage() {
   const navigate = useNavigate()
-  const [user, setUser] = useState<UserInfo | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -49,11 +42,7 @@ export default function BookmarksPage() {
       return
     }
     axios
-      .get<UserInfo>('/api/auth/me', { headers: authHeaders() })
-      .then((res) => {
-        setUser(res.data)
-        return axios.get<Post[]>('/api/community/bookmarks', { headers: authHeaders() })
-      })
+      .get<Post[]>('/api/community/bookmarks', { headers: authHeaders() })
       .then((res) => setPosts(res.data))
       .catch(() => navigate('/login'))
       .finally(() => setLoading(false))
@@ -67,11 +56,7 @@ export default function BookmarksPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <AppHeader
-        username={user?.username ?? ''}
-        plan={user?.plan ?? ''}
-        onLogout={() => { localStorage.removeItem('jwt'); navigate('/') }}
-      />
+      <AppHeader />
 
       <main className="max-w-2xl mx-auto px-6 py-10">
         <div className="flex items-center gap-3 mb-6">

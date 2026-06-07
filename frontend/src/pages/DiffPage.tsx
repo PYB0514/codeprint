@@ -18,6 +18,7 @@ import { buildLayout } from '../utils/graphLayout'
 import type { RawNode, RawEdge } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
+import AppHeader from '../components/AppHeader'
 import FileNode from '../components/FileNode'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
@@ -168,7 +169,8 @@ function DiffPageInner() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-950 text-white">
-      {/* 헤더 */}
+      <AppHeader />
+      {/* 서브 바 — 그래프 복귀 + 버전 선택 */}
       <header className="flex items-center gap-4 px-5 py-3 border-b border-gray-800 shrink-0">
         <button
           onClick={() => navigate(`/projects/${projectId}/graph`)}

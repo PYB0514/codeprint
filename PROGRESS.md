@@ -123,6 +123,12 @@
 | 그래프 페이지 온보딩 투어 | ✅ | v1.31 — react-joyride v3, 5단계, 로드 성공 후 자동 시작, localStorage 완료 기록 (#94) |
 | 커뮤니티 게시글 검색 | ✅ | v1.32 — GET /api/community/posts?q=, 제목/본문 대소문자 무시, 300ms 디바운스 (#96) |
 | AI 설명 기능 (다중 제공자) | ✅ | v1.33 — Claude/ChatGPT/Gemini API 키 등록·관리, 함수 노드 AI 설명 요청, AES 암호화 저장 |
+| AppHeader 통합 + GraphPage 헤더 추가 | ✅ | v1.34 — AppHeader 자체 페칭, 모든 페이지 일관 헤더, 우측 사이드바 position 수정 |
+| 레이어 불투명 토글 버그 수정 | ✅ | v1.34 — extent:parent 노드 hidden 미전파 수정, 섹션 높이 유지 |
+| AI 컨텍스트 다운로드 MD 형식 | ✅ | v1.34 — .txt → .md 마크다운 코드블록 형식 |
+| 랜딩 페이지 광고 영역 수정 | ✅ | v1.34 — 최상단 배너 제거, 사이드 광고 박스 크기 조정 |
+| Pages/Components 섹션 분리 | ✅ | v1.34 — 별도 컬럼 분리, LAYER_COLUMN/LAYER_SECTION_KEY 정비 |
+| DB 레이어 배치 수정 | ✅ | v1.34 — 전체 그룹 오른쪽 끝 + 80px 고정 배치 |
 
 ---
 
@@ -147,11 +153,12 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# v1.33.001 완료 (모든 브랜치 머지, main 최신)
-# 다음 기능 선택지 (우선순위 순):
-#   A. 결제 연동 — Stripe Pro 플랜 (계정 생성 필요)
-#   B. 그래프 스킨 — 레고/회로도 테마 구현
-#   C. 서버 AI 내장 — Stripe 연동 후 Pro 사용자에게 서버 키로 AI 제공
+# feat/collab-view 브랜치에 v1.34 변경사항 커밋 완료
+# PR 생성 후 main 머지 → v1.34 태그
+# 이후 작업 선택지:
+#   A. 흐름 재생 버그 수정 — pathToPlaybackItems 중복, buildDownstreamTree visited 버그, 엣지 visibility 충돌
+#   B. 결제 연동 — Stripe Pro 플랜 (계정 생성 필요)
+#   C. 그래프 스킨 — 레고/회로도 테마
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
