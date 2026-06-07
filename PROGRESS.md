@@ -189,6 +189,18 @@ npm run dev
 
 > ProjectCommandService 목킹 테스트는 Application Service 계층이므로 TDD 불필요 — 런타임 검증으로 대체.
 
+### 흐름 재생 버그 수정 (식별 완료, 미수정 — 다음 세션 우선 처리)
+
+> 파일: `frontend/src/pages/GraphPage.tsx` — `pathToPlaybackItems`, `buildDownstreamTree`, `startPlayback`
+
+| # | 버그 | 위치 | 증상 | 수정 방향 |
+|---|---|---|---|---|
+| 1 | 재생 스텝 2배 카운팅 | `pathToPlaybackItems` | node→edge→node→edge 교차 삽입으로 5개 함수 경로가 "9/9"로 표시, edge 스텝에서 카메라 멈춤 | edge 아이템 제거, node만 재생 |
+| 2 | visited set 독립 복사 | `buildDownstreamTree` | sibling 브랜치마다 visited를 복사해서 넘겨줌 → 같은 노드가 여러 브랜치에 중복 등장, 사이클 시 depth 12까지 반복 | 공유 visited set을 인자로 전달 |
+| 3 | 경로 엣지와 전역 가시성 충돌 | `startPlayback` + `applyEdgeVisibility` | 경로 엣지를 `hidden: false`로 설정해도 `showCallEdges=false`이면 `applyEdgeVisibility`가 다시 숨겨버림 | 경로 엣지에 별도 플래그 추가 후 `applyEdgeVisibility`에서 제외 |
+
+**수정 순서 (체감 효과 큰 순):** 버그 1 → 버그 3 → 버그 2
+
 ### 코어 기능
 - **인터페이스 → 구현체 자동 매핑** — ✅ v1.30에서 완료
 - **AI 기능** — 선택 노드/엣지 설명 (Claude API), 누락 연결 감지 (4차 MVP 핵심, 유료화 연동)
