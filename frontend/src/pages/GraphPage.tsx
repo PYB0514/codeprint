@@ -1052,6 +1052,18 @@ function GraphPageInner() {
   }, [setEdges])
 
 
+  // 계층형 ↔ 도메인 뷰 전환
+  const toggleLayoutPreset = useCallback(() => {
+    const next: LayoutPreset = layoutPreset === 'layer' ? 'domain' : 'layer'
+    setLayoutPreset(next)
+    if (rawNodes.length > 0) {
+      const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
+      setNodes(ln)
+      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
+      setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
+    }
+  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges, applyEdgeVisibility])
+
   // 전체 그래프를 원본 크기 PNG로 다운로드
   const handleExportImage = useCallback(async () => {
     const flowEl = flowRef.current?.querySelector('.react-flow__viewport') as HTMLElement | null
@@ -1502,12 +1514,14 @@ function GraphPageInner() {
             <LeftSection title="레이아웃" id="tour-layout">
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 text-xs">뷰</span>
-                <div className="flex items-center gap-1 bg-gray-800 text-xs px-2 py-1 rounded border border-gray-700">
-                  <span className="text-white">계층형</span>
+                <button
+                  onClick={toggleLayoutPreset}
+                  className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2 py-1 rounded border border-gray-700"
+                >
+                  <span className={layoutPreset === 'layer' ? 'text-white' : 'text-gray-500'}>계층형</span>
                   <span className="text-gray-600">/</span>
-                  <span className="text-gray-500">도메인</span>
-                  <span className="text-gray-700 text-[10px] ml-0.5">(준비중)</span>
-                </div>
+                  <span className={layoutPreset === 'domain' ? 'text-white' : 'text-gray-500'}>도메인</span>
+                </button>
               </div>
             </LeftSection>
 
@@ -1546,8 +1560,33 @@ function GraphPageInner() {
               </div>
             </LeftSection>
 
-            {/* 범례 — 계층형 레이어 + 노드 */}
+            {/* 범례 — 계층형/도메인 레이어 + 노드 */}
             <LeftSection title="범례">
+              {layoutPreset === 'domain' && (
+                <>
+                  <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">도메인</p>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mb-2">
+                  {[
+                    { label: 'Project',       color: '#3b82f6' },
+                    { label: 'User',          color: '#10b981' },
+                    { label: 'Graph',         color: '#8b5cf6' },
+                    { label: 'Analysis',      color: '#f59e0b' },
+                    { label: 'Community',     color: '#06b6d4' },
+                    { label: 'AI',            color: '#e879f9' },
+                    { label: 'Notice',        color: '#f97316' },
+                    { label: 'Donation',      color: '#4ade80' },
+                    { label: 'Collaboration', color: '#fb7185' },
+                    { label: 'Common',        color: '#6b7280' },
+                  ].map(({ label, color }) => (
+                    <div key={label} className="flex items-center gap-1.5 py-0.5">
+                      <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: `${color}33`, border: `1px solid ${color}` }} />
+                      <span className="text-gray-400 text-xs truncate">{label}</span>
+                    </div>
+                  ))}
+                  </div>
+                  <div className="border-t border-gray-800 my-2" />
+                </>
+              )}
               {layoutPreset === 'layer' && (
                 <>
                   <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">계층형 레이어</p>
