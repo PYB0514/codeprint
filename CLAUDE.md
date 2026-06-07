@@ -475,6 +475,25 @@ main                    ← 항상 배포 가능한 상태 유지
 - push는 작업 단위 완료 후 즉시. 세션 마지막에 몰아서 push하지 않는다.
 - The test: "Can I describe this commit in one sentence?" If yes, commit.
 
+**PR 단위 판단 기준 — 브랜치를 나눌지 말지**
+- **독립적으로 배포/롤백 가능한가?** → 별도 브랜치·PR
+- **이전 작업이 없으면 동작하지 않는가?** → 같은 브랜치, 커밋으로 분리
+
+직렬 의존 작업(A가 없으면 B가 동작 안 함)을 억지로 여러 브랜치로 나누면 squash merge 시 충돌이 필연적으로 발생한다. 이런 경우 하나의 브랜치에 여러 커밋으로 쌓는다.
+
+```
+# 잘못된 방식 — 직렬 의존인데 브랜치 3개
+feat/ui-준비    → PR1 머지
+  └─ feat/로직  → PR2 머지 (squash 충돌 위험)
+       └─ feat/버튼 → PR3 머지 (squash 충돌 거의 확정)
+
+# 올바른 방식 — 하나의 브랜치, 커밋으로 단계 분리
+feat/dual-layout
+  commit 1: UI 준비 (허브 제거, 텍스트 변경)
+  commit 2: 레이아웃 로직 구현
+  commit 3: 버튼 연결 + 범례
+```
+
 **PR 규칙**
 - PR description에 무엇을(What), 왜(Why) 만들었는지 반드시 작성
 - PR 제목은 `feat: 프로젝트 생성/목록 API 구현` 형식
