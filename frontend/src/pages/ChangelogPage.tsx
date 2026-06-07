@@ -11,6 +11,18 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.8.0',
+    date: '2026-06-08',
+    title: '계층형 / 도메인 이중 뷰',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '도메인 뷰 추가 — 바운디드 컨텍스트(project/user/graph/analysis 등) 단위로 파일 그룹핑' },
+      { category: '프론트', desc: '계층형 ↔ 도메인 뷰 토글 버튼 — 좌측 사이드바 레이아웃 섹션에서 전환 가능' },
+      { category: '프론트', desc: '도메인 뷰 범례 — 10개 바운디드 컨텍스트별 색상 표시' },
+      { category: '프론트', desc: '허브 프리셋 제거, 범례 레이블 계층형 레이어로 정정' },
+    ],
+  },
+  {
     version: 'v0.7.0',
     date: '2026-06-08',
     title: '후원 기능 & 흐름 재생 재설계',
