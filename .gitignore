@@ -1,1 +1,10 @@
 INTERVIEW_POINTS.md
+
+# AI 세션 관리 파일 — 개발 도구 내부용, 외부 공개 불필요
+contexts/
+.claude/
+PROGRESS.md
+ERROR_TRACKER.md
+
+# IDE 개인 설정
+.vscode/
