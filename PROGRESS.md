@@ -129,6 +129,7 @@
 | 랜딩 페이지 광고 영역 수정 | ✅ | v1.34 — 최상단 배너 제거, 사이드 광고 박스 크기 조정 |
 | Pages/Components 섹션 분리 | ✅ | v1.34 — 별도 컬럼 분리, LAYER_COLUMN/LAYER_SECTION_KEY 정비 |
 | DB 레이어 배치 수정 | ✅ | v1.34 — 전체 그룹 오른쪽 끝 + 80px 고정 배치 |
+| 흐름 재생 재설계 | ✅ | v1.35 — 노드 중심 스텝, 레이어 전환 레이블, shared visited 중복 노드 수정, 엣지 visibility 충돌 수정 |
 
 ---
 
@@ -153,12 +154,16 @@ npm run dev
 ## 🚀 다음 세션 첫 번째 액션
 
 ```
-# feat/collab-view 브랜치에 v1.34 변경사항 커밋 완료
-# PR 생성 후 main 머지 → v1.34 태그
-# 이후 작업 선택지:
-#   A. 흐름 재생 버그 수정 — pathToPlaybackItems 중복, buildDownstreamTree visited 버그, 엣지 visibility 충돌
-#   B. 결제 연동 — Stripe Pro 플랜 (계정 생성 필요)
-#   C. 그래프 스킨 — 레고/회로도 테마
+# v1.34, v1.35 머지 완료 (main 최신)
+# 다음 작업: 계층형/도메인 뷰 이중 제공 구현 — 3개 PR로 분리
+#
+# PR 1 (단순): 범례 "DDD 레이어" → "계층형 레이어" 텍스트 변경 + 허브 프리셋 제거
+# PR 2 (핵심): extractDomain() + 도메인 레이아웃 로직 구현 (graphLayout.ts)
+# PR 3 (UI):   도메인 프리셋 버튼, 도메인 박스, 범례 항목 추가 (GraphPage.tsx)
+#
+# 도메인 목록: project, user, graph, analysis, community, ai, notice, donation, collaboration
+# 프론트 파일도 도메인 안에 포함 (도메인의 시작 = 사용자 프론트 입력)
+# 공통 파일(AppHeader, Footer, graphLayout 등) → common 도메인
 ```
 
 ## 🚨 외부 계정 생성 — 단계별 최우선 사항
