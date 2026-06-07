@@ -1,6 +1,6 @@
 // 프로젝트 코드 구조를 React Flow로 시각화하는 그래프 페이지
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
   ReactFlow,
@@ -10,7 +10,6 @@ import {
   useNodesState,
   useEdgesState,
   useReactFlow,
-  useViewport,
   ReactFlowProvider,
 } from '@xyflow/react'
 import type { Edge, EdgeMouseHandler, Node } from '@xyflow/react'
@@ -22,9 +21,6 @@ import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
 import OnboardingTour, { isTourDone } from '../components/OnboardingTour'
-import CollaborationPanel from '../components/CollaborationPanel'
-import CursorOverlay from '../components/CursorOverlay'
-import { useCollaboration } from '../hooks/useCollaboration'
 import AppHeader from '../components/AppHeader'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
@@ -395,28 +391,9 @@ function CallTreePanel({ root, activeNodeIds, onSelectBranch }: {
 }
 
 // 그래프 페이지 내부 컴포넌트 (ReactFlow 훅 사용)
-// JWT payload에서 userId 추출
-function getMyUserId(): string | null {
-  const token = localStorage.getItem('jwt')
-  if (!token) return null
-  try {
-    // JWT는 base64url — atob()용으로 표준 base64로 변환 후 디코딩
-    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
-    const payload = JSON.parse(atob(b64))
-    return payload.sub ?? null
-  } catch { return null }
-}
-
 function GraphPageInner() {
   const { projectId } = useParams<{ projectId: string }>()
-  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-
-  // 협업 세션 상태
-  const [collabSessionId, setCollabSessionId] = useState<string | null>(searchParams.get('collab'))
-  const [collabInviteCode, setCollabInviteCode] = useState<string | null>(searchParams.get('code'))
-  const myUserId = getMyUserId()
-  const { state: collabState, publishCursor, publishSelection } = useCollaboration(collabSessionId, myUserId)
 
   // 커서 throttle — 50ms마다 발행
   const cursorThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -467,28 +444,15 @@ function GraphPageInner() {
   const [shareSubmitting, setShareSubmitting] = useState(false)
   const flowRef = useRef<HTMLDivElement>(null)
   const { getNodes, fitView, screenToFlowPosition } = useReactFlow()
-  const viewport = useViewport()
 
-  // 그래프 좌표 → 화면 픽셀 변환 (다른 사용자 커서 위치 렌더링용)
-  const flowToScreen = useCallback((x: number, y: number) => ({
-    x: x * viewport.zoom + viewport.x,
-    y: y * viewport.zoom + viewport.y,
-  }), [viewport])
-
-  // ReactFlow 위 마우스 이동 시 협업 커서 발행 (50ms throttle, 화면→그래프 좌표 변환)
+  // 마우스 이동 핸들러 (50ms throttle)
   const handleCollabMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!collabSessionId) return
     lastCursorRef.current = { x: e.clientX, y: e.clientY }
     if (cursorThrottleRef.current) return
     cursorThrottleRef.current = setTimeout(() => {
       cursorThrottleRef.current = null
-      const pos = lastCursorRef.current
-      if (pos) {
-        const flowPos = screenToFlowPosition({ x: pos.x, y: pos.y })
-        publishCursor(flowPos.x, flowPos.y)
-      }
     }, 50)
-  }, [collabSessionId, screenToFlowPosition, publishCursor])
+  }, [screenToFlowPosition])
 
   // 흐름 재생 상태
   const [playbackItems, setPlaybackItems] = useState<{ type: 'node' | 'edge'; id: string }[]>([])
@@ -1316,7 +1280,6 @@ function GraphPageInner() {
   }, [rawNodes, rawEdgesCache, graphId, startPlayback])
 
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
-    publishSelection(node.id)
     if (node.type === 'fileNode' || node.type === 'groupNode' || node.type === 'sectionNode') {
       resetPlayback()
       return
@@ -1375,16 +1338,6 @@ function GraphPageInner() {
       <OnboardingTour run={tourRunning} onFinish={() => setTourRunning(false)} />
 
 
-      {/* 다른 참가자 커서 오버레이 */}
-      <CursorOverlay
-        cursors={Object.fromEntries(
-          Object.entries(collabState.cursors).map(([uid, c]) => {
-            const screen = flowToScreen(c.x, c.y)
-            return [uid, { ...c, x: screen.x, y: screen.y }]
-          })
-        )}
-      />
-
       {/* 최신 커밋 감지 배너 */}
       {outdated && (
         <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-2 bg-yellow-900/80 border-b border-yellow-700 text-yellow-300 text-xs backdrop-blur-sm">
@@ -1421,17 +1374,6 @@ function GraphPageInner() {
           >
             커뮤니티에 공유
           </button>
-        )}
-        {myUserId && projectId && (
-          <CollaborationPanel
-            graphId={graphId ?? projectId}
-            myUserId={myUserId}
-            participants={collabState.participants}
-            connected={collabState.connected}
-            sessionId={collabSessionId}
-            inviteCode={collabInviteCode}
-            onSessionReady={(sid, code) => { setCollabSessionId(sid); setCollabInviteCode(code) }}
-          />
         )}
       </div>
 
