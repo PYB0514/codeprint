@@ -4,12 +4,6 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
 
-interface UserInfo {
-  id: string
-  username: string
-  plan: string
-}
-
 interface ProviderInfo {
   provider: string
   registered: boolean
@@ -41,7 +35,6 @@ function authHeaders() {
 
 export default function SettingsPage() {
   const navigate = useNavigate()
-  const [user, setUser] = useState<UserInfo | null>(null)
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [inputKeys, setInputKeys] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<Record<string, boolean>>({})
@@ -50,9 +43,6 @@ export default function SettingsPage() {
   useEffect(() => {
     const token = localStorage.getItem('jwt')
     if (!token) { navigate('/login'); return }
-    axios.get<UserInfo>('/api/auth/me', { headers: authHeaders() })
-      .then((res) => setUser(res.data))
-      .catch(() => navigate('/login'))
     axios.get<ProviderInfo[]>('/api/ai/keys', { headers: authHeaders() })
       .then((res) => setProviders(res.data))
       .catch(() => {})
@@ -84,11 +74,7 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <AppHeader
-        username={user?.username ?? ''}
-        plan={user?.plan ?? ''}
-        onLogout={() => { localStorage.removeItem('jwt'); navigate('/') }}
-      />
+      <AppHeader />
 
       <main className="max-w-xl mx-auto px-6 py-10">
         <h1 className="text-xl font-semibold mb-1">설정</h1>

@@ -4,6 +4,54 @@
 
 ## 버그
 
+### 레이어 토글 — extent:'parent' 노드에 hidden 미전파 (2026-06-08)
+
+**문제.** 레이어 불투명 토글 시 group 노드만 hidden 처리했는데, React Flow의 `extent: 'parent'` 파일 노드와 그 자식 함수 노드는 부모가 hidden이 되어도 화면에 계속 노출됐다.
+
+**이유.** React Flow는 `extent: 'parent'` 속성 노드에 부모의 `hidden` 상태를 자동으로 cascade하지 않는다. 노드 각각에 명시적으로 설정해야 한다.
+
+**결과.** `toggleLayerOpaque`에서 3단계(group → file → function) 모두 명시적으로 hidden 처리하도록 수정.
+
+---
+
+### 레이어 토글 — 섹션 박스 높이가 48px으로 줄어드는 문제 (2026-06-08)
+
+**문제.** 토글 시 섹션 박스 높이가 내용 없는 상태로 줄어들어 색상 오버레이가 좁은 영역만 덮었다.
+
+**이유.** 이전 구현에서 opaque 시 섹션 높이를 48px로 설정하는 코드가 남아 있었다.
+
+**결과.** 섹션 높이를 변경하지 않고 그대로 유지. SectionNode가 이미 전체 크기에 opaqueColor 오버레이를 렌더링하도록 구현되어 있어 높이 변경 불필요.
+
+---
+
+## 설계 결정
+
+### AppHeader 자체 데이터 페칭 패턴 (2026-06-08)
+
+**문제.** 각 페이지마다 `/api/auth/me`를 호출하고 user 데이터를 AppHeader에 props로 전달하는 구조였으나, GraphPage 등 일부 페이지에서 헤더가 없거나 로그인 상태가 표시 안 되는 문제 발생.
+
+**결정.** AppHeader가 내부에서 직접 `/api/auth/me`를 호출하도록 변경. 모든 페이지에서 `<AppHeader />`만 선언하면 자동으로 사용자 정보를 불러와 표시.
+
+**탈락 이유.** props 전달 방식은 각 페이지가 별도로 auth 상태를 관리해야 해서 일관성 유지가 어렵고, GraphPage처럼 레이아웃이 다른 페이지에서 누락되는 문제가 반복됐다.
+
+---
+
+### Pages/Components 섹션 분리 결정 (2026-06-08)
+
+**문제.** Pages와 Components를 하나의 섹션 박스에 묶었으나 사용자가 둘이 연관이 없고 혼란스럽다고 판단.
+
+**결정.** 각자 별도 섹션 박스 사용. `LAYER_SECTION_KEY`에서 pages/components 제거, `LAYER_COLUMN`에서 pages=0, components=1로 분리.
+
+---
+
+### DB 노드 레이어 배치 — 오른쪽 끝 고정 (2026-06-08)
+
+**문제.** DB 노드가 infrastructure 그룹 왼쪽에 배치되어 다른 레이어와 간격 조절이 안 되는 것처럼 보였다.
+
+**결정.** 모든 그룹의 오른쪽 끝 + 80px 위치로 배치. 기존 레이어 컬럼 시스템 외부에서 일관된 간격 유지.
+
+---
+
 ### AdminPage localStorage 키 오류 — `token` → `jwt` (2026-06-06)
 
 **문제.** AdminPage에서 `localStorage.getItem('token')`으로 JWT를 읽도록 작성했으나, 실제 앱에서는 `jwt` 키로 저장하고 있었다. 런타임 검증(Chrome 직접 접속) 중 토큰이 null로 읽혀 로그인 화면으로 리다이렉트됨을 발견.

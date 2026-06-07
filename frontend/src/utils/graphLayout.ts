@@ -5,16 +5,22 @@ import type { Node, Edge } from '@xyflow/react'
 import { MarkerType } from '@xyflow/react'
 
 // DDD 레이어 → 컬럼 순서 (왼쪽=프론트, 오른쪽=DB) — 요청 흐름 방향
-// pages/components → interfaces(컨트롤러) → application → domain → infrastructure → database
+// pages → components → hooks/utils → interfaces → application → domain → infrastructure → database
 const LAYER_COLUMN: Record<string, number> = {
   pages:          0,
-  components:     0,
-  hooks:          1,
-  utils:          1,
-  interfaces:     2,
-  application:    3,
-  domain:         4,
-  infrastructure: 5,
+  components:     1,
+  hooks:          2,
+  utils:          2,
+  interfaces:     3,
+  application:    4,
+  domain:         5,
+  infrastructure: 6,
+}
+
+// 섹션 박스 병합 규칙 — hooks+utils만 같은 섹션으로 묶음 (pages/components는 각자 독립 섹션)
+const LAYER_SECTION_KEY: Record<string, string> = {
+  hooks: 'hooks',
+  utils: 'hooks',
 }
 
 export interface ColumnInfo {
@@ -124,12 +130,14 @@ function labelNode(full: string, maxLen: number): React.ReactNode {
 }
 
 // DDD 레이어 컬럼 배치 — 같은 레이어끼리 같은 컬럼에 세로 정렬
+// 그룹 수가 많으면 레이어 내 서브컬럼으로 분할
 function buildLayerPositions(
   groups: Map<string, RawNode[]>,
   groupLayouts: Map<string, { files: Array<{ file: RawNode; x: number; y: number }>; w: number; h: number }>
 ): Map<string, { x: number; y: number }> {
   const COL_GAP = 64
   const ROW_GAP = 40
+  const SUB_COL_GAP = 40
 
   const colGroups = new Map<number, string[]>()
   groups.forEach((_, key) => {
@@ -139,27 +147,46 @@ function buildLayerPositions(
     colGroups.get(col)!.push(key)
   })
 
+  // 레이어 컬럼별 총 너비 계산 (서브컬럼 포함)
   const sortedCols = Array.from(colGroups.keys()).sort((a, b) => a - b)
-  const colMaxW = new Map<number, number>()
+  const colTotalW = new Map<number, number>()
   colGroups.forEach((keys, col) => {
-    colMaxW.set(col, Math.max(...keys.map((k) => groupLayouts.get(k)!.w)))
+    const subCols = keys.length > 8 ? 3 : keys.length > 4 ? 2 : 1
+    const perSub = Math.ceil(keys.length / subCols)
+    let totalW = 0
+    for (let s = 0; s < subCols; s++) {
+      const subKeys = keys.slice(s * perSub, (s + 1) * perSub)
+      if (subKeys.length === 0) continue
+      const maxW = Math.max(...subKeys.map((k) => groupLayouts.get(k)!.w))
+      totalW += maxW + (s < subCols - 1 ? SUB_COL_GAP : 0)
+    }
+    colTotalW.set(col, totalW)
   })
 
   const colStartX = new Map<number, number>()
   let xCursor = 0
   sortedCols.forEach((col) => {
     colStartX.set(col, xCursor)
-    xCursor += (colMaxW.get(col) ?? 0) + COL_GAP
+    xCursor += (colTotalW.get(col) ?? 0) + COL_GAP
   })
 
   const positions = new Map<string, { x: number; y: number }>()
   colGroups.forEach((keys, col) => {
-    let y = 0
-    const x = colStartX.get(col) ?? 0
-    keys.forEach((key) => {
-      positions.set(key, { x, y })
-      y += groupLayouts.get(key)!.h + ROW_GAP
-    })
+    const baseX = colStartX.get(col) ?? 0
+    const subCols = keys.length > 8 ? 3 : keys.length > 4 ? 2 : 1
+    const perSub = Math.ceil(keys.length / subCols)
+    let subX = baseX
+    for (let s = 0; s < subCols; s++) {
+      const subKeys = keys.slice(s * perSub, (s + 1) * perSub)
+      if (subKeys.length === 0) continue
+      let y = 0
+      subKeys.forEach((key) => {
+        positions.set(key, { x: subX, y })
+        y += groupLayouts.get(key)!.h + ROW_GAP
+      })
+      const maxW = Math.max(...subKeys.map((k) => groupLayouts.get(k)!.w))
+      subX += maxW + SUB_COL_GAP
+    }
   })
   return positions
 }
@@ -436,19 +463,19 @@ export function buildLayout(
     application:    { label: 'Application',    color: '#eab308', opaqueColor: 'rgba(40,30,5,0.98)'   },
     interfaces:     { label: 'Interfaces',     color: '#10b981', opaqueColor: 'rgba(5,30,20,0.98)'   },
     pages:          { label: 'Pages',          color: '#06b6d4', opaqueColor: 'rgba(5,25,35,0.98)'   },
-    components:     { label: 'Components',     color: '#06b6d4', opaqueColor: 'rgba(5,25,35,0.98)'   },
-    hooks:          { label: 'Hooks',          color: '#f97316', opaqueColor: 'rgba(40,15,5,0.98)'   },
-    utils:          { label: 'Utils',          color: '#6b7280', opaqueColor: 'rgba(20,22,25,0.98)'  },
+    components:     { label: 'Components',     color: '#0ea5e9', opaqueColor: 'rgba(5,20,40,0.98)'   },
+    hooks:          { label: 'Hooks / Utils',  color: '#f97316', opaqueColor: 'rgba(40,15,5,0.98)'   },
   }
   const LAYER_PAD_PRE = 20
   const LAYER_LABEL_H = 24
 
-  // 레이어별 그룹 키 수집 (섹션 기준점 계산용)
+  // 레이어별 그룹 키 수집 — 병합 레이어는 섹션 키 기준으로 묶음 (pages+components → 'pages', hooks+utils → 'hooks')
   const layerGroupKeysPre = new Map<string, string[]>()
   groups.forEach((_, key) => {
     const layer = key.indexOf('/') >= 0 ? key.slice(0, key.indexOf('/')) : key
-    if (!layerGroupKeysPre.has(layer)) layerGroupKeysPre.set(layer, [])
-    layerGroupKeysPre.get(layer)!.push(key)
+    const sectionKey = LAYER_SECTION_KEY[layer] ?? layer
+    if (!layerGroupKeysPre.has(sectionKey)) layerGroupKeysPre.set(sectionKey, [])
+    layerGroupKeysPre.get(sectionKey)!.push(key)
   })
 
   // 레이어별 섹션 기준점 (좌상단 절대 좌표) — 그룹 노드 상대 좌표 변환용
@@ -484,7 +511,7 @@ export function buildLayout(
         id: `layer-section-${layer}`,
         type: 'sectionNode',
         position: { x: bounds.x, y: bounds.y },
-        data: { label: meta.label, color: meta.color, opaqueColor: meta.opaqueColor, layer },
+        data: { label: meta.label, color: meta.color, opaqueColor: meta.opaqueColor, layer, origW: bounds.w, origH: bounds.h },
         style: { width: bounds.w, height: bounds.h },
         draggable: true,
         selectable: false,
@@ -507,7 +534,8 @@ export function buildLayout(
     const sub = slashIdx >= 0 ? key.slice(slashIdx + 1) : ''
 
     // layer 모드에서 섹션 기준점이 있으면 상대 좌표로 변환 + parentId 설정
-    const sectionOrigin = layerSectionOrigins.get(layer)
+    const sectionKey = LAYER_SECTION_KEY[layer] ?? layer
+    const sectionOrigin = layerSectionOrigins.get(sectionKey)
     const groupPos = sectionOrigin
       ? { x: gx - sectionOrigin.x, y: gy - sectionOrigin.y }
       : { x: gx, y: gy }
@@ -516,7 +544,7 @@ export function buildLayout(
     result.push({
       id: `group-${key}`,
       type: 'groupNode',
-      ...(sectionOrigin ? { parentId: `layer-section-${layer}` } : {}),
+      ...(sectionOrigin ? { parentId: `layer-section-${sectionKey}` } : {}),
       position: groupPos,
       data: { layer, sub, fileCount: groupFiles.length, originalHeight: layout.h },
       style: { width: layout.w, height: layout.h },
@@ -609,31 +637,19 @@ export function buildLayout(
     let horizontal: boolean  // true = 가로 행, false = 세로 열
 
     if (layoutPreset === 'layer') {
-      // 계층: infrastructure/persistence 그룹 왼쪽에 세로 열 배치
-      // persistence만 DB와 직접 연결되는 DDD 구조를 시각적으로 반영
-      const persKey = Array.from(groupPositions.keys())
-        .find(k => k === 'infrastructure/persistence' || k.includes('persistence'))
-        ?? Array.from(groupPositions.keys()).find(k => k.startsWith('infrastructure/'))
-      const persPos = persKey ? groupPositions.get(persKey) : undefined
-      const persLayout = persKey ? groupLayouts.get(persKey) : undefined
-
-      if (persPos && persLayout) {
-        const dbTotalH = dbTableNodes.length * (DB_H + DB_GAP) - DB_GAP
-        dbSectionX = persPos.x - DB_W - 60
-        dbSectionY = persPos.y + (persLayout.h - dbTotalH) / 2
-      } else {
-        // fallback: 전체 그룹 중 가장 왼쪽 기준
-        let minX = Infinity, midY = 0, cnt = 0
-        groupPositions.forEach((pos, key) => {
-          const l = groupLayouts.get(key)
-          if (!l) return
-          minX = Math.min(minX, pos.x)
-          midY += pos.y + l.h / 2
-          cnt++
-        })
-        dbSectionX = (minX === Infinity ? 0 : minX) - DB_W - 60
-        dbSectionY = cnt > 0 ? midY / cnt - (dbTableNodes.length * (DB_H + DB_GAP)) / 2 : 0
-      }
+      // 계층: 전체 그룹의 우측 끝 + 여백에 세로 열 배치 — infrastructure 다음 컬럼 위치
+      let allGroupsMaxX = 0, allMinY = Infinity, allMaxY = -Infinity
+      groupPositions.forEach((pos, key) => {
+        const l = groupLayouts.get(key)
+        if (!l) return
+        allGroupsMaxX = Math.max(allGroupsMaxX, pos.x + l.w)
+        allMinY = Math.min(allMinY, pos.y)
+        allMaxY = Math.max(allMaxY, pos.y + l.h)
+      })
+      const dbTotalH = dbTableNodes.length * (DB_H + DB_GAP) - DB_GAP
+      const allCenterY = allMinY !== Infinity ? (allMinY + allMaxY) / 2 : 0
+      dbSectionX = allGroupsMaxX + 80
+      dbSectionY = allCenterY - dbTotalH / 2
       horizontal = false
     } else {
       // 허브: 전체 그룹 경계 오른쪽에 세로 열 배치 (겹침 방지)
@@ -663,7 +679,7 @@ export function buildLayout(
       id: 'layer-section-database',
       type: 'sectionNode',
       position: { x: dbSectionX - 20, y: dbSectionY - DB_SECTION_LABEL_H - 20 },
-      data: { label: 'Database', color: '#ef4444', opaqueColor: 'rgba(40,5,5,0.98)', layer: 'database' },
+      data: { label: 'Database', color: '#ef4444', opaqueColor: 'rgba(40,5,5,0.98)', layer: 'database', origW: sectionW, origH: sectionH + 20 },
       width: sectionW,
       height: sectionH + 20,
       style: { width: sectionW, height: sectionH + 20 },
@@ -833,7 +849,8 @@ export function buildLayout(
         id: `layer-section-${layer}`,
         type: 'sectionNode',
         position: { x: minX - LAYER_PAD_PRE, y: minY - LAYER_PAD_PRE - LAYER_LABEL_H },
-        data: { label: meta.label, color: meta.color, opaqueColor: meta.opaqueColor, layer },
+        data: { label: meta.label, color: meta.color, opaqueColor: meta.opaqueColor, layer,
+          origW: maxX - minX + LAYER_PAD_PRE * 2, origH: maxY - minY + LAYER_PAD_PRE * 2 + LAYER_LABEL_H },
         style: { width: maxX - minX + LAYER_PAD_PRE * 2, height: maxY - minY + LAYER_PAD_PRE * 2 + LAYER_LABEL_H },
         draggable: false,
         selectable: false,
@@ -924,12 +941,12 @@ export function downloadTreeText(rawNodes: RawNode[]): void {
       renderDir(dir, childIndent)
     })
 
-  const text = lines.join('\n')
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+  const md = `# ${rootName} — 프로젝트 구조\n\n\`\`\`\n${lines.join('\n')}\n\`\`\`\n`
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${rootName}-structure.txt`
+  a.download = `${rootName}-structure.md`
   a.click()
   URL.revokeObjectURL(url)
 }

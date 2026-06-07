@@ -63,12 +63,6 @@ export default function DashboardPage() {
       })
   }, [navigate, fetchProjects])
 
-  // JWT를 삭제하고 로그인 페이지로 이동
-  const handleLogout = () => {
-    localStorage.removeItem('jwt')
-    navigate('/', { replace: true })
-  }
-
   // 확인 후 프로젝트를 삭제하고 목록에서 제거
   const handleDeleteProject = async (projectId: string) => {
     if (!confirm('프로젝트를 삭제할까요?')) return
@@ -115,7 +109,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <AppHeader username={user.username} plan={user.plan} onLogout={handleLogout} />
+      <AppHeader />
 
       <main className="max-w-4xl mx-auto px-6 py-10">
 

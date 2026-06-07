@@ -231,11 +231,7 @@ export default function CommunityPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <AppHeader
-        username={user?.username ?? ''}
-        plan={user?.plan ?? ''}
-        onLogout={() => { localStorage.removeItem('jwt'); navigate('/') }}
-      />
+      <AppHeader />
 
       <main className="max-w-5xl mx-auto px-6 py-10 flex gap-6">
         {/* 게시글 목록 */}

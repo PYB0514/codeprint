@@ -1,5 +1,5 @@
 // 서비스 버전별 패치노트를 공개하는 페이지
-import { useNavigate } from 'react-router-dom'
+import AppHeader from '../components/AppHeader'
 
 interface Release {
   version: string
@@ -381,23 +381,9 @@ const CATEGORY_COLOR: Record<string, string> = {
 
 // 패치노트 페이지
 export default function ChangelogPage() {
-  const navigate = useNavigate()
-
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* 헤더 */}
-      <header className="flex items-center justify-between px-8 py-5 border-b border-gray-800">
-        <button
-          onClick={() => navigate('/')}
-          className="font-bold text-lg tracking-tight hover:text-gray-300 transition-colors"
-        >
-          Codeprint
-        </button>
-        <nav className="flex items-center gap-6 text-sm text-gray-400">
-          <button onClick={() => navigate('/community')} className="hover:text-white transition-colors">커뮤니티</button>
-          <button onClick={() => navigate('/dashboard')} className="hover:text-white transition-colors">대시보드</button>
-        </nav>
-      </header>
+      <AppHeader />
 
       <main className="max-w-2xl mx-auto px-6 py-12">
         <div className="mb-10">

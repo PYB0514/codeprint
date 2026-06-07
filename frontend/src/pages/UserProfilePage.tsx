@@ -110,11 +110,7 @@ export default function UserProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <AppHeader
-        username={currentUser?.username ?? ''}
-        plan={currentUser?.plan ?? ''}
-        onLogout={() => { localStorage.removeItem('jwt'); navigate('/') }}
-      />
+      <AppHeader />
 
       <main className="max-w-2xl mx-auto px-6 py-10">
         {/* 프로필 헤더 */}
