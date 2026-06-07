@@ -191,3 +191,34 @@
 - API_CALL 진입점 prepend: 루트 함수 소속 컨트롤러 파일에 API_CALL이 있으면 프론트엔드 FILE 노드를 트리 최상단에 추가.
 
 **계층 레이아웃 방향 변경.** `LAYER_COLUMN`을 `infrastructure(0)…pages(4)`에서 `pages(0)…infrastructure(5)`로 뒤집음. 요청 흐름(프론트→백엔드→DB) 방향과 일치시키기 위함.
+
+---
+
+### 흐름 재생 — 노드+엣지 교차 스텝에서 노드 전용 스텝으로 전환 (2026-06-08)
+
+**문제.** `pathToPlaybackItems`가 노드와 엣지를 교차(node→edge→node→edge)로 스텝에 넣어 실제 흐름 단계의 2배 스텝이 생성됐다. 엣지 스텝은 "함수 호출"이라는 시맨틱이 없어 사용자 입장에서 의미없는 클릭이 필요했다.
+
+**이유.** 엣지는 두 노드 사이의 관계이지 독립적인 흐름 단계가 아님. 흐름 재생의 단위는 "어떤 컴포넌트가 실행됐는가(노드)"이어야 함.
+
+**결과.**
+- `PlaybackItem` 타입을 `{ id: string; incomingEdgeId?: string; incomingEdgeType?: string }`으로 변경. 노드만 스텝이 되고, 직전 엣지 타입은 메타데이터로 보유.
+- `EDGE_TYPE_LABEL` 맵 추가: `FUNCTION_CALL→호출`, `API_CALL→HTTP 요청`, `DB_READ→DB 조회`, `DB_WRITE→DB 저장`, `IMPORT→import`.
+- 재생 패널 UI에서 스텝 전환 시 직전 엣지 타입 레이블을 표시해 레이어 경계를 시각화.
+- `playbackEdgeIdsRef`(useRef)로 경로 엣지 ID를 관리해 `applyEdgeVisibility`가 재생 중 경로 엣지를 다시 hide하는 충돌 방지.
+
+---
+
+### 계층형 뷰 vs 도메인 뷰 — 두 시각화 이중 제공 결정 (2026-06-08) ★면접 어필 포인트
+
+**문제.** 기존 "DDD 레이어" 범례(interfaces/application/domain/infrastructure)는 이름과 달리 실제로는 **계층형 아키텍처 뷰**였다. 레이어 별로 모든 도메인의 파일을 수평으로 묶는 구조이기 때문에, 하나의 기능(도메인)이 버튼 클릭 → API 호출 → 서비스 → DB까지 수직으로 흐르는 것을 한눈에 볼 수 없었다.
+
+**이유.** DDD(도메인 주도 설계)의 핵심은 바운디드 컨텍스트 — 즉, 하나의 도메인(project, user, graph...)이 Controller + Service + Entity + Repository를 수직으로 소유한다는 것이다. 시각화가 진짜 DDD를 표현하려면 project 도메인 박스 안에 ProjectController, ProjectService, Project 엔티티, ProjectRepository가 함께 묶여야 하고, 흐름 재생이 그 박스 안에서 위→아래로 흘러야 한다. 기존 계층형 뷰로는 이 수직 슬라이싱이 불가능했다.
+
+**결정.**
+- 계층형 뷰 유지: 레거시 프로젝트(MVC, 계층형 아키텍처)를 위한 시각화. 범례 이름을 "DDD 레이어" → "계층형 레이어"로 수정.
+- 도메인 뷰 신규 추가: DDD 프로젝트를 위한 시각화. 바운디드 컨텍스트(project, user, graph, analysis, community, ai, notice, donation, collaboration) 기준으로 파일을 그룹핑. 프론트엔드 파일도 도메인 안에 포함(도메인 흐름의 시작 = 사용자 프론트 입력).
+- 허브 프리셋 제거: 도메인 뷰로 대체 가능하고 독립적인 가치가 없음.
+
+**탈락 이유 (단일 뷰만 제공).** 계층형만 제공하면 DDD 프로젝트 분석이 의미 없어지고, 도메인만 제공하면 레거시 프로젝트 사용자가 소외된다. 두 뷰를 동시 제공해 Codeprint가 다양한 아키텍처 패턴을 아우르는 도구가 된다.
+
+**면접 어필 포인트.** "DDD라고 이름 붙였지만 실제로 구현한 건 계층형 뷰였다는 걸 개발 중 스스로 인지했고, 두 개념의 차이를 시각화 설계에 반영했다" — 바운디드 컨텍스트와 수직 슬라이싱의 의미를 이해하고 있음을 실제 코드로 증명하는 포인트.
