@@ -1,4 +1,4 @@
-// 그래프 노드/엣지 레이아웃 계산 — DDD 레이어 컬럼 배치 + dagre 내부 레이아웃
+// 그래프 노드/엣지 레이아웃 계산 — 계층형(DDD 레이어 컬럼) / 도메인형(바운디드 컨텍스트 박스) 이중 레이아웃
 import React from 'react'
 
 import type { Node, Edge } from '@xyflow/react'
@@ -104,7 +104,157 @@ function calcFileSize(funcCount: number): { w: number; h: number; cols: number }
 }
 
 export type LabelMode = 'name' | 'comment'
-export type LayoutPreset = 'layer' | 'hub'
+export type LayoutPreset = 'layer' | 'domain'
+
+// 바운디드 컨텍스트 도메인 목록 — 파일 경로에서 추출 우선 순위 순
+const DOMAIN_SUBS = ['project', 'user', 'graph', 'analysis', 'community', 'ai', 'notice', 'donation', 'collaboration']
+
+// 파일명 키워드 → 도메인 매핑 (경로에서 도메인을 찾지 못할 때 사용)
+const FILENAME_DOMAIN_MAP: Array<[string[], string]> = [
+  [['dashboard', 'projectcard', 'createproject', 'project'], 'project'],
+  [['login', 'auth', 'oauth', 'jwt', 'authcallback', 'user', 'settings', 'profile'], 'user'],
+  [['graph', 'node', 'edge', 'layout', 'flow', 'share', 'diff', 'groupnode', 'filenode', 'sectionnode'], 'graph'],
+  [['analysis', 'analyz', 'analyzer', 'cloner', 'walker', 'parser', 'treesitter', 'staticcode', 'graphbuilder'], 'analysis'],
+  [['community', 'post', 'comment', 'board', 'bookmark'], 'community'],
+  [['ai', 'openai', 'claude', 'anthropic', 'gemini', 'llm', 'apikey'], 'ai'],
+  [['notice', 'announcement', 'noticebanner'], 'notice'],
+  [['payment', 'stripe', 'pay', 'donate', 'donat'], 'donation'],
+  [['collab', 'collaboration', 'cursor', 'websocket'], 'collaboration'],
+]
+
+// 파일 경로에서 바운디드 컨텍스트 도메인을 추출
+export function extractDomain(filePath: string, commonPrefix: string): string {
+  const rel = filePath.startsWith(commonPrefix) ? filePath.slice(commonPrefix.length) : filePath
+  const parts = rel.replace(/\\/g, '/').split('/').filter(Boolean)
+
+  const layers = ['domain', 'application', 'infrastructure', 'interfaces', 'pages', 'components', 'hooks', 'utils']
+  for (let i = 0; i < parts.length; i++) {
+    if (!layers.includes(parts[i])) continue
+    // 레이어 이후 모든 서브폴더에서 도메인 키워드 탐색
+    for (let j = i + 1; j < parts.length; j++) {
+      const sub = parts[j].toLowerCase()
+      if (DOMAIN_SUBS.includes(sub)) return sub
+    }
+    break
+  }
+
+  // 파일명 기반 키워드 매핑
+  const fileName = (parts[parts.length - 1] ?? '')
+    .replace(/\.(tsx?|jsx?|java|kt|sql)$/i, '')
+    .toLowerCase()
+  for (const [keywords, domain] of FILENAME_DOMAIN_MAP) {
+    if (keywords.some((k) => fileName.includes(k))) return domain
+  }
+
+  return 'common'
+}
+
+// 도메인 박스 색상 팔레트
+const DOMAIN_COLORS: Record<string, { color: string; opaqueColor: string }> = {
+  project:       { color: '#3b82f6', opaqueColor: 'rgba(15,30,60,0.98)' },
+  user:          { color: '#10b981', opaqueColor: 'rgba(5,30,20,0.98)' },
+  graph:         { color: '#8b5cf6', opaqueColor: 'rgba(25,10,50,0.98)' },
+  analysis:      { color: '#f59e0b', opaqueColor: 'rgba(40,25,5,0.98)' },
+  community:     { color: '#06b6d4', opaqueColor: 'rgba(5,25,35,0.98)' },
+  ai:            { color: '#e879f9', opaqueColor: 'rgba(35,5,40,0.98)' },
+  notice:        { color: '#f97316', opaqueColor: 'rgba(40,15,5,0.98)' },
+  donation:      { color: '#4ade80', opaqueColor: 'rgba(5,35,15,0.98)' },
+  collaboration: { color: '#fb7185', opaqueColor: 'rgba(40,10,15,0.98)' },
+  common:        { color: '#6b7280', opaqueColor: 'rgba(20,20,20,0.98)' },
+}
+
+// 도메인 뷰 — 바운디드 컨텍스트별로 그룹을 묶어 2열 그리드로 배치
+function buildDomainPositions(
+  groups: Map<string, RawNode[]>,
+  groupLayouts: Map<string, { files: Array<{ file: RawNode; x: number; y: number }>; w: number; h: number }>,
+  commonPrefix: string
+): {
+  positions: Map<string, { x: number; y: number }>
+  domainBounds: Map<string, { x: number; y: number; w: number; h: number; domain: string }>
+} {
+  const GROUP_GAP = 24
+  const DOMAIN_PAD = 20
+  const DOMAIN_LABEL_H = 28
+  const DOMAIN_COL_GAP = 48
+  const DOMAIN_ROW_GAP = 48
+
+  // 그룹 → 도메인 매핑 (그룹에 속한 첫 번째 파일의 경로로 판단)
+  const groupDomain = new Map<string, string>()
+  groups.forEach((files, key) => {
+    const domain = files.length > 0 ? extractDomain(files[0].filePath, commonPrefix) : 'common'
+    groupDomain.set(key, domain)
+  })
+
+  // 도메인별 그룹 키 목록
+  const domainGroups = new Map<string, string[]>()
+  groups.forEach((_, key) => {
+    const d = groupDomain.get(key) ?? 'common'
+    if (!domainGroups.has(d)) domainGroups.set(d, [])
+    domainGroups.get(d)!.push(key)
+  })
+
+  // 도메인 내부: 그룹들을 LAYER_COLUMN 순서로 가로 정렬
+  const domainInternalLayouts = new Map<string, { w: number; h: number; groupOffsets: Map<string, { x: number; y: number }> }>()
+  domainGroups.forEach((keys, _domain) => {
+    // 레이어 컬럼 순으로 정렬
+    const sorted = [...keys].sort((a, b) => {
+      const layerA = a.indexOf('/') >= 0 ? a.slice(0, a.indexOf('/')) : a
+      const layerB = b.indexOf('/') >= 0 ? b.slice(0, b.indexOf('/')) : b
+      return (LAYER_COLUMN[layerA] ?? 99) - (LAYER_COLUMN[layerB] ?? 99)
+    })
+
+    const offsets = new Map<string, { x: number; y: number }>()
+    let x = DOMAIN_PAD, maxH = 0
+    sorted.forEach((key) => {
+      const l = groupLayouts.get(key)!
+      offsets.set(key, { x, y: DOMAIN_PAD + DOMAIN_LABEL_H })
+      x += l.w + GROUP_GAP
+      maxH = Math.max(maxH, l.h)
+    })
+    const totalW = x - GROUP_GAP + DOMAIN_PAD
+    const totalH = DOMAIN_LABEL_H + DOMAIN_PAD + maxH + DOMAIN_PAD
+
+    domainInternalLayouts.set(_domain, { w: totalW, h: totalH, groupOffsets: offsets })
+  })
+
+  // 도메인 박스를 2열 그리드로 배치 (정의 순서 + common 마지막)
+  const domainOrder = [...DOMAIN_SUBS, 'common'].filter((d) => domainGroups.has(d))
+  const COLS = 2
+  const colW = new Array(COLS).fill(0)
+  const rowH: number[] = []
+
+  domainOrder.forEach((d, idx) => {
+    const col = idx % COLS
+    const row = Math.floor(idx / COLS)
+    const layout = domainInternalLayouts.get(d)!
+    colW[col] = Math.max(colW[col], layout.w)
+    if (rowH.length <= row) rowH.push(0)
+    rowH[row] = Math.max(rowH[row], layout.h)
+  })
+
+  const colStartX = [0, colW[0] + DOMAIN_COL_GAP]
+  const rowStartY: number[] = [0]
+  for (let r = 1; r < rowH.length; r++) rowStartY.push(rowStartY[r - 1] + rowH[r - 1] + DOMAIN_ROW_GAP)
+
+  const domainBounds = new Map<string, { x: number; y: number; w: number; h: number; domain: string }>()
+  const groupPositions = new Map<string, { x: number; y: number }>()
+
+  domainOrder.forEach((d, idx) => {
+    const col = idx % COLS
+    const row = Math.floor(idx / COLS)
+    const layout = domainInternalLayouts.get(d)!
+    const dx = colStartX[col]
+    const dy = rowStartY[row]
+
+    domainBounds.set(d, { x: dx, y: dy, w: layout.w, h: layout.h, domain: d })
+
+    layout.groupOffsets.forEach((off, key) => {
+      groupPositions.set(key, { x: dx + off.x, y: dy + off.y })
+    })
+  })
+
+  return { positions: groupPositions, domainBounds }
+}
 
 export interface FuncCallEntry {
   callerName: string; callerLabel: string; callerNodeId: string
@@ -191,148 +341,6 @@ function buildLayerPositions(
   return positions
 }
 
-// 연결 허브 배치 — 그룹 간 연결이 많을수록 중앙, 16:9 비율 그리드
-function buildHubPositions(
-  groups: Map<string, RawNode[]>,
-  groupLayouts: Map<string, { files: Array<{ file: RawNode; x: number; y: number }>; w: number; h: number }>,
-  rawEdges: RawEdge[],
-  fileIdSet: Set<string>,
-  fileToGroup: Map<string, string>
-): { positions: Map<string, { x: number; y: number }>; isoKeys: string[] } {
-  const COL_GAP = 40  // 그룹 간 가로 여백
-  const ROW_GAP = 40  // 그룹 간 세로 여백
-
-  // 그룹 간 연결 수 집계
-  const connCount = new Map<string, number>()
-  groups.forEach((_, k) => connCount.set(k, 0))
-  rawEdges
-    .filter((e) => fileIdSet.has(e.source) && fileIdSet.has(e.target))
-    .forEach((e) => {
-      const sg = fileToGroup.get(e.source)
-      const tg = fileToGroup.get(e.target)
-      if (sg && tg && sg !== tg) {
-        connCount.set(sg, (connCount.get(sg) ?? 0) + 1)
-        connCount.set(tg, (connCount.get(tg) ?? 0) + 1)
-      }
-    })
-
-  // 연결 많은 순 정렬
-  const sortedGroups = Array.from(groups.keys())
-    .sort((a, b) => (connCount.get(b) ?? 0) - (connCount.get(a) ?? 0) || a.localeCompare(b))
-
-  if (sortedGroups.length === 0) return { positions: new Map(), isoKeys: [] }
-
-  // 연결 있는 그룹 vs 고립 그룹 분리
-  const hubGroups = sortedGroups.filter((k) => (connCount.get(k) ?? 0) > 0)
-  const isoGroups = sortedGroups
-    .filter((k) => (connCount.get(k) ?? 0) === 0)
-    .sort((a, b) => {
-      const layerOf = (key: string) => {
-        const layer = key.indexOf('/') >= 0 ? key.slice(0, key.indexOf('/')) : key
-        return LAYER_COLUMN[layer] ?? 99
-      }
-      return layerOf(a) - layerOf(b) || a.localeCompare(b)
-    })
-
-  // 그리드 배치 헬퍼 — 그룹 목록을 중심부터 채우는 그리드로 배치, 기준 좌표(ox,oy) 기준 반환
-  function placeGrid(keys: string[], ox: number, oy: number): Map<string, { x: number; y: number }> {
-    const n = keys.length
-    if (n === 0) return new Map()
-    const allL = keys.map((k) => groupLayouts.get(k)!)
-    const avgW2 = allL.reduce((s, l) => s + l.w, 0) / allL.length
-    const avgH2 = allL.reduce((s, l) => s + l.h, 0) / allL.length
-    const cols2 = Math.max(1, Math.round(Math.sqrt(n * (16 / 9) * (avgH2 / avgW2))))
-    const rows2 = Math.ceil(n / cols2)
-
-    const cx2 = (cols2 - 1) / 2, cy2 = (rows2 - 1) / 2
-    const cells2: { i: number; j: number }[] = []
-    for (let j = 0; j < rows2; j++)
-      for (let i = 0; i < cols2; i++)
-        cells2.push({ i, j })
-    cells2.sort((a, b) => Math.hypot(a.i - cx2, a.j - cy2) - Math.hypot(b.i - cx2, b.j - cy2) || a.j - b.j || a.i - b.i)
-
-    const assign = new Map<string, { i: number; j: number }>()
-    keys.forEach((key, idx) => { if (idx < cells2.length) assign.set(key, cells2[idx]) })
-
-    const colW2 = new Array(cols2).fill(0)
-    const rowH2 = new Array(rows2).fill(0)
-    keys.forEach((key) => {
-      const cell = assign.get(key)!
-      const l = groupLayouts.get(key)!
-      colW2[cell.i] = Math.max(colW2[cell.i], l.w)
-      rowH2[cell.j] = Math.max(rowH2[cell.j], l.h)
-    })
-
-    const colX2 = new Array(cols2).fill(0)
-    for (let i = 1; i < cols2; i++) colX2[i] = colX2[i - 1] + colW2[i - 1] + COL_GAP
-    const rowY2 = new Array(rows2).fill(0)
-    for (let j = 1; j < rows2; j++) rowY2[j] = rowY2[j - 1] + rowH2[j - 1] + ROW_GAP
-
-    const tw = colX2[cols2 - 1] + colW2[cols2 - 1]
-    const th = rowY2[rows2 - 1] + rowH2[rows2 - 1]
-
-    const pos = new Map<string, { x: number; y: number }>()
-    keys.forEach((key) => {
-      const cell = assign.get(key)!
-      const l = groupLayouts.get(key)!
-      pos.set(key, {
-        x: ox + colX2[cell.i] + (colW2[cell.i] - l.w) / 2 - tw / 2,
-        y: oy + rowY2[cell.j] + (rowH2[cell.j] - l.h) / 2 - th / 2,
-      })
-    })
-    return pos
-  }
-
-  // 허브 그룹을 (0,0) 중심으로 배치
-  const positions = placeGrid(hubGroups, 0, 0)
-
-  // 허브 그리드 전체 높이 계산 — 고립 그룹 블록 시작 y 결정
-  if (isoGroups.length > 0) {
-    let hubBottom = 0
-    positions.forEach((pos, key) => {
-      const l = groupLayouts.get(key)!
-      hubBottom = Math.max(hubBottom, pos.y + l.h)
-    })
-    const isoOriginY = hubBottom + ROW_GAP * 3
-
-      // 고립 그룹은 DDD 레이어 컬럼 기반 배치 (계층 레이아웃과 동일한 방식)
-    const isoColGroups = new Map<number, string[]>()
-    isoGroups.forEach((key) => {
-      const layer = key.indexOf('/') >= 0 ? key.slice(0, key.indexOf('/')) : key
-      const col = LAYER_COLUMN[layer] ?? 99
-      if (!isoColGroups.has(col)) isoColGroups.set(col, [])
-      isoColGroups.get(col)!.push(key)
-    })
-
-    const isoSortedCols = Array.from(isoColGroups.keys()).sort((a, b) => a - b)
-    const isoColMaxW = new Map<number, number>()
-    isoColGroups.forEach((keys, col) => {
-      isoColMaxW.set(col, Math.max(...keys.map((k) => groupLayouts.get(k)!.w)))
-    })
-
-    const isoColStartX = new Map<number, number>()
-    let isoCursor = 0
-    isoSortedCols.forEach((col) => {
-      isoColStartX.set(col, isoCursor)
-      isoCursor += (isoColMaxW.get(col) ?? 0) + COL_GAP
-    })
-
-    // 전체 폭 기준 중앙 정렬
-    const isoTotalW2 = isoCursor - COL_GAP
-    const isoOffsetX = -isoTotalW2 / 2
-
-    isoColGroups.forEach((keys, col) => {
-      let y = isoOriginY
-      const x = isoOffsetX + (isoColStartX.get(col) ?? 0)
-      keys.forEach((key) => {
-        positions.set(key, { x, y })
-        y += groupLayouts.get(key)!.h + ROW_GAP
-      })
-    })
-  }
-
-  return { positions, isoKeys: isoGroups }
-}
 
 // 원시 노드/엣지 데이터를 레이아웃으로 변환하여 React Flow용 노드/엣지 반환
 export function buildLayout(
@@ -408,8 +416,6 @@ export function buildLayout(
   })
 
   const fileIdSet = new Set(fileNodes.map((f) => f.id))
-  const fileToGroup = new Map<string, string>()
-  fileNodes.forEach((f) => fileToGroup.set(f.id, getGroupKey(f.filePath, commonPrefix)))
 
   // 파일별 인/아웃 연결 집계 (사이드바 데이터용)
   const fileIncoming = new Map<string, ConnEntry[]>()
@@ -449,9 +455,11 @@ export function buildLayout(
 
   // 레이아웃 프리셋에 따라 그룹 위치 계산
   let groupPositions: Map<string, { x: number; y: number }>
-  if (layoutPreset === 'hub') {
-    const hubResult = buildHubPositions(groups, groupLayouts, rawEdges, fileIdSet, fileToGroup)
-    groupPositions = hubResult.positions
+  let domainBoundsResult: Map<string, { x: number; y: number; w: number; h: number; domain: string }> | undefined
+  if (layoutPreset === 'domain') {
+    const domainResult = buildDomainPositions(groups, groupLayouts, commonPrefix)
+    groupPositions = domainResult.positions
+    domainBoundsResult = domainResult.domainBounds
   } else {
     groupPositions = buildLayerPositions(groups, groupLayouts)
   }
@@ -478,7 +486,7 @@ export function buildLayout(
     layerGroupKeysPre.get(sectionKey)!.push(key)
   })
 
-  // 레이어별 섹션 기준점 (좌상단 절대 좌표) — 그룹 노드 상대 좌표 변환용
+  // 레이어별 섹션 기준점 (좌상단 절대 좌표) — 그룹 노드 상대 좌표 변환용 (layer 모드 전용)
   const layerSectionOrigins = new Map<string, { x: number; y: number; w: number; h: number }>()
   if (layoutPreset === 'layer') {
     layerGroupKeysPre.forEach((keys, layer) => {
@@ -518,6 +526,21 @@ export function buildLayout(
         zIndex: -20,
       } as Node)
     })
+  } else if (layoutPreset === 'domain' && domainBoundsResult) {
+    // 도메인 섹션 노드 삽입 — 바운디드 컨텍스트별 박스
+    domainBoundsResult.forEach((bounds, domain) => {
+      const palette = DOMAIN_COLORS[domain] ?? DOMAIN_COLORS.common
+      result.push({
+        id: `domain-section-${domain}`,
+        type: 'sectionNode',
+        position: { x: bounds.x, y: bounds.y },
+        data: { label: domain.charAt(0).toUpperCase() + domain.slice(1), color: palette.color, opaqueColor: palette.opaqueColor, layer: domain, origW: bounds.w, origH: bounds.h },
+        style: { width: bounds.w, height: bounds.h },
+        draggable: true,
+        selectable: false,
+        zIndex: -20,
+      } as Node)
+    })
   }
 
   // 그룹 노드 + 파일 노드 + 함수 노드 생성
@@ -533,18 +556,31 @@ export function buildLayout(
     const layer = slashIdx >= 0 ? key.slice(0, slashIdx) : key
     const sub = slashIdx >= 0 ? key.slice(slashIdx + 1) : ''
 
-    // layer 모드에서 섹션 기준점이 있으면 상대 좌표로 변환 + parentId 설정
-    const sectionKey = LAYER_SECTION_KEY[layer] ?? layer
-    const sectionOrigin = layerSectionOrigins.get(sectionKey)
-    const groupPos = sectionOrigin
-      ? { x: gx - sectionOrigin.x, y: gy - sectionOrigin.y }
-      : { x: gx, y: gy }
+    // 섹션 기준점 결정 — layer 모드: DDD 레이어 섹션 / domain 모드: 도메인 섹션
+    let parentSectionId: string | undefined
+    let groupPos: { x: number; y: number }
+
+    if (layoutPreset === 'domain' && domainBoundsResult) {
+      const fileDomain = groupFiles.length > 0 ? extractDomain(groupFiles[0].filePath, commonPrefix) : 'common'
+      const domainBounds = domainBoundsResult.get(fileDomain)
+      if (domainBounds) {
+        parentSectionId = `domain-section-${fileDomain}`
+        groupPos = { x: gx - domainBounds.x, y: gy - domainBounds.y }
+      } else {
+        groupPos = { x: gx, y: gy }
+      }
+    } else {
+      const sectionKey = LAYER_SECTION_KEY[layer] ?? layer
+      const sectionOrigin = layerSectionOrigins.get(sectionKey)
+      parentSectionId = sectionOrigin ? `layer-section-${sectionKey}` : undefined
+      groupPos = sectionOrigin ? { x: gx - sectionOrigin.x, y: gy - sectionOrigin.y } : { x: gx, y: gy }
+    }
 
     // 그룹 박스 (커스텀 groupNode 타입 사용)
     result.push({
       id: `group-${key}`,
       type: 'groupNode',
-      ...(sectionOrigin ? { parentId: `layer-section-${sectionKey}` } : {}),
+      ...(parentSectionId ? { parentId: parentSectionId } : {}),
       position: groupPos,
       data: { layer, sub, fileCount: groupFiles.length, originalHeight: layout.h },
       style: { width: layout.w, height: layout.h },
@@ -636,25 +672,9 @@ export function buildLayout(
     let dbSectionY: number
     let horizontal: boolean  // true = 가로 행, false = 세로 열
 
-    if (layoutPreset === 'layer') {
-      // 계층: 전체 그룹의 우측 끝 + 여백에 세로 열 배치 — infrastructure 다음 컬럼 위치
+    // 전체 그룹 경계 우측에 세로 열 배치 — 레이아웃 모드 공통
+    {
       let allGroupsMaxX = 0, allMinY = Infinity, allMaxY = -Infinity
-      groupPositions.forEach((pos, key) => {
-        const l = groupLayouts.get(key)
-        if (!l) return
-        allGroupsMaxX = Math.max(allGroupsMaxX, pos.x + l.w)
-        allMinY = Math.min(allMinY, pos.y)
-        allMaxY = Math.max(allMaxY, pos.y + l.h)
-      })
-      const dbTotalH = dbTableNodes.length * (DB_H + DB_GAP) - DB_GAP
-      const allCenterY = allMinY !== Infinity ? (allMinY + allMaxY) / 2 : 0
-      dbSectionX = allGroupsMaxX + 80
-      dbSectionY = allCenterY - dbTotalH / 2
-      horizontal = false
-    } else {
-      // 허브: 전체 그룹 경계 오른쪽에 세로 열 배치 (겹침 방지)
-      let allGroupsMaxX = 0
-      let allMinY = Infinity, allMaxY = -Infinity
       groupPositions.forEach((pos, key) => {
         const l = groupLayouts.get(key)
         if (!l) return
@@ -832,32 +852,6 @@ export function buildLayout(
       zIndex: 0,
     } as Edge))
 
-  // hub 모드에서만 레이어 섹션 박스 추가 — layer 모드는 앞에서 이미 생성 + parentId 적용
-  if (layoutPreset !== 'layer') {
-    layerGroupKeysPre.forEach((keys, layer) => {
-      const meta = LAYER_META_PRE[layer]
-      if (!meta) return
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-      keys.forEach((key) => {
-        const pos = groupPositions.get(key); const l = groupLayouts.get(key)
-        if (!pos || !l) return
-        minX = Math.min(minX, pos.x); minY = Math.min(minY, pos.y)
-        maxX = Math.max(maxX, pos.x + l.w); maxY = Math.max(maxY, pos.y + l.h)
-      })
-      if (minX === Infinity) return
-      result.push({
-        id: `layer-section-${layer}`,
-        type: 'sectionNode',
-        position: { x: minX - LAYER_PAD_PRE, y: minY - LAYER_PAD_PRE - LAYER_LABEL_H },
-        data: { label: meta.label, color: meta.color, opaqueColor: meta.opaqueColor, layer,
-          origW: maxX - minX + LAYER_PAD_PRE * 2, origH: maxY - minY + LAYER_PAD_PRE * 2 + LAYER_LABEL_H },
-        style: { width: maxX - minX + LAYER_PAD_PRE * 2, height: maxY - minY + LAYER_PAD_PRE * 2 + LAYER_LABEL_H },
-        draggable: false,
-        selectable: false,
-        zIndex: -20,
-      } as Node)
-    })
-  }
 
   return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges, ...dbReadEdges, ...dbWriteEdges, ...dbCrudEdges, ...apiCallEdges] }
 }

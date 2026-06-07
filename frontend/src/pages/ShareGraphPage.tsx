@@ -109,9 +109,9 @@ function ShareGraphInner() {
 
         const { nodes: builtNodes, edges: builtEdges } = buildLayout(raw.nodes, raw.edges, lm, lp)
 
-        // hub 모드: layer-section 노드 hidden / layer 모드: opaqueLayerSet 처리
-        const finalNodes = lp === 'hub'
-          ? builtNodes.map((n) => n.id.startsWith('layer-section-') ? { ...n, hidden: true } : n)
+        // domain 모드는 별도 처리 없음 / layer 모드: opaqueLayerSet 처리
+        const finalNodes = lp === 'domain'
+          ? builtNodes
           : applyOpaqueLayerSet(builtNodes, opaqueLayerSet)
 
         setNodes(finalNodes)

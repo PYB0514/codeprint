@@ -863,8 +863,8 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, lm, lp, openFileSidebar)
       setNodes(() => {
-        if (lp === 'hub') {
-          return layoutNodes.map((n) => n.id.startsWith('layer-section-') ? { ...n, hidden: true } : n)
+        if (lp === 'domain') {
+          return layoutNodes
         }
         // layer 모드: opaque 섹션의 자손 노드(group→file→function 3단계) hidden 처리
         const opaqueSectionIds = new Set(
