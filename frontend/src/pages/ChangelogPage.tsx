@@ -11,6 +11,23 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v1.34',
+    date: '2026-06-08',
+    title: '토스페이먼츠 후원 기능 + OAuth2 로그인 수정',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'V17 Flyway 마이그레이션 — donations 테이블 (user_id, username, amount, payment_key, order_id)' },
+      { category: '백엔드', desc: 'POST /api/donations/confirm — 토스페이먼츠 결제 승인 후 DB 저장 (인증 필요)' },
+      { category: '백엔드', desc: 'GET /api/donations — 후원 목록 조회 (공개)' },
+      { category: '프론트', desc: '/donate 후원 페이지 — 금액 선택 + 토스페이먼츠 SDK V2 결제 모달' },
+      { category: '프론트', desc: '/donate/success, /donate/fail — 결제 완료·실패 페이지' },
+      { category: '프론트', desc: '랜딩페이지 헤더에 ☕ 후원 버튼 추가' },
+      { category: '버그 수정', desc: 'OAuth2 GitHub 로그인 오류 수정 — SessionCreationPolicy.STATELESS → IF_REQUIRED (OAuth2 state 파라미터 세션 저장 필요)' },
+      { category: '버그 수정', desc: 'PKIX SSL 오류 수정 — Windows-ROOT 트러스트스토어 적용 (JDK 17 GitHub SSL 미신뢰 문제)' },
+      { category: '보안', desc: 'GlobalExceptionHandler 개선 — NoResourceFoundException→404, AccessDeniedException→403 명시적 처리, 500은 항상 스택트레이스 로깅' },
+    ],
+  },
+  {
     version: 'v1.33.001',
     date: '2026-06-07',
     title: 'Railway 배포 분석 실패 수정',

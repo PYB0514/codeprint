@@ -53,6 +53,10 @@ stripe:
   pro-price-id: ${STRIPE_PRO_PRICE_ID:price_placeholder}
   webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
 
+toss:
+  client-key: ${TOSS_CLIENT_KEY:}
+  secret-key: ${TOSS_SECRET_KEY:}
+
 aws:
   s3:
     access-key: ${AWS_ACCESS_KEY:}

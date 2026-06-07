@@ -249,6 +249,10 @@ npm run dev
 - **에러 트래킹 (Sentry)** — SDK 연동 미완료. 실사용자 생기면 진행.
 - **공개 API 문서** — /api-docs, 외부 개발자가 그래프 데이터를 가져갈 수 있는 REST API + Swagger
 
+### 인프라 고도화
+- **캐싱 레이어 (Redis)** — 그래프 조회(`GET /api/projects/{id}/graph`) 응답을 Redis에 캐시. 분석 완료 시 무효화(Cache-Aside 패턴). 대형 레포 반복 조회 시 DB 부하 및 응답 속도 개선. Spring Cache + `spring-boot-starter-data-redis` 추가, Railway에 Redis 인스턴스 추가. 후속으로 세션·레이트리밋 저장소도 Redis로 이전 가능.
+- **DB 읽기 분산 (Read Replica)** — PostgreSQL Read Replica 구성. 그래프 조회·커뮤니티 목록 등 읽기 쿼리는 Replica로, 쓰기(분석 저장·댓글 작성 등)는 Primary로 라우팅. Spring `AbstractRoutingDataSource` + Railway Replica 플랜 필요. 트래픽이 늘기 전 미리 설계해두는 것이 구조 변경 비용 최소화. 캐싱 레이어 도입 후 병목이 여전히 DB에 있을 때 적용.
+
 ---
 
 ## 알려진 문제 / 주의사항

@@ -88,6 +88,12 @@ export default function LandingPage() {
           >
             패치노트
           </button>
+          <button
+            onClick={() => navigate('/donate')}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            ☕ 후원
+          </button>
           {loggedIn ? (
             <button
               onClick={() => navigate('/dashboard')}
