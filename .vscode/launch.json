@@ -8,6 +8,7 @@
             "mainClass": "com.codeprint.CodeprintApplication",
             "projectName": "backend",
             "args": "",
+            "vmArgs": "-Djavax.net.ssl.trustStoreType=Windows-ROOT",
             "envFile": "${workspaceFolder}/.env",
             "env": {
                 "SPRING_PROFILES_ACTIVE": "local"

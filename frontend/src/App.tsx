@@ -19,6 +19,9 @@ import AdminPage from './pages/AdminPage'
 import BookmarksPage from './pages/BookmarksPage'
 import UserProfilePage from './pages/UserProfilePage'
 import SettingsPage from './pages/SettingsPage'
+import DonatePage from './pages/DonatePage'
+import DonateSuccessPage from './pages/DonateSuccessPage'
+import DonateFailPage from './pages/DonateFailPage'
 import CookieBanner from './components/CookieBanner'
 import NoticeBanner from './components/NoticeBanner'
 
@@ -46,6 +49,9 @@ export default function App() {
         <Route path="/bookmarks" element={<BookmarksPage />} />
         <Route path="/users/:userId" element={<UserProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/donate" element={<DonatePage />} />
+        <Route path="/donate/success" element={<DonateSuccessPage />} />
+        <Route path="/donate/fail" element={<DonateFailPage />} />
       </Routes>
       <NoticeBanner />
       <CookieBanner />
