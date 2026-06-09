@@ -11,6 +11,26 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.15.6',
+    date: '2026-06-10',
+    title: '로그아웃 후 새로고침 시 로그인 유지되는 버그 수정',
+    type: 'fix',
+    items: [
+      { category: '보안', desc: '로그아웃 쿠키 삭제 실패 버그 수정 — Vite 프록시 origin 불일치로 Set-Cookie가 무시되던 문제 해결' },
+      { category: '백엔드', desc: '/api/auth/logout-redirect 엔드포인트 추가 — 브라우저가 백엔드에 직접 접속해 쿠키 만료 후 메인으로 리다이렉트' },
+    ],
+  },
+  {
+    version: 'v0.15.5',
+    date: '2026-06-10',
+    title: '도메인 뷰 섹션 박스 저줌 가시성 개선',
+    type: 'fix',
+    items: [
+      { category: '프론트', desc: '섹션 박스 보더 투명도 33% → 60%, 실선으로 변경 — 줌아웃 시 서브픽셀 렌더링 문제 해결' },
+      { category: '프론트', desc: '섹션 라벨 크기 13px → 18px, 투명도 80% → 93% — 낮은 줌에서도 선명하게 표시' },
+    ],
+  },
+  {
     version: 'v0.15.4',
     date: '2026-06-10',
     title: '흐름 재생 UX 단순화 — 목적 중심 표시',
