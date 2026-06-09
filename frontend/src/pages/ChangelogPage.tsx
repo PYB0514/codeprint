@@ -11,6 +11,17 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.15.7',
+    date: '2026-06-10',
+    title: 'Refresh Token 메커니즘 도입 — 세션 자동 갱신',
+    type: 'infra',
+    items: [
+      { category: '보안', desc: 'Refresh Token 발급 — 로그인 시 7일 만료 HttpOnly 쿠키로 발급, SHA-256 해시만 DB 저장' },
+      { category: '보안', desc: 'Token Rotation 적용 — 갱신 시 기존 토큰 폐기 후 신규 발급, 재사용 불가' },
+      { category: '프론트', desc: 'axios 인터셉터 추가 — 401 응답 시 자동 토큰 갱신 후 원래 요청 재시도' },
+    ],
+  },
+  {
     version: 'v0.15.6',
     date: '2026-06-10',
     title: '로그아웃 후 새로고침 시 로그인 유지되는 버그 수정',
