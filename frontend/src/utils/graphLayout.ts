@@ -4,6 +4,19 @@ import React from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { MarkerType } from '@xyflow/react'
 
+// DDD 레이어별 색상 팔레트 — 파일/함수 노드 색상 구분용 (계층형·도메인 공통 적용)
+const LAYER_PALETTE: Record<string, { accent: string; fileBg: string; fileText: string; funcBg: string; funcText: string }> = {
+  domain:         { accent: '#3b82f6', fileBg: '#1a2e4a', fileText: '#93c5fd', funcBg: '#1e3a5f', funcText: '#bfdbfe' },
+  application:    { accent: '#ca8a04', fileBg: '#2d2200', fileText: '#fde047', funcBg: '#3a2800', funcText: '#fef08a' },
+  infrastructure: { accent: '#a855f7', fileBg: '#22103a', fileText: '#d8b4fe', funcBg: '#2d1454', funcText: '#e9d5ff' },
+  interfaces:     { accent: '#10b981', fileBg: '#052e1b', fileText: '#6ee7b7', funcBg: '#064e3b', funcText: '#a7f3d0' },
+  pages:          { accent: '#06b6d4', fileBg: '#062030', fileText: '#67e8f9', funcBg: '#0c2d3d', funcText: '#a5f3fc' },
+  components:     { accent: '#0ea5e9', fileBg: '#061e2e', fileText: '#7dd3fc', funcBg: '#0c2636', funcText: '#bae6fd' },
+  hooks:          { accent: '#f97316', fileBg: '#2d1500', fileText: '#fdba74', funcBg: '#3d1f00', funcText: '#fed7aa' },
+  utils:          { accent: '#f97316', fileBg: '#2d1500', fileText: '#fdba74', funcBg: '#3d1f00', funcText: '#fed7aa' },
+}
+const DEFAULT_LAYER_PALETTE = { accent: '#3b82f6', fileBg: '#1e3a5f', fileText: '#93c5fd', funcBg: '#064e3b', funcText: '#6ee7b7' }
+
 // DDD 레이어 → 컬럼 순서 (왼쪽=프론트, 오른쪽=DB) — 요청 흐름 방향
 // pages → components → hooks/utils → interfaces → application → domain → infrastructure → database
 const LAYER_COLUMN: Record<string, number> = {
@@ -599,6 +612,8 @@ export function buildLayout(
       const filePos = isDomainMode
         ? { x: gx + GROUP_PAD + x, y: gy + GROUP_HEADER + GROUP_PAD + y }
         : { x: GROUP_PAD + x, y: GROUP_HEADER + GROUP_PAD + y }
+      const fileDomain = extractDomain(file.filePath, commonPrefix)
+      const palette = LAYER_PALETTE[layer] ?? DEFAULT_LAYER_PALETTE
       result.push({
         id: file.id,
         type: 'fileNode',
@@ -609,6 +624,7 @@ export function buildLayout(
           name: file.name,
           comment: file.comment,
           layer,
+          domain: fileDomain,
           incoming: fileIncoming.get(file.id) ?? [],
           outgoing: fileOutgoing.get(file.id) ?? [],
           onOpenSidebar: onOpenFileSidebar ? () => onOpenFileSidebar({
@@ -619,10 +635,10 @@ export function buildLayout(
           }) : undefined,
         },
         style: {
-          background: '#1e3a5f',
-          border: '1.5px solid #3b82f6',
+          background: palette.fileBg,
+          border: `1.5px solid ${palette.accent}`,
           borderRadius: 8,
-          color: '#93c5fd',
+          color: palette.fileText,
           fontSize: 10,
           fontWeight: 700,
           width: size.w,
@@ -645,12 +661,12 @@ export function buildLayout(
             ? { x: filePos.x + fnRelX, y: filePos.y + fnRelY }
             : { x: fnRelX, y: fnRelY },
           // 함수 박스 너비 110px, 좌우 패딩 8px → 102px / ~6px per char ≈ 17자
-          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment, layer },
+          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment, layer, domain: fileDomain },
           style: {
-            background: '#064e3b',
-            border: '1px solid #10b981',
+            background: palette.funcBg,
+            border: `1px solid ${palette.accent}80`,
             borderRadius: 5,
-            color: '#6ee7b7',
+            color: palette.funcText,
             fontSize: 9,
             width: FUNC_W,
             height: FUNC_H,
