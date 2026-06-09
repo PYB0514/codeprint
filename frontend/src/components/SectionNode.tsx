@@ -4,7 +4,7 @@ import type { NodeProps } from '@xyflow/react'
 
 // 줌 레벨에 관계없이 화면상 일정한 크기로 보이도록 역스케일 폰트 크기 계산
 function scaledFontSize(target: number, zoom: number) {
-  return Math.round(Math.max(target / Math.max(zoom, 0.01), target))
+  return target / Math.max(zoom, 0.05)
 }
 
 export default function SectionNode({ data }: NodeProps) {
