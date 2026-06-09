@@ -1481,6 +1481,21 @@ function GraphPageInner() {
             커뮤니티에 공유
           </button>
         )}
+        {/* 키보드 단축키 도움말 */}
+        <div className="relative group">
+          <button className="text-gray-500 hover:text-gray-300 text-xs w-6 h-6 rounded-full border border-gray-700 hover:border-gray-500 flex items-center justify-center transition-colors">
+            ?
+          </button>
+          <div className="absolute left-0 top-8 hidden group-hover:block bg-gray-900 border border-gray-700 rounded-lg p-3 text-xs text-gray-300 whitespace-nowrap z-50 shadow-xl">
+            <div className="font-semibold text-gray-200 mb-2">키보드 단축키</div>
+            {([['/', '검색창 포커스'], ['Esc', '사이드바 닫기'], ['F', '전체 화면 맞춤'], ['L', '라벨 이름/주석 전환']] as [string, string][]).map(([key, desc]) => (
+              <div key={key} className="flex items-center gap-3 py-0.5">
+                <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-[10px] font-mono min-w-[24px] text-center">{key}</kbd>
+                <span className="text-gray-400">{desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* 왼쪽 사이드바 여는 탭 — 닫혔을 때만 표시 */}
