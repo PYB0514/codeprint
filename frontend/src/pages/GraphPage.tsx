@@ -511,6 +511,9 @@ function GraphPageInner() {
   const [commentNodeId, setCommentNodeId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const { state: collabState, publishCursor, publishSelection } = useCollaboration(collabSessionId, currentUserId)
+
+  // 런타임 경고 상태
+  const [warnings, setWarnings] = useState<{ type: string; nodeIds: string[]; message: string }[]>([])
   // publishCursorRef를 항상 최신 publishCursor로 유지
   publishCursorRef.current = publishCursor
 
@@ -745,12 +748,18 @@ function GraphPageInner() {
   const fetchGraph = useCallback(async () => {
     try {
       const res = await axios.get(`/api/projects/${projectId}/graph`, { headers: authHeaders() })
-      const { graphId: gid, nodes: rn, edges: re } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[] }
+      const { graphId: gid, nodes: rn, edges: re, warnings: w } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; message: string }[] }
       setGraphId(gid)
+      const warningList = w ?? []
+      setWarnings(warningList)
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebar)
       setRawNodes(rn)
       setRawEdgesCache(re)
-      setNodes(layoutNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
+      const warnIds = new Set(warningList.flatMap(x => x.nodeIds))
+      const styledNodes = layoutNodes.map(n =>
+        warnIds.has(n.id) ? { ...n, style: { ...((n.style as object) ?? {}), outline: '2px solid #eab308', outlineOffset: '2px' } } : n
+      )
+      setNodes(styledNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
       setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), false, false, false, true, false, true))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
@@ -1673,6 +1682,20 @@ function GraphPageInner() {
                 </div>
               </div>
             </LeftSection>
+
+            {/* 런타임 경고 패널 */}
+            {warnings.length > 0 && (
+              <LeftSection title={`경고 (${warnings.length})`}>
+                <div className="flex flex-col gap-1.5">
+                  {warnings.map((w, i) => (
+                    <div key={i} className="flex items-start gap-1.5 text-xs text-yellow-300 bg-yellow-900/20 border border-yellow-700/40 rounded p-1.5">
+                      <span className="flex-shrink-0 mt-0.5">⚠️</span>
+                      <span>{w.message}</span>
+                    </div>
+                  ))}
+                </div>
+              </LeftSection>
+            )}
           </div>
 
           {/* 왼쪽 사이드바 리사이즈 핸들 */}
