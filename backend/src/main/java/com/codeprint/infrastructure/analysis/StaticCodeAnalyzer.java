@@ -344,12 +344,15 @@ public class StaticCodeAnalyzer {
         List<ColumnInfo> result = new ArrayList<>();
         String[] lines = content.split("\n");
         String pendingColumnName = null;
+        boolean pendingConverter = false;
 
         for (String line : lines) {
             String t = line.trim();
             if (t.startsWith("@Column")) {
                 Matcher m = Pattern.compile("name\\s*=\\s*[\"']([^\"']+)[\"']").matcher(t);
                 pendingColumnName = m.find() ? m.group(1) : "";
+            } else if (t.startsWith("@Convert")) {
+                pendingConverter = true;
             } else if (t.startsWith("private ")) {
                 // private <type> <name>; — 제네릭 타입 포함
                 Matcher m = Pattern.compile("private\\s+([\\w<>\\[\\]?,\\s]+?)\\s+(\\w+)\\s*;").matcher(t);
@@ -360,12 +363,14 @@ public class StaticCodeAnalyzer {
                         String colName = (pendingColumnName != null && !pendingColumnName.isEmpty())
                                 ? pendingColumnName
                                 : toSnakeCase(fieldName);
-                        result.add(new ColumnInfo(fieldName, colName, javaType));
+                        result.add(new ColumnInfo(fieldName, colName, javaType, pendingConverter));
                     }
                 }
                 pendingColumnName = null;
+                pendingConverter = false;
             } else if (!t.startsWith("@") && !t.isEmpty()) {
                 pendingColumnName = null;
+                pendingConverter = false;
             }
         }
         return result;

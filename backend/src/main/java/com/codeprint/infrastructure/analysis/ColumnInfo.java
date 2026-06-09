@@ -4,5 +4,6 @@ package com.codeprint.infrastructure.analysis;
 public record ColumnInfo(
         String fieldName,
         String columnName,
-        String javaType
+        String javaType,
+        boolean hasConverter
 ) {}

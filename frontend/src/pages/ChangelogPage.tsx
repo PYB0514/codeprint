@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.13.0',
+    date: '2026-06-09',
+    title: '@Convert 컨버터 마이그레이션 누락 감지',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'MISSING_CONVERTER_MIGRATION 경고 — @Convert 어노테이션이 있는 JPA Entity 컬럼 감지, 기존 데이터 Flyway 마이그레이션 누락 가능성 경고' },
+      { category: '백엔드', desc: 'StaticCodeAnalyzer: @Convert 어노테이션 붙은 필드 추출, ColumnInfo.hasConverter 필드 추가' },
+    ],
+  },
+  {
     version: 'v0.12.0',
     date: '2026-06-09',
     title: 'DDD 컨텍스트 경계 위반 감지',
