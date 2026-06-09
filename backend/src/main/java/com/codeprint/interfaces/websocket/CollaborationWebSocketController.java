@@ -2,7 +2,7 @@
 package com.codeprint.interfaces.websocket;
 
 import com.codeprint.domain.user.User;
-import com.codeprint.infrastructure.persistence.user.UserJpaRepository;
+import com.codeprint.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -20,7 +20,7 @@ import java.util.UUID;
 public class CollaborationWebSocketController {
 
     private final SimpMessagingTemplate messagingTemplate;
-    private final UserJpaRepository userJpaRepository;
+    private final UserRepository userJpaRepository;
 
     // 커서 위치 이벤트를 세션 참가자 전체에게 브로드캐스트
     @MessageMapping("/collab/{sessionId}/cursor")

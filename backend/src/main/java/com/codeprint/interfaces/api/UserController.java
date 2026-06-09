@@ -2,10 +2,10 @@
 package com.codeprint.interfaces.api;
 
 import com.codeprint.domain.community.Post;
+import com.codeprint.domain.community.PostBookmarkRepository;
+import com.codeprint.domain.community.PostRepository;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
-import com.codeprint.infrastructure.persistence.community.PostBookmarkJpaRepository;
-import com.codeprint.infrastructure.persistence.community.PostJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,8 +21,8 @@ import java.util.UUID;
 public class UserController {
 
     private final UserRepository userRepository;
-    private final PostJpaRepository postJpaRepository;
-    private final PostBookmarkJpaRepository bookmarkRepository;
+    private final PostRepository postRepository;
+    private final PostBookmarkRepository bookmarkRepository;
 
     // 공개 유저 프로필 조회
     @GetMapping("/{userId}")
@@ -37,7 +37,7 @@ public class UserController {
     public ResponseEntity<List<PostSummaryResponse>> getUserPosts(
             @PathVariable UUID userId,
             @AuthenticationPrincipal User currentUser) {
-        List<PostSummaryResponse> posts = postJpaRepository.findByUserId(userId).stream()
+        List<PostSummaryResponse> posts = postRepository.findByUserId(userId).stream()
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                 .map(p -> toPostSummary(p, currentUser))
                 .toList();

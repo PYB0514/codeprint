@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface UserAiKeyJpaRepository extends JpaRepository<UserAiKey, UUID> {
+public interface UserAiKeyJpaRepository extends JpaRepository<UserAiKey, UUID>, com.codeprint.domain.ai.UserAiKeyRepository {
 
     Optional<UserAiKey> findByUserIdAndProvider(UUID userId, AiProvider provider);
 

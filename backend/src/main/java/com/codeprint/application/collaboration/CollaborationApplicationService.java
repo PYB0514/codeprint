@@ -4,7 +4,7 @@ package com.codeprint.application.collaboration;
 import com.codeprint.domain.collaboration.CollaborationSession;
 import com.codeprint.domain.collaboration.CollaborationSessionRepository;
 import com.codeprint.domain.user.User;
-import com.codeprint.infrastructure.persistence.user.UserJpaRepository;
+import com.codeprint.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,7 +19,7 @@ import java.util.UUID;
 public class CollaborationApplicationService {
 
     private final CollaborationSessionRepository sessionRepository;
-    private final UserJpaRepository userJpaRepository;
+    private final UserRepository userJpaRepository;
 
     private static final String CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final SecureRandom RANDOM = new SecureRandom();

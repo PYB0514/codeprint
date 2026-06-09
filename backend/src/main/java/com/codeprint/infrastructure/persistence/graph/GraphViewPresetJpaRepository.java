@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface GraphViewPresetJpaRepository extends JpaRepository<GraphViewPreset, UUID> {
+public interface GraphViewPresetJpaRepository extends JpaRepository<GraphViewPreset, UUID>, com.codeprint.domain.graph.GraphViewPresetRepository {
 
     // 특정 그래프의 사용자 프리셋 전체 조회
     List<GraphViewPreset> findByGraphIdAndUserIdOrderBySlotAsc(UUID graphId, UUID userId);
