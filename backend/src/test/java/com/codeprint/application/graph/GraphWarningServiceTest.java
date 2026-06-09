@@ -174,4 +174,33 @@ class GraphWarningServiceTest {
         );
         assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).isEmpty();
     }
+
+    @Test
+    @DisplayName("application/project 가 domain/user 를 직접 IMPORT — CROSS_CONTEXT_IMPORT 경고")
+    void crossContextImport_detected() {
+        Node appNode = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");
+        Node domainNode = funcNodeWithPath("UserPlan", "/com/example/domain/user/UserPlan.java");
+        Edge imp = importEdgeForPath(appNode.getId(), domainNode.getId());
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(appNode, domainNode),
+                List.of(imp)
+        );
+        assertThat(warnings).hasSize(1);
+        assertThat(warnings.get(0).get("type")).isEqualTo("CROSS_CONTEXT_IMPORT");
+    }
+
+    @Test
+    @DisplayName("같은 컨텍스트 내 application → domain IMPORT — 경고 없음")
+    void crossContextImport_sameContext_noWarning() {
+        Node appNode = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");
+        Node domainNode = funcNodeWithPath("Project", "/com/example/domain/project/Project.java");
+        Edge imp = importEdgeForPath(appNode.getId(), domainNode.getId());
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(appNode, domainNode),
+                List.of(imp)
+        );
+        assertThat(warnings.stream().filter(w -> "CROSS_CONTEXT_IMPORT".equals(w.get("type"))).toList()).isEmpty();
+    }
 }

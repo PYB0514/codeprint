@@ -11,6 +11,15 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.12.0',
+    date: '2026-06-09',
+    title: 'DDD 컨텍스트 경계 위반 감지',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'CROSS_CONTEXT_IMPORT 경고 — application/{contextA}가 domain/{contextB}를 직접 IMPORT할 때 감지 (DDD 컨텍스트 간 직접 객체 참조 위반)' },
+    ],
+  },
+  {
     version: 'v0.11.0',
     date: '2026-06-09',
     title: '런타임 경고 패턴 확장',
