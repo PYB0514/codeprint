@@ -19,6 +19,8 @@ public class GraphWarningService {
         List<Map<String, Object>> warnings = new ArrayList<>();
         warnings.addAll(detectCyclicImports(nodes, edges));
         warnings.addAll(detectBrokenInterfaceChains(nodes, edges));
+        warnings.addAll(detectAsyncSelfCalls(nodes, edges));
+        warnings.addAll(detectDbLayerBypass(nodes, edges));
         return warnings;
     }
 
@@ -119,6 +121,83 @@ public class GraphWarningService {
                 w.put("type", "BROKEN_INTERFACE_CHAIN");
                 w.put("nodeIds", List.of(n.getId().toString()));
                 w.put("message", "인터페이스 체인 끊김: " + n.getName() + " — 구현체 메서드로 가는 엣지 없음");
+                warnings.add(w);
+            }
+        }
+        return warnings;
+    }
+
+    // 같은 파일 내 @Async 메서드로 향하는 직접 FUNCTION_CALL — 프록시 우회로 @Async 무시됨
+    private List<Map<String, Object>> detectAsyncSelfCalls(List<Node> nodes, List<Edge> edges) {
+        // isAsync=true인 FUNCTION 노드 수집 (nodeId → filePath)
+        Map<UUID, String> asyncFuncFilePaths = new HashMap<>();
+        Map<UUID, String> funcFilePaths = new HashMap<>();
+        Map<UUID, String> nameMap = new HashMap<>();
+
+        for (Node n : nodes) {
+            if (n.getType() != NodeType.FUNCTION) continue;
+            funcFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+            nameMap.put(n.getId(), n.getName());
+            Map<String, Object> meta = n.getMetadata();
+            if (meta != null && Boolean.TRUE.equals(meta.get("isAsync"))) {
+                asyncFuncFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+            }
+        }
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Edge e : edges) {
+            if (e.getType() != EdgeType.FUNCTION_CALL) continue;
+            UUID target = e.getTargetNodeId();
+            if (!asyncFuncFilePaths.containsKey(target)) continue;
+
+            UUID source = e.getSourceNodeId();
+            String sourceFile = funcFilePaths.getOrDefault(source, "");
+            String targetFile = asyncFuncFilePaths.get(target);
+
+            // 같은 파일 내 @Async 메서드 호출 — 프록시 우회
+            if (!sourceFile.isEmpty() && sourceFile.equals(targetFile)) {
+                Map<String, Object> w = new LinkedHashMap<>();
+                w.put("type", "ASYNC_SELF_CALL");
+                w.put("nodeIds", List.of(source.toString(), target.toString()));
+                w.put("message", "@Async 자기 호출: " + nameMap.getOrDefault(source, source.toString())
+                        + " → " + nameMap.getOrDefault(target, target.toString())
+                        + " (프록시 우회로 비동기 무시됨)");
+                warnings.add(w);
+            }
+        }
+        return warnings;
+    }
+
+    // interfaces/ 또는 application/ 레이어가 infrastructure/persistence/ 를 직접 호출 — DB 레이어 우회
+    private List<Map<String, Object>> detectDbLayerBypass(List<Node> nodes, List<Edge> edges) {
+        Map<UUID, String> nodeFilePaths = new HashMap<>();
+        Map<UUID, String> nameMap = new HashMap<>();
+        for (Node n : nodes) {
+            nodeFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+            nameMap.put(n.getId(), n.getName());
+        }
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Edge e : edges) {
+            if (e.getType() != EdgeType.FUNCTION_CALL && e.getType() != EdgeType.IMPORT) continue;
+            String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
+            String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
+
+            boolean srcIsUpperLayer = srcPath.contains("/interfaces/") || srcPath.contains("/application/");
+            boolean tgtIsPersistence = tgtPath.contains("/infrastructure/persistence/")
+                    || tgtPath.contains("/infrastructure/db/");
+
+            if (srcIsUpperLayer && tgtIsPersistence) {
+                // isInterfaceImpl 엣지는 정상 패턴이므로 제외
+                Map<String, Object> meta = e.getMetadata();
+                if (meta != null && Boolean.TRUE.equals(meta.get("isInterfaceImpl"))) continue;
+
+                Map<String, Object> w = new LinkedHashMap<>();
+                w.put("type", "DB_LAYER_BYPASS");
+                w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
+                w.put("message", "DB 레이어 우회: " + nameMap.getOrDefault(e.getSourceNodeId(), srcPath)
+                        + " → " + nameMap.getOrDefault(e.getTargetNodeId(), tgtPath)
+                        + " (domain Repository를 거치지 않는 직접 persistence 호출)");
                 warnings.add(w);
             }
         }

@@ -31,8 +31,9 @@ public class StaticCodeAnalyzer {
         List<String> apiCalls = extractApiCalls(content, language);
         List<String> controllerMappings = extractControllerMappings(content, language);
         List<String> implementedInterfaces = extractImplementedInterfaces(content, language);
+        List<String> asyncMethods = extractAsyncMethods(content, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods);
     }
 
     // 파일 상단 첫 번째 주석 추출
@@ -445,5 +446,21 @@ public class StaticCodeAnalyzer {
         return Set.of("if", "else", "for", "while", "switch", "try", "catch", "return",
                 "new", "class", "interface", "enum", "void", "int", "long", "boolean",
                 "String", "List", "Map", "Set", "var", "val", "let", "const").contains(name);
+    }
+
+    // Java @Async 어노테이션이 붙은 메서드명 추출
+    private List<String> extractAsyncMethods(String content, String language) {
+        if (!language.equals("Java")) return List.of();
+        List<String> result = new ArrayList<>();
+        // @Async 바로 다음(0~3줄 이내)에 오는 메서드명 탐지
+        Pattern asyncPattern = Pattern.compile(
+                "@Async[\\s\\S]{0,200}?(?:public|protected|private)\\s+(?:\\w+\\s+)*(\\w+)\\s*\\(",
+                Pattern.MULTILINE);
+        Matcher m = asyncPattern.matcher(content);
+        while (m.find()) {
+            String name = m.group(1);
+            if (!isKeyword(name)) result.add(name);
+        }
+        return result;
     }
 }

@@ -18,5 +18,6 @@ public record ParsedFile(
         List<ColumnInfo> entityColumns,          // @Entity 클래스의 칼럼 목록 (null이면 Entity 아님)
         List<String> apiCalls,                   // 프론트 axios 호출 경로 목록 ("GET:/api/projects" 형식)
         List<String> controllerMappings,         // 백엔드 @*Mapping 경로 목록 ("/api/projects/{projectId}" 형식)
-        List<String> implementedInterfaces       // "class Foo implements Bar" 에서 추출한 인터페이스명 목록
+        List<String> implementedInterfaces,       // "class Foo implements Bar" 에서 추출한 인터페이스명 목록
+        List<String> asyncMethods                // @Async 어노테이션이 붙은 메서드명 목록
 ) {}

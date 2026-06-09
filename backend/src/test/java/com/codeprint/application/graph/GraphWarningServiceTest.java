@@ -1,4 +1,4 @@
-// GraphWarningService 단위 테스트 — 순환 의존 및 인터페이스 체인 끊김 감지 회귀 방지
+// GraphWarningService 단위 테스트 — 순환 의존·인터페이스 체인·비동기 자기호출·DB 레이어 우회 감지 회귀 방지
 package com.codeprint.application.graph;
 
 import com.codeprint.domain.graph.Edge;
@@ -37,6 +37,20 @@ class GraphWarningServiceTest {
         Edge e = Edge.create(graphId, src + "->" + tgt, EdgeType.FUNCTION_CALL, src, tgt);
         if (isInterfaceImpl) e.updateMetadata(Map.of("isInterfaceImpl", true));
         return e;
+    }
+
+    private Node asyncFuncNode(String name, String filePath) {
+        Node n = Node.create(graphId, NodeType.FUNCTION, name, filePath, "java");
+        n.updateMetadata(Map.of("isAsync", true));
+        return n;
+    }
+
+    private Node funcNodeWithPath(String name, String filePath) {
+        return Node.create(graphId, NodeType.FUNCTION, name, filePath, "java");
+    }
+
+    private Edge importEdgeForPath(UUID src, UUID tgt) {
+        return Edge.create(graphId, src + "->imp->" + tgt, EdgeType.IMPORT, src, tgt);
     }
 
     @Test
@@ -100,5 +114,64 @@ class GraphWarningServiceTest {
         );
         assertThat(warnings).hasSize(1);
         assertThat(warnings.get(0).get("type")).isEqualTo("BROKEN_INTERFACE_CHAIN");
+    }
+
+    @Test
+    @DisplayName("같은 파일 내 @Async 메서드 직접 호출 — ASYNC_SELF_CALL 경고")
+    void asyncSelfCall_sameFile() {
+        String file = "/com/example/MyService.java";
+        Node caller = funcNodeWithPath("doWork", file);
+        Node asyncTarget = asyncFuncNode("sendEmail", file);
+        Edge call = callEdge(caller.getId(), asyncTarget.getId(), false);
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(caller, asyncTarget),
+                List.of(call)
+        );
+        assertThat(warnings).hasSize(1);
+        assertThat(warnings.get(0).get("type")).isEqualTo("ASYNC_SELF_CALL");
+    }
+
+    @Test
+    @DisplayName("다른 파일에서 @Async 메서드 호출 — 경고 없음")
+    void asyncSelfCall_differentFile_noWarning() {
+        Node caller = funcNodeWithPath("doWork", "/com/example/CallerService.java");
+        Node asyncTarget = asyncFuncNode("sendEmail", "/com/example/EmailService.java");
+        Edge call = callEdge(caller.getId(), asyncTarget.getId(), false);
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(caller, asyncTarget),
+                List.of(call)
+        );
+        assertThat(warnings.stream().filter(w -> "ASYNC_SELF_CALL".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("application 레이어가 persistence를 직접 호출 — DB_LAYER_BYPASS 경고")
+    void dbLayerBypass_applicationToPersistence() {
+        Node appNode = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");
+        Node repoNode = funcNodeWithPath("save", "/com/example/infrastructure/persistence/JpaProjectRepo.java");
+        Edge call = callEdge(appNode.getId(), repoNode.getId(), false);
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(appNode, repoNode),
+                List.of(call)
+        );
+        assertThat(warnings).hasSize(1);
+        assertThat(warnings.get(0).get("type")).isEqualTo("DB_LAYER_BYPASS");
+    }
+
+    @Test
+    @DisplayName("isInterfaceImpl 엣지는 DB_LAYER_BYPASS에서 제외")
+    void dbLayerBypass_interfaceImpl_noWarning() {
+        Node appNode = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");
+        Node repoNode = funcNodeWithPath("save", "/com/example/infrastructure/persistence/JpaProjectRepo.java");
+        Edge call = callEdge(appNode.getId(), repoNode.getId(), true);
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(appNode, repoNode),
+                List.of(call)
+        );
+        assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).isEmpty();
     }
 }
