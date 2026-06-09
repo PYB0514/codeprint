@@ -11,6 +11,15 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.19.0',
+    date: '2026-06-09',
+    title: '그래프 키보드 단축키',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '/ — 검색창 포커스, Esc — 사이드바 닫기, F — 전체 화면 맞춤, L — 라벨 이름/주석 전환' },
+    ],
+  },
+  {
     version: 'v0.18.0',
     date: '2026-06-09',
     title: '경고 항목 클릭 → 노드 이동',

@@ -482,6 +482,7 @@ function GraphPageInner() {
   const [shareHiddenNodes, setShareHiddenNodes] = useState<Set<string>>(new Set())
   const [shareSubmitting, setShareSubmitting] = useState(false)
   const flowRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const { getNodes, fitView, screenToFlowPosition } = useReactFlow()
 
   // 검색 결과 노드로 fitView 이동
@@ -1105,6 +1106,27 @@ function GraphPageInner() {
     }
   }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges, applyEdgeVisibility])
 
+  // 키보드 단축키 — / 검색 포커스, Esc 사이드바 닫기, f fitView, l 라벨 전환
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (e.key === '/') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+        searchInputRef.current?.select()
+      } else if (e.key === 'Escape') {
+        setSidebar(null)
+      } else if (e.key === 'f' || e.key === 'F') {
+        fitView({ padding: 0.1, duration: 300 })
+      } else if (e.key === 'l' || e.key === 'L') {
+        toggleLabelMode()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [fitView, toggleLabelMode])
+
   // 전체 그래프를 원본 크기 PNG로 다운로드
   const handleExportImage = useCallback(async () => {
     const flowEl = flowRef.current?.querySelector('.react-flow__viewport') as HTMLElement | null
@@ -1491,10 +1513,11 @@ function GraphPageInner() {
             {/* 노드 검색 */}
             <LeftSection title="노드 검색">
               <input
+                ref={searchInputRef}
                 type="text"
                 value={nodeSearchQuery}
                 onChange={e => setNodeSearchQuery(e.target.value)}
-                placeholder="파일명 / 함수명 검색..."
+                placeholder="파일명 / 함수명 검색... (/)"
                 className="w-full text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500"
               />
               {nodeSearchQuery.trim() && (() => {
