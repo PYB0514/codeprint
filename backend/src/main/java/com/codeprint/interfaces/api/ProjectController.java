@@ -1,9 +1,9 @@
 // 프로젝트 CRUD REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.analysis.AnalysisApplicationService;
 import com.codeprint.application.project.ProjectCommandService;
 import com.codeprint.application.project.ProjectQueryService;
-import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.user.User;
 import com.codeprint.infrastructure.github.GitHubApiClient;
 import com.codeprint.infrastructure.github.GitHubRepoDto;
@@ -26,7 +26,7 @@ public class ProjectController {
     private final ProjectCommandService projectCommandService;
     private final ProjectQueryService projectQueryService;
     private final GitHubApiClient gitHubApiClient;
-    private final AnalysisRepository analysisRepository;
+    private final AnalysisApplicationService analysisApplicationService;
 
     // 현재 사용자의 프로젝트 목록 조회
     @GetMapping
@@ -54,7 +54,8 @@ public class ProjectController {
             @AuthenticationPrincipal User user) {
         ProjectResponse response = ProjectResponse.from(
                 projectCommandService.createProject(
-                        user.getId(), request.githubRepoUrl(), request.name(), request.description()));
+                        user.getId(), request.githubRepoUrl(), request.name(), request.description(),
+                        user.getPlan().maxProjects()));
         return ResponseEntity.status(201).body(response);
     }
 
@@ -95,9 +96,8 @@ public class ProjectController {
     public ResponseEntity<Map<String, Object>> getFreshness(
             @PathVariable UUID projectId,
             @AuthenticationPrincipal User user) {
-        projectQueryService.getProject(projectId, user.getId());
         var project = projectQueryService.getProject(projectId, user.getId());
-        var latestAnalysis = analysisRepository.findLatestByProjectId(projectId);
+        var latestAnalysis = analysisApplicationService.getLatestAnalysis(projectId);
 
         if (latestAnalysis.isEmpty() || latestAnalysis.get().getLastCommitSha() == null) {
             return ResponseEntity.ok(Map.of("isOutdated", false, "reason", "no_data"));
@@ -143,7 +143,7 @@ public class ProjectController {
             return ResponseEntity.ok(Map.of("isOutdated", false, "reason", "not_set"));
         }
 
-        var latestAnalysis = analysisRepository.findLatestByProjectIdAndBranch(projectId, primaryBranch);
+        var latestAnalysis = analysisApplicationService.getLatestAnalysisByBranch(projectId, primaryBranch);
         if (latestAnalysis.isEmpty() || latestAnalysis.get().getLastCommitSha() == null) {
             return ResponseEntity.ok(Map.of("isOutdated", false, "reason", "no_data", "branch", primaryBranch));
         }

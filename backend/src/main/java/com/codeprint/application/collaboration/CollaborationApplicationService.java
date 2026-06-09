@@ -1,10 +1,9 @@
 // 협업 세션 생성·참가·조회 유스케이스
 package com.codeprint.application.collaboration;
 
+import com.codeprint.application.user.UserQueryService;
 import com.codeprint.domain.collaboration.CollaborationSession;
 import com.codeprint.domain.collaboration.CollaborationSessionRepository;
-import com.codeprint.domain.user.User;
-import com.codeprint.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,7 +18,7 @@ import java.util.UUID;
 public class CollaborationApplicationService {
 
     private final CollaborationSessionRepository sessionRepository;
-    private final UserRepository userJpaRepository;
+    private final UserQueryService userQueryService;
 
     private static final String CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -63,8 +62,7 @@ public class CollaborationApplicationService {
 
         List<Map<String, String>> participants = session.getParticipants().stream()
                 .map(p -> {
-                    String username = userJpaRepository.findById(p.getUserId())
-                            .map(User::getUsername).orElse("알 수 없음");
+                    String username = userQueryService.findUsernameById(p.getUserId());
                     return Map.of("userId", p.getUserId().toString(), "username", username);
                 })
                 .toList();

@@ -47,7 +47,7 @@ public class User {
     private Instant updatedAt;
 
     @Convert(converter = AesEncryptionConverter.class)
-    @Column(name = "github_access_token", length = 500)
+    @Column(name = "github_access_token_encrypted", length = 500)
     private String githubAccessToken;
 
     // GitHub 사용자 정보로 새 User 인스턴스 생성

@@ -30,7 +30,7 @@ public class DonationController {
     public ResponseEntity<Map<String, String>> confirm(
             @AuthenticationPrincipal User user,
             @Valid @RequestBody ConfirmRequest request) {
-        donationApplicationService.confirm(user, request.paymentKey(), request.orderId(), request.amount());
+        donationApplicationService.confirm(user.getId(), user.getUsername(), request.paymentKey(), request.orderId(), request.amount());
         return ResponseEntity.ok(Map.of("message", "후원 감사합니다!"));
     }
 

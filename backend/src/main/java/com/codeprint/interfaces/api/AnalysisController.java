@@ -26,8 +26,10 @@ public class AnalysisController {
     public ResponseEntity<Map<String, Object>> startAnalysis(
             @RequestBody StartAnalysisRequest request,
             @AuthenticationPrincipal User user) {
-        projectQueryService.getProject(request.projectId(), user.getId());
-        AnalysisResult result = analysisApplicationService.startAnalysis(request.projectId(), request.branch());
+        var project = projectQueryService.getProject(request.projectId(), user.getId());
+        AnalysisResult result = analysisApplicationService.startAnalysis(
+                request.projectId(), request.branch(),
+                project.getGithubRepoUrl(), user.getGithubAccessToken());
         return ResponseEntity.status(202).body(Map.of(
                 "analysisId", result.getId(),
                 "status", result.getStatus(),

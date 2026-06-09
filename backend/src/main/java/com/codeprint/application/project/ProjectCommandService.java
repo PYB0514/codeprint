@@ -4,8 +4,6 @@ package com.codeprint.application.project;
 import com.codeprint.domain.project.Project;
 import com.codeprint.domain.project.ProjectLimit;
 import com.codeprint.domain.project.ProjectRepository;
-import com.codeprint.domain.user.User;
-import com.codeprint.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,21 +20,17 @@ public class ProjectCommandService {
             Pattern.compile("^https://github\\.com/[\\w.-]+/[\\w.-]+/?$");
 
     private final ProjectRepository projectRepository;
-    private final UserRepository userRepository;
 
-    // URL 유효성 및 플랜 제한 검사 후 프로젝트 생성
-    public Project createProject(UUID userId, String githubRepoUrl, String name, String description) {
+    // URL 유효성 및 플랜 제한 검사 후 프로젝트 생성 (maxProjects는 컨트롤러에서 전달)
+    public Project createProject(UUID userId, String githubRepoUrl, String name, String description, int maxProjects) {
         if (!GITHUB_URL_PATTERN.matcher(githubRepoUrl).matches()) {
             throw new IllegalArgumentException("Invalid GitHub repository URL: " + githubRepoUrl);
         }
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
-
-        ProjectLimit limit = ProjectLimit.of(user.getPlan().maxProjects());
+        ProjectLimit limit = ProjectLimit.of(maxProjects);
         int currentCount = projectRepository.countByUserId(userId);
         if (limit.isExceeded(currentCount)) {
-            throw new IllegalStateException("Project limit reached for plan: " + user.getPlan());
+            throw new IllegalStateException("Project limit reached: max=" + maxProjects + ", current=" + currentCount);
         }
 
         Project project = Project.create(userId, githubRepoUrl, name, description);
