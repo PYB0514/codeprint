@@ -515,7 +515,7 @@ function GraphPageInner() {
   const { state: collabState, publishCursor, publishSelection } = useCollaboration(collabSessionId, currentUserId)
 
   // 런타임 경고 상태
-  const [warnings, setWarnings] = useState<{ type: string; nodeIds: string[]; message: string }[]>([])
+  const [warnings, setWarnings] = useState<{ type: string; nodeIds: string[]; edgeIds?: string[]; message: string }[]>([])
   // publishCursorRef를 항상 최신 publishCursor로 유지
   publishCursorRef.current = publishCursor
 
@@ -750,7 +750,7 @@ function GraphPageInner() {
   const fetchGraph = useCallback(async () => {
     try {
       const res = await axios.get(`/api/projects/${projectId}/graph`, { headers: authHeaders() })
-      const { graphId: gid, nodes: rn, edges: re, warnings: w } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; message: string }[] }
+      const { graphId: gid, nodes: rn, edges: re, warnings: w } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; edgeIds?: string[]; message: string }[] }
       setGraphId(gid)
       const warningList = w ?? []
       setWarnings(warningList)
@@ -758,11 +758,16 @@ function GraphPageInner() {
       setRawNodes(rn)
       setRawEdgesCache(re)
       const warnIds = new Set(warningList.flatMap(x => x.nodeIds))
+      const warnEdgeIds = new Set(warningList.flatMap(x => x.edgeIds ?? []))
       const styledNodes = layoutNodes.map(n =>
         warnIds.has(n.id) ? { ...n, style: { ...((n.style as object) ?? {}), outline: '2px solid #eab308', outlineOffset: '2px' } } : n
       )
+      const baseEdges = layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i)
+      const styledEdges = baseEdges.map(e =>
+        warnEdgeIds.has(e.id) ? { ...e, style: { ...((e.style as object) ?? {}), stroke: '#eab308', strokeWidth: 2 }, animated: true } : e
+      )
       setNodes(styledNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
-      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), false, false, false, true, false, true))
+      setEdges(applyEdgeVisibility(styledEdges, false, false, false, true, false, true))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,

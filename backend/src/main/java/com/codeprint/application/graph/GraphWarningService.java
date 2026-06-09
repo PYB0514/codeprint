@@ -30,6 +30,8 @@ public class GraphWarningService {
     private List<Map<String, Object>> detectCyclicImports(List<Node> nodes, List<Edge> edges) {
         Map<UUID, Set<UUID>> adj = new HashMap<>();
         Map<UUID, String> nameMap = new HashMap<>();
+        // (src, tgt) → edgeId 역인덱스 — 사이클 엣지 ID 수집용
+        Map<String, String> importEdgeIds = new HashMap<>();
 
         for (Node n : nodes) {
             if (n.getType() == NodeType.FILE) {
@@ -40,6 +42,7 @@ public class GraphWarningService {
         for (Edge e : edges) {
             if (e.getType() == EdgeType.IMPORT && adj.containsKey(e.getSourceNodeId())) {
                 adj.get(e.getSourceNodeId()).add(e.getTargetNodeId());
+                importEdgeIds.put(e.getSourceNodeId() + ">" + e.getTargetNodeId(), e.getId().toString());
             }
         }
 
@@ -59,9 +62,18 @@ public class GraphWarningService {
             List<String> names = cycle.stream()
                     .map(id -> nameMap.getOrDefault(id, id.toString()))
                     .toList();
+            // 사이클을 형성하는 IMPORT 엣지 ID 수집
+            List<String> edgeIds = new ArrayList<>();
+            int sz = cycle.size();
+            for (int i = 0; i < sz; i++) {
+                String key = cycle.get(i) + ">" + cycle.get((i + 1) % sz);
+                String eid = importEdgeIds.get(key);
+                if (eid != null) edgeIds.add(eid);
+            }
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "CYCLIC_IMPORT");
             w.put("nodeIds", cycle.stream().map(UUID::toString).toList());
+            w.put("edgeIds", edgeIds);
             w.put("message", "순환 의존: " + String.join(" → ", names));
             warnings.add(w);
         }
@@ -122,6 +134,7 @@ public class GraphWarningService {
                 Map<String, Object> w = new LinkedHashMap<>();
                 w.put("type", "BROKEN_INTERFACE_CHAIN");
                 w.put("nodeIds", List.of(n.getId().toString()));
+                w.put("edgeIds", List.of());
                 w.put("message", "인터페이스 체인 끊김: " + n.getName() + " — 구현체 메서드로 가는 엣지 없음");
                 warnings.add(w);
             }
@@ -161,6 +174,7 @@ public class GraphWarningService {
                 Map<String, Object> w = new LinkedHashMap<>();
                 w.put("type", "ASYNC_SELF_CALL");
                 w.put("nodeIds", List.of(source.toString(), target.toString()));
+                w.put("edgeIds", List.of(e.getId().toString()));
                 w.put("message", "@Async 자기 호출: " + nameMap.getOrDefault(source, source.toString())
                         + " → " + nameMap.getOrDefault(target, target.toString())
                         + " (프록시 우회로 비동기 무시됨)");
@@ -197,6 +211,7 @@ public class GraphWarningService {
                 Map<String, Object> w = new LinkedHashMap<>();
                 w.put("type", "DB_LAYER_BYPASS");
                 w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
+                w.put("edgeIds", List.of(e.getId().toString()));
                 w.put("message", "DB 레이어 우회: " + nameMap.getOrDefault(e.getSourceNodeId(), srcPath)
                         + " → " + nameMap.getOrDefault(e.getTargetNodeId(), tgtPath)
                         + " (domain Repository를 거치지 않는 직접 persistence 호출)");
@@ -228,6 +243,7 @@ public class GraphWarningService {
                 Map<String, Object> w = new LinkedHashMap<>();
                 w.put("type", "CROSS_CONTEXT_IMPORT");
                 w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
+                w.put("edgeIds", List.of(e.getId().toString()));
                 w.put("message", "DDD 컨텍스트 경계 위반: application/" + srcContext + " → domain/" + tgtContext
                         + " 직접 참조 (ID로만 참조해야 함)");
                 warnings.add(w);
@@ -266,6 +282,7 @@ public class GraphWarningService {
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "MISSING_CONVERTER_MIGRATION");
             w.put("nodeIds", List.of(n.getId().toString()));
+            w.put("edgeIds", List.of());
             w.put("message", "@Convert 컨버터 감지: " + n.getName()
                     + " — 기존 평문 데이터에 대한 Flyway 마이그레이션이 필요합니다");
             warnings.add(w);
