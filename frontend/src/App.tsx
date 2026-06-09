@@ -22,6 +22,7 @@ import SettingsPage from './pages/SettingsPage'
 import DonatePage from './pages/DonatePage'
 import DonateSuccessPage from './pages/DonateSuccessPage'
 import DonateFailPage from './pages/DonateFailPage'
+import JoinCollaborationPage from './pages/JoinCollaborationPage'
 import CookieBanner from './components/CookieBanner'
 import NoticeBanner from './components/NoticeBanner'
 
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/donate" element={<DonatePage />} />
         <Route path="/donate/success" element={<DonateSuccessPage />} />
         <Route path="/donate/fail" element={<DonateFailPage />} />
+        <Route path="/collab/join" element={<JoinCollaborationPage />} />
       </Routes>
       <NoticeBanner />
       <CookieBanner />
