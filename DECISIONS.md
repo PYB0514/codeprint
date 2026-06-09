@@ -4,6 +4,16 @@
 
 ---
 
+## v0.27.0 — Stripe → 토스페이먼츠 교체
+
+**문제.** Stripe는 한국 서비스에서 결제 UX가 불편하고 한국 간편결제(토스, 카카오페이 등)를 지원하지 않음.
+
+**이유.** 토스페이먼츠는 국내 주요 결제 수단을 모두 지원하며, 이미 DonatePage에서 동일 SDK를 사용 중이어서 추가 의존성 없음. 테스트 키도 이미 application-local.yml에 존재.
+
+**결과.** `StripePaymentService`, `StripeEventRepository`, 관련 인프라 파일 삭제. `stripe-java` 의존성 제거. `TossPaymentOrder` 도메인 모델 + `toss_payment_orders` 테이블(Flyway V20) 신규 추가. `PaymentController`를 `/toss/prepare` + `/toss/confirm` 구조로 교체. Pro 플랜 금액 9,900원.
+
+---
+
 ## v1.33.001 — Railway 배포 분석 실패 (git 미설치)
 
 **문제.** 배포 환경에서 "분석 실패. 다시 시도해주세요." 오류 발생.
