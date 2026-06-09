@@ -46,10 +46,10 @@ public class GraphViewPresetController {
         // 슬롯 1~4 기본값 채움
         List<Map<String, Object>> result = new java.util.ArrayList<>();
         String[][] defaults = {
-            {"계층-이름", "layer", "name"},
-            {"계층-주석", "layer", "comment"},
-            {"허브-이름",  "hub",   "name"},
-            {"허브-주석",  "hub",   "comment"},
+            {"계층-이름",   "layer",  "name"},
+            {"계층-주석",   "layer",  "comment"},
+            {"도메인-이름", "domain", "name"},
+            {"도메인-주석", "domain", "comment"},
         };
         for (int slot = 1; slot <= 4; slot++) {
             if (bySlot.containsKey(slot)) {
