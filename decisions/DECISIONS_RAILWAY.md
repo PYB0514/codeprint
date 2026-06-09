@@ -134,6 +134,16 @@ server:
 
 ---
 
+## 배포 환경 git 미설치 — 분석 실패 (v1.33.001)
+
+**문제.** 배포 환경에서 "분석 실패. 다시 시도해주세요." 오류 발생.
+
+**원인.** `eclipse-temurin:21-jre` 베이스 이미지에 git이 포함되어 있지 않음. `RepoCloner.clone()`이 `ProcessBuilder`로 `git clone`을 실행하는데, git 바이너리가 없어 즉시 실패. AnalysisRunner catch 블록에서 FAILED 상태로 저장됨.
+
+**결과.** Dockerfile 런타임 스테이지에 `apt-get install -y --no-install-recommends git` 추가. Railway 재배포 후 해결.
+
+---
+
 ## 최종 환경변수 구성 (검증 완료)
 
 | 변수명 | 값 | 비고 |

@@ -412,9 +412,9 @@ Define success criteria. Loop until verified.
 - **같은 클래스/함수에서 버그가 2회 이상 발생했다면 → 즉시 테스트 코드 작성. 선택이 아닌 의무.**
 
 **ERROR_TRACKER.md 운용 규칙 — 반복 버그 포착의 유일한 수단**
-- 런타임 에러가 처음 발생하면 종류 불문(500, NPE, 마이그레이션 실패, 컴파일 에러 등) **즉시 ERROR_TRACKER.md에 기록**. 기록 없이는 두 번째 발생 여부를 알 수 없다.
-- 에러를 고쳤다고 기록을 건너뛰지 않는다. 수정 여부와 무관하게 첫 발생 시 반드시 기록.
-- 버그 수정 전에 ERROR_TRACKER.md를 먼저 확인 — 이미 기록된 항목이면 두 번째 발생이므로 회귀 테스트 작성 의무.
+- **오류 발생 시 가장 먼저 ERROR_TRACKER.md를 확인한다.** 이미 기록된 항목이면 두 번째 발생 → 회귀 테스트 작성 의무. 확인 전에 바로 수정에 들어가지 않는다.
+- 처음 발생한 오류면 종류 불문(500, NPE, 마이그레이션 실패, 컴파일 에러 등) **즉시 ERROR_TRACKER.md에 기록**. 수정 여부와 무관하게 기록한다.
+- 기록 없이는 두 번째 발생 여부를 알 수 없다. 고쳤다고 기록을 건너뛰지 않는다.
 
 TDD 대상 클래스 예시: `ProjectDomainService`, `GraphBuilder`, `AnalysisService`, `StripeWebhookHandler`
 
