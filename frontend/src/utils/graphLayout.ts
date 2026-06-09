@@ -176,7 +176,7 @@ const DOMAIN_COLORS: Record<string, { color: string; opaqueColor: string }> = {
   common:        { color: '#6b7280', opaqueColor: 'rgba(20,20,20,0.98)' },
 }
 
-// 도메인 뷰 — 바운디드 컨텍스트별로 그룹을 묶어 2열 그리드로 배치
+// 도메인 뷰 — 바운디드 컨텍스트별로 그룹을 묶어 1열 우측정렬로 배치 (DB 섹션이 우측에 붙도록)
 function buildDomainPositions(
   groups: Map<string, RawNode[]>,
   groupLayouts: Map<string, { files: Array<{ file: RawNode; x: number; y: number }>; w: number; h: number }>,
@@ -188,7 +188,6 @@ function buildDomainPositions(
   const GROUP_GAP = 24
   const DOMAIN_PAD = 20
   const DOMAIN_LABEL_H = 28
-  const DOMAIN_COL_GAP = 48
   const DOMAIN_ROW_GAP = 48
 
   // 그룹 → 도메인 매핑 (그룹에 속한 첫 번째 파일의 경로로 판단)
@@ -209,7 +208,6 @@ function buildDomainPositions(
   // 도메인 내부: 그룹들을 LAYER_COLUMN 순서로 가로 정렬
   const domainInternalLayouts = new Map<string, { w: number; h: number; groupOffsets: Map<string, { x: number; y: number }> }>()
   domainGroups.forEach((keys, _domain) => {
-    // 레이어 컬럼 순으로 정렬
     const sorted = [...keys].sort((a, b) => {
       const layerA = a.indexOf('/') >= 0 ? a.slice(0, a.indexOf('/')) : a
       const layerB = b.indexOf('/') >= 0 ? b.slice(0, b.indexOf('/')) : b
@@ -230,40 +228,33 @@ function buildDomainPositions(
     domainInternalLayouts.set(_domain, { w: totalW, h: totalH, groupOffsets: offsets })
   })
 
-  // 도메인 박스를 2열 그리드로 배치 (정의 순서 + common 마지막)
+  // 도메인 박스를 1열로 배치 — 오른쪽 끝을 맞춰 우측정렬 (DB 섹션에 최대한 가깝게)
   const domainOrder = [...DOMAIN_SUBS, 'common'].filter((d) => domainGroups.has(d))
-  const COLS = 2
-  const colW = new Array(COLS).fill(0)
-  const rowH: number[] = []
 
-  domainOrder.forEach((d, idx) => {
-    const col = idx % COLS
-    const row = Math.floor(idx / COLS)
+  // 전체 최대 너비 계산 (우측 정렬 기준선)
+  let maxDomainW = 0
+  domainOrder.forEach((d) => {
     const layout = domainInternalLayouts.get(d)!
-    colW[col] = Math.max(colW[col], layout.w)
-    if (rowH.length <= row) rowH.push(0)
-    rowH[row] = Math.max(rowH[row], layout.h)
+    maxDomainW = Math.max(maxDomainW, layout.w)
   })
-
-  const colStartX = [0, colW[0] + DOMAIN_COL_GAP]
-  const rowStartY: number[] = [0]
-  for (let r = 1; r < rowH.length; r++) rowStartY.push(rowStartY[r - 1] + rowH[r - 1] + DOMAIN_ROW_GAP)
 
   const domainBounds = new Map<string, { x: number; y: number; w: number; h: number; domain: string }>()
   const groupPositions = new Map<string, { x: number; y: number }>()
 
-  domainOrder.forEach((d, idx) => {
-    const col = idx % COLS
-    const row = Math.floor(idx / COLS)
+  let curY = 0
+  domainOrder.forEach((d) => {
     const layout = domainInternalLayouts.get(d)!
-    const dx = colStartX[col]
-    const dy = rowStartY[row]
+    // 우측정렬: 오른쪽 끝을 maxDomainW에 맞춤
+    const dx = maxDomainW - layout.w
+    const dy = curY
 
     domainBounds.set(d, { x: dx, y: dy, w: layout.w, h: layout.h, domain: d })
 
     layout.groupOffsets.forEach((off, key) => {
       groupPositions.set(key, { x: dx + off.x, y: dy + off.y })
     })
+
+    curY += layout.h + DOMAIN_ROW_GAP
   })
 
   return { positions: groupPositions, domainBounds }
