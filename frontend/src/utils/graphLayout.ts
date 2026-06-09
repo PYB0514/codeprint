@@ -111,11 +111,11 @@ const DOMAIN_SUBS = ['project', 'user', 'graph', 'analysis', 'community', 'ai', 
 
 // 파일명 키워드 → 도메인 매핑 (경로에서 도메인을 찾지 못할 때 사용)
 const FILENAME_DOMAIN_MAP: Array<[string[], string]> = [
-  [['dashboard', 'projectcard', 'createproject', 'project'], 'project'],
-  [['login', 'auth', 'oauth', 'jwt', 'authcallback', 'user', 'settings', 'profile'], 'user'],
-  [['graph', 'node', 'edge', 'layout', 'flow', 'share', 'diff', 'groupnode', 'filenode', 'sectionnode'], 'graph'],
+  [['dashboard', 'projectcard', 'createproject', 'project', 'landing'], 'project'],
+  [['login', 'auth', 'oauth', 'jwt', 'authcallback', 'user', 'settings', 'profile', 'onboard'], 'user'],
+  [['graph', 'node', 'edge', 'layout', 'flow', 'share', 'diff', 'groupnode', 'filenode', 'sectionnode', 'warning', 'preset'], 'graph'],
   [['analysis', 'analyz', 'analyzer', 'cloner', 'walker', 'parser', 'treesitter', 'staticcode', 'graphbuilder'], 'analysis'],
-  [['community', 'post', 'comment', 'board', 'bookmark'], 'community'],
+  [['community', 'post', 'comment', 'board', 'bookmark', 'attachment'], 'community'],
   [['ai', 'openai', 'claude', 'anthropic', 'gemini', 'llm', 'apikey'], 'ai'],
   [['notice', 'announcement', 'noticebanner'], 'notice'],
   [['payment', 'stripe', 'pay', 'donate', 'donat'], 'donation'],
