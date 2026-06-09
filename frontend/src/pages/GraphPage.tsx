@@ -58,6 +58,7 @@ type SidebarContent =
   | { kind: 'db-table'; tableName: string; nodeId: string; columns: ColumnInfo[]; repos: { name: string; id: string; crudTypes: string[] }[] }
   | { kind: 'db-edge'; crudType: string; repoFile: string; repoFileNodeId: string; tableName: string; tableNodeId: string; flowChain: FlowStep[] }
   | { kind: 'api-call'; frontFile: string; frontFileNodeId: string; ctrlFile: string; ctrlFileNodeId: string; flowChain: FlowStep[] }
+  | { kind: 'warning'; nodeName: string; nodeWarnings: { type: string; message: string }[] }
 
 // DB 엣지 타입 판별 — 신규 CRUD 타입 + 레거시 DB_WRITE 포함
 const DB_EDGE_TYPES = new Set(['DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE'])
@@ -1331,6 +1332,14 @@ function GraphPageInner() {
       return
     }
 
+    // 경고가 있는 노드 클릭 — 우측 사이드바에 경고 상세 표시 (다른 사이드바보다 우선)
+    const nodeWarnings = warnings.filter(w => w.nodeIds.includes(node.id))
+    if (nodeWarnings.length > 0) {
+      const rawNode = rawNodes.find(n => n.id === node.id)
+      setSidebar({ kind: 'warning', nodeName: rawNode?.name ?? node.id, nodeWarnings })
+      setRightCollapsed(false)
+    }
+
     // DB_TABLE 노드 클릭 — 칼럼 목록 + 연결된 Repository 표시 + 흐름 재생
     const rawTable = rawNodes.find((n) => n.id === node.id && n.type === 'DB_TABLE')
     if (rawTable) {
@@ -1757,6 +1766,7 @@ function GraphPageInner() {
                   : sidebar.kind === 'db-table' ? 'DB 테이블'
                   : sidebar.kind === 'db-edge' ? 'DB 연결'
                   : sidebar.kind === 'api-call' ? 'API 호출'
+                  : sidebar.kind === 'warning' ? '⚠️ 경고 상세'
                   : '인스턴스화'}
               </span>
               {sidebar && <button onClick={() => setSidebar(null)} className="text-gray-600 hover:text-white text-sm">✕</button>}
@@ -2190,6 +2200,30 @@ function GraphPageInner() {
                     <FlowChainSection steps={sidebar.flowChain} edgeColor="#e879f9"
                       onNav={(id) => { openFuncNode(id); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                     />
+                  </div>
+                )}
+
+                {/* ── 경고 노드 클릭 — 해당 노드의 경고 상세 표시 ── */}
+                {sidebar?.kind === 'warning' && (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-yellow-400 font-semibold text-sm">{sidebar.nodeName}</span>
+                      <span className="text-xs text-gray-500">{sidebar.nodeWarnings.length}개 경고</span>
+                    </div>
+                    {sidebar.nodeWarnings.map((w, i) => {
+                      const WARNING_COLORS: Record<string, string> = {
+                        CYCLIC_IMPORT: '#f97316', BROKEN_INTERFACE_CHAIN: '#ef4444',
+                        ASYNC_SELF_CALL: '#eab308', DB_LAYER_BYPASS: '#8b5cf6',
+                        CROSS_CONTEXT_IMPORT: '#06b6d4', MISSING_CONVERTER_MIGRATION: '#ec4899',
+                      }
+                      const color = WARNING_COLORS[w.type] ?? '#eab308'
+                      return (
+                        <div key={i} className="rounded-lg p-3 flex flex-col gap-1.5" style={{ background: color + '12', border: `1px solid ${color}40` }}>
+                          <span className="text-xs font-semibold" style={{ color }}>{w.type.replace(/_/g, ' ')}</span>
+                          <span className="text-xs text-gray-300 leading-snug">{w.message}</span>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
 
