@@ -4,13 +4,22 @@
 
 ---
 
-## v0.15.5 — 로그아웃 쿠키 미삭제 버그 수정
+## v0.15.5 — 로그아웃 3중 버그 수정 (쿠키 origin 불일치 + 이중 쿠키 + 세션 유지)
 
-**문제.** 로그아웃 버튼 클릭 후 새로고침 시 로그인 상태가 유지됨. POST `/api/auth/logout` 호출은 204를 반환하지만 직후 `/api/auth/me` 가 200을 반환 — 쿠키가 실제로 삭제되지 않음.
+**문제.** 로그아웃 버튼 클릭 후 새로고침 시 로그인 상태가 유지됨. 원인이 3개 레이어에 걸쳐 있었음.
 
-**이유.** OAuth 로그인 시 쿠키는 브라우저가 `localhost:8080`에 직접 접속하면서 발급됨(백엔드 직접 Set-Cookie). 로그아웃 요청은 Vite 프록시(`localhost:3000`)를 거쳐서 백엔드로 전달되고, 응답의 Set-Cookie(Max-Age=0)가 `localhost:3000` origin으로 내려옴. 로그인 쿠키(`:8080`)와 삭제 명령(`:3000`)의 origin이 달라 브라우저가 삭제 처리를 하지 않음.
+**이유.**
 
-**결과.** `GET /api/auth/logout-redirect` 엔드포인트 추가 — 브라우저가 직접 `localhost:8080`에 GET 요청 → 쿠키 만료 Set-Cookie → `frontendUrl`로 리다이렉트. 프론트 `handleLogout`은 `window.location.href = backendUrl/api/auth/logout-redirect`로 변경해 프록시를 완전히 우회.
+1. **Vite 프록시 쿠키 origin 불일치**: OAuth 로그인은 브라우저가 `localhost:8080`에 직접 접속해 JWT 쿠키 수신. 기존 로그아웃은 Vite 프록시(`localhost:3000`)를 통해 `Set-Cookie: Max-Age=0`을 수신. 브라우저는 발급 origin(`:8080`)과 삭제 명령 origin(`:3000`)이 다르면 삭제를 무시함.
+
+2. **이중 쿠키**: Vite 프록시가 백엔드 응답의 `Set-Cookie`를 통과시키면서 `:3000` origin 쿠키도 생성됨. `:8080` 쿠키를 지워도 `:3000` 쿠키가 살아남아 인증 통과.
+
+3. **Spring Security 세션 유지**: `SessionCreationPolicy.IF_REQUIRED` 설정으로 OAuth 로그인 시 서버 세션 생성됨. JWT 쿠키와 origin 쿠키를 모두 지워도 JSESSIONID로 세션 인증이 통과됨.
+
+**결과.** 세 가지를 모두 처리해야 완전한 로그아웃:
+- `POST /api/auth/logout` (프록시): `:3000` 쿠키 제거 + 세션 무효화
+- `GET /api/auth/logout-redirect` (직접): `:8080` 쿠키 제거 + 세션 무효화 + 프론트로 리다이렉트
+- 프론트 `handleLogout`: 두 엔드포인트를 순서대로 호출 (`axios.post` → `window.location.href`)
 
 ---
 
