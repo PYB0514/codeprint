@@ -11,6 +11,18 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.31.0',
+    date: '2026-06-10',
+    title: '흐름 재생 패널 재설계 — DDD 레이어 진행 바 + 스텝 카드',
+    type: 'feature',
+    items: [
+      { category: '그래프', desc: 'DDD 레이어 진행 바: API→App→Domain→Infra 현재 위치 실시간 강조' },
+      { category: '그래프', desc: '현재 스텝 카드: 함수 이름/주석, 파일 경로, 레이어 뱃지, via edge type 표시' },
+      { category: '그래프', desc: '분기 선택 버튼: 현재 노드에서 여러 경로가 갈릴 때 클릭 가능한 버튼으로 표시' },
+      { category: '그래프', desc: '호출 트리 접힘 처리(details)로 패널 공간 절약' },
+    ],
+  },
+  {
     version: 'v0.28.0',
     date: '2026-06-10',
     title: 'JWT HttpOnly 쿠키 전환 — XSS 보안 강화',
