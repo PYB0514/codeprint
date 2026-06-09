@@ -475,6 +475,7 @@ function GraphPageInner() {
   const [versions, setVersions] = useState<{ graphId: string; createdAt: string; branch: string }[]>([])
   const [loadingVersions, setLoadingVersions] = useState(false)
   const [outdated, setOutdated] = useState<{ branch: string; lastAnalyzedAt: string } | null>(null)
+  const [reanalyzing, setReanalyzing] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareTitle, setShareTitle] = useState('')
   const [shareContent, setShareContent] = useState('')
@@ -839,6 +840,33 @@ function GraphPageInner() {
         .catch(() => {})
     })
   }, [fetchGraph, projectId])
+
+  // 배너에서 바로 재분석 시작 — 완료 후 그래프 새로고침
+  const handleReanalyzeNow = async () => {
+    if (!outdated || reanalyzing) return
+    setReanalyzing(true)
+    try {
+      const res = await axios.post<{ analysisId: string }>(
+        '/api/analyses',
+        { projectId, branch: outdated.branch },
+        { headers: authHeaders() }
+      )
+      const analysisId = res.data.analysisId
+      const poll = setInterval(async () => {
+        try {
+          const s = await axios.get<{ status: string }>(`/api/analyses/${analysisId}`, { headers: authHeaders() })
+          if (s.data.status === 'COMPLETED' || s.data.status === 'FAILED') {
+            clearInterval(poll)
+            setReanalyzing(false)
+            setOutdated(null)
+            if (s.data.status === 'COMPLETED') fetchGraph()
+          }
+        } catch { clearInterval(poll); setReanalyzing(false) }
+      }, 2000)
+    } catch {
+      setReanalyzing(false)
+    }
+  }
 
   // 현재 그래프에서 그룹 키 목록 추출
   const availableGroups = (() => {
@@ -1536,10 +1564,11 @@ function GraphPageInner() {
           </span>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate(`/dashboard`)}
-              className="underline hover:text-yellow-100"
+              onClick={handleReanalyzeNow}
+              disabled={reanalyzing}
+              className="px-2 py-0.5 rounded bg-yellow-700/60 hover:bg-yellow-600/80 disabled:opacity-50 text-yellow-100 font-medium"
             >
-              재분석하기
+              {reanalyzing ? '분석 중...' : '지금 재분석'}
             </button>
             <button onClick={() => setOutdated(null)} className="text-yellow-500 hover:text-yellow-200">✕</button>
           </div>
