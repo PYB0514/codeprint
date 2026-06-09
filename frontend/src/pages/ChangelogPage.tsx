@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.22.0',
+    date: '2026-06-09',
+    title: '검색 하이라이트 — 일치 노드 강조',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '검색어 입력 시 일치 노드만 선명하게, 나머지 노드는 반투명 처리' },
+      { category: '프론트', desc: '검색 지우면 전체 그래프 원복 — 빠른 위치 파악에 유용' },
+    ],
+  },
+  {
     version: 'v0.21.0',
     date: '2026-06-09',
     title: '노드 타입 가시성 필터',

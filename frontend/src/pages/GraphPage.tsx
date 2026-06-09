@@ -1140,6 +1140,24 @@ function GraphPageInner() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [fitView, toggleLabelMode])
 
+  // 검색어가 있으면 일치 노드 강조, 나머지 반투명 처리
+  useEffect(() => {
+    const q = nodeSearchQuery.trim().toLowerCase()
+    if (!q) {
+      setNodes(nds => nds.map(n => ({ ...n, style: { ...(n.style as object ?? {}), opacity: undefined } })))
+      return
+    }
+    const matchIds = new Set(
+      rawNodes
+        .filter(n => n.name.toLowerCase().includes(q) || (n.comment ?? '').toLowerCase().includes(q))
+        .map(n => n.id)
+    )
+    setNodes(nds => nds.map(n => ({
+      ...n,
+      style: { ...(n.style as object ?? {}), opacity: matchIds.has(n.id) ? 1 : 0.1 },
+    })))
+  }, [nodeSearchQuery, rawNodes, setNodes])
+
   // 전체 그래프를 원본 크기 PNG로 다운로드
   const handleExportImage = useCallback(async () => {
     const flowEl = flowRef.current?.querySelector('.react-flow__viewport') as HTMLElement | null
