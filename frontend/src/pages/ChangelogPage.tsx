@@ -11,6 +11,18 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.10.0',
+    date: '2026-06-09',
+    title: '런타임 경고 감지',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: '순환 의존 감지 — IMPORT 엣지 DFS 탐지, 사이클 발견 시 경고 생성' },
+      { category: '백엔드', desc: '인터페이스 체인 끊김 감지 — 인터페이스 메서드에 구현체 엣지 없으면 경고' },
+      { category: '프론트', desc: '경고 노드 황색 테두리 — 문제 있는 파일/함수 즉시 식별' },
+      { category: '프론트', desc: '경고 패널 — 좌측 사이드바에 경고 목록 표시 (경고 있을 때만 노출)' },
+    ],
+  },
+  {
     version: 'v0.9.0',
     date: '2026-06-09',
     title: '실시간 협업',
