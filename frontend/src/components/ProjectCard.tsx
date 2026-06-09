@@ -20,12 +20,6 @@ interface Props {
   onVisibilityChange: (id: string, isPublic: boolean) => void
 }
 
-// JWT 토큰을 Authorization 헤더로 반환
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return { Authorization: `Bearer ${token}` }
-}
-
 // 프로젝트 카드 — 분석 시작/재분석, 진행률 표시, 그래프 이동
 export default function ProjectCard({ project, onDelete, onVisibilityChange }: Props) {
   const navigate = useNavigate()
@@ -56,11 +50,11 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
 
   useEffect(() => {
     axios
-      .get(`/api/projects/${project.id}/graph`, { headers: authHeaders() })
+      .get(`/api/projects/${project.id}/graph`)
       .then(() => {
         setHasGraph(true)
         // 마지막 분석 기준 freshness
-        axios.get(`/api/projects/${project.id}/freshness`, { headers: authHeaders() })
+        axios.get(`/api/projects/${project.id}/freshness`)
           .then(res => {
             if (!res.data.reason) {
               setFreshnessStatus(res.data.isOutdated ? 'outdated' : 'latest')
@@ -75,7 +69,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
   // primary branch freshness 별도 조회 (hasGraph 확인 후 실행)
   useEffect(() => {
     if (!primaryBranch || !hasGraph) { setPrimaryFreshness(null); return }
-    axios.get(`/api/projects/${project.id}/primary-freshness`, { headers: authHeaders() })
+    axios.get(`/api/projects/${project.id}/primary-freshness`)
       .then(res => {
         if (!res.data.reason) {
           setPrimaryFreshness(res.data.isOutdated ? 'outdated' : 'latest')
@@ -120,8 +114,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
     const next = !project.isPublic
     await axios.patch(
       `/api/projects/${project.id}/visibility`,
-      { isPublic: next },
-      { headers: authHeaders() }
+      { isPublic: next }
     )
     onVisibilityChange(project.id, next)
   }
@@ -138,7 +131,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
   const loadBranches = async () => {
     setLoadingBranches(true)
     try {
-      const res = await axios.get(`/api/projects/${project.id}/branches`, { headers: authHeaders() })
+      const res = await axios.get(`/api/projects/${project.id}/branches`)
       const list: string[] = res.data
       if (list.length === 0) {
         // 빈 배열 응답 = 토큰 null 가능성이 높음
@@ -182,8 +175,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
     try {
       const res = await axios.post(
         '/api/analyses',
-        { projectId: project.id, branch: branch || null },
-        { headers: authHeaders() }
+        { projectId: project.id, branch: branch || null }
       )
       setAnalysisId(res.data.analysisId)
     } catch {
@@ -204,8 +196,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
     try {
       await axios.patch(
         `/api/projects/${project.id}/primary-branch`,
-        { branch },
-        { headers: authHeaders() }
+        { branch }
       )
       setPrimaryBranch(branch)
       setPrimaryFreshness(null)

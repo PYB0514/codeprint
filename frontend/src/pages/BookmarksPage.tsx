@@ -17,12 +17,6 @@ interface Post {
   bookmarkedByMe: boolean
 }
 
-// JWT 토큰을 Authorization 헤더로 반환
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
 const FEEDBACK_LABELS: Record<string, string> = {
   ARCHITECTURE_REVIEW: '아키텍처 리뷰',
   GENERAL: '일반',
@@ -36,13 +30,8 @@ export default function BookmarksPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('jwt')
-    if (!token) {
-      navigate('/login')
-      return
-    }
     axios
-      .get<Post[]>('/api/community/bookmarks', { headers: authHeaders() })
+      .get<Post[]>('/api/community/bookmarks')
       .then((res) => setPosts(res.data))
       .catch(() => navigate('/login'))
       .finally(() => setLoading(false))
@@ -50,7 +39,7 @@ export default function BookmarksPage() {
 
   // 북마크 취소
   const handleRemoveBookmark = async (postId: string) => {
-    await axios.delete(`/api/community/posts/${postId}/bookmark`, { headers: authHeaders() })
+    await axios.delete(`/api/community/posts/${postId}/bookmark`)
     setPosts((prev) => prev.filter((p) => p.id !== postId))
   }
 

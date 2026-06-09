@@ -25,49 +25,35 @@ interface Project {
   primaryBranch: string | null
 }
 
-// JWT 토큰을 Authorization 헤더로 반환
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return { Authorization: `Bearer ${token}` }
-}
-
 // 프로젝트 목록 대시보드 페이지
 export default function DashboardPage() {
   const navigate = useNavigate()
   const [user, setUser] = useState<UserInfo | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [showModal, setShowModal] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   // 사용자의 프로젝트 목록을 서버에서 불러와 상태에 저장
   const fetchProjects = useCallback(async () => {
-    const res = await axios.get<Project[]>('/api/projects', { headers: authHeaders() })
+    const res = await axios.get<Project[]>('/api/projects')
     setProjects(res.data)
   }, [])
 
   useEffect(() => {
-    const token = localStorage.getItem('jwt')
-    if (!token) {
-      navigate('/', { replace: true })
-      return
-    }
-
     axios
-      .get<UserInfo>('/api/auth/me', { headers: authHeaders() })
+      .get<UserInfo>('/api/auth/me')
       .then((res) => {
         setUser(res.data)
         return fetchProjects()
       })
       .catch(() => {
-        localStorage.removeItem('jwt')
-        setError('인증 만료. 다시 로그인해주세요.')
+        navigate('/', { replace: true })
       })
   }, [navigate, fetchProjects])
 
   // 확인 후 프로젝트를 삭제하고 목록에서 제거
   const handleDeleteProject = async (projectId: string) => {
     if (!confirm('프로젝트를 삭제할까요?')) return
-    await axios.delete(`/api/projects/${projectId}`, { headers: authHeaders() })
+    await axios.delete(`/api/projects/${projectId}`)
     setProjects((prev) => prev.filter((p) => p.id !== projectId))
   }
 
@@ -82,7 +68,7 @@ export default function DashboardPage() {
       const res = await axios.post<{
         orderId: string; amount: number; orderName: string
         customerName: string; customerKey: string; clientKey: string
-      }>('/api/payments/toss/prepare', {}, { headers: authHeaders() })
+      }>('/api/payments/toss/prepare', {})
 
       const { orderId, amount, orderName, customerName, customerKey, clientKey } = res.data
       const tossPayments = await loadTossPayments(clientKey)
@@ -99,17 +85,6 @@ export default function DashboardPage() {
     } catch {
       alert('결제 페이지 연결에 실패했습니다. 잠시 후 다시 시도해주세요.')
     }
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <p className="text-red-400">{error}</p>
-        <button onClick={() => navigate('/')} className="underline text-sm">
-          로그인 페이지로
-        </button>
-      </div>
-    )
   }
 
   if (!user) {

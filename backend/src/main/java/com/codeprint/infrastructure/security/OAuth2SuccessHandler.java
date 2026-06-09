@@ -1,8 +1,9 @@
-// GitHub OAuth2 로그인 성공 후 JWT를 발급하여 프론트로 리다이렉트하는 핸들러
+// GitHub OAuth2 로그인 성공 후 JWT를 HttpOnly 쿠키로 발급하는 핸들러
 package com.codeprint.infrastructure.security;
 
 import com.codeprint.application.user.UserCommandService;
 import com.codeprint.domain.user.User;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -62,8 +63,17 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String token = jwtTokenProvider.generateToken(user.getId(), user.getEmail(), user.getRole().name());
         log.info("OAuth2 login success: userId={}, username={}", user.getId(), username);
 
-        // 프론트엔드로 JWT 전달
-        getRedirectStrategy().sendRedirect(request, response,
-                frontendUrl + "/auth/callback?token=" + token);
+        // JWT를 HttpOnly 쿠키로 설정 — XSS로부터 토큰 보호
+        Cookie jwtCookie = new Cookie("jwt", token);
+        jwtCookie.setHttpOnly(true);
+        jwtCookie.setPath("/");
+        jwtCookie.setMaxAge(3600); // 1시간
+        // 운영 환경(HTTPS)에서는 Secure 플래그 활성화
+        boolean isSecure = !frontendUrl.startsWith("http://localhost");
+        jwtCookie.setSecure(isSecure);
+        response.addCookie(jwtCookie);
+
+        // 토큰 없이 대시보드로 직접 리다이렉트
+        getRedirectStrategy().sendRedirect(request, response, frontendUrl + "/dashboard");
     }
 }

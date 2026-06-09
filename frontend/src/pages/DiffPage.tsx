@@ -59,12 +59,6 @@ interface RawDiffEdge extends RawEdge {
   targetName: string
 }
 
-// JWT 토큰을 Authorization 헤더로 반환
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return { Authorization: `Bearer ${token}` }
-}
-
 // diff 상태에 따라 노드 스타일을 오버레이
 function applyDiffStyles(nodes: Node[], diffNodes: RawDiffNode[]): Node[] {
   const statusMap = new Map(diffNodes.map((n) => [n.id, n.status]))
@@ -119,7 +113,7 @@ function DiffPageInner() {
 
   // 버전 목록 로드
   useEffect(() => {
-    axios.get(`/api/projects/${projectId}/graphs`, { headers: authHeaders() })
+    axios.get(`/api/projects/${projectId}/graphs`)
       .then((res) => {
         const list: GraphVersion[] = res.data
         setVersions(list)
@@ -140,8 +134,7 @@ function DiffPageInner() {
     setError(null)
     try {
       const res = await axios.get(
-        `/api/projects/${projectId}/diff?from=${fromId}&to=${toId}`,
-        { headers: authHeaders() },
+        `/api/projects/${projectId}/diff?from=${fromId}&to=${toId}`
       )
       const diffNodes: RawDiffNode[] = res.data.nodes
       const diffEdges: RawDiffEdge[] = res.data.edges

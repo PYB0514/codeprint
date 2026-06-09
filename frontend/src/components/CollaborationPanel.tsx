@@ -29,10 +29,7 @@ export default function CollaborationPanel({ graphId, myUserId, participants, co
   const handleStart = async () => {
     setLoading(true)
     try {
-      const token = localStorage.getItem('jwt') ?? ''
-      const res = await axios.post('/api/collaboration/sessions', { graphId }, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await axios.post('/api/collaboration/sessions', { graphId })
       onSessionReady(res.data.sessionId, res.data.inviteCode)
     } finally {
       setLoading(false)

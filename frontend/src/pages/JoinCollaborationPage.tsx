@@ -16,14 +16,7 @@ export default function JoinCollaborationPage() {
     setLoading(true)
     setError(null)
     try {
-      const token = localStorage.getItem('jwt')
-      if (!token) {
-        navigate(`/login?redirect=/collab/join?code=${code}`)
-        return
-      }
-      const res = await axios.post(`/api/collaboration/sessions/${code.toUpperCase()}/join`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await axios.post(`/api/collaboration/sessions/${code.toUpperCase()}/join`, {})
       navigate(`/projects/${res.data.graphId}/graph?collab=${res.data.sessionId}&code=${res.data.inviteCode}`)
     } catch {
       setError('유효하지 않은 초대 코드입니다.')

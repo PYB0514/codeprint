@@ -3,11 +3,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
 export default function PaymentSuccessPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -23,7 +18,7 @@ export default function PaymentSuccessPage() {
     const amount = parseInt(searchParams.get('amount') ?? '0', 10)
 
     axios
-      .post('/api/payments/toss/confirm', { paymentKey, orderId, amount }, { headers: authHeaders() })
+      .post('/api/payments/toss/confirm', { paymentKey, orderId, amount })
       .then(() => setStatus('success'))
       .catch(() => setStatus('error'))
   }, [searchParams])

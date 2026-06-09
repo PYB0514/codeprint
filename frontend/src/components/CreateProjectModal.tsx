@@ -42,10 +42,7 @@ export default function CreateProjectModal({ onClose, onCreated }: Props) {
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const token = localStorage.getItem('jwt')
-    axios.get<GitHubRepo[]>('/api/projects/github-repos', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    axios.get<GitHubRepo[]>('/api/projects/github-repos')
       .then(res => setRepos(res.data))
       .catch(() => setRepos([]))
       .finally(() => setReposLoading(false))
@@ -80,11 +77,9 @@ export default function CreateProjectModal({ onClose, onCreated }: Props) {
     setError(null)
     setLoading(true)
     try {
-      const token = localStorage.getItem('jwt')
       const res = await axios.post<Project>(
         '/api/projects',
-        { githubRepoUrl, name, description },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { githubRepoUrl, name, description }
       )
       onCreated(res.data)
     } catch (err: unknown) {

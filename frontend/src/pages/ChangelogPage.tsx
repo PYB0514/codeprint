@@ -11,6 +11,18 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.28.0',
+    date: '2026-06-10',
+    title: 'JWT HttpOnly 쿠키 전환 — XSS 보안 강화',
+    type: 'infra',
+    items: [
+      { category: '보안', desc: 'JWT를 localStorage에서 HttpOnly 쿠키로 이전 — XSS로 토큰 탈취 불가' },
+      { category: '백엔드', desc: 'OAuth2 로그인 성공 시 쿠키 발급 후 /dashboard 직접 리다이렉트' },
+      { category: '백엔드', desc: '/api/auth/logout 엔드포인트 추가 — 쿠키 만료 처리' },
+      { category: '프론트', desc: '18개 파일의 authHeaders() 함수 및 localStorage JWT 참조 전부 제거' },
+    ],
+  },
+  {
     version: 'v0.27.0',
     date: '2026-06-09',
     title: '토스페이먼츠 Pro 결제 통합',

@@ -1,18 +1,10 @@
-// OAuth 로그인 후 JWT를 저장하고 대시보드로 이동하는 콜백 페이지
+// OAuth 로그인 완료 후 대시보드로 이동하는 콜백 페이지 — JWT는 HttpOnly 쿠키로 처리
 import { useEffect } from 'react'
 
-// OAuth 콜백 처리 — JWT 저장 후 대시보드로 이동
+// OAuth 콜백 처리 — 백엔드가 이미 쿠키를 설정했으므로 대시보드로 이동
 export default function AuthCallbackPage() {
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const token = params.get('token')
-
-    if (token) {
-      localStorage.setItem('jwt', token)
-      window.location.replace('/dashboard')
-    } else {
-      window.location.replace('/')
-    }
+    window.location.replace('/dashboard')
   }, [])
 
   return (
