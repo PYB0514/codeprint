@@ -1746,7 +1746,7 @@ function GraphPageInner() {
             {/* 런타임 경고 패널 */}
             {warnings.length > 0 && (
               <LeftSection title={`경고 (${warnings.length})`}>
-                <WarningPanel warnings={warnings} />
+                <WarningPanel warnings={warnings} onNodeNavigate={handleSearchNodeClick} />
               </LeftSection>
             )}
           </div>

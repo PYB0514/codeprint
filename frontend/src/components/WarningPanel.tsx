@@ -9,6 +9,7 @@ interface Warning {
 
 interface Props {
   warnings: Warning[]
+  onNodeNavigate?: (nodeId: string) => void
 }
 
 const WARNING_META: Record<string, { label: string; desc: string; color: string }> = {
@@ -21,7 +22,7 @@ const WARNING_META: Record<string, { label: string; desc: string; color: string 
 }
 
 // 경고 목록을 타입별로 그룹핑하여 접기/펼치기 섹션으로 표시
-export default function WarningPanel({ warnings }: Props) {
+export default function WarningPanel({ warnings, onNodeNavigate }: Props) {
   const grouped = new Map<string, Warning[]>()
   for (const w of warnings) {
     if (!grouped.has(w.type)) grouped.set(w.type, [])
@@ -31,14 +32,14 @@ export default function WarningPanel({ warnings }: Props) {
   return (
     <div className="flex flex-col gap-2">
       {[...grouped.entries()].map(([type, items]) => (
-        <WarningGroup key={type} type={type} items={items} />
+        <WarningGroup key={type} type={type} items={items} onNodeNavigate={onNodeNavigate} />
       ))}
     </div>
   )
 }
 
 // 경고 타입별 접기/펼치기 그룹
-function WarningGroup({ type, items }: { type: string; items: Warning[] }) {
+function WarningGroup({ type, items, onNodeNavigate }: { type: string; items: Warning[]; onNodeNavigate?: (nodeId: string) => void }) {
   const [open, setOpen] = useState(true)
   const meta = WARNING_META[type] ?? { label: type, desc: '', color: '#eab308' }
 
@@ -58,9 +59,13 @@ function WarningGroup({ type, items }: { type: string; items: Warning[] }) {
       {open && (
         <div className="flex flex-col gap-1 mt-1">
           {items.map((w, i) => (
-            <div key={i} className="text-[11px] text-yellow-200/80 bg-yellow-900/10 border border-yellow-800/30 rounded px-1.5 py-1 leading-snug">
+            <button
+              key={i}
+              onClick={() => onNodeNavigate && w.nodeIds[0] && onNodeNavigate(w.nodeIds[0])}
+              className="w-full text-left text-[11px] text-yellow-200/80 bg-yellow-900/10 border border-yellow-800/30 rounded px-1.5 py-1 leading-snug hover:bg-yellow-900/20 hover:border-yellow-700/50 transition-colors"
+            >
               {w.message.replace(/^[^:]+:\s*/, '')}
-            </div>
+            </button>
           ))}
         </div>
       )}
