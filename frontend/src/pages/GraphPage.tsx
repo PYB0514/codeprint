@@ -439,6 +439,7 @@ function GraphPageInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [rawNodes, setRawNodes] = useState<RawNode[]>([])
+  const [nodeSearchQuery, setNodeSearchQuery] = useState('')
   const [counts, setCounts] = useState({ files: 0, funcs: 0, edges: 0 })
   const [loading, setLoading] = useState(true)
   const [tourRunning, setTourRunning] = useState(false)
@@ -482,6 +483,13 @@ function GraphPageInner() {
   const [shareSubmitting, setShareSubmitting] = useState(false)
   const flowRef = useRef<HTMLDivElement>(null)
   const { getNodes, fitView, screenToFlowPosition } = useReactFlow()
+
+  // 검색 결과 노드로 fitView 이동
+  const handleSearchNodeClick = useCallback((nodeId: string) => {
+    const flowNode = getNodes().find(n => n.id === nodeId)
+    if (flowNode) fitView({ nodes: [flowNode], duration: 400, padding: 0.5 })
+    setNodeSearchQuery('')
+  }, [getNodes, fitView])
 
   // 마우스 이동 핸들러 (50ms throttle) — 협업 세션 활성 시 커서 발행
   const handleCollabMouseMove = useCallback((e: React.MouseEvent) => {
@@ -1479,6 +1487,43 @@ function GraphPageInner() {
           </div>
 
           <div className="flex flex-col gap-0 flex-1">
+
+            {/* 노드 검색 */}
+            <LeftSection title="노드 검색">
+              <input
+                type="text"
+                value={nodeSearchQuery}
+                onChange={e => setNodeSearchQuery(e.target.value)}
+                placeholder="파일명 / 함수명 검색..."
+                className="w-full text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500"
+              />
+              {nodeSearchQuery.trim() && (() => {
+                const q = nodeSearchQuery.trim().toLowerCase()
+                const results = rawNodes.filter(n =>
+                  n.type !== 'GROUP' &&
+                  (n.name.toLowerCase().includes(q) || (n.comment ?? '').toLowerCase().includes(q))
+                ).slice(0, 10)
+                return results.length === 0 ? (
+                  <p className="text-[10px] text-gray-600 mt-1 px-1">결과 없음</p>
+                ) : (
+                  <div className="mt-1 flex flex-col gap-0.5 max-h-48 overflow-y-auto">
+                    {results.map(n => (
+                      <button
+                        key={n.id}
+                        onClick={() => handleSearchNodeClick(n.id)}
+                        className="w-full text-left text-[11px] px-2 py-1 rounded hover:bg-gray-700 text-gray-300 truncate"
+                        title={n.comment ? `${n.name} — ${n.comment}` : n.name}
+                      >
+                        <span className="text-gray-600 mr-1">
+                          {n.type === 'FILE' ? '📄' : n.type === 'FUNCTION' ? 'ƒ' : n.type === 'DB_TABLE' ? '🗄' : '◎'}
+                        </span>
+                        {n.comment || n.name}
+                      </button>
+                    ))}
+                  </div>
+                )
+              })()}
+            </LeftSection>
 
             {/* 내보내기 — 최상단 */}
             <LeftSection title="내보내기">
