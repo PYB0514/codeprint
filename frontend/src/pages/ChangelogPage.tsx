@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.24.0',
+    date: '2026-06-09',
+    title: '도메인 뷰 재설계 — 바운디드 컨텍스트 단위 박스',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '도메인 뷰에서 중간 레이어 그룹 박스 제거 — 파일 노드가 바운디드 컨텍스트 섹션에 직접 배치됨' },
+      { category: '프론트', desc: 'User / Project / Graph / Analysis / Community 등 DDD 도메인 단위로 시각화' },
+    ],
+  },
+  {
     version: 'v0.23.0',
     date: '2026-06-09',
     title: '프리셋 이름 수정 + 경고 MD 내보내기',
