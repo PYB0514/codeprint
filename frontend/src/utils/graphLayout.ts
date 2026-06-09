@@ -576,28 +576,34 @@ export function buildLayout(
       groupPos = sectionOrigin ? { x: gx - sectionOrigin.x, y: gy - sectionOrigin.y } : { x: gx, y: gy }
     }
 
-    // 그룹 박스 (커스텀 groupNode 타입 사용)
-    result.push({
-      id: `group-${key}`,
-      type: 'groupNode',
-      ...(parentSectionId ? { parentId: parentSectionId } : {}),
-      position: groupPos,
-      data: { layer, sub, fileCount: groupFiles.length, originalHeight: layout.h },
-      style: { width: layout.w, height: layout.h },
-      draggable: true,
-    })
+    const isDomainMode = layoutPreset === 'domain' && domainBoundsResult && parentSectionId
 
-    // 파일 노드
+    // 그룹 박스 — 도메인 뷰에서는 생략 (파일이 도메인 섹션 배경 위에 절대 좌표로 배치됨)
+    if (!isDomainMode) {
+      result.push({
+        id: `group-${key}`,
+        type: 'groupNode',
+        ...(parentSectionId ? { parentId: parentSectionId } : {}),
+        position: groupPos,
+        data: { layer, sub, fileCount: groupFiles.length, originalHeight: layout.h },
+        style: { width: layout.w, height: layout.h },
+        draggable: true,
+      })
+    }
+
+    // 파일 노드 — 도메인 뷰: parentId 없이 절대 좌표, 계층 뷰: group 안에 상대 좌표
     layout.files.forEach(({ file, x, y }) => {
       const size = fileSizes.get(file.id)!
       // 파일 헤더 너비 기준 최대 글자 수 (10px 폰트, 한글 약 6px/char)
       const fileMaxLen = Math.floor((size.w - FILE_PAD_X * 2) / 6)
+      const filePos = isDomainMode
+        ? { x: gx + GROUP_PAD + x, y: gy + GROUP_HEADER + GROUP_PAD + y }
+        : { x: GROUP_PAD + x, y: GROUP_HEADER + GROUP_PAD + y }
       result.push({
         id: file.id,
         type: 'fileNode',
-        parentId: `group-${key}`,
-        extent: 'parent',
-        position: { x: GROUP_PAD + x, y: GROUP_HEADER + GROUP_PAD + y },
+        ...(isDomainMode ? {} : { parentId: `group-${key}`, extent: 'parent' as const }),
+        position: filePos,
         data: {
           label: getLabel(file, fileMaxLen),
           name: file.name,
@@ -625,19 +631,19 @@ export function buildLayout(
         },
       })
 
-      // 함수 노드
+      // 함수 노드 — 도메인 뷰: 파일 절대 좌표 기준, 계층 뷰: 파일 안 상대 좌표
       const funcs = funcsByFile.get(file.id) ?? []
       funcs.forEach((fn, i) => {
         const fc = i % size.cols
         const fr = Math.floor(i / size.cols)
+        const fnRelX = FILE_PAD_X + fc * (FUNC_W + FUNC_PAD)
+        const fnRelY = FILE_PAD_TOP + fr * (FUNC_H + FUNC_PAD)
         result.push({
           id: fn.id,
-          parentId: file.id,
-          extent: 'parent',
-          position: {
-            x: FILE_PAD_X + fc * (FUNC_W + FUNC_PAD),
-            y: FILE_PAD_TOP + fr * (FUNC_H + FUNC_PAD),
-          },
+          ...(isDomainMode ? {} : { parentId: file.id, extent: 'parent' as const }),
+          position: isDomainMode
+            ? { x: filePos.x + fnRelX, y: filePos.y + fnRelY }
+            : { x: fnRelX, y: fnRelY },
           // 함수 박스 너비 110px, 좌우 패딩 8px → 102px / ~6px per char ≈ 17자
           data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment, layer },
           style: {
