@@ -653,20 +653,21 @@ export function buildLayout(
       })
     }
 
-    // 파일 노드 — 도메인 뷰: parentId 없이 절대 좌표, 계층 뷰: group 안에 상대 좌표
+    // 파일 노드 — 도메인 뷰: 도메인 섹션 기준 상대 좌표, 계층 뷰: group 안에 상대 좌표
     layout.files.forEach(({ file, x, y }) => {
       const size = fileSizes.get(file.id)!
       // 파일 헤더 너비 기준 최대 글자 수 (10px 폰트, 한글 약 6px/char)
       const fileMaxLen = Math.floor((size.w - FILE_PAD_X * 2) / 6)
+      // isDomainMode: groupPos는 도메인 섹션 기준 상대 좌표이므로 그대로 사용
       const filePos = isDomainMode
-        ? { x: gx + GROUP_PAD + x, y: gy + GROUP_HEADER + GROUP_PAD + y }
+        ? { x: groupPos!.x + GROUP_PAD + x, y: groupPos!.y + GROUP_HEADER + GROUP_PAD + y }
         : { x: GROUP_PAD + x, y: GROUP_HEADER + GROUP_PAD + y }
       const fileDomain = extractDomain(file.filePath, commonPrefix)
       const palette = LAYER_PALETTE[layer] ?? DEFAULT_LAYER_PALETTE
       result.push({
         id: file.id,
         type: 'fileNode',
-        ...(isDomainMode ? {} : { parentId: `group-${key}`, extent: 'parent' as const }),
+        ...(isDomainMode ? { parentId: parentSectionId! } : { parentId: `group-${key}`, extent: 'parent' as const }),
         position: filePos,
         data: {
           label: getLabel(file, fileMaxLen),
@@ -696,7 +697,7 @@ export function buildLayout(
         },
       })
 
-      // 함수 노드 — 도메인 뷰: 파일 절대 좌표 기준, 계층 뷰: 파일 안 상대 좌표
+      // 함수 노드 — 도메인 뷰: 도메인 섹션 기준 상대 좌표, 계층 뷰: 파일 안 상대 좌표
       const funcs = funcsByFile.get(file.id) ?? []
       funcs.forEach((fn, i) => {
         const fc = i % size.cols
@@ -705,7 +706,7 @@ export function buildLayout(
         const fnRelY = FILE_PAD_TOP + fr * (FUNC_H + FUNC_PAD)
         result.push({
           id: fn.id,
-          ...(isDomainMode ? {} : { parentId: file.id, extent: 'parent' as const }),
+          ...(isDomainMode ? { parentId: parentSectionId! } : { parentId: file.id, extent: 'parent' as const }),
           position: isDomainMode
             ? { x: filePos.x + fnRelX, y: filePos.y + fnRelY }
             : { x: fnRelX, y: fnRelY },
