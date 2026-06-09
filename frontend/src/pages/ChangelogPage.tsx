@@ -11,6 +11,15 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.25.0',
+    date: '2026-06-09',
+    title: '도메인 뷰 섹션 라벨 가시성 개선',
+    type: 'improvement',
+    items: [
+      { category: '프론트', desc: '도메인 뷰 섹션 라벨이 줌 아웃 시에도 일정한 크기로 표시됨 — useViewport 역스케일 적용' },
+    ],
+  },
+  {
     version: 'v0.24.0',
     date: '2026-06-09',
     title: '도메인 뷰 재설계 — 바운디드 컨텍스트 단위 박스',
