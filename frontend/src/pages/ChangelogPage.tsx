@@ -11,6 +11,15 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.18.0',
+    date: '2026-06-09',
+    title: '경고 항목 클릭 → 노드 이동',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '경고 패널 항목 클릭 시 해당 노드로 그래프 자동 이동 — 경고 원인 노드를 한 클릭으로 확인' },
+    ],
+  },
+  {
     version: 'v0.17.0',
     date: '2026-06-09',
     title: '노드 검색',
