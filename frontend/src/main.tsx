@@ -15,6 +15,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 }
 
 axios.defaults.baseURL = import.meta.env.VITE_API_URL ?? ''
+axios.defaults.withCredentials = true
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

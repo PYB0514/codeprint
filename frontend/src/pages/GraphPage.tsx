@@ -380,12 +380,6 @@ function buildCallTree(
   return { tree: rootNode, defaultNodeIds, defaultEdgeIds, defaultEdgeTypes }
 }
 
-// JWT 토큰을 Authorization 헤더로 반환
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return { Authorization: `Bearer ${token}` }
-}
-
 // 호출 트리 패널 — 분기 포함 흐름 트리 표시
 function CallTreePanel({ root, activeNodeIds, onSelectBranch }: {
   root: CallTreeNode
@@ -732,8 +726,7 @@ function GraphPageInner() {
           comment: s.funcComment ?? '',
           callers: s.callers.map((c: { funcName: string }) => c.funcName).join(', '),
           callees: s.callees.map((c: { funcName: string }) => c.funcName).join(', '),
-        },
-        { headers: authHeaders() }
+        }
       )
       setAiExplanation(res.data.explanation)
     } catch {
@@ -783,7 +776,7 @@ function GraphPageInner() {
   // 서버에서 그래프 데이터를 불러와 React Flow 레이아웃으로 변환
   const fetchGraph = useCallback(async () => {
     try {
-      const res = await axios.get(`/api/projects/${projectId}/graph`, { headers: authHeaders() })
+      const res = await axios.get(`/api/projects/${projectId}/graph`)
       const { graphId: gid, nodes: rn, edges: re, warnings: w } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; edgeIds?: string[]; message: string }[] }
       setGraphId(gid)
       const warningList = w ?? []
@@ -817,10 +810,10 @@ function GraphPageInner() {
   }, [projectId, setNodes, setEdges, openFileSidebar, applyEdgeVisibility, fitView])
 
   useEffect(() => {
-    axios.get<{ id: string }>('/api/auth/me', { headers: authHeaders() })
+    axios.get<{ id: string }>('/api/auth/me')
       .then((res) => setCurrentUserId(res.data.id))
       .catch(() => {})
-    axios.get<{ provider: string; registered: boolean }[]>('/api/ai/keys', { headers: authHeaders() })
+    axios.get<{ provider: string; registered: boolean }[]>('/api/ai/keys')
       .then((res) => {
         setAiProviders(res.data)
         const first = res.data.find((p) => p.registered)
@@ -831,7 +824,7 @@ function GraphPageInner() {
 
   useEffect(() => {
     fetchGraph().then(() => {
-      axios.get(`/api/projects/${projectId}/freshness`, { headers: authHeaders() })
+      axios.get(`/api/projects/${projectId}/freshness`)
         .then((res) => {
           if (res.data.isOutdated) {
             setOutdated({ branch: res.data.branch, lastAnalyzedAt: res.data.lastAnalyzedAt })
@@ -848,13 +841,12 @@ function GraphPageInner() {
     try {
       const res = await axios.post<{ analysisId: string }>(
         '/api/analyses',
-        { projectId, branch: outdated.branch },
-        { headers: authHeaders() }
+        { projectId, branch: outdated.branch }
       )
       const analysisId = res.data.analysisId
       const poll = setInterval(async () => {
         try {
-          const s = await axios.get<{ status: string }>(`/api/analyses/${analysisId}`, { headers: authHeaders() })
+          const s = await axios.get<{ status: string }>(`/api/analyses/${analysisId}`)
           if (s.data.status === 'COMPLETED' || s.data.status === 'FAILED') {
             clearInterval(poll)
             setReanalyzing(false)
@@ -893,8 +885,7 @@ function GraphPageInner() {
           hiddenLayers: Array.from(shareHiddenLayers),
           hiddenGroups: Array.from(shareHiddenGroups),
           hiddenNodeNames: Array.from(shareHiddenNodes),
-        },
-        { headers: authHeaders() }
+        }
       )
       setShowShareModal(false)
       setShareTitle('')
@@ -986,7 +977,7 @@ function GraphPageInner() {
   // 그래프의 프리셋 목록 로드
   const loadPresets = useCallback(async (gid: string) => {
     try {
-      const res = await axios.get(`/api/graphs/${gid}/presets`, { headers: authHeaders() })
+      const res = await axios.get(`/api/graphs/${gid}/presets`)
       setPresets(res.data)
     } catch {
       // 프리셋 로드 실패 무시
@@ -1006,8 +997,7 @@ function GraphPageInner() {
       const config = buildCurrentConfig()
       await axios.put(
         `/api/graphs/${graphId}/presets/${pendingSaveSlot}`,
-        { name: presetSaveName.trim(), config },
-        { headers: authHeaders() }
+        { name: presetSaveName.trim(), config }
       )
       await loadPresets(graphId)
       setShowSavePresetModal(false)
@@ -1026,7 +1016,7 @@ function GraphPageInner() {
     setLoadingVersions(true)
     setShowVersions(true)
     try {
-      const res = await axios.get(`/api/projects/${projectId}/graphs`, { headers: authHeaders() })
+      const res = await axios.get(`/api/projects/${projectId}/graphs`)
       setVersions(res.data)
     } finally {
       setLoadingVersions(false)
@@ -1037,7 +1027,7 @@ function GraphPageInner() {
   const handleLoadVersion = useCallback(async (targetGraphId: string) => {
     setLoading(true)
     try {
-      const res = await axios.get(`/api/projects/${projectId}/graph?graphId=${targetGraphId}`, { headers: authHeaders() })
+      const res = await axios.get(`/api/projects/${projectId}/graph?graphId=${targetGraphId}`)
       const { graphId: gid, nodes: rn, edges: re } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[] }
       setGraphId(gid)
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebar)
@@ -1288,8 +1278,7 @@ function GraphPageInner() {
     if (!rawNodes.some((n) => n.id === node.id)) return
     axios.put(
       `/api/graphs/${graphId}/nodes/${node.id}/position`,
-      { x: node.position.x, y: node.position.y },
-      { headers: authHeaders() }
+      { x: node.position.x, y: node.position.y }
     ).catch(() => {})
   }, [graphId, rawNodes])
 
@@ -1465,7 +1454,7 @@ function GraphPageInner() {
     setCommentNodeId(rawFunc.id)
     setCommentInput('')
     if (graphId) {
-      axios.get(`/api/graphs/${graphId}/nodes/${rawFunc.id}/comments`, { headers: authHeaders() })
+      axios.get(`/api/graphs/${graphId}/nodes/${rawFunc.id}/comments`)
         .then((res) => setNodeComments(res.data))
         .catch(() => setNodeComments([]))
     }
@@ -2318,7 +2307,7 @@ function GraphPageInner() {
                                 <button
                                   onClick={() => {
                                     if (!graphId || !commentNodeId) return
-                                    axios.delete(`/api/graphs/${graphId}/nodes/${commentNodeId}/comments/${c.id}`, { headers: authHeaders() })
+                                    axios.delete(`/api/graphs/${graphId}/nodes/${commentNodeId}/comments/${c.id}`)
                                       .then(() => setNodeComments((prev) => prev.filter((x) => x.id !== c.id)))
                                       .catch(() => {})
                                   }}
@@ -2339,8 +2328,7 @@ function GraphPageInner() {
                                 if (!commentInput.trim() || !graphId || !commentNodeId) return
                                 axios.post(
                                   `/api/graphs/${graphId}/nodes/${commentNodeId}/comments`,
-                                  { content: commentInput.trim() },
-                                  { headers: authHeaders() }
+                                  { content: commentInput.trim() }
                                 ).then((res) => {
                                   setNodeComments((prev) => [...prev, res.data])
                                   setCommentInput('')

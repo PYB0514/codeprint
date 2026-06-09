@@ -1,6 +1,5 @@
 // 사용자 설정 페이지 — AI API 키 관리
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
 
@@ -27,26 +26,17 @@ const PROVIDER_LABELS: Record<string, { label: string; hint: string; url: string
   },
 }
 
-// JWT 토큰을 Authorization 헤더로 반환
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
 export default function SettingsPage() {
-  const navigate = useNavigate()
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [inputKeys, setInputKeys] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<Record<string, boolean>>({})
   const [message, setMessage] = useState<{ provider: string; text: string; ok: boolean } | null>(null)
 
   useEffect(() => {
-    const token = localStorage.getItem('jwt')
-    if (!token) { navigate('/login'); return }
-    axios.get<ProviderInfo[]>('/api/ai/keys', { headers: authHeaders() })
+    axios.get<ProviderInfo[]>('/api/ai/keys')
       .then((res) => setProviders(res.data))
       .catch(() => {})
-  }, [navigate])
+  }, [])
 
   // AI 키 저장
   const handleSave = async (provider: string) => {
@@ -54,7 +44,7 @@ export default function SettingsPage() {
     if (!key) return
     setSaving((s) => ({ ...s, [provider]: true }))
     try {
-      await axios.put(`/api/ai/keys/${provider}`, { apiKey: key }, { headers: authHeaders() })
+      await axios.put(`/api/ai/keys/${provider}`, { apiKey: key })
       setProviders((prev) => prev.map((p) => p.provider === provider ? { ...p, registered: true } : p))
       setInputKeys((prev) => ({ ...prev, [provider]: '' }))
       setMessage({ provider, text: '저장됐습니다.', ok: true })
@@ -68,7 +58,7 @@ export default function SettingsPage() {
 
   // AI 키 삭제
   const handleDelete = async (provider: string) => {
-    await axios.delete(`/api/ai/keys/${provider}`, { headers: authHeaders() })
+    await axios.delete(`/api/ai/keys/${provider}`)
     setProviders((prev) => prev.map((p) => p.provider === provider ? { ...p, registered: false } : p))
   }
 

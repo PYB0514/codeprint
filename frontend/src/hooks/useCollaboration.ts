@@ -38,10 +38,8 @@ export function useCollaboration(sessionId: string | null, myUserId: string | nu
   useEffect(() => {
     if (!sessionId || !myUserId) return
 
-    const token = localStorage.getItem('jwt') ?? ''
     const client = new Client({
       webSocketFactory: () => new SockJS(`${API_URL}/ws`),
-      connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 3000,
       onConnect: () => {
         setState(s => ({ ...s, connected: true }))

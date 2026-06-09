@@ -27,12 +27,6 @@ interface PostSummary {
   bookmarkedByMe: boolean
 }
 
-// JWT 토큰을 Authorization 헤더로 반환
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
 const FEEDBACK_LABELS: Record<string, string> = {
   ARCHITECTURE_REVIEW: '아키텍처 리뷰',
   GENERAL: '일반',
@@ -50,20 +44,17 @@ export default function UserProfilePage() {
   const [error, setError] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('jwt')
-    if (token) {
-      axios
-        .get<UserInfo>('/api/auth/me', { headers: authHeaders() })
-        .then((res) => setCurrentUser(res.data))
-        .catch(() => {})
-    }
+    axios
+      .get<UserInfo>('/api/auth/me')
+      .then((res) => setCurrentUser(res.data))
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
     if (!userId) return
     Promise.all([
       axios.get<UserProfile>(`/api/users/${userId}`),
-      axios.get<PostSummary[]>(`/api/users/${userId}/posts`, { headers: authHeaders() }),
+      axios.get<PostSummary[]>(`/api/users/${userId}/posts`),
     ])
       .then(([profileRes, postsRes]) => {
         setProfile(profileRes.data)
@@ -78,9 +69,9 @@ export default function UserProfilePage() {
     e.stopPropagation()
     if (!currentUser) return
     if (post.bookmarkedByMe) {
-      await axios.delete(`/api/community/posts/${post.id}/bookmark`, { headers: authHeaders() })
+      await axios.delete(`/api/community/posts/${post.id}/bookmark`)
     } else {
-      await axios.post(`/api/community/posts/${post.id}/bookmark`, {}, { headers: authHeaders() })
+      await axios.post(`/api/community/posts/${post.id}/bookmark`, {})
     }
     setPosts((prev) => prev.map((p) =>
       p.id === post.id

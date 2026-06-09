@@ -43,12 +43,6 @@ interface Attachment {
   url: string
 }
 
-// JWT 토큰을 Authorization 헤더로 반환
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
 const FEEDBACK_LABELS: Record<string, string> = {
   ARCHITECTURE_REVIEW: '아키텍처 리뷰',
   GENERAL: '일반',
@@ -79,18 +73,14 @@ export default function CommunityPage() {
   const [linkingGraph, setLinkingGraph] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('jwt')
-    if (token) {
-      axios
-        .get<UserInfo>('/api/auth/me', { headers: authHeaders() })
-        .then((res) => {
-          setUser(res.data)
-          // 로그인 상태면 내 프로젝트 목록도 로드
-          return axios.get<MyProject[]>('/api/projects', { headers: authHeaders() })
-        })
-        .then((res) => setMyProjects(res.data))
-        .catch(() => {})
-    }
+    axios
+      .get<UserInfo>('/api/auth/me')
+      .then((res) => {
+        setUser(res.data)
+        return axios.get<MyProject[]>('/api/projects')
+      })
+      .then((res) => setMyProjects(res.data))
+      .catch(() => {})
     const initialPostId = searchParams.get('postId')
     axios
       .get<Post[]>('/api/community/posts', { params: initialPostId ? {} : undefined })
@@ -132,7 +122,7 @@ export default function CommunityPage() {
     }
     setLinkingGraph(true)
     try {
-      const res = await axios.get<{ graphId: string }>(`/api/projects/${projectId}/graph`, { headers: authHeaders() })
+      const res = await axios.get<{ graphId: string }>(`/api/projects/${projectId}/graph`)
       const project = myProjects.find((p) => p.id === projectId)
       setLinkedGraphId(res.data.graphId)
       setLinkedProjectName(project?.name ?? null)
@@ -154,7 +144,6 @@ export default function CommunityPage() {
       const { data } = await axios.post<{ uploadUrl: string; s3Key: string }>(
         '/api/attachments/presign',
         { contentType: file.type, filename: file.name, fileSize: String(file.size) },
-        { headers: authHeaders() }
       )
       await fetch(data.uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
       setAttachedFiles((prev) =>
@@ -177,8 +166,7 @@ export default function CommunityPage() {
       .map((f) => ({ s3Key: f.s3Key, originalFilename: f.file.name, contentType: f.file.type }))
     const res = await axios.post<Post>(
       '/api/community/posts',
-      { title: newTitle, content: newContent, feedbackType: newFeedbackType, graphId: linkedGraphId, attachments },
-      { headers: authHeaders() }
+      { title: newTitle, content: newContent, feedbackType: newFeedbackType, graphId: linkedGraphId, attachments }
     )
     setPosts((prev) => [res.data, ...prev])
     setNewTitle('')
@@ -195,8 +183,7 @@ export default function CommunityPage() {
     try {
       const res = await axios.post<Comment>(
         `/api/community/posts/${selectedPost.id}/comments`,
-        { content: newComment },
-        { headers: authHeaders() }
+        { content: newComment }
       )
       setComments((prev) => [...prev, res.data])
       setNewComment('')
@@ -210,9 +197,9 @@ export default function CommunityPage() {
     e.stopPropagation()
     if (!user) return
     if (post.bookmarkedByMe) {
-      await axios.delete(`/api/community/posts/${post.id}/bookmark`, { headers: authHeaders() })
+      await axios.delete(`/api/community/posts/${post.id}/bookmark`)
     } else {
-      await axios.post(`/api/community/posts/${post.id}/bookmark`, {}, { headers: authHeaders() })
+      await axios.post(`/api/community/posts/${post.id}/bookmark`, {})
     }
     setPosts((prev) => prev.map((p) =>
       p.id === post.id
@@ -224,7 +211,7 @@ export default function CommunityPage() {
   // 게시글 삭제
   const handleDeletePost = async (postId: string) => {
     if (!confirm('게시글을 삭제할까요?')) return
-    await axios.delete(`/api/community/posts/${postId}`, { headers: authHeaders() })
+    await axios.delete(`/api/community/posts/${postId}`)
     setPosts((prev) => prev.filter((p) => p.id !== postId))
     if (selectedPost?.id === postId) setSelectedPost(null)
   }

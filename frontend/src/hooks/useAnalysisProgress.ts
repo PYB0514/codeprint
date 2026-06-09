@@ -2,12 +2,6 @@
 import { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 
-// JWT 토큰을 Authorization 헤더로 반환
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return { Authorization: `Bearer ${token}` }
-}
-
 // analysisId가 있으면 2초 간격으로 폴링하여 진행률과 상태를 반환
 export function useAnalysisProgress(analysisId: string | null, onDone: () => void) {
   const [realProgress, setRealProgress] = useState(0)
@@ -62,7 +56,7 @@ export function useAnalysisProgress(analysisId: string | null, onDone: () => voi
 
     pollRef.current = setInterval(async () => {
       try {
-        const res = await axios.get(`/api/analyses/${analysisId}`, { headers: authHeaders() })
+        const res = await axios.get(`/api/analyses/${analysisId}`)
         const { progress, status: s } = res.data
         setRealProgress(progress)
         setStatus(s)

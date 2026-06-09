@@ -1,6 +1,5 @@
 // 관리자 대시보드 — 서비스 통계, 사용자 관리, 공지사항 관리
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 
 interface Stats {
@@ -29,7 +28,6 @@ interface NoticeItem {
 
 // 관리자 대시보드 페이지
 export default function AdminPage() {
-  const navigate = useNavigate()
   const [stats, setStats] = useState<Stats | null>(null)
   const [users, setUsers] = useState<UserItem[]>([])
   const [totalElements, setTotalElements] = useState(0)
@@ -42,16 +40,11 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const token = localStorage.getItem('jwt')
-  const headers = { Authorization: `Bearer ${token}` }
-
   // 통계 및 사용자 목록 로드
   useEffect(() => {
-    if (!token) { navigate('/login'); return }
-
     Promise.all([
-      axios.get('/api/admin/stats', { headers }),
-      axios.get(`/api/admin/users?page=${page}&size=20`, { headers }),
+      axios.get('/api/admin/stats'),
+      axios.get(`/api/admin/users?page=${page}&size=20`),
     ])
       .then(([statsRes, usersRes]) => {
         setStats(statsRes.data)
@@ -68,8 +61,7 @@ export default function AdminPage() {
 
   // 공지사항 목록 로드
   useEffect(() => {
-    if (!token) return
-    axios.get('/api/notices/all', { headers })
+    axios.get('/api/notices/all')
       .then((res) => setNotices(res.data))
       .catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -78,7 +70,7 @@ export default function AdminPage() {
   const toggleUser = async (user: UserItem) => {
     const action = user.enabled ? 'disable' : 'enable'
     try {
-      await axios.patch(`/api/admin/users/${user.id}/${action}`, null, { headers })
+      await axios.patch(`/api/admin/users/${user.id}/${action}`, null)
       setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, enabled: !u.enabled } : u))
     } catch {
       alert('처리에 실패했습니다.')
@@ -90,7 +82,7 @@ export default function AdminPage() {
     if (!noticeTitle.trim() || !noticeContent.trim()) return
     setNoticeLoading(true)
     try {
-      const res = await axios.post('/api/notices', { title: noticeTitle, content: noticeContent }, { headers })
+      const res = await axios.post('/api/notices', { title: noticeTitle, content: noticeContent })
       setNotices((prev) => [res.data, ...prev])
       setNoticeTitle('')
       setNoticeContent('')
@@ -105,7 +97,7 @@ export default function AdminPage() {
   const toggleNotice = async (notice: NoticeItem) => {
     const action = notice.active ? 'deactivate' : 'activate'
     try {
-      await axios.patch(`/api/notices/${notice.id}/${action}`, null, { headers })
+      await axios.patch(`/api/notices/${notice.id}/${action}`, null)
       setNotices((prev) => prev.map((n) => n.id === notice.id ? { ...n, active: !n.active } : n))
     } catch {
       alert('처리에 실패했습니다.')
@@ -116,7 +108,7 @@ export default function AdminPage() {
   const deleteNotice = async (id: string) => {
     if (!confirm('공지사항을 삭제하시겠습니까?')) return
     try {
-      await axios.delete(`/api/notices/${id}`, { headers })
+      await axios.delete(`/api/notices/${id}`)
       setNotices((prev) => prev.filter((n) => n.id !== id))
     } catch {
       alert('삭제에 실패했습니다.')

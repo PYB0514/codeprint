@@ -11,25 +11,26 @@ interface Props {
 export default function AppHeader({ onLogin }: Props) {
   const navigate = useNavigate()
   const [user, setUser] = useState<{ username: string; plan: string } | null>(null)
-  const jwt = localStorage.getItem('jwt')
+  const [checked, setChecked] = useState(false)
 
-  // JWT가 있으면 사용자 정보 자동 조회
+  // 쿠키 기반 인증 — /api/auth/me로 로그인 상태 확인
   useEffect(() => {
-    if (!jwt) return
     axios
-      .get<{ username: string; plan: string }>('/api/auth/me', {
-        headers: { Authorization: `Bearer ${jwt}` },
-      })
+      .get<{ username: string; plan: string }>('/api/auth/me')
       .then((r) => setUser({ username: r.data.username, plan: r.data.plan }))
-      .catch(() => { /* JWT 만료 시 로그인 버튼 표시 */ })
-  }, [jwt])
+      .catch(() => { /* 비로그인 상태 */ })
+      .finally(() => setChecked(true))
+  }, [])
 
-  // JWT 제거 후 메인으로 이동
+  // 로그아웃 쿠키 만료 후 메인으로 이동
   const handleLogout = () => {
-    localStorage.removeItem('jwt')
-    setUser(null)
-    navigate('/')
+    axios.post('/api/auth/logout').finally(() => {
+      setUser(null)
+      navigate('/')
+    })
   }
+
+  if (!checked) return null
 
   return (
     <header className="flex items-center justify-between px-8 py-4 border-b border-gray-800 flex-shrink-0 bg-gray-950">
@@ -60,18 +61,6 @@ export default function AppHeader({ onLogin }: Props) {
               설정
             </button>
             <button onClick={handleLogout} className="text-gray-400 hover:text-white transition-colors">
-              로그아웃
-            </button>
-          </>
-        ) : jwt ? (
-          <>
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="px-4 py-1.5 bg-white text-black rounded-md font-medium hover:bg-gray-100 transition-colors text-sm"
-            >
-              대시보드
-            </button>
-            <button onClick={handleLogout} className="text-gray-400 hover:text-white transition-colors text-sm">
               로그아웃
             </button>
           </>
