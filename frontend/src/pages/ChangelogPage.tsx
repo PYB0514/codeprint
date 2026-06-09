@@ -11,6 +11,15 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.15.0',
+    date: '2026-06-09',
+    title: '경고 노드 클릭 시 사이드바 상세 표시',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '경고가 있는 노드 클릭 시 우측 사이드바에 해당 경고 상세 표시 — 경고 타입, 메시지, 색상 구분' },
+    ],
+  },
+  {
     version: 'v0.14.0',
     date: '2026-06-09',
     title: '경고 패널 타입별 그룹핑 UI',
