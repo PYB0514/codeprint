@@ -11,6 +11,17 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.11.0',
+    date: '2026-06-09',
+    title: '런타임 경고 패턴 확장',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: '@Async 자기 호출 감지 — 같은 파일 내 @Async 메서드 직접 호출 시 경고 (Spring 프록시 우회 패턴)' },
+      { category: '백엔드', desc: 'DB 레이어 우회 감지 — interfaces/application 레이어가 infrastructure/persistence를 직접 호출 시 경고' },
+      { category: '백엔드', desc: '정적 분석 엔진에 @Async 메서드 추출 추가 — StaticCodeAnalyzer → ParsedFile → GraphBuilder 파이프라인' },
+    ],
+  },
+  {
     version: 'v0.10.0',
     date: '2026-06-09',
     title: '런타임 경고 감지',

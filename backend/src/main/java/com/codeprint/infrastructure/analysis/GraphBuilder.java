@@ -57,6 +57,9 @@ public class GraphBuilder {
                         ? "생성자"
                         : pf.functionComments().get(funcName);
                 if (comment != null) meta.put("comment", comment);
+                if (pf.asyncMethods() != null && pf.asyncMethods().contains(funcName)) {
+                    meta.put("isAsync", true);
+                }
                 funcNode.updateMetadata(meta);
                 graphRepository.saveNode(funcNode);
                 funcNodeIds.put(pf.filePath() + "::" + funcName, funcNode.getId());
