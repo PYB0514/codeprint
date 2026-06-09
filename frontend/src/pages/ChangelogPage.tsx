@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.20.0',
+    date: '2026-06-09',
+    title: '공유 그래프에 런타임 경고 표시',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: '공개 공유 그래프 API에 경고 감지 추가 — 비인증 뷰어에서도 경고 확인 가능' },
+      { category: '프론트', desc: '공유 그래프 페이지 좌측에 런타임 경고 패널 표시 (경고 없으면 숨김)' },
+    ],
+  },
+  {
     version: 'v0.19.0',
     date: '2026-06-09',
     title: '그래프 키보드 단축키',

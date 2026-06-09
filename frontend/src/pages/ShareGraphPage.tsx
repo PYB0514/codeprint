@@ -18,6 +18,7 @@ import type { Node, Edge } from '@xyflow/react'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
+import WarningPanel from '../components/WarningPanel'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -77,6 +78,7 @@ function ShareGraphInner() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [warnings, setWarnings] = useState<{ type: string; nodeIds: string[]; message: string }[]>([])
 
   useEffect(() => {
     if (!projectId) return
@@ -92,7 +94,8 @@ function ShareGraphInner() {
 
     Promise.all([graphPromise, presetPromise])
       .then(([graphRes, presetRes]) => {
-        const raw = graphRes.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[] }
+        const raw = graphRes.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; message: string }[] }
+        if (raw.warnings) setWarnings(raw.warnings)
 
         // 프리셋 config 파싱 (없으면 기본값)
         const cfg = (presetRes?.data?.config ?? {}) as Record<string, unknown>
@@ -159,8 +162,21 @@ function ShareGraphInner() {
         </div>
       </div>
 
-      {/* 그래프 */}
-      <div className="flex-1">
+      {/* 본문 */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* 경고 패널 (경고 있을 때만) */}
+        {warnings.length > 0 && (
+          <div className="w-64 shrink-0 bg-gray-900 border-r border-gray-800 overflow-y-auto p-3 flex flex-col gap-2">
+            <div className="text-xs font-semibold text-yellow-400 flex items-center gap-1.5">
+              <span>⚠</span>
+              <span>런타임 경고 ({warnings.length})</span>
+            </div>
+            <WarningPanel warnings={warnings} />
+          </div>
+        )}
+
+        {/* 그래프 */}
+        <div className="flex-1">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -176,6 +192,7 @@ function ShareGraphInner() {
           <Controls />
           <MiniMap nodeColor="#6b7280" maskColor="rgba(17,24,39,0.7)" />
         </ReactFlow>
+        </div>
       </div>
     </div>
   )

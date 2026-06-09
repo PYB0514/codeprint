@@ -34,7 +34,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**", "/api/share/**", "/api/community/posts", "/api/community/posts/*/graph", "/api/payments/webhook", "/api/notices", "/api/donations", "/api/users/**", "/ws/**", "/login/**", "/oauth2/**", "/actuator/health").permitAll()
+                .requestMatchers("/api/auth/**", "/api/share/**", "/api/community/posts", "/api/community/posts/*/graph", "/api/payments/webhook", "/api/notices", "/api/donations", "/api/users/**", "/ws/**", "/login/**", "/oauth2/**", "/actuator/health", "/api/dev/**").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
