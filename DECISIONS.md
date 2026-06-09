@@ -4,6 +4,16 @@
 
 ---
 
+## v0.15.5 — 로그아웃 쿠키 미삭제 버그 수정
+
+**문제.** 로그아웃 버튼 클릭 후 새로고침 시 로그인 상태가 유지됨. POST `/api/auth/logout` 호출은 204를 반환하지만 직후 `/api/auth/me` 가 200을 반환 — 쿠키가 실제로 삭제되지 않음.
+
+**이유.** OAuth 로그인 시 쿠키는 브라우저가 `localhost:8080`에 직접 접속하면서 발급됨(백엔드 직접 Set-Cookie). 로그아웃 요청은 Vite 프록시(`localhost:3000`)를 거쳐서 백엔드로 전달되고, 응답의 Set-Cookie(Max-Age=0)가 `localhost:3000` origin으로 내려옴. 로그인 쿠키(`:8080`)와 삭제 명령(`:3000`)의 origin이 달라 브라우저가 삭제 처리를 하지 않음.
+
+**결과.** `GET /api/auth/logout-redirect` 엔드포인트 추가 — 브라우저가 직접 `localhost:8080`에 GET 요청 → 쿠키 만료 Set-Cookie → `frontendUrl`로 리다이렉트. 프론트 `handleLogout`은 `window.location.href = backendUrl/api/auth/logout-redirect`로 변경해 프록시를 완전히 우회.
+
+---
+
 ## v0.28.0 — JWT localStorage → HttpOnly 쿠키 마이그레이션
 
 **문제.** JWT를 localStorage에 저장하면 XSS 공격 시 토큰이 탈취되는 보안 취약점 존재. SECURITY_POLICY.md Phase 3 항목.
