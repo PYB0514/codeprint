@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.21.0',
+    date: '2026-06-09',
+    title: '노드 타입 가시성 필터',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '좌측 사이드바 노드 섹션에 FILE / FUNCTION / DB / API 타입별 표시/숨김 토글 추가' },
+      { category: '프론트', desc: '대규모 그래프에서 원하는 노드 타입만 집중해서 볼 수 있음' },
+    ],
+  },
+  {
     version: 'v0.20.0',
     date: '2026-06-09',
     title: '공유 그래프에 런타임 경고 표시',

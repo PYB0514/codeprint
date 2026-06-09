@@ -439,6 +439,7 @@ function GraphPageInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [rawNodes, setRawNodes] = useState<RawNode[]>([])
+  const [hiddenNodeTypes, setHiddenNodeTypes] = useState<Set<string>>(new Set())
   const [nodeSearchQuery, setNodeSearchQuery] = useState('')
   const [counts, setCounts] = useState({ files: 0, funcs: 0, edges: 0 })
   const [loading, setLoading] = useState(true)
@@ -1016,6 +1017,18 @@ function GraphPageInner() {
       setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
     }
   }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, applyEdgeVisibility])
+
+  // 특정 노드 타입의 표시/숨김 토글 — rawNodes에서 ID로 타입 역조회
+  const toggleNodeType = useCallback((nodeType: string) => {
+    setHiddenNodeTypes(prev => {
+      const next = new Set(prev)
+      if (next.has(nodeType)) next.delete(nodeType)
+      else next.add(nodeType)
+      const typeIds = new Set(rawNodes.filter(n => n.type === nodeType).map(n => n.id))
+      setNodes(nds => nds.map(n => typeIds.has(n.id) ? { ...n, hidden: next.has(nodeType) } : n))
+      return next
+    })
+  }, [rawNodes, setNodes])
 
   // IMPORT 엣지 표시/숨김 토글
   const toggleEdges = useCallback(() => {
@@ -1678,6 +1691,30 @@ function GraphPageInner() {
                   <span className="text-gray-600">/</span>
                   <span className={labelMode === 'comment' ? 'text-white' : 'text-gray-500'}>주석</span>
                 </button>
+              </div>
+            </LeftSection>
+
+            {/* 노드 타입 가시성 필터 */}
+            <LeftSection title="노드">
+              <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
+                {([
+                  { type: 'FILE',         label: 'FILE',     color: '#6b7280' },
+                  { type: 'FUNCTION',     label: 'FUNCTION', color: '#10b981' },
+                  { type: 'DB_TABLE',     label: 'DB',       color: '#ef4444' },
+                  { type: 'API_ENDPOINT', label: 'API',      color: '#3b82f6' },
+                ] as { type: string; label: string; color: string }[]).map(({ type, label, color }) => {
+                  const hidden = hiddenNodeTypes.has(type)
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => toggleNodeType(type)}
+                      className="flex items-center gap-1.5 px-1.5 py-1 rounded hover:bg-gray-800 transition-colors"
+                    >
+                      <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: hidden ? '#374151' : color }} />
+                      <span className={`text-xs ${hidden ? 'text-gray-600 line-through' : 'text-gray-300'}`}>{label}</span>
+                    </button>
+                  )
+                })}
               </div>
             </LeftSection>
 
