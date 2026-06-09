@@ -216,6 +216,10 @@ WHERE 컬럼 IS NOT NULL
 
 이 가이드라인들은 서로 충돌 없이 적용된다. 우선순위가 필요한 경우: **보안 > DDD 구조 > 코드 품질 > 단순성**.
 
+**애매하면 자세하게 되물어봐라.** 코딩, 의사결정, 파일 위치, 기록 방식 등 어떤 상황이든 확신이 없으면 혼자 진행하지 말고 먼저 물어본다. 잘못된 방향으로 혼자 진행하는 것보다 한 번 묻는 게 낫다.
+
+**새 파일 생성 전 반드시 허락받아라.** 새 md 파일(메모리, 결정 기록 등)을 만들 때는 반드시 사용자에게 먼저 물어본다. 기존 파일 중 유사한 곳에 추가하는 것이 원칙이고, 새 파일이 꼭 필요한 경우에만 허락 후 생성한다.
+
 ---
 
 ### 0. Autonomous Execution
@@ -233,6 +237,12 @@ PostCompact 훅으로부터 신호를 받으면 **1회라도** 즉시 아래 순
    ```
    /loop CLAUDE.md, PROGRESS.md, 최신 Context 파일 읽고 개발예정사항 순서대로 진행해
    ```
+
+**세션 시작 시 반드시 읽는 파일**
+`/loop`로 세션을 시작하면 가장 먼저 아래 세 파일을 읽고 현재 상태를 파악한 뒤 작업을 시작한다.
+1. `CLAUDE.md` — 개발 원칙 및 규칙
+2. `PROGRESS.md` — 완료된 작업 및 다음 작업 목록
+3. `contexts/Context{N}.md` — 가장 번호가 높은 최신 Context 파일
 
 **"다음은 뭐 할까?" 라고 묻지 않는다.**
 작업이 끝나면 PROGRESS.md와 SECURITY_POLICY.md를 보고 스스로 다음 우선순위를 판단해서 진행한다.
@@ -311,7 +321,7 @@ PostCompact 훅으로부터 신호를 받으면 **1회라도** 즉시 아래 순
 - GitHub 로그인이 필요한 부분은 사용자에게 직접 테스트를 요청하고 결과를 확인한 뒤 push
 
 **규칙 5: DECISIONS.md 기록**
-아래 중 하나라도 해당하면 push 전에 해당 DECISIONS 파일에 기록한다.
+아래 중 하나라도 해당하면 push 전에 `decisions/` 폴더 내 주제별 파일에 기록한다. (`DECISIONS_BACKEND.md`, `DECISIONS_RAILWAY.md`, `DECISIONS_FRONTEND.md`, `DECISIONS_INFRA.md` 등 — 루트에 DECISIONS.md를 만들지 않는다.)
 - 버그 원인을 파악하고 수정했다
 - 여러 방법 중 하나를 선택했다 (탈락 이유 포함)
 - 기능을 추가했다가 제거하거나 번복했다
@@ -400,6 +410,11 @@ Define success criteria. Loop until verified.
 - 경계 조건이 있는 비즈니스 규칙 (예: limit, 0, null, 소유권 없음)
 - 이미 한 번 버그가 난 코드 (회귀 방지)
 - **같은 클래스/함수에서 버그가 2회 이상 발생했다면 → 즉시 테스트 코드 작성. 선택이 아닌 의무.**
+
+**ERROR_TRACKER.md 운용 규칙 — 반복 버그 포착의 유일한 수단**
+- 런타임 에러가 처음 발생하면 종류 불문(500, NPE, 마이그레이션 실패, 컴파일 에러 등) **즉시 ERROR_TRACKER.md에 기록**. 기록 없이는 두 번째 발생 여부를 알 수 없다.
+- 에러를 고쳤다고 기록을 건너뛰지 않는다. 수정 여부와 무관하게 첫 발생 시 반드시 기록.
+- 버그 수정 전에 ERROR_TRACKER.md를 먼저 확인 — 이미 기록된 항목이면 두 번째 발생이므로 회귀 테스트 작성 의무.
 
 TDD 대상 클래스 예시: `ProjectDomainService`, `GraphBuilder`, `AnalysisService`, `StripeWebhookHandler`
 
