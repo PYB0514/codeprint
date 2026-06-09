@@ -40,18 +40,18 @@ export default function SectionNode({ data }: NodeProps) {
       style={{
         width: '100%',
         height: '100%',
-        border: `1.5px dashed ${color}55`,
+        border: `2px solid ${color}99`,
         borderRadius: 14,
-        background: `${color}08`,
+        background: `${color}12`,
         pointerEvents: 'none',
         position: 'relative',
       }}
     >
       <span style={{
         position: 'absolute', top: 8, left: 14,
-        fontSize: scaledFontSize(13, zoom), fontWeight: 700,
-        color: `${color}cc`,
-        letterSpacing: '0.08em', textTransform: 'uppercase',
+        fontSize: scaledFontSize(18, zoom), fontWeight: 800,
+        color: `${color}ee`,
+        letterSpacing: '0.1em', textTransform: 'uppercase',
       }}>
         {String(data?.label ?? '')}
       </span>
