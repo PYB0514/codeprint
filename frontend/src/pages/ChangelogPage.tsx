@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.17.0',
+    date: '2026-06-09',
+    title: '노드 검색',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '좌측 사이드바에 노드 검색 입력란 추가 — 파일명·함수명·한국어 주석으로 실시간 필터링' },
+      { category: '프론트', desc: '검색 결과 클릭 시 해당 노드로 그래프 자동 이동 (fitView)' },
+    ],
+  },
+  {
     version: 'v0.16.0',
     date: '2026-06-09',
     title: '경고 엣지 황색 하이라이트',
