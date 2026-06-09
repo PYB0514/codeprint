@@ -17,6 +17,7 @@ const RELEASES: Release[] = [
     type: 'feature',
     items: [
       { category: '프론트', desc: '/ — 검색창 포커스, Esc — 사이드바 닫기, F — 전체 화면 맞춤, L — 라벨 이름/주석 전환' },
+      { category: '프론트', desc: '상단 바 ? 버튼 — 호버 시 단축키 목록 팝업 표시' },
     ],
   },
   {
