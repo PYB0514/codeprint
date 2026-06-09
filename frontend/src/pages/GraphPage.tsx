@@ -250,17 +250,6 @@ interface PlaybackItem {
 
 const CALL_FLOW_TYPES = ['FUNCTION_CALL', 'DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE', 'API_CALL']
 
-// 엣지 타입 → 전환 레이블
-const EDGE_TYPE_LABEL: Record<string, string> = {
-  FUNCTION_CALL: '호출',
-  API_CALL: 'HTTP 요청',
-  DB_READ: 'DB 조회',
-  DB_WRITE: 'DB 저장',
-  DB_CREATE: 'DB 생성',
-  DB_UPDATE: 'DB 수정',
-  DB_DELETE: 'DB 삭제',
-}
-
 // 트리에서 nodeId 검색
 function findTreeNode(root: CallTreeNode, nodeId: string): CallTreeNode | null {
   if (root.nodeId === nodeId) return root
@@ -395,41 +384,6 @@ function buildCallTree(
   return { tree: rootNode, defaultNodeIds, defaultEdgeIds, defaultEdgeTypes }
 }
 
-// 호출 트리 패널 — 분기 포함 흐름 트리 표시
-function CallTreePanel({ root, activeNodeIds, onSelectBranch }: {
-  root: CallTreeNode
-  activeNodeIds: Set<string>
-  onSelectBranch: (nodeId: string) => void
-}) {
-  const EDGE_LABEL: Record<string, string> = {
-    API_CALL: 'API', FUNCTION_CALL: '호출',
-    DB_READ: 'READ', DB_CREATE: 'CREATE', DB_UPDATE: 'UPDATE', DB_DELETE: 'DELETE', DB_WRITE: 'WRITE',
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function renderNode(node: CallTreeNode, depth: number): any {
-    const isActive = activeNodeIds.has(node.nodeId)
-    const hasBranches = node.children.length > 1
-    return (
-      <div key={node.nodeId}>
-        <button
-          className={`w-full text-left flex items-center gap-1 py-0.5 rounded text-[11px] transition-colors ${
-            isActive ? 'text-amber-300' : 'text-gray-500 hover:text-gray-300'
-          }`}
-          style={{ paddingLeft: `${depth * 10 + 4}px` }}
-          onClick={() => onSelectBranch(node.nodeId)}
-          title={node.subLabel}
-        >
-          {node.edgeType && <span className="text-[9px] text-gray-600 flex-shrink-0 mr-0.5">{EDGE_LABEL[node.edgeType] ?? '→'}</span>}
-          {hasBranches && <span className="text-blue-400 flex-shrink-0 text-[10px] mr-0.5">⑂</span>}
-          <span className={`truncate ${isActive ? 'font-medium' : ''}`}>{node.label}</span>
-        </button>
-        <div>{node.children.map((child) => renderNode(child, depth + 1))}</div>
-      </div>
-    )
-  }
-  return <div className="flex flex-col max-h-52 overflow-y-auto">{renderNode(root, 0)}</div>
-}
-
 // 그래프 페이지 내부 컴포넌트 (ReactFlow 훅 사용)
 function GraphPageInner() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -521,7 +475,7 @@ function GraphPageInner() {
   const [playbackItems, setPlaybackItems] = useState<PlaybackItem[]>([])
   const [playbackCursor, setPlaybackCursor] = useState(-1)
   const [playbackPlaying, setPlaybackPlaying] = useState(false)
-  const [playbackSpeed, setPlaybackSpeed] = useState(600)
+  const playbackSpeed = 600
   const playbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [callTree, setCallTree] = useState<CallTreeNode | null>(null)
   const [activePath, setActivePath] = useState<{ nodeIds: string[]; edgeIds: string[]; edgeTypes: string[] }>({ nodeIds: [], edgeIds: [], edgeTypes: [] })
@@ -2036,89 +1990,104 @@ function GraphPageInner() {
 
                 {/* ── 흐름 재생 패널 ── */}
                 {callTree && (() => {
-                  const DDD_LAYERS = ['interfaces', 'application', 'domain', 'infrastructure']
-                  const LAYER_LABEL: Record<string, string> = {
-                    interfaces: 'API',
-                    application: 'App',
-                    domain: 'Domain',
-                    infrastructure: 'Infra',
-                  }
                   const cur = playbackCursor >= 0 ? playbackItems[playbackCursor] : null
-                  const curLayer = cur?.layer ?? ''
-                  const curLayerIdx = DDD_LAYERS.indexOf(curLayer)
-                  // 분기점 — 현재 스텝 노드에서 트리 자식이 2개 이상인 경우
+                  const total = playbackItems.length
+
+                  // 흐름 목적: 루트 노드의 주석 또는 이름
+                  const rootRaw = rawNodes.find((n) => n.id === callTree.nodeId)
+                  const flowTitle = rootRaw?.comment || rootRaw?.name || '흐름 재생'
+
+                  // 도메인: 루트 파일 경로에서 컨텍스트 추출
+                  const rootPath = rootRaw?.filePath ?? ''
+                  const domainMatch = rootPath.match(/\/(project|user|graph|analysis|community|auth|payment|admin)[/.]?/i)
+                  const domainLabel = domainMatch ? domainMatch[1] : null
+
+                  // 분기점 감지
                   const curTreeNode = cur ? findTreeNode(callTree, cur.id) : null
-                  const hasBranch = (curTreeNode?.children.length ?? 0) > 1
+                  const branchChildren = (curTreeNode?.children.length ?? 0) > 1 ? curTreeNode!.children : []
+
                   return (
-                  <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-3 flex flex-col gap-3">
-                    {/* 헤더 */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider">▶ 흐름 재생</span>
-                      <button onClick={resetPlayback} className="text-gray-600 hover:text-gray-400 text-xs" title="초기화">✕</button>
+                  <div className="bg-gray-800/60 border border-gray-700 rounded-xl overflow-hidden">
+                    {/* 헤더 — 흐름 목적 + 도메인 뱃지 */}
+                    <div className="flex items-center justify-between px-3 pt-3 pb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-amber-400 text-xs">▶</span>
+                        <span className="text-white text-xs font-semibold truncate">{flowTitle}</span>
+                        {domainLabel && (
+                          <span className="flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-blue-900/50 text-blue-300 border border-blue-700/40">
+                            {domainLabel}
+                          </span>
+                        )}
+                      </div>
+                      <button onClick={resetPlayback} className="flex-shrink-0 text-gray-600 hover:text-gray-400 text-xs ml-2" title="닫기">✕</button>
                     </div>
 
-                    {/* DDD 레이어 진행 바 */}
-                    <div className="flex items-center gap-1">
-                      {DDD_LAYERS.map((l, i) => {
-                        const isActive = l === curLayer
-                        const isPast = curLayerIdx > i
-                        return (
-                          <div key={l} className="flex items-center gap-1 flex-1">
-                            <div className={`flex-1 text-center text-[9px] py-0.5 rounded font-medium transition-all duration-300 ${
-                              isActive ? 'bg-amber-500 text-black' :
-                              isPast ? 'bg-amber-900/50 text-amber-600' :
-                              'bg-gray-700/50 text-gray-600'
-                            }`}>{LAYER_LABEL[l]}</div>
-                            {i < DDD_LAYERS.length - 1 && <span className="text-gray-700 text-[8px]">›</span>}
-                          </div>
-                        )
-                      })}
-                    </div>
+                    {/* 전체 단계 도트 — 클릭하면 해당 스텝으로 이동 */}
+                    {total > 1 && (
+                      <div className="px-3 pb-2">
+                        <div className="flex items-center gap-0.5 flex-wrap">
+                          {playbackItems.map((item, i) => {
+                            const isCur = i === playbackCursor
+                            const isPast = i < playbackCursor
+                            const isLast = i === total - 1
+                            const hasBranchHere = (() => {
+                              const tn = findTreeNode(callTree, item.id)
+                              return (tn?.children.length ?? 0) > 1
+                            })()
+                            return (
+                              <div key={item.id} className="flex items-center gap-0.5">
+                                <button
+                                  onClick={() => { setPlaybackCursor(i); setPlaybackPlaying(false) }}
+                                  title={item.label}
+                                  className={`w-2.5 h-2.5 rounded-full transition-all duration-200 flex-shrink-0 ${
+                                    isCur ? 'bg-amber-400 scale-125 ring-2 ring-amber-400/30' :
+                                    isPast ? 'bg-amber-700/60' :
+                                    'bg-gray-600 hover:bg-gray-500'
+                                  } ${hasBranchHere ? 'ring-1 ring-blue-400/50' : ''}`}
+                                />
+                                {!isLast && (
+                                  <div className={`w-2 h-px flex-shrink-0 ${isPast || isCur ? 'bg-amber-700/50' : 'bg-gray-700'}`} />
+                                )}
+                              </div>
+                            )
+                          })}
+                          <span className="ml-1.5 text-[9px] text-gray-500 tabular-nums whitespace-nowrap">
+                            {playbackCursor < 0 ? `0 / ${total}` : `${playbackCursor + 1} / ${total} 단계`}
+                          </span>
+                        </div>
+                      </div>
+                    )}
 
                     {/* 현재 스텝 카드 */}
                     {cur && (
-                      <div className="bg-gray-900/60 border border-gray-700/50 rounded-lg p-2.5 flex flex-col gap-1.5">
-                        {cur.incomingEdgeType && (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[8px] text-gray-600">via</span>
-                            <span className="text-[9px] text-amber-400/80 bg-amber-900/20 px-1.5 py-0.5 rounded font-mono">
-                              {EDGE_TYPE_LABEL[cur.incomingEdgeType] ?? cur.incomingEdgeType}
-                            </span>
-                          </div>
-                        )}
-                        <p className="text-emerald-300 font-mono text-xs font-semibold leading-snug">{cur.label}</p>
+                      <div className="mx-3 mb-2 bg-gray-900/70 rounded-lg px-3 py-2.5 flex flex-col gap-1">
+                        <p className="text-emerald-300 text-xs font-semibold leading-snug">{cur.label}</p>
                         {cur.filePath && (
-                          <p className="text-[9px] text-blue-400/70 font-mono truncate" title={cur.filePath}>
-                            {cur.filePath.split('/').slice(-2).join('/')}
+                          <p className="text-[10px] text-gray-500 truncate" title={cur.filePath}>
+                            {cur.filePath.split('/').pop()}
                           </p>
-                        )}
-                        {cur.layer && (
-                          <span className="self-start text-[9px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">{cur.layer}</span>
                         )}
                       </div>
                     )}
 
-                    {/* 분기 선택 버튼 — 현재 노드에서 여러 경로가 갈리는 경우 */}
-                    {hasBranch && curTreeNode && (
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[9px] text-gray-500 uppercase tracking-wider">분기 선택</span>
-                        {curTreeNode.children.map((child) => {
+                    {/* 분기 선택 — 현재 스텝에서 경로가 갈릴 때 */}
+                    {branchChildren.length > 0 && (
+                      <div className="mx-3 mb-2 flex flex-col gap-1">
+                        <p className="text-[9px] text-gray-500">이 다음 경로를 선택하세요</p>
+                        {branchChildren.map((child) => {
                           const childRaw = rawNodes.find((n) => n.id === child.nodeId)
                           const isActive = activePath.nodeIds.includes(child.nodeId)
                           return (
                             <button
                               key={child.nodeId}
                               onClick={() => selectBranch(child.nodeId)}
-                              className={`text-left text-[10px] px-2 py-1.5 rounded border transition-colors ${
+                              className={`text-left text-[10px] px-2.5 py-1.5 rounded-lg border transition-colors ${
                                 isActive
-                                  ? 'border-amber-600 bg-amber-900/30 text-amber-300'
-                                  : 'border-gray-700 bg-gray-800/50 text-gray-400 hover:border-gray-600 hover:text-gray-300'
+                                  ? 'border-amber-600/60 bg-amber-900/20 text-amber-300'
+                                  : 'border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-200 hover:bg-gray-700/30'
                               }`}
                             >
-                              <span className="font-mono">{childRaw?.comment || childRaw?.name || child.nodeId}</span>
-                              {child.edgeType && (
-                                <span className="ml-1.5 text-[8px] text-gray-600">{EDGE_TYPE_LABEL[child.edgeType] ?? child.edgeType}</span>
-                              )}
+                              {childRaw?.comment || childRaw?.name || child.nodeId}
                             </button>
                           )
                         })}
@@ -2126,73 +2095,27 @@ function GraphPageInner() {
                     )}
 
                     {/* 재생 컨트롤 */}
-                    {playbackItems.length > 1 && (
-                      <div className="flex flex-col gap-2 border-t border-gray-700/50 pt-2">
-                        {/* 진행 바 + 스텝 카운터 */}
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1 bg-gray-700 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-amber-400 rounded-full transition-all duration-300"
-                              style={{ width: playbackCursor < 0 ? '0%' : `${((playbackCursor + 1) / playbackItems.length) * 100}%` }}
-                            />
-                          </div>
-                          <span className="text-[9px] text-gray-600 tabular-nums whitespace-nowrap">
-                            {playbackCursor < 0 ? '-' : `${playbackCursor + 1}/${playbackItems.length}`}
-                          </span>
-                        </div>
-                        {/* 버튼 행 */}
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => setPlaybackCursor((c) => Math.max(0, c - 1))}
-                            disabled={playbackCursor <= 0}
-                            className="text-xs text-gray-400 hover:text-white disabled:opacity-30 px-1.5 py-1 rounded hover:bg-gray-700"
-                          >⏮</button>
-                          <button
-                            onClick={() => {
-                              if (playbackCursor >= playbackItems.length - 1) {
-                                setPlaybackCursor(0)
-                                setPlaybackPlaying(true)
-                              } else {
-                                setPlaybackPlaying((p) => !p)
-                              }
-                            }}
-                            className="flex-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-700/40 rounded px-2 py-1.5"
-                          >
-                            {playbackPlaying ? '⏸ 일시정지' : playbackCursor >= playbackItems.length - 1 ? '↺ 처음부터' : '▶ 재생'}
-                          </button>
-                          <button
-                            onClick={() => setPlaybackCursor((c) => Math.min(playbackItems.length - 1, c + 1))}
-                            disabled={playbackCursor >= playbackItems.length - 1}
-                            className="text-xs text-gray-400 hover:text-white disabled:opacity-30 px-1.5 py-1 rounded hover:bg-gray-700"
-                          >⏭</button>
-                        </div>
-                        {/* 속도 선택 */}
-                        <div className="flex items-center justify-end gap-1">
-                          <span className="text-[9px] text-gray-600">속도</span>
-                          {[['빠름', 300], ['보통', 600], ['느림', 1000]].map(([label, ms]) => (
-                            <button
-                              key={ms}
-                              onClick={() => setPlaybackSpeed(ms as number)}
-                              className={`text-[9px] px-1.5 py-0.5 rounded ${playbackSpeed === ms ? 'bg-gray-600 text-white' : 'text-gray-600 hover:text-gray-400'}`}
-                            >{label}</button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 호출 트리 (접힘) */}
-                    <details className="group">
-                      <summary className="text-[9px] text-gray-600 hover:text-gray-400 cursor-pointer select-none list-none flex items-center gap-1">
-                        <span className="group-open:rotate-90 transition-transform inline-block">›</span> 전체 호출 트리
-                      </summary>
-                      <div className="mt-1.5">
-                        <CallTreePanel
-                          root={callTree}
-                          activeNodeIds={new Set(activePath.nodeIds)}
-                          onSelectBranch={selectBranch}
-                        />
-                      </div>
-                    </details>
+                    <div className="flex items-center gap-1 px-3 pb-3">
+                      <button
+                        onClick={() => setPlaybackCursor((c) => Math.max(0, c - 1))}
+                        disabled={playbackCursor <= 0}
+                        className="text-gray-500 hover:text-white disabled:opacity-25 px-2 py-1.5 rounded hover:bg-gray-700 text-sm"
+                      >←</button>
+                      <button
+                        onClick={() => {
+                          if (playbackCursor >= total - 1) { setPlaybackCursor(0); setPlaybackPlaying(true) }
+                          else setPlaybackPlaying((p) => !p)
+                        }}
+                        className="flex-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-700/40 rounded-lg py-1.5"
+                      >
+                        {playbackPlaying ? '⏸ 일시정지' : playbackCursor >= total - 1 ? '↺ 처음부터' : '▶ 재생'}
+                      </button>
+                      <button
+                        onClick={() => setPlaybackCursor((c) => Math.min(total - 1, c + 1))}
+                        disabled={playbackCursor >= total - 1}
+                        className="text-gray-500 hover:text-white disabled:opacity-25 px-2 py-1.5 rounded hover:bg-gray-700 text-sm"
+                      >→</button>
+                    </div>
                   </div>
                   )
                 })()}
