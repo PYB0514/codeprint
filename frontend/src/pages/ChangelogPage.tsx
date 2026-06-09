@@ -11,6 +11,20 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.9.0',
+    date: '2026-06-09',
+    title: '실시간 협업',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '협업 패널 — 그래프 헤더에서 세션 생성 및 초대 코드(8자리) 공유' },
+      { category: '프론트', desc: '다른 참가자 커서 실시간 오버레이 표시 (이름 라벨 + 색상)' },
+      { category: '프론트', desc: '참가자 아바타 — 현재 세션에 참가한 사용자 목록 표시' },
+      { category: '프론트', desc: '/collab/join 페이지 — 초대 코드 입력 후 그래프에 바로 참가' },
+      { category: '백엔드', desc: 'STOMP WebSocket — 커서 위치·노드 선택·입장/퇴장 이벤트 브로드캐스트' },
+      { category: '백엔드', desc: 'Free 플랜 최대 6명 협업 제한 (Pro 연동 예정)' },
+    ],
+  },
+  {
     version: 'v0.8.0',
     date: '2026-06-08',
     title: '계층형 / 도메인 이중 뷰',

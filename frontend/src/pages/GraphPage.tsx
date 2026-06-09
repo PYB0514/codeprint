@@ -1,6 +1,6 @@
 // 프로젝트 코드 구조를 React Flow로 시각화하는 그래프 페이지
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import {
   ReactFlow,
@@ -22,6 +22,9 @@ import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
 import OnboardingTour, { isTourDone } from '../components/OnboardingTour'
 import AppHeader from '../components/AppHeader'
+import { useCollaboration } from '../hooks/useCollaboration'
+import CollaborationPanel from '../components/CollaborationPanel'
+import CursorOverlay from '../components/CursorOverlay'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -420,6 +423,13 @@ function CallTreePanel({ root, activeNodeIds, onSelectBranch }: {
 function GraphPageInner() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+
+  // 협업 세션 상태 — URL query param에서 초기화
+  const [collabSessionId, setCollabSessionId] = useState<string | null>(searchParams.get('collab'))
+  const [collabInviteCode, setCollabInviteCode] = useState<string | null>(searchParams.get('code'))
+  // publishCursor를 ref로 감싸서 handleCollabMouseMove의 선언 순서 문제 우회
+  const publishCursorRef = useRef<(x: number, y: number) => void>(() => {})
 
   // 커서 throttle — 50ms마다 발행
   const cursorThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -471,12 +481,16 @@ function GraphPageInner() {
   const flowRef = useRef<HTMLDivElement>(null)
   const { getNodes, fitView, screenToFlowPosition } = useReactFlow()
 
-  // 마우스 이동 핸들러 (50ms throttle)
+  // 마우스 이동 핸들러 (50ms throttle) — 협업 세션 활성 시 커서 발행
   const handleCollabMouseMove = useCallback((e: React.MouseEvent) => {
     lastCursorRef.current = { x: e.clientX, y: e.clientY }
     if (cursorThrottleRef.current) return
     cursorThrottleRef.current = setTimeout(() => {
       cursorThrottleRef.current = null
+      if (lastCursorRef.current) {
+        const pos = screenToFlowPosition({ x: lastCursorRef.current.x, y: lastCursorRef.current.y })
+        publishCursorRef.current(pos.x, pos.y)
+      }
     }, 50)
   }, [screenToFlowPosition])
 
@@ -496,6 +510,9 @@ function GraphPageInner() {
   const [commentInput, setCommentInput] = useState('')
   const [commentNodeId, setCommentNodeId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const { state: collabState, publishCursor, publishSelection } = useCollaboration(collabSessionId, currentUserId)
+  // publishCursorRef를 항상 최신 publishCursor로 유지
+  publishCursorRef.current = publishCursor
 
   // 뷰 프리셋 상태
   const [presets, setPresets] = useState<{ slot: number; name: string; config: Record<string, unknown>; isDefault: boolean }[]>([])
@@ -1298,6 +1315,7 @@ function GraphPageInner() {
   }, [rawNodes, rawEdgesCache, graphId, startPlayback])
 
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    publishSelection(node.id)
     if (node.type === 'fileNode' || node.type === 'groupNode' || node.type === 'sectionNode') {
       resetPlayback()
       return
@@ -1350,10 +1368,26 @@ function GraphPageInner() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#030712', display: 'flex', flexDirection: 'column' }}>
-      <AppHeader />
+      <div style={{ position: 'relative' }}>
+        <AppHeader />
+        {projectId && currentUserId && (
+          <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', zIndex: 50 }}>
+            <CollaborationPanel
+              graphId={projectId}
+              myUserId={currentUserId}
+              participants={collabState.participants}
+              connected={collabState.connected}
+              sessionId={collabSessionId}
+              inviteCode={collabInviteCode}
+              onSessionReady={(sid, code) => { setCollabSessionId(sid); setCollabInviteCode(code) }}
+            />
+          </div>
+        )}
+      </div>
     <div ref={flowRef} style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
       <OnboardingTour run={tourRunning} onFinish={() => setTourRunning(false)} />
+      <CursorOverlay cursors={collabState.cursors} />
 
 
       {/* 최신 커밋 감지 배너 */}

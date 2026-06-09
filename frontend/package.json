@@ -12,6 +12,7 @@
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
     "@sentry/react": "^10.56.0",
+    "@stomp/stompjs": "^7.3.0",
     "@tailwindcss/vite": "^4.3.0",
     "@tosspayments/tosspayments-sdk": "^2.7.0",
     "@xyflow/react": "^12.11.0",
@@ -21,6 +22,7 @@
     "react-dom": "^19.2.6",
     "react-joyride": "^3.1.0",
     "react-router-dom": "^7.16.0",
+    "sockjs-client": "^1.6.1",
     "tailwindcss": "^4.3.0",
     "zustand": "^5.0.14"
   },
@@ -30,6 +32,7 @@
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/sockjs-client": "^1.5.4",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
