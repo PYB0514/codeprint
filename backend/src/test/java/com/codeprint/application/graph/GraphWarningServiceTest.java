@@ -203,4 +203,30 @@ class GraphWarningServiceTest {
         );
         assertThat(warnings.stream().filter(w -> "CROSS_CONTEXT_IMPORT".equals(w.get("type"))).toList()).isEmpty();
     }
+
+    @Test
+    @DisplayName("DB_TABLE 노드에 hasConverter=true 메타데이터 — MISSING_CONVERTER_MIGRATION 경고")
+    void missingConverterMigration_detected() {
+        Node tableNode = Node.create(graphId, NodeType.DB_TABLE, "users", "/com/example/domain/user/User.java", "java");
+        tableNode.updateMetadata(Map.of("hasConverter", true));
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(tableNode),
+                List.of()
+        );
+        assertThat(warnings).hasSize(1);
+        assertThat(warnings.get(0).get("type")).isEqualTo("MISSING_CONVERTER_MIGRATION");
+    }
+
+    @Test
+    @DisplayName("DB_TABLE 노드에 hasConverter 없음 — MISSING_CONVERTER_MIGRATION 경고 없음")
+    void missingConverterMigration_noConverter_noWarning() {
+        Node tableNode = Node.create(graphId, NodeType.DB_TABLE, "users", "/com/example/domain/user/User.java", "java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(tableNode),
+                List.of()
+        );
+        assertThat(warnings.stream().filter(w -> "MISSING_CONVERTER_MIGRATION".equals(w.get("type"))).toList()).isEmpty();
+    }
 }

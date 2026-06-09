@@ -201,14 +201,20 @@ public class GraphBuilder {
                 if (cols != null && !cols.isEmpty()) {
                     // 칼럼을 Map 목록으로 직렬화하여 JSONB에 저장
                     List<Map<String, String>> colData = new ArrayList<>();
+                    boolean anyConverter = false;
                     for (ColumnInfo col : cols) {
                         Map<String, String> c = new HashMap<>();
                         c.put("fieldName", col.fieldName());
                         c.put("columnName", col.columnName());
                         c.put("javaType", col.javaType());
+                        if (col.hasConverter()) {
+                            c.put("hasConverter", "true");
+                            anyConverter = true;
+                        }
                         colData.add(c);
                     }
                     tableMeta.put("columns", colData);
+                    if (anyConverter) tableMeta.put("hasConverter", true);
                 }
                 tableNode.updateMetadata(tableMeta);
                 graphRepository.saveNode(tableNode);

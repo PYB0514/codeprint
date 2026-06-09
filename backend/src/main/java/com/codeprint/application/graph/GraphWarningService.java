@@ -22,6 +22,7 @@ public class GraphWarningService {
         warnings.addAll(detectAsyncSelfCalls(nodes, edges));
         warnings.addAll(detectDbLayerBypass(nodes, edges));
         warnings.addAll(detectCrossContextDomainImport(nodes, edges));
+        warnings.addAll(detectMissingConverterMigration(nodes));
         return warnings;
     }
 
@@ -251,5 +252,24 @@ public class GraphWarningService {
         String after = path.substring(idx + "/domain/".length());
         int slash = after.indexOf('/');
         return slash > 0 ? after.substring(0, slash) : null;
+    }
+
+    // DB_TABLE 노드 중 @Convert 컨버터가 있는 컬럼이 있을 때 — 기존 데이터 마이그레이션 누락 가능성 경고
+    private List<Map<String, Object>> detectMissingConverterMigration(List<Node> nodes) {
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Node n : nodes) {
+            if (n.getType() != NodeType.DB_TABLE) continue;
+            Map<String, Object> meta = n.getMetadata();
+            if (meta == null) continue;
+            if (!Boolean.TRUE.equals(meta.get("hasConverter"))) continue;
+
+            Map<String, Object> w = new LinkedHashMap<>();
+            w.put("type", "MISSING_CONVERTER_MIGRATION");
+            w.put("nodeIds", List.of(n.getId().toString()));
+            w.put("message", "@Convert 컨버터 감지: " + n.getName()
+                    + " — 기존 평문 데이터에 대한 Flyway 마이그레이션이 필요합니다");
+            warnings.add(w);
+        }
+        return warnings;
     }
 }
