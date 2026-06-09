@@ -5,6 +5,7 @@ import com.codeprint.domain.user.RefreshToken;
 import com.codeprint.domain.user.RefreshTokenRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -29,12 +30,14 @@ public class RefreshTokenRepositoryImpl implements RefreshTokenRepository {
 
     // 사용자의 모든 Refresh Token 삭제
     @Override
+    @Transactional
     public void deleteAllByUserId(UUID userId) {
         jpa.deleteAllByUserId(userId);
     }
 
     // 특정 토큰 해시 삭제
     @Override
+    @Transactional
     public void deleteByTokenHash(String tokenHash) {
         jpa.deleteByTokenHash(tokenHash);
     }
