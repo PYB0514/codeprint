@@ -428,6 +428,60 @@ export function buildLayout(
     groupLayouts.set(key, { files: placed, w: gw, h: gh })
   })
 
+  // 도메인 뷰 전용: 혼합 그룹(예: interfaces/api)을 파일 도메인별로 분리
+  // — 같은 폴더의 컨트롤러들이 각자 올바른 도메인 섹션에 배치되도록
+  let effectiveGroups = groups
+  let effectiveGroupLayouts = groupLayouts
+  if (layoutPreset === 'domain') {
+    const splitGroups = new Map<string, RawNode[]>()
+    groups.forEach((files, key) => {
+      const byDomain = new Map<string, RawNode[]>()
+      files.forEach(f => {
+        const d = extractDomain(f.filePath, commonPrefix)
+        if (!byDomain.has(d)) byDomain.set(d, [])
+        byDomain.get(d)!.push(f)
+      })
+      if (byDomain.size <= 1) {
+        splitGroups.set(key, files)
+      } else {
+        byDomain.forEach((domainFiles, domain) => {
+          splitGroups.set(`${key}::${domain}`, domainFiles)
+        })
+      }
+    })
+
+    // 분리된 그룹 레이아웃 재계산
+    const splitLayouts = new Map<string, { files: Array<{ file: RawNode; x: number; y: number }>; w: number; h: number }>()
+    splitGroups.forEach((files, key) => {
+      if (groupLayouts.has(key)) {
+        splitLayouts.set(key, groupLayouts.get(key)!)
+        return
+      }
+      const COLS = 3
+      let col = 0, colX = 0, rowY = 0, maxRowH = 0
+      const placed: Array<{ file: RawNode; x: number; y: number }> = []
+      let totalW = 0
+      files.forEach(f => {
+        const size = fileSizes.get(f.id)!
+        placed.push({ file: f, x: colX, y: rowY })
+        totalW = Math.max(totalW, colX + size.w)
+        maxRowH = Math.max(maxRowH, size.h)
+        col++
+        if (col >= COLS) { col = 0; colX = 0; rowY += maxRowH + FILE_GAP; maxRowH = 0 }
+        else { colX += size.w + FILE_GAP }
+      })
+      if (col > 0) rowY += maxRowH
+      splitLayouts.set(key, {
+        files: placed,
+        w: GROUP_PAD * 2 + totalW,
+        h: GROUP_HEADER + GROUP_PAD + rowY + GROUP_PAD,
+      })
+    })
+
+    effectiveGroups = splitGroups
+    effectiveGroupLayouts = splitLayouts
+  }
+
   const fileIdSet = new Set(fileNodes.map((f) => f.id))
 
   // 파일별 인/아웃 연결 집계 (사이드바 데이터용)
@@ -470,7 +524,7 @@ export function buildLayout(
   let groupPositions: Map<string, { x: number; y: number }>
   let domainBoundsResult: Map<string, { x: number; y: number; w: number; h: number; domain: string }> | undefined
   if (layoutPreset === 'domain') {
-    const domainResult = buildDomainPositions(groups, groupLayouts, commonPrefix)
+    const domainResult = buildDomainPositions(effectiveGroups, effectiveGroupLayouts, commonPrefix)
     groupPositions = domainResult.positions
     domainBoundsResult = domainResult.domainBounds
   } else {
@@ -557,17 +611,21 @@ export function buildLayout(
   }
 
   // 그룹 노드 + 파일 노드 + 함수 노드 생성
-  groups.forEach((groupFiles, key) => {
-    const layout = groupLayouts.get(key)!
+  // 도메인 뷰: 분리된 그룹(effectiveGroups) 사용, 계층 뷰: 원본 groups 사용
+  const renderGroups = layoutPreset === 'domain' ? effectiveGroups : groups
+  const renderLayouts = layoutPreset === 'domain' ? effectiveGroupLayouts : groupLayouts
+  renderGroups.forEach((groupFiles, key) => {
+    const layout = renderLayouts.get(key)!
     const pos = groupPositions.get(key)
     if (!pos) return
     const gx = pos.x
     const gy = pos.y
 
-    // 그룹 키에서 layer / sub 분리 (예: "domain/user" → layer="domain", sub="user")
-    const slashIdx = key.indexOf('/')
-    const layer = slashIdx >= 0 ? key.slice(0, slashIdx) : key
-    const sub = slashIdx >= 0 ? key.slice(slashIdx + 1) : ''
+    // 그룹 키에서 layer / sub 분리 — split 키(예: "interfaces/api::graph")는 :: 앞 부분만 사용
+    const pureKey = key.includes('::') ? key.slice(0, key.indexOf('::')) : key
+    const slashIdx = pureKey.indexOf('/')
+    const layer = slashIdx >= 0 ? pureKey.slice(0, slashIdx) : pureKey
+    const sub = slashIdx >= 0 ? pureKey.slice(slashIdx + 1) : ''
 
     // 섹션 기준점 결정 — layer 모드: DDD 레이어 섹션 / domain 모드: 도메인 섹션
     let parentSectionId: string | undefined
@@ -698,7 +756,7 @@ export function buildLayout(
     {
       let allGroupsMaxX = 0, allMinY = Infinity, allMaxY = -Infinity
       groupPositions.forEach((pos, key) => {
-        const l = groupLayouts.get(key)
+        const l = effectiveGroupLayouts.get(key)
         if (!l) return
         allGroupsMaxX = Math.max(allGroupsMaxX, pos.x + l.w)
         allMinY = Math.min(allMinY, pos.y)
