@@ -1,7 +1,11 @@
 // 인증 관련 REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
+import com.codeprint.domain.user.RefreshToken;
+import com.codeprint.domain.user.RefreshTokenRepository;
 import com.codeprint.domain.user.User;
+import com.codeprint.domain.user.UserRepository;
+import com.codeprint.infrastructure.security.JwtTokenProvider;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -15,12 +19,21 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
+    private final JwtTokenProvider jwtTokenProvider;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final UserRepository userRepository;
+
+    // Refresh Token 유효 기간: 7일
+    private static final long REFRESH_TOKEN_EXPIRY_SECONDS = 7 * 24 * 60 * 60L;
 
     @Value("${app.frontend-url:http://localhost:3000}")
     private String frontendUrl;
@@ -40,20 +53,76 @@ public class AuthController {
         ));
     }
 
+    // Refresh Token으로 새 Access Token 발급
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refresh(HttpServletRequest request, HttpServletResponse response) {
+        String rawToken = extractCookie(request, "refresh_token");
+        if (rawToken == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "No refresh token"));
+        }
+
+        String tokenHash = jwtTokenProvider.hashRefreshToken(rawToken);
+        Optional<RefreshToken> storedOpt = refreshTokenRepository.findByTokenHash(tokenHash);
+        if (storedOpt.isEmpty() || storedOpt.get().isExpired()) {
+            return ResponseEntity.status(401).body(Map.of("error", "Invalid or expired refresh token"));
+        }
+
+        RefreshToken stored = storedOpt.get();
+        return userRepository.findById(stored.getUserId()).map(user -> {
+            // 기존 토큰 교체 (Refresh Token Rotation)
+            refreshTokenRepository.deleteByTokenHash(tokenHash);
+            String newRawToken = jwtTokenProvider.generateRefreshToken();
+            String newHash = jwtTokenProvider.hashRefreshToken(newRawToken);
+            refreshTokenRepository.save(RefreshToken.create(user.getId(), newHash,
+                    Instant.now().plusSeconds(REFRESH_TOKEN_EXPIRY_SECONDS)));
+
+            String newJwt = jwtTokenProvider.generateToken(user.getId(), user.getEmail(), user.getRole().name());
+            boolean isSecure = !frontendUrl.startsWith("http://localhost");
+
+            Cookie jwtCookie = new Cookie("jwt", newJwt);
+            jwtCookie.setHttpOnly(true);
+            jwtCookie.setPath("/");
+            jwtCookie.setMaxAge(3600);
+            jwtCookie.setSecure(isSecure);
+            response.addCookie(jwtCookie);
+
+            Cookie refreshCookie = new Cookie("refresh_token", newRawToken);
+            refreshCookie.setHttpOnly(true);
+            refreshCookie.setPath("/api/auth");
+            refreshCookie.setMaxAge((int) REFRESH_TOKEN_EXPIRY_SECONDS);
+            refreshCookie.setSecure(isSecure);
+            response.addCookie(refreshCookie);
+
+            return ResponseEntity.<Map<String, Object>>ok(Map.of("ok", true));
+        }).orElseGet(() -> ResponseEntity.status(401).body(Map.of("error", "User not found")));
+    }
+
     // jwt 쿠키 만료 + 세션 무효화로 로그아웃 처리
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+        revokeRefreshToken(request);
         invalidateSession(request);
         expireJwtCookie(response);
+        expireRefreshTokenCookie(response);
         return ResponseEntity.noContent().build();
     }
 
     // 쿠키 만료 + 세션 무효화 후 프론트엔드로 리다이렉트
     @GetMapping("/logout-redirect")
     public void logoutRedirect(HttpServletRequest request, HttpServletResponse response) throws java.io.IOException {
+        revokeRefreshToken(request);
         invalidateSession(request);
         expireJwtCookie(response);
+        expireRefreshTokenCookie(response);
         response.sendRedirect(frontendUrl);
+    }
+
+    // DB에서 Refresh Token 무효화
+    private void revokeRefreshToken(HttpServletRequest request) {
+        String rawToken = extractCookie(request, "refresh_token");
+        if (rawToken != null) {
+            refreshTokenRepository.deleteByTokenHash(jwtTokenProvider.hashRefreshToken(rawToken));
+        }
     }
 
     // Spring Security OAuth 세션 무효화
@@ -71,5 +140,23 @@ public class AuthController {
         expiredCookie.setPath("/");
         expiredCookie.setMaxAge(0);
         response.addCookie(expiredCookie);
+    }
+
+    // refresh_token 쿠키 만료 처리
+    private void expireRefreshTokenCookie(HttpServletResponse response) {
+        Cookie expiredCookie = new Cookie("refresh_token", "");
+        expiredCookie.setHttpOnly(true);
+        expiredCookie.setPath("/api/auth");
+        expiredCookie.setMaxAge(0);
+        response.addCookie(expiredCookie);
+    }
+
+    // 요청 쿠키에서 특정 이름의 값 추출
+    private String extractCookie(HttpServletRequest request, String name) {
+        if (request.getCookies() == null) return null;
+        for (Cookie cookie : request.getCookies()) {
+            if (name.equals(cookie.getName())) return cookie.getValue();
+        }
+        return null;
     }
 }

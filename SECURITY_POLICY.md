@@ -61,10 +61,10 @@
 
 | 항목 | 현재 | 목표 |
 |---|---|---|
-| 저장 위치 | localStorage (XSS 취약) | HttpOnly 쿠키 (Phase 3) |
-| 만료 시간 | ~~24시간~~ → **1시간** ✅ | HttpOnly 쿠키 전환 시 재검토 (Phase 3) |
-| 전달 방식 | URL 쿼리파라미터 | 쿠키 (Phase 3) |
-| Refresh token | 없음 | Phase 3 도입 |
+| 저장 위치 | ~~localStorage~~ → **HttpOnly 쿠키** ✅ | PR #142 완료 |
+| 만료 시간 | **1시간** ✅ | Access Token 기준 |
+| 전달 방식 | ~~URL 쿼리파라미터~~ → **쿠키** ✅ | PR #142 완료 |
+| Refresh token | **7일 만료, HttpOnly 쿠키, DB 저장(SHA-256 해시)** ✅ | feat/refresh-token 완료 |
 
 ---
 
@@ -125,5 +125,5 @@
 - [ ] Stripe Webhook race condition 방어
 
 ### Phase 3 — 유료화 전 필수
-- [ ] JWT HttpOnly 쿠키 전환
-- [ ] Refresh token 메커니즘
+- [x] JWT HttpOnly 쿠키 전환 (PR #142, v0.28.0)
+- [x] Refresh token 메커니즘 (feat/refresh-token)

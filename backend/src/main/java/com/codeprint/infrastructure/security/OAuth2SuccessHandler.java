@@ -2,6 +2,8 @@
 package com.codeprint.infrastructure.security;
 
 import com.codeprint.application.user.UserCommandService;
+import com.codeprint.domain.user.RefreshToken;
+import com.codeprint.domain.user.RefreshTokenRepository;
 import com.codeprint.domain.user.User;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,6 +20,7 @@ import org.springframework.security.web.authentication.SimpleUrlAuthenticationSu
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Map;
 
 @Slf4j
@@ -28,6 +31,10 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private final JwtTokenProvider jwtTokenProvider;
     private final UserCommandService userCommandService;
     private final OAuth2AuthorizedClientService authorizedClientService;
+    private final RefreshTokenRepository refreshTokenRepository;
+
+    // Refresh Token 유효 기간: 7일
+    private static final long REFRESH_TOKEN_EXPIRY_SECONDS = 7 * 24 * 60 * 60L;
 
     @Value("${app.frontend-url:http://localhost:3000}")
     private String frontendUrl;
@@ -63,15 +70,29 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String token = jwtTokenProvider.generateToken(user.getId(), user.getEmail(), user.getRole().name());
         log.info("OAuth2 login success: userId={}, username={}", user.getId(), username);
 
+        boolean isSecure = !frontendUrl.startsWith("http://localhost");
+
         // JWT를 HttpOnly 쿠키로 설정 — XSS로부터 토큰 보호
         Cookie jwtCookie = new Cookie("jwt", token);
         jwtCookie.setHttpOnly(true);
         jwtCookie.setPath("/");
         jwtCookie.setMaxAge(3600); // 1시간
-        // 운영 환경(HTTPS)에서는 Secure 플래그 활성화
-        boolean isSecure = !frontendUrl.startsWith("http://localhost");
         jwtCookie.setSecure(isSecure);
         response.addCookie(jwtCookie);
+
+        // Refresh Token 발급 후 DB 저장 및 쿠키 설정
+        String rawRefreshToken = jwtTokenProvider.generateRefreshToken();
+        String tokenHash = jwtTokenProvider.hashRefreshToken(rawRefreshToken);
+        Instant expiresAt = Instant.now().plusSeconds(REFRESH_TOKEN_EXPIRY_SECONDS);
+        refreshTokenRepository.deleteAllByUserId(user.getId()); // 기존 토큰 교체
+        refreshTokenRepository.save(RefreshToken.create(user.getId(), tokenHash, expiresAt));
+
+        Cookie refreshCookie = new Cookie("refresh_token", rawRefreshToken);
+        refreshCookie.setHttpOnly(true);
+        refreshCookie.setPath("/api/auth");
+        refreshCookie.setMaxAge((int) REFRESH_TOKEN_EXPIRY_SECONDS);
+        refreshCookie.setSecure(isSecure);
+        response.addCookie(refreshCookie);
 
         // 토큰 없이 대시보드로 직접 리다이렉트
         getRedirectStrategy().sendRedirect(request, response, frontendUrl + "/dashboard");
