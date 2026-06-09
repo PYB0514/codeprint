@@ -158,10 +158,13 @@ public class GraphController {
                             ))
                             .toList();
 
+                    List<Map<String, Object>> warnings = graphWarningService.detect(nodes, edges);
+
                     return ResponseEntity.ok(Map.of(
                             "graphId", graph.getId().toString(),
                             "nodes", nodeData,
-                            "edges", edgeData
+                            "edges", edgeData,
+                            "warnings", warnings
                     ));
                 })
                 .orElse(ResponseEntity.notFound().build());
