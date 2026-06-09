@@ -11,6 +11,15 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.26.0',
+    date: '2026-06-09',
+    title: '그래프 페이지에서 바로 재분석',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '"새 커밋" 배너에서 대시보드로 이동 없이 바로 재분석 시작 — 완료 후 그래프 자동 새로고침' },
+    ],
+  },
+  {
     version: 'v0.25.0',
     date: '2026-06-09',
     title: '도메인 뷰 섹션 라벨 가시성 개선',
