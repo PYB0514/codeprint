@@ -1158,6 +1158,34 @@ function GraphPageInner() {
     })))
   }, [nodeSearchQuery, rawNodes, setNodes])
 
+  // 경고 목록을 타입별로 그룹핑하여 마크다운 파일로 다운로드
+  const downloadWarningsMd = (warningList: { type: string; nodeIds: string[]; message: string }[]) => {
+    const WARNING_LABELS: Record<string, string> = {
+      CYCLIC_IMPORT: '순환 의존 (CYCLIC_IMPORT)',
+      BROKEN_INTERFACE_CHAIN: '인터페이스 미구현 (BROKEN_INTERFACE_CHAIN)',
+      ASYNC_SELF_CALL: '@Async 자기 호출 (ASYNC_SELF_CALL)',
+      DB_LAYER_BYPASS: 'DB 레이어 우회 (DB_LAYER_BYPASS)',
+      CROSS_CONTEXT_IMPORT: 'DDD 경계 위반 (CROSS_CONTEXT_IMPORT)',
+      MISSING_CONVERTER_MIGRATION: '@Convert 마이그레이션 필요 (MISSING_CONVERTER_MIGRATION)',
+    }
+    const grouped = new Map<string, string[]>()
+    for (const w of warningList) {
+      if (!grouped.has(w.type)) grouped.set(w.type, [])
+      grouped.get(w.type)!.push(w.message)
+    }
+    const lines = [`# 런타임 경고 리포트\n`, `> 총 ${warningList.length}개 경고\n`]
+    for (const [type, msgs] of grouped.entries()) {
+      lines.push(`\n## ${WARNING_LABELS[type] ?? type} (${msgs.length}개)\n`)
+      msgs.forEach(m => lines.push(`- ${m.replace(/^[^:]+:\s*/, '')}`))
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'codeprint-warnings.md'
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
   // 전체 그래프를 원본 크기 PNG로 다운로드
   const handleExportImage = useCallback(async () => {
     const flowEl = flowRef.current?.querySelector('.react-flow__viewport') as HTMLElement | null
@@ -1838,7 +1866,15 @@ function GraphPageInner() {
 
             {/* 런타임 경고 패널 */}
             {warnings.length > 0 && (
-              <LeftSection title={`경고 (${warnings.length})`}>
+              <LeftSection title={`경고 (${warnings.length})`} headerRight={
+                <button
+                  onClick={() => downloadWarningsMd(warnings)}
+                  title="경고 목록 마크다운으로 내보내기"
+                  className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800 transition-colors"
+                >
+                  ↓ MD
+                </button>
+              }>
                 <WarningPanel warnings={warnings} onNodeNavigate={handleSearchNodeClick} />
               </LeftSection>
             )}
@@ -2567,10 +2603,13 @@ function GraphPageInner() {
 }
 
 // 왼쪽 사이드바 섹션
-function LeftSection({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
+function LeftSection({ title, children, id, headerRight }: { title: string; children: React.ReactNode; id?: string; headerRight?: React.ReactNode }) {
   return (
     <div id={id} className="px-3 py-3 border-b border-gray-800/60">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{title}</p>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{title}</p>
+        {headerRight}
+      </div>
       {children}
     </div>
   )

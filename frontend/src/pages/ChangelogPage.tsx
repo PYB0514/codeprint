@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.23.0',
+    date: '2026-06-09',
+    title: '프리셋 이름 수정 + 경고 MD 내보내기',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: '뷰 프리셋 기본값 허브 → 도메인으로 변경 (Flyway V19 마이그레이션 포함)' },
+      { category: '프론트', desc: '경고 패널 헤더에 ↓ MD 버튼 — 경고 목록을 마크다운 리포트로 다운로드' },
+    ],
+  },
+  {
     version: 'v0.22.0',
     date: '2026-06-09',
     title: '검색 하이라이트 — 일치 노드 강조',
