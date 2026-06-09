@@ -32,7 +32,7 @@ export default function FileNode({ data }: NodeProps) {
           gap: 4,
         }}>
           <span style={{
-            fontSize: 10, fontWeight: 700, color: '#93c5fd',
+            fontSize: 10, fontWeight: 700, color: 'inherit',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
           }}>
             {data.label as React.ReactNode ?? String(data.name ?? '')}

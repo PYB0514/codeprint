@@ -461,6 +461,7 @@ function GraphPageInner() {
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
   const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
+  const [opaqueDomainSet, setOpaqueDomainSet] = useState<Set<string>>(new Set())
   const [showEdges, setShowEdges] = useState(false)
   const [showCallEdges, setShowCallEdges] = useState(false)
   const [showInstEdges, setShowInstEdges] = useState(false)
@@ -578,6 +579,28 @@ function GraphPageInner() {
       return next
     })
   }, [setNodes])
+
+  // 도메인 섹션 opaque 토글 — 섹션 덮기 + 내부 파일/함수 노드 hidden (domain 모드 전용)
+  const toggleDomainOpaque = useCallback((domain: string) => {
+    setOpaqueDomainSet((prev) => {
+      const next = new Set(prev)
+      if (next.has(domain)) next.delete(domain)
+      else next.add(domain)
+      const isOpaque = next.has(domain)
+      setNodes((nds) => nds.map((n) => {
+        if (n.id === `domain-section-${domain}`) return { ...n, data: { ...n.data, opaque: isOpaque } }
+        if ((n.data.domain as string) === domain) return { ...n, hidden: isOpaque }
+        return n
+      }))
+      return next
+    })
+  }, [setNodes])
+
+  // 범례 도메인 클릭 시 해당 도메인 섹션으로 fitView 이동
+  const handleFitToDomain = useCallback((domain: string) => {
+    const section = getNodes().find((n) => n.id === `domain-section-${domain}`)
+    if (section) fitView({ nodes: [section], duration: 400, padding: 0.15 })
+  }, [getNodes, fitView])
 
   // 파일 연결 보기 — 사이드바 오픈 콜백
   const openFileSidebar = useCallback((data: FileSidebarData) => {
@@ -1111,6 +1134,8 @@ function GraphPageInner() {
   const toggleLayoutPreset = useCallback(() => {
     const next: LayoutPreset = layoutPreset === 'layer' ? 'domain' : 'layer'
     setLayoutPreset(next)
+    setOpaqueLayerSet(new Set())
+    setOpaqueDomainSet(new Set())
     if (rawNodes.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
       setNodes(ln)
@@ -1791,22 +1816,45 @@ function GraphPageInner() {
                   <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">도메인</p>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mb-2">
                   {[
-                    { label: 'Project',       color: '#3b82f6' },
-                    { label: 'User',          color: '#10b981' },
-                    { label: 'Graph',         color: '#8b5cf6' },
-                    { label: 'Analysis',      color: '#f59e0b' },
-                    { label: 'Community',     color: '#06b6d4' },
-                    { label: 'AI',            color: '#e879f9' },
-                    { label: 'Notice',        color: '#f97316' },
-                    { label: 'Donation',      color: '#4ade80' },
-                    { label: 'Collaboration', color: '#fb7185' },
-                    { label: 'Common',        color: '#6b7280' },
-                  ].map(({ label, color }) => (
-                    <div key={label} className="flex items-center gap-1.5 py-0.5">
-                      <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: `${color}33`, border: `1px solid ${color}` }} />
-                      <span className="text-gray-400 text-xs truncate">{label}</span>
-                    </div>
-                  ))}
+                    { label: 'Project',       color: '#3b82f6', key: 'project' },
+                    { label: 'User',          color: '#10b981', key: 'user' },
+                    { label: 'Graph',         color: '#8b5cf6', key: 'graph' },
+                    { label: 'Analysis',      color: '#f59e0b', key: 'analysis' },
+                    { label: 'Community',     color: '#06b6d4', key: 'community' },
+                    { label: 'AI',            color: '#e879f9', key: 'ai' },
+                    { label: 'Notice',        color: '#f97316', key: 'notice' },
+                    { label: 'Donation',      color: '#4ade80', key: 'donation' },
+                    { label: 'Collaboration', color: '#fb7185', key: 'collaboration' },
+                    { label: 'Common',        color: '#6b7280', key: 'common' },
+                  ].map(({ label, color, key }) => {
+                    const active = opaqueDomainSet.has(key)
+                    return (
+                      <div key={key} className="flex items-center gap-1.5 py-0.5">
+                        <button
+                          onClick={() => toggleDomainOpaque(key)}
+                          title={active ? '내용 표시' : '내용 가리기'}
+                          style={{
+                            width: 16, height: 16, borderRadius: 3,
+                            border: `1px solid ${color}88`,
+                            background: active ? color : `${color}22`,
+                            color: active ? '#fff' : color,
+                            fontSize: 9, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {active ? '◑' : '○'}
+                        </button>
+                        <span
+                          className="text-gray-400 text-xs truncate cursor-pointer hover:text-white transition-colors"
+                          onClick={() => handleFitToDomain(key)}
+                          title="이 도메인으로 이동"
+                        >
+                          {label}
+                        </span>
+                      </div>
+                    )
+                  })}
                   </div>
                   <div className="border-t border-gray-800 my-2" />
                 </>
