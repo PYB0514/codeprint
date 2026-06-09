@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.14.0',
+    date: '2026-06-09',
+    title: '경고 패널 타입별 그룹핑 UI',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '경고 패널을 타입별로 그룹핑 — CYCLIC_IMPORT/BROKEN_INTERFACE_CHAIN 등 6가지 타입별 섹션, 접기/펼치기 토글' },
+      { category: '프론트', desc: '각 경고 타입에 색상 레이블과 설명 추가 — 경고 원인을 즉시 파악 가능' },
+    ],
+  },
+  {
     version: 'v0.13.0',
     date: '2026-06-09',
     title: '@Convert 컨버터 마이그레이션 누락 감지',

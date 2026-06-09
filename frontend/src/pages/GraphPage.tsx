@@ -25,6 +25,7 @@ import AppHeader from '../components/AppHeader'
 import { useCollaboration } from '../hooks/useCollaboration'
 import CollaborationPanel from '../components/CollaborationPanel'
 import CursorOverlay from '../components/CursorOverlay'
+import WarningPanel from '../components/WarningPanel'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -1686,14 +1687,7 @@ function GraphPageInner() {
             {/* 런타임 경고 패널 */}
             {warnings.length > 0 && (
               <LeftSection title={`경고 (${warnings.length})`}>
-                <div className="flex flex-col gap-1.5">
-                  {warnings.map((w, i) => (
-                    <div key={i} className="flex items-start gap-1.5 text-xs text-yellow-300 bg-yellow-900/20 border border-yellow-700/40 rounded p-1.5">
-                      <span className="flex-shrink-0 mt-0.5">⚠️</span>
-                      <span>{w.message}</span>
-                    </div>
-                  ))}
-                </div>
+                <WarningPanel warnings={warnings} />
               </LeftSection>
             )}
           </div>
