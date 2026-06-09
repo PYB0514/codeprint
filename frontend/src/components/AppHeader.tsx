@@ -22,12 +22,10 @@ export default function AppHeader({ onLogin }: Props) {
       .finally(() => setChecked(true))
   }, [])
 
-  // 로그아웃 쿠키 만료 후 메인으로 이동
+  // 백엔드 직접 호출로 쿠키 만료 후 메인으로 리다이렉트 — 프록시 우회
   const handleLogout = () => {
-    axios.post('/api/auth/logout').finally(() => {
-      setUser(null)
-      navigate('/')
-    })
+    const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+    window.location.href = `${backendUrl}/api/auth/logout-redirect`
   }
 
   if (!checked) return null
