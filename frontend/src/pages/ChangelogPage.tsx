@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.16.0',
+    date: '2026-06-09',
+    title: '경고 엣지 황색 하이라이트',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: '경고 응답에 edgeIds 필드 추가 — CYCLIC_IMPORT, ASYNC_SELF_CALL, DB_LAYER_BYPASS, CROSS_CONTEXT_IMPORT 경고의 관련 엣지 ID 포함' },
+      { category: '프론트', desc: '경고 관련 엣지에 황색 스트로크 + 애니메이션 표시 — 경고 원인 엣지를 그래프에서 즉시 식별' },
+    ],
+  },
+  {
     version: 'v0.15.0',
     date: '2026-06-09',
     title: '경고 노드 클릭 시 사이드바 상세 표시',
