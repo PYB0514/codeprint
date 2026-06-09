@@ -21,6 +21,7 @@ public class GraphWarningService {
         warnings.addAll(detectBrokenInterfaceChains(nodes, edges));
         warnings.addAll(detectAsyncSelfCalls(nodes, edges));
         warnings.addAll(detectDbLayerBypass(nodes, edges));
+        warnings.addAll(detectCrossContextDomainImport(nodes, edges));
         return warnings;
     }
 
@@ -202,5 +203,53 @@ public class GraphWarningService {
             }
         }
         return warnings;
+    }
+
+    // application/{contextA}/ 파일이 domain/{contextB}/ 를 직접 IMPORT — DDD 컨텍스트 간 직접 참조 위반
+    private List<Map<String, Object>> detectCrossContextDomainImport(List<Node> nodes, List<Edge> edges) {
+        Map<UUID, String> nodeFilePaths = new HashMap<>();
+        Map<UUID, String> nameMap = new HashMap<>();
+        for (Node n : nodes) {
+            nodeFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+            nameMap.put(n.getId(), n.getName());
+        }
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Edge e : edges) {
+            if (e.getType() != EdgeType.IMPORT) continue;
+            String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
+            String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
+
+            String srcContext = extractContextFromApplicationPath(srcPath);
+            String tgtContext = extractContextFromDomainPath(tgtPath);
+
+            if (srcContext != null && tgtContext != null && !srcContext.equals(tgtContext)) {
+                Map<String, Object> w = new LinkedHashMap<>();
+                w.put("type", "CROSS_CONTEXT_IMPORT");
+                w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
+                w.put("message", "DDD 컨텍스트 경계 위반: application/" + srcContext + " → domain/" + tgtContext
+                        + " 직접 참조 (ID로만 참조해야 함)");
+                warnings.add(w);
+            }
+        }
+        return warnings;
+    }
+
+    // "/application/{context}/" 경로에서 컨텍스트명 추출 — 없으면 null
+    private String extractContextFromApplicationPath(String path) {
+        int idx = path.indexOf("/application/");
+        if (idx < 0) return null;
+        String after = path.substring(idx + "/application/".length());
+        int slash = after.indexOf('/');
+        return slash > 0 ? after.substring(0, slash) : null;
+    }
+
+    // "/domain/{context}/" 경로에서 컨텍스트명 추출 — 없으면 null
+    private String extractContextFromDomainPath(String path) {
+        int idx = path.indexOf("/domain/");
+        if (idx < 0) return null;
+        String after = path.substring(idx + "/domain/".length());
+        int slash = after.indexOf('/');
+        return slash > 0 ? after.substring(0, slash) : null;
     }
 }
