@@ -6,16 +6,15 @@ import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.domain.community.Comment;
 import com.codeprint.domain.community.Post;
 import com.codeprint.domain.community.PostBookmark;
+import com.codeprint.domain.community.PostBookmarkRepository;
+import com.codeprint.domain.community.PostRepository;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
-import com.codeprint.infrastructure.persistence.community.PostBookmarkJpaRepository;
-import com.codeprint.infrastructure.persistence.community.PostJpaRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -33,8 +32,8 @@ public class CommunityController {
     private final PostCommandService postCommandService;
     private final GraphQueryService graphQueryService;
     private final UserRepository userRepository;
-    private final PostBookmarkJpaRepository bookmarkRepository;
-    private final PostJpaRepository postJpaRepository;
+    private final PostBookmarkRepository bookmarkRepository;
+    private final PostRepository postRepository;
 
     // 게시글 목록 조회 (페이지, 검색) — 로그인 시 내 북마크 여부 포함
     @GetMapping("/posts")
@@ -46,7 +45,7 @@ public class CommunityController {
         List<Post> raw;
         if (q != null && !q.isBlank()) {
             org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
-            raw = postJpaRepository.findByTitleContainingIgnoreCaseOrContentContainingIgnoreCaseOrderByCreatedAtDesc(q, q, pageable);
+            raw = postRepository.findByTitleContainingIgnoreCaseOrContentContainingIgnoreCaseOrderByCreatedAtDesc(q, q, pageable);
         } else {
             raw = postCommandService.getPosts(page, size);
         }
@@ -191,9 +190,8 @@ public class CommunityController {
     @GetMapping("/bookmarks")
     public ResponseEntity<List<PostResponse>> getMyBookmarks(@AuthenticationPrincipal User user) {
         List<PostResponse> posts = bookmarkRepository
-                .findByUserIdOrderByCreatedAtDesc(user.getId(), PageRequest.of(0, 50))
-                .getContent().stream()
-                .flatMap(bm -> postJpaRepository.findById(bm.getPostId()).stream())
+                .findByUserIdOrderByCreatedAtDesc(user.getId(), 50).stream()
+                .flatMap(bm -> postRepository.findById(bm.getPostId()).stream())
                 .map(p -> toPostResponse(p, null, user))
                 .toList();
         return ResponseEntity.ok(posts);

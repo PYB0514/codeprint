@@ -70,4 +70,10 @@ public class GraphRepositoryImpl implements GraphRepository {
     public void deleteById(UUID id) {
         graphJpa.deleteById(id);
     }
+
+    // 프로젝트의 최신 그래프 조회
+    @Override
+    public Optional<Graph> findTopByProjectIdOrderByCreatedAtDesc(UUID projectId) {
+        return graphJpa.findTopByProjectIdOrderByCreatedAtDesc(projectId);
+    }
 }

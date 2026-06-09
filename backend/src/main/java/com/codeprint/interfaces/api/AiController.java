@@ -3,8 +3,8 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.domain.ai.AiProvider;
 import com.codeprint.domain.ai.UserAiKey;
+import com.codeprint.domain.ai.UserAiKeyRepository;
 import com.codeprint.infrastructure.ai.AiService;
-import com.codeprint.infrastructure.persistence.ai.UserAiKeyJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,7 +22,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AiController {
 
-    private final UserAiKeyJpaRepository aiKeyRepository;
+    private final UserAiKeyRepository aiKeyRepository;
     private final List<AiService> aiServices;
 
     record SaveKeyRequest(@NotBlank String apiKey) {}

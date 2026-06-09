@@ -24,4 +24,7 @@ public interface GraphRepository {
     Edge saveEdge(Edge edge);
 
     void deleteById(UUID id);
+
+    // 프로젝트의 최신 그래프 조회
+    Optional<Graph> findTopByProjectIdOrderByCreatedAtDesc(UUID projectId);
 }

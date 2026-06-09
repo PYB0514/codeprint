@@ -7,6 +7,7 @@ import com.codeprint.domain.community.PostAttachment;
 import com.codeprint.domain.community.PostRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -73,5 +74,18 @@ public class PostRepositoryImpl implements PostRepository {
     @Override
     public List<PostAttachment> findAttachmentsByPostId(UUID postId) {
         return attachmentJpa.findByPostIdOrderByCreatedAtAsc(postId);
+    }
+
+    // 제목/본문 키워드 검색
+    @Override
+    public List<Post> findByTitleContainingIgnoreCaseOrContentContainingIgnoreCaseOrderByCreatedAtDesc(
+            String title, String content, Pageable pageable) {
+        return postJpa.findByTitleContainingIgnoreCaseOrContentContainingIgnoreCaseOrderByCreatedAtDesc(title, content, pageable);
+    }
+
+    // 최신순 페이지 목록 (Pageable 버전)
+    @Override
+    public List<Post> findAllByOrderByCreatedAtDesc(Pageable pageable) {
+        return postJpa.findAllByOrderByCreatedAtDesc(pageable);
     }
 }

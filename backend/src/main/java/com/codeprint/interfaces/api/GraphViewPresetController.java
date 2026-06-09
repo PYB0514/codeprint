@@ -2,10 +2,10 @@
 package com.codeprint.interfaces.api;
 
 import com.codeprint.application.project.ProjectQueryService;
+import com.codeprint.domain.graph.GraphRepository;
 import com.codeprint.domain.graph.GraphViewPreset;
+import com.codeprint.domain.graph.GraphViewPresetRepository;
 import com.codeprint.domain.user.User;
-import com.codeprint.infrastructure.persistence.graph.GraphViewPresetJpaRepository;
-import com.codeprint.infrastructure.persistence.graph.GraphJpaRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -24,8 +24,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class GraphViewPresetController {
 
-    private final GraphViewPresetJpaRepository presetRepository;
-    private final GraphJpaRepository graphRepository;
+    private final GraphViewPresetRepository presetRepository;
+    private final GraphRepository graphRepository;
     private final ProjectQueryService projectQueryService;
 
     // 내 프리셋 전체 조회 (슬롯 1~4, 없는 슬롯은 기본값으로 채움)

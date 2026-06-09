@@ -24,4 +24,11 @@ public interface PostRepository {
     PostAttachment saveAttachment(PostAttachment attachment);
 
     List<PostAttachment> findAttachmentsByPostId(UUID postId);
+
+    // 제목/본문 검색 (대소문자 무시)
+    List<Post> findByTitleContainingIgnoreCaseOrContentContainingIgnoreCaseOrderByCreatedAtDesc(
+            String title, String content, org.springframework.data.domain.Pageable pageable);
+
+    // 최신순 페이지 목록
+    List<Post> findAllByOrderByCreatedAtDesc(org.springframework.data.domain.Pageable pageable);
 }
