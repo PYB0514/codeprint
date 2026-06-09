@@ -1,8 +1,8 @@
 // 그래프 뷰 프리셋 저장/조회 REST API
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.application.project.ProjectQueryService;
-import com.codeprint.domain.graph.GraphRepository;
 import com.codeprint.domain.graph.GraphViewPreset;
 import com.codeprint.domain.graph.GraphViewPresetRepository;
 import com.codeprint.domain.user.User;
@@ -25,7 +25,7 @@ import java.util.UUID;
 public class GraphViewPresetController {
 
     private final GraphViewPresetRepository presetRepository;
-    private final GraphRepository graphRepository;
+    private final GraphQueryService graphQueryService;
     private final ProjectQueryService projectQueryService;
 
     // 내 프리셋 전체 조회 (슬롯 1~4, 없는 슬롯은 기본값으로 채움)
@@ -82,7 +82,7 @@ public class GraphViewPresetController {
             @AuthenticationPrincipal User user) {
 
         // 그래프 소유자 확인
-        graphRepository.findById(graphId)
+        graphQueryService.findById(graphId)
                 .ifPresent(g -> projectQueryService.getProject(g.getProjectId(), user.getId()));
 
         // 기존 슬롯이 있으면 삭제 후 새로 저장
@@ -102,7 +102,7 @@ public class GraphViewPresetController {
             @RequestParam UUID userId) {
 
         // 해당 프로젝트의 최신 그래프 찾기
-        return graphRepository.findTopByProjectIdOrderByCreatedAtDesc(projectId)
+        return graphQueryService.findLatestByProject(projectId)
                 .flatMap(g -> presetRepository.findByGraphIdAndUserIdAndSlot(g.getId(), userId, slot))
                 .map(p -> {
                     Map<String, Object> body = new java.util.LinkedHashMap<>();

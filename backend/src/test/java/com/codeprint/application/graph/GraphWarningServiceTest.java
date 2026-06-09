@@ -147,8 +147,23 @@ class GraphWarningServiceTest {
     }
 
     @Test
-    @DisplayName("application 레이어가 persistence를 직접 호출 — DB_LAYER_BYPASS 경고")
+    @DisplayName("application 레이어가 persistence를 직접 IMPORT — DB_LAYER_BYPASS 경고")
     void dbLayerBypass_applicationToPersistence() {
+        Node appNode = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");
+        Node repoNode = funcNodeWithPath("save", "/com/example/infrastructure/persistence/JpaProjectRepo.java");
+        Edge imp = importEdgeForPath(appNode.getId(), repoNode.getId());
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(appNode, repoNode),
+                List.of(imp)
+        );
+        assertThat(warnings).hasSize(1);
+        assertThat(warnings.get(0).get("type")).isEqualTo("DB_LAYER_BYPASS");
+    }
+
+    @Test
+    @DisplayName("FUNCTION_CALL만 있으면 Tree-sitter 오추적 — DB_LAYER_BYPASS 경고 없음")
+    void dbLayerBypass_functionCallOnly_noWarning() {
         Node appNode = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");
         Node repoNode = funcNodeWithPath("save", "/com/example/infrastructure/persistence/JpaProjectRepo.java");
         Edge call = callEdge(appNode.getId(), repoNode.getId(), false);
@@ -157,8 +172,7 @@ class GraphWarningServiceTest {
                 List.of(appNode, repoNode),
                 List.of(call)
         );
-        assertThat(warnings).hasSize(1);
-        assertThat(warnings.get(0).get("type")).isEqualTo("DB_LAYER_BYPASS");
+        assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).isEmpty();
     }
 
     @Test

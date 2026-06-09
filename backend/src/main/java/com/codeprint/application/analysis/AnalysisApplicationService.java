@@ -3,12 +3,11 @@ package com.codeprint.application.analysis;
 
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
-import com.codeprint.domain.project.Project;
-import com.codeprint.domain.project.ProjectRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -17,20 +16,28 @@ import java.util.UUID;
 public class AnalysisApplicationService {
 
     private final AnalysisRepository analysisRepository;
-    private final ProjectRepository projectRepository;
     private final AnalysisRunner analysisRunner;
 
-    // 분석 레코드를 생성하고 비동기 분석을 시작
-    public AnalysisResult startAnalysis(UUID projectId, String branch) {
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
-
+    // 분석 레코드를 생성하고 비동기 분석을 시작 (URL·토큰은 컨트롤러에서 전달)
+    public AnalysisResult startAnalysis(UUID projectId, String branch, String githubRepoUrl, String githubAccessToken) {
         AnalysisResult analysis = AnalysisResult.create(projectId, branch);
         analysisRepository.save(analysis);
 
         // URL을 미리 추출해서 넘김 — 트랜잭션 커밋 전 비동기 스레드가 DB 조회 시 못 찾는 문제 방지
-        analysisRunner.run(analysis.getId(), projectId, project.getGithubRepoUrl(), branch);
+        analysisRunner.run(analysis.getId(), projectId, githubRepoUrl, branch, githubAccessToken);
         return analysis;
+    }
+
+    // 최신 분석 결과 조회
+    @Transactional(readOnly = true)
+    public Optional<AnalysisResult> getLatestAnalysis(UUID projectId) {
+        return analysisRepository.findLatestByProjectId(projectId);
+    }
+
+    // 특정 브랜치의 최신 분석 결과 조회
+    @Transactional(readOnly = true)
+    public Optional<AnalysisResult> getLatestAnalysisByBranch(UUID projectId, String branch) {
+        return analysisRepository.findLatestByProjectIdAndBranch(projectId, branch);
     }
 
     // 분석 ID로 분석 결과를 조회

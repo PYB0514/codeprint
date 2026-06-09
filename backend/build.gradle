@@ -76,3 +76,13 @@ bootRun {
     args = ['--spring.profiles.active=local']
     jvmArgs = ['-Djavax.net.ssl.trustStoreType=Windows-ROOT']
 }
+
+// 로컬 코드베이스 워닝 분석 — Spring 없이 직접 실행 (DB 불필요)
+task analyzeLocal(type: JavaExec, dependsOn: classes) {
+    group = 'codeprint'
+    description = '로컬 소스 디렉터리에서 GraphWarning 감지 (Spring/DB 없이 실행)'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.codeprint.tools.LocalAnalyzer'
+    // 기본값: backend/src/main/java (직접 경로 지정 가능 — ./gradlew analyzeLocal --args="경로")
+    args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
+}

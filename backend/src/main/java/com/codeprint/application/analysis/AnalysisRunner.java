@@ -3,10 +3,6 @@ package com.codeprint.application.analysis;
 
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
-import com.codeprint.domain.project.Project;
-import com.codeprint.domain.project.ProjectRepository;
-import com.codeprint.domain.user.User;
-import com.codeprint.domain.user.UserRepository;
 import com.codeprint.infrastructure.analysis.*;
 import com.codeprint.infrastructure.github.GitHubApiClient;
 import com.codeprint.interfaces.websocket.AnalysisProgressHandler;
@@ -26,8 +22,6 @@ import java.util.UUID;
 public class AnalysisRunner {
 
     private final AnalysisRepository analysisRepository;
-    private final ProjectRepository projectRepository;
-    private final UserRepository userRepository;
     private final GitHubApiClient gitHubApiClient;
     private final RepoCloner repoCloner;
     private final SourceFileWalker sourceFileWalker;
@@ -38,7 +32,7 @@ public class AnalysisRunner {
     // 레포 클론 → 파일 수집 → 정적 분석 → 그래프 빌드를 비동기로 실행
     @Async
     @Transactional
-    public void run(UUID analysisId, UUID projectId, String githubRepoUrl, String branch) {
+    public void run(UUID analysisId, UUID projectId, String githubRepoUrl, String branch, String githubAccessToken) {
         Path repoDir = null;
         try {
             // 새 트랜잭션에서 조회 — outer 트랜잭션 커밋 후 확실히 존재
@@ -80,11 +74,8 @@ public class AnalysisRunner {
             // 분석 완료 시점의 브랜치 최신 커밋 SHA 저장
             String commitSha = null;
             try {
-                Project project = projectRepository.findById(projectId).orElse(null);
-                if (project != null && branch != null) {
-                    String accessToken = userRepository.findById(project.getUserId())
-                            .map(User::getGithubAccessToken).orElse(null);
-                    commitSha = gitHubApiClient.fetchLatestCommitSha(githubRepoUrl, branch, accessToken);
+                if (branch != null) {
+                    commitSha = gitHubApiClient.fetchLatestCommitSha(githubRepoUrl, branch, githubAccessToken);
                 }
             } catch (Exception e) {
                 log.warn("커밋 SHA 조회 실패 (무시): {}", e.getMessage());

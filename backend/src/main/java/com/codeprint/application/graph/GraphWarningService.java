@@ -184,7 +184,8 @@ public class GraphWarningService {
         return warnings;
     }
 
-    // interfaces/ 또는 application/ 레이어가 infrastructure/persistence/ 를 직접 호출 — DB 레이어 우회
+    // interfaces/ 또는 application/ 레이어가 infrastructure/persistence/ 를 직접 IMPORT — DB 레이어 우회
+    // FUNCTION_CALL 엣지는 Tree-sitter가 인터페이스 호출을 구현체로 오추적하므로 제외
     private List<Map<String, Object>> detectDbLayerBypass(List<Node> nodes, List<Edge> edges) {
         Map<UUID, String> nodeFilePaths = new HashMap<>();
         Map<UUID, String> nameMap = new HashMap<>();
@@ -195,7 +196,8 @@ public class GraphWarningService {
 
         List<Map<String, Object>> warnings = new ArrayList<>();
         for (Edge e : edges) {
-            if (e.getType() != EdgeType.FUNCTION_CALL && e.getType() != EdgeType.IMPORT) continue;
+            // IMPORT 엣지만 검사 — 직접 persistence 클래스를 import하는 경우가 실제 위반
+            if (e.getType() != EdgeType.IMPORT) continue;
             String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
             String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
 
@@ -271,6 +273,7 @@ public class GraphWarningService {
     }
 
     // DB_TABLE 노드 중 @Convert 컨버터가 있는 컬럼이 있을 때 — 기존 데이터 마이그레이션 누락 가능성 경고
+    @SuppressWarnings("unchecked")
     private List<Map<String, Object>> detectMissingConverterMigration(List<Node> nodes) {
         List<Map<String, Object>> warnings = new ArrayList<>();
         for (Node n : nodes) {
@@ -278,6 +281,18 @@ public class GraphWarningService {
             Map<String, Object> meta = n.getMetadata();
             if (meta == null) continue;
             if (!Boolean.TRUE.equals(meta.get("hasConverter"))) continue;
+
+            // 마이그레이션 완료 플래그가 있으면 건너뜀
+            if (Boolean.TRUE.equals(meta.get("converterMigrationDone"))) continue;
+
+            // 컨버터 컬럼명이 _encrypted로 끝나면 처음부터 암호화 설계 — 평문 데이터 없음
+            List<Map<String, String>> columns = (List<Map<String, String>>) meta.get("columns");
+            if (columns != null && columns.stream()
+                    .filter(c -> "true".equals(c.get("hasConverter")))
+                    .allMatch(c -> {
+                        String col = c.get("columnName");
+                        return col != null && col.endsWith("_encrypted");
+                    })) continue;
 
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "MISSING_CONVERTER_MIGRATION");
