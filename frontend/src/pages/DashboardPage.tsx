@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
 import CreateProjectModal from '../components/CreateProjectModal'
 import ProjectCard from '../components/ProjectCard'
 import AppHeader from '../components/AppHeader'
@@ -75,11 +76,26 @@ export default function DashboardPage() {
     setProjects((prev) => prev.map((p) => p.id === projectId ? { ...p, isPublic } : p))
   }
 
-  // Stripe Checkout 세션 생성 후 결제 페이지로 이동
+  // 토스페이먼츠 결제창 호출하여 Pro 플랜 업그레이드
   const handleUpgrade = async () => {
     try {
-      const res = await axios.post<{ url: string }>('/api/payments/checkout', {}, { headers: authHeaders() })
-      window.location.href = res.data.url
+      const res = await axios.post<{
+        orderId: string; amount: number; orderName: string
+        customerName: string; customerKey: string; clientKey: string
+      }>('/api/payments/toss/prepare', {}, { headers: authHeaders() })
+
+      const { orderId, amount, orderName, customerName, customerKey, clientKey } = res.data
+      const tossPayments = await loadTossPayments(clientKey)
+      const payment = tossPayments.payment({ customerKey })
+      await payment.requestPayment({
+        method: 'CARD',
+        amount: { currency: 'KRW', value: amount },
+        orderId,
+        orderName,
+        customerName,
+        successUrl: window.location.origin + '/payment/success',
+        failUrl: window.location.origin + '/payment/fail',
+      })
     } catch {
       alert('결제 페이지 연결에 실패했습니다. 잠시 후 다시 시도해주세요.')
     }

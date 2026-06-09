@@ -41,6 +41,7 @@ export default function App() {
         <Route path="/community/posts/:postId/graph" element={<CommunityPostGraphPage />} />
         <Route path="/payment/success" element={<PaymentSuccessPage />} />
         <Route path="/payment/cancel" element={<PaymentCancelPage />} />
+        <Route path="/payment/fail" element={<PaymentCancelPage />} />
         <Route path="/changelog" element={<ChangelogPage />} />
         <Route path="/projects/:projectId/diff" element={<DiffPage />} />
         <Route path="/terms" element={<TermsPage />} />

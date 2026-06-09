@@ -11,6 +11,17 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.27.0',
+    date: '2026-06-09',
+    title: '토스페이먼츠 Pro 결제 통합',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'Stripe 제거 — 토스페이먼츠 결제 승인 API로 전환 (Pro 플랜 9,900원)' },
+      { category: '백엔드', desc: 'toss_payment_orders 테이블 추가 — 결제 주문 멱등성 처리 (Flyway V10)' },
+      { category: '프론트', desc: '대시보드 "업그레이드" 버튼에서 토스페이먼츠 결제창 직접 호출' },
+    ],
+  },
+  {
     version: 'v0.26.0',
     date: '2026-06-09',
     title: '그래프 페이지에서 바로 재분석',

@@ -1,28 +1,72 @@
-// 결제 성공 후 리다이렉트되는 페이지
-import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+// Pro 플랜 결제 성공 처리 페이지 — 토스 리다이렉트 후 백엔드 승인 요청
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import axios from 'axios'
 
-// Stripe Checkout 완료 후 표시되는 결제 성공 페이지
+function authHeaders() {
+  const token = localStorage.getItem('jwt')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 export default function PaymentSuccessPage() {
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
+  const called = useRef(false)
 
   useEffect(() => {
-    const timer = setTimeout(() => navigate('/dashboard'), 3000)
-    return () => clearTimeout(timer)
-  }, [navigate])
+    if (called.current) return
+    called.current = true
+
+    const paymentKey = searchParams.get('paymentKey') ?? ''
+    const orderId = searchParams.get('orderId') ?? ''
+    const amount = parseInt(searchParams.get('amount') ?? '0', 10)
+
+    axios
+      .post('/api/payments/toss/confirm', { paymentKey, orderId, amount }, { headers: authHeaders() })
+      .then(() => setStatus('success'))
+      .catch(() => setStatus('error'))
+  }, [searchParams])
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
-      <div className="text-4xl">🎉</div>
-      <h1 className="text-2xl font-semibold">Pro 플랜 업그레이드 완료!</h1>
-      <p className="text-gray-400 text-sm">프로젝트 무제한 + AI 기능을 사용할 수 있습니다.</p>
-      <p className="text-gray-600 text-xs">3초 후 대시보드로 이동합니다...</p>
-      <button
-        onClick={() => navigate('/dashboard')}
-        className="mt-2 text-sm bg-white text-black font-medium px-4 py-2 rounded-lg hover:bg-gray-200"
-      >
-        지금 이동
-      </button>
+    <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
+      <div className="text-center max-w-md px-4">
+        {status === 'loading' && (
+          <>
+            <div className="text-4xl mb-4">⏳</div>
+            <p className="text-gray-400">결제 확인 중...</p>
+          </>
+        )}
+        {status === 'success' && (
+          <>
+            <div className="text-5xl mb-4">🎉</div>
+            <h1 className="text-2xl font-bold mb-2">Pro 업그레이드 완료!</h1>
+            <p className="text-gray-400 mb-2">이제 프로젝트를 무제한으로 만들 수 있어요.</p>
+            <p className="text-gray-500 text-sm mb-6">결제 금액: 9,900원</p>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium transition-colors"
+            >
+              대시보드로 이동
+            </button>
+          </>
+        )}
+        {status === 'error' && (
+          <>
+            <div className="text-4xl mb-4">❌</div>
+            <h1 className="text-xl font-bold mb-2">결제 확인 실패</h1>
+            <p className="text-gray-400 mb-6 text-sm">
+              결제는 완료됐을 수 있습니다. 고객센터로 문의해 주세요.
+            </p>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors"
+            >
+              대시보드로 돌아가기
+            </button>
+          </>
+        )}
+      </div>
     </div>
   )
 }

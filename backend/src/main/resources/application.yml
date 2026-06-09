@@ -48,11 +48,6 @@ jwt:
   secret: ${JWT_SECRET:local-dev-secret-key-must-be-at-least-32-characters}
   expiration-ms: 3600000  # 1h — localStorage 저장이므로 탈취 시 노출 최소화
 
-stripe:
-  secret-key: ${STRIPE_SECRET_KEY:}
-  pro-price-id: ${STRIPE_PRO_PRICE_ID:price_placeholder}
-  webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
-
 toss:
   client-key: ${TOSS_CLIENT_KEY:}
   secret-key: ${TOSS_SECRET_KEY:}
