@@ -750,6 +750,8 @@ function GraphPageInner() {
     setPlaybackPlaying(false)
     setPendingBranchNodeId(null)
     setPlaybackRootNodeId(nodeId)
+    // 재생 시작 시 도메인 요약 사이드바 닫기 — 재생 컨트롤이 가려지지 않도록
+    setSidebar(prev => prev?.kind === 'domain-summary' ? null : prev)
     setEdges((eds) => eds.map((e) => edgeIds.has(e.id) ? { ...e, hidden: false } : e))
   }, [rawEdgesCache, rawNodes, setEdges])
 
