@@ -7,12 +7,16 @@ import java.util.UUID;
 
 public interface AnalysisRepository {
 
+    // 분석 결과 저장
     AnalysisResult save(AnalysisResult analysisResult);
 
+    // ID로 분석 결과 조회
     Optional<AnalysisResult> findById(UUID id);
 
+    // 프로젝트의 분석 목록 조회
     List<AnalysisResult> findByProjectId(UUID projectId);
 
+    // 프로젝트의 최신 분석 조회
     Optional<AnalysisResult> findLatestByProjectId(UUID projectId);
 
     // 특정 브랜치의 가장 최근 완료 분석 조회

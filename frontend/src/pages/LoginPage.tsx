@@ -1,4 +1,5 @@
 // GitHub OAuth 로그인 진입 페이지
+// 로그인 페이지 컴포넌트
 export default function LoginPage() {
   // GitHub OAuth 로그인 페이지로 이동
   const handleLogin = () => {

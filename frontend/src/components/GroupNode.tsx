@@ -39,6 +39,7 @@ export default function GroupNode({ id, data }: NodeProps) {
   const [opaque, setOpaque] = useState(false)
   const { setNodes } = useReactFlow()
 
+  // 자식 노드 숨김 처리
   const setDescendantsHidden = (hidden: boolean) => {
     setNodes((nodes) => {
       const directChildIds = new Set(nodes.filter((n) => n.parentId === id).map((n) => n.id))
@@ -50,6 +51,7 @@ export default function GroupNode({ id, data }: NodeProps) {
     })
   }
 
+  // 그룹 최소화/펼치기 토글
   const toggleCollapse = () => {
     const next = !collapsed
     setCollapsed(next)
@@ -69,12 +71,14 @@ export default function GroupNode({ id, data }: NodeProps) {
     }
   }
 
+  // 불투명 모드 토글
   const toggleOpaque = () => {
     const next = !opaque
     setOpaque(next)
     if (!collapsed) setDescendantsHidden(next)
   }
 
+  // 헤더 버튼 스타일 생성
   const btnStyle = (active: boolean): React.CSSProperties => ({
     width: 20,
     height: 20,

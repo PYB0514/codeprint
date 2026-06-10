@@ -50,6 +50,7 @@ public class DonationController {
     ) {}
 
     public record DonationResponse(UUID id, String username, long amount, Instant createdAt) {
+        // Donation 엔티티를 DTO로 변환
         static DonationResponse from(Donation d) {
             return new DonationResponse(d.getId(), d.getUsername(), d.getAmount(), d.getCreatedAt());
         }

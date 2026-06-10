@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom'
 import Footer from '../components/Footer'
 
+// 문의하기 페이지 렌더링
 export default function ContactPage() {
   const navigate = useNavigate()
 

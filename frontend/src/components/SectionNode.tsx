@@ -1,6 +1,7 @@
 // 레이어 섹션 배경 박스 — opaque 모드에서 완전 불투명 다크 색상으로 내용을 덮음
 import type { NodeProps } from '@xyflow/react'
 
+// 섹션 배경 박스 노드 렌더링
 export default function SectionNode({ data }: NodeProps) {
   const color = (data?.color as string) ?? '#4b5563'
   const opaqueColor = (data?.opaqueColor as string) ?? 'rgba(20,22,25,0.98)'

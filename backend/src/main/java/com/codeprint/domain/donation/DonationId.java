@@ -4,6 +4,7 @@ package com.codeprint.domain.donation;
 import java.util.UUID;
 
 public record DonationId(UUID value) {
+    // UUID로 DonationId 생성
     public static DonationId of(UUID value) {
         return new DonationId(value);
     }

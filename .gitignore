@@ -9,6 +9,9 @@ ERROR_TRACKER.md
 # IDE 개인 설정
 .vscode/
 
+# 백엔드 빌드 아웃풋
+backend/bin/
+
 # 로컬 실행 로그
 *.log
 boot.log

@@ -195,11 +195,13 @@ public class LocalAnalyzer {
         }
     }
 
+    // 경로에서 파일명만 추출
     private static String extractFileName(String filePath) {
         int slash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
         return slash >= 0 ? filePath.substring(slash + 1) : filePath;
     }
 
+    // import 경로와 파일 경로 일치 여부 판별
     private static boolean isImportMatch(String importPath, String filePath) {
         String normalizedImport = importPath.replace(".", "/");
         String normalizedFile = filePath.replace("\\", "/");

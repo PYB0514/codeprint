@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom'
 import Footer from '../components/Footer'
 
+// 이용약관 렌더링
 export default function TermsPage() {
   const navigate = useNavigate()
 

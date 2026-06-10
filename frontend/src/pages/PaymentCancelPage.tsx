@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom'
 
 // Stripe Checkout 취소 후 표시되는 페이지
+// 결제 취소 안내 페이지
 export default function PaymentCancelPage() {
   const navigate = useNavigate()
 

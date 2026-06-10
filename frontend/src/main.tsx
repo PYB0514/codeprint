@@ -1,3 +1,4 @@
+// 앱 진입점 — React 루트 마운트 및 Axios 전역 설정
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import * as Sentry from '@sentry/react'

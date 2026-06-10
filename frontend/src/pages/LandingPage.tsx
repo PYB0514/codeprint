@@ -30,6 +30,7 @@ const SLIDES = [
   },
 ]
 
+// 랜딩 페이지 컴포넌트
 export default function LandingPage() {
   const navigate = useNavigate()
   const [loggedIn, setLoggedIn] = useState(false)
