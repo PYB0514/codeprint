@@ -163,7 +163,7 @@ export function extractDomain(filePath: string, commonPrefix: string): string {
 }
 
 // 도메인 박스 색상 팔레트
-const DOMAIN_COLORS: Record<string, { color: string; opaqueColor: string }> = {
+export const DOMAIN_COLORS: Record<string, { color: string; opaqueColor: string }> = {
   project:       { color: '#3b82f6', opaqueColor: 'rgba(15,30,60,0.98)' },
   user:          { color: '#10b981', opaqueColor: 'rgba(5,30,20,0.98)' },
   graph:         { color: '#8b5cf6', opaqueColor: 'rgba(25,10,50,0.98)' },
