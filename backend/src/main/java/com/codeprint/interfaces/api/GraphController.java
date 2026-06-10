@@ -13,9 +13,12 @@ import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.graph.NodeType;
 import com.codeprint.domain.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.concurrent.TimeUnit;
 
 import java.time.Instant;
 import java.util.List;
@@ -105,12 +108,15 @@ public class GraphController {
 
                     List<Map<String, Object>> warnings = graphWarningService.detect(nodes, edges);
 
-                    return ResponseEntity.ok(Map.of(
-                            "graphId", graph.getId().toString(),
-                            "nodes", nodeData,
-                            "edges", edgeData,
-                            "warnings", warnings
-                    ));
+                    // 그래프는 재분석 전까지 변경되지 않으므로 5분 브라우저 캐시 허용
+                    return ResponseEntity.ok()
+                            .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePrivate())
+                            .body(Map.of(
+                                    "graphId", graph.getId().toString(),
+                                    "nodes", nodeData,
+                                    "edges", edgeData,
+                                    "warnings", warnings
+                            ));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -160,12 +166,15 @@ public class GraphController {
 
                     List<Map<String, Object>> warnings = graphWarningService.detect(nodes, edges);
 
-                    return ResponseEntity.ok(Map.of(
-                            "graphId", graph.getId().toString(),
-                            "nodes", nodeData,
-                            "edges", edgeData,
-                            "warnings", warnings
-                    ));
+                    // 공개 그래프는 누구나 접근 가능하므로 public 캐시 허용
+                    return ResponseEntity.ok()
+                            .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePublic())
+                            .body(Map.of(
+                                    "graphId", graph.getId().toString(),
+                                    "nodes", nodeData,
+                                    "edges", edgeData,
+                                    "warnings", warnings
+                            ));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

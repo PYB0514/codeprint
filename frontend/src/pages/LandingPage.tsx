@@ -39,6 +39,9 @@ export default function LandingPage() {
   // 쿠키 기반 인증 상태 확인
   useEffect(() => {
     axios.get('/api/auth/me').then(() => setLoggedIn(true)).catch(() => {})
+    // 랜딩 페이지 로드 후 대시보드·그래프 청크를 백그라운드 prefetch
+    import('../pages/DashboardPage')
+    import('../pages/GraphPage')
   }, [])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
