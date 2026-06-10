@@ -60,7 +60,7 @@ type SidebarContent =
   | { kind: 'db-edge'; crudType: string; repoFile: string; repoFileNodeId: string; tableName: string; tableNodeId: string; flowChain: FlowStep[] }
   | { kind: 'api-call'; frontFile: string; frontFileNodeId: string; ctrlFile: string; ctrlFileNodeId: string; flowChain: FlowStep[] }
   | { kind: 'warning'; nodeName: string; nodeWarnings: { type: string; message: string }[] }
-  | { kind: 'domain-summary'; domainName: string; color: string; apiEndpoints: { id: string; name: string; comment: string | null }[]; entryFunctions: { id: string; name: string; comment: string | null; fileName: string }[] }
+  | { kind: 'domain-summary'; domainName: string; color: string; flows: { id: string; label: string; preview: string[] }[] }
 
 // DB 엣지 타입 판별 — 신규 CRUD 타입 + 레거시 DB_WRITE 포함
 const DB_EDGE_TYPES = new Set(['DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE'])
@@ -618,16 +618,27 @@ function GraphPageInner() {
   const openDomainFlows = useCallback((domain: string, color: string) => {
     const domainNodes = rawNodes.filter(n => extractDomain(n.filePath, commonPrefix) === domain)
     const domainNodeIds = new Set(domainNodes.map(n => n.id))
-    const apiEndpoints = domainNodes.filter(n => n.type === 'API_ENDPOINT')
-      .map(n => ({ id: n.id, name: n.name, comment: n.comment ?? null }))
-    const entryFunctions = domainNodes.filter(n => n.type === 'FUNCTION')
-      .filter(n => !rawEdgesCache.some(e => e.type === 'FUNCTION_CALL' && e.target === n.id && !domainNodeIds.has(e.source)))
-      .slice(0, 20)
-      .map(n => {
-        const file = rawNodes.find(f => f.type === 'FILE' && f.filePath === n.filePath)
-        return { id: n.id, name: n.name, comment: n.comment ?? null, fileName: file?.name ?? n.filePath }
+    const entryPoints = [
+      ...domainNodes.filter(n => n.type === 'API_ENDPOINT'),
+      ...domainNodes.filter(n => n.type === 'FUNCTION')
+        .filter(n => !rawEdgesCache.some(e => e.type === 'FUNCTION_CALL' && e.target === n.id && !domainNodeIds.has(e.source))),
+    ].slice(0, 15)
+    const flows = entryPoints.map(ep => {
+      const previewIds: string[] = [ep.id]
+      let cur = ep.id
+      for (let i = 0; i < 3; i++) {
+        const next = rawEdgesCache.find(e => CALL_FLOW_TYPES.includes(e.type ?? '') && e.source === cur)
+        if (!next) break
+        previewIds.push(next.target)
+        cur = next.target
+      }
+      const preview = previewIds.map(id => {
+        const n = rawNodes.find(n => n.id === id)
+        return n?.comment || n?.name || id
       })
-    setSidebar({ kind: 'domain-summary', domainName: domain, color, apiEndpoints, entryFunctions })
+      return { id: ep.id, label: ep.comment || ep.name, preview }
+    })
+    setSidebar({ kind: 'domain-summary', domainName: domain, color, flows })
     setRightCollapsed(false)
   }, [rawNodes, rawEdgesCache, commonPrefix])
 
@@ -816,7 +827,9 @@ function GraphPageInner() {
     setCallTree(prunedTree)
     setActivePath(path)
     setPlaybackItems(items)
-    setPlaybackCursor(path.nodeIds.length - 1)
+    // 분기 노드 인덱스부터 재생 — length-1 로 설정하면 이미 끝에 도달해 애니메이션이 생략됨
+    const branchIdx = path.nodeIds.indexOf(nodeId)
+    setPlaybackCursor(branchIdx >= 0 ? branchIdx : 0)
     setPlaybackPlaying(true)
     setPendingBranchNodeId(null)
     setEdges((eds) => eds.map((e) => edgeIds.has(e.id) ? { ...e, hidden: false } : e))
@@ -1523,16 +1536,24 @@ function GraphPageInner() {
       const palette = DOMAIN_COLORS[domainName] ?? { color: '#6b7280' }
       const domainNodes = rawNodes.filter(n => extractDomain(n.filePath, commonPrefix) === domainName)
       const domainNodeIds = new Set(domainNodes.map(n => n.id))
-      const apiEndpoints = domainNodes.filter(n => n.type === 'API_ENDPOINT')
-        .map(n => ({ id: n.id, name: n.name, comment: n.comment ?? null }))
-      const entryFunctions = domainNodes.filter(n => n.type === 'FUNCTION')
-        .filter(n => !rawEdgesCache.some(e => e.type === 'FUNCTION_CALL' && e.target === n.id && !domainNodeIds.has(e.source)))
-        .slice(0, 10)
-        .map(n => {
-          const file = rawNodes.find(f => f.type === 'FILE' && f.filePath === n.filePath)
-          return { id: n.id, name: n.name, comment: n.comment ?? null, fileName: file?.name ?? n.filePath }
-        })
-      setSidebar({ kind: 'domain-summary', domainName, color: palette.color, apiEndpoints, entryFunctions })
+      const entryPoints2 = [
+        ...domainNodes.filter(n => n.type === 'API_ENDPOINT'),
+        ...domainNodes.filter(n => n.type === 'FUNCTION')
+          .filter(n => !rawEdgesCache.some(e => e.type === 'FUNCTION_CALL' && e.target === n.id && !domainNodeIds.has(e.source))),
+      ].slice(0, 15)
+      const flows2 = entryPoints2.map(ep => {
+        const previewIds: string[] = [ep.id]
+        let c = ep.id
+        for (let i = 0; i < 3; i++) {
+          const nx = rawEdgesCache.find(e => CALL_FLOW_TYPES.includes(e.type ?? '') && e.source === c)
+          if (!nx) break
+          previewIds.push(nx.target)
+          c = nx.target
+        }
+        const preview = previewIds.map(id => { const n = rawNodes.find(n => n.id === id); return n?.comment || n?.name || id })
+        return { id: ep.id, label: ep.comment || ep.name, preview }
+      })
+      setSidebar({ kind: 'domain-summary', domainName, color: palette.color, flows: flows2 })
       setRightCollapsed(false)
       resetPlayback()
       return
@@ -1960,8 +1981,8 @@ function GraphPageInner() {
                     <span
                       className="text-gray-400 text-xs truncate cursor-pointer hover:text-white transition-colors flex-1 min-w-0"
                       onClick={() => {
-                        const dbNodes = rawNodes.filter(n => n.type === 'DB_TABLE').map(n => ({ id: n.id, name: n.name, comment: n.comment ?? null }))
-                        setSidebar({ kind: 'domain-summary', domainName: 'DB 테이블', color: '#22d3ee', apiEndpoints: dbNodes, entryFunctions: [] })
+                        const dbFlows = rawNodes.filter(n => n.type === 'DB_TABLE').map(n => ({ id: n.id, label: n.comment || n.name, preview: [n.comment || n.name] }))
+                        setSidebar({ kind: 'domain-summary', domainName: 'DB 테이블', color: '#22d3ee', flows: dbFlows })
                         setRightCollapsed(false)
                       }}
                       title="DB 테이블 목록 보기"
@@ -2194,6 +2215,33 @@ function GraphPageInner() {
                         )}
                       </div>
                     )}
+
+                    {/* 마지막 스텝 — 결과 설명 (생성자·DB 조작 등 비개발자 친화적 안내) */}
+                    {cur && playbackCursor === total - 1 && (() => {
+                      const rawNode = rawNodes.find(n => n.id === cur.id)
+                      const name = rawNode?.name || ''
+                      const comment = rawNode?.comment || ''
+                      let msg: string | null = null
+                      let clr = '#4ade80'
+                      if (cur.nodeType === 'FUNCTION' && /^[A-Z]/.test(name)) {
+                        // PascalCase 함수 = 생성자로 판단
+                        msg = `${comment || name} 객체가 반환됩니다`
+                      } else if (cur.nodeType === 'DB_TABLE') {
+                        const et = cur.incomingEdgeType
+                        if (et === 'DB_READ') { msg = `${comment || name} 데이터를 읽습니다`; clr = '#22d3ee' }
+                        else if (et === 'DB_CREATE' || et === 'DB_WRITE') { msg = `${comment || name}에 저장됩니다`; clr = '#4ade80' }
+                        else if (et === 'DB_UPDATE') { msg = `${comment || name} 데이터가 수정됩니다`; clr = '#facc15' }
+                        else if (et === 'DB_DELETE') { msg = `${comment || name} 데이터가 삭제됩니다`; clr = '#f87171' }
+                      }
+                      if (!msg) return null
+                      return (
+                        <div className="mx-3 mb-2 rounded-lg px-3 py-2 flex items-center gap-2"
+                             style={{ background: clr + '18', border: `1px solid ${clr}40` }}>
+                          <span style={{ color: clr }} className="text-xs flex-shrink-0">✓</span>
+                          <span className="text-[11px] leading-snug" style={{ color: clr }}>{msg}</span>
+                        </div>
+                      )
+                    })()}
 
                     {/* 분기 선택 — 현재 스텝에서 경로가 갈릴 때 */}
                     {branchChildren.length > 0 && (
@@ -2641,62 +2689,38 @@ function GraphPageInner() {
                   </div>
                 )}
 
-                {/* ── 도메인 섹션 클릭 — 주요 흐름 진입점 목록 ── */}
+                {/* ── 도메인 섹션 클릭 — 흐름 재생 목록 ── */}
                 {sidebar?.kind === 'domain-summary' && (
-                  <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold uppercase tracking-widest" style={{ color: sidebar.color }}>
                         {sidebar.domainName}
                       </span>
-                      <span className="text-xs text-gray-500">도메인</span>
+                      <span className="text-xs text-gray-500">{sidebar.domainName === 'DB 테이블' ? '테이블' : '도메인'}</span>
                     </div>
-
-                    {sidebar.apiEndpoints.length > 0 && (
-                      <div className="flex flex-col gap-1.5">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">{sidebar.domainName === 'DB 테이블' ? 'DB 테이블' : 'API 엔드포인트'}</p>
-                        {sidebar.apiEndpoints.map(ep => (
-                          <button key={ep.id}
-                            className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:opacity-80 transition-opacity"
-                            style={{ background: sidebar.color + '18', border: `1px solid ${sidebar.color}44` }}
-                            onClick={() => {
-                              startPlayback(ep.id)
-                              setTimeout(() => fitView({ nodes: [{ id: ep.id }], duration: 500, padding: 0.3 }), 50)
-                            }}
-                          >
-                            <span className="text-xs" style={{ color: sidebar.color }}>▶</span>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-xs font-mono font-semibold text-gray-200 truncate">{ep.name}</span>
-                              {ep.comment && <span className="text-[10px] text-gray-400 truncate">{ep.comment}</span>}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {sidebar.entryFunctions.length > 0 && (
-                      <div className="flex flex-col gap-1.5">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">주요 진입점 함수</p>
-                        {sidebar.entryFunctions.map(fn => (
-                          <button key={fn.id}
-                            className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:opacity-80 transition-opacity"
-                            style={{ background: '#ffffff0a', border: '1px solid #ffffff18' }}
-                            onClick={() => {
-                              openFuncNode(fn.id)
-                              setTimeout(() => fitView({ nodes: [{ id: fn.id }], duration: 500, padding: 0.3 }), 50)
-                            }}
-                          >
-                            <span className="text-xs text-emerald-400">▶</span>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-xs font-semibold text-emerald-300 truncate">{fn.comment || fn.name}</span>
-                              <span className="text-[10px] text-gray-500 truncate font-mono">{fn.name} · {fn.fileName}</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {sidebar.apiEndpoints.length === 0 && sidebar.entryFunctions.length === 0 && (
-                      <p className="text-xs text-gray-500">이 도메인에서 진입점을 찾지 못했습니다.</p>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">흐름 재생 목록</p>
+                    {sidebar.flows.length > 0 ? sidebar.flows.map(flow => (
+                      <button key={flow.id}
+                        className="flex flex-col gap-1 rounded-lg px-2.5 py-2.5 text-left transition-opacity hover:opacity-80"
+                        style={{ background: sidebar.color + '15', border: `1px solid ${sidebar.color}40` }}
+                        onClick={() => {
+                          startPlayback(flow.id)
+                          setTimeout(() => fitView({ nodes: [{ id: flow.id }], duration: 500, padding: 0.3 }), 50)
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px]" style={{ color: sidebar.color }}>▶</span>
+                          <span className="text-xs font-semibold truncate" style={{ color: sidebar.color }}>{flow.label}</span>
+                        </div>
+                        {flow.preview.length > 1 && (
+                          <span className="text-[10px] text-gray-500 leading-snug">
+                            {flow.preview.join(' → ')}
+                            {flow.preview.length >= 4 ? ' ...' : ''}
+                          </span>
+                        )}
+                      </button>
+                    )) : (
+                      <p className="text-xs text-gray-500">이 도메인에서 흐름을 찾지 못했습니다.</p>
                     )}
                   </div>
                 )}
