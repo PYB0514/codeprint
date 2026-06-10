@@ -12,5 +12,28 @@ services:
       - codeprint_pgdata:/var/lib/postgresql/data
     restart: unless-stopped
 
+  # 백엔드 컨테이너 실행: docker compose --profile backend up
+  # 로컬 개발은 Spring Boot Dashboard에서 직접 실행 권장
+  backend:
+    profiles: [backend]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: codeprint-backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/codeprint
+      DB_USERNAME: postgres
+      DB_PASSWORD: "1234"
+      SPRING_PROFILES_ACTIVE: local
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-placeholder}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-placeholder}
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-key-must-be-at-least-32-characters}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    depends_on:
+      - db
+    restart: unless-stopped
+
 volumes:
   codeprint_pgdata:
