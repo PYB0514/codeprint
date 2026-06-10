@@ -224,6 +224,8 @@ public class StaticCodeAnalyzer {
 
         // 함수 호출 패턴: 식별자 뒤에 '(' — 키워드·생성자(대문자 시작) 제외
         Pattern callPattern = Pattern.compile("\\b([a-z][a-zA-Z0-9_]*)\\s*\\(");
+        // 정적 팩토리/클래스 메서드 호출: ClassName.method() — 클래스명 대문자 시작
+        Pattern qualifiedCallPattern = Pattern.compile("\\b([A-Z][a-zA-Z0-9_]*)\\.([a-z][a-zA-Z0-9_]*)\\s*\\(");
 
         Matcher defMatcher = funcDefPattern.matcher(content);
         List<int[]> funcBoundaries = new ArrayList<>(); // [nameGroupStart, bodyStart]
@@ -242,13 +244,19 @@ public class StaticCodeAnalyzer {
             int bodyEnd = i + 1 < funcBoundaries.size() ? funcBoundaries.get(i + 1)[0] : content.length();
 
             String body = content.substring(bodyStart, Math.min(bodyEnd, content.length()));
-            Matcher callMatcher = callPattern.matcher(body);
             Set<String> calls = new LinkedHashSet<>();
+            // 단순 함수 호출: method()
+            Matcher callMatcher = callPattern.matcher(body);
             while (callMatcher.find()) {
                 String callee = callMatcher.group(1);
-                if (!isKeyword(callee) && !callee.equals(funcName)) {
-                    calls.add(callee);
-                }
+                if (!isKeyword(callee) && !callee.equals(funcName)) calls.add(callee);
+            }
+            // 정적 팩토리/클래스 메서드 호출: ClassName.method() → "ClassName::method" 형식으로 추가
+            Matcher qualifiedMatcher = qualifiedCallPattern.matcher(body);
+            while (qualifiedMatcher.find()) {
+                String className = qualifiedMatcher.group(1);
+                String methodName = qualifiedMatcher.group(2);
+                if (!isKeyword(methodName)) calls.add(className + "::" + methodName);
             }
             if (!calls.isEmpty()) {
                 result.put(funcName, new ArrayList<>(calls));
