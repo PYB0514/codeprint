@@ -1,6 +1,7 @@
 // 앱 라우팅 루트
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
+import axios from 'axios'
 
 // 초기 로드에 항상 필요한 경량 페이지는 정적 import 유지
 import LandingPage from './pages/LandingPage'
@@ -34,6 +35,21 @@ import NoticeBanner from './components/NoticeBanner'
 
 // 앱 최상위 라우터 컴포넌트
 export default function App() {
+  // 로그인한 사용자의 배경 이미지를 body에 적용
+  useEffect(() => {
+    axios.get<{ graphBgUrl?: string | null }>('/api/auth/me')
+      .then((r) => {
+        const url = r.data.graphBgUrl
+        if (url) {
+          document.body.style.backgroundImage = `url(${url})`
+          document.body.style.backgroundSize = 'cover'
+          document.body.style.backgroundAttachment = 'fixed'
+          document.body.style.backgroundPosition = 'center'
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   return (
     <BrowserRouter>
       <Suspense fallback={null}>

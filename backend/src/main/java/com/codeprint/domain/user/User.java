@@ -50,6 +50,12 @@ public class User {
     @Column(name = "github_access_token_encrypted", length = 500)
     private String githubAccessToken;
 
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
+
+    @Column(name = "graph_bg_url", length = 500)
+    private String graphBgUrl;
+
     // GitHub 사용자 정보로 새 User 인스턴스 생성
     public static User create(Long githubId, String email, String username) {
         User user = new User();
@@ -92,6 +98,18 @@ public class User {
     // 계정을 활성 상태로 복구
     public void enable() {
         this.enabled = true;
+        this.updatedAt = Instant.now();
+    }
+
+    // 프로필 아바타 URL 업데이트
+    public void updateAvatarUrl(String url) {
+        this.avatarUrl = url;
+        this.updatedAt = Instant.now();
+    }
+
+    // 그래프 배경 이미지 URL 업데이트
+    public void updateGraphBgUrl(String url) {
+        this.graphBgUrl = url;
         this.updatedAt = Instant.now();
     }
 

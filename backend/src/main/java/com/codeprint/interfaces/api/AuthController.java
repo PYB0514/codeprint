@@ -46,13 +46,15 @@ public class AuthController {
         if (user == null) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
-        return ResponseEntity.ok(Map.of(
-                "id", user.getId(),
-                "email", user.getEmail(),
-                "username", user.getUsername(),
-                "plan", user.getPlan(),
-                "hasGithubToken", user.getGithubAccessToken() != null
-        ));
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        body.put("id", user.getId());
+        body.put("email", user.getEmail());
+        body.put("username", user.getUsername());
+        body.put("plan", user.getPlan());
+        body.put("hasGithubToken", user.getGithubAccessToken() != null);
+        body.put("avatarUrl", user.getAvatarUrl());
+        body.put("graphBgUrl", user.getGraphBgUrl());
+        return ResponseEntity.ok(body);
     }
 
     // Refresh Token으로 새 Access Token 발급

@@ -11,6 +11,18 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.22.0',
+    date: '2026-06-10',
+    title: '프로필 사진 & 배경 이미지',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '설정 페이지에서 프로필 사진 업로드 가능 — 헤더에 아바타 이미지 표시' },
+      { category: '프론트', desc: '배경 이미지 업로드 시 사이트 전체 배경으로 적용 (로그인 유지 시 자동 복원)' },
+      { category: '백엔드', desc: 'POST/DELETE /api/users/me/avatar, /api/users/me/background 엔드포인트 추가' },
+      { category: '백엔드', desc: 'users 테이블에 avatar_url, graph_bg_url 컬럼 추가 (V24 마이그레이션)' },
+    ],
+  },
+  {
     version: 'v0.21.0',
     date: '2026-06-10',
     title: '노드 배경색 커스터마이징',

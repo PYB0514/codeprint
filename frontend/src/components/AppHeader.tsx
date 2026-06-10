@@ -7,17 +7,23 @@ interface Props {
   onLogin?: () => void
 }
 
+interface UserInfo {
+  username: string
+  plan: string
+  avatarUrl: string | null
+}
+
 // 공통 앱 헤더 — 어느 페이지에서든 <AppHeader /> 한 줄로 동작
 export default function AppHeader({ onLogin }: Props) {
   const navigate = useNavigate()
-  const [user, setUser] = useState<{ username: string; plan: string } | null>(null)
+  const [user, setUser] = useState<UserInfo | null>(null)
   const [checked, setChecked] = useState(false)
 
   // 쿠키 기반 인증 — /api/auth/me로 로그인 상태 확인
   useEffect(() => {
     axios
-      .get<{ username: string; plan: string }>('/api/auth/me')
-      .then((r) => setUser({ username: r.data.username, plan: r.data.plan }))
+      .get<{ username: string; plan: string; avatarUrl: string | null }>('/api/auth/me')
+      .then((r) => setUser({ username: r.data.username, plan: r.data.plan, avatarUrl: r.data.avatarUrl ?? null }))
       .catch(() => { /* 비로그인 상태 */ })
       .finally(() => setChecked(true))
   }, [])
@@ -53,7 +59,16 @@ export default function AppHeader({ onLogin }: Props) {
 
         {user ? (
           <>
-            <span className="text-gray-400">{user.username}</span>
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={user.username}
+                className="w-7 h-7 rounded-full object-cover cursor-pointer"
+                onClick={() => navigate('/settings')}
+              />
+            ) : (
+              <span className="text-gray-400">{user.username}</span>
+            )}
             {user.plan && (
               <span className="bg-gray-800 px-2 py-0.5 rounded text-xs text-gray-300">{user.plan}</span>
             )}

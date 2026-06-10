@@ -4,14 +4,17 @@ package com.codeprint.infrastructure.storage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.UUID;
 
@@ -54,6 +57,25 @@ public class S3Service {
                  .getObjectRequest(getRequest));
 
         return presigned.url().toString();
+    }
+
+    // multipart 파일을 지정 경로에 업로드하고 공개 URL 반환
+    public String uploadFile(MultipartFile file, String keyPrefix) throws IOException {
+        String originalFilename = file.getOriginalFilename();
+        String ext = (originalFilename != null && originalFilename.contains("."))
+                ? originalFilename.substring(originalFilename.lastIndexOf('.'))
+                : "";
+        String key = keyPrefix + UUID.randomUUID() + ext;
+
+        PutObjectRequest putRequest = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .contentType(file.getContentType())
+                .build();
+
+        s3Client.putObject(putRequest, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+
+        return "https://" + bucket + ".s3.amazonaws.com/" + key;
     }
 
     // S3 객체 삭제
