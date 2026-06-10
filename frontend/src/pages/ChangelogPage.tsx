@@ -11,7 +11,7 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
-    version: 'v0.19.0',
+    version: 'v0.20.0',
     date: '2026-06-10',
     title: 'API 엔드포인트 노드 클릭 시 흐름 재생 시작',
     type: 'feature',
