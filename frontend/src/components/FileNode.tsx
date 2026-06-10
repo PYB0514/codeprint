@@ -1,9 +1,10 @@
 // 파일 노드 — 헤더(이름 + 연결 사이드바 버튼)를 렌더링, 함수 노드는 React Flow가 자식으로 배치
+import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 
 // 파일 노드 렌더링
-export default function FileNode({ data }: NodeProps) {
+const FileNode = memo(function FileNode({ data }: NodeProps) {
   const hasConn = (data.incoming as unknown[])?.length > 0 || (data.outgoing as unknown[])?.length > 0
   const handleStyle = { opacity: 0, width: 6, height: 6 }
 
@@ -60,4 +61,6 @@ export default function FileNode({ data }: NodeProps) {
       </div>
     </>
   )
-}
+})
+
+export default FileNode
