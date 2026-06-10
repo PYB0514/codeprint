@@ -329,7 +329,10 @@ function pruneTreeToPath(root: CallTreeNode, targetId: string): boolean {
   return false
 }
 
-// 자손 트리 재귀 빌드 — visited를 공유해 중복 노드 방지
+const DB_FLOW_TYPES = new Set(['DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE'])
+
+// 자손 트리 재귀 빌드 — visited 공유로 중복 방지
+// FUNCTION 노드가 직접 DB 엣지 없으면 소속 FILE의 DB 엣지로 폴백 (기존 그래프 호환)
 function buildDownstreamTree(nodeId: string, rawEdges: RawEdge[], rawNodes: RawNode[], visited: Set<string>, depth: number): CallTreeNode[] {
   if (depth >= 12) return []
   const result: CallTreeNode[] = []
@@ -339,6 +342,19 @@ function buildDownstreamTree(nodeId: string, rawEdges: RawEdge[], rawNodes: RawN
     const child = makeCallTreeNode(e.target, rawNodes, e.id, e.type)
     child.children = buildDownstreamTree(e.target, rawEdges, rawNodes, visited, depth + 1)
     result.push(child)
+  }
+  // FUNCTION 노드에 직접 DB 엣지가 없으면 소속 FILE의 DB 엣지로 폴백
+  const curRaw = rawNodes.find((n) => n.id === nodeId)
+  const hasDirectDb = result.some((c) => DB_FLOW_TYPES.has(c.edgeType ?? ''))
+  if (curRaw?.type === 'FUNCTION' && !hasDirectDb) {
+    const parentFile = rawNodes.find((f) => f.type === 'FILE' && f.filePath === curRaw.filePath)
+    if (parentFile && !visited.has(parentFile.id)) {
+      for (const e of rawEdges) {
+        if (!DB_FLOW_TYPES.has(e.type) || e.source !== parentFile.id || visited.has(e.target)) continue
+        visited.add(e.target)
+        result.push(makeCallTreeNode(e.target, rawNodes, e.id, e.type))
+      }
+    }
   }
   return result
 }
@@ -360,16 +376,17 @@ function buildCallTree(
   }
   const rootFuncId = upChain.length > 0 ? upChain[0].nodeId : nodeId
 
-  // 2. 프론트엔드 진입점 탐색 (루트 함수 소속 파일에 API_CALL이 오면 프론트가 entry)
-  const rootFuncRaw = rawNodes.find((n) => n.id === rootFuncId && n.type === 'FUNCTION')
+  // 2. 프론트엔드 진입점 탐색 — upstream chain 전체(루트→nodeId)를 순서대로 확인
+  // 가장 상위 함수 중 API_CALL을 받는 FILE이 있으면 그 파일이 컨트롤러 → 프론트가 entry
   let frontendNodeId: string | undefined
   let frontendEdgeId: string | undefined
-  if (rootFuncRaw) {
-    const parentFile = rawNodes.find((f) => f.type === 'FILE' && f.filePath === rootFuncRaw.filePath)
-    if (parentFile) {
-      const apiEdge = rawEdges.find((e) => e.type === 'API_CALL' && e.target === parentFile.id)
-      if (apiEdge) { frontendNodeId = apiEdge.source; frontendEdgeId = apiEdge.id }
-    }
+  for (const chainNodeId of [...upChain.map((u) => u.nodeId), nodeId]) {
+    const chainRaw = rawNodes.find((n) => n.id === chainNodeId && n.type === 'FUNCTION')
+    if (!chainRaw) continue
+    const parentFile = rawNodes.find((f) => f.type === 'FILE' && f.filePath === chainRaw.filePath)
+    if (!parentFile) continue
+    const apiEdge = rawEdges.find((e) => e.type === 'API_CALL' && e.target === parentFile.id)
+    if (apiEdge) { frontendNodeId = apiEdge.source; frontendEdgeId = apiEdge.id; break }
   }
 
   // 3. 루트 함수부터 전체 트리 빌드 (shared visited로 중복 방지)
@@ -752,7 +769,7 @@ function GraphPageInner() {
     }), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
   }, [setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges])
 
-  // 트리에서 분기 선택 — 해당 노드까지의 경로로 재생 전환
+  // 트리에서 분기 선택 — 선택한 분기 노드 위치에서 자동 재생 재개
   const selectBranch = useCallback((nodeId: string) => {
     if (!callTree) return
     const path = findPathInTree(callTree, nodeId)
@@ -761,10 +778,16 @@ function GraphPageInner() {
     const items = pathToPlaybackItems(path.nodeIds, path.edgeIds, path.edgeTypes, rawNodes)
     const edgeIds = new Set(path.edgeIds.filter(Boolean))
     playbackEdgeIdsRef.current = edgeIds
+    // callTree 프루닝 — 선택한 분기 외 형제 제거해 auto-play 재정지 방지
+    const cloneNode = (n: CallTreeNode): CallTreeNode => ({ ...n, children: n.children.map(cloneNode) })
+    const prunedTree = cloneNode(callTree)
+    pruneTreeToPath(prunedTree, nodeId)
+    setCallTree(prunedTree)
     setActivePath(path)
     setPlaybackItems(items)
-    setPlaybackCursor(0)
-    setPlaybackPlaying(false)
+    // 커서를 선택한 분기 노드 위치로 설정 (0이 아님 — 처음부터 재시작 아님)
+    setPlaybackCursor(path.nodeIds.length - 1)
+    setPlaybackPlaying(true)
     setEdges((eds) => eds.map((e) => edgeIds.has(e.id) ? { ...e, hidden: false } : e))
   }, [callTree, rawNodes, setEdges])
 

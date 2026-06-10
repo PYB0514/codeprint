@@ -109,7 +109,18 @@ public class GraphBuilder {
                 UUID callerFuncId = funcNodeIds.get(callerFile.filePath() + "::" + callerFunc);
                 if (callerFuncId == null) continue;
 
-                for (String calleeFunc : entry.getValue()) {
+                for (String calleeEntry : entry.getValue()) {
+                    // "ClassName::method" 형식이면 클래스명으로 파일 직접 매칭
+                    String calleeFunc;
+                    String targetClass = null;
+                    if (calleeEntry.contains("::")) {
+                        String[] parts = calleeEntry.split("::", 2);
+                        targetClass = parts[0];
+                        calleeFunc = parts[1];
+                    } else {
+                        calleeFunc = calleeEntry;
+                    }
+
                     // 후보 callee 파일 중 구현체를 인터페이스보다 우선 선택
                     ParsedFile bestMatch = null;
                     boolean bestIsInterface = false;
@@ -117,6 +128,12 @@ public class GraphBuilder {
                         if (calleeFile.filePath().equals(callerFile.filePath())) continue;
                         if (!calleeFile.functions().contains(calleeFunc)) continue;
                         String calleeClassName = extractFileNameWithoutExt(calleeFile.filePath());
+                        // 클래스명이 명시된 경우: 정확히 일치하는 파일 우선 선택
+                        if (targetClass != null && calleeClassName.equals(targetClass)) {
+                            bestMatch = calleeFile;
+                            break;
+                        }
+                        if (targetClass != null) continue; // 클래스명 불일치 → 건너뜀
                         boolean calleeIsInterface = interfaceToImplFiles.containsKey(calleeClassName);
                         if (bestMatch == null) {
                             bestMatch = calleeFile;
@@ -222,7 +239,7 @@ public class GraphBuilder {
             }
         }
 
-        // Repository 파일 → DB_TABLE 엣지 (CRUD 타입별 분류)
+        // Repository FILE → DB_TABLE 엣지 (파일 단위 — 그래프 시각화용) + FUNCTION → DB_TABLE (흐름 재생용)
         Set<String> usedDbEdgeIds = new HashSet<>();
         for (ParsedFile pf : parsedFiles) {
             if (pf.repositoryEntityClass() == null) continue;
@@ -230,13 +247,29 @@ public class GraphBuilder {
             UUID tableNodeId = entityClassToTableNodeId.get(pf.repositoryEntityClass());
             if (repoFileId == null || tableNodeId == null) continue;
 
-            Set<EdgeType> crudTypes = detectCrudTypes(pf.functions());
             String fileBase = extractFileName(pf.filePath());
-            for (EdgeType crudType : crudTypes) {
+
+            // 파일 단위 엣지 (기존 방식 유지 — 그래프 시각화)
+            Set<EdgeType> fileCrudTypes = detectCrudTypes(pf.functions());
+            for (EdgeType crudType : fileCrudTypes) {
                 String edgeId = fileBase + "-" + crudType.name().toLowerCase() + "-" + pf.repositoryEntityClass();
                 if (!usedDbEdgeIds.contains(edgeId)) {
                     usedDbEdgeIds.add(edgeId);
                     graphRepository.saveEdge(Edge.create(graphId, edgeId, crudType, repoFileId, tableNodeId));
+                }
+            }
+
+            // 함수 단위 엣지 — 각 Repository 함수에서 DB_TABLE로 직접 연결 (흐름 재생에서 DB까지 추적 가능)
+            for (String funcName : pf.functions()) {
+                UUID funcId = funcNodeIds.get(pf.filePath() + "::" + funcName);
+                if (funcId == null) continue;
+                Set<EdgeType> funcCrudTypes = detectCrudTypes(List.of(funcName));
+                for (EdgeType crudType : funcCrudTypes) {
+                    String edgeId = fileBase + "-fn-" + funcName + "-" + crudType.name().toLowerCase();
+                    if (!usedDbEdgeIds.contains(edgeId)) {
+                        usedDbEdgeIds.add(edgeId);
+                        graphRepository.saveEdge(Edge.create(graphId, edgeId, crudType, funcId, tableNodeId));
+                    }
                 }
             }
         }
