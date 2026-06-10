@@ -608,6 +608,12 @@ function GraphPageInner() {
   }, [setNodes])
 
   // 범례 도메인 클릭 시 해당 도메인 섹션으로 fitView 이동
+  // 도메인 섹션으로 뷰포트 이동
+  const handleFitToDomain = useCallback((domain: string) => {
+    const section = getNodes().find((n) => n.id === `domain-section-${domain}`)
+    if (section) fitView({ nodes: [section], duration: 400, padding: 0.15 })
+  }, [getNodes, fitView])
+
   // 도메인 범례 클릭 — 해당 도메인의 흐름 재생 진입점 목록을 사이드바에 표시
   const openDomainFlows = useCallback((domain: string, color: string) => {
     const domainNodes = rawNodes.filter(n => extractDomain(n.filePath, commonPrefix) === domain)
@@ -1933,15 +1939,33 @@ function GraphPageInner() {
                           {active ? '◑' : '○'}
                         </button>
                         <span
-                          className="text-gray-400 text-xs truncate cursor-pointer hover:text-white transition-colors"
+                          className="text-gray-400 text-xs truncate cursor-pointer hover:text-white transition-colors flex-1 min-w-0"
                           onClick={() => openDomainFlows(key, color)}
                           title="이 도메인의 흐름 목록 보기"
                         >
                           {label}
                         </span>
+                        <button
+                          onClick={() => handleFitToDomain(key)}
+                          title="이 도메인으로 이동"
+                          className="text-gray-600 hover:text-gray-300 transition-colors flex-shrink-0 text-[9px] leading-none"
+                        >→</button>
                       </div>
                     )
                   })}
+                  </div>
+                  {/* DB 테이블 범례 */}
+                  <div className="flex items-center gap-1.5 py-0.5 mb-2">
+                    <span style={{ width: 16, height: 16, borderRadius: 3, border: '1px solid #22d3ee88', background: '#22d3ee22', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 9, color: '#22d3ee' }}>◇</span>
+                    <span
+                      className="text-gray-400 text-xs truncate cursor-pointer hover:text-white transition-colors flex-1 min-w-0"
+                      onClick={() => {
+                        const dbNodes = rawNodes.filter(n => n.type === 'DB_TABLE').slice(0, 20).map(n => ({ id: n.id, name: n.name, comment: n.comment ?? null, fileName: '' }))
+                        setSidebar({ kind: 'domain-summary', domainName: 'DB 테이블', color: '#22d3ee', apiEndpoints: [], entryFunctions: dbNodes })
+                        setRightCollapsed(false)
+                      }}
+                      title="DB 테이블 목록 보기"
+                    >DB</span>
                   </div>
                   <div className="border-t border-gray-800 my-2" />
                 </>
