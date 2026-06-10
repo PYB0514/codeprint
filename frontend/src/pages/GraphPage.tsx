@@ -1960,8 +1960,8 @@ function GraphPageInner() {
                     <span
                       className="text-gray-400 text-xs truncate cursor-pointer hover:text-white transition-colors flex-1 min-w-0"
                       onClick={() => {
-                        const dbNodes = rawNodes.filter(n => n.type === 'DB_TABLE').slice(0, 20).map(n => ({ id: n.id, name: n.name, comment: n.comment ?? null, fileName: '' }))
-                        setSidebar({ kind: 'domain-summary', domainName: 'DB 테이블', color: '#22d3ee', apiEndpoints: [], entryFunctions: dbNodes })
+                        const dbNodes = rawNodes.filter(n => n.type === 'DB_TABLE').map(n => ({ id: n.id, name: n.name, comment: n.comment ?? null }))
+                        setSidebar({ kind: 'domain-summary', domainName: 'DB 테이블', color: '#22d3ee', apiEndpoints: dbNodes, entryFunctions: [] })
                         setRightCollapsed(false)
                       }}
                       title="DB 테이블 목록 보기"
@@ -2639,7 +2639,7 @@ function GraphPageInner() {
 
                     {sidebar.apiEndpoints.length > 0 && (
                       <div className="flex flex-col gap-1.5">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">API 엔드포인트</p>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">{sidebar.domainName === 'DB 테이블' ? 'DB 테이블' : 'API 엔드포인트'}</p>
                         {sidebar.apiEndpoints.map(ep => (
                           <button key={ep.id}
                             className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:opacity-80 transition-opacity"
