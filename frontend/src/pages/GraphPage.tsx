@@ -608,10 +608,28 @@ function GraphPageInner() {
   }, [setNodes])
 
   // 범례 도메인 클릭 시 해당 도메인 섹션으로 fitView 이동
+  // 도메인 섹션으로 뷰포트 이동
   const handleFitToDomain = useCallback((domain: string) => {
     const section = getNodes().find((n) => n.id === `domain-section-${domain}`)
     if (section) fitView({ nodes: [section], duration: 400, padding: 0.15 })
   }, [getNodes, fitView])
+
+  // 도메인 범례 클릭 — 해당 도메인의 흐름 재생 진입점 목록을 사이드바에 표시
+  const openDomainFlows = useCallback((domain: string, color: string) => {
+    const domainNodes = rawNodes.filter(n => extractDomain(n.filePath, commonPrefix) === domain)
+    const domainNodeIds = new Set(domainNodes.map(n => n.id))
+    const apiEndpoints = domainNodes.filter(n => n.type === 'API_ENDPOINT')
+      .map(n => ({ id: n.id, name: n.name, comment: n.comment ?? null }))
+    const entryFunctions = domainNodes.filter(n => n.type === 'FUNCTION')
+      .filter(n => !rawEdgesCache.some(e => e.type === 'FUNCTION_CALL' && e.target === n.id && !domainNodeIds.has(e.source)))
+      .slice(0, 20)
+      .map(n => {
+        const file = rawNodes.find(f => f.type === 'FILE' && f.filePath === n.filePath)
+        return { id: n.id, name: n.name, comment: n.comment ?? null, fileName: file?.name ?? n.filePath }
+      })
+    setSidebar({ kind: 'domain-summary', domainName: domain, color, apiEndpoints, entryFunctions })
+    setRightCollapsed(false)
+  }, [rawNodes, rawEdgesCache, commonPrefix])
 
   // 파일 연결 보기 — 사이드바 오픈 콜백
   const openFileSidebar = useCallback((data: FileSidebarData) => {
@@ -1921,15 +1939,33 @@ function GraphPageInner() {
                           {active ? '◑' : '○'}
                         </button>
                         <span
-                          className="text-gray-400 text-xs truncate cursor-pointer hover:text-white transition-colors"
-                          onClick={() => handleFitToDomain(key)}
-                          title="이 도메인으로 이동"
+                          className="text-gray-400 text-xs truncate cursor-pointer hover:text-white transition-colors flex-1 min-w-0"
+                          onClick={() => openDomainFlows(key, color)}
+                          title="이 도메인의 흐름 목록 보기"
                         >
                           {label}
                         </span>
+                        <button
+                          onClick={() => handleFitToDomain(key)}
+                          title="이 도메인으로 이동"
+                          className="text-gray-600 hover:text-gray-300 transition-colors flex-shrink-0 text-[9px] leading-none"
+                        >→</button>
                       </div>
                     )
                   })}
+                  </div>
+                  {/* DB 테이블 범례 */}
+                  <div className="flex items-center gap-1.5 py-0.5 mb-2">
+                    <span style={{ width: 16, height: 16, borderRadius: 3, border: '1px solid #22d3ee88', background: '#22d3ee22', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 9, color: '#22d3ee' }}>◇</span>
+                    <span
+                      className="text-gray-400 text-xs truncate cursor-pointer hover:text-white transition-colors flex-1 min-w-0"
+                      onClick={() => {
+                        const dbNodes = rawNodes.filter(n => n.type === 'DB_TABLE').map(n => ({ id: n.id, name: n.name, comment: n.comment ?? null }))
+                        setSidebar({ kind: 'domain-summary', domainName: 'DB 테이블', color: '#22d3ee', apiEndpoints: dbNodes, entryFunctions: [] })
+                        setRightCollapsed(false)
+                      }}
+                      title="DB 테이블 목록 보기"
+                    >DB</span>
                   </div>
                   <div className="border-t border-gray-800 my-2" />
                 </>
@@ -2167,6 +2203,15 @@ function GraphPageInner() {
                           const childRaw = rawNodes.find((n) => n.id === child.nodeId)
                           const isPending = pendingBranchNodeId === child.nodeId
                           const isConfirmed = activePath.nodeIds.includes(child.nodeId) && !pendingBranchNodeId
+                          // 이 분기를 선택했을 때의 예상 단계 수 계산 (in-place 수정 방지를 위해 복사본 사용)
+                          const branchStepCount = (() => {
+                            if (!callTree) return null
+                            const p = findPathInTree(callTree, child.nodeId)
+                            if (!p) return null
+                            const ids = [...p.nodeIds], eIds = [...p.edgeIds], eTypes = [...p.edgeTypes]
+                            extendToDefaultLeaf(callTree, child.nodeId, ids, eIds, eTypes)
+                            return ids.length
+                          })()
                           return (
                             <button
                               key={child.nodeId}
@@ -2179,7 +2224,12 @@ function GraphPageInner() {
                                   : 'border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-200 hover:bg-gray-700/30'
                               }`}
                             >
-                              {childRaw?.comment || childRaw?.name || child.nodeId}
+                              <span className="flex items-center justify-between gap-2">
+                                <span className="truncate">{childRaw?.comment || childRaw?.name || child.nodeId}</span>
+                                {branchStepCount != null && (
+                                  <span className={`flex-shrink-0 tabular-nums ${isPending ? 'text-blue-400' : 'text-gray-600'}`}>{branchStepCount}단계</span>
+                                )}
+                              </span>
                             </button>
                           )
                         })}
@@ -2603,7 +2653,7 @@ function GraphPageInner() {
 
                     {sidebar.apiEndpoints.length > 0 && (
                       <div className="flex flex-col gap-1.5">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">API 엔드포인트</p>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">{sidebar.domainName === 'DB 테이블' ? 'DB 테이블' : 'API 엔드포인트'}</p>
                         {sidebar.apiEndpoints.map(ep => (
                           <button key={ep.id}
                             className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:opacity-80 transition-opacity"
@@ -2637,8 +2687,8 @@ function GraphPageInner() {
                           >
                             <span className="text-xs text-emerald-400">▶</span>
                             <div className="flex flex-col min-w-0">
-                              <span className="text-xs font-mono font-semibold text-emerald-300 truncate">{fn.name}</span>
-                              <span className="text-[10px] text-gray-500 truncate">{fn.fileName}</span>
+                              <span className="text-xs font-semibold text-emerald-300 truncate">{fn.comment || fn.name}</span>
+                              <span className="text-[10px] text-gray-500 truncate font-mono">{fn.name} · {fn.fileName}</span>
                             </div>
                           </button>
                         ))}
