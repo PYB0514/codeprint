@@ -11,6 +11,79 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.18.1',
+    date: '2026-06-10',
+    title: '흐름 재생 UX 4종 개선 — 분기 애니메이션·도메인 흐름·결과 카드',
+    type: 'fix',
+    items: [
+      { category: '프론트', desc: '분기 선택 후 재생 시 분기 노드부터 애니메이션 — 이전에는 마지막 스텝으로 즉시 점프하던 버그 수정' },
+      { category: '프론트', desc: '도메인 범례 흐름 목록 — 진입점 함수 나열 대신 실제 호출 체인 미리보기(A → B → C) 표시' },
+      { category: '프론트', desc: '종착점 결과 카드 추가 — 생성자 종착 시 "X 객체가 반환됩니다", DB 종착 시 읽기/쓰기/수정/삭제 결과 메시지 표시' },
+      { category: '프론트', desc: '흐름 재생 시작 시 도메인 요약 사이드바 자동 닫힘 — 재생 컨트롤이 가려지지 않도록' },
+    ],
+  },
+  {
+    version: 'v0.18.0',
+    date: '2026-06-10',
+    title: '도메인 범례 클릭 시 흐름 재생 목록 표시',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '도메인 범례 버튼 클릭 시 해당 도메인의 진입점 흐름 목록을 사이드바에 표시' },
+      { category: '프론트', desc: '흐름 클릭 시 해당 진입점에서 자동 재생 시작 + fitView 이동' },
+    ],
+  },
+  {
+    version: 'v0.17.2',
+    date: '2026-06-10',
+    title: '흐름 재생 속도·outline 누적 버그 수정',
+    type: 'fix',
+    items: [
+      { category: '프론트', desc: '재생 간격 1.0초 → 1.2초 — 빠른 전환으로 인한 시각적 혼란 개선' },
+      { category: '프론트', desc: '노드 outline이 다음 흐름 시작 시 누적되던 버그 수정 — 항상 초기화 후 적용' },
+    ],
+  },
+  {
+    version: 'v0.17.1',
+    date: '2026-06-10',
+    title: '흐름 재생 분기 선택 UX 개선 — 클릭 후 재생 버튼으로 확정',
+    type: 'fix',
+    items: [
+      { category: '프론트', desc: '분기 클릭 즉시 재생 → 클릭으로 경로 미리보기 후 ▶ 버튼으로 확정하는 2단계 UX로 변경' },
+      { category: '프론트', desc: '분기 대기 중 취소 버튼 추가 — 다른 분기 선택 또는 현재 경로 유지 가능' },
+    ],
+  },
+  {
+    version: 'v0.17.0',
+    date: '2026-06-10',
+    title: '흐름 재생 전면 재설계 — 뷰포트 전환·분기 트리·DB 연결',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '재생 중 fitView 자동 전환 — 현재 스텝 노드가 항상 화면 중앙에 위치' },
+      { category: '프론트', desc: '분기 트리 패널 추가 — 호출 분기를 시각적 트리로 표시, 클릭으로 경로 전환' },
+      { category: '프론트', desc: 'DB 연결 흐름 포함 — DB_READ/DB_WRITE 엣지를 따라 DB 테이블까지 재생 경로 확장' },
+      { category: '프론트', desc: '진입점 자동 탐색 — 선택 노드에 callers가 없으면 upstream을 역추적해 최상위 진입점에서 시작' },
+    ],
+  },
+  {
+    version: 'v0.16.0',
+    date: '2026-06-10',
+    title: '도메인 뷰 섹션 클릭 시 흐름 사이드바 + 타이틀 스케일 수정',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '도메인 뷰 섹션 박스 클릭 시 해당 도메인의 API/진입점 함수 목록과 흐름 재생 버튼 사이드바 표시' },
+      { category: '프론트', desc: '섹션 타이틀 역스케일 제거 — 줌 아웃 시 타이틀이 비대해지던 버그 수정' },
+    ],
+  },
+  {
+    version: 'v0.15.8',
+    date: '2026-06-10',
+    title: '배포 환경 로그인 불가 수정 — SameSite=None 쿠키',
+    type: 'fix',
+    items: [
+      { category: '백엔드', desc: 'ResponseCookie SameSite=None; Secure 추가 — HTTPS 배포 환경에서 cross-site 쿠키 전달 실패 수정' },
+    ],
+  },
+  {
     version: 'v0.15.7',
     date: '2026-06-10',
     title: 'Refresh Token 메커니즘 도입 — 세션 자동 갱신',
