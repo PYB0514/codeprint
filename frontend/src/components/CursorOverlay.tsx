@@ -3,6 +3,7 @@ import type { RemoteCursor } from '../hooks/useCollaboration'
 
 // 사용자 이름 첫 글자로 아바타 색상 결정
 const CURSOR_COLORS = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#ef4444', '#84cc16']
+// 커서 색상 반환
 function cursorColor(username: string) {
   let h = 0
   for (const c of username) h = (h * 31 + c.charCodeAt(0)) & 0xffff

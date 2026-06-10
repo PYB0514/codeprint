@@ -1,6 +1,7 @@
 // 서비스 공통 푸터 — 약관, 개인정보처리방침, 문의하기, 패치노트 링크
 import { useNavigate } from 'react-router-dom'
 
+// 공통 푸터 렌더링
 export default function Footer() {
   const navigate = useNavigate()
 

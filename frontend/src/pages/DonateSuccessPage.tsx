@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 
+// 후원 결제 성공 페이지
 export default function DonateSuccessPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()

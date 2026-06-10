@@ -1525,6 +1525,7 @@ function GraphPageInner() {
     setRightCollapsed(false)
   }, [rawNodes, rawEdgesCache, graphId, startPlayback])
 
+  // 노드 클릭 이벤트 처리
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     publishSelection(node.id)
     if (node.type === 'fileNode' || node.type === 'groupNode') {

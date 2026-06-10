@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom'
 import Footer from '../components/Footer'
 
+// 개인정보처리방침 렌더링
 export default function PrivacyPage() {
   const navigate = useNavigate()
 

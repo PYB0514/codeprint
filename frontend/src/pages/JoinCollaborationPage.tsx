@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 
+// 협업 세션 참가 페이지 컴포넌트
 export default function JoinCollaborationPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()

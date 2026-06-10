@@ -36,6 +36,7 @@ function timeAgo(isoStr: string) {
   return mins <= 0 ? '방금 전' : `${mins}분 전`
 }
 
+// 후원 페이지 컴포넌트
 export default function DonatePage() {
   const navigate = useNavigate()
   const [user, setUser] = useState<UserInfo | null>(null)

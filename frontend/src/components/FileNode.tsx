@@ -2,6 +2,7 @@
 import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 
+// 파일 노드 렌더링
 export default function FileNode({ data }: NodeProps) {
   const hasConn = (data.incoming as unknown[])?.length > 0 || (data.outgoing as unknown[])?.length > 0
   const handleStyle = { opacity: 0, width: 6, height: 6 }

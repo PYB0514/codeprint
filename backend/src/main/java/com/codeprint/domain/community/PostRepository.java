@@ -7,22 +7,31 @@ import java.util.UUID;
 
 public interface PostRepository {
 
+    // 게시글 저장
     Post save(Post post);
 
+    // ID로 게시글 조회
     Optional<Post> findById(UUID id);
 
+    // 전체 게시글 페이지 조회
     List<Post> findAll(int page, int size);
 
+    // 사용자 게시글 목록 조회
     List<Post> findByUserId(UUID userId);
 
+    // 댓글 저장
     Comment saveComment(Comment comment);
 
+    // 게시글 댓글 목록 조회
     List<Comment> findCommentsByPostId(UUID postId);
 
+    // 게시글 삭제
     void deleteById(UUID id);
 
+    // 첨부파일 저장
     PostAttachment saveAttachment(PostAttachment attachment);
 
+    // 게시글 첨부파일 목록 조회
     List<PostAttachment> findAttachmentsByPostId(UUID postId);
 
     // 제목/본문 검색 (대소문자 무시)

@@ -10,6 +10,7 @@ export function hasCookieConsent(): boolean {
   return localStorage.getItem(STORAGE_KEY) !== null
 }
 
+// 쿠키 배너 렌더링
 export default function CookieBanner() {
   const navigate = useNavigate()
   const [visible, setVisible] = useState(!hasCookieConsent())

@@ -9,5 +9,6 @@ import java.util.UUID;
 
 public interface NodeJpaRepository extends JpaRepository<Node, UUID> {
 
+    // 그래프 ID로 노드 목록 조회
     List<Node> findByGraphId(UUID graphId);
 }

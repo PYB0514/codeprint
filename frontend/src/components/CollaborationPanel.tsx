@@ -14,12 +14,14 @@ interface Props {
 
 // 사용자 이름 첫 글자로 아바타 색상 결정
 const AVATAR_COLORS = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#ef4444', '#84cc16']
+// 아바타 배경색 반환
 function avatarColor(username: string) {
   let h = 0
   for (const c of username) h = (h * 31 + c.charCodeAt(0)) & 0xffff
   return AVATAR_COLORS[h % AVATAR_COLORS.length]
 }
 
+// 협업 패널 렌더링
 export default function CollaborationPanel({ graphId, myUserId, participants, connected, sessionId, inviteCode, onSessionReady }: Props) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)

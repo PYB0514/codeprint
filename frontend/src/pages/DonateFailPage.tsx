@@ -1,6 +1,7 @@
 // 후원 결제 실패 처리 페이지
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
+// 후원 결제 실패 페이지 렌더링
 export default function DonateFailPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()

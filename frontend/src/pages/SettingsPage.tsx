@@ -26,6 +26,7 @@ const PROVIDER_LABELS: Record<string, { label: string; hint: string; url: string
   },
 }
 
+// 설정 페이지 렌더링
 export default function SettingsPage() {
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [inputKeys, setInputKeys] = useState<Record<string, string>>({})
