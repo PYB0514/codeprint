@@ -518,7 +518,7 @@ function GraphPageInner() {
   const [playbackItems, setPlaybackItems] = useState<PlaybackItem[]>([])
   const [playbackCursor, setPlaybackCursor] = useState(-1)
   const [playbackPlaying, setPlaybackPlaying] = useState(false)
-  const playbackSpeed = 600
+  const playbackSpeed = 1200
   const playbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [callTree, setCallTree] = useState<CallTreeNode | null>(null)
   const [activePath, setActivePath] = useState<{ nodeIds: string[]; edgeIds: string[]; edgeTypes: string[] }>({ nodeIds: [], edgeIds: [], edgeTypes: [] })
@@ -652,7 +652,7 @@ function GraphPageInner() {
 
     setNodes((nds) => nds.map((n) => {
       if (!visitedNodeIds.has(n.id)) {
-        return { ...n, data: { ...n.data, playbackActive: false, playbackInPath: false } }
+        return { ...n, style: { ...(n.style ?? {}), outline: 'none', boxShadow: 'none' }, data: { ...n.data, playbackActive: false, playbackInPath: false } }
       }
       const isActive = n.id === activeNodeId
       const baseStyle = n.style ?? {}
