@@ -2203,6 +2203,15 @@ function GraphPageInner() {
                           const childRaw = rawNodes.find((n) => n.id === child.nodeId)
                           const isPending = pendingBranchNodeId === child.nodeId
                           const isConfirmed = activePath.nodeIds.includes(child.nodeId) && !pendingBranchNodeId
+                          // 이 분기를 선택했을 때의 예상 단계 수 계산 (in-place 수정 방지를 위해 복사본 사용)
+                          const branchStepCount = (() => {
+                            if (!callTree) return null
+                            const p = findPathInTree(callTree, child.nodeId)
+                            if (!p) return null
+                            const ids = [...p.nodeIds], eIds = [...p.edgeIds], eTypes = [...p.edgeTypes]
+                            extendToDefaultLeaf(callTree, child.nodeId, ids, eIds, eTypes)
+                            return ids.length
+                          })()
                           return (
                             <button
                               key={child.nodeId}
@@ -2215,7 +2224,12 @@ function GraphPageInner() {
                                   : 'border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-200 hover:bg-gray-700/30'
                               }`}
                             >
-                              {childRaw?.comment || childRaw?.name || child.nodeId}
+                              <span className="flex items-center justify-between gap-2">
+                                <span className="truncate">{childRaw?.comment || childRaw?.name || child.nodeId}</span>
+                                {branchStepCount != null && (
+                                  <span className={`flex-shrink-0 tabular-nums ${isPending ? 'text-blue-400' : 'text-gray-600'}`}>{branchStepCount}단계</span>
+                                )}
+                              </span>
                             </button>
                           )
                         })}
