@@ -465,7 +465,7 @@ function GraphPageInner() {
   const dragStartX = useRef(0)
   const dragStartWidth = useRef(0)
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
-  const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
+  const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('domain')
   const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
   const [opaqueDomainSet, setOpaqueDomainSet] = useState<Set<string>>(new Set())
   const [showEdges, setShowEdges] = useState(false)
@@ -518,7 +518,7 @@ function GraphPageInner() {
   const [playbackItems, setPlaybackItems] = useState<PlaybackItem[]>([])
   const [playbackCursor, setPlaybackCursor] = useState(-1)
   const [playbackPlaying, setPlaybackPlaying] = useState(false)
-  const playbackSpeed = 600
+  const playbackSpeed = 1200
   const playbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [callTree, setCallTree] = useState<CallTreeNode | null>(null)
   const [activePath, setActivePath] = useState<{ nodeIds: string[]; edgeIds: string[]; edgeTypes: string[] }>({ nodeIds: [], edgeIds: [], edgeTypes: [] })
@@ -652,7 +652,7 @@ function GraphPageInner() {
 
     setNodes((nds) => nds.map((n) => {
       if (!visitedNodeIds.has(n.id)) {
-        return { ...n, data: { ...n.data, playbackActive: false, playbackInPath: false } }
+        return { ...n, style: { ...(n.style ?? {}), outline: 'none', boxShadow: 'none' }, data: { ...n.data, playbackActive: false, playbackInPath: false } }
       }
       const isActive = n.id === activeNodeId
       const baseStyle = n.style ?? {}
@@ -952,7 +952,7 @@ function GraphPageInner() {
 
   // 프리셋 config를 현재 뷰 상태에 적용
   const applyPresetConfig = useCallback((config: Record<string, unknown>) => {
-    const lp = (config.layoutPreset as LayoutPreset) ?? 'layer'
+    const lp = (config.layoutPreset as LayoutPreset) ?? 'domain'
     const lm = (config.labelMode as LabelMode) ?? 'name'
     const edgeConfig = (config.edges as Record<string, boolean>) ?? {}
     const se = edgeConfig.import ?? false
