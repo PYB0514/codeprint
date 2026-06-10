@@ -5,12 +5,13 @@ import com.codeprint.application.user.UserCommandService;
 import com.codeprint.domain.user.RefreshToken;
 import com.codeprint.domain.user.RefreshTokenRepository;
 import com.codeprint.domain.user.User;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
@@ -71,14 +72,18 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         log.info("OAuth2 login success: userId={}, username={}", user.getId(), username);
 
         boolean isSecure = !frontendUrl.startsWith("http://localhost");
+        // cross-origin 배포 환경에서 쿠키 전송을 위해 SameSite=None 필요
+        String sameSite = isSecure ? "None" : "Lax";
 
         // JWT를 HttpOnly 쿠키로 설정 — XSS로부터 토큰 보호
-        Cookie jwtCookie = new Cookie("jwt", token);
-        jwtCookie.setHttpOnly(true);
-        jwtCookie.setPath("/");
-        jwtCookie.setMaxAge(3600); // 1시간
-        jwtCookie.setSecure(isSecure);
-        response.addCookie(jwtCookie);
+        ResponseCookie jwtCookie = ResponseCookie.from("jwt", token)
+                .httpOnly(true)
+                .path("/")
+                .maxAge(3600)
+                .secure(isSecure)
+                .sameSite(sameSite)
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, jwtCookie.toString());
 
         // Refresh Token 발급 후 DB 저장 및 쿠키 설정
         String rawRefreshToken = jwtTokenProvider.generateRefreshToken();
@@ -87,12 +92,14 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         refreshTokenRepository.deleteAllByUserId(user.getId()); // 기존 토큰 교체
         refreshTokenRepository.save(RefreshToken.create(user.getId(), tokenHash, expiresAt));
 
-        Cookie refreshCookie = new Cookie("refresh_token", rawRefreshToken);
-        refreshCookie.setHttpOnly(true);
-        refreshCookie.setPath("/api/auth");
-        refreshCookie.setMaxAge((int) REFRESH_TOKEN_EXPIRY_SECONDS);
-        refreshCookie.setSecure(isSecure);
-        response.addCookie(refreshCookie);
+        ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", rawRefreshToken)
+                .httpOnly(true)
+                .path("/api/auth")
+                .maxAge(REFRESH_TOKEN_EXPIRY_SECONDS)
+                .secure(isSecure)
+                .sameSite(sameSite)
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
 
         // 토큰 없이 대시보드로 직접 리다이렉트
         getRedirectStrategy().sendRedirect(request, response, frontendUrl + "/dashboard");

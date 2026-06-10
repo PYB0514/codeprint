@@ -8,3 +8,7 @@ ERROR_TRACKER.md
 
 # IDE 개인 설정
 .vscode/
+
+# 로컬 실행 로그
+*.log
+boot.log

@@ -12,6 +12,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -78,20 +80,25 @@ public class AuthController {
 
             String newJwt = jwtTokenProvider.generateToken(user.getId(), user.getEmail(), user.getRole().name());
             boolean isSecure = !frontendUrl.startsWith("http://localhost");
+            String sameSite = isSecure ? "None" : "Lax";
 
-            Cookie jwtCookie = new Cookie("jwt", newJwt);
-            jwtCookie.setHttpOnly(true);
-            jwtCookie.setPath("/");
-            jwtCookie.setMaxAge(3600);
-            jwtCookie.setSecure(isSecure);
-            response.addCookie(jwtCookie);
+            ResponseCookie jwtCookie = ResponseCookie.from("jwt", newJwt)
+                    .httpOnly(true)
+                    .path("/")
+                    .maxAge(3600)
+                    .secure(isSecure)
+                    .sameSite(sameSite)
+                    .build();
+            response.addHeader(HttpHeaders.SET_COOKIE, jwtCookie.toString());
 
-            Cookie refreshCookie = new Cookie("refresh_token", newRawToken);
-            refreshCookie.setHttpOnly(true);
-            refreshCookie.setPath("/api/auth");
-            refreshCookie.setMaxAge((int) REFRESH_TOKEN_EXPIRY_SECONDS);
-            refreshCookie.setSecure(isSecure);
-            response.addCookie(refreshCookie);
+            ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", newRawToken)
+                    .httpOnly(true)
+                    .path("/api/auth")
+                    .maxAge(REFRESH_TOKEN_EXPIRY_SECONDS)
+                    .secure(isSecure)
+                    .sameSite(sameSite)
+                    .build();
+            response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
 
             return ResponseEntity.<Map<String, Object>>ok(Map.of("ok", true));
         }).orElseGet(() -> ResponseEntity.status(401).body(Map.of("error", "User not found")));
@@ -135,20 +142,28 @@ public class AuthController {
 
     // jwt 쿠키 만료 공통 처리
     private void expireJwtCookie(HttpServletResponse response) {
-        Cookie expiredCookie = new Cookie("jwt", "");
-        expiredCookie.setHttpOnly(true);
-        expiredCookie.setPath("/");
-        expiredCookie.setMaxAge(0);
-        response.addCookie(expiredCookie);
+        boolean isSecure = !frontendUrl.startsWith("http://localhost");
+        ResponseCookie expiredCookie = ResponseCookie.from("jwt", "")
+                .httpOnly(true)
+                .path("/")
+                .maxAge(0)
+                .secure(isSecure)
+                .sameSite(isSecure ? "None" : "Lax")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, expiredCookie.toString());
     }
 
     // refresh_token 쿠키 만료 처리
     private void expireRefreshTokenCookie(HttpServletResponse response) {
-        Cookie expiredCookie = new Cookie("refresh_token", "");
-        expiredCookie.setHttpOnly(true);
-        expiredCookie.setPath("/api/auth");
-        expiredCookie.setMaxAge(0);
-        response.addCookie(expiredCookie);
+        boolean isSecure = !frontendUrl.startsWith("http://localhost");
+        ResponseCookie expiredCookie = ResponseCookie.from("refresh_token", "")
+                .httpOnly(true)
+                .path("/api/auth")
+                .maxAge(0)
+                .secure(isSecure)
+                .sameSite(isSecure ? "None" : "Lax")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, expiredCookie.toString());
     }
 
     // 요청 쿠키에서 특정 이름의 값 추출
