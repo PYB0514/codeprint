@@ -524,6 +524,10 @@ function GraphPageInner() {
   const [activePath, setActivePath] = useState<{ nodeIds: string[]; edgeIds: string[]; edgeTypes: string[] }>({ nodeIds: [], edgeIds: [], edgeTypes: [] })
   // 현재 경로의 엣지 ID 집합 — 재생 중 visibility 관리용
   const playbackEdgeIdsRef = useRef<Set<string>>(new Set())
+  // 대기 중인 분기 선택 (재생 버튼으로 확정)
+  const [pendingBranchNodeId, setPendingBranchNodeId] = useState<string | null>(null)
+  // 처음부터 재시작을 위한 루트 노드 ID
+  const [playbackRootNodeId, setPlaybackRootNodeId] = useState<string | null>(null)
 
   // 노드 코멘트 상태
   const [nodeComments, setNodeComments] = useState<{ id: string; userId: string; content: string; createdAt: number }[]>([])
@@ -715,6 +719,8 @@ function GraphPageInner() {
     setPlaybackItems(items)
     setPlaybackCursor(0)
     setPlaybackPlaying(false)
+    setPendingBranchNodeId(null)
+    setPlaybackRootNodeId(nodeId)
     setEdges((eds) => eds.map((e) => edgeIds.has(e.id) ? { ...e, hidden: false } : e))
   }, [rawEdgesCache, rawNodes, setEdges])
 
@@ -757,6 +763,8 @@ function GraphPageInner() {
     setPlaybackItems([])
     setCallTree(null)
     setActivePath({ nodeIds: [], edgeIds: [], edgeTypes: [] })
+    setPendingBranchNodeId(null)
+    setPlaybackRootNodeId(null)
     setNodes((nds) => nds.map((n) => ({ ...n, style: { ...n.style, outline: 'none', boxShadow: 'none' }, data: { ...n.data, playbackActive: false, playbackInPath: false } })))
     setEdges((eds) => applyEdgeVisibility(eds.map((e) => {
       const d = e.data as { type?: string; broken?: boolean } | undefined
@@ -769,8 +777,13 @@ function GraphPageInner() {
     }), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
   }, [setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges])
 
-  // 트리에서 분기 선택 — 선택한 분기 노드 위치에서 자동 재생 재개
+  // 분기 대기 상태로만 전환 — 재생 버튼으로 확정
   const selectBranch = useCallback((nodeId: string) => {
+    setPendingBranchNodeId((prev) => prev === nodeId ? null : nodeId)
+  }, [])
+
+  // 대기 중인 분기를 확정하고 해당 위치부터 자동 재생
+  const confirmBranch = useCallback((nodeId: string) => {
     if (!callTree) return
     const path = findPathInTree(callTree, nodeId)
     if (!path) return
@@ -785,9 +798,9 @@ function GraphPageInner() {
     setCallTree(prunedTree)
     setActivePath(path)
     setPlaybackItems(items)
-    // 커서를 선택한 분기 노드 위치로 설정 (0이 아님 — 처음부터 재시작 아님)
     setPlaybackCursor(path.nodeIds.length - 1)
     setPlaybackPlaying(true)
+    setPendingBranchNodeId(null)
     setEdges((eds) => eds.map((e) => edgeIds.has(e.id) ? { ...e, hidden: false } : e))
   }, [callTree, rawNodes, setEdges])
 
@@ -2149,16 +2162,19 @@ function GraphPageInner() {
                     {/* 분기 선택 — 현재 스텝에서 경로가 갈릴 때 */}
                     {branchChildren.length > 0 && (
                       <div className="mx-3 mb-2 flex flex-col gap-1">
-                        <p className="text-[9px] text-gray-500">이 다음 경로를 선택하세요</p>
+                        <p className="text-[9px] text-gray-500">분기를 선택하고 ▶ 재생을 누르세요</p>
                         {branchChildren.map((child) => {
                           const childRaw = rawNodes.find((n) => n.id === child.nodeId)
-                          const isActive = activePath.nodeIds.includes(child.nodeId)
+                          const isPending = pendingBranchNodeId === child.nodeId
+                          const isConfirmed = activePath.nodeIds.includes(child.nodeId) && !pendingBranchNodeId
                           return (
                             <button
                               key={child.nodeId}
                               onClick={() => selectBranch(child.nodeId)}
                               className={`text-left text-[10px] px-2.5 py-1.5 rounded-lg border transition-colors ${
-                                isActive
+                                isPending
+                                  ? 'border-blue-500/60 bg-blue-900/30 text-blue-300'
+                                  : isConfirmed
                                   ? 'border-amber-600/60 bg-amber-900/20 text-amber-300'
                                   : 'border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-200 hover:bg-gray-700/30'
                               }`}
@@ -2173,18 +2189,19 @@ function GraphPageInner() {
                     {/* 재생 컨트롤 */}
                     <div className="flex items-center gap-1 px-3 pb-3">
                       <button
-                        onClick={() => setPlaybackCursor((c) => Math.max(0, c - 1))}
+                        onClick={() => { setPendingBranchNodeId(null); setPlaybackCursor((c) => Math.max(0, c - 1)) }}
                         disabled={playbackCursor <= 0}
                         className="text-gray-500 hover:text-white disabled:opacity-25 px-2 py-1.5 rounded hover:bg-gray-700 text-sm"
                       >←</button>
                       <button
                         onClick={() => {
-                          if (playbackCursor >= total - 1) { setPlaybackCursor(0); setPlaybackPlaying(true) }
+                          if (pendingBranchNodeId) { confirmBranch(pendingBranchNodeId) }
+                          else if (playbackCursor >= total - 1) { if (playbackRootNodeId) startPlayback(playbackRootNodeId) }
                           else setPlaybackPlaying((p) => !p)
                         }}
                         className="flex-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-700/40 rounded-lg py-1.5"
                       >
-                        {playbackPlaying ? '⏸ 일시정지' : playbackCursor >= total - 1 ? '↺ 처음부터' : '▶ 재생'}
+                        {pendingBranchNodeId ? '▶ 이 경로로 재생' : playbackPlaying ? '⏸ 일시정지' : playbackCursor >= total - 1 ? '↺ 처음부터' : '▶ 재생'}
                       </button>
                       <button
                         onClick={() => setPlaybackCursor((c) => Math.min(total - 1, c + 1))}
