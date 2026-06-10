@@ -6,6 +6,7 @@ import com.codeprint.application.graph.GraphCommandService;
 import com.codeprint.application.graph.GraphDiffService;
 import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.application.graph.GraphWarningService;
+import com.codeprint.application.graph.NodeStyleService;
 import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
@@ -36,6 +37,7 @@ public class GraphController {
     private final AnalysisApplicationService analysisApplicationService;
     private final GraphDiffService graphDiffService;
     private final GraphWarningService graphWarningService;
+    private final NodeStyleService nodeStyleService;
 
     // 프로젝트의 그래프 버전 목록을 최신순으로 조회
     @GetMapping("/api/projects/{projectId}/graphs")
@@ -72,6 +74,13 @@ public class GraphController {
                     List<Node> nodes = graphQueryService.getNodes(graph.getId());
                     List<Edge> edges = graphQueryService.getEdges(graph.getId());
 
+                    // 노드 스타일 맵 (nodeId → bgColor)
+                    Map<String, String> styleMap = nodeStyleService.getStyles(graph.getId()).stream()
+                            .collect(java.util.stream.Collectors.toMap(
+                                    s -> s.getNodeId().toString(),
+                                    s -> s.getBgColor() != null ? s.getBgColor() : ""
+                            ));
+
                     List<Map<String, Object>> nodeData = nodes.stream()
                             .filter(n -> !n.isHidden())
                             .map(n -> {
@@ -83,6 +92,8 @@ public class GraphController {
                                 node.put("language", n.getLanguage() != null ? n.getLanguage() : "");
                                 node.put("posX", n.getPosX());
                                 node.put("posY", n.getPosY());
+                                String bg = styleMap.get(n.getId().toString());
+                                if (bg != null && !bg.isBlank()) node.put("bgColor", bg);
                                 if (n.getMetadata() != null) {
                                     if (n.getMetadata().containsKey("comment")) {
                                         node.put("comment", n.getMetadata().get("comment"));
