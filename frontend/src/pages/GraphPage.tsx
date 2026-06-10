@@ -534,6 +534,11 @@ function GraphPageInner() {
   const [commentInput, setCommentInput] = useState('')
   const [commentNodeId, setCommentNodeId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  // 노드 색상 커스터마이징 — nodeId → bgColor (즉시 반영용)
+  const [nodeColorMap, setNodeColorMap] = useState<Record<string, string>>({})
+  // 현재 선택된 노드 ID (색상 팔레트 표시 대상)
+  const [clickedNodeId, setClickedNodeId] = useState<string | null>(null)
   const { state: collabState, publishCursor, publishSelection } = useCollaboration(collabSessionId, currentUserId)
 
   // 런타임 경고 상태
@@ -848,11 +853,19 @@ function GraphPageInner() {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebar)
       setRawNodes(rn)
       setRawEdgesCache(re)
+      // bgColor 초기화 — 서버에서 받은 색상을 즉시 반영 맵에 저장
+      const bgMap: Record<string, string> = {}
+      rn.forEach(n => { if (n.bgColor) bgMap[n.id] = n.bgColor })
+      setNodeColorMap(bgMap)
       const warnIds = new Set(warningList.flatMap(x => x.nodeIds))
       const warnEdgeIds = new Set(warningList.flatMap(x => x.edgeIds ?? []))
-      const styledNodes = layoutNodes.map(n =>
-        warnIds.has(n.id) ? { ...n, style: { ...((n.style as object) ?? {}), outline: '2px solid #eab308', outlineOffset: '2px' } } : n
-      )
+      const styledNodes = layoutNodes.map(n => {
+        const bg = bgMap[n.id]
+        let style = (n.style as object) ?? {}
+        if (bg) style = { ...style, background: bg }
+        if (warnIds.has(n.id)) style = { ...style, outline: '2px solid #eab308', outlineOffset: '2px' }
+        return { ...n, style }
+      })
       const baseEdges = layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i)
       const styledEdges = baseEdges.map(e =>
         warnEdgeIds.has(e.id) ? { ...e, style: { ...((e.style as object) ?? {}), stroke: '#eab308', strokeWidth: 2 }, animated: true } : e
@@ -1532,6 +1545,7 @@ function GraphPageInner() {
       resetPlayback()
       return
     }
+    if (node.type !== 'sectionNode') setClickedNodeId(node.id)
 
     // 도메인 뷰에서 섹션 클릭 — 해당 도메인의 주요 흐름 목록 표시
     if (node.type === 'sectionNode' && layoutPreset === 'domain') {
@@ -1602,6 +1616,21 @@ function GraphPageInner() {
 
     openFuncNode(node.id)
   }, [rawNodes, rawEdgesCache, commonPrefix, layoutPreset, openFuncNode, startPlayback, resetPlayback])
+
+  // 노드 배경색 변경 — PUT API 호출 후 즉시 UI 반영
+  const handleNodeColorChange = useCallback(async (nodeId: string, bgColor: string) => {
+    if (!graphId) return
+    try {
+      await axios.put(`/api/graphs/${graphId}/nodes/${nodeId}/style`, { bgColor })
+      setNodeColorMap(prev => ({ ...prev, [nodeId]: bgColor }))
+      setNodes(nds => nds.map(n => {
+        if (n.id !== nodeId) return n
+        const existingStyle = (n.style as object) ?? {}
+        const newStyle = bgColor ? { ...existingStyle, background: bgColor } : Object.fromEntries(Object.entries(existingStyle).filter(([k]) => k !== 'background'))
+        return { ...n, style: newStyle }
+      }))
+    } catch { /* 실패 시 무시 */ }
+  }, [graphId, setNodes])
 
   if (loading) {
     return (
@@ -2562,6 +2591,39 @@ function GraphPageInner() {
                         </div>
                       </div>
                     </SidebarSection>
+
+                    {/* 노드 색상 */}
+                    {clickedNodeId && (
+                      <SidebarSection title="노드 색상">
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { color: '', label: '없음' },
+                            { color: '#ef4444', label: '빨강' },
+                            { color: '#f97316', label: '주황' },
+                            { color: '#eab308', label: '노랑' },
+                            { color: '#22c55e', label: '초록' },
+                            { color: '#3b82f6', label: '파랑' },
+                            { color: '#a855f7', label: '보라' },
+                            { color: '#ec4899', label: '분홍' },
+                            { color: '#6b7280', label: '회색' },
+                          ].map(({ color, label }) => (
+                            <button
+                              key={label}
+                              title={label}
+                              onClick={() => handleNodeColorChange(clickedNodeId, color)}
+                              style={{
+                                width: 22, height: 22, borderRadius: 4,
+                                background: color || '#1f2937',
+                                border: nodeColorMap[clickedNodeId] === color
+                                  ? '2px solid #fff'
+                                  : '2px solid #374151',
+                                cursor: 'pointer',
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </SidebarSection>
+                    )}
                   </>
                 )}
 

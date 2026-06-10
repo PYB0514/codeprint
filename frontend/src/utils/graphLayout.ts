@@ -52,6 +52,7 @@ export interface RawNode {
   posY: number
   comment?: string
   columns?: ColumnInfo[]
+  bgColor?: string
 }
 
 export interface RawEdge {
