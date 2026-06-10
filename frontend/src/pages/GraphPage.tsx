@@ -317,6 +317,18 @@ function makeCallTreeNode(nodeId: string, rawNodes: RawNode[], edgeId?: string, 
   return { nodeId, edgeId, edgeType, label, subLabel, nodeType: raw?.type, children: [] }
 }
 
+// 클릭한 노드까지의 경로를 남기고 형제 분기 제거 — 클릭 노드 이후(하위)는 모두 보존
+function pruneTreeToPath(root: CallTreeNode, targetId: string): boolean {
+  if (root.nodeId === targetId) return true
+  for (const child of root.children) {
+    if (pruneTreeToPath(child, targetId)) {
+      root.children = [child]
+      return true
+    }
+  }
+  return false
+}
+
 // 자손 트리 재귀 빌드 — visited를 공유해 중복 노드 방지
 function buildDownstreamTree(nodeId: string, rawEdges: RawEdge[], rawNodes: RawNode[], visited: Set<string>, depth: number): CallTreeNode[] {
   if (depth >= 12) return []
@@ -376,6 +388,8 @@ function buildCallTree(
     const frontendNode = makeCallTreeNode(frontendNodeId, rawNodes)
     rootNode.edgeId = frontendEdgeId; rootNode.edgeType = 'API_CALL'
     frontendNode.children = [rootNode]
+    // 클릭한 노드가 루트가 아니면 경로 외 형제 분기 제거
+    if (nodeId !== frontendNodeId) pruneTreeToPath(frontendNode, nodeId)
     return {
       tree: frontendNode,
       defaultNodeIds: [frontendNodeId, ...defaultNodeIds],
@@ -383,6 +397,8 @@ function buildCallTree(
       defaultEdgeTypes: ['API_CALL', ...defaultEdgeTypes],
     }
   }
+  // 클릭한 노드가 루트가 아니면 경로 외 형제 분기 제거
+  if (nodeId !== rootFuncId) pruneTreeToPath(rootNode, nodeId)
   return { tree: rootNode, defaultNodeIds, defaultEdgeIds, defaultEdgeTypes }
 }
 
@@ -643,11 +659,11 @@ function GraphPageInner() {
     }))
   }, [playbackCursor, playbackItems, setNodes, setEdges])
 
-  // 흐름 재생 — 재생 중 현재 노드를 화면 중앙으로 이동
+  // 흐름 재생 — 수동/자동 스텝 이동 시 현재 노드 위치로 화면 전환
   useEffect(() => {
-    if (!playbackPlaying || playbackItems.length === 0 || playbackCursor < 0) return
+    if (playbackItems.length === 0 || playbackCursor < 0) return
     fitView({ nodes: [{ id: playbackItems[playbackCursor].id }], duration: 300, padding: 0.5, maxZoom: 1.5 })
-  }, [playbackCursor, playbackItems, playbackPlaying, fitView])
+  }, [playbackCursor, playbackItems, fitView])
 
   // 흐름 재생 — 자동 진행 타이머 (분기점에서 자동 일시정지)
   useEffect(() => {
