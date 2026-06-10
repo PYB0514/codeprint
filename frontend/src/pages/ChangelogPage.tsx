@@ -11,6 +11,17 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.21.0',
+    date: '2026-06-10',
+    title: '노드 배경색 커스터마이징',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '노드 클릭 시 우측 사이드바에 색상 팔레트 표시 — 9가지 색상으로 노드 배경색 변경 가능' },
+      { category: '백엔드', desc: 'node_styles 테이블 + PUT /api/graphs/{graphId}/nodes/{nodeId}/style 엔드포인트 추가' },
+      { category: '백엔드', desc: '그래프 조회 응답에 bgColor 필드 포함 — 재로드 시에도 색상 유지' },
+    ],
+  },
+  {
     version: 'v0.20.0',
     date: '2026-06-10',
     title: 'API 엔드포인트 노드 클릭 시 흐름 재생 시작',
