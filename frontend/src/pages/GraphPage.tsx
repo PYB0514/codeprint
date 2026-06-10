@@ -465,7 +465,7 @@ function GraphPageInner() {
   const dragStartX = useRef(0)
   const dragStartWidth = useRef(0)
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
-  const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
+  const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('domain')
   const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
   const [opaqueDomainSet, setOpaqueDomainSet] = useState<Set<string>>(new Set())
   const [showEdges, setShowEdges] = useState(false)
@@ -952,7 +952,7 @@ function GraphPageInner() {
 
   // 프리셋 config를 현재 뷰 상태에 적용
   const applyPresetConfig = useCallback((config: Record<string, unknown>) => {
-    const lp = (config.layoutPreset as LayoutPreset) ?? 'layer'
+    const lp = (config.layoutPreset as LayoutPreset) ?? 'domain'
     const lm = (config.labelMode as LabelMode) ?? 'name'
     const edgeConfig = (config.edges as Record<string, boolean>) ?? {}
     const se = edgeConfig.import ?? false
