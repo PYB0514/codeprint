@@ -1475,9 +1475,9 @@ function GraphPageInner() {
     })
   }, [rawNodes, rawEdgesCache, resetPlayback])
 
-  // 함수 노드 선택 — 사이드바 갱신 + 흐름 재생 시작. 사이드바 링크 클릭(onNav)에서도 재사용
+  // 함수/API_ENDPOINT 노드 선택 — 사이드바 갱신 + 흐름 재생 시작. 사이드바 링크 클릭(onNav)에서도 재사용
   const openFuncNode = useCallback((nodeId: string) => {
-    const rawFunc = rawNodes.find((n) => n.id === nodeId && n.type === 'FUNCTION')
+    const rawFunc = rawNodes.find((n) => n.id === nodeId && (n.type === 'FUNCTION' || n.type === 'API_ENDPOINT'))
     if (!rawFunc) return
 
     const parentFile = rawNodes.find((n) => n.type === 'FILE' && n.filePath === rawFunc.filePath)
@@ -1495,13 +1495,13 @@ function GraphPageInner() {
 
     const callers: FuncCallChainEntry[] = rawEdgesCache
       .filter((e) => e.type === 'FUNCTION_CALL' && e.target === rawFunc.id)
-      .map((e) => rawNodes.find((n) => n.id === e.source && n.type === 'FUNCTION'))
+      .map((e) => rawNodes.find((n) => n.id === e.source && (n.type === 'FUNCTION' || n.type === 'API_ENDPOINT')))
       .filter((n): n is RawNode => !!n && n.filePath !== rawFunc.filePath)
       .map(toEntry)
 
     const callees: FuncCallChainEntry[] = rawEdgesCache
       .filter((e) => e.type === 'FUNCTION_CALL' && e.source === rawFunc.id)
-      .map((e) => rawNodes.find((n) => n.id === e.target && n.type === 'FUNCTION'))
+      .map((e) => rawNodes.find((n) => n.id === e.target && (n.type === 'FUNCTION' || n.type === 'API_ENDPOINT')))
       .filter((n): n is RawNode => !!n && n.filePath !== rawFunc.filePath)
       .map(toEntry)
 

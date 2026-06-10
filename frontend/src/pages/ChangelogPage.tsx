@@ -11,6 +11,40 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.19.0',
+    date: '2026-06-10',
+    title: 'API 엔드포인트 노드 클릭 시 흐름 재생 시작',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: 'API_ENDPOINT 노드 클릭 시 callee 호출 체인 사이드바 + 흐름 재생 자동 시작 — 이전에는 클릭해도 아무 반응 없었음' },
+    ],
+  },
+  {
+    version: 'v0.18.3',
+    date: '2026-06-10',
+    title: 'HTTP 캐시·Docker 최적화',
+    type: 'infra',
+    items: [
+      { category: '백엔드', desc: 'Cache-Control 헤더 추가 — 그래프 API 5분 브라우저 캐시(private), 공개 그래프 5분 public 캐시' },
+      { category: '백엔드', desc: 'gzip 압축 활성화 — JSON/JS/CSS 응답 1KB 이상 자동 압축' },
+      { category: '인프라', desc: 'Dockerfile 의존성 레이어 분리 — build.gradle 변경 없으면 Gradle 의존성 캐시 재사용' },
+      { category: '인프라', desc: 'docker-compose backend profile 추가 — docker compose --profile backend up 으로 선택적 실행 가능' },
+    ],
+  },
+  {
+    version: 'v0.18.2',
+    date: '2026-06-10',
+    title: '성능 최적화 4종 — 번들 분할·서버 캐시·N+1 해소·React.memo',
+    type: 'infra',
+    items: [
+      { category: '프론트', desc: 'React.lazy 코드 스플리팅 — 초기 번들 834KB → 283KB (gzip 257→93KB)' },
+      { category: '프론트', desc: '대시보드·그래프 페이지 prefetch — 랜딩 페이지 로드 후 백그라운드 사전 로딩' },
+      { category: '백엔드', desc: 'Caffeine 인메모리 캐시 — 그래프 노드·엣지 10분 TTL, 최대 200개 그래프 캐시' },
+      { category: '백엔드', desc: 'N+1 쿼리 해소 — 그래프 버전 목록 API에서 분석 정보 개별 조회 → 일괄 조회로 개선' },
+      { category: '프론트', desc: 'React.memo — FileNode·GroupNode·SectionNode 불필요한 리렌더링 방지' },
+    ],
+  },
+  {
     version: 'v0.18.1',
     date: '2026-06-10',
     title: '흐름 재생 UX 4종 개선 — 분기 애니메이션·도메인 흐름·결과 카드',
