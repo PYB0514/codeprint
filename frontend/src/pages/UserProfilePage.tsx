@@ -10,6 +10,12 @@ interface UserInfo {
   plan: string
 }
 
+interface FollowStatus {
+  following: boolean
+  followers: number
+  followingCount: number
+}
+
 interface UserProfile {
   id: string
   username: string
@@ -42,6 +48,8 @@ export default function UserProfilePage() {
   const [posts, setPosts] = useState<PostSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [followStatus, setFollowStatus] = useState<FollowStatus>({ following: false, followers: 0, followingCount: 0 })
+  const [followLoading, setFollowLoading] = useState(false)
 
   useEffect(() => {
     axios
@@ -55,14 +63,32 @@ export default function UserProfilePage() {
     Promise.all([
       axios.get<UserProfile>(`/api/users/${userId}`),
       axios.get<PostSummary[]>(`/api/users/${userId}/posts`),
+      axios.get<FollowStatus>(`/api/users/${userId}/follow`),
     ])
-      .then(([profileRes, postsRes]) => {
+      .then(([profileRes, postsRes, followRes]) => {
         setProfile(profileRes.data)
         setPosts(postsRes.data)
+        setFollowStatus(followRes.data)
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [userId])
+
+  // 팔로우/언팔로우 토글
+  const handleFollowToggle = async () => {
+    if (!currentUser || !userId) return
+    setFollowLoading(true)
+    try {
+      if (followStatus.following) {
+        await axios.delete(`/api/users/${userId}/follow`)
+        setFollowStatus((prev) => ({ ...prev, following: false, followers: prev.followers - 1 }))
+      } else {
+        await axios.post(`/api/users/${userId}/follow`)
+        setFollowStatus((prev) => ({ ...prev, following: true, followers: prev.followers + 1 }))
+      }
+    } catch { /* 오류 무시 */ }
+    finally { setFollowLoading(false) }
+  }
 
   // 북마크 토글
   const handleToggleBookmark = async (e: React.MouseEvent, post: PostSummary) => {
@@ -105,16 +131,36 @@ export default function UserProfilePage() {
 
       <main className="max-w-2xl mx-auto px-6 py-10">
         {/* 프로필 헤더 */}
-        <div className="flex items-center gap-4 mb-8">
-          <img
-            src={profile.avatarUrl}
-            alt={profile.username}
-            className="w-16 h-16 rounded-full border border-gray-700 object-cover"
-          />
-          <div>
-            <h1 className="text-xl font-semibold">{profile.username}</h1>
-            <p className="text-sm text-gray-500">{joinedYear}년 가입</p>
+        <div className="flex items-center justify-between gap-4 mb-8">
+          <div className="flex items-center gap-4">
+            <img
+              src={profile.avatarUrl}
+              alt={profile.username}
+              className="w-16 h-16 rounded-full border border-gray-700 object-cover"
+            />
+            <div>
+              <h1 className="text-xl font-semibold">{profile.username}</h1>
+              <p className="text-sm text-gray-500">{joinedYear}년 가입</p>
+              <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                <span><strong className="text-gray-300">{followStatus.followers}</strong> 팔로워</span>
+                <span><strong className="text-gray-300">{followStatus.followingCount}</strong> 팔로잉</span>
+              </div>
+            </div>
           </div>
+
+          {currentUser && currentUser.id !== userId && (
+            <button
+              onClick={handleFollowToggle}
+              disabled={followLoading}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                followStatus.following
+                  ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+                  : 'bg-white text-black hover:bg-gray-100'
+              }`}
+            >
+              {followStatus.following ? '팔로잉' : '팔로우'}
+            </button>
+          )}
         </div>
 
         {/* 게시글 목록 */}
