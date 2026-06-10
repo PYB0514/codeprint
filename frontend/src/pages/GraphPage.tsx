@@ -1,5 +1,5 @@
 // 프로젝트 코드 구조를 React Flow로 시각화하는 그래프 페이지
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import {
@@ -17,6 +17,7 @@ import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
 import { buildLayout, downloadTreeText, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry, ColumnInfo } from '../utils/graphLayout'
+import { extractDomain, DOMAIN_COLORS } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
@@ -59,6 +60,7 @@ type SidebarContent =
   | { kind: 'db-edge'; crudType: string; repoFile: string; repoFileNodeId: string; tableName: string; tableNodeId: string; flowChain: FlowStep[] }
   | { kind: 'api-call'; frontFile: string; frontFileNodeId: string; ctrlFile: string; ctrlFileNodeId: string; flowChain: FlowStep[] }
   | { kind: 'warning'; nodeName: string; nodeWarnings: { type: string; message: string }[] }
+  | { kind: 'domain-summary'; domainName: string; color: string; apiEndpoints: { id: string; name: string; comment: string | null }[]; entryFunctions: { id: string; name: string; comment: string | null; fileName: string }[] }
 
 // DB 엣지 타입 판별 — 신규 CRUD 타입 + 레거시 DB_WRITE 포함
 const DB_EDGE_TYPES = new Set(['DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE'])
@@ -402,6 +404,14 @@ function GraphPageInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [rawNodes, setRawNodes] = useState<RawNode[]>([])
+
+  // 파일 경로 공통 접두사 — extractDomain에 필요
+  const commonPrefix = useMemo(() => {
+    const paths = rawNodes.filter(n => n.type === 'FILE').map(n => n.filePath)
+    if (paths.length === 0) return ''
+    return paths.reduce((a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i++; return a.slice(0, i) }, paths[0])
+  }, [rawNodes])
+
   const [hiddenNodeTypes, setHiddenNodeTypes] = useState<Set<string>>(new Set())
   const [nodeSearchQuery, setNodeSearchQuery] = useState('')
   const [counts, setCounts] = useState({ files: 0, funcs: 0, edges: 0 })
@@ -1432,7 +1442,33 @@ function GraphPageInner() {
 
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     publishSelection(node.id)
-    if (node.type === 'fileNode' || node.type === 'groupNode' || node.type === 'sectionNode') {
+    if (node.type === 'fileNode' || node.type === 'groupNode') {
+      resetPlayback()
+      return
+    }
+
+    // 도메인 뷰에서 섹션 클릭 — 해당 도메인의 주요 흐름 목록 표시
+    if (node.type === 'sectionNode' && layoutPreset === 'domain') {
+      const domainName = (node.data?.layer as string ?? '').toLowerCase()
+      const palette = DOMAIN_COLORS[domainName] ?? { color: '#6b7280' }
+      const domainNodes = rawNodes.filter(n => extractDomain(n.filePath, commonPrefix) === domainName)
+      const domainNodeIds = new Set(domainNodes.map(n => n.id))
+      const apiEndpoints = domainNodes.filter(n => n.type === 'API_ENDPOINT')
+        .map(n => ({ id: n.id, name: n.name, comment: n.comment ?? null }))
+      const entryFunctions = domainNodes.filter(n => n.type === 'FUNCTION')
+        .filter(n => !rawEdgesCache.some(e => e.type === 'FUNCTION_CALL' && e.target === n.id && !domainNodeIds.has(e.source)))
+        .slice(0, 10)
+        .map(n => {
+          const file = rawNodes.find(f => f.type === 'FILE' && f.filePath === n.filePath)
+          return { id: n.id, name: n.name, comment: n.comment ?? null, fileName: file?.name ?? n.filePath }
+        })
+      setSidebar({ kind: 'domain-summary', domainName, color: palette.color, apiEndpoints, entryFunctions })
+      setRightCollapsed(false)
+      resetPlayback()
+      return
+    }
+
+    if (node.type === 'sectionNode') {
       resetPlayback()
       return
     }
@@ -1471,7 +1507,7 @@ function GraphPageInner() {
     }
 
     openFuncNode(node.id)
-  }, [rawNodes, rawEdgesCache, openFuncNode, startPlayback, resetPlayback])
+  }, [rawNodes, rawEdgesCache, commonPrefix, layoutPreset, openFuncNode, startPlayback, resetPlayback])
 
   if (loading) {
     return (
@@ -1981,6 +2017,7 @@ function GraphPageInner() {
                   : sidebar.kind === 'db-edge' ? 'DB 연결'
                   : sidebar.kind === 'api-call' ? 'API 호출'
                   : sidebar.kind === 'warning' ? '⚠️ 경고 상세'
+                  : sidebar.kind === 'domain-summary' ? '도메인 흐름'
                   : '인스턴스화'}
               </span>
               {sidebar && <button onClick={() => setSidebar(null)} className="text-gray-600 hover:text-white text-sm">✕</button>}
@@ -2495,6 +2532,66 @@ function GraphPageInner() {
                         </div>
                       )
                     })}
+                  </div>
+                )}
+
+                {/* ── 도메인 섹션 클릭 — 주요 흐름 진입점 목록 ── */}
+                {sidebar?.kind === 'domain-summary' && (
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold uppercase tracking-widest" style={{ color: sidebar.color }}>
+                        {sidebar.domainName}
+                      </span>
+                      <span className="text-xs text-gray-500">도메인</span>
+                    </div>
+
+                    {sidebar.apiEndpoints.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">API 엔드포인트</p>
+                        {sidebar.apiEndpoints.map(ep => (
+                          <button key={ep.id}
+                            className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:opacity-80 transition-opacity"
+                            style={{ background: sidebar.color + '18', border: `1px solid ${sidebar.color}44` }}
+                            onClick={() => {
+                              startPlayback(ep.id)
+                              setTimeout(() => fitView({ nodes: [{ id: ep.id }], duration: 500, padding: 0.3 }), 50)
+                            }}
+                          >
+                            <span className="text-xs" style={{ color: sidebar.color }}>▶</span>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-mono font-semibold text-gray-200 truncate">{ep.name}</span>
+                              {ep.comment && <span className="text-[10px] text-gray-400 truncate">{ep.comment}</span>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {sidebar.entryFunctions.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">주요 진입점 함수</p>
+                        {sidebar.entryFunctions.map(fn => (
+                          <button key={fn.id}
+                            className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:opacity-80 transition-opacity"
+                            style={{ background: '#ffffff0a', border: '1px solid #ffffff18' }}
+                            onClick={() => {
+                              openFuncNode(fn.id)
+                              setTimeout(() => fitView({ nodes: [{ id: fn.id }], duration: 500, padding: 0.3 }), 50)
+                            }}
+                          >
+                            <span className="text-xs text-emerald-400">▶</span>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-mono font-semibold text-emerald-300 truncate">{fn.name}</span>
+                              <span className="text-[10px] text-gray-500 truncate">{fn.fileName}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {sidebar.apiEndpoints.length === 0 && sidebar.entryFunctions.length === 0 && (
+                      <p className="text-xs text-gray-500">이 도메인에서 진입점을 찾지 못했습니다.</p>
+                    )}
                   </div>
                 )}
 
