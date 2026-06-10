@@ -1,5 +1,5 @@
 // DDD 레이어별 색상과 헤더를 가진 커스텀 그룹 노드 — 최소화/불투명 토글 지원
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Handle, Position, useReactFlow } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 
@@ -30,7 +30,7 @@ const LAYER_KO: Record<string, string> = {
 
 const HEADER_H = 36
 
-export default function GroupNode({ id, data }: NodeProps) {
+const GroupNode = memo(function GroupNode({ id, data }: NodeProps) {
   const { layer, sub, fileCount, originalHeight } = data as unknown as GroupData
   const p = LAYER_PALETTE[layer] ?? DEFAULT_PALETTE
   const layerLabel = LAYER_KO[layer] ?? layer
@@ -160,4 +160,6 @@ export default function GroupNode({ id, data }: NodeProps) {
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
     </div>
   )
-}
+})
+
+export default GroupNode

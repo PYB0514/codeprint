@@ -57,6 +57,10 @@ dependencies {
     // Rate Limiting — IP 기반 요청 제한
     implementation 'com.bucket4j:bucket4j-core:8.10.1'
 
+    // Cache — 그래프 노드·엣지 인메모리 캐싱 (Caffeine)
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'com.github.ben-manes.caffeine:caffeine'
+
     // AWS S3
     implementation 'software.amazon.awssdk:s3:2.25.60'
 

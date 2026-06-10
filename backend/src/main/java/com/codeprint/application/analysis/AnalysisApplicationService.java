@@ -7,8 +7,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -45,5 +48,15 @@ public class AnalysisApplicationService {
     public AnalysisResult getAnalysis(UUID analysisId) {
         return analysisRepository.findById(analysisId)
                 .orElseThrow(() -> new IllegalArgumentException("Analysis not found: " + analysisId));
+    }
+
+    // 여러 analysisId의 브랜치를 한 번에 조회 — N+1 방지용 배치 조회
+    @Transactional(readOnly = true)
+    public Map<UUID, String> getBranchMap(List<UUID> analysisIds) {
+        return analysisRepository.findAllById(analysisIds).stream()
+                .collect(Collectors.toMap(
+                        AnalysisResult::getId,
+                        a -> a.getBranch() != null ? a.getBranch() : "default"
+                ));
     }
 }

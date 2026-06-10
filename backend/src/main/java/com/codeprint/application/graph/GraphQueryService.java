@@ -3,6 +3,7 @@ package com.codeprint.application.graph;
 
 import com.codeprint.domain.graph.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,13 +37,16 @@ public class GraphQueryService {
         return graphRepository.findById(graphId);
     }
 
-    // 그래프 ID로 노드 목록 조회
+    // 그래프 ID로 노드 목록 조회 — 동일 graphId 재조회 시 캐시 반환
+    @Cacheable(value = "graphNodes", key = "#graphId")
     public List<Node> getNodes(UUID graphId) {
         return graphRepository.findNodesByGraphId(graphId);
     }
 
-    // 그래프 ID로 엣지 목록 조회
+    // 그래프 ID로 엣지 목록 조회 — 동일 graphId 재조회 시 캐시 반환
+    @Cacheable(value = "graphEdges", key = "#graphId")
     public List<Edge> getEdges(UUID graphId) {
         return graphRepository.findEdgesByGraphId(graphId);
     }
+
 }

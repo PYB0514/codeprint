@@ -46,6 +46,12 @@ public class AnalysisRepositoryImpl implements AnalysisRepository {
         return jpa.findLatestByProjectIdAndBranch(projectId, branch);
     }
 
+    // ID 목록으로 분석 결과 일괄 조회 — Spring Data findAllById 활용
+    @Override
+    public List<AnalysisResult> findAllById(List<UUID> ids) {
+        return jpa.findAllById(ids);
+    }
+
     // 전체 분석 횟수 반환
     @Override
     public long count() {
