@@ -608,10 +608,22 @@ function GraphPageInner() {
   }, [setNodes])
 
   // 범례 도메인 클릭 시 해당 도메인 섹션으로 fitView 이동
-  const handleFitToDomain = useCallback((domain: string) => {
-    const section = getNodes().find((n) => n.id === `domain-section-${domain}`)
-    if (section) fitView({ nodes: [section], duration: 400, padding: 0.15 })
-  }, [getNodes, fitView])
+  // 도메인 범례 클릭 — 해당 도메인의 흐름 재생 진입점 목록을 사이드바에 표시
+  const openDomainFlows = useCallback((domain: string, color: string) => {
+    const domainNodes = rawNodes.filter(n => extractDomain(n.filePath, commonPrefix) === domain)
+    const domainNodeIds = new Set(domainNodes.map(n => n.id))
+    const apiEndpoints = domainNodes.filter(n => n.type === 'API_ENDPOINT')
+      .map(n => ({ id: n.id, name: n.name, comment: n.comment ?? null }))
+    const entryFunctions = domainNodes.filter(n => n.type === 'FUNCTION')
+      .filter(n => !rawEdgesCache.some(e => e.type === 'FUNCTION_CALL' && e.target === n.id && !domainNodeIds.has(e.source)))
+      .slice(0, 20)
+      .map(n => {
+        const file = rawNodes.find(f => f.type === 'FILE' && f.filePath === n.filePath)
+        return { id: n.id, name: n.name, comment: n.comment ?? null, fileName: file?.name ?? n.filePath }
+      })
+    setSidebar({ kind: 'domain-summary', domainName: domain, color, apiEndpoints, entryFunctions })
+    setRightCollapsed(false)
+  }, [rawNodes, rawEdgesCache, commonPrefix])
 
   // 파일 연결 보기 — 사이드바 오픈 콜백
   const openFileSidebar = useCallback((data: FileSidebarData) => {
@@ -1922,8 +1934,8 @@ function GraphPageInner() {
                         </button>
                         <span
                           className="text-gray-400 text-xs truncate cursor-pointer hover:text-white transition-colors"
-                          onClick={() => handleFitToDomain(key)}
-                          title="이 도메인으로 이동"
+                          onClick={() => openDomainFlows(key, color)}
+                          title="이 도메인의 흐름 목록 보기"
                         >
                           {label}
                         </span>
@@ -2637,8 +2649,8 @@ function GraphPageInner() {
                           >
                             <span className="text-xs text-emerald-400">▶</span>
                             <div className="flex flex-col min-w-0">
-                              <span className="text-xs font-mono font-semibold text-emerald-300 truncate">{fn.name}</span>
-                              <span className="text-[10px] text-gray-500 truncate">{fn.fileName}</span>
+                              <span className="text-xs font-semibold text-emerald-300 truncate">{fn.comment || fn.name}</span>
+                              <span className="text-[10px] text-gray-500 truncate font-mono">{fn.name} · {fn.fileName}</span>
                             </div>
                           </button>
                         ))}
