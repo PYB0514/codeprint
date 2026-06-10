@@ -11,6 +11,17 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.23.0',
+    date: '2026-06-10',
+    title: '유저 팔로우',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '유저 프로필 페이지에 팔로우/언팔로우 버튼 추가' },
+      { category: '프론트', desc: '팔로워 수 + 팔로잉 수 표시' },
+      { category: '백엔드', desc: 'user_follows 테이블 (V25 마이그레이션) + POST/DELETE/GET 팔로우 API' },
+    ],
+  },
+  {
     version: 'v0.22.0',
     date: '2026-06-10',
     title: '프로필 사진 & 배경 이미지',
