@@ -1,8 +1,8 @@
 // 유저 알림 설정 조회·수정 애플리케이션 서비스
 package com.codeprint.application.notification;
 
+import com.codeprint.domain.notification.NotificationSettingsRepository;
 import com.codeprint.domain.notification.UserNotificationSettings;
-import com.codeprint.infrastructure.persistence.notification.NotificationSettingsJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,7 +13,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NotificationSettingsApplicationService {
 
-    private final NotificationSettingsJpaRepository settingsRepository;
+    private final NotificationSettingsRepository settingsRepository;
 
     // 알림 설정 조회 (없으면 기본값 반환)
     @Transactional(readOnly = true)

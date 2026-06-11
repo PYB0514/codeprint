@@ -3,7 +3,6 @@ package com.codeprint.application.message;
 
 import com.codeprint.domain.message.DirectMessage;
 import com.codeprint.domain.message.DirectMessageRepository;
-import com.codeprint.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -19,12 +18,12 @@ import java.util.UUID;
 public class MessageApplicationService {
 
     private final DirectMessageRepository messageRepository;
-    private final UserRepository userRepository;
+    private final UserQueryPort userQueryPort;
 
     // 쪽지 전송
     @Transactional
     public DirectMessage send(UUID senderId, UUID receiverId, String content) {
-        if (userRepository.findById(receiverId).isEmpty()) {
+        if (userQueryPort.findById(receiverId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "수신자를 찾을 수 없습니다.");
         }
         if (senderId.equals(receiverId)) {
@@ -66,8 +65,7 @@ public class MessageApplicationService {
     // 유저 요약 정보 조회 (컨트롤러 응답 구성용)
     @Transactional(readOnly = true)
     public UserSummaryDto getUser(UUID userId) {
-        return userRepository.findById(userId)
-            .map(u -> new UserSummaryDto(u.getId(), u.getUsername(), u.getAvatarUrl()))
+        return userQueryPort.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 }
