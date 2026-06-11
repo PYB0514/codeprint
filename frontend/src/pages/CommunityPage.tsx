@@ -434,6 +434,7 @@ export default function CommunityPage() {
                 : '아직 게시글이 없습니다.'}
             </p>
           ) : (
+            <>
             <div className="flex flex-col gap-2">
               {posts.map((post) => (
                 <div
@@ -507,6 +508,7 @@ export default function CommunityPage() {
                 </button>
               </div>
             )}
+            </>
           )}
         </div>
 
