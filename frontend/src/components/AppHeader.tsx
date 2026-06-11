@@ -139,15 +139,6 @@ export default function AppHeader({ onLogin }: Props) {
         Codeprint
       </button>
       <nav className="flex items-center gap-5 text-sm">
-        {/* 테마 토글 */}
-        <button
-          onClick={toggleTheme}
-          className="text-gray-400 hover:text-white transition-colors"
-          title={isDark ? '라이트 테마로 전환' : '다크 테마로 전환'}
-        >
-          {isDark ? '☀️' : '🌙'}
-        </button>
-
         <button onClick={() => navigate('/community')} className="text-gray-400 hover:text-white transition-colors">
           커뮤니티
         </button>
@@ -155,7 +146,7 @@ export default function AppHeader({ onLogin }: Props) {
           패치노트
         </button>
         <button onClick={() => navigate('/donate')} className="text-gray-400 hover:text-white transition-colors">
-          ☕ 후원
+          후원
         </button>
 
         {/* 유저 검색 */}
@@ -163,9 +154,8 @@ export default function AppHeader({ onLogin }: Props) {
           <button
             onClick={() => { setShowSearch(v => !v); setSearchQuery(''); setSearchResults([]) }}
             className="text-gray-400 hover:text-white transition-colors"
-            title="유저 검색"
           >
-            🔍
+            검색
           </button>
           {showSearch && (
             <div className="absolute right-0 top-8 w-64 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 overflow-hidden">
@@ -199,11 +189,19 @@ export default function AppHeader({ onLogin }: Props) {
           )}
         </div>
 
+        {/* 테마 토글 */}
+        <button
+          onClick={toggleTheme}
+          className="text-gray-400 hover:text-white transition-colors"
+        >
+          {isDark ? '라이트' : '다크'}
+        </button>
+
         {user ? (
           <>
             {/* 쪽지 버튼 */}
             <button onClick={() => navigate('/messages')} className="relative text-gray-400 hover:text-white transition-colors">
-              ✉
+              쪽지
               {unreadMessages > 0 && (
                 <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-xs rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5 leading-none">
                   {unreadMessages > 99 ? '99+' : unreadMessages}
@@ -217,7 +215,7 @@ export default function AppHeader({ onLogin }: Props) {
                 onClick={handleOpenNotifs}
                 className="relative text-gray-400 hover:text-white transition-colors"
               >
-                🔔
+                알림
                 {unreadNotifs > 0 && (
                   <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-xs rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5 leading-none">
                     {unreadNotifs > 99 ? '99+' : unreadNotifs}
