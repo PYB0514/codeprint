@@ -22,7 +22,7 @@ export default function TermsPage() {
       {/* 본문 */}
       <main className="flex-1 max-w-3xl mx-auto w-full px-6 py-12">
         <h1 className="text-2xl font-bold mb-2">이용약관</h1>
-        <p className="text-gray-500 text-sm mb-10">최종 업데이트: 2025년 1월 1일</p>
+        <p className="text-gray-500 text-sm mb-10">최종 업데이트: 2026년 6월 11일</p>
 
         <Section title="제1조 (목적)">
           본 약관은 Codeprint(이하 "서비스")가 제공하는 GitHub 레포지토리 분석 및 시각화 서비스의
