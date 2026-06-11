@@ -51,4 +51,10 @@ public class ProjectRepositoryImpl implements ProjectRepository {
     public long count() {
         return jpa.count();
     }
+
+    // 특정 유저의 공개 프로젝트 목록 조회
+    @Override
+    public List<Project> findPublicByUserId(UUID userId) {
+        return jpa.findByUserIdAndIsPublicTrue(userId);
+    }
 }

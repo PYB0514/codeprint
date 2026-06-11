@@ -19,6 +19,9 @@ public interface ProjectRepository {
     // 사용자 ID로 프로젝트 수 조회
     int countByUserId(UUID userId);
 
+    // 특정 유저의 공개 프로젝트 목록 조회
+    List<Project> findPublicByUserId(UUID userId);
+
     // ID로 프로젝트 삭제
     void deleteById(UUID id);
 
