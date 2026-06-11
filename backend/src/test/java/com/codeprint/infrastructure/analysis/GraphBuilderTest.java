@@ -147,7 +147,7 @@ class GraphBuilderTest {
                 "src/infra/NoticeRepositoryImpl.java", "Java",
                 List.of("save"), List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
-                List.of("NoticeRepository"), List.of()
+                List.of("NoticeRepository"), List.of(), List.of()
         );
 
         // CachedNoticeRepositoryImpl (두 번째 구현체)
@@ -155,7 +155,7 @@ class GraphBuilderTest {
                 "src/infra/CachedNoticeRepositoryImpl.java", "Java",
                 List.of("save"), List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
-                List.of("NoticeRepository"), List.of()
+                List.of("NoticeRepository"), List.of(), List.of()
         );
 
         graphBuilder.build(projectId, analysisId, List.of(ifaceFile, impl1, impl2));
@@ -184,7 +184,8 @@ class GraphBuilderTest {
                 List.of("save", "findById"), List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
                 List.of("GraphRepository"), // implementedInterfaces
-                List.of() // asyncMethods
+                List.of(), // asyncMethods
+                List.of()  // jsxComponents
         );
 
         graphBuilder.build(projectId, analysisId, List.of(ifaceFile, implFile));
@@ -283,23 +284,23 @@ class GraphBuilderTest {
 
     private ParsedFile parsedFile(String path, String lang, List<String> functions, Map<String, String> comments) {
         return new ParsedFile(path, lang, functions, List.of(), null, comments,
-                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of());
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     private ParsedFile parsedFileWithCalls(String path, String lang, List<String> functions,
                                            Map<String, List<String>> calls) {
         return new ParsedFile(path, lang, functions, List.of(), null, Map.of(),
-                calls, List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of());
+                calls, List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     private ParsedFile parsedFileWithImports(String path, String lang, List<String> imports) {
         return new ParsedFile(path, lang, List.of(), imports, null, Map.of(),
-                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of());
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     // 구현체 파일 생성 헬퍼 — implementedInterfaces 포함
     private ParsedFile parsedFileWithImpl(String path, String lang, List<String> functions, String implementedInterface) {
         return new ParsedFile(path, lang, functions, List.of(), null, Map.of(),
-                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(implementedInterface), List.of());
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(implementedInterface), List.of(), List.of());
     }
 }

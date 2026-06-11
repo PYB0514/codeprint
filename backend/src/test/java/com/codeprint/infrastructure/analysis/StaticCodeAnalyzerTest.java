@@ -615,6 +615,61 @@ class StaticCodeAnalyzerTest {
         assertThat(result.functions()).contains("fetchData", "buildGraph", "handleSubmit");
     }
 
+    // ── JSX 컴포넌트 추출 (회귀: DEAD_CODE 오탐 방지) ──────────────────────
+
+    @Test
+    @DisplayName("TSX 파일에서 JSX 컴포넌트 사용을 추출한다")
+    void TSX_JSX_컴포넌트_추출() throws IOException {
+        // DEAD_CODE 오탐 근본 원인: JSX 렌더링을 FUNCTION_CALL로 인식 못 함
+        Path file = tempDir.resolve("DashboardPage.tsx");
+        Files.writeString(file, """
+                import React from 'react';
+                import ProjectCard from './ProjectCard';
+                import AppHeader from './AppHeader';
+                const DashboardPage = () => (
+                  <div>
+                    <AppHeader />
+                    <ProjectCard title="test" />
+                    <span>plain html</span>
+                  </div>
+                );
+                export default DashboardPage;
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.jsxComponents()).contains("AppHeader", "ProjectCard");
+        assertThat(result.jsxComponents()).doesNotContain("span");
+    }
+
+    @Test
+    @DisplayName("JSX 파일에서도 JSX 컴포넌트를 추출한다")
+    void JSX_파일_컴포넌트_추출() throws IOException {
+        Path file = tempDir.resolve("App.jsx");
+        Files.writeString(file, """
+                import React from 'react';
+                function App() {
+                  return <Router><HomePage /></Router>;
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "JavaScript");
+
+        assertThat(result.jsxComponents()).contains("Router", "HomePage");
+    }
+
+    @Test
+    @DisplayName("TS 파일 (비JSX)에서는 jsxComponents가 비어 있다")
+    void TS_파일은_JSX_컴포넌트_없음() throws IOException {
+        Path file = writeTsFile("""
+                export const fetchData = async () => [];
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.jsxComponents()).isEmpty();
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {
