@@ -275,8 +275,8 @@ public class GraphWarningService {
     }
 
     // FUNCTION 노드 중 아무 FUNCTION_CALL 엣지도 받지 않는 함수 — 데드 코드 후보
+    // 외부 진입점(컨트롤러 레이어, @Async, 생성자, main, 테스트)은 제외
     private List<Map<String, Object>> detectDeadCode(List<Node> nodes, List<Edge> edges) {
-        // FUNCTION_CALL 엣지의 target nodeId 수집
         Set<UUID> calledFuncIds = new HashSet<>();
         for (Edge e : edges) {
             if (e.getType() == EdgeType.FUNCTION_CALL) {
@@ -287,27 +287,31 @@ public class GraphWarningService {
         List<Map<String, Object>> warnings = new ArrayList<>();
         for (Node n : nodes) {
             if (n.getType() != NodeType.FUNCTION) continue;
-            // 이미 호출됨 → 제외
             if (calledFuncIds.contains(n.getId())) continue;
 
-            Map<String, Object> meta = n.getMetadata();
-            // 컨트롤러(API 엔드포인트) 메서드, 생성자, main 메서드는 외부 진입점 — 제외
-            if (meta != null) {
-                if (Boolean.TRUE.equals(meta.get("isController"))) continue;
-                if (Boolean.TRUE.equals(meta.get("isConstructor"))) continue;
-                String name = n.getName();
-                if ("main".equals(name) || "생성자".equals(name)) continue;
-            }
-
-            // 파일 경로 내 test/ 포함 — 테스트 코드는 제외
             String fp = n.getFilePath() != null ? n.getFilePath() : "";
+            String name = n.getName();
+
+            // 테스트 코드 제외
             if (fp.contains("/test/") || fp.contains("\\test\\")) continue;
+            // interfaces/ 레이어 (컨트롤러, WebSocket 핸들러 등) — 외부 진입점
+            if (fp.contains("/interfaces/")) continue;
+            // 생성자·main·오버라이드 후보 제외
+            if ("main".equals(name) || "생성자".equals(name) || "toString".equals(name)
+                    || "equals".equals(name) || "hashCode".equals(name)) continue;
+
+            Map<String, Object> meta = n.getMetadata();
+            if (meta != null) {
+                // @Async 메서드는 Spring이 직접 호출 — 제외
+                if (Boolean.TRUE.equals(meta.get("isAsync"))) continue;
+                if (Boolean.TRUE.equals(meta.get("isConstructor"))) continue;
+            }
 
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "DEAD_CODE");
             w.put("nodeIds", List.of(n.getId().toString()));
             w.put("edgeIds", List.of());
-            w.put("message", "데드 코드 후보: " + n.getName() + " — 이 함수를 호출하는 곳이 없습니다");
+            w.put("message", "데드 코드 후보: " + name + " — 이 함수를 호출하는 곳이 없습니다");
             warnings.add(w);
         }
         return warnings;
