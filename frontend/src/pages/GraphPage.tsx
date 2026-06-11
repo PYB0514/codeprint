@@ -1041,12 +1041,12 @@ function GraphPageInner() {
   }, [])
 
   // 현재 그래프에서 그룹 키 목록 추출
-  const availableGroups = (() => {
+  const availableGroups = useMemo(() => {
     const fileNodes = rawNodes.filter((n) => n.type === 'FILE' && n.filePath)
     const commonPrefix = findCommonPrefix(fileNodes.map((n) => n.filePath))
     const groups = new Set(fileNodes.map((n) => getGroupKey(n.filePath, commonPrefix)))
     return Array.from(groups).sort()
-  })()
+  }, [rawNodes])
 
   const availableLayers = ['domain', 'application', 'infrastructure', 'interfaces', 'pages', 'components', 'hooks', 'utils']
 
@@ -1739,6 +1739,18 @@ function GraphPageInner() {
     } catch { /* 실패 시 무시 */ }
   }, [graphId, setNodes])
 
+  // ReactFlow에 전달할 노드 — showDomainBoxes 꺼지면 sectionNode 제외 (매 렌더마다 재생성 방지)
+  const displayNodes = useMemo(
+    () => showDomainBoxes ? nodes : nodes.filter(n => n.type !== 'sectionNode'),
+    [showDomainBoxes, nodes]
+  )
+
+  // MiniMap 노드 색상 함수 — 인라인 선언 시 매 렌더 MiniMap 전체 재렌더 유발
+  const minimapNodeColor = useCallback((n: Node) => {
+    const bg = n.style?.background as string
+    return bg ?? '#374151'
+  }, [])
+
   if (loading) {
     return (
       <div className="app-page min-h-screen bg-gray-950 flex items-center justify-center text-gray-400">
@@ -2253,7 +2265,7 @@ function GraphPageInner() {
       )}
 
       <ReactFlow
-        nodes={showDomainBoxes ? nodes : nodes.filter(n => n.type !== 'sectionNode')}
+        nodes={displayNodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
@@ -2272,10 +2284,7 @@ function GraphPageInner() {
         <Background color="#1f2937" gap={20} />
         <Controls />
         <MiniMap
-          nodeColor={(n) => {
-            const bg = n.style?.background as string
-            return bg ?? '#374151'
-          }}
+          nodeColor={minimapNodeColor}
           style={{ background: '#111827' }}
           position="bottom-center"
         />
