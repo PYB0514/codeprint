@@ -58,6 +58,18 @@ public class PostRepositoryImpl implements PostRepository {
         return commentJpa.findByPostIdOrderByCreatedAtAsc(postId);
     }
 
+    // 댓글 단건 조회
+    @Override
+    public Optional<Comment> findCommentById(UUID commentId) {
+        return commentJpa.findById(commentId);
+    }
+
+    // 댓글 삭제
+    @Override
+    public void deleteCommentById(UUID commentId) {
+        commentJpa.deleteById(commentId);
+    }
+
     // UUID로 게시글 삭제
     @Override
     public void deleteById(UUID id) {

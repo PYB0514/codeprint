@@ -178,6 +178,16 @@ public class CommunityController {
         return ResponseEntity.status(201).body(toCommentResponse(comment));
     }
 
+    // 댓글 삭제 (작성자 본인만)
+    @DeleteMapping("/posts/{postId}/comments/{commentId}")
+    public ResponseEntity<Void> deleteComment(
+            @PathVariable UUID postId,
+            @PathVariable UUID commentId,
+            @AuthenticationPrincipal User user) {
+        postCommandService.deleteComment(commentId, user.getId());
+        return ResponseEntity.noContent().build();
+    }
+
     // 게시글 삭제
     @DeleteMapping("/posts/{postId}")
     public ResponseEntity<Void> deletePost(

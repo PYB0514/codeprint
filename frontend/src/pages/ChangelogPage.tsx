@@ -17,6 +17,7 @@ const RELEASES: Release[] = [
     type: 'feature',
     items: [
       { category: '백엔드', desc: '게시글에 댓글이 달리면 게시글 작성자에게 인앱 알림 자동 발송 (자신의 게시글 제외)' },
+      { category: '프론트', desc: '커뮤니티 댓글 삭제 — 작성자 본인 댓글에 hover 시 ✕ 버튼 표시, 즉시 목록에서 제거' },
     ],
   },
   {
