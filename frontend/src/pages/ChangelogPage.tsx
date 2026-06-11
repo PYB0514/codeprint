@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.41.0',
+    date: '2026-06-11',
+    title: '게시글 정렬',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'GET /api/community/posts?sort=likes|views 파라미터 추가 — 좋아요순/조회수순 정렬 지원' },
+      { category: '프론트', desc: '게시글 목록 상단에 최신순/좋아요순/조회순 정렬 버튼 추가 (전체 탭, 검색 미입력 시 노출)' },
+    ],
+  },
+  {
     version: 'v0.40.0',
     date: '2026-06-11',
     title: '게시글 댓글 수 표시',

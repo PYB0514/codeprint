@@ -49,6 +49,7 @@ public class CommunityController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String feed,
+            @RequestParam(defaultValue = "latest") String sort,
             @AuthenticationPrincipal User user) {
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         List<Post> raw;
@@ -61,6 +62,10 @@ public class CommunityController {
             raw = followingIds.isEmpty()
                     ? List.of()
                     : postRepository.findByUserIdInOrderByCreatedAtDesc(followingIds, pageable);
+        } else if ("likes".equals(sort)) {
+            raw = postRepository.findAllOrderByLikeCountDesc(pageable);
+        } else if ("views".equals(sort)) {
+            raw = postRepository.findAllByOrderByViewCountDesc(pageable);
         } else {
             raw = postCommandService.getPosts(page, size);
         }
