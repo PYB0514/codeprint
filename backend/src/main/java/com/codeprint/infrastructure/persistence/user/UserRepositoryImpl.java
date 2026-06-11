@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -57,5 +58,11 @@ public class UserRepositoryImpl implements UserRepository {
     @Override
     public Page<User> findAll(Pageable pageable) {
         return jpa.findAll(pageable);
+    }
+
+    // 사용자명 키워드로 검색 (최대 10명)
+    @Override
+    public List<User> searchByUsername(String keyword) {
+        return jpa.findByUsernameContainingIgnoreCase(keyword, Pageable.ofSize(10));
     }
 }
