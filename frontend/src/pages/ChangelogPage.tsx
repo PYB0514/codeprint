@@ -11,6 +11,20 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.55.0',
+    date: '2026-06-11',
+    title: '랜딩페이지 전면 개선 + OG 태그',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '랜딩페이지 히어로 섹션 개선 — 그라디언트 제목, 서비스 설명 강화' },
+      { category: '프론트', desc: '그래프 UI 목업 SVG 추가 — 도메인 박스·노드·엣지·사이드바·경고 바를 실제 제품과 동일한 스타일로 표현' },
+      { category: '프론트', desc: '"어떻게 사용하나요?" 3단계 섹션 추가 (URL 입력 → 자동 분석 → 다이어그램)' },
+      { category: '프론트', desc: '기능 소개 카드 3개 → 6개로 확장 (흐름 추적, 경고 감지, AI 분석, 실시간 협업, 내보내기)' },
+      { category: '인프라', desc: 'index.html OG 태그 추가 — og:title, og:description, og:image, twitter:card (SNS 공유 미리보기)' },
+      { category: '인프라', desc: 'html lang=ko 변경, SEO meta description·keywords·robots·canonical 추가' },
+    ],
+  },
+  {
     version: 'v0.53.0',
     date: '2026-06-11',
     title: '배경이미지 복원',
