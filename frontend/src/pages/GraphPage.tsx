@@ -486,6 +486,7 @@ function GraphPageInner() {
   const [versions, setVersions] = useState<{ graphId: string; createdAt: string; branch: string }[]>([])
   const [loadingVersions, setLoadingVersions] = useState(false)
   const [outdated, setOutdated] = useState<{ branch: string; lastAnalyzedAt: string } | null>(null)
+  const [freshnessError, setFreshnessError] = useState<'rate_limit' | 'github_error' | null>(null)
   const [reanalyzing, setReanalyzing] = useState(false)
   const [showDomainBoxes, setShowDomainBoxes] = useState(true)
   // 탭 분리: null = 전체 보기, 문자열 = 해당 도메인/레이어만 표시
@@ -1002,6 +1003,8 @@ function GraphPageInner() {
         .then((res) => {
           if (res.data.isOutdated) {
             setOutdated({ branch: res.data.branch, lastAnalyzedAt: res.data.lastAnalyzedAt })
+          } else if (res.data.reason === 'rate_limit' || res.data.reason === 'github_error') {
+            setFreshnessError(res.data.reason)
           }
         })
         .catch(() => {})
@@ -1899,6 +1902,18 @@ function GraphPageInner() {
       <CursorOverlay cursors={collabState.cursors} />
 
 
+      {/* GitHub API 한도 초과 또는 오류 시 안내 */}
+      {!outdated && freshnessError && (
+        <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-1.5 bg-gray-800/80 border-b border-gray-700 text-gray-400 text-xs backdrop-blur-sm">
+          <span>
+            {freshnessError === 'rate_limit'
+              ? '⏳ GitHub API 요청 한도 초과 — 잠시 후 자동으로 최신 여부를 확인합니다.'
+              : 'GitHub 연결 오류 — 최신 커밋 확인에 실패했습니다.'}
+          </span>
+          <button onClick={() => setFreshnessError(null)} className="text-gray-600 hover:text-gray-300 ml-4">✕</button>
+        </div>
+      )}
+
       {/* 최신 커밋 감지 배너 */}
       {outdated && (
         <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-2 bg-yellow-900/80 border-b border-yellow-700 text-yellow-300 text-xs backdrop-blur-sm">
@@ -1919,7 +1934,7 @@ function GraphPageInner() {
       )}
 
       {/* 상단 바 — 내비 + 통계만 */}
-      <div className="absolute z-10 flex items-center gap-3" style={{ top: outdated ? '44px' : '16px', left: leftOpen ? `${leftWidth + 8}px` : '20px' }}>
+      <div className="absolute z-10 flex items-center gap-3" style={{ top: (outdated || freshnessError) ? '44px' : '16px', left: leftOpen ? `${leftWidth + 8}px` : '20px' }}>
         <button
           onClick={() => navigate('/dashboard')}
           className="bg-gray-800 hover:bg-gray-700 text-white text-sm px-3 py-1.5 rounded-lg"
