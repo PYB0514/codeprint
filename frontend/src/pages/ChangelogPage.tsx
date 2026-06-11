@@ -11,6 +11,17 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.32.0',
+    date: '2026-06-11',
+    title: '경고 패턴 확장 (데드 코드·과도한 의존)',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'DEAD_CODE 경고 — 아무 곳에서도 호출되지 않는 함수 감지 (API 엔드포인트·생성자·테스트 제외)' },
+      { category: '백엔드', desc: 'HIGH_FAN_OUT 경고 — 10개 초과 함수 호출 시 단일 책임 원칙 위반 가능성 경고' },
+      { category: '프론트', desc: 'WarningPanel에 두 신규 타입 레이블·색상 추가' },
+    ],
+  },
+  {
     version: 'v0.31.0',
     date: '2026-06-11',
     title: 'Web Push 알림',
