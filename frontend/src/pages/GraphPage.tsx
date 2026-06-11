@@ -488,6 +488,7 @@ function GraphPageInner() {
   const [outdated, setOutdated] = useState<{ branch: string; lastAnalyzedAt: string } | null>(null)
   const [reanalyzing, setReanalyzing] = useState(false)
   const [bgEnabled, setBgEnabled] = useState(() => localStorage.getItem('graphBgEnabled') !== 'false')
+  const [bgUrl, setBgUrl] = useState<string | null>(null)
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareTitle, setShareTitle] = useState('')
   const [shareContent, setShareContent] = useState('')
@@ -1001,14 +1002,34 @@ function GraphPageInner() {
     }
   }
 
-  // 마운트 시 bgEnabled 초기값을 DOM에 반영 (App.tsx 비동기 fetch와 localStorage 상태 동기화)
+  // 마운트 시 배경이미지 URL 조회 후 body에 적용, 언마운트 시 정리
   useEffect(() => {
-    if (bgEnabled) {
+    axios.get<{ graphBgUrl?: string | null }>('/api/auth/me')
+      .then(r => {
+        const url = r.data.graphBgUrl ?? null
+        setBgUrl(url)
+        if (url) {
+          document.body.style.backgroundImage = `url(${url})`
+          document.body.style.backgroundSize = 'cover'
+          document.body.style.backgroundAttachment = 'fixed'
+          document.body.style.backgroundPosition = 'center'
+        }
+      })
+      .catch(() => {})
+    return () => {
+      document.body.style.backgroundImage = ''
+      document.body.classList.remove('has-bg')
+    }
+  }, [])
+
+  // bgEnabled 또는 bgUrl 변화 시 has-bg 클래스 동기화
+  useEffect(() => {
+    if (bgEnabled && bgUrl) {
       document.body.classList.add('has-bg')
     } else {
       document.body.classList.remove('has-bg')
     }
-  }, [bgEnabled])
+  }, [bgEnabled, bgUrl])
 
   // 배경이미지 표시/숨김 토글
   const toggleBg = useCallback(() => {
@@ -1893,19 +1914,21 @@ function GraphPageInner() {
             {/* AI 누락 감지 */}
             <AiAnalysisSection graphId={graphId} />
 
-            {/* 보기 옵션 */}
-            <LeftSection title="보기">
-              <button
-                onClick={toggleBg}
-                className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
-                  bgEnabled
-                    ? 'bg-blue-900/40 text-blue-300 hover:bg-blue-900/60'
-                    : 'bg-gray-800/60 text-gray-500 hover:bg-gray-800'
-                }`}
-              >
-                {bgEnabled ? '🖼 배경이미지 켜짐' : '□ 배경이미지 꺼짐'}
-              </button>
-            </LeftSection>
+            {/* 보기 옵션 — 배경이미지 있을 때만 표시 */}
+            {bgUrl && (
+              <LeftSection title="보기">
+                <button
+                  onClick={toggleBg}
+                  className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
+                    bgEnabled
+                      ? 'bg-blue-900/40 text-blue-300 hover:bg-blue-900/60'
+                      : 'bg-gray-800/60 text-gray-500 hover:bg-gray-800'
+                  }`}
+                >
+                  {bgEnabled ? '🖼 배경이미지 켜짐' : '□ 배경이미지 꺼짐'}
+                </button>
+              </LeftSection>
+            )}
 
             {/* 내보내기 — 최상단 */}
             <LeftSection title="내보내기">

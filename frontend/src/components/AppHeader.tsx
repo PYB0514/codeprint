@@ -33,6 +33,7 @@ export default function AppHeader({ onLogin }: Props) {
   const navigate = useNavigate()
   const [user, setUser] = useState<UserInfo | null>(null)
   const [checked, setChecked] = useState(false)
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light')
   const [unreadMessages, setUnreadMessages] = useState(0)
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [unreadNotifs, setUnreadNotifs] = useState(0)
@@ -43,6 +44,19 @@ export default function AppHeader({ onLogin }: Props) {
   const [searchResults, setSearchResults] = useState<UserSearchResult[]>([])
   const searchRef = useRef<HTMLDivElement>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 테마 초기화 및 토글
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+  }, [isDark])
+
+  const toggleTheme = () => {
+    setIsDark(prev => {
+      const next = !prev
+      localStorage.setItem('theme', next ? 'dark' : 'light')
+      return next
+    })
+  }
 
   // 쿠키 기반 인증 — /api/auth/me로 로그인 상태 확인
   useEffect(() => {
@@ -125,6 +139,15 @@ export default function AppHeader({ onLogin }: Props) {
         Codeprint
       </button>
       <nav className="flex items-center gap-5 text-sm">
+        {/* 테마 토글 */}
+        <button
+          onClick={toggleTheme}
+          className="text-gray-400 hover:text-white transition-colors"
+          title={isDark ? '라이트 테마로 전환' : '다크 테마로 전환'}
+        >
+          {isDark ? '☀️' : '🌙'}
+        </button>
+
         <button onClick={() => navigate('/community')} className="text-gray-400 hover:text-white transition-colors">
           커뮤니티
         </button>

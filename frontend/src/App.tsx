@@ -1,7 +1,6 @@
 // 앱 라우팅 루트
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { Suspense, lazy, useEffect } from 'react'
-import axios from 'axios'
+import { Suspense, lazy } from 'react'
 
 // 초기 로드에 항상 필요한 경량 페이지는 정적 import 유지
 import LandingPage from './pages/LandingPage'
@@ -36,24 +35,6 @@ import NoticeBanner from './components/NoticeBanner'
 
 // 앱 최상위 라우터 컴포넌트
 export default function App() {
-  // 로그인한 사용자의 배경 이미지를 body에 적용 (has-bg는 localStorage 토글 상태 존중)
-  useEffect(() => {
-    axios.get<{ graphBgUrl?: string | null }>('/api/auth/me')
-      .then((r) => {
-        const url = r.data.graphBgUrl
-        if (url) {
-          document.body.style.backgroundImage = `url(${url})`
-          document.body.style.backgroundSize = 'cover'
-          document.body.style.backgroundAttachment = 'fixed'
-          document.body.style.backgroundPosition = 'center'
-          // 사용자가 명시적으로 꺼둔 경우(graphBgEnabled=false)가 아니면 켜짐 상태로 시작
-          if (localStorage.getItem('graphBgEnabled') !== 'false') {
-            document.body.classList.add('has-bg')
-          }
-        }
-      })
-      .catch(() => {})
-  }, [])
 
   return (
     <BrowserRouter>
