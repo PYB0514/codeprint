@@ -10,6 +10,7 @@ import com.codeprint.infrastructure.github.GitHubRepoDto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +21,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/projects")
+@Slf4j
 @RequiredArgsConstructor
 public class ProjectController {
 
@@ -118,7 +120,10 @@ public class ProjectController {
                     "latestCommitSha", latestSha
             ));
         } catch (Exception e) {
-            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", "github_error"));
+            log.warn("Freshness 조회 실패 projectId={} token_null={} cause={}", projectId, user.getGithubAccessToken() == null, e.getMessage(), e);
+            String causeMsg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
+            String reason = causeMsg != null && causeMsg.contains("403") ? "rate_limit" : "github_error";
+            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", reason));
         }
     }
 
@@ -161,7 +166,10 @@ public class ProjectController {
                     "latestCommitSha", latestSha
             ));
         } catch (Exception e) {
-            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", "github_error", "branch", primaryBranch));
+            log.warn("PrimaryFreshness 조회 실패 projectId={} token_null={} cause={}", projectId, user.getGithubAccessToken() == null, e.getMessage(), e);
+            String causeMsg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
+            String reason = causeMsg != null && causeMsg.contains("403") ? "rate_limit" : "github_error";
+            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", reason, "branch", primaryBranch));
         }
     }
 

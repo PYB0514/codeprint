@@ -69,8 +69,15 @@ public class GitHubApiClient {
             }
             HttpRequest request = builder.GET().build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new RuntimeException("GitHub API " + response.statusCode() + " — " + response.body());
+            }
             JsonNode root = objectMapper.readTree(response.body());
-            return root.get("sha").asText();
+            JsonNode shaNode = root.get("sha");
+            if (shaNode == null) {
+                throw new RuntimeException("GitHub API 응답에 sha 필드 없음: " + response.body());
+            }
+            return shaNode.asText();
         } catch (Exception e) {
             throw new RuntimeException("GitHub 커밋 SHA 조회 실패: " + ownerRepo + " / " + branch, e);
         }

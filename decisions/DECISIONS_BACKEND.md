@@ -2,6 +2,27 @@
 
 ---
 
+## freshness 엔드포인트 github_error 원인 분석 (2026-06-11)
+
+**문제.** `GET /api/projects/{id}/freshness`가 항상 `{"isOutdated":false,"reason":"github_error"}`를 반환해 "재분석 필요" 배너가 한 번도 뜨지 않았다.
+
+**진단 과정.**
+1. `ProjectController` catch 블록이 exception message만 삼키고 있어서 실제 원인을 알 수 없었다.
+2. `@Slf4j` + `log.warn(..., e)` 추가 후 재시작하니 로그에 `Caused by: RuntimeException: GitHub API 403 — {"message":"API rate limit exceeded for user ID ..."}` 출력.
+3. 원인: 이전 GraphPage 무한 루프(PR #206에서 수정)가 수백 회 freshness API를 반복 호출해 GitHub REST API 5000회/시간 한도를 소진한 것.
+4. 토큰 null 여부(`token_null=false`)도 함께 로깅해 "토큰 복호화 실패" 가능성 배제.
+
+**추가로 발견한 버그.** `fetchLatestCommitSha`가 HTTP 응답 상태 코드를 체크하지 않아서 403/404 응답 바디에 `sha` 필드가 없으면 NPE → RuntimeException으로만 보고됐다.
+
+**수정.**
+- `GitHubApiClient.fetchLatestCommitSha`: 200 이외 응답 시 상태 코드와 body를 포함한 RuntimeException 즉시 throw, `sha` null 체크 추가.
+- `ProjectController.getFreshness/getPrimaryFreshness`: `e.getCause().getMessage()`로 403 여부 판별 → `rate_limit` / `github_error` 구분 반환.
+- `GraphPage.tsx`: `freshnessError` state 추가, `rate_limit` 시 회색 안내 배너("⏳ GitHub API 요청 한도 초과 — 잠시 후 자동으로 확인합니다.") 표시.
+
+**결과.** rate limit 만료 후 freshness API가 `isOutdated:true`를 정상 반환, "지금 재분석" 배너 정상 출력 확인.
+
+---
+
 ## NodeComment.nodeId — UUID가 아닌 String 타입 (2026-06-11)
 
 **문제.** 초기 NodeComment 엔티티에서 nodeId를 UUID 타입으로 정의했으나, 그래프 노드 ID는 파일 경로와 함수명을 조합한 문자열 식별자 (예: `UserController-createUser`)이며 UUID가 아니다.
