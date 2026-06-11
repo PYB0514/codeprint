@@ -178,6 +178,16 @@ public class CommunityController {
         return ResponseEntity.status(201).body(toCommentResponse(comment));
     }
 
+    // 게시글 수정 (작성자 본인만)
+    @PutMapping("/posts/{postId}")
+    public ResponseEntity<PostResponse> updatePost(
+            @PathVariable UUID postId,
+            @Valid @RequestBody UpdatePostRequest request,
+            @AuthenticationPrincipal User user) {
+        Post post = postCommandService.updatePost(postId, user.getId(), request.title(), request.content());
+        return ResponseEntity.ok(toPostResponse(post, user.getUsername(), user));
+    }
+
     // 댓글 삭제 (작성자 본인만)
     @DeleteMapping("/posts/{postId}/comments/{commentId}")
     public ResponseEntity<Void> deleteComment(
@@ -297,6 +307,9 @@ public class CommunityController {
                 comment.getCreatedAt()
         );
     }
+
+    // 게시글 수정 요청 DTO
+    public record UpdatePostRequest(@NotBlank String title, String content) {}
 
     // 게시글 생성 요청 DTO
     public record CreatePostRequest(
