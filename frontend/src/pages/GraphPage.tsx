@@ -28,6 +28,7 @@ import CollaborationPanel from '../components/CollaborationPanel'
 import CursorOverlay from '../components/CursorOverlay'
 import WarningPanel from '../components/WarningPanel'
 import TeamChatPanel from '../components/TeamChatPanel'
+import AiAnalysisSection from '../components/AiAnalysisSection'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -1805,6 +1806,9 @@ function GraphPageInner() {
                 )
               })()}
             </LeftSection>
+
+            {/* AI 누락 감지 */}
+            <AiAnalysisSection graphId={graphId} />
 
             {/* 내보내기 — 최상단 */}
             <LeftSection title="내보내기">
