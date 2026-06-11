@@ -37,6 +37,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/users/me", "/api/users/me/**").authenticated()
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/users/*/follow").authenticated()
                 .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/users/*/follow").authenticated()
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/community/posts/*/like").authenticated()
+                .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/community/posts/*/like").authenticated()
                 .requestMatchers("/api/auth/**", "/api/share/**", "/api/community/posts", "/api/community/posts/*/graph", "/api/payments/webhook", "/api/notices", "/api/donations", "/api/users/**", "/ws/**", "/login/**", "/oauth2/**", "/actuator/health", "/api/dev/**").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()

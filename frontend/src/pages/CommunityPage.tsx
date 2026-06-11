@@ -26,6 +26,8 @@ interface Post {
   createdAt: string
   bookmarkCount: number
   bookmarkedByMe: boolean
+  likeCount: number
+  likedByMe: boolean
 }
 
 interface Comment {
@@ -209,6 +211,28 @@ export default function CommunityPage() {
         ? { ...p, bookmarkedByMe: !p.bookmarkedByMe, bookmarkCount: p.bookmarkCount + (p.bookmarkedByMe ? -1 : 1) }
         : p
     ))
+  }
+
+  // 게시글 좋아요 토글
+  const handleToggleLike = async (e: React.MouseEvent, post: Post) => {
+    e.stopPropagation()
+    if (!user) return
+    if (post.likedByMe) {
+      await axios.delete(`/api/community/posts/${post.id}/like`)
+    } else {
+      await axios.post(`/api/community/posts/${post.id}/like`, {})
+    }
+    setPosts((prev) => prev.map((p) =>
+      p.id === post.id
+        ? { ...p, likedByMe: !p.likedByMe, likeCount: p.likeCount + (p.likedByMe ? -1 : 1) }
+        : p
+    ))
+    if (selectedPost?.id === post.id) {
+      setSelectedPost((prev) => prev
+        ? { ...prev, likedByMe: !prev.likedByMe, likeCount: prev.likeCount + (prev.likedByMe ? -1 : 1) }
+        : prev
+      )
+    }
   }
 
   // 게시글 삭제
@@ -412,6 +436,13 @@ export default function CommunityPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <button
+                        onClick={(e) => handleToggleLike(e, post)}
+                        className={`text-xs flex items-center gap-1 ${post.likedByMe ? 'text-red-400' : 'text-gray-600 hover:text-red-400'}`}
+                      >
+                        <span>{post.likedByMe ? '❤' : '♡'}</span>
+                        {post.likeCount > 0 && <span>{post.likeCount}</span>}
+                      </button>
+                      <button
                         onClick={(e) => handleToggleBookmark(e, post)}
                         className={`text-xs flex items-center gap-1 ${post.bookmarkedByMe ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'}`}
                       >
@@ -456,17 +487,30 @@ export default function CommunityPage() {
                   </button>
                   {' · '}{new Date(selectedPost.createdAt).toLocaleDateString('ko-KR')}
                 </p>
-                <button
-                  onClick={(e) => handleToggleBookmark(e, selectedPost)}
-                  className={`text-sm flex items-center gap-1 ${
-                    selectedPost.bookmarkedByMe ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'
-                  }`}
-                >
-                  <span>{selectedPost.bookmarkedByMe ? '★' : '☆'}</span>
-                  {selectedPost.bookmarkCount > 0 && (
-                    <span className="text-xs">{selectedPost.bookmarkCount}</span>
-                  )}
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={(e) => handleToggleLike(e, selectedPost)}
+                    className={`text-sm flex items-center gap-1 ${
+                      selectedPost.likedByMe ? 'text-red-400' : 'text-gray-600 hover:text-red-400'
+                    }`}
+                  >
+                    <span>{selectedPost.likedByMe ? '❤' : '♡'}</span>
+                    {selectedPost.likeCount > 0 && (
+                      <span className="text-xs">{selectedPost.likeCount}</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={(e) => handleToggleBookmark(e, selectedPost)}
+                    className={`text-sm flex items-center gap-1 ${
+                      selectedPost.bookmarkedByMe ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'
+                    }`}
+                  >
+                    <span>{selectedPost.bookmarkedByMe ? '★' : '☆'}</span>
+                    {selectedPost.bookmarkCount > 0 && (
+                      <span className="text-xs">{selectedPost.bookmarkCount}</span>
+                    )}
+                  </button>
+                </div>
               </div>
               <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{selectedPost.content}</p>
 
