@@ -110,19 +110,19 @@
 ## 단계별 보안 작업 현황
 
 ### Phase 1 — 즉시 (진행 중)
-- [ ] `AttachmentController` 인증 추가
-- [ ] `AnalysisController` 소유권 검증 (시작/조회)
-- [ ] 보안 헤더 필터 추가
-- [ ] CORS 도메인 정확히 지정
-- [ ] 프로덕션 로그 레벨 INFO
-- [ ] `/actuator/prometheus` 제거 + push 방식 전환
+- [x] `AttachmentController` 인증 추가
+- [x] `AnalysisController` 소유권 검증 (시작/조회)
+- [x] 보안 헤더 필터 추가 (SecurityHeadersFilter)
+- [x] CORS 도메인 정확히 지정
+- [x] 프로덕션 로그 레벨 INFO
+- [x] `/actuator/prometheus` 미노출 — application.yml include: health,metrics,info 만 공개
 
 ### Phase 2 — v1.9
-- [ ] 레이트 리미팅 (Bucket4j)
+- [x] 레이트 리미팅 (Bucket4j)
 - [x] S3 파일 타입/크기 검증 (Phase 1 + 10MB 제한 추가)
 - [x] JWT 만료 1시간 단축
 - [x] S3 다운로드 presigned URL 15분
-- [ ] Stripe Webhook race condition 방어
+- [x] Stripe Webhook → 토스페이먼츠로 교체 완료, race condition 불해당
 
 ### Phase 3 — 유료화 전 필수
 - [x] JWT HttpOnly 쿠키 전환 (PR #142, v0.28.0)

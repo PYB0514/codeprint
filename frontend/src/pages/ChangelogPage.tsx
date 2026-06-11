@@ -11,6 +11,20 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.47.0',
+    date: '2026-06-11',
+    title: '그래프 도메인 탭 분리 + 성능 최적화',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '그래프 좌측 사이드바에 도메인/레이어 탭 분리 기능 추가 — 탭 클릭 시 해당 영역 노드만 표시하여 렌더링 부하 감소' },
+      { category: '프론트', desc: 'useMemo 최적화 — 엣지 토글 섹션, 노드 필터 섹션 메모화로 드래그 중 불필요한 리렌더 감소' },
+      { category: '백엔드', desc: 'GraphWarning 감지 결과 Caffeine 10분 캐싱 — detect() 매 요청 실행 제거로 p99 응답시간 개선' },
+      { category: '백엔드', desc: 'Spring Boot Actuator metrics/info 엔드포인트 추가 (ADMIN 전용) — JVM 힙·CPU·DB 커넥션 모니터링' },
+      { category: '백엔드', desc: 'DDD 위반 수정 — UserSummaryDto 도입으로 메시지 컨텍스트의 User 도메인 직접 참조 제거' },
+      { category: '백엔드', desc: 'JSX 분석엔진 개선 — <ComponentName /> 패턴을 FUNCTION_CALL 엣지로 추출, DEAD_CODE 오탐 감소' },
+    ],
+  },
+  {
     version: 'v0.46.0',
     date: '2026-06-11',
     title: '배경이미지 토글',
