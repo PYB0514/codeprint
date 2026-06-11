@@ -6,7 +6,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -22,8 +22,8 @@ public class NodeComment {
     @Column(name = "graph_id", nullable = false, columnDefinition = "uuid")
     private UUID graphId;
 
-    @Column(name = "node_id", nullable = false, columnDefinition = "uuid")
-    private UUID nodeId;
+    @Column(name = "node_id", nullable = false)
+    private String nodeId;
 
     @Column(name = "user_id", nullable = false, columnDefinition = "uuid")
     private UUID userId;
@@ -32,28 +32,18 @@ public class NodeComment {
     private String content;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    private Instant createdAt;
 
     // 새 노드 코멘트 생성
-    public static NodeComment create(UUID graphId, UUID nodeId, UUID userId, String content) {
+    public static NodeComment create(UUID graphId, String nodeId, UUID userId, String content) {
         NodeComment c = new NodeComment();
         c.id = UUID.randomUUID();
         c.graphId = graphId;
         c.nodeId = nodeId;
         c.userId = userId;
         c.content = content;
-        c.createdAt = LocalDateTime.now();
-        c.updatedAt = LocalDateTime.now();
+        c.createdAt = Instant.now();
         return c;
-    }
-
-    // 코멘트 내용 수정
-    public void updateContent(String content) {
-        this.content = content;
-        this.updatedAt = LocalDateTime.now();
     }
 
     // 코멘트 작성자 확인

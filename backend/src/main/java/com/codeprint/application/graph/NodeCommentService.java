@@ -18,14 +18,14 @@ public class NodeCommentService {
 
     // 코멘트 작성
     @Transactional
-    public NodeComment addComment(UUID graphId, UUID nodeId, UUID userId, String content) {
+    public NodeComment addComment(UUID graphId, String nodeId, UUID userId, String content) {
         NodeComment comment = NodeComment.create(graphId, nodeId, userId, content);
         return nodeCommentRepository.save(comment);
     }
 
     // 특정 노드 코멘트 목록 조회
     @Transactional(readOnly = true)
-    public List<NodeComment> getComments(UUID graphId, UUID nodeId) {
+    public List<NodeComment> getComments(UUID graphId, String nodeId) {
         return nodeCommentRepository.findByGraphIdAndNodeId(graphId, nodeId);
     }
 

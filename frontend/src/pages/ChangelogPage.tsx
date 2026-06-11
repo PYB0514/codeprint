@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.34.0',
+    date: '2026-06-11',
+    title: '그래프 노드 코멘트',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'node_comments 테이블(V30) + GET/POST/DELETE /api/graphs/:id/nodes/:nodeId/comments API 추가' },
+      { category: '프론트', desc: '함수 노드 클릭 사이드바 하단 코멘트 섹션 — 작성·삭제·목록 표시' },
+    ],
+  },
+  {
     version: 'v0.33.0',
     date: '2026-06-11',
     title: '유저 프로필 — 공개 프로젝트 목록',

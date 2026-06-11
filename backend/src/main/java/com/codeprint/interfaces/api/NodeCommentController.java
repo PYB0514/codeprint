@@ -11,7 +11,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -28,7 +27,7 @@ public class NodeCommentController {
     @GetMapping("/api/graphs/{graphId}/nodes/{nodeId}/comments")
     public ResponseEntity<List<Map<String, Object>>> getComments(
             @PathVariable UUID graphId,
-            @PathVariable UUID nodeId,
+            @PathVariable String nodeId,
             @AuthenticationPrincipal User user) {
 
         verifyOwnership(graphId, user);
@@ -43,7 +42,7 @@ public class NodeCommentController {
     @PostMapping("/api/graphs/{graphId}/nodes/{nodeId}/comments")
     public ResponseEntity<Map<String, Object>> addComment(
             @PathVariable UUID graphId,
-            @PathVariable UUID nodeId,
+            @PathVariable String nodeId,
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal User user) {
 
@@ -84,7 +83,7 @@ public class NodeCommentController {
                 "nodeId", c.getNodeId(),
                 "userId", c.getUserId(),
                 "content", c.getContent(),
-                "createdAt", c.getCreatedAt().toInstant(ZoneOffset.UTC).toEpochMilli()
+                "createdAt", c.getCreatedAt().toEpochMilli()
         );
     }
 }
