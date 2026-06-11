@@ -23,5 +23,5 @@ body {
 
 /* 배경 이미지 활성화 시 페이지 루트 반투명 처리 */
 body.has-bg .app-page {
-  background-color: rgba(3, 7, 18, 0.82) !important;
+  background-color: transparent !important;
 }
