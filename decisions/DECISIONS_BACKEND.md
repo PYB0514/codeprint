@@ -402,3 +402,26 @@
 1. `domain/notification/NotificationSettingsRepository` 인터페이스 생성 + infrastructure 구현체 분리
 2. `application/message/UserQueryPort` 인터페이스 생성 + `UserQueryPortImpl`(infrastructure/user)이 UserRepository 위임
 3. `application/ai/GraphNodeDto`, `GraphEdgeDto` 레코드 생성 → AI 서비스는 DTO만 받음, AiController에서 변환
+
+---
+
+## DEAD_CODE 오탐 제거 — GraphWarningService 필터 개선 (2026-06-11)
+
+**문제.** 그래프 경고 패널에 DEAD_CODE 경고 142건이 표시됐으며, 대부분(140건 이상)이 오탐이었다.
+
+**원인.**
+1. Spring @Service 메서드는 DI 프록시를 통해 호출 → FUNCTION_CALL 엣지 없음 → 오탐
+2. Lombok getter/setter, JPA 파생 쿼리(indBy*, indLatest*) → 런타임 프록시 호출
+3. Java record 생성자 (PascalCase 이름) → Tree-sitter가 생성자를 FUNCTION 노드로 추출
+4. is 접두사 체크 버그: 
+ame.charAt(3)이 아닌 
+ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
+5. React utils/, lib/ 폴더 export 함수는 모듈 import로 사용, FUNCTION_CALL 엣지 없음
+
+**해결.**
+- pplication/, infrastructure/ 경로 전체 제외
+- isFrameworkCallPattern() 메서드: get/set/is 패턴, find/count/delete 파생쿼리, save/update/toggle/mark/upgrade/downgrade 뮤테이션, PascalCase 생성자 제외
+- utils/, lib/ 경로 제외
+- FRAMEWORK_CALL_NAMES에 도메인 상태 변경 메서드(confirm, touch, apply 등) 추가
+
+**결과.** 142건 → 0건. 총 경고 147건 → 5건 (순환 의존, 과도한 의존 등 진짜 경고만 남음)
