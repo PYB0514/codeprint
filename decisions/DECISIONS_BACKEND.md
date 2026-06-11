@@ -367,3 +367,17 @@
 **이유:** Post 엔티티의 실제 테이블명은 `@Table(name = "posts")`인데 community_ 접두사를 붙여 작성.
 
 **결과:** `REFERENCES posts(id)`로 수정 후 마이그레이션 성공.
+
+## DDD 경계 위반 수정 (2026-06-11)
+
+**문제** — 그래프 경고 패널이 Codeprint 자체 코드에서 3건의 DDD 위반을 감지
+1. `NotificationSettingsApplicationService` → `NotificationSettingsJpaRepository` 직접 참조
+2. `MessageApplicationService` → `UserRepository` (domain/user) 직접 참조  
+3. `AiGraphAnalysisService` → `Node`, `Edge`, `NodeType` (domain/graph) 직접 참조
+
+**이유** — 각 Application Service가 다른 Bounded Context의 인프라/도메인 클래스를 직접 import하면 컨텍스트 경계가 무너짐
+
+**결과**
+1. `domain/notification/NotificationSettingsRepository` 인터페이스 생성 + infrastructure 구현체 분리
+2. `application/message/UserQueryPort` 인터페이스 생성 + `UserQueryPortImpl`(infrastructure/user)이 UserRepository 위임
+3. `application/ai/GraphNodeDto`, `GraphEdgeDto` 레코드 생성 → AI 서비스는 DTO만 받음, AiController에서 변환

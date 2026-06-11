@@ -487,8 +487,6 @@ function GraphPageInner() {
   const [loadingVersions, setLoadingVersions] = useState(false)
   const [outdated, setOutdated] = useState<{ branch: string; lastAnalyzedAt: string } | null>(null)
   const [reanalyzing, setReanalyzing] = useState(false)
-  const [bgEnabled, setBgEnabled] = useState(() => localStorage.getItem('graphBgEnabled') !== 'false')
-  const [bgUrl, setBgUrl] = useState<string | null>(null)
   const [showDomainBoxes, setShowDomainBoxes] = useState(true)
   // 탭 분리: null = 전체 보기, 문자열 = 해당 도메인/레이어만 표시
   const [activeDomainTab, setActiveDomainTab] = useState<string | null>(null)
@@ -688,6 +686,9 @@ function GraphPageInner() {
     setAnnotationNote(rawFile?.userNote ?? '')
     setRightCollapsed(false)
   }, [rawNodes])
+  // openFileSidebar는 rawNodes에 의존해 매 fetchGraph 호출 후 재생성됨 → ref로 안정화
+  const openFileSidebarRef = useRef(openFileSidebar)
+  useEffect(() => { openFileSidebarRef.current = openFileSidebar }, [openFileSidebar])
 
   // 사이드바 드래그 리사이즈 — 전역 mousemove/mouseup 처리
   useEffect(() => {
@@ -918,7 +919,7 @@ function GraphPageInner() {
       setGraphId(gid)
       const warningList = w ?? []
       setWarnings(warningList)
-      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebar)
+      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebarRef.current)
       setRawNodes(rn)
       setRawEdgesCache(re)
       // bgColor 초기화 — 서버에서 받은 색상을 즉시 반영 맵에 저장
@@ -952,20 +953,12 @@ function GraphPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, setNodes, setEdges, openFileSidebar, applyEdgeVisibility, fitView])
+  }, [projectId, setNodes, setEdges, applyEdgeVisibility, fitView])
 
   useEffect(() => {
-    axios.get<{ id: string; graphBgUrl?: string | null }>('/api/auth/me')
+    axios.get<{ id: string }>('/api/auth/me')
       .then((res) => {
         setCurrentUserId(res.data.id)
-        const url = res.data.graphBgUrl ?? null
-        setBgUrl(url)
-        if (url) {
-          document.body.style.backgroundImage = `url(${url})`
-          document.body.style.backgroundSize = 'cover'
-          document.body.style.backgroundAttachment = 'fixed'
-          document.body.style.backgroundPosition = 'center'
-        }
       })
       .catch(() => {})
 
@@ -1015,32 +1008,6 @@ function GraphPageInner() {
       setReanalyzing(false)
     }
   }
-
-  // GraphPage 언마운트 시 body 배경이미지 정리
-  useEffect(() => {
-    return () => {
-      document.body.style.backgroundImage = ''
-      document.body.classList.remove('has-bg')
-    }
-  }, [])
-
-  // bgEnabled 또는 bgUrl 변화 시 has-bg 클래스 동기화
-  useEffect(() => {
-    if (bgEnabled && bgUrl) {
-      document.body.classList.add('has-bg')
-    } else {
-      document.body.classList.remove('has-bg')
-    }
-  }, [bgEnabled, bgUrl])
-
-  // 배경이미지 표시/숨김 토글
-  const toggleBg = useCallback(() => {
-    setBgEnabled(prev => {
-      const next = !prev
-      localStorage.setItem('graphBgEnabled', String(next))
-      return next
-    })
-  }, [])
 
   // 현재 그래프에서 그룹 키 목록 추출
   const availableGroups = useMemo(() => {
@@ -2041,47 +2008,9 @@ function GraphPageInner() {
             {/* AI 누락 감지 */}
             <AiAnalysisSection graphId={graphId} />
 
-            {/* 탭 분리 — 도메인/레이어별 분할 보기 */}
-            {availableTabs.length > 0 && (
-              <LeftSection title="탭 분리">
-                <div className="flex flex-col gap-1">
-                  <button
-                    onClick={() => { setActiveDomainTab(null); fitView({ duration: 400, padding: 0.1 }) }}
-                    className={`w-full text-left text-xs px-2 py-1 rounded transition-colors ${
-                      activeDomainTab === null
-                        ? 'bg-blue-700/60 text-blue-200 border border-blue-600/60'
-                        : 'bg-gray-800/60 text-gray-400 hover:bg-gray-800'
-                    }`}
-                  >
-                    전체 보기
-                  </button>
-                  {availableTabs.map(tab => {
-                    const color = layoutPreset === 'domain'
-                      ? (DOMAIN_COLORS[tab]?.color ?? '#6b7280')
-                      : '#6b7280'
-                    const isActive = activeDomainTab === tab
-                    return (
-                      <button
-                        key={tab}
-                        onClick={() => { setActiveDomainTab(tab); fitView({ duration: 400, padding: 0.1 }) }}
-                        className={`w-full text-left text-xs px-2 py-1 rounded transition-colors flex items-center gap-1.5 ${
-                          isActive ? 'text-white' : 'text-gray-400 hover:bg-gray-800'
-                        }`}
-                        style={isActive ? { background: `${color}33`, border: `1px solid ${color}66` } : {}}
-                      >
-                        <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: color }} />
-                        {tab}
-                      </button>
-                    )
-                  })}
-                </div>
-              </LeftSection>
-            )}
-
-            {/* 보기 옵션 */}
-            <LeftSection title="보기">
-              {/* 도메인 박스 토글 — 도메인 뷰일 때만 표시 */}
-              {layoutPreset === 'domain' && (
+            {/* 보기 옵션 — 도메인 박스 토글 (도메인 뷰일 때만) */}
+            {layoutPreset === 'domain' && (
+              <LeftSection title="보기">
                 <button
                   onClick={() => setShowDomainBoxes(v => !v)}
                   className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
@@ -2092,21 +2021,8 @@ function GraphPageInner() {
                 >
                   {showDomainBoxes ? '⬡ 도메인 박스 켜짐' : '⬡ 도메인 박스 꺼짐'}
                 </button>
-              )}
-              {/* 배경이미지 토글 — 배경사진 설정한 경우만 표시 */}
-              {bgUrl && (
-                <button
-                  onClick={toggleBg}
-                  className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
-                    bgEnabled
-                      ? 'bg-blue-900/40 text-blue-300 hover:bg-blue-900/60'
-                      : 'bg-gray-800/60 text-gray-500 hover:bg-gray-800'
-                  }`}
-                >
-                  {bgEnabled ? '🖼 배경이미지 켜짐' : '□ 배경이미지 꺼짐'}
-                </button>
-              )}
-            </LeftSection>
+              </LeftSection>
+            )}
 
             {/* 내보내기 — 최상단 */}
             <LeftSection title="내보내기">
@@ -2376,6 +2292,47 @@ function GraphPageInner() {
             style={{ userSelect: 'none' }}
           />
         </aside>
+      )}
+
+      {/* 도메인/레이어 탭바 — ReactFlow 캔버스 상단에 오버레이 */}
+      {availableTabs.length > 0 && (
+        <div
+          className="absolute top-0 z-20 flex items-center gap-0.5 px-2 py-1 bg-gray-950/90 border-b border-gray-800 backdrop-blur-sm overflow-x-auto"
+          style={{
+            left: leftOpen ? `${leftWidth}px` : '0px',
+            right: rightCollapsed ? '40px' : `${rightWidth}px`,
+          }}
+        >
+          <button
+            onClick={() => { setActiveDomainTab(null); fitView({ duration: 400, padding: 0.1 }) }}
+            className={`flex-shrink-0 text-xs px-3 py-1 rounded transition-colors ${
+              activeDomainTab === null
+                ? 'bg-blue-700/60 text-blue-200 border border-blue-600/60'
+                : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+            }`}
+          >
+            전체
+          </button>
+          {availableTabs.map(tab => {
+            const color = layoutPreset === 'domain'
+              ? (DOMAIN_COLORS[tab]?.color ?? '#6b7280')
+              : '#6b7280'
+            const isActive = activeDomainTab === tab
+            return (
+              <button
+                key={tab}
+                onClick={() => { setActiveDomainTab(tab); fitView({ duration: 400, padding: 0.1 }) }}
+                className={`flex-shrink-0 text-xs px-3 py-1 rounded transition-colors flex items-center gap-1.5 ${
+                  isActive ? 'text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                }`}
+                style={isActive ? { background: `${color}33`, border: `1px solid ${color}66` } : {}}
+              >
+                <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: color }} />
+                {tab}
+              </button>
+            )
+          })}
+        </div>
       )}
 
       <ReactFlow

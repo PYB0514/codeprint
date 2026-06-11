@@ -11,6 +11,18 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.52.0',
+    date: '2026-06-11',
+    title: '그래프 탭바 상단 이동 + 배경이미지 제거',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '도메인/레이어 탭을 좌측 사이드바에서 캔버스 상단 탭바로 이동 — 더 넓게 보임' },
+      { category: '프론트', desc: '그래프 배경이미지 기능 제거 — 그래프 가독성 저하 원인' },
+      { category: '프론트', desc: 'GraphPage + ShareGraphPage 동일하게 적용' },
+      { category: '성능', desc: 'fetchGraph 무한 재요청 루프 수정 — 페이지 로드 시 /graph 14회 → 1회' },
+    ],
+  },
+  {
     version: 'v0.51.0',
     date: '2026-06-11',
     title: '엣지 온디맨드 렌더링',
