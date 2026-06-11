@@ -163,3 +163,20 @@ server:
 | Authorization callback URL | `https://codeprint.up.railway.app/login/oauth2/code/github` |
 
 > 로컬용과 운영용 OAuth App을 반드시 분리 생성한다. 하나로 쓰면 콜백 URL 충돌로 로컬 테스트가 불가능해진다.
+
+
+## Railway 헬스체크 실패 — V8/V30 Flyway 마이그레이션 충돌 (2026-06-11)
+
+**문제**: PR #181 이후 모든 Railway 배포가 Network › Healthcheck 단계에서 실패.
+Spring Boot가 기동되지 않아 `/actuator/health`에 응답 불가.
+
+**원인**: 두 Flyway 마이그레이션이 동일 테이블을 생성 시도.
+- `V8__add_node_comments.sql` — 초기 구현 파일, Railway DB에 이미 적용돼 `node_comments` 테이블 존재
+- `V30__add_node_comments.sql` (PR #182) — 재설계된 스키마 (node_id TEXT, FK 없음) 로 `CREATE TABLE node_comments` 실행 → 테이블 이미 존재하므로 오류 → Flyway 전체 중단 → V31-V34 미적용 → Hibernate validate 실패 → 서버 기동 실패
+
+로컬 개발 환경에서는 `application-local.yml`로 Flyway 비활성화 상태여서 동일 문제가 발생하지 않았음.
+
+**해결**: V30 상단에 `DROP TABLE IF EXISTS node_comments CASCADE;` 추가.
+Railway DB에 V8 테이블이 존재하는 경우 삭제 후 V30 스키마로 재생성. IF EXISTS로 없는 환경에서도 안전하게 동작.
+
+**결과**: V30 성공 → V31-V34 순차 적용 → Hibernate validate 통과 → 서버 기동 → 헬스체크 통과 예상.
