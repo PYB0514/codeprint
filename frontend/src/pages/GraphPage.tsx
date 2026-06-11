@@ -490,6 +490,8 @@ function GraphPageInner() {
   const [bgEnabled, setBgEnabled] = useState(() => localStorage.getItem('graphBgEnabled') !== 'false')
   const [bgUrl, setBgUrl] = useState<string | null>(null)
   const [showDomainBoxes, setShowDomainBoxes] = useState(true)
+  // 탭 분리: null = 전체 보기, 문자열 = 해당 도메인/레이어만 표시
+  const [activeDomainTab, setActiveDomainTab] = useState<string | null>(null)
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareTitle, setShareTitle] = useState('')
   const [shareContent, setShareContent] = useState('')
@@ -1743,10 +1745,54 @@ function GraphPageInner() {
   }, [graphId, setNodes])
 
   // ReactFlow에 전달할 노드 — showDomainBoxes 꺼지면 sectionNode 제외 (매 렌더마다 재생성 방지)
-  const displayNodes = useMemo(
-    () => showDomainBoxes ? nodes : nodes.filter(n => n.type !== 'sectionNode'),
-    [showDomainBoxes, nodes]
-  )
+  // 탭 필터링: activeDomainTab이 설정되면 해당 도메인/레이어 노드만 표시 (성능 핵심 최적화)
+  const tabFilteredNodeIds = useMemo(() => {
+    if (!activeDomainTab) return null
+    const isLayerMode = layoutPreset === 'layer'
+    const visibleRaw = rawNodes.filter(n => {
+      if (isLayerMode) {
+        // 계층형: filePath에서 레이어 폴더명 매칭
+        const rel = n.filePath.startsWith(commonPrefix) ? n.filePath.slice(commonPrefix.length) : n.filePath
+        const parts = rel.replace(/\\/g, '/').split('/').filter(Boolean)
+        return parts.some(p => p.toLowerCase() === activeDomainTab)
+      } else {
+        // 도메인형: extractDomain 기준
+        return extractDomain(n.filePath, commonPrefix) === activeDomainTab
+      }
+    })
+    return new Set(visibleRaw.map(n => n.id))
+  }, [activeDomainTab, rawNodes, commonPrefix, layoutPreset])
+
+  const displayNodes = useMemo(() => {
+    let result = showDomainBoxes ? nodes : nodes.filter(n => n.type !== 'sectionNode')
+    if (tabFilteredNodeIds) {
+      result = result.filter(n =>
+        tabFilteredNodeIds.has(n.id) || n.type === 'sectionNode' || n.type === 'groupNode'
+      )
+    }
+    return result
+  }, [showDomainBoxes, nodes, tabFilteredNodeIds])
+
+  // 탭 필터링된 엣지 — 양쪽 노드가 모두 표시될 때만 보여줌
+  const displayEdges = useMemo(() => {
+    if (!tabFilteredNodeIds) return edges
+    return edges.filter(e => tabFilteredNodeIds.has(e.source) && tabFilteredNodeIds.has(e.target))
+  }, [edges, tabFilteredNodeIds])
+
+  // 현재 레이아웃 기준으로 사용 가능한 탭 목록
+  const availableTabs = useMemo(() => {
+    if (layoutPreset === 'layer') {
+      const layers = ['pages', 'components', 'hooks', 'interfaces', 'application', 'domain', 'infrastructure']
+      const used = new Set(rawNodes.flatMap(n => {
+        const rel = n.filePath.startsWith(commonPrefix) ? n.filePath.slice(commonPrefix.length) : n.filePath
+        return rel.replace(/\\/g, '/').split('/').filter(Boolean).map(p => p.toLowerCase())
+      }))
+      return layers.filter(l => used.has(l))
+    } else {
+      const domains = new Set(rawNodes.map(n => extractDomain(n.filePath, commonPrefix)))
+      return Object.keys(DOMAIN_COLORS).filter(d => domains.has(d))
+    }
+  }, [rawNodes, commonPrefix, layoutPreset])
 
   // MiniMap 노드 색상 함수 — 인라인 선언 시 매 렌더 MiniMap 전체 재렌더 유발
   const minimapNodeColor = useCallback((n: Node) => {
@@ -1976,6 +2022,43 @@ function GraphPageInner() {
 
             {/* AI 누락 감지 */}
             <AiAnalysisSection graphId={graphId} />
+
+            {/* 탭 분리 — 도메인/레이어별 분할 보기 */}
+            {availableTabs.length > 0 && (
+              <LeftSection title="탭 분리">
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => { setActiveDomainTab(null); fitView({ duration: 400, padding: 0.1 }) }}
+                    className={`w-full text-left text-xs px-2 py-1 rounded transition-colors ${
+                      activeDomainTab === null
+                        ? 'bg-blue-700/60 text-blue-200 border border-blue-600/60'
+                        : 'bg-gray-800/60 text-gray-400 hover:bg-gray-800'
+                    }`}
+                  >
+                    전체 보기
+                  </button>
+                  {availableTabs.map(tab => {
+                    const color = layoutPreset === 'domain'
+                      ? (DOMAIN_COLORS[tab]?.color ?? '#6b7280')
+                      : '#6b7280'
+                    const isActive = activeDomainTab === tab
+                    return (
+                      <button
+                        key={tab}
+                        onClick={() => { setActiveDomainTab(tab); fitView({ duration: 400, padding: 0.1 }) }}
+                        className={`w-full text-left text-xs px-2 py-1 rounded transition-colors flex items-center gap-1.5 ${
+                          isActive ? 'text-white' : 'text-gray-400 hover:bg-gray-800'
+                        }`}
+                        style={isActive ? { background: `${color}33`, border: `1px solid ${color}66` } : {}}
+                      >
+                        <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: color }} />
+                        {tab}
+                      </button>
+                    )
+                  })}
+                </div>
+              </LeftSection>
+            )}
 
             {/* 보기 옵션 */}
             <LeftSection title="보기">
@@ -2279,7 +2362,7 @@ function GraphPageInner() {
 
       <ReactFlow
         nodes={displayNodes}
-        edges={edges}
+        edges={displayEdges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
