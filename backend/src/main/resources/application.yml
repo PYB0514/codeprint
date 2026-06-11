@@ -79,10 +79,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,metrics,info
   endpoint:
     health:
       show-details: never
+    metrics:
+      enabled: true
 
 sentry:
   dsn: ${SENTRY_DSN:}
