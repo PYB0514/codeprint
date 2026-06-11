@@ -4,6 +4,40 @@
 
 ## 버그
 
+### GraphPage fetchGraph 무한 재요청 루프 (2026-06-11)
+
+**문제.** 그래프 페이지 로드 시 `/api/projects/{id}/graph`가 14회 이상, `/freshness`가 9회 이상 반복 호출됨. 앱이 비정상적으로 느린 원인이었다.
+
+**원인.** React useCallback 의존성 순환.
+1. `openFileSidebar` = `useCallback(..., [rawNodes])` — rawNodes에 의존
+2. `fetchGraph` = `useCallback(..., [..., openFileSidebar])` — openFileSidebar에 의존
+3. `useEffect(() => fetchGraph(), [fetchGraph])` — fetchGraph 변경 시 재실행
+4. `fetchGraph` 실행 → `setRawNodes(rn)` 호출 → rawNodes 변경
+5. rawNodes 변경 → openFileSidebar 재생성 → fetchGraph 재생성 → useEffect 재실행 → 1번으로
+
+**발견 방법.** Chrome Network 탭에서 /graph 14회, /freshness 9회 호출을 확인. React DevTools가 아닌 실제 네트워크 요청 수로 진단.
+
+**결과.** `openFileSidebarRef = useRef(openFileSidebar)`로 안정적 참조를 유지하고, fetchGraph 의존성 배열에서 openFileSidebar 제거. 페이지 로드 시 /graph 호출 1회로 정상화.
+
+```tsx
+// 순환 의존 제거 전
+const fetchGraph = useCallback(async () => {
+  buildLayout(rn, re, labelMode, layoutPreset, openFileSidebar)  // openFileSidebar 직접 사용
+}, [..., openFileSidebar])  // rawNodes → openFileSidebar 변경 시마다 재생성
+
+// 순환 의존 제거 후
+const openFileSidebarRef = useRef(openFileSidebar)
+useEffect(() => { openFileSidebarRef.current = openFileSidebar }, [openFileSidebar])
+
+const fetchGraph = useCallback(async () => {
+  buildLayout(rn, re, labelMode, layoutPreset, openFileSidebarRef.current)  // ref로 접근
+}, [...])  // openFileSidebar 제거 → 순환 끊김
+```
+
+**면접 포인트.** React 18 + useCallback 의존성 배열에서 함수 참조가 불안정할 때 발생하는 무한 루프 패턴. "Effect가 실행될 때마다 상태를 변경하고, 그 상태가 Effect를 트리거하는 값을 바꾼다" 는 고전적 순환 의존 케이스. useRef로 최신 값을 읽으면서 의존성 배열에서 제외하는 패턴은 React 공식 문서에서도 권장하는 해법.
+
+---
+
 ### 레이어 토글 — extent:'parent' 노드에 hidden 미전파 (2026-06-08)
 
 **문제.** 레이어 불투명 토글 시 group 노드만 hidden 처리했는데, React Flow의 `extent: 'parent'` 파일 노드와 그 자식 함수 노드는 부모가 hidden이 되어도 화면에 계속 노출됐다.

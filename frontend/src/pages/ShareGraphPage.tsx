@@ -98,6 +98,8 @@ function ShareGraphInner() {
   const [nodeSearch, setNodeSearch] = useState('')
   const [showChat, setShowChat] = useState(false)
   const [activeDomainTab, setActiveDomainTab] = useState<string>('전체')
+  const [ownerBgUrl, setOwnerBgUrl] = useState<string | null>(null)
+  const [bgEnabled, setBgEnabled] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, connected, sendMessage } = useGraphChat(graphId, null)
 
@@ -129,9 +131,10 @@ function ShareGraphInner() {
 
     Promise.all([graphPromise, presetPromise])
       .then(([graphRes, presetRes]) => {
-        const raw = graphRes.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; message: string }[] }
+        const raw = graphRes.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; message: string }[]; ownerBgUrl?: string | null }
         if (raw.warnings) setWarnings(raw.warnings)
         setGraphId(raw.graphId)
+        if (raw.ownerBgUrl) setOwnerBgUrl(raw.ownerBgUrl)
 
         const cfg = (presetRes?.data?.config ?? {}) as Record<string, unknown>
         const lp = (cfg.layoutPreset as LayoutPreset) ?? 'layer'
@@ -157,6 +160,17 @@ function ShareGraphInner() {
       .catch(() => setError('프로젝트를 찾을 수 없거나 비공개 상태입니다.'))
       .finally(() => setLoading(false))
   }, [projectId, searchParams])
+
+  // bgEnabled 또는 ownerBgUrl 변화 시 body 배경이미지 동기화
+  useEffect(() => {
+    if (bgEnabled && ownerBgUrl) {
+      document.body.style.backgroundImage = `url(${ownerBgUrl})`
+      document.body.classList.add('has-bg')
+    } else {
+      document.body.classList.remove('has-bg')
+    }
+    return () => { document.body.classList.remove('has-bg') }
+  }, [bgEnabled, ownerBgUrl])
 
   // 새 채팅 메시지 수신 시 스크롤
   useEffect(() => {
@@ -298,6 +312,22 @@ function ShareGraphInner() {
               <WarningPanel warnings={warnings} />
             )}
           </div>
+          {/* 배경이미지 토글 — 오너 배경이 있을 때만 표시 */}
+          {ownerBgUrl && (
+            <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">보기</p>
+              <button
+                onClick={() => setBgEnabled(v => !v)}
+                className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
+                  bgEnabled
+                    ? 'bg-blue-900/40 text-blue-300 hover:bg-blue-900/60'
+                    : 'bg-gray-800/60 text-gray-500 hover:bg-gray-800'
+                }`}
+              >
+                {bgEnabled ? '🖼 배경이미지 켜짐' : '□ 배경이미지 꺼짐'}
+              </button>
+            </div>
+          )}
         </aside>
 
         {/* 그래프 캔버스 */}
