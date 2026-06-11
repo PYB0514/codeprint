@@ -1363,22 +1363,25 @@ function GraphPageInner() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [fitView, toggleLabelMode])
 
-  // 검색어가 있으면 일치 노드 강조, 나머지 반투명 처리
+  // 검색어 하이라이트 — 150ms 디바운스로 키 입력마다 전체 노드 순회 방지
   useEffect(() => {
-    const q = nodeSearchQuery.trim().toLowerCase()
-    if (!q) {
-      setNodes(nds => nds.map(n => ({ ...n, style: { ...(n.style as object ?? {}), opacity: undefined } })))
-      return
-    }
-    const matchIds = new Set(
-      rawNodes
-        .filter(n => n.name.toLowerCase().includes(q) || (n.comment ?? '').toLowerCase().includes(q))
-        .map(n => n.id)
-    )
-    setNodes(nds => nds.map(n => ({
-      ...n,
-      style: { ...(n.style as object ?? {}), opacity: matchIds.has(n.id) ? 1 : 0.1 },
-    })))
+    const timer = setTimeout(() => {
+      const q = nodeSearchQuery.trim().toLowerCase()
+      if (!q) {
+        setNodes(nds => nds.map(n => ({ ...n, style: { ...(n.style as object ?? {}), opacity: undefined } })))
+        return
+      }
+      const matchIds = new Set(
+        rawNodes
+          .filter(n => n.name.toLowerCase().includes(q) || (n.comment ?? '').toLowerCase().includes(q))
+          .map(n => n.id)
+      )
+      setNodes(nds => nds.map(n => ({
+        ...n,
+        style: { ...(n.style as object ?? {}), opacity: matchIds.has(n.id) ? 1 : 0.1 },
+      })))
+    }, 150)
+    return () => clearTimeout(timer)
   }, [nodeSearchQuery, rawNodes, setNodes])
 
   // 경고 목록을 타입별로 그룹핑하여 마크다운 파일로 다운로드
