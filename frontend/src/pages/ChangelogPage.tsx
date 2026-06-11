@@ -11,6 +11,17 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.29.0',
+    date: '2026-06-11',
+    title: 'AI 누락 패턴 감지',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '그래프 좌측 사이드바에 🤖 AI 분석 섹션 추가 — Claude API로 누락 패턴 자동 감지' },
+      { category: '프론트', desc: '감지 항목: 에러 처리 누락 / 입력 검증 누락 / 테스트 누락 / 레이어 위반 / 로깅 누락 (5가지)' },
+      { category: '백엔드', desc: 'POST /api/ai/graphs/{graphId}/analyze — 그래프 직렬화 후 Claude API 전송, DetectedIssue 목록 반환' },
+    ],
+  },
+  {
     version: 'v0.28.0',
     date: '2026-06-11',
     title: '팀채팅 + 브라우저 알림',

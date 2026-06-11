@@ -1,9 +1,11 @@
-// AI 키 관리 + 노드/엣지 설명 API
+// AI 키 관리 + 노드/엣지 설명 + 그래프 누락 패턴 감지 API
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.ai.AiGraphAnalysisService;
 import com.codeprint.domain.ai.AiProvider;
 import com.codeprint.domain.ai.UserAiKey;
 import com.codeprint.domain.ai.UserAiKeyRepository;
+import com.codeprint.domain.graph.GraphRepository;
 import com.codeprint.infrastructure.ai.AiService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +26,8 @@ public class AiController {
 
     private final UserAiKeyRepository aiKeyRepository;
     private final List<AiService> aiServices;
+    private final AiGraphAnalysisService aiGraphAnalysisService;
+    private final GraphRepository graphRepository;
 
     record SaveKeyRequest(@NotBlank String apiKey) {}
     record ExplainRequest(@NotBlank String provider, @NotBlank String nodeId,
@@ -89,6 +93,18 @@ public class AiController {
         String prompt = buildPrompt(req);
         String explanation = service.explain(key.getApiKey(), prompt);
         return ResponseEntity.ok(new ExplainResponse(explanation));
+    }
+
+    // 그래프 전체를 Claude AI로 분석하여 누락 패턴 감지
+    @PostMapping("/graphs/{graphId}/analyze")
+    public ResponseEntity<List<AiGraphAnalysisService.DetectedIssue>> analyzeGraph(
+            @PathVariable UUID graphId,
+            @AuthenticationPrincipal User user) {
+        UUID userId = UUID.fromString(user.getUsername());
+        var nodes = graphRepository.findNodesByGraphId(graphId);
+        var edges = graphRepository.findEdgesByGraphId(graphId);
+        List<AiGraphAnalysisService.DetectedIssue> issues = aiGraphAnalysisService.analyze(userId, nodes, edges);
+        return ResponseEntity.ok(issues);
     }
 
     // 노드 컨텍스트를 기반으로 AI 프롬프트 구성
