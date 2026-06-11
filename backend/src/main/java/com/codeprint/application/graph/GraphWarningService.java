@@ -274,8 +274,28 @@ public class GraphWarningService {
         return slash > 0 ? after.substring(0, slash) : null;
     }
 
+    // DDD 팩토리·JPA·React·콜백 패턴은 정적 FUNCTION_CALL 엣지로 추적 불가 → 제외
+    private static final Set<String> FRAMEWORK_CALL_NAMES = Set.of(
+        // DDD 팩토리 패턴
+        "of", "newId", "create", "from", "build",
+        // JPA/공통 레포지토리 메서드 (Spring 런타임 프록시로 호출)
+        "findById", "findAll", "findAllById", "save", "saveAll", "deleteById",
+        "deleteAll", "existsById", "count",
+        // Object 기본 메서드
+        "toString", "equals", "hashCode", "compareTo",
+        // Java lifecycle
+        "main", "run", "init", "destroy", "close",
+        // 생성자 alias
+        "생성자"
+    );
+
     // FUNCTION 노드 중 아무 FUNCTION_CALL 엣지도 받지 않는 함수 — 데드 코드 후보
-    // 외부 진입점(컨트롤러 레이어, @Async, 생성자, main, 테스트)은 제외
+    // 아래 5가지 패턴은 정적 분석으로 호출 추적이 불가능하여 false positive 발생:
+    //   1. JSX 렌더 (<App />) — React.createElement 호출, FUNCTION_CALL 엣지로 연결 안 됨
+    //   2. JPA Repository 메서드 — Spring AOP 프록시가 런타임에 호출
+    //   3. DDD 팩토리 메서드(of/create) — import 후 다른 파일에서 사용, cross-file 추적 미완성
+    //   4. 콜백 참조(addEventListener(handler)) — 값으로 전달, "호출"이 아님
+    //   5. React 컴포넌트(대문자 시작 tsx 함수) — export 후 JSX로 사용
     private List<Map<String, Object>> detectDeadCode(List<Node> nodes, List<Edge> edges) {
         Set<UUID> calledFuncIds = new HashSet<>();
         for (Edge e : edges) {
@@ -290,21 +310,31 @@ public class GraphWarningService {
             if (calledFuncIds.contains(n.getId())) continue;
 
             String fp = n.getFilePath() != null ? n.getFilePath() : "";
-            String name = n.getName();
+            String name = n.getName() != null ? n.getName() : "";
 
             // 테스트 코드 제외
             if (fp.contains("/test/") || fp.contains("\\test\\")) continue;
-            // interfaces/ 레이어 (컨트롤러, WebSocket 핸들러 등) — 외부 진입점
+            // interfaces/ 레이어 — 컨트롤러, WebSocket 핸들러 등 외부 진입점
             if (fp.contains("/interfaces/")) continue;
-            // 생성자·main·오버라이드 후보 제외
-            if ("main".equals(name) || "생성자".equals(name) || "toString".equals(name)
-                    || "equals".equals(name) || "hashCode".equals(name)) continue;
+            // React 컴포넌트 — .tsx 파일에서 대문자 시작 함수 (JSX로 렌더링되므로 FUNCTION_CALL 엣지 없음)
+            if ((fp.endsWith(".tsx") || fp.endsWith(".jsx")) && !name.isEmpty()
+                    && Character.isUpperCase(name.charAt(0))) continue;
+            // pages/ · components/ · hooks/ 레이어 — React 모듈 전체가 JSX/export 기반
+            if (fp.contains("/pages/") || fp.contains("/components/") || fp.contains("/hooks/")) continue;
+            // JPA Repository 구현체 · domain 팩토리 메서드 등 프레임워크 호출 패턴
+            if (FRAMEWORK_CALL_NAMES.contains(name)) continue;
+            // infrastructure/ 레이어 — Spring @Bean, @EventListener, Filter 등 프레임워크 진입점 다수
+            if (fp.contains("/infrastructure/")) continue;
 
             Map<String, Object> meta = n.getMetadata();
             if (meta != null) {
                 // @Async 메서드는 Spring이 직접 호출 — 제외
                 if (Boolean.TRUE.equals(meta.get("isAsync"))) continue;
                 if (Boolean.TRUE.equals(meta.get("isConstructor"))) continue;
+                // @EventListener, @Scheduled, @Bean — Spring이 직접 호출
+                if (Boolean.TRUE.equals(meta.get("isEventListener"))) continue;
+                if (Boolean.TRUE.equals(meta.get("isScheduled"))) continue;
+                if (Boolean.TRUE.equals(meta.get("isBean"))) continue;
             }
 
             Map<String, Object> w = new LinkedHashMap<>();

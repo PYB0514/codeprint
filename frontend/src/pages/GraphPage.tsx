@@ -2278,7 +2278,7 @@ function GraphPageInner() {
         onEdgeClick={handleEdgeClick}
         onNodeClick={handleNodeClick}
         onNodeDragStop={handleNodeDragStop}
-        onMouseMove={handleCollabMouseMove}
+        onMouseMove={collabSessionId ? handleCollabMouseMove : undefined}
         fitView
         fitViewOptions={{ padding: 0.1 }}
         minZoom={0.05}

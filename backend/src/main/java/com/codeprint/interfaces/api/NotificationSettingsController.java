@@ -1,9 +1,9 @@
 // 유저 알림 설정 조회·수정 REST API
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.notification.NotificationSettingsApplicationService;
 import com.codeprint.domain.notification.UserNotificationSettings;
 import com.codeprint.domain.user.User;
-import com.codeprint.infrastructure.persistence.notification.NotificationSettingsJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -17,7 +17,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NotificationSettingsController {
 
-    private final NotificationSettingsJpaRepository settingsRepo;
+    private final NotificationSettingsApplicationService settingsService;
 
     // Principal에서 로그인 사용자 ID 추출
     private UUID currentUserId(Principal principal) {
@@ -34,20 +34,14 @@ public class NotificationSettingsController {
     // 알림 설정 조회 (없으면 기본값 반환)
     @GetMapping
     public SettingsResponse get(Principal principal) {
-        UUID userId = currentUserId(principal);
-        UserNotificationSettings s = settingsRepo.findById(userId)
-                .orElseGet(() -> UserNotificationSettings.defaultFor(userId));
+        UserNotificationSettings s = settingsService.get(currentUserId(principal));
         return new SettingsResponse(s.isTeamChat(), s.isDm());
     }
 
     // 알림 설정 업데이트
     @PutMapping
     public SettingsResponse update(@RequestBody UpdateRequest req, Principal principal) {
-        UUID userId = currentUserId(principal);
-        UserNotificationSettings s = settingsRepo.findById(userId)
-                .orElseGet(() -> UserNotificationSettings.defaultFor(userId));
-        s.update(req.teamChat(), req.dm());
-        settingsRepo.save(s);
+        UserNotificationSettings s = settingsService.update(currentUserId(principal), req.teamChat(), req.dm());
         return new SettingsResponse(s.isTeamChat(), s.isDm());
     }
 }
