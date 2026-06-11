@@ -11,6 +11,17 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.27.0',
+    date: '2026-06-11',
+    title: '유저 간 쪽지',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '헤더에 ✉ 쪽지 아이콘 + 읽지 않은 쪽지 badge 추가' },
+      { category: '프론트', desc: '/messages 페이지 — 받은 쪽지함(대화 상대별), 대화 스레드, 읽음 처리' },
+      { category: '백엔드', desc: 'direct_messages 테이블 (V27 마이그레이션) + 전송/받은함/스레드/읽음 API' },
+    ],
+  },
+  {
     version: 'v0.26.0',
     date: '2026-06-11',
     title: '공유 그래프 실시간 채팅',

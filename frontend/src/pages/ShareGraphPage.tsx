@@ -11,6 +11,7 @@ import {
   useNodesState,
   useEdgesState,
   ReactFlowProvider,
+  type NodeMouseHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { buildLayout } from '../utils/graphLayout'
@@ -83,8 +84,12 @@ function ShareGraphInner() {
   const [graphId, setGraphId] = useState<string | null>(null)
   const [showChat, setShowChat] = useState(false)
   const [chatInput, setChatInput] = useState('')
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, connected, sendMessage } = useGraphChat(graphId, null)
+
+  // 노드 클릭 시 상세 패널 표시
+  const handleNodeClick: NodeMouseHandler = (_, node) => setSelectedNode(node)
 
   useEffect(() => {
     if (!projectId) return
@@ -251,22 +256,61 @@ function ShareGraphInner() {
         )}
 
         {/* 그래프 */}
-        <div className="flex-1">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          nodeTypes={nodeTypes}
-          fitView
-          nodesDraggable={false}
-          nodesConnectable={false}
-          elementsSelectable={false}
-        >
-          <Background color="#374151" gap={20} />
-          <Controls />
-          <MiniMap nodeColor="#6b7280" maskColor="rgba(17,24,39,0.7)" />
-        </ReactFlow>
+        <div className="flex-1 h-full relative">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            nodeTypes={nodeTypes}
+            fitView
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable={false}
+            onNodeClick={handleNodeClick}
+            onPaneClick={() => setSelectedNode(null)}
+          >
+            <Background color="#374151" gap={20} />
+            <Controls />
+            <MiniMap nodeColor="#6b7280" maskColor="rgba(17,24,39,0.7)" />
+          </ReactFlow>
+
+          {/* 노드 상세 사이드바 */}
+          {selectedNode && selectedNode.type !== 'sectionNode' && selectedNode.type !== 'groupNode' && (
+            <div className="absolute top-3 right-3 w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-10 overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
+                <span className="text-xs font-semibold text-white truncate flex-1 mr-2">
+                  {String(selectedNode.data?.name ?? selectedNode.id)}
+                </span>
+                <button
+                  onClick={() => setSelectedNode(null)}
+                  className="text-gray-500 hover:text-white text-sm leading-none shrink-0"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="p-3 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 w-12 shrink-0">타입</span>
+                  <span className="text-xs font-mono bg-gray-800 text-blue-300 px-2 py-0.5 rounded">
+                    {selectedNode.type === 'fileNode' ? 'FILE' : 'FUNCTION'}
+                  </span>
+                </div>
+                {!!selectedNode.data?.domain && String(selectedNode.data.domain) !== 'common' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 w-12 shrink-0">도메인</span>
+                    <span className="text-xs text-gray-300">{String(selectedNode.data.domain)}</span>
+                  </div>
+                )}
+                {!!selectedNode.data?.comment && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-gray-500 w-12 shrink-0 mt-0.5">설명</span>
+                    <span className="text-xs text-gray-300 break-words">{String(selectedNode.data.comment)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -18,12 +18,17 @@ export default function AppHeader({ onLogin }: Props) {
   const navigate = useNavigate()
   const [user, setUser] = useState<UserInfo | null>(null)
   const [checked, setChecked] = useState(false)
+  const [unreadMessages, setUnreadMessages] = useState(0)
 
   // 쿠키 기반 인증 — /api/auth/me로 로그인 상태 확인
   useEffect(() => {
     axios
       .get<{ username: string; plan: string; avatarUrl: string | null }>('/api/auth/me')
-      .then((r) => setUser({ username: r.data.username, plan: r.data.plan, avatarUrl: r.data.avatarUrl ?? null }))
+      .then((r) => {
+        setUser({ username: r.data.username, plan: r.data.plan, avatarUrl: r.data.avatarUrl ?? null })
+        return axios.get<{ count: number }>('/api/messages/unread-count')
+      })
+      .then((r) => setUnreadMessages(r.data.count))
       .catch(() => { /* 비로그인 상태 */ })
       .finally(() => setChecked(true))
   }, [])
@@ -59,6 +64,14 @@ export default function AppHeader({ onLogin }: Props) {
 
         {user ? (
           <>
+            <button onClick={() => navigate('/messages')} className="relative text-gray-400 hover:text-white transition-colors">
+              ✉
+              {unreadMessages > 0 && (
+                <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-xs rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5 leading-none">
+                  {unreadMessages > 99 ? '99+' : unreadMessages}
+                </span>
+              )}
+            </button>
             {user.avatarUrl ? (
               <img
                 src={user.avatarUrl}
