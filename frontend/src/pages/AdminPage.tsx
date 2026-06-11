@@ -18,6 +18,13 @@ interface UserItem {
   createdAt: string
 }
 
+interface JvmMetrics {
+  heapUsedMb: number
+  heapMaxMb: number
+  cpuUsage: number
+  threadCount: number
+}
+
 interface NoticeItem {
   id: string
   title: string
@@ -39,6 +46,7 @@ export default function AdminPage() {
   const [noticeLoading, setNoticeLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [jvmMetrics, setJvmMetrics] = useState<JvmMetrics | null>(null)
 
   // 통계 및 사용자 목록 로드
   useEffect(() => {
@@ -58,6 +66,29 @@ export default function AdminPage() {
       })
       .finally(() => setLoading(false))
   }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // JVM 메트릭 로드 — 30초마다 갱신
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        const [heapUsed, heapMax, cpu, threads] = await Promise.all([
+          axios.get('/actuator/metrics/jvm.memory.used?tag=area:heap'),
+          axios.get('/actuator/metrics/jvm.memory.max?tag=area:heap'),
+          axios.get('/actuator/metrics/process.cpu.usage'),
+          axios.get('/actuator/metrics/jvm.threads.live'),
+        ])
+        setJvmMetrics({
+          heapUsedMb: Math.round(heapUsed.data.measurements[0]?.value / 1024 / 1024),
+          heapMaxMb: Math.round(heapMax.data.measurements[0]?.value / 1024 / 1024),
+          cpuUsage: Math.round((cpu.data.measurements[0]?.value ?? 0) * 100),
+          threadCount: Math.round(threads.data.measurements[0]?.value ?? 0),
+        })
+      } catch { /* actuator 접근 불가 시 무시 */ }
+    }
+    fetchMetrics()
+    const id = setInterval(fetchMetrics, 30_000)
+    return () => clearInterval(id)
+  }, [])
 
   // 공지사항 목록 로드
   useEffect(() => {
@@ -142,6 +173,22 @@ export default function AdminPage() {
             <StatCard label="전체 사용자" value={stats.totalUsers} />
             <StatCard label="전체 프로젝트" value={stats.totalProjects} />
             <StatCard label="전체 분석" value={stats.totalAnalyses} />
+          </div>
+        )}
+
+        {/* JVM 메트릭 */}
+        {jvmMetrics && (
+          <div className="bg-gray-900 rounded-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">서버 메트릭 (30초 갱신)</h2>
+              <span className="text-xs text-gray-500">Actuator</span>
+            </div>
+            <div className="px-6 py-4 grid grid-cols-4 gap-4">
+              <MetricCard label="힙 사용" value={`${jvmMetrics.heapUsedMb} MB`} sub={`/ ${jvmMetrics.heapMaxMb} MB`} warn={jvmMetrics.heapUsedMb / jvmMetrics.heapMaxMb > 0.8} />
+              <MetricCard label="힙 사용률" value={`${Math.round(jvmMetrics.heapUsedMb / jvmMetrics.heapMaxMb * 100)}%`} warn={jvmMetrics.heapUsedMb / jvmMetrics.heapMaxMb > 0.8} />
+              <MetricCard label="CPU 사용률" value={`${jvmMetrics.cpuUsage}%`} warn={jvmMetrics.cpuUsage > 70} />
+              <MetricCard label="활성 스레드" value={`${jvmMetrics.threadCount}`} warn={jvmMetrics.threadCount > 200} />
+            </div>
           </div>
         )}
 
@@ -310,6 +357,17 @@ function StatCard({ label, value }: { label: string; value: number }) {
     <div className="bg-gray-900 rounded-lg p-6">
       <p className="text-gray-400 text-sm mb-1">{label}</p>
       <p className="text-3xl font-bold">{value.toLocaleString()}</p>
+    </div>
+  )
+}
+
+// JVM 메트릭 카드 컴포넌트
+function MetricCard({ label, value, sub, warn }: { label: string; value: string; sub?: string; warn?: boolean }) {
+  return (
+    <div className={`rounded-lg p-4 ${warn ? 'bg-red-900/40 border border-red-700/50' : 'bg-gray-800'}`}>
+      <p className="text-gray-400 text-xs mb-1">{label}</p>
+      <p className={`text-2xl font-bold ${warn ? 'text-red-300' : 'text-white'}`}>{value}</p>
+      {sub && <p className="text-gray-500 text-xs mt-0.5">{sub}</p>}
     </div>
   )
 }
