@@ -686,6 +686,9 @@ function GraphPageInner() {
     setAnnotationNote(rawFile?.userNote ?? '')
     setRightCollapsed(false)
   }, [rawNodes])
+  // openFileSidebar는 rawNodes에 의존해 매 fetchGraph 호출 후 재생성됨 → ref로 안정화
+  const openFileSidebarRef = useRef(openFileSidebar)
+  useEffect(() => { openFileSidebarRef.current = openFileSidebar }, [openFileSidebar])
 
   // 사이드바 드래그 리사이즈 — 전역 mousemove/mouseup 처리
   useEffect(() => {
@@ -916,7 +919,7 @@ function GraphPageInner() {
       setGraphId(gid)
       const warningList = w ?? []
       setWarnings(warningList)
-      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebar)
+      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebarRef.current)
       setRawNodes(rn)
       setRawEdgesCache(re)
       // bgColor 초기화 — 서버에서 받은 색상을 즉시 반영 맵에 저장
@@ -950,7 +953,7 @@ function GraphPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, setNodes, setEdges, openFileSidebar, applyEdgeVisibility, fitView])
+  }, [projectId, setNodes, setEdges, applyEdgeVisibility, fitView])
 
   useEffect(() => {
     axios.get<{ id: string }>('/api/auth/me')
