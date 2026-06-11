@@ -78,6 +78,22 @@ public class S3Service {
         return "https://" + bucket + ".s3.amazonaws.com/" + key;
     }
 
+    // 저장된 S3 URL(또는 키)을 7일 만료 presigned GET URL로 변환
+    public String toPresignedUrl(String storedUrl) {
+        if (storedUrl == null || storedUrl.isBlank()) return null;
+        String key = storedUrl.contains(".amazonaws.com/")
+                ? storedUrl.substring(storedUrl.indexOf(".amazonaws.com/") + ".amazonaws.com/".length())
+                : storedUrl;
+        GetObjectRequest getRequest = GetObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .build();
+        PresignedGetObjectRequest presigned = s3Presigner.presignGetObject(r ->
+                r.signatureDuration(Duration.ofDays(7))
+                 .getObjectRequest(getRequest));
+        return presigned.url().toString();
+    }
+
     // S3 객체 삭제
     public void deleteObject(String key) {
         s3Client.deleteObject(DeleteObjectRequest.builder()

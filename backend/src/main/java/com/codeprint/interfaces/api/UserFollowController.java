@@ -6,6 +6,7 @@ import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserFollow;
 import com.codeprint.domain.user.UserFollowRepository;
 import com.codeprint.domain.user.UserRepository;
+import com.codeprint.infrastructure.storage.S3Service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,6 +24,7 @@ public class UserFollowController {
     private final UserFollowRepository userFollowRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final S3Service s3Service;
 
     // 팔로우
     @PostMapping("/{userId}/follow")
@@ -87,7 +89,7 @@ public class UserFollowController {
                 .map(u -> Map.<String, Object>of(
                         "id", u.getId(),
                         "username", u.getUsername(),
-                        "avatarUrl", u.getAvatarUrl() != null ? u.getAvatarUrl() : "https://github.com/" + u.getUsername() + ".png"
+                        "avatarUrl", u.getAvatarUrl() != null ? s3Service.toPresignedUrl(u.getAvatarUrl()) : "https://github.com/" + u.getUsername() + ".png"
                 ))
                 .toList();
     }
