@@ -64,6 +64,7 @@ export default function CommunityPage() {
   const [newFeedbackType, setNewFeedbackType] = useState('GENERAL')
   const [newComment, setNewComment] = useState('')
   const [loading, setLoading] = useState(true)
+  const [feedTab, setFeedTab] = useState<'all' | 'following'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [attachedFiles, setAttachedFiles] = useState<{ file: File; s3Key: string; uploading: boolean }[]>([])
@@ -94,14 +95,16 @@ export default function CommunityPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  // 검색어 변경 시 300ms 디바운스 후 게시글 재조회
+  // 검색어 또는 탭 변경 시 300ms 디바운스 후 게시글 재조회
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     searchTimerRef.current = setTimeout(() => {
-      const params = searchQuery.trim() ? { q: searchQuery.trim() } : {}
+      const params: Record<string, string> = {}
+      if (searchQuery.trim()) params.q = searchQuery.trim()
+      if (feedTab === 'following') params.feed = 'following'
       axios.get<Post[]>('/api/community/posts', { params }).then((res) => setPosts(res.data))
     }, 300)
-  }, [searchQuery])
+  }, [searchQuery, feedTab])
 
   // 게시글 클릭 시 상세, 댓글, 첨부파일 로드
   const handleSelectPost = async (post: Post) => {
@@ -223,7 +226,7 @@ export default function CommunityPage() {
       <main className="max-w-5xl mx-auto px-6 py-10 flex gap-6">
         {/* 게시글 목록 */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3">
             <h1 className="text-xl font-semibold">커뮤니티</h1>
             <div className="flex items-center gap-2">
               <input
@@ -251,6 +254,32 @@ export default function CommunityPage() {
               )}
             </div>
           </div>
+
+          {/* 전체 / 팔로잉 탭 */}
+          {user && (
+            <div className="flex gap-1 mb-4 border-b border-gray-800">
+              <button
+                onClick={() => setFeedTab('all')}
+                className={`text-sm px-4 py-2 -mb-px border-b-2 transition-colors ${
+                  feedTab === 'all'
+                    ? 'border-white text-white font-medium'
+                    : 'border-transparent text-gray-400 hover:text-white'
+                }`}
+              >
+                전체
+              </button>
+              <button
+                onClick={() => setFeedTab('following')}
+                className={`text-sm px-4 py-2 -mb-px border-b-2 transition-colors ${
+                  feedTab === 'following'
+                    ? 'border-white text-white font-medium'
+                    : 'border-transparent text-gray-400 hover:text-white'
+                }`}
+              >
+                팔로잉
+              </button>
+            </div>
+          )}
 
           {/* 글쓰기 폼 */}
           {showWriteForm && (
@@ -341,7 +370,11 @@ export default function CommunityPage() {
           {loading ? (
             <p className="text-gray-500 text-sm">로딩 중...</p>
           ) : posts.length === 0 ? (
-            <p className="text-gray-500 text-sm">아직 게시글이 없습니다.</p>
+            <p className="text-gray-500 text-sm">
+              {feedTab === 'following'
+                ? '팔로우한 유저의 게시글이 없습니다. 다른 유저를 팔로우해보세요.'
+                : '아직 게시글이 없습니다.'}
+            </p>
           ) : (
             <div className="flex flex-col gap-2">
               {posts.map((post) => (

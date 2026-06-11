@@ -11,6 +11,7 @@ import com.codeprint.domain.community.PostRepository;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.user.User;
+import com.codeprint.domain.user.UserFollowRepository;
 import com.codeprint.domain.user.UserRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -34,18 +35,27 @@ public class CommunityController {
     private final UserRepository userRepository;
     private final PostBookmarkRepository bookmarkRepository;
     private final PostRepository postRepository;
+    private final UserFollowRepository followRepository;
 
-    // 게시글 목록 조회 (페이지, 검색) — 로그인 시 내 북마크 여부 포함
+    // 게시글 목록 조회 (페이지, 검색, 팔로잉 피드) — 로그인 시 내 북마크 여부 포함
     @GetMapping("/posts")
     public ResponseEntity<List<PostResponse>> getPosts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) String feed,
             @AuthenticationPrincipal User user) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         List<Post> raw;
         if (q != null && !q.isBlank()) {
-            org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
             raw = postRepository.findByTitleContainingIgnoreCaseOrContentContainingIgnoreCaseOrderByCreatedAtDesc(q, q, pageable);
+        } else if ("following".equals(feed) && user != null) {
+            List<java.util.UUID> followingIds = followRepository.findByFollowerId(user.getId()).stream()
+                    .map(f -> f.getFollowingId())
+                    .toList();
+            raw = followingIds.isEmpty()
+                    ? List.of()
+                    : postRepository.findByUserIdInOrderByCreatedAtDesc(followingIds, pageable);
         } else {
             raw = postCommandService.getPosts(page, size);
         }
