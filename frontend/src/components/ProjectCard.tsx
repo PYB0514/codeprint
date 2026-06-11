@@ -96,16 +96,18 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showBranchPicker, showPrimaryPicker])
 
-  // 분석 완료 시 freshness 갱신
+  // 분석 완료 시 freshness 갱신 후 그래프 페이지로 자동 이동
   const handleDone = useCallback(() => {
     setHasGraph(true)
     setFreshnessStatus('latest')
-    // primary branch가 방금 재분석한 브랜치이면 primary freshness도 갱신
     if (primaryBranch && primaryBranch === lastAnalyzedBranch) {
       setPrimaryFreshness('latest')
     }
-    setTimeout(() => setAnalysisId(null), 800)
-  }, [primaryBranch, lastAnalyzedBranch])
+    setTimeout(() => {
+      setAnalysisId(null)
+      navigate(`/projects/${project.id}/graph`)
+    }, 800)
+  }, [primaryBranch, lastAnalyzedBranch, navigate, project.id])
 
   const { progress, status } = useAnalysisProgress(analysisId, handleDone)
 
