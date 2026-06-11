@@ -64,6 +64,10 @@ dependencies {
     // AWS S3
     implementation 'software.amazon.awssdk:s3:2.25.60'
 
+    // Web Push (VAPID)
+    implementation 'nl.martijndwars:web-push:5.1.1'
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
+
     // DevTools — 파일 변경 시 자동 재시작 (개발 환경 전용, 배포 시 자동 비활성화)
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
 

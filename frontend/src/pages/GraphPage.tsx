@@ -811,7 +811,12 @@ function GraphPageInner() {
           comment: s.funcComment ?? '',
           callers: s.callers.map((c: { funcName: string }) => c.funcName).join(', '),
           callees: s.callees.map((c: { funcName: string }) => c.funcName).join(', '),
-          language: 'java',
+          language: (() => {
+            // rawNodes에서 가장 많이 등장하는 언어를 주 언어로 사용
+            const langCount: Record<string, number> = {}
+            for (const n of rawNodes) if (n.language) langCount[n.language] = (langCount[n.language] ?? 0) + 1
+            return Object.entries(langCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'java'
+          })(),
         }
       )
       setAiGeneratedCode(res.data.code)

@@ -11,6 +11,18 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.31.0',
+    date: '2026-06-11',
+    title: 'Web Push 알림',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '쪽지·설정 페이지에 "브라우저 푸시" 토글 추가 — 브라우저 닫혀도 알림 수신' },
+      { category: '프론트', desc: 'Service Worker (sw.js) 등록 — Push API 이벤트 수신 및 클릭 시 /messages 이동' },
+      { category: '백엔드', desc: 'push_subscriptions 테이블 (V29 마이그레이션) + VAPID 기반 구독 등록·해제 API' },
+      { category: '백엔드', desc: 'DM 전송 시 수신자 구독에 Web Push 발송 (알림 수신 설정 ON인 경우)' },
+    ],
+  },
+  {
     version: 'v0.30.0',
     date: '2026-06-11',
     title: 'AI 코드 생성',

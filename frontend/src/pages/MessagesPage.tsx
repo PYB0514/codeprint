@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
+import { useWebPush } from '../hooks/useWebPush'
 
 interface MessageItem {
   id: string
@@ -30,6 +31,7 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true)
   const [notifSettings, setNotifSettings] = useState<{ teamChat: boolean; dm: boolean } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const { subscribed, loading: pushLoading, subscribe, unsubscribe, checkSubscription } = useWebPush()
 
   useEffect(() => {
     axios.get<{ id: string; username: string }>('/api/auth/me')
@@ -46,7 +48,8 @@ export default function MessagesPage() {
     axios.get<{ teamChat: boolean; dm: boolean }>('/api/notifications/settings')
       .then(r => setNotifSettings(r.data))
       .catch(() => null)
-  }, [myId])
+    checkSubscription()
+  }, [myId, checkSubscription])
 
   // 알림 설정 토글
   const toggleNotif = (key: 'teamChat' | 'dm') => {
@@ -120,6 +123,17 @@ export default function MessagesPage() {
                   </button>
                 </label>
               ))}
+              {/* Web Push 구독 토글 */}
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-xs text-gray-400">브라우저 푸시</span>
+                <button
+                  onClick={subscribed ? unsubscribe : subscribe}
+                  disabled={pushLoading}
+                  className={`w-8 h-4 rounded-full relative transition-colors disabled:opacity-40 ${subscribed ? 'bg-blue-600' : 'bg-gray-700'}`}
+                >
+                  <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${subscribed ? 'left-4' : 'left-0.5'}`} />
+                </button>
+              </label>
             </div>
           )}
           <div className="flex-1 overflow-y-auto">

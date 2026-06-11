@@ -1,15 +1,22 @@
 // 초대 코드로 협업 세션에 참가하는 페이지
-import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom'
 import axios from 'axios'
 
 // 협업 세션 참가 페이지 컴포넌트
 export default function JoinCollaborationPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const [code, setCode] = useState(params.get('code') ?? '')
+  const { inviteCode: codeFromPath } = useParams<{ inviteCode?: string }>()
+  const [code, setCode] = useState(codeFromPath ?? params.get('code') ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // URL 경로에 초대 코드가 있으면 자동 참가
+  useEffect(() => {
+    if (codeFromPath && codeFromPath.length >= 6) handleJoin()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codeFromPath])
 
   // 초대 코드로 세션 참가 후 그래프 페이지로 이동
   const handleJoin = async () => {

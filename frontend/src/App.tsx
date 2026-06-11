@@ -79,6 +79,7 @@ export default function App() {
           <Route path="/donate/success" element={<DonateSuccessPage />} />
           <Route path="/donate/fail" element={<DonateFailPage />} />
           <Route path="/collab/join" element={<JoinCollaborationPage />} />
+          <Route path="/collab/:inviteCode" element={<JoinCollaborationPage />} />
           <Route path="/messages" element={<MessagesPage />} />
         </Routes>
       </Suspense>

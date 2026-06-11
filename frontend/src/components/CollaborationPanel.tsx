@@ -38,10 +38,11 @@ export default function CollaborationPanel({ graphId, myUserId, participants, co
     }
   }
 
-  // 초대 코드를 클립보드에 복사
+  // 초대 링크를 클립보드에 복사
   const handleCopy = () => {
     if (!inviteCode) return
-    navigator.clipboard.writeText(inviteCode)
+    const link = `${window.location.origin}/collab/${inviteCode}`
+    navigator.clipboard.writeText(link)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -101,7 +102,7 @@ export default function CollaborationPanel({ graphId, myUserId, participants, co
                   {copied ? '복사됨!' : '복사'}
                 </button>
               </div>
-              <p className="text-gray-500 text-xs">이 코드를 공유하면 팀원이 같은 뷰에 참가합니다.</p>
+              <p className="text-gray-500 text-xs">링크를 공유하면 팀원이 바로 참가합니다.</p>
 
               {participants.length > 0 && (
                 <div className="flex flex-col gap-1">

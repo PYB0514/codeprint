@@ -63,6 +63,11 @@ aws:
     bucket: ${AWS_S3_BUCKET:codeprint-uploads}
     region: ${AWS_S3_REGION:ap-northeast-2}
 
+vapid:
+  public-key: ${VAPID_PUBLIC_KEY:}
+  private-key: ${VAPID_PRIVATE_KEY:}
+  subject: mailto:qkrdydqls999@gmail.com
+
 encryption:
   # 32바이트 AES-256 키를 Base64로 인코딩한 값. 운영 환경에서는 반드시 환경변수로 교체.
   key: ${ENCRYPTION_KEY:Y29kZXByaW50LWxvY2FsLWRldi1lbmNyeXB0LWtleSE=}
