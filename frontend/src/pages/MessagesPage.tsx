@@ -1,4 +1,4 @@
-// 유저 간 쪽지 받은 함 및 대화 스레드 페이지
+// 유저 간 쪽지 받은 함 및 대화 스레드 + 알림 설정 페이지
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
@@ -28,6 +28,7 @@ export default function MessagesPage() {
   const [activeUsername, setActiveUsername] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
+  const [notifSettings, setNotifSettings] = useState<{ teamChat: boolean; dm: boolean } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -36,13 +37,24 @@ export default function MessagesPage() {
       .catch(() => navigate('/login'))
   }, [navigate])
 
-  // 받은 쪽지함 조회
+  // 받은 쪽지함 + 알림 설정 조회
   useEffect(() => {
     if (!myId) return
     axios.get<MessageItem[]>('/api/messages/inbox')
       .then(r => setInbox(r.data))
       .finally(() => setLoading(false))
+    axios.get<{ teamChat: boolean; dm: boolean }>('/api/notifications/settings')
+      .then(r => setNotifSettings(r.data))
+      .catch(() => null)
   }, [myId])
+
+  // 알림 설정 토글
+  const toggleNotif = (key: 'teamChat' | 'dm') => {
+    if (!notifSettings) return
+    const updated = { ...notifSettings, [key]: !notifSettings[key] }
+    setNotifSettings(updated)
+    axios.put('/api/notifications/settings', updated).catch(() => null)
+  }
 
   // 특정 유저와의 대화 스레드 조회
   useEffect(() => {
@@ -93,6 +105,23 @@ export default function MessagesPage() {
           <div className="px-4 py-3 border-b border-gray-800">
             <h2 className="text-sm font-semibold text-white">받은 쪽지함</h2>
           </div>
+          {/* 알림 설정 */}
+          {notifSettings && (
+            <div className="px-4 py-3 border-b border-gray-800 flex flex-col gap-2">
+              <span className="text-xs font-semibold text-gray-500">알림 설정</span>
+              {([['dm', '쪽지 알림'], ['teamChat', '팀채팅 알림']] as const).map(([key, label]) => (
+                <label key={key} className="flex items-center justify-between cursor-pointer">
+                  <span className="text-xs text-gray-400">{label}</span>
+                  <button
+                    onClick={() => toggleNotif(key)}
+                    className={`w-8 h-4 rounded-full relative transition-colors ${notifSettings[key] ? 'bg-blue-600' : 'bg-gray-700'}`}
+                  >
+                    <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${notifSettings[key] ? 'left-4' : 'left-0.5'}`} />
+                  </button>
+                </label>
+              ))}
+            </div>
+          )}
           <div className="flex-1 overflow-y-auto">
             {inbox.length === 0 ? (
               <p className="text-center text-gray-600 text-sm mt-8">쪽지가 없습니다.</p>

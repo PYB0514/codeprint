@@ -27,6 +27,7 @@ import { useCollaboration } from '../hooks/useCollaboration'
 import CollaborationPanel from '../components/CollaborationPanel'
 import CursorOverlay from '../components/CursorOverlay'
 import WarningPanel from '../components/WarningPanel'
+import TeamChatPanel from '../components/TeamChatPanel'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -476,6 +477,7 @@ function GraphPageInner() {
   const [showApiCallEdges, setShowApiCallEdges] = useState(true)
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
+  const [showTeamChat, setShowTeamChat] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [showVersions, setShowVersions] = useState(false)
   const [versions, setVersions] = useState<{ graphId: string; createdAt: string; branch: string }[]>([])
@@ -1711,6 +1713,17 @@ function GraphPageInner() {
             커뮤니티에 공유
           </button>
         )}
+        {/* 팀채팅 패널 토글 */}
+        <button
+          onClick={() => setShowTeamChat(v => !v)}
+          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+            showTeamChat
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'text-gray-400 border-gray-700 hover:border-gray-500 hover:text-white bg-gray-800'
+          }`}
+        >
+          💬 팀채팅
+        </button>
         {/* 키보드 단축키 도움말 */}
         <div className="relative group">
           <button className="text-gray-500 hover:text-gray-300 text-xs w-6 h-6 rounded-full border border-gray-700 hover:border-gray-500 flex items-center justify-center transition-colors">
@@ -2129,6 +2142,19 @@ function GraphPageInner() {
           position="bottom-center"
         />
       </ReactFlow>
+
+      {/* 팀채팅 패널 — showTeamChat 시 우측 사이드바 왼쪽에 표시 */}
+      {showTeamChat && (
+        <div
+          className="absolute top-0 h-full z-30"
+          style={{ right: rightCollapsed ? '40px' : `${rightWidth}px`, width: '280px' }}
+        >
+          <TeamChatPanel
+            roomId={graphId}
+            onClose={() => setShowTeamChat(false)}
+          />
+        </div>
+      )}
 
       {/* 우측 사이드바 — 항상 표시 */}
       <aside

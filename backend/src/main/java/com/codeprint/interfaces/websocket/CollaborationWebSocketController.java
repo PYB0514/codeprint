@@ -103,6 +103,28 @@ public class CollaborationWebSocketController {
         messagingTemplate.convertAndSend("/topic/graph/" + graphId + "/chat", event);
     }
 
+    // 팀채팅 메시지를 해당 룸 구독자 전체에게 브로드캐스트 (인증 필수)
+    @MessageMapping("/team/{roomId}/chat")
+    public void handleTeamChat(
+            @DestinationVariable String roomId,
+            @Payload Map<String, Object> payload,
+            Principal principal) {
+        if (principal == null) return;
+        User user = extractUser(principal);
+        if (user == null) return;
+
+        Map<String, Object> event = Map.of(
+                "type", "team_chat",
+                "userId", user.getId().toString(),
+                "username", user.getUsername(),
+                "avatarUrl", user.getAvatarUrl() != null ? user.getAvatarUrl() : "",
+                "message", payload.getOrDefault("message", ""),
+                "timestamp", java.time.Instant.now().toEpochMilli()
+        );
+
+        messagingTemplate.convertAndSend("/topic/team/" + roomId + "/chat", event);
+    }
+
     // 세션 참가/퇴장 이벤트를 참가자 전체에게 브로드캐스트
     @MessageMapping("/collab/{sessionId}/presence")
     public void handlePresence(

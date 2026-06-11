@@ -11,6 +11,19 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.28.0',
+    date: '2026-06-11',
+    title: '팀채팅 + 브라우저 알림',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '그래프 페이지에 💬 팀채팅 버튼 추가 — 인증 유저 간 실시간 채팅 패널' },
+      { category: '프론트', desc: '백그라운드 탭에서 새 메시지 수신 시 브라우저 Notification 알림' },
+      { category: '프론트', desc: '알림 설정 — 팀채팅/쪽지 알림 개별 ON/OFF (MessagesPage 설정 패널)' },
+      { category: '백엔드', desc: 'user_notification_settings 테이블 (V28) + 알림 설정 조회·수정 API' },
+      { category: '백엔드', desc: 'WebSocket 팀채팅 핸들러 추가 — 인증된 유저만 메시지 전송 가능' },
+    ],
+  },
+  {
     version: 'v0.27.0',
     date: '2026-06-11',
     title: '유저 간 쪽지',
