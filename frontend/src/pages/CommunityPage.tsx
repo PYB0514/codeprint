@@ -77,6 +77,9 @@ export default function CommunityPage() {
   const [linkedGraphId, setLinkedGraphId] = useState<string | null>(null)
   const [linkedProjectName, setLinkedProjectName] = useState<string | null>(null)
   const [linkingGraph, setLinkingGraph] = useState(false)
+  const [postPage, setPostPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   useEffect(() => {
     axios
@@ -100,16 +103,34 @@ export default function CommunityPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  // 검색어 또는 탭 변경 시 300ms 디바운스 후 게시글 재조회
+  // 검색어 또는 탭 변경 시 300ms 디바운스 후 게시글 재조회 (페이지 초기화)
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     searchTimerRef.current = setTimeout(() => {
-      const params: Record<string, string> = {}
+      const params: Record<string, string> = { page: '0', size: '20' }
       if (searchQuery.trim()) params.q = searchQuery.trim()
       if (feedTab === 'following') params.feed = 'following'
-      axios.get<Post[]>('/api/community/posts', { params }).then((res) => setPosts(res.data))
+      axios.get<Post[]>('/api/community/posts', { params }).then((res) => {
+        setPosts(res.data)
+        setPostPage(0)
+        setHasMore(res.data.length === 20)
+      })
     }, 300)
   }, [searchQuery, feedTab])
+
+  // 게시글 더 보기 로드
+  const handleLoadMore = async () => {
+    setLoadingMore(true)
+    const nextPage = postPage + 1
+    const params: Record<string, string> = { page: String(nextPage), size: '20' }
+    if (searchQuery.trim()) params.q = searchQuery.trim()
+    if (feedTab === 'following') params.feed = 'following'
+    const res = await axios.get<Post[]>('/api/community/posts', { params })
+    setPosts(prev => [...prev, ...res.data])
+    setPostPage(nextPage)
+    setHasMore(res.data.length === 20)
+    setLoadingMore(false)
+  }
 
   // 게시글 클릭 시 상세, 댓글, 첨부파일 로드
   const handleSelectPost = async (post: Post) => {
@@ -413,6 +434,7 @@ export default function CommunityPage() {
                 : '아직 게시글이 없습니다.'}
             </p>
           ) : (
+            <>
             <div className="flex flex-col gap-2">
               {posts.map((post) => (
                 <div
@@ -475,6 +497,18 @@ export default function CommunityPage() {
                 </div>
               ))}
             </div>
+            {hasMore && !searchQuery && (
+              <div className="mt-4 text-center">
+                <button
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
+                >
+                  {loadingMore ? '불러오는 중...' : '더 보기'}
+                </button>
+              </div>
+            )}
+            </>
           )}
         </div>
 
