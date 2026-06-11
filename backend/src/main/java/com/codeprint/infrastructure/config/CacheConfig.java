@@ -15,7 +15,7 @@ public class CacheConfig {
     // 그래프 노드·엣지 캐시 — 분석 완료 후 자주 재조회되는 데이터
     @Bean
     public CacheManager cacheManager() {
-        CaffeineCacheManager manager = new CaffeineCacheManager("graphNodes", "graphEdges");
+        CaffeineCacheManager manager = new CaffeineCacheManager("graphNodes", "graphEdges", "graphWarnings");
         manager.setCaffeine(
             Caffeine.newBuilder()
                 .maximumSize(200)
