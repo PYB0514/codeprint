@@ -34,16 +34,13 @@ export default function SettingsPage() {
   const [message, setMessage] = useState<{ provider: string; text: string; ok: boolean } | null>(null)
 
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-  const [bgUrl, setBgUrl] = useState<string | null>(null)
   const [imageMsg, setImageMsg] = useState<string | null>(null)
   const avatarRef = useRef<HTMLInputElement>(null)
-  const bgRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    axios.get<{ avatarUrl?: string | null; graphBgUrl?: string | null }>('/api/auth/me')
+    axios.get<{ avatarUrl?: string | null }>('/api/auth/me')
       .then((r) => {
         setAvatarUrl(r.data.avatarUrl ?? null)
-        setBgUrl(r.data.graphBgUrl ?? null)
       })
       .catch(() => {})
     axios.get<ProviderInfo[]>('/api/ai/keys')
@@ -147,25 +144,6 @@ export default function SettingsPage() {
               )}
             </div>
 
-            {/* 배경 이미지 */}
-            <div className="flex flex-col items-center gap-2">
-              <div
-                className="w-28 h-16 rounded-lg bg-gray-800 border border-gray-700 overflow-hidden cursor-pointer flex items-center justify-center"
-                onClick={() => bgRef.current?.click()}
-              >
-                {bgUrl
-                  ? <img src={bgUrl} alt="배경" className="w-full h-full object-cover" />
-                  : <span className="text-2xl text-gray-600">+</span>
-                }
-              </div>
-              <span className="text-xs text-gray-500">배경 이미지</span>
-              <input ref={bgRef} type="file" accept="image/*" className="hidden"
-                onChange={(e) => e.target.files?.[0] && uploadImage(e.target.files[0], '/api/users/me/background', setBgUrl)} />
-              {bgUrl && (
-                <button onClick={() => deleteImage('/api/users/me/background', () => setBgUrl(null))}
-                  className="text-xs text-red-400 hover:text-red-300">삭제</button>
-              )}
-            </div>
           </div>
         </section>
 
