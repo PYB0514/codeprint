@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.33.0',
+    date: '2026-06-11',
+    title: '유저 프로필 — 공개 프로젝트 목록',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'GET /api/users/:id/projects — 공개 프로젝트 목록 API 추가' },
+      { category: '프론트', desc: '유저 프로필 페이지에 공개 프로젝트 섹션 추가 — 클릭 시 공유 그래프로 이동' },
+    ],
+  },
+  {
     version: 'v0.32.0',
     date: '2026-06-11',
     title: '경고 패턴 확장 (데드 코드·과도한 의존)',
