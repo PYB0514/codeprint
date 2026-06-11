@@ -22,7 +22,7 @@ export default function PrivacyPage() {
       {/* 본문 */}
       <main className="flex-1 max-w-3xl mx-auto w-full px-6 py-12">
         <h1 className="text-2xl font-bold mb-2">개인정보처리방침</h1>
-        <p className="text-gray-500 text-sm mb-10">최종 업데이트: 2025년 1월 1일</p>
+        <p className="text-gray-500 text-sm mb-10">최종 업데이트: 2026년 6월 11일</p>
 
         <Section title="1. 수집하는 개인정보 항목">
           서비스는 GitHub OAuth 로그인을 통해 다음 정보를 수집합니다.
