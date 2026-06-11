@@ -11,6 +11,17 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.35.0',
+    date: '2026-06-11',
+    title: '인앱 알림 센터',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'notifications 테이블(V31) + GET/PATCH /api/notifications API 추가' },
+      { category: '백엔드', desc: '팔로우·게시글 좋아요·쪽지 수신 시 알림 자동 생성 (@Async)' },
+      { category: '프론트', desc: '헤더 🔔 버튼 + 드롭다운 — 미읽 배지, 항목 클릭 이동, 열 때 전체 읽음 처리' },
+    ],
+  },
+  {
     version: 'v0.34.0',
     date: '2026-06-11',
     title: '그래프 노드 코멘트',
