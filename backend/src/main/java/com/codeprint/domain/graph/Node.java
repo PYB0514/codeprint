@@ -50,6 +50,12 @@ public class Node {
     @Column(name = "is_hidden", nullable = false)
     private boolean isHidden;
 
+    @Column(name = "user_label", length = 200)
+    private String userLabel;
+
+    @Column(name = "user_note", columnDefinition = "text")
+    private String userNote;
+
     // 그래프에 속하는 새 노드 인스턴스 생성
     public static Node create(UUID graphId, NodeType type, String name, String filePath, String language) {
         Node node = new Node();
@@ -79,6 +85,12 @@ public class Node {
     // 노드의 메타데이터(함수 시그니처, 주석 등)를 갱신
     public void updateMetadata(Map<String, Object> metadata) {
         this.metadata = metadata;
+    }
+
+    // 사용자 정의 레이블과 메모를 저장
+    public void updateAnnotation(String userLabel, String userNote) {
+        this.userLabel = userLabel != null && userLabel.isBlank() ? null : userLabel;
+        this.userNote = userNote != null && userNote.isBlank() ? null : userNote;
     }
 
     // UUID를 NodeId Value Object로 변환하여 반환

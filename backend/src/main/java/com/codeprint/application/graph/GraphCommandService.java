@@ -58,4 +58,12 @@ public class GraphCommandService {
         node.updatePosition(x, y);
         graphRepository.saveNode(node);
     }
+
+    // 노드 사용자 정의 레이블과 메모를 업데이트
+    public void updateNodeAnnotation(UUID nodeId, String userLabel, String userNote) {
+        Node node = graphRepository.findNodeById(nodeId)
+                .orElseThrow(() -> new IllegalArgumentException("Node not found: " + nodeId));
+        node.updateAnnotation(userLabel, userNote);
+        graphRepository.saveNode(node);
+    }
 }

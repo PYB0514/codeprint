@@ -52,6 +52,9 @@ public class Post {
     @Column(name = "view_count", nullable = false)
     private long viewCount = 0;
 
+    @Column(name = "repo_url", length = 500)
+    private String repoUrl;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -60,7 +63,8 @@ public class Post {
 
     // 사용자 입력으로 새 게시글 인스턴스 생성
     public static Post create(UUID userId, UUID graphId, String title, String content, String feedbackType,
-                              List<String> hiddenLayers, List<String> hiddenGroups, List<String> hiddenNodeNames) {
+                              List<String> hiddenLayers, List<String> hiddenGroups, List<String> hiddenNodeNames,
+                              String repoUrl) {
         Post post = new Post();
         post.id = UUID.randomUUID();
         post.userId = userId;
@@ -71,6 +75,7 @@ public class Post {
         post.hiddenLayers = hiddenLayers != null ? hiddenLayers : List.of();
         post.hiddenGroups = hiddenGroups != null ? hiddenGroups : List.of();
         post.hiddenNodeNames = hiddenNodeNames != null ? hiddenNodeNames : List.of();
+        post.repoUrl = repoUrl;
         post.createdAt = Instant.now();
         post.updatedAt = Instant.now();
         return post;

@@ -11,6 +11,20 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.44.0',
+    date: '2026-06-11',
+    title: '노드 커스텀 이름/메모 + 커뮤니티 레포 URL',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'nodes 테이블에 user_label, user_note 컬럼 추가 — 노드별 사용자 정의 표시 이름 및 메모 저장' },
+      { category: '백엔드', desc: 'PUT /api/graphs/{graphId}/nodes/{nodeId}/annotation 엔드포인트 추가 — 커스텀 이름/메모 저장' },
+      { category: '프론트', desc: '그래프 우측 사이드바에 "커스텀 이름 / 메모" 편집 섹션 추가 — 파일/함수 노드 클릭 시 표시' },
+      { category: '백엔드', desc: 'posts 테이블에 repo_url 컬럼 추가 — 공개 프로젝트 글 작성 시 레포 URL 자동 포함, 프라이빗은 null' },
+      { category: '프론트', desc: '커뮤니티 게시글 카드에 GitHub 레포 링크 표시 — repo_url이 있는 공개 프로젝트 게시글에만 노출' },
+      { category: '프론트', desc: '공유 그래프 좌측 사이드바를 GraphPage 스타일로 통일 — 탭 제거, 섹션 분리(노드 검색 / 경고)' },
+    ],
+  },
+  {
     version: 'v0.43.0',
     date: '2026-06-11',
     title: '공유 그래프 사이드바',

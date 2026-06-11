@@ -24,8 +24,9 @@ public class PostCommandService {
 
     // 새 게시글을 생성하여 저장
     public Post createPost(UUID userId, UUID graphId, String title, String content, String feedbackType,
-                           List<String> hiddenLayers, List<String> hiddenGroups, List<String> hiddenNodeNames) {
-        Post post = Post.create(userId, graphId, title, content, feedbackType, hiddenLayers, hiddenGroups, hiddenNodeNames);
+                           List<String> hiddenLayers, List<String> hiddenGroups, List<String> hiddenNodeNames,
+                           String repoUrl) {
+        Post post = Post.create(userId, graphId, title, content, feedbackType, hiddenLayers, hiddenGroups, hiddenNodeNames, repoUrl);
         return postRepository.save(post);
     }
 
