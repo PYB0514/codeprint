@@ -162,13 +162,19 @@ public class CommunityController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // 댓글 작성
+    // 댓글 작성 — 게시글 작성자에게 알림 발송
     @PostMapping("/posts/{postId}/comments")
     public ResponseEntity<CommentResponse> addComment(
             @PathVariable UUID postId,
             @Valid @RequestBody CreateCommentRequest request,
             @AuthenticationPrincipal User user) {
         Comment comment = postCommandService.addComment(postId, user.getId(), request.content());
+        postRepository.findById(postId).ifPresent(post -> {
+            if (!post.getUserId().equals(user.getId())) {
+                notificationService.create(post.getUserId(), "COMMENT",
+                        user.getUsername() + "님이 댓글을 달았습니다.", "/community?postId=" + postId);
+            }
+        });
         return ResponseEntity.status(201).body(toCommentResponse(comment));
     }
 

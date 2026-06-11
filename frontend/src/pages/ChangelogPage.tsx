@@ -11,6 +11,15 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.36.0',
+    date: '2026-06-11',
+    title: '댓글 알림',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: '게시글에 댓글이 달리면 게시글 작성자에게 인앱 알림 자동 발송 (자신의 게시글 제외)' },
+    ],
+  },
+  {
     version: 'v0.35.0',
     date: '2026-06-11',
     title: '인앱 알림 센터',
