@@ -489,6 +489,7 @@ function GraphPageInner() {
   const [reanalyzing, setReanalyzing] = useState(false)
   const [bgEnabled, setBgEnabled] = useState(() => localStorage.getItem('graphBgEnabled') !== 'false')
   const [bgUrl, setBgUrl] = useState<string | null>(null)
+  const [showDomainBoxes, setShowDomainBoxes] = useState(true)
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareTitle, setShareTitle] = useState('')
   const [shareContent, setShareContent] = useState('')
@@ -952,9 +953,20 @@ function GraphPageInner() {
   }, [projectId, setNodes, setEdges, openFileSidebar, applyEdgeVisibility, fitView])
 
   useEffect(() => {
-    axios.get<{ id: string }>('/api/auth/me')
-      .then((res) => setCurrentUserId(res.data.id))
+    axios.get<{ id: string; graphBgUrl?: string | null }>('/api/auth/me')
+      .then((res) => {
+        setCurrentUserId(res.data.id)
+        const url = res.data.graphBgUrl ?? null
+        setBgUrl(url)
+        if (url) {
+          document.body.style.backgroundImage = `url(${url})`
+          document.body.style.backgroundSize = 'cover'
+          document.body.style.backgroundAttachment = 'fixed'
+          document.body.style.backgroundPosition = 'center'
+        }
+      })
       .catch(() => {})
+
     axios.get<{ provider: string; registered: boolean }[]>('/api/ai/keys')
       .then((res) => {
         setAiProviders(res.data)
@@ -1002,20 +1014,8 @@ function GraphPageInner() {
     }
   }
 
-  // 마운트 시 배경이미지 URL 조회 후 body에 적용, 언마운트 시 정리
+  // GraphPage 언마운트 시 body 배경이미지 정리
   useEffect(() => {
-    axios.get<{ graphBgUrl?: string | null }>('/api/auth/me')
-      .then(r => {
-        const url = r.data.graphBgUrl ?? null
-        setBgUrl(url)
-        if (url) {
-          document.body.style.backgroundImage = `url(${url})`
-          document.body.style.backgroundSize = 'cover'
-          document.body.style.backgroundAttachment = 'fixed'
-          document.body.style.backgroundPosition = 'center'
-        }
-      })
-      .catch(() => {})
     return () => {
       document.body.style.backgroundImage = ''
       document.body.classList.remove('has-bg')
@@ -1914,9 +1914,23 @@ function GraphPageInner() {
             {/* AI 누락 감지 */}
             <AiAnalysisSection graphId={graphId} />
 
-            {/* 보기 옵션 — 배경이미지 있을 때만 표시 */}
-            {bgUrl && (
-              <LeftSection title="보기">
+            {/* 보기 옵션 */}
+            <LeftSection title="보기">
+              {/* 도메인 박스 토글 — 도메인 뷰일 때만 표시 */}
+              {layoutPreset === 'domain' && (
+                <button
+                  onClick={() => setShowDomainBoxes(v => !v)}
+                  className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
+                    showDomainBoxes
+                      ? 'bg-purple-900/40 text-purple-300 hover:bg-purple-900/60'
+                      : 'bg-gray-800/60 text-gray-500 hover:bg-gray-800'
+                  }`}
+                >
+                  {showDomainBoxes ? '⬡ 도메인 박스 켜짐' : '⬡ 도메인 박스 꺼짐'}
+                </button>
+              )}
+              {/* 배경이미지 토글 — 배경사진 설정한 경우만 표시 */}
+              {bgUrl && (
                 <button
                   onClick={toggleBg}
                   className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
@@ -1927,8 +1941,8 @@ function GraphPageInner() {
                 >
                   {bgEnabled ? '🖼 배경이미지 켜짐' : '□ 배경이미지 꺼짐'}
                 </button>
-              </LeftSection>
-            )}
+              )}
+            </LeftSection>
 
             {/* 내보내기 — 최상단 */}
             <LeftSection title="내보내기">
@@ -2239,7 +2253,7 @@ function GraphPageInner() {
       )}
 
       <ReactFlow
-        nodes={nodes}
+        nodes={showDomainBoxes ? nodes : nodes.filter(n => n.type !== 'sectionNode')}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
