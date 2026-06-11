@@ -286,8 +286,26 @@ public class GraphWarningService {
         // Java lifecycle
         "main", "run", "init", "destroy", "close",
         // 생성자 alias
-        "생성자"
+        "생성자",
+        // Spring Web MVC — HTTP 핸들러, 예외처리
+        "handleException", "handleMethodArgumentNotValid", "handleNoHandlerFound",
+        // Spring Security
+        "configure", "userDetailsService", "passwordEncoder",
+        // Spring Boot 진입점
+        "getApplicationContext", "contextLoads"
     );
+
+    // getter/setter 또는 Spring 콜백 네이밍 패턴 — 정적 분석으로 호출 추적 불가
+    private static boolean isFrameworkCallPattern(String name) {
+        if (name == null || name.isEmpty()) return false;
+        // Lombok/JPA getter/setter 패턴
+        if ((name.startsWith("get") || name.startsWith("set") || name.startsWith("is"))
+                && name.length() > 3 && Character.isUpperCase(name.charAt(3))) return true;
+        // Spring/이벤트 핸들러 패턴
+        if (name.startsWith("on") && name.length() > 2 && Character.isUpperCase(name.charAt(2))) return true;
+        if (name.startsWith("handle") && name.length() > 6 && Character.isUpperCase(name.charAt(6))) return true;
+        return false;
+    }
 
     // FUNCTION 노드 중 아무 FUNCTION_CALL 엣지도 받지 않는 함수 — 데드 코드 후보
     // 아래 5가지 패턴은 정적 분석으로 호출 추적이 불가능하여 false positive 발생:
@@ -323,6 +341,10 @@ public class GraphWarningService {
             if (fp.contains("/pages/") || fp.contains("/components/") || fp.contains("/hooks/")) continue;
             // JPA Repository 구현체 · domain 팩토리 메서드 등 프레임워크 호출 패턴
             if (FRAMEWORK_CALL_NAMES.contains(name)) continue;
+            // getter/setter/onXxx/handleXxx 네이밍 패턴 — 프레임워크·Lombok 자동 생성
+            if (isFrameworkCallPattern(name)) continue;
+            // application/ 레이어 — Spring @Service 메서드는 DI를 통해 호출, FUNCTION_CALL 엣지 없음
+            if (fp.contains("/application/")) continue;
             // infrastructure/ 레이어 — Spring @Bean, @EventListener, Filter 등 프레임워크 진입점 다수
             if (fp.contains("/infrastructure/")) continue;
 
