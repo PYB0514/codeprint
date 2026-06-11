@@ -88,4 +88,10 @@ public class PostRepositoryImpl implements PostRepository {
     public List<Post> findAllByOrderByCreatedAtDesc(Pageable pageable) {
         return postJpa.findAllByOrderByCreatedAtDesc(pageable);
     }
+
+    // 팔로잉 유저 게시글 최신순 조회
+    @Override
+    public List<Post> findByUserIdInOrderByCreatedAtDesc(List<UUID> userIds, Pageable pageable) {
+        return postJpa.findByUserIdInOrderByCreatedAtDesc(userIds, pageable);
+    }
 }

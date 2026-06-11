@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.24.0',
+    date: '2026-06-11',
+    title: '팔로잉 피드',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '커뮤니티 페이지에 전체 / 팔로잉 탭 추가 — 팔로우한 유저의 게시글만 필터링' },
+      { category: '백엔드', desc: 'GET /api/community/posts?feed=following — 팔로잉 유저 게시글 최신순 반환' },
+    ],
+  },
+  {
     version: 'v0.23.0',
     date: '2026-06-10',
     title: '유저 팔로우',
