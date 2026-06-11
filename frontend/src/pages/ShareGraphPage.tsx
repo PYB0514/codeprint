@@ -97,8 +97,6 @@ function ShareGraphInner() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [nodeSearch, setNodeSearch] = useState('')
   const [showChat, setShowChat] = useState(false)
-  const [ownerBgUrl, setOwnerBgUrl] = useState<string | null>(null)
-  const [bgEnabled, setBgEnabled] = useState(false)
   const [activeDomainTab, setActiveDomainTab] = useState<string>('전체')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, connected, sendMessage } = useGraphChat(graphId, null)
@@ -131,10 +129,9 @@ function ShareGraphInner() {
 
     Promise.all([graphPromise, presetPromise])
       .then(([graphRes, presetRes]) => {
-        const raw = graphRes.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; message: string }[]; ownerBgUrl?: string | null }
+        const raw = graphRes.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; message: string }[] }
         if (raw.warnings) setWarnings(raw.warnings)
         setGraphId(raw.graphId)
-        if (raw.ownerBgUrl) setOwnerBgUrl(raw.ownerBgUrl)
 
         const cfg = (presetRes?.data?.config ?? {}) as Record<string, unknown>
         const lp = (cfg.layoutPreset as LayoutPreset) ?? 'layer'
@@ -160,24 +157,6 @@ function ShareGraphInner() {
       .catch(() => setError('프로젝트를 찾을 수 없거나 비공개 상태입니다.'))
       .finally(() => setLoading(false))
   }, [projectId, searchParams])
-
-  // 오너 배경이미지 — 토글에 따라 body에 적용/해제
-  useEffect(() => {
-    if (bgEnabled && ownerBgUrl) {
-      document.body.style.backgroundImage = `url(${ownerBgUrl})`
-      document.body.style.backgroundSize = 'cover'
-      document.body.style.backgroundAttachment = 'fixed'
-      document.body.style.backgroundPosition = 'center'
-      document.body.classList.add('has-bg')
-    } else {
-      document.body.style.backgroundImage = ''
-      document.body.classList.remove('has-bg')
-    }
-    return () => {
-      document.body.style.backgroundImage = ''
-      document.body.classList.remove('has-bg')
-    }
-  }, [bgEnabled, ownerBgUrl])
 
   // 새 채팅 메시지 수신 시 스크롤
   useEffect(() => {
@@ -269,29 +248,6 @@ function ShareGraphInner() {
         {/* 좌측 사이드바 */}
         <aside className="w-56 shrink-0 bg-gray-950 border-r border-gray-800 flex flex-col overflow-y-auto">
 
-          {/* 도메인 탭 분리 — 2개 이상일 때만 표시 */}
-          {availableTabs.length > 2 && (
-            <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-1.5">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">탭 분리</p>
-              {availableTabs.map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => {
-                    setActiveDomainTab(tab)
-                    setTimeout(() => fitView({ duration: 400, padding: 0.15 }), 50)
-                  }}
-                  className={`w-full text-left text-xs px-2 py-1 rounded transition-colors truncate ${
-                    activeDomainTab === tab
-                      ? 'bg-blue-600/30 text-blue-300'
-                      : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-          )}
-
           {/* 노드 검색 섹션 */}
           <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">노드 검색</p>
@@ -322,23 +278,6 @@ function ShareGraphInner() {
             </div>
           </div>
 
-          {/* 배경이미지 토글 — 오너 배경이 있을 때만 표시 */}
-          {ownerBgUrl && (
-            <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">보기</p>
-              <button
-                onClick={() => setBgEnabled(v => !v)}
-                className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
-                  bgEnabled
-                    ? 'bg-blue-900/40 text-blue-300 hover:bg-blue-900/60'
-                    : 'bg-gray-800/60 text-gray-500 hover:bg-gray-800'
-                }`}
-              >
-                {bgEnabled ? '🖼 배경이미지 켜짐' : '□ 배경이미지 꺼짐'}
-              </button>
-            </div>
-          )}
-
           {/* 경고 섹션 */}
           <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -354,7 +293,36 @@ function ShareGraphInner() {
         </aside>
 
         {/* 그래프 캔버스 */}
-        <div className="flex-1 h-full relative">
+        <div className="flex-1 h-full flex flex-col">
+          {/* 도메인/레이어 탭바 */}
+          {availableTabs.length > 2 && (
+            <div className="flex items-center gap-0.5 px-2 py-1 bg-gray-950/90 border-b border-gray-800 overflow-x-auto shrink-0">
+              <button
+                onClick={() => { setActiveDomainTab('전체'); setTimeout(() => fitView({ duration: 400, padding: 0.15 }), 50) }}
+                className={`flex-shrink-0 text-xs px-3 py-1 rounded transition-colors ${
+                  activeDomainTab === '전체'
+                    ? 'bg-blue-700/60 text-blue-200 border border-blue-600/60'
+                    : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                }`}
+              >
+                전체
+              </button>
+              {availableTabs.filter(t => t !== '전체').map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => { setActiveDomainTab(tab); setTimeout(() => fitView({ duration: 400, padding: 0.15 }), 50) }}
+                  className={`flex-shrink-0 text-xs px-3 py-1 rounded transition-colors ${
+                    activeDomainTab === tab
+                      ? 'bg-blue-600/30 text-blue-300 border border-blue-600/40'
+                      : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex-1 relative">
           <ReactFlow
             nodes={displayNodes}
             edges={displayEdges}
@@ -372,6 +340,7 @@ function ShareGraphInner() {
             <Controls />
             <MiniMap nodeColor="#6b7280" maskColor="rgba(17,24,39,0.7)" />
           </ReactFlow>
+          </div>
         </div>
 
         {/* 우측 사이드바 */}
