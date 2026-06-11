@@ -1,7 +1,8 @@
 // 공개 프로젝트 읽기 전용 그래프 뷰어 (비인증 접근 허용)
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
+import { useGraphChat } from '../hooks/useGraphChat'
 import {
   ReactFlow,
   Background,
@@ -79,6 +80,11 @@ function ShareGraphInner() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [warnings, setWarnings] = useState<{ type: string; nodeIds: string[]; message: string }[]>([])
+  const [graphId, setGraphId] = useState<string | null>(null)
+  const [showChat, setShowChat] = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const { messages, connected, sendMessage } = useGraphChat(graphId, null)
 
   useEffect(() => {
     if (!projectId) return
@@ -96,6 +102,7 @@ function ShareGraphInner() {
       .then(([graphRes, presetRes]) => {
         const raw = graphRes.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; message: string }[] }
         if (raw.warnings) setWarnings(raw.warnings)
+        setGraphId(raw.graphId)
 
         // 프리셋 config 파싱 (없으면 기본값)
         const cfg = (presetRes?.data?.config ?? {}) as Record<string, unknown>
@@ -123,6 +130,19 @@ function ShareGraphInner() {
       .catch(() => setError('프로젝트를 찾을 수 없거나 비공개 상태입니다.'))
       .finally(() => setLoading(false))
   }, [projectId, searchParams])
+
+  // 새 메시지 수신 시 채팅 패널 하단으로 자동 스크롤
+  useEffect(() => {
+    if (showChat) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, showChat])
+
+  // 채팅 메시지 전송
+  const handleSendChat = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!chatInput.trim()) return
+    sendMessage(chatInput)
+    setChatInput('')
+  }
 
   if (loading) {
     return (
@@ -152,6 +172,16 @@ function ShareGraphInner() {
           <span className="text-gray-500 text-xs">읽기 전용</span>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowChat(v => !v)}
+            className={`text-xs px-3 py-1 rounded-lg border transition-colors ${
+              showChat
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'text-gray-400 border-gray-700 hover:border-gray-500 hover:text-white'
+            }`}
+          >
+            💬 채팅{connected && showChat ? ' •' : ''}
+          </button>
           <span className="text-gray-400 text-xs">공유된 그래프</span>
           <button
             onClick={() => navigate('/')}
@@ -172,6 +202,51 @@ function ShareGraphInner() {
               <span>런타임 경고 ({warnings.length})</span>
             </div>
             <WarningPanel warnings={warnings} />
+          </div>
+        )}
+
+        {/* 채팅 패널 */}
+        {showChat && (
+          <div className="w-72 shrink-0 bg-gray-900 border-l border-gray-800 flex flex-col order-last">
+            <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between">
+              <span className="text-xs font-semibold text-white">채팅</span>
+              <span className={`text-xs ${connected ? 'text-green-400' : 'text-gray-500'}`}>
+                {connected ? '연결됨' : '연결 중...'}
+              </span>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
+              {messages.length === 0 && (
+                <p className="text-xs text-gray-600 text-center mt-4">
+                  아직 메시지가 없습니다.
+                  <br />첫 메시지를 보내보세요.
+                </p>
+              )}
+              {messages.map((msg, i) => (
+                <div key={i} className="flex flex-col gap-0.5">
+                  <span className="text-xs text-gray-500">{msg.username}</span>
+                  <span className="text-sm text-white bg-gray-800 rounded-lg px-2.5 py-1.5 break-words">
+                    {msg.message}
+                  </span>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+            <form onSubmit={handleSendChat} className="p-3 border-t border-gray-800 flex gap-2">
+              <input
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                placeholder="메시지 입력..."
+                className="flex-1 bg-gray-800 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-gray-500 placeholder-gray-600"
+                maxLength={500}
+              />
+              <button
+                type="submit"
+                disabled={!connected || !chatInput.trim()}
+                className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                전송
+              </button>
+            </form>
           </div>
         )}
 

@@ -2,12 +2,12 @@
 package com.codeprint.interfaces.websocket;
 
 import com.codeprint.domain.user.User;
-import com.codeprint.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Controller;
 
 import java.security.Principal;
@@ -20,7 +20,15 @@ import java.util.UUID;
 public class CollaborationWebSocketController {
 
     private final SimpMessagingTemplate messagingTemplate;
-    private final UserRepository userJpaRepository;
+
+    // Principal에서 User 엔티티 추출 (JWT 필터가 User 객체를 principal로 저장)
+    private User extractUser(Principal principal) {
+        if (principal instanceof UsernamePasswordAuthenticationToken auth
+                && auth.getPrincipal() instanceof User u) {
+            return u;
+        }
+        return null;
+    }
 
     // 커서 위치 이벤트를 세션 참가자 전체에게 브로드캐스트
     @MessageMapping("/collab/{sessionId}/cursor")
@@ -29,9 +37,10 @@ public class CollaborationWebSocketController {
             @Payload Map<String, Object> payload,
             Principal principal) {
         if (principal == null) return;
-        UUID userId = UUID.fromString(principal.getName());
-        String username = userJpaRepository.findById(userId)
-                .map(User::getUsername).orElse("알 수 없음");
+        User user = extractUser(principal);
+        if (user == null) return;
+        UUID userId = user.getId();
+        String username = user.getUsername();
 
         Map<String, Object> event = new HashMap<>(payload);
         event.put("userId", userId.toString());
@@ -48,9 +57,10 @@ public class CollaborationWebSocketController {
             @Payload Map<String, Object> payload,
             Principal principal) {
         if (principal == null) return;
-        UUID userId = UUID.fromString(principal.getName());
-        String username = userJpaRepository.findById(userId)
-                .map(User::getUsername).orElse("알 수 없음");
+        User user = extractUser(principal);
+        if (user == null) return;
+        UUID userId = user.getId();
+        String username = user.getUsername();
 
         Map<String, Object> event = new HashMap<>(payload);
         event.put("userId", userId.toString());
@@ -60,6 +70,39 @@ public class CollaborationWebSocketController {
         messagingTemplate.convertAndSend("/topic/collab/" + sessionId, event);
     }
 
+    // 그래프 채팅 메시지를 해당 그래프 구독자 전체에게 브로드캐스트
+    @MessageMapping("/graph/{graphId}/chat")
+    public void handleChat(
+            @DestinationVariable String graphId,
+            @Payload Map<String, Object> payload,
+            Principal principal) {
+        String username;
+        String userId;
+        if (principal != null) {
+            User user = extractUser(principal);
+            if (user != null) {
+                username = user.getUsername();
+                userId = user.getId().toString();
+            } else {
+                username = (String) payload.getOrDefault("anonymousName", "익명");
+                userId = "anon-" + username;
+            }
+        } else {
+            username = (String) payload.getOrDefault("anonymousName", "익명");
+            userId = "anon-" + username;
+        }
+
+        Map<String, Object> event = Map.of(
+                "type", "chat",
+                "userId", userId,
+                "username", username,
+                "message", payload.getOrDefault("message", ""),
+                "timestamp", java.time.Instant.now().toEpochMilli()
+        );
+
+        messagingTemplate.convertAndSend("/topic/graph/" + graphId + "/chat", event);
+    }
+
     // 세션 참가/퇴장 이벤트를 참가자 전체에게 브로드캐스트
     @MessageMapping("/collab/{sessionId}/presence")
     public void handlePresence(
@@ -67,9 +110,10 @@ public class CollaborationWebSocketController {
             @Payload Map<String, Object> payload,
             Principal principal) {
         if (principal == null) return;
-        UUID userId = UUID.fromString(principal.getName());
-        String username = userJpaRepository.findById(userId)
-                .map(User::getUsername).orElse("알 수 없음");
+        User user = extractUser(principal);
+        if (user == null) return;
+        UUID userId = user.getId();
+        String username = user.getUsername();
 
         Map<String, Object> event = Map.of(
                 "userId", userId.toString(),

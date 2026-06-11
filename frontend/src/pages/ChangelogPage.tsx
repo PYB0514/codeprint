@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.26.0',
+    date: '2026-06-11',
+    title: '공유 그래프 실시간 채팅',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '공유 그래프 뷰에 💬 채팅 패널 추가 — 접속자 모두 실시간 메시지 교환 가능' },
+      { category: '백엔드', desc: 'STOMP /app/graph/{graphId}/chat 채널 — 인증/비인증 모두 참여 가능' },
+    ],
+  },
+  {
     version: 'v0.25.0',
     date: '2026-06-11',
     title: '게시글 좋아요',
