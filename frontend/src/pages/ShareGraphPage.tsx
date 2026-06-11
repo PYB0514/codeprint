@@ -11,6 +11,7 @@ import {
   useNodesState,
   useEdgesState,
   ReactFlowProvider,
+  useReactFlow,
   type NodeMouseHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -50,7 +51,7 @@ function applyEdgeVisibility(
   })
 }
 
-// layer 모드에서 opaque 섹션의 자손 노드(group→file→function 3단계) hidden 처리
+// layer 모드에서 opaque 섹션의 자손 노드 hidden 처리
 function applyOpaqueLayerSet(nodes: Node[], opaqueLayerSet: Set<string>): Node[] {
   const opaqueSectionIds = new Set(
     nodes
@@ -71,25 +72,47 @@ function applyOpaqueLayerSet(nodes: Node[], opaqueLayerSet: Set<string>): Node[]
   })
 }
 
+// NODE_TYPE_LABEL 매핑
+const NODE_TYPE_LABEL: Record<string, string> = {
+  fileNode: 'FILE',
+  FILE: 'FILE',
+  FUNCTION: 'FUNCTION',
+  DB_TABLE: 'DB',
+  API_ENDPOINT: 'API',
+}
+
 // 공개 프로젝트 그래프를 읽기 전용으로 표시하는 페이지
 function ShareGraphInner() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { fitView } = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [warnings, setWarnings] = useState<{ type: string; nodeIds: string[]; message: string }[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
-  const [showChat, setShowChat] = useState(false)
   const [chatInput, setChatInput] = useState('')
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
+  const [nodeSearch, setNodeSearch] = useState('')
+  const [leftTab, setLeftTab] = useState<'nodes' | 'warnings'>('nodes')
+  const [showChat, setShowChat] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, connected, sendMessage } = useGraphChat(graphId, null)
 
-  // 노드 클릭 시 상세 패널 표시
-  const handleNodeClick: NodeMouseHandler = (_, node) => setSelectedNode(node)
+  // 노드 클릭 시 우측 사이드바 표시
+  const handleNodeClick: NodeMouseHandler = (_, node) => {
+    if (node.type === 'sectionNode' || node.type === 'groupNode') return
+    setSelectedNode(node)
+  }
+
+  // 좌측 노드 목록 클릭 시 해당 노드로 이동
+  const handleFocusNode = (nodeId: string) => {
+    fitView({ nodes: [{ id: nodeId }], duration: 400, padding: 0.3 })
+    const target = nodes.find(n => n.id === nodeId)
+    if (target) setSelectedNode(target)
+  }
 
   useEffect(() => {
     if (!projectId) return
@@ -109,7 +132,6 @@ function ShareGraphInner() {
         if (raw.warnings) setWarnings(raw.warnings)
         setGraphId(raw.graphId)
 
-        // 프리셋 config 파싱 (없으면 기본값)
         const cfg = (presetRes?.data?.config ?? {}) as Record<string, unknown>
         const lp = (cfg.layoutPreset as LayoutPreset) ?? 'layer'
         const lm = (cfg.labelMode as LabelMode) ?? 'name'
@@ -124,7 +146,6 @@ function ShareGraphInner() {
 
         const { nodes: builtNodes, edges: builtEdges } = buildLayout(raw.nodes, raw.edges, lm, lp)
 
-        // domain 모드는 별도 처리 없음 / layer 모드: opaqueLayerSet 처리
         const finalNodes = lp === 'domain'
           ? builtNodes
           : applyOpaqueLayerSet(builtNodes, opaqueLayerSet)
@@ -136,7 +157,7 @@ function ShareGraphInner() {
       .finally(() => setLoading(false))
   }, [projectId, searchParams])
 
-  // 새 메시지 수신 시 채팅 패널 하단으로 자동 스크롤
+  // 새 채팅 메시지 수신 시 스크롤
   useEffect(() => {
     if (showChat) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, showChat])
@@ -148,6 +169,12 @@ function ShareGraphInner() {
     sendMessage(chatInput)
     setChatInput('')
   }
+
+  // 인덱스에 표시할 노드 (section/group 제외, 검색 필터)
+  const indexNodes = nodes.filter(n =>
+    n.type !== 'sectionNode' && n.type !== 'groupNode' && !n.hidden &&
+    (nodeSearch === '' || String(n.data?.name ?? n.id).toLowerCase().includes(nodeSearch.toLowerCase()))
+  )
 
   if (loading) {
     return (
@@ -161,32 +188,20 @@ function ShareGraphInner() {
     return (
       <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
         <p className="text-red-400">{error}</p>
-        <button onClick={() => navigate('/')} className="text-sm underline text-gray-400">
-          홈으로
-        </button>
+        <button onClick={() => navigate('/')} className="text-sm underline text-gray-400">홈으로</button>
       </div>
     )
   }
 
   return (
     <div className="w-screen h-screen bg-gray-950 flex flex-col">
-      {/* 상단 읽기 전용 배너 */}
+      {/* 상단 배너 */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 shrink-0">
         <div className="flex items-center gap-3">
           <span className="font-bold text-white text-sm">Codeprint</span>
           <span className="text-gray-500 text-xs">읽기 전용</span>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowChat(v => !v)}
-            className={`text-xs px-3 py-1 rounded-lg border transition-colors ${
-              showChat
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'text-gray-400 border-gray-700 hover:border-gray-500 hover:text-white'
-            }`}
-          >
-            💬 채팅{connected && showChat ? ' •' : ''}
-          </button>
           <span className="text-gray-400 text-xs">공유된 그래프</span>
           <button
             onClick={() => navigate('/')}
@@ -199,63 +214,74 @@ function ShareGraphInner() {
 
       {/* 본문 */}
       <div className="flex-1 flex overflow-hidden">
-        {/* 경고 패널 (경고 있을 때만) */}
-        {warnings.length > 0 && (
-          <div className="w-64 shrink-0 bg-gray-900 border-r border-gray-800 overflow-y-auto p-3 flex flex-col gap-2">
-            <div className="text-xs font-semibold text-yellow-400 flex items-center gap-1.5">
-              <span>⚠</span>
-              <span>런타임 경고 ({warnings.length})</span>
-            </div>
-            <WarningPanel warnings={warnings} />
-          </div>
-        )}
 
-        {/* 채팅 패널 */}
-        {showChat && (
-          <div className="w-72 shrink-0 bg-gray-900 border-l border-gray-800 flex flex-col order-last">
-            <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between">
-              <span className="text-xs font-semibold text-white">채팅</span>
-              <span className={`text-xs ${connected ? 'text-green-400' : 'text-gray-500'}`}>
-                {connected ? '연결됨' : '연결 중...'}
-              </span>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
-              {messages.length === 0 && (
-                <p className="text-xs text-gray-600 text-center mt-4">
-                  아직 메시지가 없습니다.
-                  <br />첫 메시지를 보내보세요.
-                </p>
+        {/* 좌측 사이드바 */}
+        <aside className="w-56 shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col overflow-hidden">
+          {/* 탭 */}
+          <div className="flex border-b border-gray-800 shrink-0">
+            <button
+              onClick={() => setLeftTab('nodes')}
+              className={`flex-1 text-xs py-2 transition-colors ${leftTab === 'nodes' ? 'text-white border-b-2 border-white' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              노드
+            </button>
+            <button
+              onClick={() => setLeftTab('warnings')}
+              className={`flex-1 text-xs py-2 transition-colors relative ${leftTab === 'warnings' ? 'text-white border-b-2 border-white' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              경고
+              {warnings.length > 0 && (
+                <span className="ml-1 text-yellow-400 text-[10px]">({warnings.length})</span>
               )}
-              {messages.map((msg, i) => (
-                <div key={i} className="flex flex-col gap-0.5">
-                  <span className="text-xs text-gray-500">{msg.username}</span>
-                  <span className="text-sm text-white bg-gray-800 rounded-lg px-2.5 py-1.5 break-words">
-                    {msg.message}
-                  </span>
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-            <form onSubmit={handleSendChat} className="p-3 border-t border-gray-800 flex gap-2">
-              <input
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                placeholder="메시지 입력..."
-                className="flex-1 bg-gray-800 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-gray-500 placeholder-gray-600"
-                maxLength={500}
-              />
-              <button
-                type="submit"
-                disabled={!connected || !chatInput.trim()}
-                className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                전송
-              </button>
-            </form>
+            </button>
           </div>
-        )}
 
-        {/* 그래프 */}
+          {/* 노드 탭 */}
+          {leftTab === 'nodes' && (
+            <div className="flex flex-col overflow-hidden flex-1">
+              <div className="p-2 shrink-0">
+                <input
+                  value={nodeSearch}
+                  onChange={e => setNodeSearch(e.target.value)}
+                  placeholder="노드 검색..."
+                  className="w-full bg-gray-800 text-xs text-white rounded px-2 py-1.5 outline-none placeholder-gray-600 border border-gray-700 focus:border-gray-500"
+                />
+              </div>
+              <div className="overflow-y-auto flex-1 px-1 pb-2">
+                {indexNodes.length === 0 ? (
+                  <p className="text-xs text-gray-600 text-center py-6">결과 없음</p>
+                ) : (
+                  indexNodes.map(n => (
+                    <button
+                      key={n.id}
+                      onClick={() => handleFocusNode(n.id)}
+                      className={`w-full text-left px-2 py-1.5 rounded text-xs hover:bg-gray-800 transition-colors truncate ${selectedNode?.id === n.id ? 'bg-gray-800 text-white' : 'text-gray-400'}`}
+                      title={String(n.data?.name ?? n.id)}
+                    >
+                      <span className="text-gray-600 mr-1 text-[10px]">
+                        {n.type === 'fileNode' ? '📄' : '⚙'}
+                      </span>
+                      {String(n.data?.name ?? n.id)}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 경고 탭 */}
+          {leftTab === 'warnings' && (
+            <div className="overflow-y-auto flex-1 p-2">
+              {warnings.length === 0 ? (
+                <p className="text-xs text-gray-600 text-center py-6">경고 없음</p>
+              ) : (
+                <WarningPanel warnings={warnings} />
+              )}
+            </div>
+          )}
+        </aside>
+
+        {/* 그래프 캔버스 */}
         <div className="flex-1 h-full relative">
           <ReactFlow
             nodes={nodes}
@@ -274,44 +300,109 @@ function ShareGraphInner() {
             <Controls />
             <MiniMap nodeColor="#6b7280" maskColor="rgba(17,24,39,0.7)" />
           </ReactFlow>
-
-          {/* 노드 상세 사이드바 */}
-          {selectedNode && selectedNode.type !== 'sectionNode' && selectedNode.type !== 'groupNode' && (
-            <div className="absolute top-3 right-3 w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-10 overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
-                <span className="text-xs font-semibold text-white truncate flex-1 mr-2">
-                  {String(selectedNode.data?.name ?? selectedNode.id)}
-                </span>
-                <button
-                  onClick={() => setSelectedNode(null)}
-                  className="text-gray-500 hover:text-white text-sm leading-none shrink-0"
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="p-3 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 w-12 shrink-0">타입</span>
-                  <span className="text-xs font-mono bg-gray-800 text-blue-300 px-2 py-0.5 rounded">
-                    {selectedNode.type === 'fileNode' ? 'FILE' : 'FUNCTION'}
-                  </span>
-                </div>
-                {!!selectedNode.data?.domain && String(selectedNode.data.domain) !== 'common' && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 w-12 shrink-0">도메인</span>
-                    <span className="text-xs text-gray-300">{String(selectedNode.data.domain)}</span>
-                  </div>
-                )}
-                {!!selectedNode.data?.comment && (
-                  <div className="flex items-start gap-2">
-                    <span className="text-xs text-gray-500 w-12 shrink-0 mt-0.5">설명</span>
-                    <span className="text-xs text-gray-300 break-words">{String(selectedNode.data.comment)}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
+
+        {/* 우측 사이드바 */}
+        <aside className="w-64 shrink-0 bg-gray-900 border-l border-gray-800 flex flex-col overflow-hidden">
+
+          {/* 노드 상세 */}
+          <div className="flex flex-col overflow-hidden" style={{ flex: selectedNode ? '0 0 auto' : '1' }}>
+            <div className="px-3 py-2.5 border-b border-gray-800 shrink-0 flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">노드 정보</span>
+              {selectedNode && (
+                <button onClick={() => setSelectedNode(null)} className="text-gray-600 hover:text-gray-300 text-xs">✕</button>
+              )}
+            </div>
+
+            {selectedNode ? (
+              <div className="p-3 flex flex-col gap-2.5 overflow-y-auto">
+                <p className="text-sm font-medium text-white break-words leading-snug">
+                  {String(selectedNode.data?.name ?? selectedNode.id)}
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-500 w-10 shrink-0">타입</span>
+                    <span className="text-xs font-mono bg-gray-800 text-blue-300 px-1.5 py-0.5 rounded">
+                      {NODE_TYPE_LABEL[selectedNode.type ?? ''] ?? selectedNode.type ?? '-'}
+                    </span>
+                  </div>
+                  {!!selectedNode.data?.domain && String(selectedNode.data.domain) !== 'common' && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-500 w-10 shrink-0">도메인</span>
+                      <span className="text-xs text-gray-300">{String(selectedNode.data.domain)}</span>
+                    </div>
+                  )}
+                  {!!selectedNode.data?.filePath && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-[10px] text-gray-500 w-10 shrink-0 mt-0.5">경로</span>
+                      <span className="text-[10px] text-gray-500 break-all font-mono">{String(selectedNode.data.filePath)}</span>
+                    </div>
+                  )}
+                  {!!selectedNode.data?.comment && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-[10px] text-gray-500 w-10 shrink-0 mt-0.5">설명</span>
+                      <span className="text-xs text-gray-300 break-words">{String(selectedNode.data.comment)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 flex-1 flex items-center justify-center">
+                <p className="text-xs text-gray-600 text-center">노드를 클릭하면<br />상세 정보가 표시됩니다.</p>
+              </div>
+            )}
+          </div>
+
+          {/* 채팅 */}
+          <div className="flex flex-col border-t border-gray-800" style={{ flex: showChat ? '1' : '0 0 auto', overflow: 'hidden' }}>
+            <button
+              onClick={() => setShowChat(v => !v)}
+              className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-800 transition-colors shrink-0"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">💬 채팅</span>
+                {connected && <span className="w-1.5 h-1.5 rounded-full bg-green-400" />}
+              </div>
+              <span className="text-gray-600 text-xs">{showChat ? '▲' : '▼'}</span>
+            </button>
+
+            {showChat && (
+              <>
+                <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 min-h-0">
+                  {messages.length === 0 && (
+                    <p className="text-xs text-gray-600 text-center mt-4">
+                      아직 메시지가 없습니다.<br />첫 메시지를 보내보세요.
+                    </p>
+                  )}
+                  {messages.map((msg, i) => (
+                    <div key={i} className="flex flex-col gap-0.5">
+                      <span className="text-[10px] text-gray-500">{msg.username}</span>
+                      <span className="text-xs text-white bg-gray-800 rounded-lg px-2.5 py-1.5 break-words">{msg.message}</span>
+                    </div>
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
+                <form onSubmit={handleSendChat} className="p-2 border-t border-gray-800 flex gap-1.5 shrink-0">
+                  <input
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    placeholder="메시지 입력..."
+                    className="flex-1 bg-gray-800 text-white text-xs px-2.5 py-1.5 rounded border border-gray-700 focus:outline-none focus:border-gray-500 placeholder-gray-600"
+                    maxLength={500}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!connected || !chatInput.trim()}
+                    className="text-xs bg-blue-600 text-white px-2.5 py-1.5 rounded hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    전송
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        </aside>
+
       </div>
     </div>
   )
