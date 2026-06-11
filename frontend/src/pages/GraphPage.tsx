@@ -1757,7 +1757,7 @@ function GraphPageInner() {
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#030712', display: 'flex', flexDirection: 'column' }}>
+    <div className="app-page" style={{ width: '100vw', height: '100vh', background: '#030712', display: 'flex', flexDirection: 'column' }}>
       <div style={{ position: 'relative' }}>
         <AppHeader />
         {projectId && currentUserId && (

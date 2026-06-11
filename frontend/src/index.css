@@ -63,7 +63,8 @@ body {
   min-height: 100vh;
 }
 
-/* 배경 이미지 활성화 시 그래프 페이지 루트 투명 처리 */
+/* 배경 이미지 활성화 시 그래프 페이지 루트 투명 처리 (인라인 스타일 덮어씀) */
 body.has-bg .app-page {
+  background: transparent !important;
   background-color: transparent !important;
 }
