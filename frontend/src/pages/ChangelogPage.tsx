@@ -11,6 +11,15 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.38.0',
+    date: '2026-06-11',
+    title: '게시글 더 보기',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '커뮤니티 게시글 목록 하단에 "더 보기" 버튼 추가 — 20개씩 추가 로드, 검색·탭 변경 시 초기화' },
+    ],
+  },
+  {
     version: 'v0.37.0',
     date: '2026-06-11',
     title: '게시글 수정',
