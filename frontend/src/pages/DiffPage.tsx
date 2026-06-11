@@ -1,4 +1,4 @@
-// 두 그래프 버전의 변경 사항을 색상으로 시각화하는 diff 페이지
+﻿// 두 그래프 버전의 변경 사항을 색상으로 시각화하는 diff 페이지
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -161,7 +161,7 @@ function DiffPageInner() {
     `${v.branch} · ${new Date(v.createdAt).toLocaleDateString('ko-KR')}`
 
   return (
-    <div className="flex flex-col h-screen bg-gray-950 text-white">
+    <div className="app-page flex flex-col h-screen bg-gray-950 text-white">
       <AppHeader />
       {/* 서브 바 — 그래프 복귀 + 버전 선택 */}
       <header className="flex items-center gap-4 px-5 py-3 border-b border-gray-800 shrink-0">

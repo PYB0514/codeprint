@@ -46,6 +46,7 @@ export default function App() {
           document.body.style.backgroundSize = 'cover'
           document.body.style.backgroundAttachment = 'fixed'
           document.body.style.backgroundPosition = 'center'
+          document.body.classList.add('has-bg')
         }
       })
       .catch(() => {})

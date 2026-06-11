@@ -1,4 +1,4 @@
-// 초대 코드로 협업 세션에 참가하는 페이지
+﻿// 초대 코드로 협업 세션에 참가하는 페이지
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom'
 import axios from 'axios'
@@ -34,7 +34,7 @@ export default function JoinCollaborationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+    <div className="app-page min-h-screen bg-gray-950 flex items-center justify-center">
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 flex flex-col gap-5 w-80">
         <div className="flex flex-col gap-1">
           <h1 className="text-white font-bold text-lg">협업 세션 참가</h1>

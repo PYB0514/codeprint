@@ -1,4 +1,4 @@
-// 로그인 후 메인 대시보드 — 프로젝트 목록 및 생성 관리
+﻿// 로그인 후 메인 대시보드 — 프로젝트 목록 및 생성 관리
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -99,7 +99,7 @@ export default function DashboardPage() {
   const canCreate = projectLimit === null || projects.length < projectLimit
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="app-page min-h-screen bg-gray-950 text-white">
       <AppHeader />
 
       <main className="max-w-4xl mx-auto px-6 py-10">

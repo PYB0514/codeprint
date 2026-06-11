@@ -1,4 +1,4 @@
-// 후원 결제 실패 처리 페이지
+﻿// 후원 결제 실패 처리 페이지
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 // 후원 결제 실패 페이지 렌더링
@@ -8,7 +8,7 @@ export default function DonateFailPage() {
   const message = searchParams.get('message') ?? '결제가 취소되었거나 오류가 발생했습니다.'
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
+    <div className="app-page min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
       <div className="text-center max-w-md px-4">
         <div className="text-4xl mb-4">😢</div>
         <h1 className="text-xl font-bold mb-2">결제 실패</h1>

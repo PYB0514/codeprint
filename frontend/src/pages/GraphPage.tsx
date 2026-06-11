@@ -1,4 +1,4 @@
-// 프로젝트 코드 구조를 React Flow로 시각화하는 그래프 페이지
+﻿// 프로젝트 코드 구조를 React Flow로 시각화하는 그래프 페이지
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
@@ -1701,7 +1701,7 @@ function GraphPageInner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-400">
+      <div className="app-page min-h-screen bg-gray-950 flex items-center justify-center text-gray-400">
         로딩 중...
       </div>
     )
@@ -1709,7 +1709,7 @@ function GraphPageInner() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center gap-4 text-gray-400">
+      <div className="app-page min-h-screen bg-gray-950 flex flex-col items-center justify-center gap-4 text-gray-400">
         <p>{error}</p>
         <button onClick={() => navigate('/dashboard')} className="underline text-sm">대시보드로</button>
       </div>

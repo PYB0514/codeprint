@@ -1,4 +1,4 @@
-// 서비스 버전별 패치노트를 공개하는 페이지
+﻿// 서비스 버전별 패치노트를 공개하는 페이지
 import AppHeader from '../components/AppHeader'
 
 interface Release {
@@ -773,7 +773,7 @@ const CATEGORY_COLOR: Record<string, string> = {
 // 패치노트 페이지
 export default function ChangelogPage() {
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="app-page min-h-screen bg-gray-950 text-white">
       <AppHeader />
 
       <main className="max-w-2xl mx-auto px-6 py-12">
