@@ -490,6 +490,9 @@ function GraphPageInner() {
   const [showDomainBoxes, setShowDomainBoxes] = useState(true)
   // 탭 분리: null = 전체 보기, 문자열 = 해당 도메인/레이어만 표시
   const [activeDomainTab, setActiveDomainTab] = useState<string | null>(null)
+  // 배경이미지 — localStorage에 on/off 상태 저장
+  const [bgEnabled, setBgEnabled] = useState(() => localStorage.getItem('graphBgEnabled') !== 'false')
+  const [bgUrl, setBgUrl] = useState<string | null>(null)
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareTitle, setShareTitle] = useState('')
   const [shareContent, setShareContent] = useState('')
@@ -689,6 +692,27 @@ function GraphPageInner() {
   // openFileSidebar는 rawNodes에 의존해 매 fetchGraph 호출 후 재생성됨 → ref로 안정화
   const openFileSidebarRef = useRef(openFileSidebar)
   useEffect(() => { openFileSidebarRef.current = openFileSidebar }, [openFileSidebar])
+
+  // GraphPage 언마운트 시 body 배경이미지 정리
+  useEffect(() => () => { document.body.classList.remove('has-bg') }, [])
+
+  // bgEnabled 또는 bgUrl 변화 시 has-bg 클래스 동기화
+  useEffect(() => {
+    if (bgEnabled && bgUrl) {
+      document.body.classList.add('has-bg')
+    } else {
+      document.body.classList.remove('has-bg')
+    }
+  }, [bgEnabled, bgUrl])
+
+  // 배경이미지 표시/숨김 토글
+  const toggleBg = useCallback(() => {
+    setBgEnabled(v => {
+      const next = !v
+      localStorage.setItem('graphBgEnabled', String(next))
+      return next
+    })
+  }, [])
 
   // 사이드바 드래그 리사이즈 — 전역 mousemove/mouseup 처리
   useEffect(() => {
@@ -956,9 +980,10 @@ function GraphPageInner() {
   }, [projectId, setNodes, setEdges, applyEdgeVisibility, fitView])
 
   useEffect(() => {
-    axios.get<{ id: string }>('/api/auth/me')
+    axios.get<{ id: string; graphBgUrl?: string | null }>('/api/auth/me')
       .then((res) => {
         setCurrentUserId(res.data.id)
+        setBgUrl(res.data.graphBgUrl ?? null)
       })
       .catch(() => {})
 
@@ -2008,19 +2033,34 @@ function GraphPageInner() {
             {/* AI 누락 감지 */}
             <AiAnalysisSection graphId={graphId} />
 
-            {/* 보기 옵션 — 도메인 박스 토글 (도메인 뷰일 때만) */}
-            {layoutPreset === 'domain' && (
+            {/* 보기 옵션 */}
+            {(layoutPreset === 'domain' || bgUrl) && (
               <LeftSection title="보기">
-                <button
-                  onClick={() => setShowDomainBoxes(v => !v)}
-                  className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
-                    showDomainBoxes
-                      ? 'bg-purple-900/40 text-purple-300 hover:bg-purple-900/60'
-                      : 'bg-gray-800/60 text-gray-500 hover:bg-gray-800'
-                  }`}
-                >
-                  {showDomainBoxes ? '⬡ 도메인 박스 켜짐' : '⬡ 도메인 박스 꺼짐'}
-                </button>
+                {layoutPreset === 'domain' && (
+                  <button
+                    onClick={() => setShowDomainBoxes(v => !v)}
+                    className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
+                      showDomainBoxes
+                        ? 'bg-purple-900/40 text-purple-300 hover:bg-purple-900/60'
+                        : 'bg-gray-800/60 text-gray-500 hover:bg-gray-800'
+                    }`}
+                  >
+                    {showDomainBoxes ? '⬡ 도메인 박스 켜짐' : '⬡ 도메인 박스 꺼짐'}
+                  </button>
+                )}
+                {/* 배경이미지 토글 — 배경사진 설정한 경우만 표시 */}
+                {bgUrl && (
+                  <button
+                    onClick={toggleBg}
+                    className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
+                      bgEnabled
+                        ? 'bg-blue-900/40 text-blue-300 hover:bg-blue-900/60'
+                        : 'bg-gray-800/60 text-gray-500 hover:bg-gray-800'
+                    }`}
+                  >
+                    {bgEnabled ? '🖼 배경이미지 켜짐' : '□ 배경이미지 꺼짐'}
+                  </button>
+                )}
               </LeftSection>
             )}
 

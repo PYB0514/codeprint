@@ -11,6 +11,18 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.53.0',
+    date: '2026-06-11',
+    title: '배경이미지 복원',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '그래프 배경이미지 기능 복원 — 느린 원인이 배경이미지가 아닌 fetchGraph 무한 루프였음을 확인 후 재도입' },
+      { category: '프론트', desc: 'GraphPage "보기" 섹션에 배경이미지 켜기/끄기 토글 (localStorage 상태 유지)' },
+      { category: '프론트', desc: 'ShareGraphPage 좌측 사이드바에 오너 배경이미지 토글 복원' },
+      { category: '프론트', desc: '설정 페이지 배경이미지 업로드/삭제 UI 복원' },
+    ],
+  },
+  {
     version: 'v0.52.0',
     date: '2026-06-11',
     title: '그래프 탭바 상단 이동 + 배경이미지 제거',
