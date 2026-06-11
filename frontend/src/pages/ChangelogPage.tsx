@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.43.0',
+    date: '2026-06-11',
+    title: '공유 그래프 사이드바',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '공유 그래프 페이지에 좌측 사이드바 추가 — 노드 인덱스(검색+클릭 이동) / 경고 패널 탭 전환' },
+      { category: '프론트', desc: '공유 그래프 페이지에 우측 사이드바 추가 — 노드 상세 정보(타입·도메인·경로·설명) + 채팅 패널 통합' },
+    ],
+  },
+  {
     version: 'v0.42.0',
     date: '2026-06-11',
     title: '유저 검색',
