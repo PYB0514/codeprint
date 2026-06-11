@@ -55,7 +55,7 @@ interface FlowStep {
 type SidebarContent =
   | { kind: 'edge'; sourceId: string; targetId: string; sourceNodeId: string; targetNodeId: string; callChain: ConnEntry['callChain']; flowChain: FlowStep[] }
   | { kind: 'file'; data: FileSidebarData }
-  | { kind: 'func'; funcName: string; funcComment: string | null; parentFileName: string; parentFileNodeId: string; callers: FuncCallChainEntry[]; callees: FuncCallChainEntry[] }
+  | { kind: 'func'; nodeId: string; funcName: string; funcComment: string | null; parentFileName: string; parentFileNodeId: string; callers: FuncCallChainEntry[]; callees: FuncCallChainEntry[] }
   | { kind: 'func-call'; callerName: string; callerComment: string | null; callerNodeId: string; callerFile: string; callerFileNodeId: string; calleeName: string; calleeComment: string | null; calleeNodeId: string; calleeFile: string; calleeFileNodeId: string; flowChain: FlowStep[] }
   | { kind: 'instantiation'; sourceFile: string; sourceNodeId: string; targetClass: string; targetNodeId: string; flowChain: FlowStep[] }
   | { kind: 'db-table'; tableName: string; nodeId: string; columns: ColumnInfo[]; repos: { name: string; id: string; crudTypes: string[] }[] }
@@ -539,6 +539,28 @@ function GraphPageInner() {
   const [commentInput, setCommentInput] = useState('')
   const [commentNodeId, setCommentNodeId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [annotationNodeId, setAnnotationNodeId] = useState<string | null>(null)
+  const [annotationLabel, setAnnotationLabel] = useState('')
+  const [annotationNote, setAnnotationNote] = useState('')
+  const [annotationSaving, setAnnotationSaving] = useState(false)
+
+  // 노드 커스텀 이름/메모 저장
+  const handleSaveAnnotation = async () => {
+    if (!graphId || !annotationNodeId) return
+    setAnnotationSaving(true)
+    try {
+      await axios.put(`/api/graphs/${graphId}/nodes/${annotationNodeId}/annotation`, {
+        userLabel: annotationLabel.trim() || null,
+        userNote: annotationNote.trim() || null,
+      })
+      setRawNodes(prev => prev.map(n => n.id === annotationNodeId
+        ? { ...n, userLabel: annotationLabel.trim() || undefined, userNote: annotationNote.trim() || undefined }
+        : n
+      ))
+    } finally {
+      setAnnotationSaving(false)
+    }
+  }
 
   // 노드 색상 커스터마이징 — nodeId → bgColor (즉시 반영용)
   const [nodeColorMap, setNodeColorMap] = useState<Record<string, string>>({})
@@ -655,8 +677,12 @@ function GraphPageInner() {
   // 파일 연결 보기 — 사이드바 오픈 콜백
   const openFileSidebar = useCallback((data: FileSidebarData) => {
     setSidebar({ kind: 'file', data })
+    setAnnotationNodeId(data.nodeId)
+    const rawFile = rawNodes.find(n => n.id === data.nodeId)
+    setAnnotationLabel(rawFile?.userLabel ?? '')
+    setAnnotationNote(rawFile?.userNote ?? '')
     setRightCollapsed(false)
-  }, [])
+  }, [rawNodes])
 
   // 사이드바 드래그 리사이즈 — 전역 mousemove/mouseup 처리
   useEffect(() => {
@@ -1557,6 +1583,7 @@ function GraphPageInner() {
 
     setSidebar({
       kind: 'func',
+      nodeId: rawFunc.id,
       funcName: rawFunc.name,
       funcComment: rawFunc.comment ?? null,
       parentFileName: parentFile?.name ?? rawFunc.filePath,
@@ -1564,6 +1591,9 @@ function GraphPageInner() {
       callers,
       callees,
     })
+    setAnnotationNodeId(rawFunc.id)
+    setAnnotationLabel(rawFunc.userLabel ?? '')
+    setAnnotationNote(rawFunc.userNote ?? '')
     startPlayback(rawFunc.id)
     setCommentNodeId(rawFunc.id)
     setCommentInput('')
@@ -2514,6 +2544,28 @@ function GraphPageInner() {
                       <p className="text-white font-mono font-semibold text-sm">{sidebar.data.name}</p>
                       {sidebar.data.comment && <p className="text-gray-500 text-xs mt-0.5">{sidebar.data.comment}</p>}
                     </div>
+                    <SidebarSection title="커스텀 이름 / 메모">
+                      <input
+                        value={annotationLabel}
+                        onChange={e => setAnnotationLabel(e.target.value)}
+                        placeholder="표시 이름 (비워두면 원래 이름 사용)"
+                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500"
+                      />
+                      <textarea
+                        value={annotationNote}
+                        onChange={e => setAnnotationNote(e.target.value)}
+                        placeholder="메모 (수정 필요, 요구사항 등)"
+                        rows={3}
+                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500 mt-1 resize-none"
+                      />
+                      <button
+                        onClick={handleSaveAnnotation}
+                        disabled={annotationSaving}
+                        className="mt-1 w-full text-xs bg-blue-600 hover:bg-blue-500 text-white rounded px-2 py-1 disabled:opacity-40"
+                      >
+                        {annotationSaving ? '저장 중...' : '저장'}
+                      </button>
+                    </SidebarSection>
                     <SidebarSection title={`의존하는 파일 — import${sidebar.data.outgoing.length > 0 ? ` (${sidebar.data.outgoing.length})` : ''}`}>
                       {sidebar.data.outgoing.length === 0
                         ? <p className="text-gray-700 text-xs">없음</p>
@@ -2552,6 +2604,28 @@ function GraphPageInner() {
                         onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.parentFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
                       >{sidebar.parentFileName}</p>
                     </div>
+                    <SidebarSection title="커스텀 이름 / 메모">
+                      <input
+                        value={annotationLabel}
+                        onChange={e => setAnnotationLabel(e.target.value)}
+                        placeholder="표시 이름 (비워두면 원래 이름 사용)"
+                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500"
+                      />
+                      <textarea
+                        value={annotationNote}
+                        onChange={e => setAnnotationNote(e.target.value)}
+                        placeholder="메모 (수정 필요, 요구사항 등)"
+                        rows={3}
+                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500 mt-1 resize-none"
+                      />
+                      <button
+                        onClick={handleSaveAnnotation}
+                        disabled={annotationSaving}
+                        className="mt-1 w-full text-xs bg-blue-600 hover:bg-blue-500 text-white rounded px-2 py-1 disabled:opacity-40"
+                      >
+                        {annotationSaving ? '저장 중...' : '저장'}
+                      </button>
+                    </SidebarSection>
                     <SidebarSection title={`호출하는 함수${sidebar.callers.length > 0 ? ` (${sidebar.callers.length})` : ''}`}>
                       {sidebar.callers.length === 0
                         ? <p className="text-gray-700 text-xs">없음</p>

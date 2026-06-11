@@ -102,6 +102,8 @@ public class GraphController {
                                         node.put("columns", n.getMetadata().get("columns"));
                                     }
                                 }
+                                if (n.getUserLabel() != null) node.put("userLabel", n.getUserLabel());
+                                if (n.getUserNote() != null) node.put("userNote", n.getUserNote());
                                 return node;
                             })
                             .toList();
@@ -160,6 +162,8 @@ public class GraphController {
                                         node.put("columns", n.getMetadata().get("columns"));
                                     }
                                 }
+                                if (n.getUserLabel() != null) node.put("userLabel", n.getUserLabel());
+                                if (n.getUserNote() != null) node.put("userNote", n.getUserNote());
                                 return node;
                             })
                             .toList();
@@ -244,6 +248,21 @@ public class GraphController {
                 "edges", edges,
                 "summary", Map.of("added", added, "removed", removed, "unchanged", unchanged)
         ));
+    }
+
+    // 노드 사용자 정의 레이블/메모 저장 — 그래프 소유자만 가능
+    @PutMapping("/api/graphs/{graphId}/nodes/{nodeId}/annotation")
+    public ResponseEntity<Void> updateNodeAnnotation(
+            @PathVariable UUID graphId,
+            @PathVariable UUID nodeId,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal User user) {
+
+        graphQueryService.findById(graphId)
+                .ifPresent(graph -> projectQueryService.getProject(graph.getProjectId(), user.getId()));
+
+        graphCommandService.updateNodeAnnotation(nodeId, body.get("userLabel"), body.get("userNote"));
+        return ResponseEntity.ok().build();
     }
 
     // 노드 드래그 후 위치를 저장 — 그래프 소유자만 가능

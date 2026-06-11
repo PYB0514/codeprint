@@ -6,6 +6,7 @@ import com.codeprint.domain.user.RefreshTokenRepository;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
 import com.codeprint.infrastructure.security.JwtTokenProvider;
+import com.codeprint.infrastructure.storage.S3Service;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -33,6 +34,7 @@ public class AuthController {
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
+    private final S3Service s3Service;
 
     // Refresh Token 유효 기간: 7일
     private static final long REFRESH_TOKEN_EXPIRY_SECONDS = 7 * 24 * 60 * 60L;
@@ -52,8 +54,8 @@ public class AuthController {
         body.put("username", user.getUsername());
         body.put("plan", user.getPlan());
         body.put("hasGithubToken", user.getGithubAccessToken() != null);
-        body.put("avatarUrl", user.getAvatarUrl());
-        body.put("graphBgUrl", user.getGraphBgUrl());
+        body.put("avatarUrl", s3Service.toPresignedUrl(user.getAvatarUrl()));
+        body.put("graphBgUrl", s3Service.toPresignedUrl(user.getGraphBgUrl()));
         return ResponseEntity.ok(body);
     }
 

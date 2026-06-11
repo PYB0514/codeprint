@@ -36,7 +36,7 @@ public class UserImageController {
         String url = s3Service.uploadFile(file, "avatars/");
         user.updateAvatarUrl(url);
         userRepository.save(user);
-        return ResponseEntity.ok(Map.of("avatarUrl", url));
+        return ResponseEntity.ok(Map.of("avatarUrl", s3Service.toPresignedUrl(url)));
     }
 
     // 프로필 아바타 이미지 삭제
@@ -58,7 +58,7 @@ public class UserImageController {
         String url = s3Service.uploadFile(file, "backgrounds/");
         user.updateGraphBgUrl(url);
         userRepository.save(user);
-        return ResponseEntity.ok(Map.of("graphBgUrl", url));
+        return ResponseEntity.ok(Map.of("graphBgUrl", s3Service.toPresignedUrl(url)));
     }
 
     // 그래프 배경 이미지 삭제

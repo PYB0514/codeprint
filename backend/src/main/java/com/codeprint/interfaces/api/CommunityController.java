@@ -4,6 +4,7 @@ package com.codeprint.interfaces.api;
 import com.codeprint.application.community.PostCommandService;
 import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.application.notification.NotificationService;
+import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.community.Comment;
 import com.codeprint.domain.community.Post;
 import com.codeprint.domain.community.PostBookmark;
@@ -35,6 +36,7 @@ public class CommunityController {
 
     private final PostCommandService postCommandService;
     private final GraphQueryService graphQueryService;
+    private final ProjectQueryService projectQueryService;
     private final UserRepository userRepository;
     private final PostBookmarkRepository bookmarkRepository;
     private final PostLikeRepository likeRepository;
@@ -98,6 +100,22 @@ public class CommunityController {
     public ResponseEntity<PostResponse> createPost(
             @Valid @RequestBody CreatePostRequest request,
             @AuthenticationPrincipal User user) {
+        // 공개 프로젝트이면 레포 URL 포함 — 프라이빗 프로젝트는 null 처리
+        String repoUrl = null;
+        if (request.graphId() != null) {
+            repoUrl = graphQueryService.findById(request.graphId())
+                    .flatMap(graph -> {
+                        try {
+                            var project = projectQueryService.getProject(graph.getProjectId(), user.getId());
+                            return project.isPublic()
+                                    ? java.util.Optional.ofNullable(project.getGithubRepoUrl())
+                                    : java.util.Optional.empty();
+                        } catch (Exception e) {
+                            return java.util.Optional.empty();
+                        }
+                    })
+                    .orElse(null);
+        }
         Post post = postCommandService.createPost(
                 user.getId(),
                 request.graphId(),
@@ -106,7 +124,8 @@ public class CommunityController {
                 request.feedbackType(),
                 request.hiddenLayers(),
                 request.hiddenGroups(),
-                request.hiddenNodeNames());
+                request.hiddenNodeNames(),
+                repoUrl);
         if (request.attachments() != null && !request.attachments().isEmpty()) {
             List<PostCommandService.AttachmentInfo> infos = request.attachments().stream()
                     .map(a -> new PostCommandService.AttachmentInfo(a.s3Key(), a.originalFilename(), a.contentType()))
@@ -300,7 +319,8 @@ public class CommunityController {
                 likeCount,
                 likedByMe,
                 post.getViewCount(),
-                commentCount
+                commentCount,
+                post.getRepoUrl()
         );
     }
 
@@ -342,7 +362,7 @@ public class CommunityController {
             UUID graphId, UUID userId, String authorUsername, Instant createdAt,
             long bookmarkCount, boolean bookmarkedByMe,
             long likeCount, boolean likedByMe,
-            long viewCount, long commentCount) {}
+            long viewCount, long commentCount, String repoUrl) {}
 
     // 댓글 응답 DTO
     public record CommentResponse(

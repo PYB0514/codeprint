@@ -96,10 +96,10 @@ function ShareGraphInner() {
   const [chatInput, setChatInput] = useState('')
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [nodeSearch, setNodeSearch] = useState('')
-  const [leftTab, setLeftTab] = useState<'nodes' | 'warnings'>('nodes')
   const [showChat, setShowChat] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, connected, sendMessage } = useGraphChat(graphId, null)
+
 
   // 노드 클릭 시 우측 사이드바 표시
   const handleNodeClick: NodeMouseHandler = (_, node) => {
@@ -216,69 +216,50 @@ function ShareGraphInner() {
       <div className="flex-1 flex overflow-hidden">
 
         {/* 좌측 사이드바 */}
-        <aside className="w-56 shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col overflow-hidden">
-          {/* 탭 */}
-          <div className="flex border-b border-gray-800 shrink-0">
-            <button
-              onClick={() => setLeftTab('nodes')}
-              className={`flex-1 text-xs py-2 transition-colors ${leftTab === 'nodes' ? 'text-white border-b-2 border-white' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              노드
-            </button>
-            <button
-              onClick={() => setLeftTab('warnings')}
-              className={`flex-1 text-xs py-2 transition-colors relative ${leftTab === 'warnings' ? 'text-white border-b-2 border-white' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              경고
-              {warnings.length > 0 && (
-                <span className="ml-1 text-yellow-400 text-[10px]">({warnings.length})</span>
+        <aside className="w-56 shrink-0 bg-gray-950 border-r border-gray-800 flex flex-col overflow-y-auto">
+
+          {/* 노드 검색 섹션 */}
+          <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">노드 검색</p>
+            <input
+              value={nodeSearch}
+              onChange={e => setNodeSearch(e.target.value)}
+              placeholder="파일명 / 함수명 검색..."
+              className="w-full text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500"
+            />
+            <div className="flex flex-col gap-0.5 max-h-64 overflow-y-auto">
+              {indexNodes.length === 0 ? (
+                <p className="text-[10px] text-gray-600 px-1">결과 없음</p>
+              ) : (
+                indexNodes.map(n => (
+                  <button
+                    key={n.id}
+                    onClick={() => handleFocusNode(n.id)}
+                    className={`w-full text-left text-[11px] px-2 py-1 rounded hover:bg-gray-700 truncate transition-colors ${selectedNode?.id === n.id ? 'bg-gray-700 text-white' : 'text-gray-300'}`}
+                    title={String(n.data?.name ?? n.id)}
+                  >
+                    <span className="text-gray-600 mr-1">
+                      {n.type === 'fileNode' ? '📄' : n.type === 'DB_TABLE' ? '🗄' : 'ƒ'}
+                    </span>
+                    {String(n.data?.name ?? n.id)}
+                  </button>
+                ))
               )}
-            </button>
+            </div>
           </div>
 
-          {/* 노드 탭 */}
-          {leftTab === 'nodes' && (
-            <div className="flex flex-col overflow-hidden flex-1">
-              <div className="p-2 shrink-0">
-                <input
-                  value={nodeSearch}
-                  onChange={e => setNodeSearch(e.target.value)}
-                  placeholder="노드 검색..."
-                  className="w-full bg-gray-800 text-xs text-white rounded px-2 py-1.5 outline-none placeholder-gray-600 border border-gray-700 focus:border-gray-500"
-                />
-              </div>
-              <div className="overflow-y-auto flex-1 px-1 pb-2">
-                {indexNodes.length === 0 ? (
-                  <p className="text-xs text-gray-600 text-center py-6">결과 없음</p>
-                ) : (
-                  indexNodes.map(n => (
-                    <button
-                      key={n.id}
-                      onClick={() => handleFocusNode(n.id)}
-                      className={`w-full text-left px-2 py-1.5 rounded text-xs hover:bg-gray-800 transition-colors truncate ${selectedNode?.id === n.id ? 'bg-gray-800 text-white' : 'text-gray-400'}`}
-                      title={String(n.data?.name ?? n.id)}
-                    >
-                      <span className="text-gray-600 mr-1 text-[10px]">
-                        {n.type === 'fileNode' ? '📄' : '⚙'}
-                      </span>
-                      {String(n.data?.name ?? n.id)}
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* 경고 탭 */}
-          {leftTab === 'warnings' && (
-            <div className="overflow-y-auto flex-1 p-2">
-              {warnings.length === 0 ? (
-                <p className="text-xs text-gray-600 text-center py-6">경고 없음</p>
-              ) : (
-                <WarningPanel warnings={warnings} />
-              )}
-            </div>
-          )}
+          {/* 경고 섹션 */}
+          <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              경고
+              {warnings.length > 0 && <span className="ml-1 text-yellow-400 font-normal">({warnings.length})</span>}
+            </p>
+            {warnings.length === 0 ? (
+              <p className="text-[10px] text-gray-600 px-1">경고 없음</p>
+            ) : (
+              <WarningPanel warnings={warnings} />
+            )}
+          </div>
         </aside>
 
         {/* 그래프 캔버스 */}

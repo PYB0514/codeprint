@@ -53,6 +53,8 @@ export interface RawNode {
   comment?: string
   columns?: ColumnInfo[]
   bgColor?: string
+  userLabel?: string
+  userNote?: string
 }
 
 export interface RawEdge {
@@ -271,6 +273,7 @@ export interface ConnEntry {
 }
 
 export interface FileSidebarData {
+  nodeId: string
   name: string
   comment?: string
   incoming: ConnEntry[]
@@ -355,9 +358,11 @@ export function buildLayout(
   layoutPreset: LayoutPreset = 'layer',
   onOpenFileSidebar?: (data: FileSidebarData) => void
 ): { nodes: Node[]; edges: Edge[] } {
-  // 노드 라벨 반환 — 초과 시 말줄임표 + hover tooltip
+  // 노드 라벨 반환 — userLabel 우선, 없으면 labelMode 적용, 초과 시 말줄임표
   const getLabel = (node: RawNode, maxLen = 999): React.ReactNode => {
-    const raw = labelMode === 'comment' && node.comment ? node.comment : node.name
+    const raw = node.userLabel
+      ? node.userLabel
+      : (labelMode === 'comment' && node.comment ? node.comment : node.name)
     return labelNode(raw, maxLen)
   }
   const fileNodes = rawNodes.filter((n) => n.type === 'FILE')
@@ -674,11 +679,14 @@ export function buildLayout(
           label: getLabel(file, fileMaxLen),
           name: file.name,
           comment: file.comment,
+          userLabel: file.userLabel,
+          userNote: file.userNote,
           layer,
           domain: fileDomain,
           incoming: fileIncoming.get(file.id) ?? [],
           outgoing: fileOutgoing.get(file.id) ?? [],
           onOpenSidebar: onOpenFileSidebar ? () => onOpenFileSidebar({
+            nodeId: file.id,
             name: file.name,
             comment: file.comment,
             incoming: fileIncoming.get(file.id) ?? [],
@@ -712,7 +720,7 @@ export function buildLayout(
             ? { x: filePos.x + fnRelX, y: filePos.y + fnRelY }
             : { x: fnRelX, y: fnRelY },
           // 함수 박스 너비 110px, 좌우 패딩 8px → 102px / ~6px per char ≈ 17자
-          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment, layer, domain: fileDomain },
+          data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment, userLabel: fn.userLabel, userNote: fn.userNote, layer, domain: fileDomain },
           style: {
             background: palette.funcBg,
             border: `1px solid ${palette.accent}80`,

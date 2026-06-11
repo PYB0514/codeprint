@@ -30,6 +30,7 @@ interface Post {
   likedByMe: boolean
   viewCount: number
   commentCount: number
+  repoUrl?: string | null
 }
 
 interface Comment {
@@ -480,6 +481,17 @@ export default function CommunityPage() {
                           <span className="text-xs text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded">
                             📊 그래프
                           </span>
+                        )}
+                        {post.repoUrl && (
+                          <a
+                            href={post.repoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="text-xs text-gray-500 hover:text-gray-300 bg-gray-800 px-2 py-0.5 rounded flex items-center gap-1"
+                          >
+                            <span>GitHub</span>
+                          </a>
                         )}
                         <span className="font-medium text-sm">{post.title}</span>
                       </div>
