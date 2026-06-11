@@ -23,6 +23,8 @@ public class GraphWarningService {
         warnings.addAll(detectDbLayerBypass(nodes, edges));
         warnings.addAll(detectCrossContextDomainImport(nodes, edges));
         warnings.addAll(detectMissingConverterMigration(nodes));
+        warnings.addAll(detectDeadCode(nodes, edges));
+        warnings.addAll(detectHighFanOut(nodes, edges));
         return warnings;
     }
 
@@ -270,6 +272,77 @@ public class GraphWarningService {
         String after = path.substring(idx + "/domain/".length());
         int slash = after.indexOf('/');
         return slash > 0 ? after.substring(0, slash) : null;
+    }
+
+    // FUNCTION 노드 중 아무 FUNCTION_CALL 엣지도 받지 않는 함수 — 데드 코드 후보
+    private List<Map<String, Object>> detectDeadCode(List<Node> nodes, List<Edge> edges) {
+        // FUNCTION_CALL 엣지의 target nodeId 수집
+        Set<UUID> calledFuncIds = new HashSet<>();
+        for (Edge e : edges) {
+            if (e.getType() == EdgeType.FUNCTION_CALL) {
+                calledFuncIds.add(e.getTargetNodeId());
+            }
+        }
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Node n : nodes) {
+            if (n.getType() != NodeType.FUNCTION) continue;
+            // 이미 호출됨 → 제외
+            if (calledFuncIds.contains(n.getId())) continue;
+
+            Map<String, Object> meta = n.getMetadata();
+            // 컨트롤러(API 엔드포인트) 메서드, 생성자, main 메서드는 외부 진입점 — 제외
+            if (meta != null) {
+                if (Boolean.TRUE.equals(meta.get("isController"))) continue;
+                if (Boolean.TRUE.equals(meta.get("isConstructor"))) continue;
+                String name = n.getName();
+                if ("main".equals(name) || "생성자".equals(name)) continue;
+            }
+
+            // 파일 경로 내 test/ 포함 — 테스트 코드는 제외
+            String fp = n.getFilePath() != null ? n.getFilePath() : "";
+            if (fp.contains("/test/") || fp.contains("\\test\\")) continue;
+
+            Map<String, Object> w = new LinkedHashMap<>();
+            w.put("type", "DEAD_CODE");
+            w.put("nodeIds", List.of(n.getId().toString()));
+            w.put("edgeIds", List.of());
+            w.put("message", "데드 코드 후보: " + n.getName() + " — 이 함수를 호출하는 곳이 없습니다");
+            warnings.add(w);
+        }
+        return warnings;
+    }
+
+    // FUNCTION 노드가 10개 초과 FUNCTION_CALL 아웃바운드를 가질 때 — 과도한 책임 (High Fan-Out)
+    private List<Map<String, Object>> detectHighFanOut(List<Node> nodes, List<Edge> edges) {
+        final int THRESHOLD = 10;
+
+        Map<UUID, Integer> fanOutMap = new HashMap<>();
+        Map<UUID, String> nameMap = new HashMap<>();
+        for (Node n : nodes) {
+            if (n.getType() == NodeType.FUNCTION) {
+                fanOutMap.put(n.getId(), 0);
+                nameMap.put(n.getId(), n.getName());
+            }
+        }
+        for (Edge e : edges) {
+            if (e.getType() == EdgeType.FUNCTION_CALL && fanOutMap.containsKey(e.getSourceNodeId())) {
+                fanOutMap.merge(e.getSourceNodeId(), 1, Integer::sum);
+            }
+        }
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Map.Entry<UUID, Integer> entry : fanOutMap.entrySet()) {
+            if (entry.getValue() <= THRESHOLD) continue;
+            Map<String, Object> w = new LinkedHashMap<>();
+            w.put("type", "HIGH_FAN_OUT");
+            w.put("nodeIds", List.of(entry.getKey().toString()));
+            w.put("edgeIds", List.of());
+            w.put("message", "과도한 의존: " + nameMap.getOrDefault(entry.getKey(), entry.getKey().toString())
+                    + " — " + entry.getValue() + "개 함수를 호출 (단일 책임 원칙 위반 가능성)");
+            warnings.add(w);
+        }
+        return warnings;
     }
 
     // DB_TABLE 노드 중 @Convert 컨버터가 있는 컬럼이 있을 때 — 기존 데이터 마이그레이션 누락 가능성 경고

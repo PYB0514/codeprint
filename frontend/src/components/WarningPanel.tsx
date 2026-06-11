@@ -19,6 +19,8 @@ const WARNING_META: Record<string, { label: string; desc: string; color: string 
   DB_LAYER_BYPASS: { label: 'DB 레이어 우회', desc: 'Repository를 거치지 않는 직접 persistence 호출', color: '#8b5cf6' },
   CROSS_CONTEXT_IMPORT: { label: 'DDD 경계 위반', desc: '다른 바운디드 컨텍스트 domain 직접 import', color: '#06b6d4' },
   MISSING_CONVERTER_MIGRATION: { label: '@Convert 마이그레이션 필요', desc: '기존 평문 데이터에 Flyway 마이그레이션 미작성 가능성', color: '#ec4899' },
+  DEAD_CODE: { label: '데드 코드 후보', desc: '아무 곳에서도 호출되지 않는 함수', color: '#6b7280' },
+  HIGH_FAN_OUT: { label: '과도한 의존', desc: '10개 초과 함수 호출 — 단일 책임 원칙 위반 가능성', color: '#f59e0b' },
 }
 
 // 경고 목록을 타입별로 그룹핑하여 접기/펼치기 섹션으로 표시
