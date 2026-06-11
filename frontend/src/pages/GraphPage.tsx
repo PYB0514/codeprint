@@ -1754,6 +1754,54 @@ function GraphPageInner() {
     return bg ?? '#374151'
   }, [])
 
+  // 엣지 토글 섹션 — drag 중 nodes 변경과 무관하게 memoize하여 불필요한 reconcile 방지
+  const edgeToggleSectionJsx = useMemo(() => (
+    <LeftSection title="엣지" id="tour-edges">
+      <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
+      {[
+        { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: '의존성',    textCls: showEdges ? 'text-gray-300' : 'text-gray-600',        active: showEdges,        onToggle: toggleEdges },
+        { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="5 4" /></svg>,                                label: '콜 체인',   textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600',    active: showCallEdges,    onToggle: toggleCallEdges },
+        { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',      textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600',   active: showInstEdges,    onToggle: toggleInstEdges },
+        { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결', textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600',   active: showBrokenEdges,  onToggle: toggleBrokenEdges },
+        { key: 'db',      icon: <svg width="16" height="4"><line x1="0" y1="2" x2="3.5" y2="2" stroke={showDbEdges ? '#22d3ee' : '#374151'} strokeWidth="1.5"/><line x1="4.5" y1="2" x2="8" y2="2" stroke={showDbEdges ? '#4ade80' : '#374151'} strokeWidth="1.5"/><line x1="9" y1="2" x2="12.5" y2="2" stroke={showDbEdges ? '#facc15' : '#374151'} strokeWidth="1.5"/><line x1="13.5" y1="2" x2="16" y2="2" stroke={showDbEdges ? '#f87171' : '#374151'} strokeWidth="1.5"/></svg>, label: 'DB 연결',   textCls: showDbEdges ? 'text-cyan-400' : 'text-gray-600',       active: showDbEdges,      onToggle: toggleDbEdges },
+        { key: 'api',     icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showApiCallEdges ? '#e879f9' : '#701a75'} strokeWidth="1.5" strokeDasharray="6 3" /></svg>,                              label: 'API 호출',  textCls: showApiCallEdges ? 'text-fuchsia-400' : 'text-gray-600', active: showApiCallEdges, onToggle: toggleApiCallEdges },
+      ].map(({ key, icon, label, textCls, active, onToggle }) => (
+        <div key={key} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}
+          className={`flex items-center gap-1.5 px-1.5 py-1 rounded cursor-pointer hover:bg-gray-800/60 ${active ? '' : 'opacity-40'}`}>
+          <span className="w-4 flex-shrink-0">{icon}</span>
+          <span className={`text-xs truncate ${textCls}`}>{label}</span>
+        </div>
+      ))}
+      </div>
+    </LeftSection>
+  ), [showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges, toggleEdges, toggleCallEdges, toggleInstEdges, toggleBrokenEdges, toggleDbEdges, toggleApiCallEdges])
+
+  // 노드 타입 필터 섹션 — drag 중 변경 없음
+  const nodeFilterSectionJsx = useMemo(() => (
+    <LeftSection title="노드">
+      <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
+        {([
+          { type: 'FILE',         label: 'FILE',     color: '#6b7280' },
+          { type: 'FUNCTION',     label: 'FUNCTION', color: '#10b981' },
+          { type: 'DB_TABLE',     label: 'DB',       color: '#ef4444' },
+          { type: 'API_ENDPOINT', label: 'API',      color: '#3b82f6' },
+        ] as { type: string; label: string; color: string }[]).map(({ type, label, color }) => {
+          const hidden = hiddenNodeTypes.has(type)
+          return (
+            <button
+              key={type}
+              onClick={() => toggleNodeType(type)}
+              className="flex items-center gap-1.5 px-1.5 py-1 rounded hover:bg-gray-800 transition-colors"
+            >
+              <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: hidden ? '#374151' : color }} />
+              <span className={`text-xs ${hidden ? 'text-gray-600 line-through' : 'text-gray-300'}`}>{label}</span>
+            </button>
+          )
+        })}
+      </div>
+    </LeftSection>
+  ), [hiddenNodeTypes, toggleNodeType])
+
   if (loading) {
     return (
       <div className="app-page min-h-screen bg-gray-950 flex items-center justify-center text-gray-400">
@@ -2077,49 +2125,11 @@ function GraphPageInner() {
               </div>
             </LeftSection>
 
-            {/* 노드 타입 가시성 필터 */}
-            <LeftSection title="노드">
-              <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
-                {([
-                  { type: 'FILE',         label: 'FILE',     color: '#6b7280' },
-                  { type: 'FUNCTION',     label: 'FUNCTION', color: '#10b981' },
-                  { type: 'DB_TABLE',     label: 'DB',       color: '#ef4444' },
-                  { type: 'API_ENDPOINT', label: 'API',      color: '#3b82f6' },
-                ] as { type: string; label: string; color: string }[]).map(({ type, label, color }) => {
-                  const hidden = hiddenNodeTypes.has(type)
-                  return (
-                    <button
-                      key={type}
-                      onClick={() => toggleNodeType(type)}
-                      className="flex items-center gap-1.5 px-1.5 py-1 rounded hover:bg-gray-800 transition-colors"
-                    >
-                      <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: hidden ? '#374151' : color }} />
-                      <span className={`text-xs ${hidden ? 'text-gray-600 line-through' : 'text-gray-300'}`}>{label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </LeftSection>
+            {/* 노드 타입 가시성 필터 — memoized */}
+            {nodeFilterSectionJsx}
 
-            {/* 엣지 — 색인 + 토글 통합 */}
-            <LeftSection title="엣지" id="tour-edges">
-              <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
-              {[
-                { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: '의존성',    textCls: showEdges ? 'text-gray-300' : 'text-gray-600',        active: showEdges,        onToggle: toggleEdges },
-                { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="5 4" /></svg>,                                label: '콜 체인',   textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600',    active: showCallEdges,    onToggle: toggleCallEdges },
-                { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',      textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600',   active: showInstEdges,    onToggle: toggleInstEdges },
-                { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결', textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600',   active: showBrokenEdges,  onToggle: toggleBrokenEdges },
-                { key: 'db',      icon: <svg width="16" height="4"><line x1="0" y1="2" x2="3.5" y2="2" stroke={showDbEdges ? '#22d3ee' : '#374151'} strokeWidth="1.5"/><line x1="4.5" y1="2" x2="8" y2="2" stroke={showDbEdges ? '#4ade80' : '#374151'} strokeWidth="1.5"/><line x1="9" y1="2" x2="12.5" y2="2" stroke={showDbEdges ? '#facc15' : '#374151'} strokeWidth="1.5"/><line x1="13.5" y1="2" x2="16" y2="2" stroke={showDbEdges ? '#f87171' : '#374151'} strokeWidth="1.5"/></svg>, label: 'DB 연결',   textCls: showDbEdges ? 'text-cyan-400' : 'text-gray-600',       active: showDbEdges,      onToggle: toggleDbEdges },
-                { key: 'api',     icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showApiCallEdges ? '#e879f9' : '#701a75'} strokeWidth="1.5" strokeDasharray="6 3" /></svg>,                              label: 'API 호출',  textCls: showApiCallEdges ? 'text-fuchsia-400' : 'text-gray-600', active: showApiCallEdges, onToggle: toggleApiCallEdges },
-              ].map(({ key, icon, label, textCls, active, onToggle }) => (
-                <div key={key} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}
-                  className={`flex items-center gap-1.5 px-1.5 py-1 rounded cursor-pointer hover:bg-gray-800/60 ${active ? '' : 'opacity-40'}`}>
-                  <span className="w-4 flex-shrink-0">{icon}</span>
-                  <span className={`text-xs truncate ${textCls}`}>{label}</span>
-                </div>
-              ))}
-              </div>
-            </LeftSection>
+            {/* 엣지 — 색인 + 토글 통합 — memoized */}
+            {edgeToggleSectionJsx}
 
             {/* 범례 — 계층형/도메인 레이어 + 노드 */}
             <LeftSection title="범례">

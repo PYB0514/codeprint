@@ -195,6 +195,54 @@ public class GraphBuilder {
             }
         }
 
+        // JSX 컴포넌트 사용 → FUNCTION_CALL 엣지 생성
+        // import 경로에서 컴포넌트 파일을 찾아 FILE→FILE FUNCTION_CALL 엣지로 연결
+        Map<String, ParsedFile> fileNameToFile = new HashMap<>();
+        for (ParsedFile pf : parsedFiles) {
+            String name = extractFileNameWithoutExt(pf.filePath());
+            fileNameToFile.put(name, pf);
+        }
+        for (ParsedFile callerFile : parsedFiles) {
+            if (callerFile.jsxComponents().isEmpty()) continue;
+            UUID callerFileId = fileNodeIds.get(callerFile.filePath());
+            if (callerFileId == null) continue;
+            for (String componentName : callerFile.jsxComponents()) {
+                // import 경로 중 컴포넌트명으로 끝나는 항목 탐색
+                String importedPath = null;
+                for (String imp : callerFile.imports()) {
+                    String importedName = imp.substring(imp.lastIndexOf('/') + 1);
+                    // "import './ComponentName'" 또는 "../ComponentName" 형식
+                    if (importedName.equals(componentName) || importedName.startsWith(componentName + ".")) {
+                        importedPath = imp;
+                        break;
+                    }
+                }
+                // import 경로가 없으면 파일명 인덱스로 직접 탐색
+                ParsedFile calleeFile = null;
+                if (importedPath != null) {
+                    String importedName = importedPath.substring(importedPath.lastIndexOf('/') + 1)
+                            .replaceAll("\\.(tsx|ts|jsx|js)$", "");
+                    calleeFile = fileNameToFile.get(importedName);
+                }
+                if (calleeFile == null) {
+                    calleeFile = fileNameToFile.get(componentName);
+                }
+                if (calleeFile == null || calleeFile.filePath().equals(callerFile.filePath())) continue;
+                UUID calleeFileId = fileNodeIds.get(calleeFile.filePath());
+                if (calleeFileId == null) continue;
+                String edgeId = extractFileNameWithoutExt(callerFile.filePath()) + "-jsx-" + componentName;
+                if (usedEdgeIds.contains(edgeId)) continue;
+                usedEdgeIds.add(edgeId);
+                Edge jsxEdge = Edge.create(graphId, edgeId, EdgeType.FUNCTION_CALL, callerFileId, calleeFileId);
+                Map<String, Object> jsxMeta = new HashMap<>();
+                jsxMeta.put("callerFile", callerFile.filePath());
+                jsxMeta.put("calleeFile", calleeFile.filePath());
+                jsxMeta.put("isJsxRender", true);
+                jsxEdge.updateMetadata(jsxMeta);
+                graphRepository.saveEdge(jsxEdge);
+            }
+        }
+
         // DB_TABLE 노드 생성 + Repository → DB_TABLE 엣지 생성
         // 엔티티 클래스명 → DB_TABLE 노드 ID 인덱스
         Map<String, UUID> entityClassToTableNodeId = new HashMap<>();

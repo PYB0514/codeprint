@@ -2,6 +2,7 @@
 package com.codeprint.interfaces.api;
 
 import com.codeprint.application.message.MessageApplicationService;
+import com.codeprint.application.message.UserSummaryDto;
 import com.codeprint.application.notification.NotificationService;
 import com.codeprint.application.notification.NotificationSettingsApplicationService;
 import com.codeprint.domain.message.DirectMessage;
@@ -85,13 +86,13 @@ public class MessageController {
         UUID senderId = currentUserId(principal);
         DirectMessage dm = messageService.send(senderId, receiverId, req.content());
         boolean dmPushEnabled = notificationSettingsService.isDmPushEnabled(receiverId);
-        User sender = messageService.getUser(senderId);
+        UserSummaryDto sender = messageService.getUser(senderId);
         if (dmPushEnabled) {
-            webPushService.sendToUser(receiverId, sender.getUsername() + "님의 쪽지",
+            webPushService.sendToUser(receiverId, sender.username() + "님의 쪽지",
                     req.content().length() > 60 ? req.content().substring(0, 60) + "…" : req.content());
         }
         notificationService.create(receiverId, "DM",
-                sender.getUsername() + "님이 쪽지를 보냈습니다.", "/messages");
+                sender.username() + "님이 쪽지를 보냈습니다.", "/messages");
         return toResponse(dm, messageService);
     }
 
@@ -104,11 +105,11 @@ public class MessageController {
 
     // DirectMessage -> MessageResponse 변환
     private MessageResponse toResponse(DirectMessage dm, MessageApplicationService svc) {
-        User sender = svc.getUser(dm.getSenderId());
-        User receiver = svc.getUser(dm.getReceiverId());
+        UserSummaryDto sender = svc.getUser(dm.getSenderId());
+        UserSummaryDto receiver = svc.getUser(dm.getReceiverId());
         return new MessageResponse(
-            dm.getId(), dm.getSenderId(), sender.getUsername(), sender.getAvatarUrl(),
-            dm.getReceiverId(), receiver.getUsername(), receiver.getAvatarUrl(),
+            dm.getId(), dm.getSenderId(), sender.username(), sender.avatarUrl(),
+            dm.getReceiverId(), receiver.username(), receiver.avatarUrl(),
             dm.getContent(), dm.getReadAt(), dm.getCreatedAt()
         );
     }

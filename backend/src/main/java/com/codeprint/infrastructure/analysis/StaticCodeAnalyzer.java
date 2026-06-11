@@ -32,8 +32,9 @@ public class StaticCodeAnalyzer {
         List<String> controllerMappings = extractControllerMappings(content, language);
         List<String> implementedInterfaces = extractImplementedInterfaces(content, language);
         List<String> asyncMethods = extractAsyncMethods(content, language);
+        List<String> jsxComponents = extractJsxComponents(content, relativePath);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents);
     }
 
     // 파일 상단 첫 번째 주석 추출
@@ -459,6 +460,17 @@ public class StaticCodeAnalyzer {
         return Set.of("if", "else", "for", "while", "switch", "try", "catch", "return",
                 "new", "class", "interface", "enum", "void", "int", "long", "boolean",
                 "String", "List", "Map", "Set", "var", "val", "let", "const").contains(name);
+    }
+
+    // .tsx/.jsx 파일에서 JSX 컴포넌트 사용 추출 — <ComponentName 패턴 (대문자 시작)
+    private List<String> extractJsxComponents(String content, String relativePath) {
+        if (!relativePath.endsWith(".tsx") && !relativePath.endsWith(".jsx")) return List.of();
+        Pattern p = Pattern.compile("<([A-Z][\\w]*)(?:\\s|/?>)");
+        Matcher m = p.matcher(content);
+        Set<String> result = new LinkedHashSet<>();
+        while (m.find()) result.add(m.group(1));
+        // HTML 태그처럼 보이는 내장 컴포넌트 제외 (모두 대문자 시작이므로 이미 필터됨)
+        return new ArrayList<>(result);
     }
 
     // Java @Async 어노테이션이 붙은 메서드명 추출
