@@ -11,6 +11,26 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.46.0',
+    date: '2026-06-11',
+    title: '배경이미지 토글',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: 'GraphPage 좌측 사이드바 "보기" 섹션 추가 — 배경이미지 켜기/끄기 토글, localStorage에 상태 저장' },
+      { category: '프론트', desc: 'ShareGraphPage 좌측 사이드바에 오너 배경이미지 토글 추가 — 오너 배경이 있을 때만 표시, 기본 꺼짐' },
+      { category: '백엔드', desc: 'GET /api/share/{projectId}/graph 응답에 ownerBgUrl 필드 추가 — S3 presigned URL 7일 만료' },
+    ],
+  },
+  {
+    version: 'v0.45.0',
+    date: '2026-06-11',
+    title: '배경이미지 전체 페이지 적용',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '사용자 배경이미지를 랜딩 페이지를 제외한 모든 페이지에 적용 — app-page CSS 클래스 + body.has-bg 조합' },
+    ],
+  },
+  {
     version: 'v0.44.0',
     date: '2026-06-11',
     title: '노드 커스텀 이름/메모 + 커뮤니티 레포 URL',
