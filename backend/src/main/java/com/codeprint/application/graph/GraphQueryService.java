@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,6 +19,7 @@ import java.util.UUID;
 public class GraphQueryService {
 
     private final GraphRepository graphRepository;
+    private final GraphWarningService graphWarningService;
 
     // 프로젝트의 가장 최근 그래프를 조회
     public Optional<Graph> findLatestByProject(UUID projectId) {
@@ -47,6 +49,14 @@ public class GraphQueryService {
     @Cacheable(value = "graphEdges", key = "#graphId")
     public List<Edge> getEdges(UUID graphId) {
         return graphRepository.findEdgesByGraphId(graphId);
+    }
+
+    // 그래프 경고 감지 결과 캐싱 — detect()는 CPU 집약적이므로 graphId 기준으로 10분 캐시
+    @Cacheable(value = "graphWarnings", key = "#graphId")
+    public List<Map<String, Object>> getWarnings(UUID graphId) {
+        List<Node> nodes = getNodes(graphId);
+        List<Edge> edges = getEdges(graphId);
+        return graphWarningService.detect(nodes, edges);
     }
 
 }

@@ -40,6 +40,7 @@ public class SecurityConfig {
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/community/posts/*/like").authenticated()
                 .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/community/posts/*/like").authenticated()
                 .requestMatchers("/api/auth/**", "/api/share/**", "/api/community/posts", "/api/community/posts/*/graph", "/api/payments/webhook", "/api/notices", "/api/donations", "/api/users/**", "/ws/**", "/login/**", "/oauth2/**", "/actuator/health", "/api/dev/**", "/api/push/vapid-public-key").permitAll()
+                .requestMatchers("/actuator/metrics/**", "/actuator/info").hasRole("ADMIN")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )

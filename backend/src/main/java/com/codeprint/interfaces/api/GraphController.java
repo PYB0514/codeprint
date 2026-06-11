@@ -123,7 +123,7 @@ public class GraphController {
                             ))
                             .toList();
 
-                    List<Map<String, Object>> warnings = graphWarningService.detect(nodes, edges);
+                    List<Map<String, Object>> warnings = graphQueryService.getWarnings(graph.getId());
 
                     // 그래프는 재분석 전까지 변경되지 않으므로 5분 브라우저 캐시 허용
                     return ResponseEntity.ok()
@@ -186,7 +186,7 @@ public class GraphController {
                             ))
                             .toList();
 
-                    List<Map<String, Object>> warnings = graphWarningService.detect(nodes, edges);
+                    List<Map<String, Object>> warnings = graphQueryService.getWarnings(graph.getId());
 
                     // 공개 그래프는 누구나 접근 가능하므로 public 캐시 허용
                     Map<String, Object> body = new java.util.LinkedHashMap<>();

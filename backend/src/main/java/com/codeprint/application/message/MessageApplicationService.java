@@ -3,7 +3,6 @@ package com.codeprint.application.message;
 
 import com.codeprint.domain.message.DirectMessage;
 import com.codeprint.domain.message.DirectMessageRepository;
-import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -64,10 +63,11 @@ public class MessageApplicationService {
         return messageRepository.countUnread(userId);
     }
 
-    // 유저 정보 조회 (컨트롤러 응답 구성용)
+    // 유저 요약 정보 조회 (컨트롤러 응답 구성용)
     @Transactional(readOnly = true)
-    public User getUser(UUID userId) {
+    public UserSummaryDto getUser(UUID userId) {
         return userRepository.findById(userId)
+            .map(u -> new UserSummaryDto(u.getId(), u.getUsername(), u.getAvatarUrl()))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 }

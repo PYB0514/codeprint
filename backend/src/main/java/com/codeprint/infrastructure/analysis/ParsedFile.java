@@ -19,5 +19,6 @@ public record ParsedFile(
         List<String> apiCalls,                   // 프론트 axios 호출 경로 목록 ("GET:/api/projects" 형식)
         List<String> controllerMappings,         // 백엔드 @*Mapping 경로 목록 ("/api/projects/{projectId}" 형식)
         List<String> implementedInterfaces,       // "class Foo implements Bar" 에서 추출한 인터페이스명 목록
-        List<String> asyncMethods                // @Async 어노테이션이 붙은 메서드명 목록
+        List<String> asyncMethods,               // @Async 어노테이션이 붙은 메서드명 목록
+        List<String> jsxComponents               // .tsx/.jsx 에서 사용된 JSX 컴포넌트명 목록 (<ComponentName 패턴)
 ) {}
