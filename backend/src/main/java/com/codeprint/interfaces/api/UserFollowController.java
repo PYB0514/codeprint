@@ -1,6 +1,7 @@
 // 유저 팔로우/팔로워 REST API
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.notification.NotificationService;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserFollow;
 import com.codeprint.domain.user.UserFollowRepository;
@@ -21,6 +22,7 @@ public class UserFollowController {
 
     private final UserFollowRepository userFollowRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     // 팔로우
     @PostMapping("/{userId}/follow")
@@ -38,6 +40,8 @@ public class UserFollowController {
             return ResponseEntity.ok(Map.of("following", true));
         }
         userFollowRepository.save(UserFollow.create(me.getId(), userId));
+        notificationService.create(userId, "FOLLOW",
+                me.getUsername() + "님이 팔로우했습니다.", "/users/" + me.getId());
         return ResponseEntity.ok(Map.of("following", true));
     }
 

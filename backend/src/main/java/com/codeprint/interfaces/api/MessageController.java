@@ -2,6 +2,7 @@
 package com.codeprint.interfaces.api;
 
 import com.codeprint.application.message.MessageApplicationService;
+import com.codeprint.application.notification.NotificationService;
 import com.codeprint.domain.message.DirectMessage;
 import com.codeprint.domain.notification.UserNotificationSettings;
 import com.codeprint.domain.user.User;
@@ -29,6 +30,7 @@ public class MessageController {
     private final MessageApplicationService messageService;
     private final WebPushService webPushService;
     private final NotificationSettingsJpaRepository notificationSettingsRepository;
+    private final NotificationService notificationService;
 
     // Principal에서 로그인 사용자 ID 추출
     private UUID currentUserId(Principal principal) {
@@ -85,11 +87,13 @@ public class MessageController {
         DirectMessage dm = messageService.send(senderId, receiverId, req.content());
         boolean dmPushEnabled = notificationSettingsRepository.findById(receiverId)
                 .map(UserNotificationSettings::isDm).orElse(true);
+        User sender = messageService.getUser(senderId);
         if (dmPushEnabled) {
-            User sender = messageService.getUser(senderId);
             webPushService.sendToUser(receiverId, sender.getUsername() + "님의 쪽지",
                     req.content().length() > 60 ? req.content().substring(0, 60) + "…" : req.content());
         }
+        notificationService.create(receiverId, "DM",
+                sender.getUsername() + "님이 쪽지를 보냈습니다.", "/messages");
         return toResponse(dm, messageService);
     }
 

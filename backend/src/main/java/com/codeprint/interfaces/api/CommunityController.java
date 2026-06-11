@@ -3,6 +3,7 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.application.community.PostCommandService;
 import com.codeprint.application.graph.GraphQueryService;
+import com.codeprint.application.notification.NotificationService;
 import com.codeprint.domain.community.Comment;
 import com.codeprint.domain.community.Post;
 import com.codeprint.domain.community.PostBookmark;
@@ -39,6 +40,7 @@ public class CommunityController {
     private final PostLikeRepository likeRepository;
     private final PostRepository postRepository;
     private final UserFollowRepository followRepository;
+    private final NotificationService notificationService;
 
     // 게시글 목록 조회 (페이지, 검색, 팔로잉 피드) — 로그인 시 내 북마크 여부 포함
     @GetMapping("/posts")
@@ -206,6 +208,12 @@ public class CommunityController {
             @AuthenticationPrincipal User user) {
         if (!likeRepository.existsByUserIdAndPostId(user.getId(), postId)) {
             likeRepository.save(PostLike.of(user.getId(), postId));
+            postRepository.findById(postId).ifPresent(post -> {
+                if (!post.getUserId().equals(user.getId())) {
+                    notificationService.create(post.getUserId(), "LIKE",
+                            user.getUsername() + "님이 게시글을 좋아합니다.", "/community?postId=" + postId);
+                }
+            });
         }
         return ResponseEntity.ok().build();
     }
