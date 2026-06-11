@@ -34,6 +34,10 @@ public class AiController {
                           @NotBlank String nodeName, String nodeType, String comment,
                           String callers, String callees) {}
     record ExplainResponse(String explanation) {}
+    record GenerateCodeRequest(@NotBlank String provider, @NotBlank String nodeName,
+                               String nodeType, String comment,
+                               String callers, String callees, String language) {}
+    record GenerateCodeResponse(String code, String language) {}
     record ProviderInfo(String provider, boolean registered) {}
 
     // 등록된 AI 제공자 목록 조회 (키 값은 반환하지 않음)
@@ -95,6 +99,27 @@ public class AiController {
         return ResponseEntity.ok(new ExplainResponse(explanation));
     }
 
+    // 함수 노드 컨텍스트로 코드 스텁 생성
+    @PostMapping("/generate-code")
+    public ResponseEntity<GenerateCodeResponse> generateCode(
+            @Valid @RequestBody GenerateCodeRequest req,
+            @AuthenticationPrincipal User user) {
+        UUID userId = UUID.fromString(user.getUsername());
+        AiProvider aiProvider = AiProvider.valueOf(req.provider().toUpperCase());
+        UserAiKey key = aiKeyRepository.findByUserIdAndProvider(userId, aiProvider)
+                .orElseThrow(() -> new IllegalArgumentException(req.provider() + " API 키가 등록되지 않았습니다."));
+
+        AiService service = aiServices.stream()
+                .filter(s -> s.provider() == aiProvider)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Unsupported provider: " + aiProvider));
+
+        String lang = req.language() != null && !req.language().isBlank() ? req.language() : "java";
+        String prompt = buildCodeGenPrompt(req, lang);
+        String code = service.explain(key.getApiKey(), prompt);
+        return ResponseEntity.ok(new GenerateCodeResponse(code, lang));
+    }
+
     // 그래프 전체를 Claude AI로 분석하여 누락 패턴 감지
     @PostMapping("/graphs/{graphId}/analyze")
     public ResponseEntity<List<AiGraphAnalysisService.DetectedIssue>> analyzeGraph(
@@ -105,6 +130,24 @@ public class AiController {
         var edges = graphRepository.findEdgesByGraphId(graphId);
         List<AiGraphAnalysisService.DetectedIssue> issues = aiGraphAnalysisService.analyze(userId, nodes, edges);
         return ResponseEntity.ok(issues);
+    }
+
+    // 코드 생성 프롬프트 구성
+    private String buildCodeGenPrompt(GenerateCodeRequest req, String lang) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("다음은 소프트웨어 프로젝트의 함수 노드 정보입니다.\n\n");
+        sb.append("함수명: ").append(req.nodeName()).append("\n");
+        sb.append("언어: ").append(lang).append("\n");
+        if (req.comment() != null && !req.comment().isBlank())
+            sb.append("역할(주석): ").append(req.comment()).append("\n");
+        if (req.callers() != null && !req.callers().isBlank())
+            sb.append("이 함수를 호출하는 곳: ").append(req.callers()).append("\n");
+        if (req.callees() != null && !req.callees().isBlank())
+            sb.append("이 함수가 호출하는 곳: ").append(req.callees()).append("\n");
+        sb.append("\n위 정보를 바탕으로 이 함수의 ").append(lang).append(" 구현 코드 스텁을 생성해주세요. ");
+        sb.append("실제 구현 가능한 수준의 코드를 작성하되, 코드만 반환하고 설명은 생략하세요. ");
+        sb.append("코드 블록(```")  .append(lang).append(" ... ```) 형식으로 반환하세요.");
+        return sb.toString();
     }
 
     // 노드 컨텍스트를 기반으로 AI 프롬프트 구성
