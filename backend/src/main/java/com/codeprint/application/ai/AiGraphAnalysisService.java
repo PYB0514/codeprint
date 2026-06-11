@@ -4,10 +4,6 @@ package com.codeprint.application.ai;
 import com.codeprint.domain.ai.AiProvider;
 import com.codeprint.domain.ai.UserAiKey;
 import com.codeprint.domain.ai.UserAiKeyRepository;
-import com.codeprint.domain.graph.Edge;
-import com.codeprint.domain.graph.Node;
-import com.codeprint.domain.graph.NodeType;
-import com.codeprint.infrastructure.ai.AiService;
 import com.codeprint.infrastructure.ai.ClaudeAiService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +31,7 @@ public class AiGraphAnalysisService {
     ) {}
 
     // 그래프 노드+엣지를 Claude에 전송하여 누락 패턴 감지
-    public List<DetectedIssue> analyze(UUID userId, List<Node> nodes, List<Edge> edges) {
+    public List<DetectedIssue> analyze(UUID userId, List<GraphNodeDto> nodes, List<GraphEdgeDto> edges) {
         UserAiKey key = aiKeyRepository.findByUserIdAndProvider(userId, AiProvider.CLAUDE)
                 .orElseThrow(() -> new IllegalStateException("Claude API 키가 등록되지 않았습니다. AI 설정에서 키를 등록하세요."));
 
@@ -45,33 +41,33 @@ public class AiGraphAnalysisService {
     }
 
     // 그래프 요약 프롬프트 구성 (상위 300개 노드/엣지 제한으로 토큰 절약)
-    private String buildAnalysisPrompt(List<Node> nodes, List<Edge> edges) {
-        List<Node> sampleNodes = nodes.stream()
-                .filter(n -> n.getType() == NodeType.FUNCTION || n.getType() == NodeType.FILE)
+    private String buildAnalysisPrompt(List<GraphNodeDto> nodes, List<GraphEdgeDto> edges) {
+        List<GraphNodeDto> sampleNodes = nodes.stream()
+                .filter(n -> "FUNCTION".equals(n.type()) || "FILE".equals(n.type()))
                 .limit(200)
                 .toList();
-        List<Edge> sampleEdges = edges.stream().limit(300).toList();
+        List<GraphEdgeDto> sampleEdges = edges.stream().limit(300).toList();
 
         StringBuilder sb = new StringBuilder();
         sb.append("다음은 소프트웨어 프로젝트의 코드 구조 그래프입니다. ");
         sb.append("아키텍처 분석을 통해 누락되거나 개선이 필요한 패턴을 찾아주세요.\n\n");
 
         sb.append("## 노드 목록 (파일 및 함수)\n");
-        for (Node n : sampleNodes) {
+        for (GraphNodeDto n : sampleNodes) {
             String comment = "";
-            if (n.getMetadata() != null && n.getMetadata().get("comment") instanceof String c) {
+            if (n.metadata() != null && n.metadata().get("comment") instanceof String c) {
                 comment = " // " + c;
             }
-            sb.append(String.format("- [%s] %s%s\n", n.getType(), n.getName(), comment));
+            sb.append(String.format("- [%s] %s%s\n", n.type(), n.name(), comment));
         }
 
         sb.append("\n## 관계 목록 (엣지)\n");
         Map<UUID, String> nodeNames = new java.util.HashMap<>();
-        nodes.forEach(n -> nodeNames.put(n.getId(), n.getName()));
-        for (Edge e : sampleEdges) {
-            String src = nodeNames.getOrDefault(e.getSourceNodeId(), e.getSourceNodeId().toString());
-            String tgt = nodeNames.getOrDefault(e.getTargetNodeId(), e.getTargetNodeId().toString());
-            sb.append(String.format("- %s --[%s]--> %s\n", src, e.getType(), tgt));
+        nodes.forEach(n -> nodeNames.put(n.id(), n.name()));
+        for (GraphEdgeDto e : sampleEdges) {
+            String src = nodeNames.getOrDefault(e.sourceNodeId(), e.sourceNodeId().toString());
+            String tgt = nodeNames.getOrDefault(e.targetNodeId(), e.targetNodeId().toString());
+            sb.append(String.format("- %s --[%s]--> %s\n", src, e.type(), tgt));
         }
 
         sb.append("\n## 분석 요청\n");
@@ -91,9 +87,8 @@ public class AiGraphAnalysisService {
 
     // Claude 응답에서 이슈 목록 파싱
     @SuppressWarnings("unchecked")
-    private List<DetectedIssue> parseIssues(String response, List<Node> nodes) {
+    private List<DetectedIssue> parseIssues(String response, List<GraphNodeDto> nodes) {
         try {
-            // JSON 배열 부분 추출 (응답에 설명이 포함될 경우 대비)
             int start = response.indexOf('[');
             int end = response.lastIndexOf(']');
             if (start < 0 || end < 0) return List.of();
@@ -102,7 +97,7 @@ public class AiGraphAnalysisService {
             List<Map<String, String>> raw = objectMapper.readValue(json, List.class);
 
             Map<String, UUID> nameToId = new java.util.HashMap<>();
-            nodes.forEach(n -> nameToId.put(n.getName(), n.getId()));
+            nodes.forEach(n -> nameToId.put(n.name(), n.id()));
 
             List<DetectedIssue> issues = new ArrayList<>();
             for (Map<String, String> item : raw) {

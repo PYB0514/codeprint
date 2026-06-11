@@ -193,12 +193,20 @@ function ShareGraphInner() {
     tabFilteredNodeIds ? nodes.filter(n => tabFilteredNodeIds.has(n.id)) : nodes,
     [nodes, tabFilteredNodeIds]
   )
-  const displayEdges = useMemo(() =>
-    tabFilteredNodeIds
+  const focusedNodeId = selectedNode?.id ?? null
+
+  const displayEdges = useMemo(() => {
+    const baseEdges = tabFilteredNodeIds
       ? edges.filter(e => tabFilteredNodeIds.has(e.source) && tabFilteredNodeIds.has(e.target))
-      : edges,
-    [edges, tabFilteredNodeIds]
-  )
+      : []
+    if (focusedNodeId) {
+      const connectedEdges = edges.filter(e => e.source === focusedNodeId || e.target === focusedNodeId)
+      const combined = [...baseEdges]
+      connectedEdges.forEach(e => { if (!combined.find(b => b.id === e.id)) combined.push(e) })
+      return combined
+    }
+    return baseEdges
+  }, [edges, tabFilteredNodeIds, focusedNodeId])
 
   // 인덱스에 표시할 노드 (section/group 제외, 검색 필터)
   const indexNodes = nodes.filter(n =>

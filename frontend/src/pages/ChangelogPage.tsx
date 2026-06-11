@@ -19,6 +19,18 @@ const RELEASES: Release[] = [
       { category: '프론트', desc: '도메인/레이어 탭을 좌측 사이드바에서 캔버스 상단 탭바로 이동 — 더 넓게 보임' },
       { category: '프론트', desc: '그래프 배경이미지 기능 제거 — 그래프 가독성 저하 원인' },
       { category: '프론트', desc: 'GraphPage + ShareGraphPage 동일하게 적용' },
+      { category: '성능', desc: 'fetchGraph 무한 재요청 루프 수정 — 페이지 로드 시 /graph 14회 → 1회' },
+    ],
+  },
+  {
+    version: 'v0.51.0',
+    date: '2026-06-11',
+    title: '엣지 온디맨드 렌더링',
+    type: 'fix',
+    items: [
+      { category: '프론트', desc: '전체 탭에서는 엣지 숨김 — 도메인 탭 선택 시에만 해당 범위 엣지 표시' },
+      { category: '프론트', desc: '노드 클릭 시 연결된 엣지만 추가 표시 (GraphPage + ShareGraphPage 공통 적용)' },
+      { category: '성능', desc: '수천 개 엣지 SVG 렌더링 제거로 대형 프로젝트 렌더 부하 대폭 감소' },
     ],
   },
   {

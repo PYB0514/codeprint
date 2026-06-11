@@ -2,6 +2,8 @@
 package com.codeprint.interfaces.api;
 
 import com.codeprint.application.ai.AiGraphAnalysisService;
+import com.codeprint.application.ai.GraphEdgeDto;
+import com.codeprint.application.ai.GraphNodeDto;
 import com.codeprint.domain.ai.AiProvider;
 import com.codeprint.domain.ai.UserAiKey;
 import com.codeprint.domain.ai.UserAiKeyRepository;
@@ -126,8 +128,14 @@ public class AiController {
             @PathVariable UUID graphId,
             @AuthenticationPrincipal User user) {
         UUID userId = UUID.fromString(user.getUsername());
-        var nodes = graphRepository.findNodesByGraphId(graphId);
-        var edges = graphRepository.findEdgesByGraphId(graphId);
+        var rawNodes = graphRepository.findNodesByGraphId(graphId);
+        var rawEdges = graphRepository.findEdgesByGraphId(graphId);
+        var nodes = rawNodes.stream()
+                .map(n -> new GraphNodeDto(n.getId(), n.getType().name(), n.getName(), n.getMetadata()))
+                .toList();
+        var edges = rawEdges.stream()
+                .map(e -> new GraphEdgeDto(e.getId(), e.getType().name(), e.getSourceNodeId(), e.getTargetNodeId()))
+                .toList();
         List<AiGraphAnalysisService.DetectedIssue> issues = aiGraphAnalysisService.analyze(userId, nodes, edges);
         return ResponseEntity.ok(issues);
     }
