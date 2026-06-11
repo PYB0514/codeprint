@@ -456,6 +456,8 @@ function GraphPageInner() {
   const [selectedAiProvider, setSelectedAiProvider] = useState<string>('')
   const [aiExplaining, setAiExplaining] = useState(false)
   const [aiExplanation, setAiExplanation] = useState<string | null>(null)
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiGeneratedCode, setAiGeneratedCode] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [sidebar, setSidebar] = useState<SidebarContent | null>(null)
   const [rightCollapsed, setRightCollapsed] = useState(false)
@@ -763,8 +765,8 @@ function GraphPageInner() {
     setEdges((eds) => eds.map((e) => edgeIds.has(e.id) ? { ...e, hidden: false } : e))
   }, [rawEdgesCache, rawNodes, setEdges])
 
-  // 사이드바 노드 변경 시 AI 설명 초기화
-  useEffect(() => { setAiExplanation(null) }, [sidebar])
+  // 사이드바 노드 변경 시 AI 설명/코드 초기화
+  useEffect(() => { setAiExplanation(null); setAiGeneratedCode(null) }, [sidebar])
 
   // 선택한 AI 제공자로 함수 노드 설명 요청
   const handleAiExplain = async () => {
@@ -790,6 +792,33 @@ function GraphPageInner() {
       setAiExplanation('AI 설명을 가져오지 못했습니다. API 키를 확인해주세요.')
     } finally {
       setAiExplaining(false)
+    }
+  }
+
+  // 선택한 함수 노드의 코드 스텁을 AI로 생성
+  const handleAiGenerateCode = async () => {
+    if (!selectedAiProvider || sidebar?.kind !== 'func') return
+    setAiGenerating(true)
+    setAiGeneratedCode(null)
+    try {
+      const s = sidebar
+      const res = await axios.post<{ code: string; language: string }>(
+        '/api/ai/generate-code',
+        {
+          provider: selectedAiProvider,
+          nodeName: s.funcName,
+          nodeType: 'FUNCTION',
+          comment: s.funcComment ?? '',
+          callers: s.callers.map((c: { funcName: string }) => c.funcName).join(', '),
+          callees: s.callees.map((c: { funcName: string }) => c.funcName).join(', '),
+          language: 'java',
+        }
+      )
+      setAiGeneratedCode(res.data.code)
+    } catch {
+      setAiGeneratedCode('코드 생성에 실패했습니다. API 키를 확인해주세요.')
+    } finally {
+      setAiGenerating(false)
     }
   }
 
@@ -2558,10 +2587,17 @@ function GraphPageInner() {
                           </select>
                           <button
                             onClick={handleAiExplain}
-                            disabled={aiExplaining}
+                            disabled={aiExplaining || aiGenerating}
                             className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1.5 rounded disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                           >
-                            {aiExplaining ? '생성 중...' : '설명'}
+                            {aiExplaining ? '...' : '설명'}
+                          </button>
+                          <button
+                            onClick={handleAiGenerateCode}
+                            disabled={aiExplaining || aiGenerating}
+                            className="text-xs bg-purple-700 hover:bg-purple-600 text-white px-2 py-1.5 rounded disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                          >
+                            {aiGenerating ? '...' : '코드'}
                           </button>
                         </div>
                         {aiExplanation && (
@@ -2569,8 +2605,13 @@ function GraphPageInner() {
                             {aiExplanation}
                           </p>
                         )}
-                        {!aiExplanation && !aiExplaining && (
-                          <p className="text-xs text-gray-600">버튼을 눌러 이 함수의 역할을 설명받으세요.</p>
+                        {aiGeneratedCode && (
+                          <pre className="text-xs text-green-300 bg-gray-900 rounded-lg px-3 py-2 overflow-x-auto whitespace-pre-wrap break-words">
+                            {aiGeneratedCode}
+                          </pre>
+                        )}
+                        {!aiExplanation && !aiGeneratedCode && !aiExplaining && !aiGenerating && (
+                          <p className="text-xs text-gray-600">설명 또는 코드 생성을 눌러보세요.</p>
                         )}
                       </SidebarSection>
                     )}

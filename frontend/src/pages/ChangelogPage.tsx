@@ -11,6 +11,17 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.30.0',
+    date: '2026-06-11',
+    title: 'AI 코드 생성',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '우측 사이드바 AI 섹션에 "코드" 버튼 추가 — 선택 함수의 코드 스텁을 AI가 생성' },
+      { category: '프론트', desc: '생성된 코드는 녹색 코드블록으로 표시, 설명과 코드를 동시에 확인 가능' },
+      { category: '백엔드', desc: 'POST /api/ai/generate-code — 함수명·호출 컨텍스트 기반 코드 스텁 생성 API' },
+    ],
+  },
+  {
     version: 'v0.29.0',
     date: '2026-06-11',
     title: 'AI 누락 패턴 감지',
