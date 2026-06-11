@@ -1774,10 +1774,28 @@ function GraphPageInner() {
   }, [showDomainBoxes, nodes, tabFilteredNodeIds])
 
   // 탭 필터링된 엣지 — 양쪽 노드가 모두 표시될 때만 보여줌
+  // 현재 사이드바에서 열린 노드 ID (엣지 온디맨드 표시용)
+  const focusedNodeId = useMemo<string | null>(() => {
+    if (!sidebar) return null
+    if (sidebar.kind === 'func' || sidebar.kind === 'db-table') return sidebar.nodeId
+    if (sidebar.kind === 'func-call') return sidebar.callerNodeId
+    if (sidebar.kind === 'file') return (sidebar.data as { nodeId?: string }).nodeId ?? null
+    return null
+  }, [sidebar])
+
   const displayEdges = useMemo(() => {
-    if (!tabFilteredNodeIds) return edges
-    return edges.filter(e => tabFilteredNodeIds.has(e.source) && tabFilteredNodeIds.has(e.target))
-  }, [edges, tabFilteredNodeIds])
+    const baseEdges = tabFilteredNodeIds
+      ? edges.filter(e => tabFilteredNodeIds.has(e.source) && tabFilteredNodeIds.has(e.target))
+      : []
+    // 노드가 선택됐으면 그 노드에 연결된 엣지 추가 표시 (탭 내부 + 전체 탭 모두)
+    if (focusedNodeId) {
+      const connectedEdges = edges.filter(e => e.source === focusedNodeId || e.target === focusedNodeId)
+      const combined = [...baseEdges]
+      connectedEdges.forEach(e => { if (!combined.find(b => b.id === e.id)) combined.push(e) })
+      return combined
+    }
+    return baseEdges
+  }, [edges, tabFilteredNodeIds, focusedNodeId])
 
   // 현재 레이아웃 기준으로 사용 가능한 탭 목록
   const availableTabs = useMemo(() => {

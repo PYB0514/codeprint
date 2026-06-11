@@ -11,6 +11,17 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.51.0',
+    date: '2026-06-11',
+    title: '엣지 온디맨드 렌더링',
+    type: 'fix',
+    items: [
+      { category: '프론트', desc: '전체 탭에서는 엣지 숨김 — 도메인 탭 선택 시에만 해당 범위 엣지 표시' },
+      { category: '프론트', desc: '노드 클릭 시 연결된 엣지만 추가 표시 (GraphPage + ShareGraphPage 공통 적용)' },
+      { category: '성능', desc: '수천 개 엣지 SVG 렌더링 제거로 대형 프로젝트 렌더 부하 대폭 감소' },
+    ],
+  },
+  {
     version: 'v0.50.0',
     date: '2026-06-11',
     title: '공유 그래프 도메인 탭 분리',
