@@ -106,4 +106,10 @@ public class PostRepositoryImpl implements PostRepository {
     public List<Post> findByUserIdInOrderByCreatedAtDesc(List<UUID> userIds, Pageable pageable) {
         return postJpa.findByUserIdInOrderByCreatedAtDesc(userIds, pageable);
     }
+
+    // 게시글 댓글 수 조회
+    @Override
+    public long countCommentsByPostId(UUID postId) {
+        return commentJpa.countByPostId(postId);
+    }
 }

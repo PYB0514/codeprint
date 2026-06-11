@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.40.0',
+    date: '2026-06-11',
+    title: '게시글 댓글 수 표시',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'PostResponse에 commentCount 필드 추가 — 게시글 목록/단건 응답에 댓글 수 포함' },
+      { category: '프론트', desc: '게시글 카드에 💬 댓글 수 표시 (1개 이상일 때만)' },
+    ],
+  },
+  {
     version: 'v0.39.0',
     date: '2026-06-11',
     title: '게시글 조회수',

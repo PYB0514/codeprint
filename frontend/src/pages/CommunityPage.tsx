@@ -29,6 +29,7 @@ interface Post {
   likeCount: number
   likedByMe: boolean
   viewCount: number
+  commentCount: number
 }
 
 interface Comment {
@@ -471,6 +472,11 @@ export default function CommunityPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      {post.commentCount > 0 && (
+                        <span className="text-xs text-gray-600 flex items-center gap-0.5">
+                          <span>💬</span><span>{post.commentCount}</span>
+                        </span>
+                      )}
                       <button
                         onClick={(e) => handleToggleLike(e, post)}
                         className={`text-xs flex items-center gap-1 ${post.likedByMe ? 'text-red-400' : 'text-gray-600 hover:text-red-400'}`}
