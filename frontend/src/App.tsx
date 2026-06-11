@@ -13,6 +13,7 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const GraphPage = lazy(() => import('./pages/GraphPage'))
 const ShareGraphPage = lazy(() => import('./pages/ShareGraphPage'))
 const CommunityPage = lazy(() => import('./pages/CommunityPage'))
+const MessagesPage = lazy(() => import('./pages/MessagesPage'))
 const CommunityPostGraphPage = lazy(() => import('./pages/CommunityPostGraphPage'))
 const DiffPage = lazy(() => import('./pages/DiffPage'))
 const AdminPage = lazy(() => import('./pages/AdminPage'))
@@ -78,6 +79,7 @@ export default function App() {
           <Route path="/donate/success" element={<DonateSuccessPage />} />
           <Route path="/donate/fail" element={<DonateFailPage />} />
           <Route path="/collab/join" element={<JoinCollaborationPage />} />
+          <Route path="/messages" element={<MessagesPage />} />
         </Routes>
       </Suspense>
       <NoticeBanner />
