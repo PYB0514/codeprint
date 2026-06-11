@@ -292,18 +292,33 @@ public class GraphWarningService {
         // Spring Security
         "configure", "userDetailsService", "passwordEncoder",
         // Spring Boot 진입점
-        "getApplicationContext", "contextLoads"
+        "getApplicationContext", "contextLoads",
+        // Domain entity 상태 변경 — DI로 호출
+        "confirm", "touch", "apply", "activate", "deactivate", "enable", "disable", "reset",
+        // 팩토리/기본값 메서드
+        "defaultStyle", "empty", "none", "zero"
     );
 
-    // getter/setter 또는 Spring 콜백 네이밍 패턴 — 정적 분석으로 호출 추적 불가
+    // getter/setter·Spring 콜백·JPA 파생쿼리·생성자 패턴 — 정적 분석으로 호출 추적 불가
     private static boolean isFrameworkCallPattern(String name) {
         if (name == null || name.isEmpty()) return false;
-        // Lombok/JPA getter/setter 패턴
-        if ((name.startsWith("get") || name.startsWith("set") || name.startsWith("is"))
+        // Lombok/JPA getter/setter 패턴 (get/set: charAt(3), is: charAt(2))
+        if ((name.startsWith("get") || name.startsWith("set"))
                 && name.length() > 3 && Character.isUpperCase(name.charAt(3))) return true;
+        if (name.startsWith("is") && name.length() > 2 && Character.isUpperCase(name.charAt(2))) return true;
         // Spring/이벤트 핸들러 패턴
         if (name.startsWith("on") && name.length() > 2 && Character.isUpperCase(name.charAt(2))) return true;
         if (name.startsWith("handle") && name.length() > 6 && Character.isUpperCase(name.charAt(6))) return true;
+        // Spring Data JPA 파생 쿼리 — 런타임 프록시가 메서드명으로 쿼리 생성
+        if ((name.startsWith("find") || name.startsWith("count")
+                || name.startsWith("existsBy") || name.startsWith("delete"))
+                && name.length() > 6) return true;
+        // Domain entity 뮤테이션 메서드 — DI 인터페이스를 통해 호출, FUNCTION_CALL 엣지 없음
+        if ((name.startsWith("save") || name.startsWith("update") || name.startsWith("toggle")
+                || name.startsWith("mark") || name.startsWith("upgrade") || name.startsWith("downgrade"))
+                && name.length() > 4) return true;
+        // Java record/class 생성자 — 함수명이 PascalCase (첫 글자 대문자)
+        if (Character.isUpperCase(name.charAt(0))) return true;
         return false;
     }
 
@@ -337,8 +352,9 @@ public class GraphWarningService {
             // React 컴포넌트 — .tsx 파일에서 대문자 시작 함수 (JSX로 렌더링되므로 FUNCTION_CALL 엣지 없음)
             if ((fp.endsWith(".tsx") || fp.endsWith(".jsx")) && !name.isEmpty()
                     && Character.isUpperCase(name.charAt(0))) continue;
-            // pages/ · components/ · hooks/ 레이어 — React 모듈 전체가 JSX/export 기반
-            if (fp.contains("/pages/") || fp.contains("/components/") || fp.contains("/hooks/")) continue;
+            // pages/ · components/ · hooks/ · utils/ · lib/ 레이어 — React 모듈 전체가 export 기반
+            if (fp.contains("/pages/") || fp.contains("/components/") || fp.contains("/hooks/")
+                    || fp.contains("/utils/") || fp.contains("/lib/")) continue;
             // JPA Repository 구현체 · domain 팩토리 메서드 등 프레임워크 호출 패턴
             if (FRAMEWORK_CALL_NAMES.contains(name)) continue;
             // getter/setter/onXxx/handleXxx 네이밍 패턴 — 프레임워크·Lombok 자동 생성
