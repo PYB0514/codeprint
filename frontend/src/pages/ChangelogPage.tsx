@@ -14,7 +14,7 @@ const RELEASES: Release[] = [
     version: 'v0.51.0',
     date: '2026-06-11',
     title: '엣지 온디맨드 렌더링',
-    type: 'improvement',
+    type: 'fix',
     items: [
       { category: '프론트', desc: '전체 탭에서는 엣지 숨김 — 도메인 탭 선택 시에만 해당 범위 엣지 표시' },
       { category: '프론트', desc: '노드 클릭 시 연결된 엣지만 추가 표시 (GraphPage + ShareGraphPage 공통 적용)' },
