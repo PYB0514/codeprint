@@ -11,6 +11,35 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.50.0',
+    date: '2026-06-11',
+    title: '공유 그래프 도메인 탭 분리',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '공유 그래프(ShareGraphPage) 좌측 사이드바에 도메인 탭 분리 추가 — GraphPage와 동일한 방식' },
+      { category: '프론트', desc: '탭 클릭 시 해당 도메인 노드/엣지만 렌더링하여 대형 프로젝트 공유 시 부하 감소' },
+    ],
+  },
+  {
+    version: 'v0.49.0',
+    date: '2026-06-11',
+    title: '분석 완료 후 그래프 자동 이동',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '분석 완료 후 0.8초 딜레이 후 자동으로 그래프 페이지로 이동 — 수동 클릭 없이 바로 결과 확인' },
+    ],
+  },
+  {
+    version: 'v0.48.0',
+    date: '2026-06-11',
+    title: '관리자 JVM 메트릭 패널',
+    type: 'infra',
+    items: [
+      { category: '프론트', desc: '관리자 대시보드에 서버 메트릭 패널 추가 — 힙 사용률·CPU·활성 스레드 30초 갱신' },
+      { category: '프론트', desc: '80% 힙/70% CPU/200 스레드 초과 시 빨간 경고 카드 표시' },
+    ],
+  },
+  {
     version: 'v0.47.0',
     date: '2026-06-11',
     title: '그래프 도메인 탭 분리 + 성능 최적화',
