@@ -1,4 +1,4 @@
-// Pro 플랜 결제 성공 처리 페이지 — 토스 리다이렉트 후 백엔드 승인 요청
+﻿// Pro 플랜 결제 성공 처리 페이지 — 토스 리다이렉트 후 백엔드 승인 요청
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
@@ -25,7 +25,7 @@ export default function PaymentSuccessPage() {
   }, [searchParams])
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
+    <div className="app-page min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
       <div className="text-center max-w-md px-4">
         {status === 'loading' && (
           <>

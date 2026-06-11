@@ -1,4 +1,4 @@
-// 커뮤니티 게시글에 첨부된 그래프 — 숨김 필터 적용 읽기 전용 뷰어
+﻿// 커뮤니티 게시글에 첨부된 그래프 — 숨김 필터 적용 읽기 전용 뷰어
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -100,7 +100,7 @@ function CommunityPostGraphInner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+      <div className="app-page min-h-screen bg-gray-950 text-white flex items-center justify-center">
         <p className="text-gray-400">로딩 중...</p>
       </div>
     )
@@ -108,7 +108,7 @@ function CommunityPostGraphInner() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
+      <div className="app-page min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
         <p className="text-red-400">{error}</p>
         <button onClick={() => navigate('/community')} className="text-sm underline text-gray-400">
           커뮤니티로
@@ -118,7 +118,7 @@ function CommunityPostGraphInner() {
   }
 
   return (
-    <div className="w-screen h-screen bg-gray-950 flex flex-col">
+    <div className="app-page w-screen h-screen bg-gray-950 flex flex-col">
       <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 shrink-0">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/community')} className="font-bold text-white text-sm hover:text-gray-300">

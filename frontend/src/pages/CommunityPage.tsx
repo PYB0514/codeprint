@@ -1,4 +1,4 @@
-// 커뮤니티 게시판 — 게시글 목록/상세/작성 통합 페이지
+﻿// 커뮤니티 게시판 — 게시글 목록/상세/작성 통합 페이지
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
@@ -284,7 +284,7 @@ export default function CommunityPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="app-page min-h-screen bg-gray-950 text-white">
       <AppHeader />
 
       <main className="max-w-5xl mx-auto px-6 py-10 flex gap-6">

@@ -1,4 +1,4 @@
-// 내 북마크 목록 페이지
+﻿// 내 북마크 목록 페이지
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -44,7 +44,7 @@ export default function BookmarksPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="app-page min-h-screen bg-gray-950 text-white">
       <AppHeader />
 
       <main className="max-w-2xl mx-auto px-6 py-10">

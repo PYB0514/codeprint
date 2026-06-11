@@ -1,4 +1,4 @@
-// 공개 유저 프로필 페이지 — /users/:id
+﻿// 공개 유저 프로필 페이지 — /users/:id
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -118,7 +118,7 @@ export default function UserProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+      <div className="app-page min-h-screen bg-gray-950 text-white flex items-center justify-center">
         <p className="text-gray-400">로딩 중...</p>
       </div>
     )
@@ -126,7 +126,7 @@ export default function UserProfilePage() {
 
   if (error || !profile) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
+      <div className="app-page min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
         <p className="text-red-400">사용자를 찾을 수 없습니다.</p>
         <button onClick={() => navigate(-1)} className="text-sm underline text-gray-400">뒤로가기</button>
       </div>
@@ -136,7 +136,7 @@ export default function UserProfilePage() {
   const joinedYear = new Date(profile.createdAt).getFullYear()
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="app-page min-h-screen bg-gray-950 text-white">
       <AppHeader />
 
       <main className="max-w-2xl mx-auto px-6 py-10">

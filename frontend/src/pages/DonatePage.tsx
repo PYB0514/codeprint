@@ -1,4 +1,4 @@
-// 후원 페이지 — 금액 선택 및 토스페이먼츠 결제 요청
+﻿// 후원 페이지 — 금액 선택 및 토스페이먼츠 결제 요청
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -92,7 +92,7 @@ export default function DonatePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="app-page min-h-screen bg-gray-950 text-gray-100">
       <AppHeader />
       <div className="max-w-2xl mx-auto px-4 py-12">
         <div className="text-center mb-10">

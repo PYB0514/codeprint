@@ -1,4 +1,4 @@
-// 사용자 설정 페이지 — 프로필 이미지, 배경 이미지, AI API 키 관리
+﻿// 사용자 설정 페이지 — 프로필 이미지, 배경 이미지, AI API 키 관리
 import { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
@@ -114,7 +114,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="app-page min-h-screen bg-gray-950 text-white">
       <AppHeader />
 
       <main className="max-w-xl mx-auto px-6 py-10">

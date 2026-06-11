@@ -1,4 +1,4 @@
-// 공개 프로젝트 읽기 전용 그래프 뷰어 (비인증 접근 허용)
+﻿// 공개 프로젝트 읽기 전용 그래프 뷰어 (비인증 접근 허용)
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
@@ -178,7 +178,7 @@ function ShareGraphInner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+      <div className="app-page min-h-screen bg-gray-950 text-white flex items-center justify-center">
         <p className="text-gray-400">로딩 중...</p>
       </div>
     )
@@ -186,7 +186,7 @@ function ShareGraphInner() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
+      <div className="app-page min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
         <p className="text-red-400">{error}</p>
         <button onClick={() => navigate('/')} className="text-sm underline text-gray-400">홈으로</button>
       </div>
@@ -194,7 +194,7 @@ function ShareGraphInner() {
   }
 
   return (
-    <div className="w-screen h-screen bg-gray-950 flex flex-col">
+    <div className="app-page w-screen h-screen bg-gray-950 flex flex-col">
       {/* 상단 배너 */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 shrink-0">
         <div className="flex items-center gap-3">

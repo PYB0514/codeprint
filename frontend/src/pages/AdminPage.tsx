@@ -1,4 +1,4 @@
-// 관리자 대시보드 — 서비스 통계, 사용자 관리, 공지사항 관리
+﻿// 관리자 대시보드 — 서비스 통계, 사용자 관리, 공지사항 관리
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 
@@ -117,7 +117,7 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="app-page min-h-screen bg-gray-950 flex items-center justify-center">
         <p className="text-gray-400">로딩 중...</p>
       </div>
     )
@@ -125,14 +125,14 @@ export default function AdminPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="app-page min-h-screen bg-gray-950 flex items-center justify-center">
         <p className="text-red-400">{error}</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-8">
+    <div className="app-page min-h-screen bg-gray-950 text-gray-100 p-8">
       <div className="max-w-6xl mx-auto space-y-10">
         <h1 className="text-2xl font-bold">관리자 대시보드</h1>
 

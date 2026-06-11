@@ -1,4 +1,4 @@
-// 유저 간 쪽지 받은 함 및 대화 스레드 + 알림 설정 페이지
+﻿// 유저 간 쪽지 받은 함 및 대화 스레드 + 알림 설정 페이지
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
@@ -91,7 +91,7 @@ export default function MessagesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+      <div className="app-page min-h-screen bg-gray-950 text-white flex flex-col">
         <AppHeader />
         <div className="flex-1 flex items-center justify-center text-gray-500">로딩 중...</div>
       </div>
@@ -99,7 +99,7 @@ export default function MessagesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+    <div className="app-page min-h-screen bg-gray-950 text-white flex flex-col">
       <AppHeader />
       <div className="flex-1 flex overflow-hidden" style={{ height: 'calc(100vh - 65px)' }}>
 

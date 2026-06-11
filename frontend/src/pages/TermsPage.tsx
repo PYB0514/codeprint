@@ -1,4 +1,4 @@
-// 이용약관 페이지
+﻿// 이용약관 페이지
 import { useNavigate } from 'react-router-dom'
 import Footer from '../components/Footer'
 
@@ -7,7 +7,7 @@ export default function TermsPage() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-950 text-white">
+    <div className="app-page min-h-screen flex flex-col bg-gray-950 text-white">
 
       {/* 헤더 */}
       <header className="flex items-center justify-between px-8 py-5 border-b border-gray-800">
