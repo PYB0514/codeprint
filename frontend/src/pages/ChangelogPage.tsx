@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.56.0',
+    date: '2026-06-11',
+    title: '문의하기 피드백 폼',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'feedbacks 테이블(V35) + POST /api/feedback (로그인 필수) + GET /api/feedback/admin (ADMIN 전용)' },
+      { category: '프론트', desc: 'ContactPage 이메일 링크 방식 → 실제 폼 UI로 교체 — 카테고리 토글, 글자수 카운터, 제출 완료 화면' },
+    ],
+  },
+  {
     version: 'v0.55.0',
     date: '2026-06-11',
     title: '랜딩페이지 전면 개선 + OG 태그',
