@@ -65,6 +65,9 @@ export default function CommunityPage() {
   const [newContent, setNewContent] = useState('')
   const [newFeedbackType, setNewFeedbackType] = useState('GENERAL')
   const [newComment, setNewComment] = useState('')
+  const [editingPost, setEditingPost] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editContent, setEditContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [feedTab, setFeedTab] = useState<'all' | 'following'>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -233,6 +236,16 @@ export default function CommunityPage() {
         : prev
       )
     }
+  }
+
+  // 게시글 수정 저장
+  const handleUpdatePost = async () => {
+    if (!selectedPost || !editTitle.trim()) return
+    const res = await axios.put<Post>(`/api/community/posts/${selectedPost.id}`, { title: editTitle, content: editContent })
+    const updated = res.data
+    setPosts(prev => prev.map(p => p.id === updated.id ? updated : p))
+    setSelectedPost(updated)
+    setEditingPost(false)
   }
 
   // 게시글 삭제
@@ -476,7 +489,29 @@ export default function CommunityPage() {
                   </span>
                 )}
               </div>
-              <h2 className="font-semibold text-base mb-1">{selectedPost.title}</h2>
+              {editingPost ? (
+                <div className="flex flex-col gap-2 mb-3">
+                  <input
+                    value={editTitle}
+                    onChange={e => setEditTitle(e.target.value)}
+                    className="w-full bg-gray-800 text-white text-sm px-3 py-1.5 rounded border border-gray-700 focus:outline-none"
+                    placeholder="제목"
+                  />
+                  <textarea
+                    value={editContent}
+                    onChange={e => setEditContent(e.target.value)}
+                    rows={5}
+                    className="w-full bg-gray-800 text-white text-sm px-3 py-1.5 rounded border border-gray-700 focus:outline-none resize-none"
+                    placeholder="내용"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={handleUpdatePost} className="text-xs bg-white text-black font-medium px-3 py-1 rounded hover:bg-gray-200">저장</button>
+                    <button onClick={() => setEditingPost(false)} className="text-xs text-gray-400 hover:text-white">취소</button>
+                  </div>
+                </div>
+              ) : (
+                <h2 className="font-semibold text-base mb-1">{selectedPost.title}</h2>
+              )}
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs text-gray-500">
                   <button
@@ -510,9 +545,19 @@ export default function CommunityPage() {
                       <span className="text-xs">{selectedPost.bookmarkCount}</span>
                     )}
                   </button>
+                  {user && user.username === selectedPost.authorUsername && !editingPost && (
+                    <button
+                      onClick={() => { setEditTitle(selectedPost.title); setEditContent(selectedPost.content ?? ''); setEditingPost(true) }}
+                      className="text-xs text-gray-500 hover:text-white transition-colors"
+                    >
+                      수정
+                    </button>
+                  )}
                 </div>
               </div>
-              <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{selectedPost.content}</p>
+              {!editingPost && (
+                <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{selectedPost.content}</p>
+              )}
 
               {/* 첨부 이미지 */}
               {postAttachments.length > 0 && (
