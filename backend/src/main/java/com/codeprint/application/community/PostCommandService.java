@@ -43,6 +43,17 @@ public class PostCommandService {
         return postRepository.saveComment(comment);
     }
 
+    // 소유자 확인 후 댓글 삭제
+    public void deleteComment(UUID commentId, UUID requestingUserId) {
+        Comment comment = postRepository.findCommentById(commentId)
+                .orElseThrow(() -> new IllegalArgumentException("Comment not found: " + commentId));
+        if (!comment.getUserId().equals(requestingUserId)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN, "댓글 작성자만 삭제할 수 있습니다.");
+        }
+        postRepository.deleteCommentById(commentId);
+    }
+
     // 소유자 확인 후 게시글 삭제
     public void deletePost(UUID postId, UUID requestingUserId) {
         Post post = postRepository.findById(postId)

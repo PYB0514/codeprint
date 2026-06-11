@@ -553,9 +553,24 @@ export default function CommunityPage() {
             <div className="border-t border-gray-800 pt-3 flex flex-col gap-2">
               <p className="text-xs font-medium text-gray-400">댓글 {comments.length}</p>
               {comments.map((c) => (
-                <div key={c.id} className="text-xs text-gray-300">
-                  <span className="text-gray-500 mr-1">{c.authorUsername}</span>
-                  {c.content}
+                <div key={c.id} className="text-xs text-gray-300 flex items-start justify-between gap-2 group">
+                  <span>
+                    <span className="text-gray-500 mr-1">{c.authorUsername}</span>
+                    {c.content}
+                  </span>
+                  {user && user.username === c.authorUsername && (
+                    <button
+                      onClick={async () => {
+                        if (!selectedPost) return
+                        await axios.delete(`/api/community/posts/${selectedPost.id}/comments/${c.id}`)
+                        setComments(prev => prev.filter(x => x.id !== c.id))
+                      }}
+                      className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                      title="댓글 삭제"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               ))}
               {user && (

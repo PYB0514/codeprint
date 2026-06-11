@@ -25,6 +25,12 @@ public interface PostRepository {
     // 게시글 댓글 목록 조회
     List<Comment> findCommentsByPostId(UUID postId);
 
+    // 댓글 단건 조회
+    Optional<Comment> findCommentById(UUID commentId);
+
+    // 댓글 삭제
+    void deleteCommentById(UUID commentId);
+
     // 게시글 삭제
     void deleteById(UUID id);
 
