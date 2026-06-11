@@ -36,7 +36,7 @@ import NoticeBanner from './components/NoticeBanner'
 
 // 앱 최상위 라우터 컴포넌트
 export default function App() {
-  // 로그인한 사용자의 배경 이미지를 body에 적용
+  // 로그인한 사용자의 배경 이미지를 body에 적용 (has-bg는 localStorage 토글 상태 존중)
   useEffect(() => {
     axios.get<{ graphBgUrl?: string | null }>('/api/auth/me')
       .then((r) => {
@@ -46,7 +46,10 @@ export default function App() {
           document.body.style.backgroundSize = 'cover'
           document.body.style.backgroundAttachment = 'fixed'
           document.body.style.backgroundPosition = 'center'
-          document.body.classList.add('has-bg')
+          // 사용자가 명시적으로 꺼둔 경우(graphBgEnabled=false)가 아니면 켜짐 상태로 시작
+          if (localStorage.getItem('graphBgEnabled') !== 'false') {
+            document.body.classList.add('has-bg')
+          }
         }
       })
       .catch(() => {})

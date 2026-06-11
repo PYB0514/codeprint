@@ -1001,16 +1001,20 @@ function GraphPageInner() {
     }
   }
 
+  // 마운트 시 bgEnabled 초기값을 DOM에 반영 (App.tsx 비동기 fetch와 localStorage 상태 동기화)
+  useEffect(() => {
+    if (bgEnabled) {
+      document.body.classList.add('has-bg')
+    } else {
+      document.body.classList.remove('has-bg')
+    }
+  }, [bgEnabled])
+
   // 배경이미지 표시/숨김 토글
   const toggleBg = useCallback(() => {
     setBgEnabled(prev => {
       const next = !prev
       localStorage.setItem('graphBgEnabled', String(next))
-      if (next) {
-        document.body.classList.add('has-bg')
-      } else {
-        document.body.classList.remove('has-bg')
-      }
       return next
     })
   }, [])
