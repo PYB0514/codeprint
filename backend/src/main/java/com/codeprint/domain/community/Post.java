@@ -49,6 +49,9 @@ public class Post {
     @Column(name = "hidden_node_names", columnDefinition = "jsonb")
     private List<String> hiddenNodeNames;
 
+    @Column(name = "view_count", nullable = false)
+    private long viewCount = 0;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -71,6 +74,11 @@ public class Post {
         post.createdAt = Instant.now();
         post.updatedAt = Instant.now();
         return post;
+    }
+
+    // 조회수 1 증가
+    public void incrementViewCount() {
+        this.viewCount++;
     }
 
     // 게시글 제목과 내용을 수정

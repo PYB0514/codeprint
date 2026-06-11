@@ -77,6 +77,8 @@ public class CommunityController {
             @AuthenticationPrincipal User user) {
         Post post = postCommandService.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
+        post.incrementViewCount();
+        postRepository.save(post);
         List<CommentResponse> comments = postCommandService.getComments(postId).stream()
                 .map(this::toCommentResponse)
                 .toList();
@@ -290,7 +292,8 @@ public class CommunityController {
                 bookmarkCount,
                 bookmarkedByMe,
                 likeCount,
-                likedByMe
+                likedByMe,
+                post.getViewCount()
         );
     }
 
@@ -331,7 +334,8 @@ public class CommunityController {
             UUID id, String title, String content, String feedbackType,
             UUID graphId, UUID userId, String authorUsername, Instant createdAt,
             long bookmarkCount, boolean bookmarkedByMe,
-            long likeCount, boolean likedByMe) {}
+            long likeCount, boolean likedByMe,
+            long viewCount) {}
 
     // 댓글 응답 DTO
     public record CommentResponse(

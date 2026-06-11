@@ -28,6 +28,7 @@ interface Post {
   bookmarkedByMe: boolean
   likeCount: number
   likedByMe: boolean
+  viewCount: number
 }
 
 interface Comment {
@@ -484,6 +485,11 @@ export default function CommunityPage() {
                         <span>{post.bookmarkedByMe ? '★' : '☆'}</span>
                         {post.bookmarkCount > 0 && <span>{post.bookmarkCount}</span>}
                       </button>
+                      {post.viewCount > 0 && (
+                        <span className="text-xs text-gray-600 flex items-center gap-0.5">
+                          <span>👁</span><span>{post.viewCount}</span>
+                        </span>
+                      )}
                       {user?.id === post.userId && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id) }}
