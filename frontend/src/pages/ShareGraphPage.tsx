@@ -1,5 +1,5 @@
 ﻿// 공개 프로젝트 읽기 전용 그래프 뷰어 (비인증 접근 허용)
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { useGraphChat } from '../hooks/useGraphChat'
@@ -99,6 +99,7 @@ function ShareGraphInner() {
   const [showChat, setShowChat] = useState(false)
   const [ownerBgUrl, setOwnerBgUrl] = useState<string | null>(null)
   const [bgEnabled, setBgEnabled] = useState(false)
+  const [activeDomainTab, setActiveDomainTab] = useState<string>('전체')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, connected, sendMessage } = useGraphChat(graphId, null)
 
@@ -191,6 +192,35 @@ function ShareGraphInner() {
     setChatInput('')
   }
 
+  // 도메인/레이어 탭 목록 — sectionNode 라벨에서 추출
+  const availableTabs = useMemo(() => {
+    const sections = nodes.filter(n => n.type === 'sectionNode').map(n => String(n.data?.label ?? ''))
+    return ['전체', ...Array.from(new Set(sections)).sort()]
+  }, [nodes])
+
+  // 탭 필터링된 노드 ID 집합
+  const tabFilteredNodeIds = useMemo(() => {
+    if (activeDomainTab === '전체') return null
+    const sectionNode = nodes.find(n => n.type === 'sectionNode' && String(n.data?.label ?? '') === activeDomainTab)
+    if (!sectionNode) return null
+    const childIds = new Set<string>([sectionNode.id])
+    nodes.forEach(n => { if (n.parentId === sectionNode.id) childIds.add(n.id) })
+    nodes.forEach(n => { if (n.parentId && childIds.has(n.parentId)) childIds.add(n.id) })
+    nodes.forEach(n => { if (n.parentId && childIds.has(n.parentId)) childIds.add(n.id) })
+    return childIds
+  }, [activeDomainTab, nodes])
+
+  const displayNodes = useMemo(() =>
+    tabFilteredNodeIds ? nodes.filter(n => tabFilteredNodeIds.has(n.id)) : nodes,
+    [nodes, tabFilteredNodeIds]
+  )
+  const displayEdges = useMemo(() =>
+    tabFilteredNodeIds
+      ? edges.filter(e => tabFilteredNodeIds.has(e.source) && tabFilteredNodeIds.has(e.target))
+      : edges,
+    [edges, tabFilteredNodeIds]
+  )
+
   // 인덱스에 표시할 노드 (section/group 제외, 검색 필터)
   const indexNodes = nodes.filter(n =>
     n.type !== 'sectionNode' && n.type !== 'groupNode' && !n.hidden &&
@@ -238,6 +268,29 @@ function ShareGraphInner() {
 
         {/* 좌측 사이드바 */}
         <aside className="w-56 shrink-0 bg-gray-950 border-r border-gray-800 flex flex-col overflow-y-auto">
+
+          {/* 도메인 탭 분리 — 2개 이상일 때만 표시 */}
+          {availableTabs.length > 2 && (
+            <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-1.5">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">탭 분리</p>
+              {availableTabs.map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => {
+                    setActiveDomainTab(tab)
+                    setTimeout(() => fitView({ duration: 400, padding: 0.15 }), 50)
+                  }}
+                  className={`w-full text-left text-xs px-2 py-1 rounded transition-colors truncate ${
+                    activeDomainTab === tab
+                      ? 'bg-blue-600/30 text-blue-300'
+                      : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* 노드 검색 섹션 */}
           <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
@@ -303,8 +356,8 @@ function ShareGraphInner() {
         {/* 그래프 캔버스 */}
         <div className="flex-1 h-full relative">
           <ReactFlow
-            nodes={nodes}
-            edges={edges}
+            nodes={displayNodes}
+            edges={displayEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
