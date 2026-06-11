@@ -11,13 +11,24 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.37.0',
+    date: '2026-06-11',
+    title: '게시글 수정',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'PUT /api/community/posts/:id — 제목/내용 수정, 작성자 소유권 검증 (타인 수정 시 403)' },
+      { category: '프론트', desc: '게시글 상세 패널에 수정 버튼 — 인라인 편집 폼, 저장/취소' },
+    ],
+  },
+  {
     version: 'v0.36.0',
     date: '2026-06-11',
-    title: '댓글 알림',
+    title: '댓글 알림 + 댓글 삭제',
     type: 'feature',
     items: [
       { category: '백엔드', desc: '게시글에 댓글이 달리면 게시글 작성자에게 인앱 알림 자동 발송 (자신의 게시글 제외)' },
-      { category: '프론트', desc: '커뮤니티 댓글 삭제 — 작성자 본인 댓글에 hover 시 ✕ 버튼 표시, 즉시 목록에서 제거' },
+      { category: '백엔드', desc: 'DELETE /api/community/posts/:id/comments/:cid — 댓글 삭제, 작성자 소유권 검증' },
+      { category: '프론트', desc: '커뮤니티 댓글 — 작성자 본인 댓글에 hover 시 ✕ 버튼 표시, 즉시 목록에서 제거' },
     ],
   },
   {
