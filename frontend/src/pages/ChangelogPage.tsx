@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.25.0',
+    date: '2026-06-11',
+    title: '게시글 좋아요',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '커뮤니티 게시글 목록 및 상세에 ♡ 좋아요 버튼 추가 — 클릭 시 실시간 카운트 반영' },
+      { category: '백엔드', desc: 'post_likes 테이블 (V26 마이그레이션) + POST/DELETE /api/community/posts/{id}/like API' },
+    ],
+  },
+  {
     version: 'v0.24.0',
     date: '2026-06-11',
     title: '팔로잉 피드',

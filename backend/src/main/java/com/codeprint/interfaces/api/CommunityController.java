@@ -7,6 +7,8 @@ import com.codeprint.domain.community.Comment;
 import com.codeprint.domain.community.Post;
 import com.codeprint.domain.community.PostBookmark;
 import com.codeprint.domain.community.PostBookmarkRepository;
+import com.codeprint.domain.community.PostLike;
+import com.codeprint.domain.community.PostLikeRepository;
 import com.codeprint.domain.community.PostRepository;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Node;
@@ -34,6 +36,7 @@ public class CommunityController {
     private final GraphQueryService graphQueryService;
     private final UserRepository userRepository;
     private final PostBookmarkRepository bookmarkRepository;
+    private final PostLikeRepository likeRepository;
     private final PostRepository postRepository;
     private final UserFollowRepository followRepository;
 
@@ -196,6 +199,26 @@ public class CommunityController {
         return ResponseEntity.noContent().build();
     }
 
+    // 게시글 좋아요 추가
+    @PostMapping("/posts/{postId}/like")
+    public ResponseEntity<Void> addLike(
+            @PathVariable UUID postId,
+            @AuthenticationPrincipal User user) {
+        if (!likeRepository.existsByUserIdAndPostId(user.getId(), postId)) {
+            likeRepository.save(PostLike.of(user.getId(), postId));
+        }
+        return ResponseEntity.ok().build();
+    }
+
+    // 게시글 좋아요 취소
+    @DeleteMapping("/posts/{postId}/like")
+    public ResponseEntity<Void> removeLike(
+            @PathVariable UUID postId,
+            @AuthenticationPrincipal User user) {
+        likeRepository.deleteByUserIdAndPostId(user.getId(), postId);
+        return ResponseEntity.noContent().build();
+    }
+
     // 내 북마크 목록 조회 (최신순, 최대 50개)
     @GetMapping("/bookmarks")
     public ResponseEntity<List<PostResponse>> getMyBookmarks(@AuthenticationPrincipal User user) {
@@ -207,7 +230,7 @@ public class CommunityController {
         return ResponseEntity.ok(posts);
     }
 
-    // Post 엔티티를 응답 DTO로 변환 (북마크 수, 내 북마크 여부 포함)
+    // Post 엔티티를 응답 DTO로 변환 (북마크/좋아요 수 및 내 여부 포함)
     private PostResponse toPostResponse(Post post, String authorUsername, User currentUser) {
         String username = authorUsername;
         if (username == null) {
@@ -218,6 +241,9 @@ public class CommunityController {
         long bookmarkCount = bookmarkRepository.countByPostId(post.getId());
         boolean bookmarkedByMe = currentUser != null &&
                 bookmarkRepository.existsByUserIdAndPostId(currentUser.getId(), post.getId());
+        long likeCount = likeRepository.countByPostId(post.getId());
+        boolean likedByMe = currentUser != null &&
+                likeRepository.existsByUserIdAndPostId(currentUser.getId(), post.getId());
         return new PostResponse(
                 post.getId(),
                 post.getTitle(),
@@ -228,7 +254,9 @@ public class CommunityController {
                 username,
                 post.getCreatedAt(),
                 bookmarkCount,
-                bookmarkedByMe
+                bookmarkedByMe,
+                likeCount,
+                likedByMe
         );
     }
 
@@ -265,7 +293,8 @@ public class CommunityController {
     public record PostResponse(
             UUID id, String title, String content, String feedbackType,
             UUID graphId, UUID userId, String authorUsername, Instant createdAt,
-            long bookmarkCount, boolean bookmarkedByMe) {}
+            long bookmarkCount, boolean bookmarkedByMe,
+            long likeCount, boolean likedByMe) {}
 
     // 댓글 응답 DTO
     public record CommentResponse(
