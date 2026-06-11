@@ -16,6 +16,9 @@ public interface UserRepository {
 
     boolean existsByGithubId(Long githubId);
 
+    // 사용자명 키워드로 검색 (최대 10명)
+    java.util.List<User> searchByUsername(String keyword);
+
     // 어드민 전용 — 전체 사용자 수 조회
     long count();
 

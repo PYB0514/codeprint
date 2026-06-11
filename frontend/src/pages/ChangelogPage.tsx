@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.42.0',
+    date: '2026-06-11',
+    title: '유저 검색',
+    type: 'feature',
+    items: [
+      { category: '백엔드', desc: 'GET /api/users?q= 엔드포인트 추가 — 사용자명 키워드 검색, 최대 10명 반환' },
+      { category: '프론트', desc: '헤더 🔍 버튼 클릭 시 유저 검색 드롭다운 — 300ms 디바운스, 결과 클릭 시 프로필 이동' },
+    ],
+  },
+  {
     version: 'v0.41.0',
     date: '2026-06-11',
     title: '게시글 정렬',

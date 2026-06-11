@@ -22,6 +22,12 @@ interface NotificationItem {
   createdAt: number
 }
 
+interface UserSearchResult {
+  id: string
+  username: string
+  avatarUrl: string
+}
+
 // 공통 앱 헤더 — 어느 페이지에서든 <AppHeader /> 한 줄로 동작
 export default function AppHeader({ onLogin }: Props) {
   const navigate = useNavigate()
@@ -32,6 +38,11 @@ export default function AppHeader({ onLogin }: Props) {
   const [unreadNotifs, setUnreadNotifs] = useState(0)
   const [showNotifs, setShowNotifs] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
+  const [showSearch, setShowSearch] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([])
+  const searchRef = useRef<HTMLDivElement>(null)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 쿠키 기반 인증 — /api/auth/me로 로그인 상태 확인
   useEffect(() => {
@@ -59,10 +70,24 @@ export default function AppHeader({ onLogin }: Props) {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setShowNotifs(false)
       }
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSearch(false)
+      }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  // 유저 검색 — 300ms 디바운스
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    if (!searchQuery.trim()) { setSearchResults([]); return }
+    searchTimer.current = setTimeout(() => {
+      axios.get<UserSearchResult[]>('/api/users', { params: { q: searchQuery.trim() } })
+        .then(r => setSearchResults(r.data))
+        .catch(() => {})
+    }, 300)
+  }, [searchQuery])
 
   // 알림 드롭다운 열기 — 열 때 전체 읽음 처리
   const handleOpenNotifs = () => {
@@ -109,6 +134,47 @@ export default function AppHeader({ onLogin }: Props) {
         <button onClick={() => navigate('/donate')} className="text-gray-400 hover:text-white transition-colors">
           ☕ 후원
         </button>
+
+        {/* 유저 검색 */}
+        <div className="relative" ref={searchRef}>
+          <button
+            onClick={() => { setShowSearch(v => !v); setSearchQuery(''); setSearchResults([]) }}
+            className="text-gray-400 hover:text-white transition-colors"
+            title="유저 검색"
+          >
+            🔍
+          </button>
+          {showSearch && (
+            <div className="absolute right-0 top-8 w-64 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 overflow-hidden">
+              <div className="p-2">
+                <input
+                  autoFocus
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="사용자명 검색..."
+                  className="w-full bg-gray-800 text-sm text-white rounded-lg px-3 py-2 outline-none placeholder-gray-600"
+                />
+              </div>
+              {searchResults.length > 0 && (
+                <div className="max-h-60 overflow-y-auto border-t border-gray-800">
+                  {searchResults.map(u => (
+                    <button
+                      key={u.id}
+                      onClick={() => { setShowSearch(false); navigate(`/users/${u.id}`) }}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-800 transition-colors"
+                    >
+                      <img src={u.avatarUrl} alt={u.username} className="w-6 h-6 rounded-full" />
+                      <span className="text-sm text-gray-200">{u.username}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {searchQuery.trim() && searchResults.length === 0 && (
+                <p className="text-xs text-gray-600 text-center py-4 border-t border-gray-800">결과 없음</p>
+              )}
+            </div>
+          )}
+        </div>
 
         {user ? (
           <>

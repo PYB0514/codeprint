@@ -27,6 +27,16 @@ public class UserController {
     private final PostBookmarkRepository bookmarkRepository;
     private final ProjectRepository projectRepository;
 
+    // 사용자명 키워드로 유저 검색 (최대 10명)
+    @GetMapping
+    public ResponseEntity<List<UserProfileResponse>> searchUsers(@RequestParam(required = false) String q) {
+        if (q == null || q.isBlank()) return ResponseEntity.ok(List.of());
+        List<UserProfileResponse> results = userRepository.searchByUsername(q.trim()).stream()
+                .map(this::toProfile)
+                .toList();
+        return ResponseEntity.ok(results);
+    }
+
     // 공개 유저 프로필 조회
     @GetMapping("/{userId}")
     public ResponseEntity<UserProfileResponse> getProfile(@PathVariable UUID userId) {
