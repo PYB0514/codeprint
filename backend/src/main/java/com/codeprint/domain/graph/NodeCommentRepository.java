@@ -14,7 +14,7 @@ public interface NodeCommentRepository {
     Optional<NodeComment> findById(UUID id);
 
     // 특정 노드의 코멘트 목록 조회 (최신순)
-    List<NodeComment> findByGraphIdAndNodeId(UUID graphId, UUID nodeId);
+    List<NodeComment> findByGraphIdAndNodeId(UUID graphId, String nodeId);
 
     // 코멘트 삭제
     void deleteById(UUID id);

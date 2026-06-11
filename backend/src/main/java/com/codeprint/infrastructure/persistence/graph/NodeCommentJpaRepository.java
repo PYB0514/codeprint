@@ -13,10 +13,10 @@ import java.util.UUID;
 public interface NodeCommentJpaRepository extends JpaRepository<NodeComment, UUID>, NodeCommentRepository {
 
     // 그래프+노드 기준 코멘트 목록 — 생성 시간 오름차순
-    List<NodeComment> findByGraphIdAndNodeIdOrderByCreatedAtAsc(UUID graphId, UUID nodeId);
+    List<NodeComment> findByGraphIdAndNodeIdOrderByCreatedAtAsc(UUID graphId, String nodeId);
 
     @Override
-    default List<NodeComment> findByGraphIdAndNodeId(UUID graphId, UUID nodeId) {
+    default List<NodeComment> findByGraphIdAndNodeId(UUID graphId, String nodeId) {
         return findByGraphIdAndNodeIdOrderByCreatedAtAsc(graphId, nodeId);
     }
 }
