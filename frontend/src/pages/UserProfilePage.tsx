@@ -23,6 +23,13 @@ interface UserProfile {
   createdAt: string
 }
 
+interface PublicProject {
+  id: string
+  name: string
+  description: string | null
+  createdAt: string
+}
+
 interface PostSummary {
   id: string
   title: string
@@ -46,6 +53,7 @@ export default function UserProfilePage() {
   const [currentUser, setCurrentUser] = useState<UserInfo | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [posts, setPosts] = useState<PostSummary[]>([])
+  const [projects, setProjects] = useState<PublicProject[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [followStatus, setFollowStatus] = useState<FollowStatus>({ following: false, followers: 0, followingCount: 0 })
@@ -64,11 +72,13 @@ export default function UserProfilePage() {
       axios.get<UserProfile>(`/api/users/${userId}`),
       axios.get<PostSummary[]>(`/api/users/${userId}/posts`),
       axios.get<FollowStatus>(`/api/users/${userId}/follow`),
+      axios.get<PublicProject[]>(`/api/users/${userId}/projects`),
     ])
-      .then(([profileRes, postsRes, followRes]) => {
+      .then(([profileRes, postsRes, followRes, projectsRes]) => {
         setProfile(profileRes.data)
         setPosts(postsRes.data)
         setFollowStatus(followRes.data)
+        setProjects(projectsRes.data)
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false))
@@ -162,6 +172,32 @@ export default function UserProfilePage() {
             </button>
           )}
         </div>
+
+        {/* 공개 프로젝트 */}
+        {projects.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-sm font-medium text-gray-400 mb-3">
+              공개 프로젝트 <span className="text-gray-600">({projects.length})</span>
+            </h2>
+            <div className="flex flex-col gap-2">
+              {projects.map((project) => (
+                <div
+                  key={project.id}
+                  onClick={() => navigate(`/share/${project.id}`)}
+                  className="bg-gray-900 rounded-xl p-4 cursor-pointer hover:bg-gray-800 transition-colors"
+                >
+                  <p className="text-sm font-medium">{project.name}</p>
+                  {project.description && (
+                    <p className="text-xs text-gray-500 mt-1 truncate">{project.description}</p>
+                  )}
+                  <p className="text-xs text-gray-600 mt-1">
+                    {new Date(project.createdAt).toLocaleDateString('ko-KR')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 게시글 목록 */}
         <div>

@@ -4,6 +4,8 @@ package com.codeprint.interfaces.api;
 import com.codeprint.domain.community.Post;
 import com.codeprint.domain.community.PostBookmarkRepository;
 import com.codeprint.domain.community.PostRepository;
+import com.codeprint.domain.project.Project;
+import com.codeprint.domain.project.ProjectRepository;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,7 @@ public class UserController {
     private final UserRepository userRepository;
     private final PostRepository postRepository;
     private final PostBookmarkRepository bookmarkRepository;
+    private final ProjectRepository projectRepository;
 
     // 공개 유저 프로필 조회
     @GetMapping("/{userId}")
@@ -44,6 +47,15 @@ public class UserController {
         return ResponseEntity.ok(posts);
     }
 
+    // 유저의 공개 프로젝트 목록 조회
+    @GetMapping("/{userId}/projects")
+    public ResponseEntity<List<PublicProjectResponse>> getUserProjects(@PathVariable UUID userId) {
+        List<PublicProjectResponse> projects = projectRepository.findPublicByUserId(userId).stream()
+                .map(p -> new PublicProjectResponse(p.getId(), p.getName(), p.getDescription(), p.getCreatedAt()))
+                .toList();
+        return ResponseEntity.ok(projects);
+    }
+
     // User → UserProfileResponse 변환
     private UserProfileResponse toProfile(User u) {
         String avatarUrl = "https://github.com/" + u.getUsername() + ".png";
@@ -62,6 +74,9 @@ public class UserController {
 
     // 공개 유저 프로필 응답 DTO
     public record UserProfileResponse(UUID id, String username, String avatarUrl, Instant createdAt) {}
+
+    // 공개 프로젝트 응답 DTO
+    public record PublicProjectResponse(UUID id, String name, String description, Instant createdAt) {}
 
     // 게시글 요약 응답 DTO
     public record PostSummaryResponse(
