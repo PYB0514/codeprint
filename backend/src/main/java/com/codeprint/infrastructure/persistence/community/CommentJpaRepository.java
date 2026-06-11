@@ -10,4 +10,7 @@ import java.util.UUID;
 public interface CommentJpaRepository extends JpaRepository<Comment, UUID> {
 
     List<Comment> findByPostIdOrderByCreatedAtAsc(UUID postId);
+
+    // 게시글 ID로 댓글 수 조회
+    long countByPostId(UUID postId);
 }

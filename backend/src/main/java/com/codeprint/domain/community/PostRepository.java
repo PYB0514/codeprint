@@ -49,4 +49,7 @@ public interface PostRepository {
 
     // 특정 유저 목록의 게시글 최신순 조회 (팔로잉 피드)
     List<Post> findByUserIdInOrderByCreatedAtDesc(List<UUID> userIds, org.springframework.data.domain.Pageable pageable);
+
+    // 게시글 댓글 수 조회
+    long countCommentsByPostId(UUID postId);
 }

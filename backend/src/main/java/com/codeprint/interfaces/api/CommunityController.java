@@ -280,6 +280,7 @@ public class CommunityController {
         long likeCount = likeRepository.countByPostId(post.getId());
         boolean likedByMe = currentUser != null &&
                 likeRepository.existsByUserIdAndPostId(currentUser.getId(), post.getId());
+        long commentCount = postRepository.countCommentsByPostId(post.getId());
         return new PostResponse(
                 post.getId(),
                 post.getTitle(),
@@ -293,7 +294,8 @@ public class CommunityController {
                 bookmarkedByMe,
                 likeCount,
                 likedByMe,
-                post.getViewCount()
+                post.getViewCount(),
+                commentCount
         );
     }
 
@@ -335,7 +337,7 @@ public class CommunityController {
             UUID graphId, UUID userId, String authorUsername, Instant createdAt,
             long bookmarkCount, boolean bookmarkedByMe,
             long likeCount, boolean likedByMe,
-            long viewCount) {}
+            long viewCount, long commentCount) {}
 
     // 댓글 응답 DTO
     public record CommentResponse(
