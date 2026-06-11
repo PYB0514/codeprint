@@ -52,4 +52,10 @@ public interface PostRepository {
 
     // 게시글 댓글 수 조회
     long countCommentsByPostId(UUID postId);
+
+    // 좋아요 수 내림차순 게시글 목록 조회
+    List<Post> findAllOrderByLikeCountDesc(org.springframework.data.domain.Pageable pageable);
+
+    // 조회수 내림차순 게시글 목록 조회
+    List<Post> findAllByOrderByViewCountDesc(org.springframework.data.domain.Pageable pageable);
 }

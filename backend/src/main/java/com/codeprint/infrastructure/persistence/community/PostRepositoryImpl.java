@@ -112,4 +112,16 @@ public class PostRepositoryImpl implements PostRepository {
     public long countCommentsByPostId(UUID postId) {
         return commentJpa.countByPostId(postId);
     }
+
+    // 좋아요 수 내림차순 게시글 목록 조회
+    @Override
+    public List<Post> findAllOrderByLikeCountDesc(Pageable pageable) {
+        return postJpa.findAllOrderByLikeCountDesc(pageable);
+    }
+
+    // 조회수 내림차순 게시글 목록 조회
+    @Override
+    public List<Post> findAllByOrderByViewCountDesc(Pageable pageable) {
+        return postJpa.findAllByOrderByViewCountDesc(pageable);
+    }
 }

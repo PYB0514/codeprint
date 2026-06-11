@@ -82,6 +82,7 @@ export default function CommunityPage() {
   const [postPage, setPostPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [sortOrder, setSortOrder] = useState<'latest' | 'likes' | 'views'>('latest')
 
   useEffect(() => {
     axios
@@ -105,20 +106,21 @@ export default function CommunityPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  // 검색어 또는 탭 변경 시 300ms 디바운스 후 게시글 재조회 (페이지 초기화)
+  // 검색어, 탭, 정렬 변경 시 300ms 디바운스 후 게시글 재조회 (페이지 초기화)
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     searchTimerRef.current = setTimeout(() => {
       const params: Record<string, string> = { page: '0', size: '20' }
       if (searchQuery.trim()) params.q = searchQuery.trim()
       if (feedTab === 'following') params.feed = 'following'
+      if (sortOrder !== 'latest') params.sort = sortOrder
       axios.get<Post[]>('/api/community/posts', { params }).then((res) => {
         setPosts(res.data)
         setPostPage(0)
         setHasMore(res.data.length === 20)
       })
     }, 300)
-  }, [searchQuery, feedTab])
+  }, [searchQuery, feedTab, sortOrder])
 
   // 게시글 더 보기 로드
   const handleLoadMore = async () => {
@@ -127,6 +129,7 @@ export default function CommunityPage() {
     const params: Record<string, string> = { page: String(nextPage), size: '20' }
     if (searchQuery.trim()) params.q = searchQuery.trim()
     if (feedTab === 'following') params.feed = 'following'
+    if (sortOrder !== 'latest') params.sort = sortOrder
     const res = await axios.get<Post[]>('/api/community/posts', { params })
     setPosts(prev => [...prev, ...res.data])
     setPostPage(nextPage)
@@ -338,6 +341,25 @@ export default function CommunityPage() {
               >
                 팔로잉
               </button>
+            </div>
+          )}
+
+          {/* 정렬 버튼 */}
+          {!searchQuery && feedTab === 'all' && (
+            <div className="flex gap-1 mb-3">
+              {(['latest', 'likes', 'views'] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSortOrder(s)}
+                  className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                    sortOrder === s
+                      ? 'border-gray-400 text-white'
+                      : 'border-gray-700 text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {s === 'latest' ? '최신순' : s === 'likes' ? '좋아요순' : '조회순'}
+                </button>
+              ))}
             </div>
           )}
 

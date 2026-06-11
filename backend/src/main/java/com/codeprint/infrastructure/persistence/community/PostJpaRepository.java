@@ -4,6 +4,7 @@ package com.codeprint.infrastructure.persistence.community;
 import com.codeprint.domain.community.Post;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.UUID;
@@ -22,4 +23,11 @@ public interface PostJpaRepository extends JpaRepository<Post, UUID> {
 
     // 특정 유저 목록의 게시글 최신순 조회
     List<Post> findByUserIdInOrderByCreatedAtDesc(List<UUID> userIds, Pageable pageable);
+
+    // 좋아요 수 내림차순 조회 (post_likes COUNT 기준)
+    @Query("SELECT p FROM Post p ORDER BY (SELECT COUNT(l) FROM PostLike l WHERE l.postId = p.id) DESC, p.createdAt DESC")
+    List<Post> findAllOrderByLikeCountDesc(Pageable pageable);
+
+    // 조회수 내림차순 조회
+    List<Post> findAllByOrderByViewCountDesc(Pageable pageable);
 }
