@@ -13,6 +13,8 @@ import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.graph.NodeType;
 import com.codeprint.domain.user.User;
+import com.codeprint.domain.user.UserRepository;
+import com.codeprint.infrastructure.storage.S3Service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +40,8 @@ public class GraphController {
     private final GraphDiffService graphDiffService;
     private final GraphWarningService graphWarningService;
     private final NodeStyleService nodeStyleService;
+    private final UserRepository userRepository;
+    private final S3Service s3Service;
 
     // 프로젝트의 그래프 버전 목록을 최신순으로 조회
     @GetMapping("/api/projects/{projectId}/graphs")
@@ -134,10 +138,13 @@ public class GraphController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // 공개 프로젝트의 그래프를 비인증으로 조회
+    // 공개 프로젝트의 그래프를 비인증으로 조회 (오너 배경이미지 포함)
     @GetMapping("/api/share/{projectId}/graph")
     public ResponseEntity<?> getPublicGraph(@PathVariable UUID projectId) {
-        projectQueryService.getPublicProject(projectId);
+        var project = projectQueryService.getPublicProject(projectId);
+        String ownerBgUrl = userRepository.findById(project.getUserId())
+                .map(u -> s3Service.toPresignedUrl(u.getGraphBgUrl()))
+                .orElse(null);
         return graphQueryService.findLatestByProject(projectId)
                 .map(graph -> {
                     List<Node> nodes = graphQueryService.getNodes(graph.getId());
@@ -182,14 +189,15 @@ public class GraphController {
                     List<Map<String, Object>> warnings = graphWarningService.detect(nodes, edges);
 
                     // 공개 그래프는 누구나 접근 가능하므로 public 캐시 허용
+                    Map<String, Object> body = new java.util.LinkedHashMap<>();
+                    body.put("graphId", graph.getId().toString());
+                    body.put("nodes", nodeData);
+                    body.put("edges", edgeData);
+                    body.put("warnings", warnings);
+                    body.put("ownerBgUrl", ownerBgUrl);
                     return ResponseEntity.ok()
                             .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePublic())
-                            .body(Map.of(
-                                    "graphId", graph.getId().toString(),
-                                    "nodes", nodeData,
-                                    "edges", edgeData,
-                                    "warnings", warnings
-                            ));
+                            .body(body);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

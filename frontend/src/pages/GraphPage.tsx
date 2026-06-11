@@ -487,6 +487,7 @@ function GraphPageInner() {
   const [loadingVersions, setLoadingVersions] = useState(false)
   const [outdated, setOutdated] = useState<{ branch: string; lastAnalyzedAt: string } | null>(null)
   const [reanalyzing, setReanalyzing] = useState(false)
+  const [bgEnabled, setBgEnabled] = useState(() => localStorage.getItem('graphBgEnabled') !== 'false')
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareTitle, setShareTitle] = useState('')
   const [shareContent, setShareContent] = useState('')
@@ -999,6 +1000,20 @@ function GraphPageInner() {
       setReanalyzing(false)
     }
   }
+
+  // 배경이미지 표시/숨김 토글
+  const toggleBg = useCallback(() => {
+    setBgEnabled(prev => {
+      const next = !prev
+      localStorage.setItem('graphBgEnabled', String(next))
+      if (next) {
+        document.body.classList.add('has-bg')
+      } else {
+        document.body.classList.remove('has-bg')
+      }
+      return next
+    })
+  }, [])
 
   // 현재 그래프에서 그룹 키 목록 추출
   const availableGroups = (() => {
@@ -1873,6 +1888,20 @@ function GraphPageInner() {
 
             {/* AI 누락 감지 */}
             <AiAnalysisSection graphId={graphId} />
+
+            {/* 보기 옵션 */}
+            <LeftSection title="보기">
+              <button
+                onClick={toggleBg}
+                className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
+                  bgEnabled
+                    ? 'bg-blue-900/40 text-blue-300 hover:bg-blue-900/60'
+                    : 'bg-gray-800/60 text-gray-500 hover:bg-gray-800'
+                }`}
+              >
+                {bgEnabled ? '🖼 배경이미지 켜짐' : '□ 배경이미지 꺼짐'}
+              </button>
+            </LeftSection>
 
             {/* 내보내기 — 최상단 */}
             <LeftSection title="내보내기">
