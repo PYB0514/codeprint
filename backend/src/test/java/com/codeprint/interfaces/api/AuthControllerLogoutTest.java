@@ -1,6 +1,7 @@
 // 로그아웃 플로우 통합 테스트 — RefreshToken 삭제/쿠키 만료/세션 무효화 회귀 방지 (반복-A)
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.user.UserCommandService;
 import com.codeprint.domain.user.RefreshTokenRepository;
 import com.codeprint.domain.user.UserRepository;
 import com.codeprint.infrastructure.security.JwtTokenProvider;
@@ -28,12 +29,13 @@ class AuthControllerLogoutTest {
     @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private UserRepository userRepository;
     @Mock private S3Service s3Service;
+    @Mock private UserCommandService userCommandService;
 
     private AuthController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new AuthController(jwtTokenProvider, refreshTokenRepository, userRepository, s3Service);
+        controller = new AuthController(jwtTokenProvider, refreshTokenRepository, userRepository, s3Service, userCommandService);
         ReflectionTestUtils.setField(controller, "frontendUrl", "http://localhost:3000");
     }
 

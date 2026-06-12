@@ -128,8 +128,10 @@ class GraphWarningServiceTest {
                 List.of(caller, asyncTarget),
                 List.of(call)
         );
-        assertThat(warnings).hasSize(1);
-        assertThat(warnings.get(0).get("type")).isEqualTo("ASYNC_SELF_CALL");
+        // DEAD_CODE 등 다른 타입 경고가 함께 감지될 수 있으므로 타입 필터 후 검증
+        List<Map<String, Object>> asyncWarnings = warnings.stream()
+                .filter(w -> "ASYNC_SELF_CALL".equals(w.get("type"))).toList();
+        assertThat(asyncWarnings).hasSize(1);
     }
 
     @Test
