@@ -332,8 +332,8 @@ public class StaticCodeAnalyzer {
             }
         }
 
-        // Prisma schema.prisma: model 블록
-        if (filePath.endsWith("schema.prisma")) {
+        // Prisma 스키마 파일: model 블록 (멀티 파일 스키마 지원 — 모든 .prisma 대상)
+        if (filePath.endsWith(".prisma")) {
             Matcher m = Pattern.compile("^model\\s+(\\w+)\\s*\\{", Pattern.MULTILINE).matcher(content);
             while (m.find()) {
                 result.add(new DbTableInfo(m.group(1), m.group(1)));

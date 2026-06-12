@@ -817,6 +817,35 @@ class StaticCodeAnalyzerTest {
         assertThat(result.dbTables().get(0).tableName()).isEqualTo("users");
     }
 
+    // ── Prisma 스키마 DB 테이블 감지 ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("schema.prisma model 블록에서 DB 테이블을 추출한다")
+    void Prisma_model_블록_추출() throws IOException {
+        Path file = tempDir.resolve("schema.prisma");
+        Files.writeString(file, """
+                generator client {
+                  provider = "prisma-client-js"
+                }
+
+                model User {
+                  id    Int    @id @default(autoincrement())
+                  email String @unique
+                }
+
+                model Post {
+                  id       Int  @id @default(autoincrement())
+                  author   User @relation(fields: [authorId], references: [id])
+                  authorId Int
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Prisma");
+
+        assertThat(result.dbTables()).extracting(DbTableInfo::tableName)
+                .containsExactlyInAnyOrder("User", "Post");
+    }
+
     // ── Go DB 테이블 감지 (GORM / Beego ORM) ─────────────────────────────────
 
     @Test

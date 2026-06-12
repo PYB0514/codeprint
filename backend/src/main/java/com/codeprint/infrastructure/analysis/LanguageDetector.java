@@ -21,12 +21,13 @@ public class LanguageDetector {
             Map.entry("c", "C"),
             Map.entry("rb", "Ruby"),
             Map.entry("php", "PHP"),
-            Map.entry("swift", "Swift")
+            Map.entry("swift", "Swift"),
+            Map.entry("prisma", "Prisma")
     );
 
     private static final java.util.Set<String> SUPPORTED = java.util.Set.of(
             "Java", "Kotlin", "TypeScript", "JavaScript", "Python", "Go", "Rust",
-            "C#", "Ruby", "PHP", "Swift"
+            "C#", "Ruby", "PHP", "Swift", "Prisma"
     );
 
     // 파일 확장자로 프로그래밍 언어를 감지하여 반환
