@@ -65,4 +65,10 @@ public class UserRepositoryImpl implements UserRepository {
     public List<User> searchByUsername(String keyword) {
         return jpa.findByUsernameContainingIgnoreCase(keyword, Pageable.ofSize(10));
     }
+
+    // 계정 영구 삭제
+    @Override
+    public void delete(UUID id) {
+        jpa.deleteById(id);
+    }
 }

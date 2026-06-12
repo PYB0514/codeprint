@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.69.0',
+    date: '2026-06-12',
+    title: '계정 탈퇴 기능 + 개인정보처리방침 정확도 개선',
+    type: 'feature',
+    items: [
+      { category: '설정', desc: '설정 페이지에 계정 삭제 섹션 추가 — "삭제" 입력 확인 후 영구 삭제' },
+      { category: '법무', desc: '개인정보처리방침 쿠키 항목 수정 — localStorage → HttpOnly Secure 쿠키로 정확도 개선' },
+    ],
+  },
+  {
     version: 'v0.68.0',
     date: '2026-06-12',
     title: '대시보드 첫 방문자 온보딩 가이드',

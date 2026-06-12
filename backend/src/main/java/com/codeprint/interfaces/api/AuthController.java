@@ -1,6 +1,7 @@
 // 인증 관련 REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.user.UserCommandService;
 import com.codeprint.domain.user.RefreshToken;
 import com.codeprint.domain.user.RefreshTokenRepository;
 import com.codeprint.domain.user.User;
@@ -17,6 +18,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,6 +37,7 @@ public class AuthController {
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
     private final S3Service s3Service;
+    private final UserCommandService userCommandService;
 
     // Refresh Token 유효 기간: 7일
     private static final long REFRESH_TOKEN_EXPIRY_SECONDS = 7 * 24 * 60 * 60L;
@@ -106,6 +109,21 @@ public class AuthController {
 
             return ResponseEntity.<Map<String, Object>>ok(Map.of("ok", true));
         }).orElseGet(() -> ResponseEntity.status(401).body(Map.of("error", "User not found")));
+    }
+
+    // 계정 탈퇴 — 사용자 데이터 전체 삭제 후 쿠키 만료
+    @DeleteMapping("/account")
+    public ResponseEntity<Void> deleteAccount(
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        if (user == null) return ResponseEntity.status(401).build();
+        revokeRefreshToken(request);
+        invalidateSession(request);
+        userCommandService.deleteAccount(user.getId());
+        expireJwtCookie(response);
+        expireRefreshTokenCookie(response);
+        return ResponseEntity.noContent().build();
     }
 
     // jwt 쿠키 만료 + 세션 무효화로 로그아웃 처리
