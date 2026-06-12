@@ -1,13 +1,12 @@
 // 그래프 조회 REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
-import com.codeprint.application.analysis.AnalysisApplicationService;
 import com.codeprint.application.graph.GraphCommandService;
 import com.codeprint.application.graph.GraphDiffService;
+import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.application.graph.GraphWarningService;
 import com.codeprint.application.graph.NodeStyleService;
-import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.Node;
@@ -35,8 +34,7 @@ public class GraphController {
 
     private final GraphQueryService graphQueryService;
     private final GraphCommandService graphCommandService;
-    private final ProjectQueryService projectQueryService;
-    private final AnalysisApplicationService analysisApplicationService;
+    private final GraphFacade graphFacade;
     private final GraphDiffService graphDiffService;
     private final GraphWarningService graphWarningService;
     private final NodeStyleService nodeStyleService;
@@ -48,19 +46,7 @@ public class GraphController {
     public ResponseEntity<List<Map<String, Object>>> getGraphVersions(
             @PathVariable UUID projectId,
             @AuthenticationPrincipal User user) {
-        projectQueryService.getProject(projectId, user.getId());
-        List<Map<String, Object>> versions = graphQueryService.findAllByProject(projectId).stream()
-                .map(graph -> {
-                    String branch = analysisApplicationService.getAnalysis(graph.getAnalysisId())
-                            .getBranch();
-                    Map<String, Object> item = new java.util.LinkedHashMap<>();
-                    item.put("graphId", graph.getId().toString());
-                    item.put("createdAt", graph.getCreatedAt().toString());
-                    item.put("branch", branch != null ? branch : "default");
-                    return item;
-                })
-                .toList();
-        return ResponseEntity.ok(versions);
+        return ResponseEntity.ok(graphFacade.getGraphVersionsWithBranch(projectId, user.getId()));
     }
 
     // 프로젝트의 최신 그래프(노드+엣지)를 조회 — graphId 지정 시 해당 버전 반환
@@ -141,7 +127,7 @@ public class GraphController {
     // 공개 프로젝트의 그래프를 비인증으로 조회 (오너 배경이미지 포함)
     @GetMapping("/api/share/{projectId}/graph")
     public ResponseEntity<?> getPublicGraph(@PathVariable UUID projectId) {
-        var project = projectQueryService.getPublicProject(projectId);
+        var project = graphFacade.getPublicProject(projectId);
         String ownerBgUrl = userRepository.findById(project.getUserId())
                 .map(u -> s3Service.toPresignedUrl(u.getGraphBgUrl()))
                 .orElse(null);
@@ -210,7 +196,7 @@ public class GraphController {
             @RequestParam UUID to,
             @AuthenticationPrincipal User user) {
 
-        projectQueryService.getProject(projectId, user.getId());
+        graphFacade.verifyProjectOwnership(projectId, user.getId());
 
         GraphDiffService.DiffResult result = graphDiffService.diff(from, to);
 
@@ -266,8 +252,7 @@ public class GraphController {
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal User user) {
 
-        graphQueryService.findById(graphId)
-                .ifPresent(graph -> projectQueryService.getProject(graph.getProjectId(), user.getId()));
+        graphFacade.verifyGraphOwnership(graphId, user.getId());
 
         graphCommandService.updateNodeAnnotation(nodeId, body.get("userLabel"), body.get("userNote"));
         return ResponseEntity.ok().build();
@@ -281,8 +266,7 @@ public class GraphController {
             @RequestBody Map<String, Double> body,
             @AuthenticationPrincipal User user) {
 
-        graphQueryService.findById(graphId)
-                .ifPresent(graph -> projectQueryService.getProject(graph.getProjectId(), user.getId()));
+        graphFacade.verifyGraphOwnership(graphId, user.getId());
 
         double x = body.getOrDefault("x", 0.0);
         double y = body.getOrDefault("y", 0.0);

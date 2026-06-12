@@ -1,9 +1,8 @@
 // 노드 코멘트 REST API — 그래프 노드에 코멘트 추가/조회/삭제
 package com.codeprint.interfaces.api;
 
-import com.codeprint.application.graph.GraphQueryService;
+import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.application.graph.NodeCommentService;
-import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.graph.NodeComment;
 import com.codeprint.domain.user.User;
 import lombok.RequiredArgsConstructor;
@@ -20,8 +19,7 @@ import java.util.UUID;
 public class NodeCommentController {
 
     private final NodeCommentService nodeCommentService;
-    private final GraphQueryService graphQueryService;
-    private final ProjectQueryService projectQueryService;
+    private final GraphFacade graphFacade;
 
     // 노드 코멘트 목록 조회 — 그래프 소유자만 접근 가능
     @GetMapping("/api/graphs/{graphId}/nodes/{nodeId}/comments")
@@ -72,8 +70,7 @@ public class NodeCommentController {
 
     // 그래프 → 프로젝트 소유권 검증
     private void verifyOwnership(UUID graphId, User user) {
-        graphQueryService.findById(graphId)
-                .ifPresent(graph -> projectQueryService.getProject(graph.getProjectId(), user.getId()));
+        graphFacade.verifyGraphOwnership(graphId, user.getId());
     }
 
     // NodeComment → 응답 Map 변환

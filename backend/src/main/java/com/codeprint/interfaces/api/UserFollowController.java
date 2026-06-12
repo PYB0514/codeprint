@@ -1,13 +1,14 @@
 // 유저 팔로우/팔로워 REST API
 package com.codeprint.interfaces.api;
 
-import com.codeprint.application.notification.NotificationService;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserFollow;
 import com.codeprint.domain.user.UserFollowRepository;
+import com.codeprint.domain.user.UserFollowedEvent;
 import com.codeprint.domain.user.UserRepository;
 import com.codeprint.infrastructure.storage.S3Service;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -23,7 +24,7 @@ public class UserFollowController {
 
     private final UserFollowRepository userFollowRepository;
     private final UserRepository userRepository;
-    private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
     private final S3Service s3Service;
 
     // 팔로우
@@ -42,8 +43,7 @@ public class UserFollowController {
             return ResponseEntity.ok(Map.of("following", true));
         }
         userFollowRepository.save(UserFollow.create(me.getId(), userId));
-        notificationService.create(userId, "FOLLOW",
-                me.getUsername() + "님이 팔로우했습니다.", "/users/" + me.getId());
+        eventPublisher.publishEvent(new UserFollowedEvent(me.getId(), me.getUsername(), userId));
         return ResponseEntity.ok(Map.of("following", true));
     }
 

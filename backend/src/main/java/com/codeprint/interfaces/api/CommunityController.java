@@ -1,12 +1,12 @@
 // 커뮤니티 게시글/댓글/북마크 REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.community.CommunityFacade;
 import com.codeprint.application.community.PostCommandService;
-import com.codeprint.application.graph.GraphQueryService;
-import com.codeprint.application.notification.NotificationService;
-import com.codeprint.application.project.ProjectQueryService;
+import com.codeprint.domain.community.CommentAddedEvent;
 import com.codeprint.domain.community.Comment;
 import com.codeprint.domain.community.Post;
+import com.codeprint.domain.community.PostLikedEvent;
 import com.codeprint.domain.community.PostBookmark;
 import com.codeprint.domain.community.PostBookmarkRepository;
 import com.codeprint.domain.community.PostLike;
@@ -20,6 +20,7 @@ import com.codeprint.domain.user.UserRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -35,14 +36,13 @@ import java.util.UUID;
 public class CommunityController {
 
     private final PostCommandService postCommandService;
-    private final GraphQueryService graphQueryService;
-    private final ProjectQueryService projectQueryService;
+    private final CommunityFacade communityFacade;
+    private final ApplicationEventPublisher eventPublisher;
     private final UserRepository userRepository;
     private final PostBookmarkRepository bookmarkRepository;
     private final PostLikeRepository likeRepository;
     private final PostRepository postRepository;
     private final UserFollowRepository followRepository;
-    private final NotificationService notificationService;
 
     // 게시글 목록 조회 (페이지, 검색, 팔로잉 피드) — 로그인 시 내 북마크 여부 포함
     @GetMapping("/posts")
@@ -106,18 +106,7 @@ public class CommunityController {
         // 공개 프로젝트이면 레포 URL 포함 — 프라이빗 프로젝트는 null 처리
         String repoUrl = null;
         if (request.graphId() != null) {
-            repoUrl = graphQueryService.findById(request.graphId())
-                    .flatMap(graph -> {
-                        try {
-                            var project = projectQueryService.getProject(graph.getProjectId(), user.getId());
-                            return project.isPublic()
-                                    ? java.util.Optional.ofNullable(project.getGithubRepoUrl())
-                                    : java.util.Optional.empty();
-                        } catch (Exception e) {
-                            return java.util.Optional.empty();
-                        }
-                    })
-                    .orElse(null);
+            repoUrl = communityFacade.findPublicRepoUrl(request.graphId(), user.getId()).orElse(null);
         }
         Post post = postCommandService.createPost(
                 user.getId(),
@@ -145,12 +134,9 @@ public class CommunityController {
                 .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
         if (post.getGraphId() == null) return ResponseEntity.notFound().build();
 
-        return graphQueryService.findById(post.getGraphId())
-                .map(graph -> {
-                    List<Node> nodes = graphQueryService.getNodes(graph.getId());
-                    List<Edge> edges = graphQueryService.getEdges(graph.getId());
-
-                    List<Map<String, Object>> nodeData = nodes.stream()
+        return communityFacade.getGraphSnapshot(post.getGraphId())
+                .map(snapshot -> {
+                    List<Map<String, Object>> nodeData = snapshot.nodes().stream()
                             .filter(n -> !n.isHidden())
                             .map(n -> {
                                 Map<String, Object> node = new java.util.LinkedHashMap<>();
@@ -168,7 +154,7 @@ public class CommunityController {
                             })
                             .toList();
 
-                    List<Map<String, Object>> edgeData = edges.stream()
+                    List<Map<String, Object>> edgeData = snapshot.edges().stream()
                             .filter(e -> !e.isHidden())
                             .map(e -> Map.<String, Object>of(
                                     "id", e.getId().toString(),
@@ -180,7 +166,7 @@ public class CommunityController {
                             .toList();
 
                     return ResponseEntity.ok(Map.of(
-                            "graphId", graph.getId().toString(),
+                            "graphId", snapshot.graphId().toString(),
                             "nodes", nodeData,
                             "edges", edgeData,
                             "hiddenLayers", post.getHiddenLayers(),
@@ -198,12 +184,9 @@ public class CommunityController {
             @Valid @RequestBody CreateCommentRequest request,
             @AuthenticationPrincipal User user) {
         Comment comment = postCommandService.addComment(postId, user.getId(), request.content());
-        postRepository.findById(postId).ifPresent(post -> {
-            if (!post.getUserId().equals(user.getId())) {
-                notificationService.create(post.getUserId(), "COMMENT",
-                        user.getUsername() + "님이 댓글을 달았습니다.", "/community?postId=" + postId);
-            }
-        });
+        postRepository.findById(postId).ifPresent(post ->
+                eventPublisher.publishEvent(
+                        new CommentAddedEvent(postId, post.getUserId(), user.getId(), user.getUsername())));
         return ResponseEntity.status(201).body(toCommentResponse(comment));
     }
 
@@ -263,12 +246,9 @@ public class CommunityController {
             @AuthenticationPrincipal User user) {
         if (!likeRepository.existsByUserIdAndPostId(user.getId(), postId)) {
             likeRepository.save(PostLike.of(user.getId(), postId));
-            postRepository.findById(postId).ifPresent(post -> {
-                if (!post.getUserId().equals(user.getId())) {
-                    notificationService.create(post.getUserId(), "LIKE",
-                            user.getUsername() + "님이 게시글을 좋아합니다.", "/community?postId=" + postId);
-                }
-            });
+            postRepository.findById(postId).ifPresent(post ->
+                    eventPublisher.publishEvent(
+                            new PostLikedEvent(postId, post.getUserId(), user.getId(), user.getUsername())));
         }
         return ResponseEntity.ok().build();
     }

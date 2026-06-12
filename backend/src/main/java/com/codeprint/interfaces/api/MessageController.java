@@ -3,16 +3,14 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.application.message.MessageApplicationService;
 import com.codeprint.application.message.UserSummaryDto;
-import com.codeprint.application.notification.NotificationService;
-import com.codeprint.application.notification.NotificationSettingsApplicationService;
 import com.codeprint.domain.message.DirectMessage;
+import com.codeprint.domain.message.MessageSentEvent;
 import com.codeprint.domain.user.User;
-import com.codeprint.infrastructure.push.WebPushService;
-import com.codeprint.infrastructure.security.JwtTokenProvider;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
@@ -28,9 +26,7 @@ import java.util.UUID;
 public class MessageController {
 
     private final MessageApplicationService messageService;
-    private final WebPushService webPushService;
-    private final NotificationSettingsApplicationService notificationSettingsService;
-    private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     // Principal에서 로그인 사용자 ID 추출
     private UUID currentUserId(Principal principal) {
@@ -85,14 +81,8 @@ public class MessageController {
                                 Principal principal) {
         UUID senderId = currentUserId(principal);
         DirectMessage dm = messageService.send(senderId, receiverId, req.content());
-        boolean dmPushEnabled = notificationSettingsService.isDmPushEnabled(receiverId);
         UserSummaryDto sender = messageService.getUser(senderId);
-        if (dmPushEnabled) {
-            webPushService.sendToUser(receiverId, sender.username() + "님의 쪽지",
-                    req.content().length() > 60 ? req.content().substring(0, 60) + "…" : req.content());
-        }
-        notificationService.create(receiverId, "DM",
-                sender.username() + "님이 쪽지를 보냈습니다.", "/messages");
+        eventPublisher.publishEvent(new MessageSentEvent(senderId, sender.username(), receiverId, req.content()));
         return toResponse(dm, messageService);
     }
 
