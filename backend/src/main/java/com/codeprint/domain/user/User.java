@@ -1,7 +1,7 @@
 // 사용자 Aggregate Root 엔티티
 package com.codeprint.domain.user;
 
-import com.codeprint.infrastructure.security.AesEncryptionConverter;
+import com.codeprint.shared.jpa.AesEncryptionConverter;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;

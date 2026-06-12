@@ -1,7 +1,7 @@
 // 사용자별 AI 제공자 API 키 도메인 엔티티
 package com.codeprint.domain.ai;
 
-import com.codeprint.infrastructure.security.AesEncryptionConverter;
+import com.codeprint.shared.jpa.AesEncryptionConverter;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
