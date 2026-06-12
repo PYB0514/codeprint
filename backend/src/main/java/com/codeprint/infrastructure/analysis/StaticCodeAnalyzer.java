@@ -371,6 +371,19 @@ public class StaticCodeAnalyzer {
             }
         }
 
+        // Swift: Core Data (@objc(EntityName) class X: NSManagedObject)
+        if (language.equals("Swift")) {
+            Matcher m = Pattern.compile("@objc\\(\"(\\w+)\"\\)\\s*\\nclass\\s+(\\w+)\\s*:\\s*NSManagedObject", Pattern.MULTILINE).matcher(content);
+            while (m.find()) {
+                result.add(new DbTableInfo(m.group(1), m.group(2)));
+            }
+            // @objcMembers class X: NSManagedObject 패턴 폴백
+            Matcher fallback = Pattern.compile("class\\s+(\\w+)\\s*:\\s*NSManagedObject").matcher(content);
+            while (fallback.find()) {
+                result.add(new DbTableInfo(toSnakeCase(fallback.group(1)), fallback.group(1)));
+            }
+        }
+
         return result;
     }
 
