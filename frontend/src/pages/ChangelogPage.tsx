@@ -11,6 +11,19 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.58.0',
+    date: '2026-06-12',
+    title: '다국어 분석 엔진 확장',
+    type: 'feature',
+    items: [
+      { category: '분석', desc: 'Express.js / FastAPI / Flask / Go Gin API 엔드포인트 자동 감지 — URL 경로가 API_ENDPOINT 노드로 표시됨' },
+      { category: '분석', desc: 'Rails Routes / Laravel Route:: API 엔드포인트 감지 추가 (Ruby, PHP)' },
+      { category: '분석', desc: 'TypeORM @Entity(), SQLAlchemy Base 상속 클래스 DB 테이블 감지 (TypeScript, Python)' },
+      { category: '분석', desc: 'Ruby ActiveRecord / PHP Eloquent 모델 DB 테이블 감지 추가' },
+      { category: '분석', desc: 'Python async def / TypeScript async function 비동기 함수 감지 — @Async 경고 대상 확장' },
+    ],
+  },
+  {
     version: 'v0.56.0',
     date: '2026-06-11',
     title: '문의하기 피드백 폼',
