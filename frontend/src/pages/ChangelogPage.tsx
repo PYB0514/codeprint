@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.71.1',
+    date: '2026-06-12',
+    title: 'Go 프로젝트 DB 테이블 감지',
+    type: 'feature',
+    items: [
+      { category: '분석', desc: 'Go GORM gorm.Model 임베딩 구조체 DB_TABLE 노드 감지 추가 — TableName() 오버라이드 시 명시적 테이블명 우선' },
+      { category: '분석', desc: 'Go Beego ORM orm.RegisterModel 등록 모델 DB_TABLE 노드 감지 추가' },
+    ],
+  },
+  {
     version: 'v0.71.0',
     date: '2026-06-12',
     title: '랜딩 페이지 요금제 섹션 + 분석 엔진 개선',

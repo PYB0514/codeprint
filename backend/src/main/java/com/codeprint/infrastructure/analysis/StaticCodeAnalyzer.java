@@ -384,6 +384,30 @@ public class StaticCodeAnalyzer {
             }
         }
 
+        // Go: GORM (gorm.Model 임베딩 / TableName() 오버라이드) + Beego ORM (orm.RegisterModel)
+        if (language.equals("Go")) {
+            Map<String, String> goTables = new LinkedHashMap<>();
+            // type User struct { gorm.Model ... } — GORM 규칙: snake_case 복수형
+            Matcher gm = Pattern.compile("type\\s+(\\w+)\\s+struct\\s*\\{[^}]*?\\bgorm\\.Model\\b").matcher(content);
+            while (gm.find()) {
+                goTables.put(gm.group(1), toSnakeCase(gm.group(1)) + "s");
+            }
+            // Beego: orm.RegisterModel(new(User), new(Profile)) — snake_case 단수형
+            Matcher bm = Pattern.compile("orm\\.RegisterModel\\s*\\(((?:\\s*new\\s*\\(\\s*\\w+\\s*\\)\\s*,?)+)\\s*\\)").matcher(content);
+            while (bm.find()) {
+                Matcher nm = Pattern.compile("new\\s*\\(\\s*(\\w+)\\s*\\)").matcher(bm.group(1));
+                while (nm.find()) {
+                    goTables.putIfAbsent(nm.group(1), toSnakeCase(nm.group(1)));
+                }
+            }
+            // func (u *User) TableName() string { return "users" } — 명시적 테이블명이 규칙 기반 이름을 덮어씀
+            Matcher tm = Pattern.compile("func\\s*\\(\\s*(?:\\w+\\s+)?\\*?(\\w+)\\s*\\)\\s*TableName\\s*\\(\\s*\\)\\s*string\\s*\\{\\s*return\\s+\"([^\"]+)\"").matcher(content);
+            while (tm.find()) {
+                goTables.put(tm.group(1), tm.group(2));
+            }
+            goTables.forEach((className, tableName) -> result.add(new DbTableInfo(tableName, className)));
+        }
+
         return result;
     }
 
