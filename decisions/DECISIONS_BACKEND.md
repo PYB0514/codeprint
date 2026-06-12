@@ -33,6 +33,30 @@
 
 ---
 
+## DDD 아키텍처 강화 — Shared Kernel + Port & Adapter 도입 (2026-06-12)
+
+**문제.** 코드베이스 분석 결과 2가지 DDD 위반 확인.
+1. `domain/user/User.java`, `domain/ai/UserAiKey.java`가 `infrastructure.security.AesEncryptionConverter`를 직접 import (`DOMAIN_IMPORTS_INFRA` 위반).
+2. `application/collaboration/CollaborationApplicationService`가 `application/user/UserQueryService`를 직접 주입 (`CROSS_DOMAIN_CALL` 위반).
+
+**이유.** `@Convert` 어노테이션이 있는 도메인 엔티티는 JPA 컨버터 클래스를 import해야 하므로, 컨버터를 infra에서 shared/로 이동하지 않으면 제거 불가. JPA Entity와 Domain Object 분리(CQRS 완전 분리)는 현 시점 과도한 리팩토링.
+
+**선택지.**
+- A: JPA Entity ↔ Domain Object 분리 → 과도한 변경, 현 MVP 단계에서 불필요
+- B: AesEncryptionConverter를 `shared/jpa/`(Shared Kernel)로 이동 → 선택. `shared/`는 domain·infrastructure 모두 import 가능한 공통 모듈 레이어
+
+**결과.**
+- `AesEncryptionConverter` → `com.codeprint.shared.jpa.AesEncryptionConverter` 이동
+- User.java, UserAiKey.java import 경로 업데이트
+- CollaborationApplicationService의 UserQueryService 직접 주입 → `domain/collaboration/port/UserInfoPort` 인터페이스로 교체
+- `infrastructure/persistence/collaboration/UserInfoAdapter` 어댑터 구현체 신설
+- `GraphWarningService`: `detectDomainInfraImport`, `detectCrossDomainFunctionCall` 신규 감지 로직 추가, HIGH_FAN_OUT 임계값 10→7
+- 감지 결과: Codeprint 자체 코드 적용 시 0 위반 (사용자 최소 요건 달성)
+
+**false positive 방지.** `infrastructure/persistence/{context}/Adapter.java`에서 다른 도메인의 Repository를 호출하는 패턴은 DDD 어댑터의 정상 패턴. `extractBoundedContext`가 `persistence`를 반환하는 경로 파싱 문제로 false positive 발생 가능. 수정: `detectCrossDomainFunctionCall`에서 source/target이 `infrastructure/`이면 제외.
+
+---
+
 ## 사용자 이미지 업로드 방식 — Presign vs Backend Proxy (2026-06-10)
 
 **문제.** 프로필 사진 / 배경 이미지를 S3에 올릴 때 클라이언트가 직접 Presigned PUT URL로 올릴지, 아니면 서버를 경유할지 선택해야 했다.

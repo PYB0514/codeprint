@@ -1,5 +1,5 @@
-// GitHub Access Token 등 민감 문자열을 AES-256-GCM으로 암호화하는 JPA 컨버터
-package com.codeprint.infrastructure.security;
+// 민감 문자열을 AES-256-GCM으로 암호화하는 JPA 공유 컨버터 (Shared Kernel)
+package com.codeprint.shared.jpa;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;

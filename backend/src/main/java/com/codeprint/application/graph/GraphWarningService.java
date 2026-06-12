@@ -22,6 +22,8 @@ public class GraphWarningService {
         warnings.addAll(detectAsyncSelfCalls(nodes, edges));
         warnings.addAll(detectDbLayerBypass(nodes, edges));
         warnings.addAll(detectCrossContextDomainImport(nodes, edges));
+        warnings.addAll(detectDomainInfraImport(nodes, edges));
+        warnings.addAll(detectCrossDomainFunctionCall(nodes, edges));
         warnings.addAll(detectMissingConverterMigration(nodes));
         warnings.addAll(detectDeadCode(nodes, edges));
         warnings.addAll(detectHighFanOut(nodes, edges));
@@ -385,9 +387,99 @@ public class GraphWarningService {
         return warnings;
     }
 
-    // FUNCTION 노드가 10개 초과 FUNCTION_CALL 아웃바운드를 가질 때 — 과도한 책임 (High Fan-Out)
+    // domain/ 파일이 infrastructure/ 를 직접 IMPORT — 의존 방향 위반 (Domain → Infrastructure 금지)
+    // shared/ 는 Shared Kernel이므로 허용
+    private List<Map<String, Object>> detectDomainInfraImport(List<Node> nodes, List<Edge> edges) {
+        Map<UUID, String> nodeFilePaths = new HashMap<>();
+        Map<UUID, String> nameMap = new HashMap<>();
+        for (Node n : nodes) {
+            nodeFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+            nameMap.put(n.getId(), n.getName());
+        }
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Edge e : edges) {
+            if (e.getType() != EdgeType.IMPORT) continue;
+            String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
+            String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
+
+            boolean srcIsDomain = srcPath.contains("/domain/");
+            boolean tgtIsInfra = tgtPath.contains("/infrastructure/") && !tgtPath.contains("/shared/");
+
+            if (srcIsDomain && tgtIsInfra) {
+                String srcContext = extractContextFromDomainPath(srcPath);
+                Map<String, Object> w = new LinkedHashMap<>();
+                w.put("type", "DOMAIN_IMPORTS_INFRA");
+                w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
+                w.put("edgeIds", List.of(e.getId().toString()));
+                w.put("message", "DDD 의존 방향 위반: domain/"
+                        + (srcContext != null ? srcContext : "?") + " → infrastructure/ 직접 import. "
+                        + "공통 관심사는 shared/ 로 이동하거나 domain/port/ 인터페이스로 역전하세요.");
+                warnings.add(w);
+            }
+        }
+        return warnings;
+    }
+
+    // FUNCTION_CALL 엣지가 도메인 경계를 넘을 때 — Cross-Domain 직접 호출 위반
+    // 수정 방법: 호출하는 도메인에 port/ 인터페이스 선언 → infrastructure/adapter/ 에서 구현
+    private List<Map<String, Object>> detectCrossDomainFunctionCall(List<Node> nodes, List<Edge> edges) {
+        Map<UUID, String> nodeFilePaths = new HashMap<>();
+        Map<UUID, String> nameMap = new HashMap<>();
+        for (Node n : nodes) {
+            nodeFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+            nameMap.put(n.getId(), n.getName());
+        }
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Edge e : edges) {
+            if (e.getType() != EdgeType.FUNCTION_CALL) continue;
+            String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
+            String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
+
+            // infrastructure/ 레이어는 여러 도메인을 브릿지하는 역할 — cross-domain 허용
+            if (srcPath.contains("/infrastructure/") || tgtPath.contains("/infrastructure/")) continue;
+
+            String srcDomain = extractBoundedContext(srcPath);
+            String tgtDomain = extractBoundedContext(tgtPath);
+
+            if (srcDomain == null || tgtDomain == null) continue;
+            if (srcDomain.equals(tgtDomain)) continue;
+            // shared/ 경유는 허용
+            if (tgtPath.contains("/shared/")) continue;
+            // port/ 어댑터 경유는 허용 (인터페이스 구현체로 향하는 호출)
+            if (tgtPath.contains("/port/") || tgtPath.contains("/adapter/")) continue;
+
+            String srcName = nameMap.getOrDefault(e.getSourceNodeId(), srcDomain);
+            String tgtName = nameMap.getOrDefault(e.getTargetNodeId(), tgtDomain);
+            Map<String, Object> w = new LinkedHashMap<>();
+            w.put("type", "CROSS_DOMAIN_CALL");
+            w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
+            w.put("edgeIds", List.of(e.getId().toString()));
+            w.put("message", "Cross-Domain 직접 호출: " + srcDomain + "/" + srcName
+                    + " → " + tgtDomain + "/" + tgtName
+                    + ". 수정: domain/" + srcDomain + "/port/ 인터페이스 선언 후 "
+                    + "infrastructure/adapter/ 에서 구현하세요.");
+            warnings.add(w);
+        }
+        return warnings;
+    }
+
+    // 파일 경로에서 Bounded Context 이름 추출 (domain/X, application/X, infrastructure/X → X)
+    private String extractBoundedContext(String path) {
+        for (String layer : List.of("/domain/", "/application/", "/infrastructure/")) {
+            int idx = path.indexOf(layer);
+            if (idx < 0) continue;
+            String after = path.substring(idx + layer.length());
+            int slash = after.indexOf('/');
+            if (slash > 0) return after.substring(0, slash);
+        }
+        return null;
+    }
+
+    // FUNCTION 노드가 7개 초과 FUNCTION_CALL 아웃바운드를 가질 때 — 과도한 책임 (High Fan-Out)
     private List<Map<String, Object>> detectHighFanOut(List<Node> nodes, List<Edge> edges) {
-        final int THRESHOLD = 10;
+        final int THRESHOLD = 7;
 
         Map<UUID, Integer> fanOutMap = new HashMap<>();
         Map<UUID, String> nameMap = new HashMap<>();

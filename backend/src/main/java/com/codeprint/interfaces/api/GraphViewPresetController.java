@@ -1,8 +1,8 @@
 // 그래프 뷰 프리셋 저장/조회 REST API
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.application.graph.GraphQueryService;
-import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.graph.GraphViewPreset;
 import com.codeprint.domain.graph.GraphViewPresetRepository;
 import com.codeprint.domain.user.User;
@@ -26,7 +26,7 @@ public class GraphViewPresetController {
 
     private final GraphViewPresetRepository presetRepository;
     private final GraphQueryService graphQueryService;
-    private final ProjectQueryService projectQueryService;
+    private final GraphFacade graphFacade;
 
     // 내 프리셋 전체 조회 (슬롯 1~4, 없는 슬롯은 기본값으로 채움)
     @GetMapping("/api/graphs/{graphId}/presets")
@@ -82,8 +82,7 @@ public class GraphViewPresetController {
             @AuthenticationPrincipal User user) {
 
         // 그래프 소유자 확인
-        graphQueryService.findById(graphId)
-                .ifPresent(g -> projectQueryService.getProject(g.getProjectId(), user.getId()));
+        graphFacade.verifyGraphOwnership(graphId, user.getId());
 
         // 기존 슬롯이 있으면 삭제 후 새로 저장
         presetRepository.findByGraphIdAndUserIdAndSlot(graphId, user.getId(), slot)

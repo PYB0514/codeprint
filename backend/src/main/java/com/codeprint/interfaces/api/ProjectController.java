@@ -1,8 +1,8 @@
 // 프로젝트 CRUD REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
-import com.codeprint.application.analysis.AnalysisApplicationService;
 import com.codeprint.application.project.ProjectCommandService;
+import com.codeprint.application.project.ProjectFacade;
 import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.user.User;
 import com.codeprint.infrastructure.github.GitHubApiClient;
@@ -10,7 +10,6 @@ import com.codeprint.infrastructure.github.GitHubRepoDto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -21,14 +20,13 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/projects")
-@Slf4j
 @RequiredArgsConstructor
 public class ProjectController {
 
     private final ProjectCommandService projectCommandService;
     private final ProjectQueryService projectQueryService;
     private final GitHubApiClient gitHubApiClient;
-    private final AnalysisApplicationService analysisApplicationService;
+    private final ProjectFacade projectFacade;
 
     // 현재 사용자의 프로젝트 목록 조회
     @GetMapping
@@ -98,33 +96,7 @@ public class ProjectController {
     public ResponseEntity<Map<String, Object>> getFreshness(
             @PathVariable UUID projectId,
             @AuthenticationPrincipal User user) {
-        var project = projectQueryService.getProject(projectId, user.getId());
-        var latestAnalysis = analysisApplicationService.getLatestAnalysis(projectId);
-
-        if (latestAnalysis.isEmpty() || latestAnalysis.get().getLastCommitSha() == null) {
-            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", "no_data"));
-        }
-
-        var analysis = latestAnalysis.get();
-        String branch = analysis.getBranch() != null ? analysis.getBranch() : "main";
-
-        try {
-            String latestSha = gitHubApiClient.fetchLatestCommitSha(
-                    project.getGithubRepoUrl(), branch, user.getGithubAccessToken());
-            boolean isOutdated = !latestSha.equals(analysis.getLastCommitSha());
-            return ResponseEntity.ok(Map.of(
-                    "isOutdated", isOutdated,
-                    "branch", branch,
-                    "lastAnalyzedAt", analysis.getFinishedAt().toString(),
-                    "lastCommitSha", analysis.getLastCommitSha(),
-                    "latestCommitSha", latestSha
-            ));
-        } catch (Exception e) {
-            log.warn("Freshness 조회 실패 projectId={} token_null={} cause={}", projectId, user.getGithubAccessToken() == null, e.getMessage(), e);
-            String causeMsg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
-            String reason = causeMsg != null && causeMsg.contains("403") ? "rate_limit" : "github_error";
-            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", reason));
-        }
+        return ResponseEntity.ok(projectFacade.getFreshness(projectId, user.getId(), user.getGithubAccessToken()));
     }
 
     // 주요 브랜치 설정 (null이면 해제)
@@ -142,35 +114,7 @@ public class ProjectController {
     public ResponseEntity<Map<String, Object>> getPrimaryFreshness(
             @PathVariable UUID projectId,
             @AuthenticationPrincipal User user) {
-        var project = projectQueryService.getProject(projectId, user.getId());
-        String primaryBranch = project.getPrimaryBranch();
-        if (primaryBranch == null) {
-            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", "not_set"));
-        }
-
-        var latestAnalysis = analysisApplicationService.getLatestAnalysisByBranch(projectId, primaryBranch);
-        if (latestAnalysis.isEmpty() || latestAnalysis.get().getLastCommitSha() == null) {
-            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", "no_data", "branch", primaryBranch));
-        }
-
-        var analysis = latestAnalysis.get();
-        try {
-            String latestSha = gitHubApiClient.fetchLatestCommitSha(
-                    project.getGithubRepoUrl(), primaryBranch, user.getGithubAccessToken());
-            boolean isOutdated = !latestSha.equals(analysis.getLastCommitSha());
-            return ResponseEntity.ok(Map.of(
-                    "isOutdated", isOutdated,
-                    "branch", primaryBranch,
-                    "lastAnalyzedAt", analysis.getFinishedAt().toString(),
-                    "lastCommitSha", analysis.getLastCommitSha(),
-                    "latestCommitSha", latestSha
-            ));
-        } catch (Exception e) {
-            log.warn("PrimaryFreshness 조회 실패 projectId={} token_null={} cause={}", projectId, user.getGithubAccessToken() == null, e.getMessage(), e);
-            String causeMsg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
-            String reason = causeMsg != null && causeMsg.contains("403") ? "rate_limit" : "github_error";
-            return ResponseEntity.ok(Map.of("isOutdated", false, "reason", reason, "branch", primaryBranch));
-        }
+        return ResponseEntity.ok(projectFacade.getPrimaryFreshness(projectId, user.getId(), user.getGithubAccessToken()));
     }
 
     // 프로젝트 삭제
