@@ -54,6 +54,16 @@ const fetchGraph = useCallback(async () => {
 
 ---
 
+## 계층 뷰 — 비DDD 레이어 섹션 박스 미표시 (2026-06-12)
+
+**문제.** `LAYER_META_PRE`가 DDD 레이어명(`infrastructure`, `domain`, `application`, `interfaces`, `pages`, `components`, `hooks`)만 정의하고 있어, 비DDD 프로젝트(`controllers/`, `services/`, `models/` 등)의 레이어는 섹션 박스가 렌더링되지 않았다. 파일은 보이지만 레이어 구분 박스 없이 나열되어 계층 뷰가 의미없었다.
+
+**결정.** `LAYER_META_PRE`에 없는 레이어명은 fallback 회색 팔레트로 섹션 박스를 생성. 레이어명 첫 글자를 대문자로 표시. 기존 DDD 레이어는 기존 색상 그대로 유지.
+
+**결과.** Express.js(`controllers/services/models/`), Go(`handler/repository/`), Django(`views/models/serializers/`) 등 어떤 폴더 구조도 계층 뷰에서 섹션 박스로 표시.
+
+---
+
 ### 레이어 토글 — extent:'parent' 노드에 hidden 미전파 (2026-06-08)
 
 **문제.** 레이어 불투명 토글 시 group 노드만 hidden 처리했는데, React Flow의 `extent: 'parent'` 파일 노드와 그 자식 함수 노드는 부모가 hidden이 되어도 화면에 계속 노출됐다.
