@@ -1655,6 +1655,18 @@ function GraphPageInner() {
     setRightCollapsed(false)
   }, [rawNodes, rawEdgesCache, graphId, startPlayback])
 
+  // ?nodeId= 딥링크 — 그래프 로드 후 해당 노드 자동 선택 + fitView
+  const deepLinkApplied = useRef(false)
+  useEffect(() => {
+    const targetNodeId = searchParams.get('nodeId')
+    if (!targetNodeId || deepLinkApplied.current || rawNodes.length === 0) return
+    deepLinkApplied.current = true
+    setTimeout(() => {
+      openFuncNode(targetNodeId)
+      setTimeout(() => fitView({ nodes: [{ id: targetNodeId }], duration: 600, padding: 0.4 }), 50)
+    }, 400)
+  }, [rawNodes, searchParams, openFuncNode, fitView])
+
   // 노드 클릭 이벤트 처리
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     publishSelection(node.id)
@@ -2851,16 +2863,32 @@ function GraphPageInner() {
                 {sidebar.kind === 'func' && (
                   <>
                     <div>
-                      <p className="text-white font-mono font-semibold text-sm">
-                        {labelMode === 'comment' && sidebar.funcComment ? sidebar.funcComment : sidebar.funcName}
-                      </p>
-                      <p className="text-gray-500 font-mono text-xs mt-0.5">
-                        {labelMode === 'comment' && sidebar.funcComment ? sidebar.funcName : sidebar.funcComment}
-                      </p>
-                      <p
-                        className="text-blue-400 font-mono text-xs mt-1 cursor-pointer hover:text-blue-300 underline decoration-gray-700"
-                        onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.parentFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
-                      >{sidebar.parentFileName}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-white font-mono font-semibold text-sm">
+                            {labelMode === 'comment' && sidebar.funcComment ? sidebar.funcComment : sidebar.funcName}
+                          </p>
+                          <p className="text-gray-500 font-mono text-xs mt-0.5">
+                            {labelMode === 'comment' && sidebar.funcComment ? sidebar.funcName : sidebar.funcComment}
+                          </p>
+                          <p
+                            className="text-blue-400 font-mono text-xs mt-1 cursor-pointer hover:text-blue-300 underline decoration-gray-700"
+                            onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.parentFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
+                          >{sidebar.parentFileName}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const url = new URL(window.location.href)
+                            url.searchParams.set('nodeId', sidebar.nodeId)
+                            url.searchParams.delete('fresh')
+                            navigator.clipboard.writeText(url.toString())
+                          }}
+                          className="shrink-0 text-xs text-gray-500 hover:text-gray-300 border border-gray-700 hover:border-gray-500 rounded px-2 py-0.5 transition-colors"
+                          title="이 노드 링크 복사"
+                        >
+                          🔗
+                        </button>
+                      </div>
                     </div>
                     <SidebarSection title="커스텀 이름 / 메모">
                       <input
