@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.66.0',
+    date: '2026-06-12',
+    title: '노드 클릭 시 연결 엣지 자동 표시',
+    type: 'fix',
+    items: [
+      { category: 'UX', desc: '노드 클릭 시 직접 연결된 엣지(1단계)가 토글 상태와 무관하게 자동 표시됨' },
+      { category: 'UX', desc: '✕ 또는 흐름 재생 종료 시 엣지 원래 상태로 복원 — 전체 엣지 토글 부작용 없음' },
+    ],
+  },
+  {
     version: 'v0.65.0',
     date: '2026-06-12',
     title: '팀 플랜 — Seat Pool 협업 관리',
