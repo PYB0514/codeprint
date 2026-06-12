@@ -17,10 +17,12 @@ const WARNING_META: Record<string, { label: string; desc: string; color: string 
   BROKEN_INTERFACE_CHAIN: { label: '인터페이스 미구현', desc: '구현체 엣지 없는 인터페이스 메서드', color: '#ef4444' },
   ASYNC_SELF_CALL: { label: '@Async 자기 호출', desc: '프록시 우회로 비동기 무시됨', color: '#eab308' },
   DB_LAYER_BYPASS: { label: 'DB 레이어 우회', desc: 'Repository를 거치지 않는 직접 persistence 호출', color: '#8b5cf6' },
-  CROSS_CONTEXT_IMPORT: { label: 'DDD 경계 위반', desc: '다른 바운디드 컨텍스트 domain 직접 import', color: '#06b6d4' },
+  CROSS_CONTEXT_IMPORT: { label: 'DDD 컨텍스트 import 위반', desc: 'application/A가 domain/B를 직접 import — ID로만 참조해야 함', color: '#06b6d4' },
+  DOMAIN_IMPORTS_INFRA: { label: 'DDD 의존 방향 위반', desc: 'domain/ 이 infrastructure/ 를 직접 import — 공통 모듈은 shared/ 로 이동', color: '#ef4444' },
+  CROSS_DOMAIN_CALL: { label: 'Cross-Domain 직접 호출', desc: '도메인 경계를 넘는 직접 함수 호출 — domain/port/ 인터페이스 경유 필요', color: '#f43f5e' },
   MISSING_CONVERTER_MIGRATION: { label: '@Convert 마이그레이션 필요', desc: '기존 평문 데이터에 Flyway 마이그레이션 미작성 가능성', color: '#ec4899' },
   DEAD_CODE: { label: '데드 코드 후보', desc: '아무 곳에서도 호출되지 않는 함수', color: '#6b7280' },
-  HIGH_FAN_OUT: { label: '과도한 의존', desc: '10개 초과 함수 호출 — 단일 책임 원칙 위반 가능성', color: '#f59e0b' },
+  HIGH_FAN_OUT: { label: '과도한 의존 (SRP 위반)', desc: '7개 초과 함수 호출 — 단일 책임 원칙 위반 가능성', color: '#f59e0b' },
 }
 
 // 경고 목록을 타입별로 그룹핑하여 접기/펼치기 섹션으로 표시
