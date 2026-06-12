@@ -86,6 +86,7 @@ const STEPS = [
 export default function LandingPage() {
   const navigate = useNavigate()
   const [loggedIn, setLoggedIn] = useState(false)
+  const [urlInput, setUrlInput] = useState('')
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // 쿠키 기반 인증 상태 확인 + 청크 프리페치
@@ -99,6 +100,19 @@ export default function LandingPage() {
   const handleLogin = () => {
     const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
     window.location.href = `${apiUrl}/oauth2/authorization/github`
+  }
+
+  // URL 입력 후 분석 시작 — 로그인 상태면 대시보드로, 아니면 OAuth 후 자동 팝업
+  const handleTryUrl = () => {
+    const trimmed = urlInput.trim()
+    if (!trimmed) return
+    localStorage.setItem('pendingAnalysisUrl', trimmed)
+    if (loggedIn) {
+      navigate('/dashboard')
+    } else {
+      const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
+      window.location.href = `${apiUrl}/oauth2/authorization/github`
+    }
   }
 
   // 타이머 cleanup
@@ -142,6 +156,26 @@ export default function LandingPage() {
               URL 하나로 파일 구조, 함수 호출 흐름, DB 연결 관계를 시각화한다.
               런타임 경고 감지와 AI 분석까지 — 무료로 프로젝트 3개까지.
             </p>
+
+            {/* URL 입력 — 바로 분석 시작 */}
+            <form
+              onSubmit={(e) => { e.preventDefault(); handleTryUrl() }}
+              className="flex w-full max-w-md gap-2"
+            >
+              <input
+                type="text"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="github.com/owner/repo"
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none focus:ring-2 focus:ring-white/20"
+              />
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+              >
+                분석 시작
+              </button>
+            </form>
 
             <div className="flex items-center gap-3 mt-1">
               {loggedIn ? (

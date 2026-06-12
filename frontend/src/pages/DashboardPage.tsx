@@ -31,6 +31,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<UserInfo | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [showModal, setShowModal] = useState(false)
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null)
 
   // 사용자의 프로젝트 목록을 서버에서 불러와 상태에 저장
   const fetchProjects = useCallback(async () => {
@@ -43,6 +44,12 @@ export default function DashboardPage() {
       .get<UserInfo>('/api/auth/me')
       .then((res) => {
         setUser(res.data)
+        const saved = localStorage.getItem('pendingAnalysisUrl')
+        if (saved) {
+          localStorage.removeItem('pendingAnalysisUrl')
+          setPendingUrl(saved)
+          setShowModal(true)
+        }
         return fetchProjects()
       })
       .catch(() => {
@@ -202,11 +209,13 @@ export default function DashboardPage() {
 
       {showModal && (
         <CreateProjectModal
-          onClose={() => setShowModal(false)}
+          onClose={() => { setShowModal(false); setPendingUrl(null) }}
           onCreated={(project) => {
             setProjects((prev) => [project, ...prev])
             setShowModal(false)
+            setPendingUrl(null)
           }}
+          initialUrl={pendingUrl ?? undefined}
         />
       )}
     </div>
