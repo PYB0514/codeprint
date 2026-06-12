@@ -30,4 +30,7 @@ public interface PostJpaRepository extends JpaRepository<Post, UUID> {
 
     // 조회수 내림차순 조회
     List<Post> findAllByOrderByViewCountDesc(Pageable pageable);
+
+    // 그래프 첨부 게시글만 최신순 조회
+    List<Post> findByGraphIdNotNullOrderByCreatedAtDesc(Pageable pageable);
 }

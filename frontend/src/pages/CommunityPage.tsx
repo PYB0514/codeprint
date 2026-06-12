@@ -72,7 +72,7 @@ export default function CommunityPage() {
   const [editTitle, setEditTitle] = useState('')
   const [editContent, setEditContent] = useState('')
   const [loading, setLoading] = useState(true)
-  const [feedTab, setFeedTab] = useState<'all' | 'following'>('all')
+  const [feedTab, setFeedTab] = useState<'all' | 'following' | 'gallery'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [attachedFiles, setAttachedFiles] = useState<{ file: File; s3Key: string; uploading: boolean }[]>([])
@@ -112,9 +112,10 @@ export default function CommunityPage() {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     searchTimerRef.current = setTimeout(() => {
       const params: Record<string, string> = { page: '0', size: '20' }
-      if (searchQuery.trim()) params.q = searchQuery.trim()
-      if (feedTab === 'following') params.feed = 'following'
-      if (sortOrder !== 'latest') params.sort = sortOrder
+      if (feedTab === 'gallery') params.graphOnly = 'true'
+      else if (searchQuery.trim()) params.q = searchQuery.trim()
+      else if (feedTab === 'following') params.feed = 'following'
+      if (sortOrder !== 'latest' && feedTab === 'all') params.sort = sortOrder
       axios.get<Post[]>('/api/community/posts', { params }).then((res) => {
         setPosts(res.data)
         setPostPage(0)
@@ -128,9 +129,10 @@ export default function CommunityPage() {
     setLoadingMore(true)
     const nextPage = postPage + 1
     const params: Record<string, string> = { page: String(nextPage), size: '20' }
-    if (searchQuery.trim()) params.q = searchQuery.trim()
-    if (feedTab === 'following') params.feed = 'following'
-    if (sortOrder !== 'latest') params.sort = sortOrder
+    if (feedTab === 'gallery') params.graphOnly = 'true'
+    else if (searchQuery.trim()) params.q = searchQuery.trim()
+    else if (feedTab === 'following') params.feed = 'following'
+    if (sortOrder !== 'latest' && feedTab === 'all') params.sort = sortOrder
     const res = await axios.get<Post[]>('/api/community/posts', { params })
     setPosts(prev => [...prev, ...res.data])
     setPostPage(nextPage)
@@ -319,19 +321,19 @@ export default function CommunityPage() {
             </div>
           </div>
 
-          {/* 전체 / 팔로잉 탭 */}
-          {user && (
-            <div className="flex gap-1 mb-4 border-b border-gray-800">
-              <button
-                onClick={() => setFeedTab('all')}
-                className={`text-sm px-4 py-2 -mb-px border-b-2 transition-colors ${
-                  feedTab === 'all'
-                    ? 'border-white text-white font-medium'
-                    : 'border-transparent text-gray-400 hover:text-white'
-                }`}
-              >
-                전체
-              </button>
+          {/* 전체 / 팔로잉 / 갤러리 탭 */}
+          <div className="flex gap-1 mb-4 border-b border-gray-800">
+            <button
+              onClick={() => setFeedTab('all')}
+              className={`text-sm px-4 py-2 -mb-px border-b-2 transition-colors ${
+                feedTab === 'all'
+                  ? 'border-white text-white font-medium'
+                  : 'border-transparent text-gray-400 hover:text-white'
+              }`}
+            >
+              전체
+            </button>
+            {user && (
               <button
                 onClick={() => setFeedTab('following')}
                 className={`text-sm px-4 py-2 -mb-px border-b-2 transition-colors ${
@@ -342,8 +344,18 @@ export default function CommunityPage() {
               >
                 팔로잉
               </button>
-            </div>
-          )}
+            )}
+            <button
+              onClick={() => setFeedTab('gallery')}
+              className={`text-sm px-4 py-2 -mb-px border-b-2 transition-colors ${
+                feedTab === 'gallery'
+                  ? 'border-indigo-400 text-indigo-300 font-medium'
+                  : 'border-transparent text-gray-400 hover:text-white'
+              }`}
+            >
+              📊 갤러리
+            </button>
+          </div>
 
           {/* 정렬 버튼 */}
           {!searchQuery && feedTab === 'all' && (
@@ -452,6 +464,34 @@ export default function CommunityPage() {
 
           {loading ? (
             <p className="text-gray-500 text-sm">로딩 중...</p>
+          ) : feedTab === 'gallery' ? (
+            posts.length === 0 ? (
+              <p className="text-gray-500 text-sm">그래프가 첨부된 게시글이 없습니다.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {posts.map((post) => (
+                  <div
+                    key={post.id}
+                    onClick={() => handleSelectPost(post)}
+                    className="bg-gray-900 border border-gray-800 rounded-xl p-4 cursor-pointer hover:border-indigo-700 hover:bg-gray-800 transition-colors flex flex-col gap-2"
+                  >
+                    <div className="flex items-center gap-1 text-indigo-400 text-xs">
+                      <span>📊</span>
+                      <span>그래프 첨부</span>
+                    </div>
+                    <p className="text-white text-sm font-medium line-clamp-2 leading-snug">{post.title}</p>
+                    <p className="text-gray-500 text-xs line-clamp-2">{post.content}</p>
+                    <div className="flex items-center justify-between mt-auto pt-1">
+                      <span className="text-gray-600 text-xs">{post.authorUsername}</span>
+                      <div className="flex items-center gap-2 text-gray-600 text-xs">
+                        {post.likeCount > 0 && <span>♥ {post.likeCount}</span>}
+                        {post.viewCount > 0 && <span>👁 {post.viewCount}</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
           ) : posts.length === 0 ? (
             <p className="text-gray-500 text-sm">
               {feedTab === 'following'

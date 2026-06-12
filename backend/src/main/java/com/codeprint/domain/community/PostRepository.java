@@ -58,4 +58,7 @@ public interface PostRepository {
 
     // 조회수 내림차순 게시글 목록 조회
     List<Post> findAllByOrderByViewCountDesc(org.springframework.data.domain.Pageable pageable);
+
+    // 그래프 첨부 게시글만 최신순 조회
+    List<Post> findByGraphIdNotNull(org.springframework.data.domain.Pageable pageable);
 }

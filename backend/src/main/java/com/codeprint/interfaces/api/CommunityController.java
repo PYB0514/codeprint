@@ -52,10 +52,13 @@ public class CommunityController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String feed,
             @RequestParam(defaultValue = "latest") String sort,
+            @RequestParam(defaultValue = "false") boolean graphOnly,
             @AuthenticationPrincipal User user) {
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         List<Post> raw;
-        if (q != null && !q.isBlank()) {
+        if (graphOnly) {
+            raw = postRepository.findByGraphIdNotNull(pageable);
+        } else if (q != null && !q.isBlank()) {
             raw = postRepository.findByTitleContainingIgnoreCaseOrContentContainingIgnoreCaseOrderByCreatedAtDesc(q, q, pageable);
         } else if ("following".equals(feed) && user != null) {
             List<java.util.UUID> followingIds = followRepository.findByFollowerId(user.getId()).stream()
