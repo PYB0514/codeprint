@@ -817,6 +817,99 @@ class StaticCodeAnalyzerTest {
         assertThat(result.dbTables().get(0).tableName()).isEqualTo("users");
     }
 
+    // ── Go DB 테이블 감지 (GORM / Beego ORM) ─────────────────────────────────
+
+    @Test
+    @DisplayName("Go GORM gorm.Model 임베딩 구조체에서 DB 테이블명을 추출한다")
+    void Go_GORM_Model_임베딩_추출() throws IOException {
+        Path file = tempDir.resolve("models.go");
+        Files.writeString(file, """
+                package models
+
+                import "gorm.io/gorm"
+
+                type User struct {
+                    gorm.Model
+                    Name  string
+                    Email string
+                }
+
+                type OrderItem struct {
+                    gorm.Model
+                    Quantity int
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.dbTables()).extracting(DbTableInfo::tableName)
+                .containsExactlyInAnyOrder("users", "order_items");
+    }
+
+    @Test
+    @DisplayName("Go GORM TableName() 오버라이드가 규칙 기반 테이블명을 덮어쓴다")
+    void Go_GORM_TableName_오버라이드_우선() throws IOException {
+        Path file = tempDir.resolve("user.go");
+        Files.writeString(file, """
+                package models
+
+                import "gorm.io/gorm"
+
+                type User struct {
+                    gorm.Model
+                    Name string
+                }
+
+                func (u *User) TableName() string {
+                    return "members"
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.dbTables()).hasSize(1);
+        assertThat(result.dbTables().get(0).tableName()).isEqualTo("members");
+        assertThat(result.dbTables().get(0).className()).isEqualTo("User");
+    }
+
+    @Test
+    @DisplayName("Go Beego orm.RegisterModel에서 DB 테이블명을 추출한다")
+    void Go_Beego_RegisterModel_추출() throws IOException {
+        Path file = tempDir.resolve("init.go");
+        Files.writeString(file, """
+                package models
+
+                import "github.com/beego/beego/v2/client/orm"
+
+                func init() {
+                    orm.RegisterModel(new(User), new(Profile))
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.dbTables()).extracting(DbTableInfo::tableName)
+                .containsExactlyInAnyOrder("user", "profile");
+    }
+
+    @Test
+    @DisplayName("gorm.Model 없는 일반 Go 구조체는 DB 테이블로 감지하지 않는다")
+    void Go_일반_구조체_미감지() throws IOException {
+        Path file = tempDir.resolve("config.go");
+        Files.writeString(file, """
+                package config
+
+                type ServerConfig struct {
+                    Port int
+                    Host string
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.dbTables()).isEmpty();
+    }
+
     // ── 다국어 비동기 메서드 감지 ────────────────────────────────────────────
 
     @Test
