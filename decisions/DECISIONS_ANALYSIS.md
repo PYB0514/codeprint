@@ -184,6 +184,16 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 
 ---
 
+### 비Spring 백엔드 API_CALL 엣지 0개 버그 (2026-06-13, 멀티에이전트 코드 감사로 발견)
+
+**문제.** Express/FastAPI/Gin/Rails/Laravel/Ktor 등 비Spring 백엔드 프로젝트에서 프론트→백엔드 API_CALL 엣지가 단 한 번도 생성된 적이 없었다. 풀스택 시각화라는 핵심 가치가 Java 외 스택에서 통째로 빠져 있던 것.
+
+**이유.** 비Spring 프레임워크의 컨트롤러 매핑은 `GET:/users` 형식(METHOD 프리픽스 포함)으로 저장되는데, `GraphBuilder`의 글로브 인덱스가 이 문자열 전체를 경로 패턴으로 사용했다. `globPathMatches`는 `/`로 split해서 세그먼트를 비교하므로 `GET:` 세그먼트와 프론트 경로 `/api/...`가 절대 일치할 수 없었다. 프리픽스 없이 저장되는 Spring 매핑만 우연히 동작했다. 단위 테스트가 Spring 케이스만 있어서 잡히지 않았다.
+
+**결과.** 인덱스 빌드 시 `^[A-Z]+:` 프리픽스를 분리하고, Express/Rails식 `:param` 세그먼트도 `{var}`와 함께 `*` 글로브로 정규화. TDD로 진행 — 수정 전 실패하는 테스트 2개(Express 매핑, :param 매칭)로 버그 재현 확인 후 수정, Spring 회귀 테스트 1개 포함 3개 추가. 교훈: 형식이 다른 입력 변형(프리픽스 유/무)마다 테스트 케이스가 필요하다.
+
+---
+
 ### DB 스키마 수집 fallback 전략
 
 **결정.** DB 스키마 자동 감지 → 파일 업로드 → 수동 입력 순으로 fallback.

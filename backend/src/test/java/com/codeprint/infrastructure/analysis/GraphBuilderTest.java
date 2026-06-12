@@ -280,6 +280,61 @@ class GraphBuilderTest {
         assertThat(hasCallEdge).isTrue();
     }
 
+    // ── API_CALL 엣지 생성 (비Spring 백엔드 매핑) ───────────────────────────
+
+    @Test
+    @DisplayName("Express 스타일 METHOD:/path 매핑도 프론트 호출과 API_CALL 엣지로 연결된다")
+    void Express_매핑_API_CALL_엣지_생성() {
+        // 회귀: 비Spring 매핑은 "GET:/users" 형식인데 글로브 매칭이 "GET:"을 경로 세그먼트로 비교해 항상 실패했던 버그
+        ParsedFile front = parsedFileWithApiCalls("src/api.ts", "TypeScript", List.of("GET:/users"));
+        ParsedFile backend = parsedFileWithMappings("src/userRouter.js", "JavaScript", List.of("GET:/users"));
+
+        graphBuilder.build(projectId, analysisId, List.of(front, backend));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasApiCall = edgeCaptor.getAllValues().stream()
+                .anyMatch(e -> e.getType() == EdgeType.API_CALL);
+
+        assertThat(hasApiCall).isTrue();
+    }
+
+    @Test
+    @DisplayName("Express :param 경로 세그먼트가 글로브로 정규화되어 매칭된다")
+    void Express_param_세그먼트_매칭() {
+        // 프론트 템플릿 리터럴 ${id}는 extractApiCalls에서 이미 * 로 정규화됨
+        ParsedFile front = parsedFileWithApiCalls("src/api.ts", "TypeScript", List.of("DELETE:/users/*"));
+        ParsedFile backend = parsedFileWithMappings("src/userRouter.js", "JavaScript", List.of("DELETE:/users/:id"));
+
+        graphBuilder.build(projectId, analysisId, List.of(front, backend));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasApiCall = edgeCaptor.getAllValues().stream()
+                .anyMatch(e -> e.getType() == EdgeType.API_CALL);
+
+        assertThat(hasApiCall).isTrue();
+    }
+
+    @Test
+    @DisplayName("Spring 프리픽스 없는 매핑은 기존대로 매칭된다 (회귀 방지)")
+    void Spring_매핑_기존_동작_유지() {
+        ParsedFile front = parsedFileWithApiCalls("src/api.ts", "TypeScript", List.of("GET:/api/projects"));
+        ParsedFile backend = parsedFileWithMappings("src/ProjectController.java", "Java", List.of("/api/projects"));
+
+        graphBuilder.build(projectId, analysisId, List.of(front, backend));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasApiCall = edgeCaptor.getAllValues().stream()
+                .anyMatch(e -> e.getType() == EdgeType.API_CALL);
+
+        assertThat(hasApiCall).isTrue();
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private ParsedFile parsedFile(String path, String lang, List<String> functions, Map<String, String> comments) {
@@ -302,5 +357,17 @@ class GraphBuilderTest {
     private ParsedFile parsedFileWithImpl(String path, String lang, List<String> functions, String implementedInterface) {
         return new ParsedFile(path, lang, functions, List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(implementedInterface), List.of(), List.of());
+    }
+
+    // 프론트 API 호출 파일 생성 헬퍼 — apiCalls 포함
+    private ParsedFile parsedFileWithApiCalls(String path, String lang, List<String> apiCalls) {
+        return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), apiCalls, List.of(), List.of(), List.of(), List.of());
+    }
+
+    // 백엔드 컨트롤러 매핑 파일 생성 헬퍼 — controllerMappings 포함
+    private ParsedFile parsedFileWithMappings(String path, String lang, List<String> mappings) {
+        return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), mappings, List.of(), List.of(), List.of());
     }
 }

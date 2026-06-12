@@ -358,7 +358,12 @@ public class GraphBuilder {
             UUID fileId = fileNodeIds.get(pf.filePath());
             if (fileId == null) continue;
             for (String mapping : pf.controllerMappings()) {
-                String glob = mapping.replaceAll("\\{[^}]+}", "*");
+                // 비Spring 프레임워크(Express/FastAPI/Gin 등)는 "METHOD:/path" 형식 — 경로만 분리해야 매칭 가능
+                String path = mapping.matches("^[A-Z]+:.*")
+                        ? mapping.substring(mapping.indexOf(':') + 1)
+                        : mapping;
+                // Spring {var}와 Express/Rails :param 세그먼트를 * 글로브로 정규화
+                String glob = path.replaceAll("\\{[^}]+}", "*").replaceAll("/:[^/]+", "/*");
                 controllerGlobIndex.put(glob, fileId);
             }
         }

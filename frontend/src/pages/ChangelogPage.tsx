@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.71.2',
+    date: '2026-06-13',
+    title: '비Spring 백엔드 API 연결선 버그 수정',
+    type: 'fix',
+    items: [
+      { category: '분석', desc: 'Express/FastAPI/Gin/Rails/Laravel/Ktor 백엔드에서 프론트→백엔드 API_CALL 연결선이 생성되지 않던 버그 수정' },
+      { category: '분석', desc: 'Express/Rails 스타일 :param 경로 세그먼트 매칭 지원 — /users/:id ↔ /users/${id} 연결' },
+    ],
+  },
+  {
     version: 'v0.71.1',
     date: '2026-06-12',
     title: 'Go 프로젝트 DB 테이블 감지',
