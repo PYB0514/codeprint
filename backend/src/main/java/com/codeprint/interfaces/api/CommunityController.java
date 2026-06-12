@@ -15,7 +15,6 @@ import com.codeprint.domain.community.PostRepository;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.user.User;
-import com.codeprint.domain.user.UserFollowRepository;
 import com.codeprint.domain.user.UserRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -42,7 +41,6 @@ public class CommunityController {
     private final PostBookmarkRepository bookmarkRepository;
     private final PostLikeRepository likeRepository;
     private final PostRepository postRepository;
-    private final UserFollowRepository followRepository;
 
     // 게시글 목록 조회 (페이지, 검색, 팔로잉 피드) — 로그인 시 내 북마크 여부 포함
     @GetMapping("/posts")
@@ -61,12 +59,7 @@ public class CommunityController {
         } else if (q != null && !q.isBlank()) {
             raw = postRepository.findByTitleContainingIgnoreCaseOrContentContainingIgnoreCaseOrderByCreatedAtDesc(q, q, pageable);
         } else if ("following".equals(feed) && user != null) {
-            List<java.util.UUID> followingIds = followRepository.findByFollowerId(user.getId()).stream()
-                    .map(f -> f.getFollowingId())
-                    .toList();
-            raw = followingIds.isEmpty()
-                    ? List.of()
-                    : postRepository.findByUserIdInOrderByCreatedAtDesc(followingIds, pageable);
+            raw = communityFacade.getFollowingFeed(user.getId(), pageable);
         } else if ("likes".equals(sort)) {
             raw = postRepository.findAllOrderByLikeCountDesc(pageable);
         } else if ("views".equals(sort)) {
