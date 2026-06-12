@@ -201,15 +201,33 @@ public class LocalAnalyzer {
         return slash >= 0 ? filePath.substring(slash + 1) : filePath;
     }
 
-    // import 경로와 파일 경로 일치 여부 판별
+    // import 경로와 파일 경로 일치 여부 판별 — 상대경로(TS/JS/Python)와 패키지경로(Java/Kotlin) 모두 처리
     private static boolean isImportMatch(String importPath, String filePath) {
-        String normalizedImport = importPath.replace(".", "/");
         String normalizedFile = filePath.replace("\\", "/");
         String fileWithoutExt = normalizedFile.contains(".")
                 ? normalizedFile.substring(0, normalizedFile.lastIndexOf('.'))
                 : normalizedFile;
+
+        if (importPath.startsWith("./") || importPath.startsWith("../")) {
+            String rel = importPath.replaceAll("^(\\./)+", "").replace("\\", "/");
+            return fileWithoutExt.endsWith(rel)
+                    || normalizedFile.endsWith(rel + ".ts")
+                    || normalizedFile.endsWith(rel + ".tsx")
+                    || normalizedFile.endsWith(rel + ".js")
+                    || normalizedFile.endsWith(rel + ".jsx")
+                    || normalizedFile.endsWith(rel + ".py")
+                    || normalizedFile.endsWith(rel + "/index.ts")
+                    || normalizedFile.endsWith(rel + "/index.tsx")
+                    || normalizedFile.endsWith(rel + "/index.js");
+        }
+
+        String normalizedImport = importPath.replace(".", "/");
         return fileWithoutExt.endsWith(normalizedImport)
-                || normalizedFile.endsWith(importPath.replace(".", "/") + ".java")
-                || normalizedFile.endsWith(importPath.replace(".", "/") + ".kt");
+                || normalizedFile.endsWith(normalizedImport + ".java")
+                || normalizedFile.endsWith(normalizedImport + ".kt")
+                || normalizedFile.endsWith(normalizedImport + ".py")
+                || normalizedFile.endsWith(normalizedImport + ".go")
+                || normalizedFile.endsWith(normalizedImport + ".rs")
+                || normalizedFile.endsWith(normalizedImport + ".cs");
     }
 }

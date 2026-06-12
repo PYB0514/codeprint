@@ -455,15 +455,35 @@ public class GraphBuilder {
         return dot > 0 ? name.substring(0, dot) : name;
     }
 
-    // import 경로가 실제 파일 경로와 일치하는지 확인
+    // import 경로가 실제 파일 경로와 일치하는지 확인 — 상대경로(TS/JS/Python)와 패키지경로(Java/Kotlin) 모두 처리
     private boolean isImportMatch(String importPath, String filePath) {
-        String normalizedImport = importPath.replace(".", "/").replace("\\", "/");
         String normalizedFile = filePath.replace("\\", "/");
         String fileWithoutExt = normalizedFile.contains(".")
                 ? normalizedFile.substring(0, normalizedFile.lastIndexOf('.'))
                 : normalizedFile;
-        return fileWithoutExt.endsWith(normalizedImport) ||
-               normalizedFile.endsWith(importPath.replace(".", "/") + ".java") ||
-               normalizedFile.endsWith(importPath.replace(".", "/") + ".kt");
+
+        // 상대경로(./  ../): ./ 제거 후 경로 세그먼트로 매칭 (TypeScript/JS/Python 상대 import)
+        if (importPath.startsWith("./") || importPath.startsWith("../")) {
+            String rel = importPath.replaceAll("^(\\./)+", "").replace("\\", "/");
+            return fileWithoutExt.endsWith(rel)
+                    || normalizedFile.endsWith(rel + ".ts")
+                    || normalizedFile.endsWith(rel + ".tsx")
+                    || normalizedFile.endsWith(rel + ".js")
+                    || normalizedFile.endsWith(rel + ".jsx")
+                    || normalizedFile.endsWith(rel + ".py")
+                    || normalizedFile.endsWith(rel + "/index.ts")
+                    || normalizedFile.endsWith(rel + "/index.tsx")
+                    || normalizedFile.endsWith(rel + "/index.js");
+        }
+
+        // 패키지경로: com.example.User → com/example/User (Java/Kotlin/Python 절대 import)
+        String normalizedImport = importPath.replace(".", "/").replace("\\", "/");
+        return fileWithoutExt.endsWith(normalizedImport)
+                || normalizedFile.endsWith(normalizedImport + ".java")
+                || normalizedFile.endsWith(normalizedImport + ".kt")
+                || normalizedFile.endsWith(normalizedImport + ".py")
+                || normalizedFile.endsWith(normalizedImport + ".go")
+                || normalizedFile.endsWith(normalizedImport + ".rs")
+                || normalizedFile.endsWith(normalizedImport + ".cs");
     }
 }

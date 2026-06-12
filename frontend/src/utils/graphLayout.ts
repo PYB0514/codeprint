@@ -576,7 +576,7 @@ export function buildLayout(
   const layerSectionOrigins = new Map<string, { x: number; y: number; w: number; h: number }>()
   if (layoutPreset === 'layer') {
     layerGroupKeysPre.forEach((keys, layer) => {
-      if (!LAYER_META_PRE[layer]) return
+      // 비DDD 레이어도 섹션 박스 표시 — LAYER_META_PRE에 없으면 폴백 처리
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
       keys.forEach((key) => {
         const p = groupPositions.get(key); const l = groupLayouts.get(key)
@@ -597,10 +597,18 @@ export function buildLayout(
   const result: Node[] = []
 
   // 섹션 노드를 먼저 삽입 — React Flow는 parentId 노드보다 부모가 먼저 있어야 올바르게 렌더링
+  // 미지의 레이어명에 폴백 색상을 할당 — 비DDD 프로젝트 계층 뷰 지원
+  const LAYER_FALLBACK_COLORS = ['#6b7280', '#64748b', '#78716c', '#71717a', '#737373']
+  let fallbackColorIdx = 0
+  const getFallbackLayerMeta = (layer: string) => ({
+    label: layer.charAt(0).toUpperCase() + layer.slice(1),
+    color: LAYER_FALLBACK_COLORS[fallbackColorIdx++ % LAYER_FALLBACK_COLORS.length],
+    opaqueColor: 'rgba(20,20,20,0.98)',
+  })
+
   if (layoutPreset === 'layer') {
     layerSectionOrigins.forEach((bounds, layer) => {
-      const meta = LAYER_META_PRE[layer]
-      if (!meta) return
+      const meta = LAYER_META_PRE[layer] ?? getFallbackLayerMeta(layer)
       result.push({
         id: `layer-section-${layer}`,
         type: 'sectionNode',

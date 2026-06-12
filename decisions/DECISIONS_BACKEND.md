@@ -425,3 +425,16 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 - FRAMEWORK_CALL_NAMES에 도메인 상태 변경 메서드(confirm, touch, apply 등) 추가
 
 **결과.** 142건 → 0건. 총 경고 147건 → 5건 (순환 의존, 과도한 의존 등 진짜 경고만 남음)
+
+
+## Import 매칭 다국어 확장 — TypeScript 상대경로 import 엣지 복구 (2026-06-12)
+
+**문제.** GraphBuilder.java의 isImportMatch()가 .java와 .kt 확장자만 처리하고, TypeScript 상대경로 import(./utils/helper)의 경우 dot→slash 변환(./ → //)으로 경로가 깨져 IMPORT 엣지가 전혀 생성되지 않았다. Java/Kotlin 외 11개 지원 언어 중 TypeScript/Python/Go/Rust/C# 프로젝트에서 파일 간 의존성 그래프가 비어있는 상태였다.
+
+**원인.** 초기 구현 시 Java 패키지 import만 고려해 dot→slash 변환 로직을 작성했고, 상대경로(./, ../) 처리 분기가 없었다.
+
+**결정.** 두 가지 경로로 분기:
+1. 상대경로(./, ../ 시작): dot→slash 변환 없이 ./ prefix만 제거 후 세그먼트 매칭. .ts/.tsx/.js/.jsx/.py + /index.ts/.tsx/.js 폴백 추가.
+2. 패키지경로: 기존 dot→slash 변환 유지. .java/.kt 외 .py/.go/.rs/.cs 확장자 추가.
+
+**결과.** TypeScript/Python/Go/Rust/C# 프로젝트에서 IMPORT 엣지가 정상 생성됨. GraphBuilder.java와 LocalAnalyzer.java 동일하게 적용.
