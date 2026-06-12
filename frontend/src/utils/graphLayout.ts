@@ -122,61 +122,78 @@ function calcFileSize(funcCount: number): { w: number; h: number; cols: number }
 export type LabelMode = 'name' | 'comment'
 export type LayoutPreset = 'layer' | 'domain'
 
-// 바운디드 컨텍스트 도메인 목록 — 파일 경로에서 추출 우선 순위 순
-const DOMAIN_SUBS = ['project', 'user', 'graph', 'analysis', 'community', 'ai', 'notice', 'donation', 'collaboration']
+// 도메인으로 사용하기 부적절한 구조적 폴더명 (너무 일반적이어서 도메인 식별 불가)
+const NON_DOMAIN_FOLDERS = new Set([
+  'impl', 'dto', 'entity', 'vo', 'config',
+  'mapper', 'exception', 'exceptions', 'constant', 'constants', 'enums',
+  'persistence', 'repository', 'repositories',
+  'com', 'org', 'net', 'io', 'co', 'kr',
+  'util', 'utils', 'helper', 'helpers', 'lib', 'libs', 'generated',
+])
 
-// 파일명 키워드 → 도메인 매핑 (경로에서 도메인을 찾지 못할 때 사용)
-const FILENAME_DOMAIN_MAP: Array<[string[], string]> = [
-  [['dashboard', 'projectcard', 'createproject', 'project', 'landing'], 'project'],
-  [['login', 'auth', 'oauth', 'jwt', 'authcallback', 'user', 'settings', 'profile', 'onboard'], 'user'],
-  [['graph', 'node', 'edge', 'layout', 'flow', 'share', 'diff', 'groupnode', 'filenode', 'sectionnode', 'warning', 'preset'], 'graph'],
-  [['analysis', 'analyz', 'analyzer', 'cloner', 'walker', 'parser', 'treesitter', 'staticcode', 'graphbuilder'], 'analysis'],
-  [['community', 'post', 'comment', 'board', 'bookmark', 'attachment'], 'community'],
-  [['ai', 'openai', 'claude', 'anthropic', 'gemini', 'llm', 'apikey'], 'ai'],
-  [['notice', 'announcement', 'noticebanner'], 'notice'],
-  [['payment', 'stripe', 'pay', 'donate', 'donat'], 'donation'],
-  [['collab', 'collaboration', 'cursor', 'websocket'], 'collaboration'],
-]
+// 파일명에서 제거할 suffix — 남은 첫 단어를 도메인으로 사용
+const FILE_SUFFIX_RE = /(?:Page|Component|Service|Controller|Repository|Impl|Handler|Filter|Config|VO|Entity|Dto|Spec|Test|Mock|Store|Hook|Context|Provider|Resolver|Middleware|Module|Factory|Builder|Manager|Validator|Adapter|Gateway|Facade|Command|Query|Event)$/i
 
-// 파일 경로에서 바운디드 컨텍스트 도메인을 추출
+// 파일 경로에서 도메인을 동적으로 추출 — 어떤 프로젝트 구조에서도 작동
 export function extractDomain(filePath: string, commonPrefix: string): string {
   const rel = filePath.startsWith(commonPrefix) ? filePath.slice(commonPrefix.length) : filePath
   const parts = rel.replace(/\\/g, '/').split('/').filter(Boolean)
 
-  const layers = ['domain', 'application', 'infrastructure', 'interfaces', 'pages', 'components', 'hooks', 'utils']
+  const layerKeywords = new Set([
+    'domain', 'application', 'infrastructure', 'interfaces',
+    'pages', 'components', 'hooks',
+    'features', 'modules', 'views', 'screens',
+  ])
+
+  // 1. 레이어 키워드 이후 첫 번째 의미 있는 서브폴더를 도메인으로 사용
   for (let i = 0; i < parts.length; i++) {
-    if (!layers.includes(parts[i])) continue
-    // 레이어 이후 모든 서브폴더에서 도메인 키워드 탐색
-    for (let j = i + 1; j < parts.length; j++) {
+    if (!layerKeywords.has(parts[i])) continue
+    for (let j = i + 1; j < parts.length - 1; j++) {
       const sub = parts[j].toLowerCase()
-      if (DOMAIN_SUBS.includes(sub)) return sub
+      if (!NON_DOMAIN_FOLDERS.has(sub) && sub.length > 1) return sub
     }
     break
   }
 
-  // 파일명 기반 키워드 매핑
-  const fileName = (parts[parts.length - 1] ?? '')
-    .replace(/\.(tsx?|jsx?|java|kt|sql)$/i, '')
-    .toLowerCase()
-  for (const [keywords, domain] of FILENAME_DOMAIN_MAP) {
-    if (keywords.some((k) => fileName.includes(k))) return domain
+  // 2. 파일명 첫 번째 PascalCase 단어에서 도메인 추출
+  //    UserService → user, DashboardPage → dashboard, ProjectController → project
+  const fileName = parts[parts.length - 1]
+    ?.replace(/\.(tsx?|jsx?|java|kt|py|go|rs|cs|rb|php|swift)$/i, '') ?? ''
+  const cleaned = fileName.replace(FILE_SUFFIX_RE, '')
+  if (cleaned.length >= 2) {
+    const words = cleaned.split(/(?=[A-Z])|-|_/).filter(w => /^[a-zA-Z]{2,}$/.test(w))
+    if (words.length > 0) return words[0].toLowerCase()
   }
 
   return 'common'
 }
 
-// 도메인 박스 색상 팔레트
-export const DOMAIN_COLORS: Record<string, { color: string; opaqueColor: string }> = {
-  project:       { color: '#3b82f6', opaqueColor: 'rgba(15,30,60,0.98)' },
-  user:          { color: '#10b981', opaqueColor: 'rgba(5,30,20,0.98)' },
-  graph:         { color: '#8b5cf6', opaqueColor: 'rgba(25,10,50,0.98)' },
-  analysis:      { color: '#f59e0b', opaqueColor: 'rgba(40,25,5,0.98)' },
-  community:     { color: '#06b6d4', opaqueColor: 'rgba(5,25,35,0.98)' },
-  ai:            { color: '#e879f9', opaqueColor: 'rgba(35,5,40,0.98)' },
-  notice:        { color: '#f97316', opaqueColor: 'rgba(40,15,5,0.98)' },
-  donation:      { color: '#4ade80', opaqueColor: 'rgba(5,35,15,0.98)' },
-  collaboration: { color: '#fb7185', opaqueColor: 'rgba(40,10,15,0.98)' },
-  common:        { color: '#6b7280', opaqueColor: 'rgba(20,20,20,0.98)' },
+// 도메인 뷰 색상 팔레트 — 12색 순환
+const PALETTE: ReadonlyArray<{ color: string; opaqueColor: string }> = [
+  { color: '#3b82f6', opaqueColor: 'rgba(15,30,60,0.98)' },
+  { color: '#10b981', opaqueColor: 'rgba(5,30,20,0.98)' },
+  { color: '#8b5cf6', opaqueColor: 'rgba(25,10,50,0.98)' },
+  { color: '#f59e0b', opaqueColor: 'rgba(40,25,5,0.98)' },
+  { color: '#06b6d4', opaqueColor: 'rgba(5,25,35,0.98)' },
+  { color: '#e879f9', opaqueColor: 'rgba(35,5,40,0.98)' },
+  { color: '#f97316', opaqueColor: 'rgba(40,15,5,0.98)' },
+  { color: '#4ade80', opaqueColor: 'rgba(5,35,15,0.98)' },
+  { color: '#fb7185', opaqueColor: 'rgba(40,10,15,0.98)' },
+  { color: '#a78bfa', opaqueColor: 'rgba(20,10,40,0.98)' },
+  { color: '#34d399', opaqueColor: 'rgba(5,30,20,0.98)' },
+  { color: '#fbbf24', opaqueColor: 'rgba(40,30,0,0.98)' },
+]
+const COMMON_COLOR = { color: '#6b7280', opaqueColor: 'rgba(20,20,20,0.98)' }
+
+// 발견된 도메인 이름 목록으로 색상 맵을 동적 생성 — 같은 이름 = 항상 같은 색상 (알파벳 정렬 인덱스)
+export function buildDomainColorMap(
+  domains: Iterable<string>
+): Map<string, { color: string; opaqueColor: string }> {
+  const map = new Map<string, { color: string; opaqueColor: string }>()
+  const sorted = [...new Set(domains)].filter(d => d !== 'common').sort()
+  sorted.forEach((d, i) => map.set(d, PALETTE[i % PALETTE.length]))
+  map.set('common', COMMON_COLOR)
+  return map
 }
 
 // 도메인 뷰 — 바운디드 컨텍스트별로 그룹을 묶어 1열 우측정렬로 배치 (DB 섹션이 우측에 붙도록)
@@ -232,7 +249,12 @@ function buildDomainPositions(
   })
 
   // 도메인 박스를 1열로 배치 — 오른쪽 끝을 맞춰 우측정렬 (DB 섹션에 최대한 가깝게)
-  const domainOrder = [...DOMAIN_SUBS, 'common'].filter((d) => domainGroups.has(d))
+  // 파일 수 내림차순으로 정렬 (규모가 큰 도메인 먼저), common 항상 마지막
+  const domainOrder = [...domainGroups.keys()].sort((a, b) => {
+    if (a === 'common') return 1
+    if (b === 'common') return -1
+    return a.localeCompare(b)
+  })
 
   // 전체 최대 너비 계산 (우측 정렬 기준선)
   let maxDomainW = 0
@@ -592,8 +614,9 @@ export function buildLayout(
     })
   } else if (layoutPreset === 'domain' && domainBoundsResult) {
     // 도메인 섹션 노드 삽입 — 바운디드 컨텍스트별 박스
+    const domColorMap = buildDomainColorMap([...domainBoundsResult.keys()])
     domainBoundsResult.forEach((bounds, domain) => {
-      const palette = DOMAIN_COLORS[domain] ?? DOMAIN_COLORS.common
+      const palette = domColorMap.get(domain) ?? COMMON_COLOR
       result.push({
         id: `domain-section-${domain}`,
         type: 'sectionNode',
