@@ -1883,17 +1883,26 @@ function GraphPageInner() {
 
   if (loading) {
     return (
-      <div className="app-page min-h-screen bg-gray-950 flex items-center justify-center text-gray-400">
-        로딩 중...
+      <div className="app-page min-h-screen bg-gray-950 flex flex-col items-center justify-center gap-3 text-gray-400">
+        <svg className="animate-spin w-8 h-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+        </svg>
+        <p className="text-sm">코드 구조를 불러오는 중...</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="app-page min-h-screen bg-gray-950 flex flex-col items-center justify-center gap-4 text-gray-400">
-        <p>{error}</p>
-        <button onClick={() => navigate('/dashboard')} className="underline text-sm">대시보드로</button>
+      <div className="app-page min-h-screen bg-gray-950 flex flex-col items-center justify-center gap-4">
+        <div className="text-4xl">⚠️</div>
+        <p className="text-gray-300 font-medium">그래프를 불러오지 못했습니다</p>
+        <p className="text-gray-500 text-sm">{error}</p>
+        <div className="flex gap-3 mt-2">
+          <button onClick={() => window.location.reload()} className="text-sm bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-1.5 rounded-lg">다시 시도</button>
+          <button onClick={() => navigate('/dashboard')} className="text-sm text-gray-400 hover:text-gray-200 underline">대시보드로</button>
+        </div>
       </div>
     )
   }
@@ -2435,6 +2444,23 @@ function GraphPageInner() {
           position="bottom-center"
         />
       </ReactFlow>
+
+      {/* 빈 그래프 안내 overlay — 노드가 0개일 때 */}
+      {counts.files === 0 && !loading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl px-8 py-6 flex flex-col items-center gap-3 max-w-sm text-center pointer-events-auto">
+            <div className="text-3xl">🔍</div>
+            <p className="text-gray-200 font-medium">분석 결과가 없습니다</p>
+            <p className="text-gray-500 text-sm">지원되는 소스 파일을 찾지 못했거나, 분석이 아직 완료되지 않았을 수 있습니다.</p>
+            <div className="flex gap-2 mt-1">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="text-sm bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-1.5 rounded-lg"
+              >대시보드에서 재분석</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 분석 완료 요약 토스트 */}
       {analysisSummary && (
