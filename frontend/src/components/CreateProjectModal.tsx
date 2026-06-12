@@ -24,16 +24,17 @@ interface GitHubRepo {
 interface Props {
   onClose: () => void
   onCreated: (project: Project) => void
+  initialUrl?: string
 }
 
 // 새 프로젝트 생성 모달 컴포넌트
-export default function CreateProjectModal({ onClose, onCreated }: Props) {
+export default function CreateProjectModal({ onClose, onCreated, initialUrl }: Props) {
   const [repos, setRepos] = useState<GitHubRepo[]>([])
   const [reposLoading, setReposLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [dropdownOpen, setDropdownOpen] = useState(false)
 
-  const [githubRepoUrl, setGithubRepoUrl] = useState('')
+  const [githubRepoUrl, setGithubRepoUrl] = useState(initialUrl ?? '')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(false)
