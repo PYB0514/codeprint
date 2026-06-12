@@ -131,10 +131,7 @@ const NON_DOMAIN_FOLDERS = new Set([
   'util', 'utils', 'helper', 'helpers', 'lib', 'libs', 'generated',
 ])
 
-// 파일명에서 제거할 suffix — 남은 첫 단어를 도메인으로 사용
-const FILE_SUFFIX_RE = /(?:Page|Component|Service|Controller|Repository|Impl|Handler|Filter|Config|VO|Entity|Dto|Spec|Test|Mock|Store|Hook|Context|Provider|Resolver|Middleware|Module|Factory|Builder|Manager|Validator|Adapter|Gateway|Facade|Command|Query|Event)$/i
-
-// 파일 경로에서 도메인을 동적으로 추출 — 어떤 프로젝트 구조에서도 작동
+//파일 경로에서 도메인을 동적으로 추출 — 어떤 프로젝트 구조에서도 작동
 export function extractDomain(filePath: string, commonPrefix: string): string {
   const rel = filePath.startsWith(commonPrefix) ? filePath.slice(commonPrefix.length) : filePath
   const parts = rel.replace(/\\/g, '/').split('/').filter(Boolean)
@@ -155,16 +152,7 @@ export function extractDomain(filePath: string, commonPrefix: string): string {
     break
   }
 
-  // 2. 파일명 첫 번째 PascalCase 단어에서 도메인 추출
-  //    UserService → user, DashboardPage → dashboard, ProjectController → project
-  const fileName = parts[parts.length - 1]
-    ?.replace(/\.(tsx?|jsx?|java|kt|py|go|rs|cs|rb|php|swift)$/i, '') ?? ''
-  const cleaned = fileName.replace(FILE_SUFFIX_RE, '')
-  if (cleaned.length >= 2) {
-    const words = cleaned.split(/(?=[A-Z])|-|_/).filter(w => /^[a-zA-Z]{2,}$/.test(w))
-    if (words.length > 0) return words[0].toLowerCase()
-  }
-
+  // 레이어 키워드 기반 구조가 없으면 common으로 분류 — 파일명 기반 추출은 파편화 유발
   return 'common'
 }
 

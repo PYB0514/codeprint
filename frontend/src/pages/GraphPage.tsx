@@ -1783,12 +1783,25 @@ function GraphPageInner() {
   const displayNodes = useMemo(() => {
     let result = showDomainBoxes ? nodes : nodes.filter(n => n.type !== 'sectionNode')
     if (tabFilteredNodeIds) {
-      result = result.filter(n =>
-        tabFilteredNodeIds.has(n.id) || n.type === 'sectionNode' || n.type === 'groupNode'
-      )
+      result = result.filter(n => {
+        if (tabFilteredNodeIds.has(n.id)) return true
+        // sectionNode: 활성 도메인의 박스만 남김 (data.layer가 도메인 이름)
+        if (n.type === 'sectionNode') {
+          const layer = (n.data?.layer as string | undefined)?.toLowerCase() ?? ''
+          return layer === activeDomainTab
+        }
+        // groupNode: 활성 도메인 sectionNode 자식만 남김 (parentId가 tabFilteredNodeIds에 포함된 sectionNode)
+        if (n.type === 'groupNode') {
+          return !!n.parentId && nodes.some(
+            p => p.id === n.parentId && p.type === 'sectionNode' &&
+                 ((p.data?.layer as string | undefined)?.toLowerCase() ?? '') === activeDomainTab
+          )
+        }
+        return false
+      })
     }
     return result
-  }, [showDomainBoxes, nodes, tabFilteredNodeIds])
+  }, [showDomainBoxes, nodes, tabFilteredNodeIds, activeDomainTab])
 
   // 탭 필터링된 엣지 — 양쪽 노드가 모두 표시될 때만 보여줌
   // 현재 사이드바에서 열린 노드 ID (엣지 온디맨드 표시용)
@@ -1824,12 +1837,21 @@ function GraphPageInner() {
       }))
       return layers.filter(l => used.has(l))
     } else {
-      const domains = [...new Set(rawNodes.map(n => extractDomain(n.filePath, commonPrefix)))]
-      return domains.sort((a, b) => {
-        if (a === 'common') return 1
-        if (b === 'common') return -1
-        return a.localeCompare(b)
+      // 도메인별 노드 수 계산 — 최소 3개 이상인 도메인만 탭으로 노출 (파일명 기반 파편화 방지)
+      const domainCounts = new Map<string, number>()
+      rawNodes.forEach(n => {
+        const d = extractDomain(n.filePath, commonPrefix)
+        domainCounts.set(d, (domainCounts.get(d) ?? 0) + 1)
       })
+      const MIN_NODES = 3
+      return [...domainCounts.entries()]
+        .filter(([, count]) => count >= MIN_NODES)
+        .map(([d]) => d)
+        .sort((a, b) => {
+          if (a === 'common') return 1
+          if (b === 'common') return -1
+          return a.localeCompare(b)
+        })
     }
   }, [rawNodes, commonPrefix, layoutPreset])
 
