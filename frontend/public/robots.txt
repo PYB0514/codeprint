@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /auth/
+Disallow: /settings
+Disallow: /admin
+Disallow: /messages
+
+Sitemap: https://codeprint.dev/sitemap.xml
