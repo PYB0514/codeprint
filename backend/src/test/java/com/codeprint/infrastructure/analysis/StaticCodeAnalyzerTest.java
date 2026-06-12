@@ -734,6 +734,47 @@ class StaticCodeAnalyzerTest {
         assertThat(result.controllerMappings()).contains("GET:/users", "POST:/users", "DELETE:/users/:id");
     }
 
+    @Test
+    @DisplayName("C# ASP.NET Core [HttpGet] 어노테이션에서 API 경로를 추출한다")
+    void CSharp_API_엔드포인트_추출() throws IOException {
+        Path file = tempDir.resolve("UserController.cs");
+        Files.writeString(file, """
+                [ApiController]
+                [Route("api/[controller]")]
+                public class UserController : ControllerBase {
+                    [HttpGet]
+                    public IActionResult List() => Ok();
+                    [HttpPost]
+                    public IActionResult Create() => Ok();
+                    [HttpDelete("{id}")]
+                    public IActionResult Delete(int id) => Ok();
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.controllerMappings()).anyMatch(m -> m.startsWith("GET:api/user"));
+        assertThat(result.controllerMappings()).anyMatch(m -> m.startsWith("POST:api/user"));
+        assertThat(result.controllerMappings()).anyMatch(m -> m.startsWith("DELETE:"));
+    }
+
+    @Test
+    @DisplayName("C# Entity Framework DbSet<T>에서 DB 테이블명을 추출한다")
+    void CSharp_DbSet_DB테이블_추출() throws IOException {
+        Path file = tempDir.resolve("AppDbContext.cs");
+        Files.writeString(file, """
+                public class AppDbContext : DbContext {
+                    public DbSet<User> Users { get; set; }
+                    public DbSet<Project> Projects { get; set; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.dbTables()).extracting(DbTableInfo::tableName)
+                .containsExactlyInAnyOrder("Users", "Projects");
+    }
+
     // ── 다국어 DB 엔티티 감지 ────────────────────────────────────────────────
 
     @Test

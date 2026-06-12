@@ -356,6 +356,21 @@ public class StaticCodeAnalyzer {
             }
         }
 
+        // C#: Entity Framework DbContext (public DbSet<EntityName> TableName { get; set; })
+        if (language.equals("C#")) {
+            Matcher m = Pattern.compile("public\\s+DbSet\\s*<\\s*(\\w+)\\s*>\\s+(\\w+)\\s*\\{", Pattern.MULTILINE).matcher(content);
+            while (m.find()) {
+                result.add(new DbTableInfo(m.group(2), m.group(1))); // 프로퍼티명을 테이블명으로
+            }
+            // [Table("name")] 어노테이션이 있는 클래스
+            Matcher tableMatcher = Pattern.compile("\\[Table\\s*\\(\\s*\"([^\"]+)\"\\s*\\)\\]").matcher(content);
+            if (tableMatcher.find()) {
+                String tableName = tableMatcher.group(1);
+                Matcher classMatcher = Pattern.compile("\\bclass\\s+(\\w+)").matcher(content);
+                if (classMatcher.find()) result.add(new DbTableInfo(tableName, classMatcher.group(1)));
+            }
+        }
+
         return result;
     }
 
@@ -532,6 +547,43 @@ public class StaticCodeAnalyzer {
             // Laravel: Route::get('/path', ...) / $router->post('/path', ...)
             Matcher m = Pattern.compile(
                 "(?:Route::|\\$router->)(get|post|put|delete|patch)\\s*\\(\\s*['\"]([^'\"\\n]+)['\"]",
+                Pattern.CASE_INSENSITIVE
+            ).matcher(content);
+            while (m.find()) {
+                result.add(m.group(1).toUpperCase() + ":" + m.group(2));
+            }
+
+        } else if (language.equals("C#")) {
+            // ASP.NET Core: [HttpGet("/path")], [Route("/path")]
+            // 클래스 레벨 [Route("api/[controller]")] prefix 추출
+            String classPrefix = "";
+            Matcher cm = Pattern.compile("\\[Route\\s*\\(\\s*\"([^\"]+)\"\\s*\\)\\]").matcher(content);
+            if (cm.find()) {
+                // [controller] 토큰을 실제 컨트롤러명으로 치환
+                String routeTemplate = cm.group(1);
+                Matcher controllerMatcher = Pattern.compile("\\bclass\\s+(\\w+)Controller\\b").matcher(content);
+                if (controllerMatcher.find()) {
+                    classPrefix = routeTemplate.replace("[controller]", controllerMatcher.group(1).toLowerCase());
+                } else {
+                    classPrefix = routeTemplate.replace("[controller]", "");
+                }
+            }
+            Matcher mm = Pattern.compile(
+                "\\[Http(Get|Post|Put|Delete|Patch)(?:\\s*\\(\\s*\"([^\"]+)\"\\s*\\))?\\]",
+                Pattern.CASE_INSENSITIVE
+            ).matcher(content);
+            while (mm.find()) {
+                String method = mm.group(1).toUpperCase();
+                String path = mm.group(2) != null ? mm.group(2) : "";
+                String full = classPrefix.isEmpty() ? path : (classPrefix + "/" + path).replaceAll("/+", "/");
+                if (!full.isEmpty()) result.add(method + ":" + full);
+                else result.add(method + ":" + classPrefix);
+            }
+
+        } else if (language.equals("Swift")) {
+            // Vapor: router.get("path", use: handler) / app.get("path") { ... }
+            Matcher m = Pattern.compile(
+                "(?:router|app)\\.(get|post|put|delete|patch)\\s*\\(\\s*\"([^\"\\n]+)\"",
                 Pattern.CASE_INSENSITIVE
             ).matcher(content);
             while (m.find()) {
