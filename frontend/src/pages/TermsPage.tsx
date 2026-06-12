@@ -22,7 +22,7 @@ export default function TermsPage() {
       {/* 본문 */}
       <main className="flex-1 max-w-3xl mx-auto w-full px-6 py-12">
         <h1 className="text-2xl font-bold mb-2">이용약관</h1>
-        <p className="text-gray-500 text-sm mb-10">최종 업데이트: 2026년 6월 11일</p>
+        <p className="text-gray-500 text-sm mb-10">최종 업데이트: 2026년 6월 12일</p>
 
         <Section title="제1조 (목적)">
           본 약관은 Codeprint(이하 "서비스")가 제공하는 GitHub 레포지토리 분석 및 시각화 서비스의
@@ -44,8 +44,9 @@ export default function TermsPage() {
 
         <Section title="제4조 (서비스 내용)">
           <ul className="list-disc list-inside space-y-1 text-gray-400">
-            <li><strong className="text-white">무료 플랜:</strong> 프로젝트 3개, 기본 분석 기능</li>
-            <li><strong className="text-white">Pro 플랜:</strong> 프로젝트 무제한, AI 기능, 우선 지원 (월정액)</li>
+            <li><strong className="text-white">무료 플랜:</strong> 비공개 프로젝트 3개, 팀 협업 최대 5명</li>
+            <li><strong className="text-white">Pro 플랜:</strong> 비공개 프로젝트 무제한, AI 기능 (월정액)</li>
+            <li><strong className="text-white">Team 플랜:</strong> Pro 기능 포함, 팀 협업 및 좌석 관리 (Starter / Growth / Business)</li>
           </ul>
           <p className="mt-3 text-gray-400">
             서비스는 사전 고지 없이 기능을 추가·변경·중단할 수 있으며, 서비스 안정성을 위한 일시적 중단이
