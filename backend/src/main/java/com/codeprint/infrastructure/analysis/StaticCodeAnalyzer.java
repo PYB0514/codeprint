@@ -516,6 +516,17 @@ public class StaticCodeAnalyzer {
             }
             if (result.isEmpty() && !classPrefix.isEmpty()) result.add(classPrefix);
 
+            // Ktor: get("/path") { ... } / post("/path") { ... } — 함수 호출 형태
+            if (language.equals("Kotlin") && result.isEmpty()) {
+                Matcher km = Pattern.compile(
+                    "\\b(get|post|put|delete|patch)\\s*\\(\\s*\"(/[^\"\\n]*)\"",
+                    Pattern.CASE_INSENSITIVE
+                ).matcher(content);
+                while (km.find()) {
+                    result.add(km.group(1).toUpperCase() + ":" + km.group(2));
+                }
+            }
+
         } else if (language.equals("JavaScript") || language.equals("TypeScript")) {
             // Express.js: router.get('/path', ...) / app.post('/path', ...)
             Matcher m = Pattern.compile(
