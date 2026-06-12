@@ -124,4 +124,10 @@ public class PostRepositoryImpl implements PostRepository {
     public List<Post> findAllByOrderByViewCountDesc(Pageable pageable) {
         return postJpa.findAllByOrderByViewCountDesc(pageable);
     }
+
+    // 그래프 첨부 게시글만 최신순 조회
+    @Override
+    public List<Post> findByGraphIdNotNull(Pageable pageable) {
+        return postJpa.findByGraphIdNotNullOrderByCreatedAtDesc(pageable);
+    }
 }

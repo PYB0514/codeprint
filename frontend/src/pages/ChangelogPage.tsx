@@ -11,6 +11,26 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.61.0',
+    date: '2026-06-12',
+    title: '커뮤니티 갤러리 탭',
+    type: 'feature',
+    items: [
+      { category: '커뮤니티', desc: '갤러리 탭 추가 — 그래프가 첨부된 게시글만 카드 그리드 형태로 표시' },
+      { category: '커뮤니티', desc: '갤러리 탭은 로그인 없이도 조회 가능' },
+    ],
+  },
+  {
+    version: 'v0.60.0',
+    date: '2026-06-12',
+    title: '그래프 빈 상태 + 로딩/에러 UX 개선',
+    type: 'fix',
+    items: [
+      { category: 'UX', desc: '분석 결과가 없을 때 "분석 결과가 없습니다" 안내 오버레이 표시' },
+      { category: 'UX', desc: '그래프 로딩 중 스피너 + 텍스트 표시, 에러 시 재시도 버튼 노출' },
+    ],
+  },
+  {
     version: 'v0.58.0',
     date: '2026-06-12',
     title: '다국어 분석 엔진 확장',
