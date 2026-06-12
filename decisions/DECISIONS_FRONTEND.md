@@ -38,6 +38,22 @@ const fetchGraph = useCallback(async () => {
 
 ---
 
+## 도메인 뷰 — Codeprint 전용 하드코딩 → 범용 동적 추출로 전환 (2026-06-12)
+
+**문제.** `extractDomain()` 함수의 `DOMAIN_SUBS` 허용 목록이 Codeprint 자체 도메인 이름(`project`, `user`, `graph`, `analysis`, `community`, …)으로 하드코딩되어 있었다. 다른 사용자의 프로젝트를 분석하면 경로의 서브폴더 이름이 허용 목록과 일치하지 않아 모든 파일이 `common` 박스 하나에 몰리는 문제가 있었다. 즉, 도메인 뷰가 Codeprint 자신의 코드에서만 동작하고 외부 프로젝트에서는 사실상 무용지물이었다. MVP가 완성됐다고 볼 수 없는 상태였다.
+
+**원인.** 초기 개발 시 Codeprint 자체 코드를 테스트용으로 사용하다보니 `DOMAIN_SUBS` 목록을 Codeprint 도메인으로 채웠고, 범용 추출 로직을 별도로 구현하지 않았다.
+
+**결정.** `DOMAIN_SUBS` 허용 목록 제거, 범용 동적 추출로 전환.
+
+- **레이어 키워드** (`domain`, `application`, `infrastructure`, `pages`, `features`, `modules` 등) 이후 첫 번째 의미 있는 서브폴더를 도메인으로 추출
+- 서브폴더가 없으면 파일명 PascalCase 첫 단어에서 추출 (`DashboardPage` → `dashboard`, `UserService` → `user`)
+- `DOMAIN_COLORS` 정적 맵도 제거 → `buildDomainColorMap(domains)` 함수로 12색 팔레트 동적 할당
+
+**결과.** DDD Java 프로젝트 (`domain/user/`, `application/graph/`), feature-based React (`features/cart/`), flat-pages React (`pages/DashboardPage.tsx`) 모두 동작. 어떤 프로젝트를 분석해도 발견된 도메인에 맞게 색상 박스가 자동 생성된다.
+
+---
+
 ### 레이어 토글 — extent:'parent' 노드에 hidden 미전파 (2026-06-08)
 
 **문제.** 레이어 불투명 토글 시 group 노드만 hidden 처리했는데, React Flow의 `extent: 'parent'` 파일 노드와 그 자식 함수 노드는 부모가 hidden이 되어도 화면에 계속 노출됐다.
