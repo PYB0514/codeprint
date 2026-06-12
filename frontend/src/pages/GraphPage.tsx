@@ -17,7 +17,7 @@ import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
 import { buildLayout, downloadTreeText, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry, ColumnInfo } from '../utils/graphLayout'
-import { extractDomain, DOMAIN_COLORS } from '../utils/graphLayout'
+import { extractDomain, buildDomainColorMap } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
@@ -1657,7 +1657,7 @@ function GraphPageInner() {
     // 도메인 뷰에서 섹션 클릭 — 해당 도메인의 주요 흐름 목록 표시
     if (node.type === 'sectionNode' && layoutPreset === 'domain') {
       const domainName = (node.data?.layer as string ?? '').toLowerCase()
-      const palette = DOMAIN_COLORS[domainName] ?? { color: '#6b7280' }
+      const palette = domainColorMap.get(domainName) ?? { color: '#6b7280' }
       const domainNodes = rawNodes.filter(n => extractDomain(n.filePath, commonPrefix) === domainName)
       const domainNodeIds = new Set(domainNodes.map(n => n.id))
       const entryPoints2 = [
@@ -1802,10 +1802,20 @@ function GraphPageInner() {
       }))
       return layers.filter(l => used.has(l))
     } else {
-      const domains = new Set(rawNodes.map(n => extractDomain(n.filePath, commonPrefix)))
-      return Object.keys(DOMAIN_COLORS).filter(d => domains.has(d))
+      const domains = [...new Set(rawNodes.map(n => extractDomain(n.filePath, commonPrefix)))]
+      return domains.sort((a, b) => {
+        if (a === 'common') return 1
+        if (b === 'common') return -1
+        return a.localeCompare(b)
+      })
     }
   }, [rawNodes, commonPrefix, layoutPreset])
+
+  // 도메인 색상 맵 — 발견된 도메인 이름으로 동적 생성
+  const domainColorMap = useMemo(() => {
+    const domains = rawNodes.map(n => extractDomain(n.filePath, commonPrefix))
+    return buildDomainColorMap(domains)
+  }, [rawNodes, commonPrefix])
 
   // MiniMap 노드 색상 함수 — 인라인 선언 시 매 렌더 MiniMap 전체 재렌더 유발
   const minimapNodeColor = useCallback((n: Node) => {
@@ -2370,7 +2380,7 @@ function GraphPageInner() {
           </button>
           {availableTabs.map(tab => {
             const color = layoutPreset === 'domain'
-              ? (DOMAIN_COLORS[tab]?.color ?? '#6b7280')
+              ? (domainColorMap.get(tab)?.color ?? '#6b7280')
               : '#6b7280'
             const isActive = activeDomainTab === tab
             return (
