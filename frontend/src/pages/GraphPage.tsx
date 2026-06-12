@@ -924,10 +924,31 @@ function GraphPageInner() {
     }), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
   }, [setNodes, setEdges, setClickedNodeId, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges])
 
-  // 분기 대기 상태로만 전환 — 재생 버튼으로 확정
-  const selectBranch = useCallback((nodeId: string) => {
-    setPendingBranchNodeId((prev) => prev === nodeId ? null : nodeId)
-  }, [])
+  // 분기 즉시 확정 — 버튼 클릭 한 번으로 바로 해당 경로 재생
+  const selectBranchImmediate = useCallback((nodeId: string) => {
+    setPendingBranchNodeId(nodeId)
+    // 다음 틱에서 confirmBranch 호출 (state 반영 후)
+    setTimeout(() => {
+      if (!callTree) return
+      const path = findPathInTree(callTree, nodeId)
+      if (!path) return
+      extendToDefaultLeaf(callTree, nodeId, path.nodeIds, path.edgeIds, path.edgeTypes)
+      const items = pathToPlaybackItems(path.nodeIds, path.edgeIds, path.edgeTypes, rawNodes)
+      const edgeIds = new Set(path.edgeIds.filter(Boolean))
+      playbackEdgeIdsRef.current = edgeIds
+      const cloneNode = (n: CallTreeNode): CallTreeNode => ({ ...n, children: n.children.map(cloneNode) })
+      const prunedTree = cloneNode(callTree)
+      pruneTreeToPath(prunedTree, nodeId)
+      setCallTree(prunedTree)
+      setActivePath(path)
+      setPlaybackItems(items)
+      const branchIdx = path.nodeIds.indexOf(nodeId)
+      setPlaybackCursor(branchIdx >= 0 ? branchIdx : 0)
+      setPlaybackPlaying(true)
+      setPendingBranchNodeId(null)
+      setEdges((eds) => eds.map((e) => edgeIds.has(e.id) ? { ...e, hidden: false } : e))
+    }, 0)
+  }, [callTree, rawNodes, setEdges])
 
   // 대기 중인 분기를 확정하고 해당 위치부터 자동 재생
   const confirmBranch = useCallback((nodeId: string) => {
@@ -2687,7 +2708,7 @@ function GraphPageInner() {
                     {/* 분기 선택 — 현재 스텝에서 경로가 갈릴 때 */}
                     {branchChildren.length > 0 && (
                       <div className="mx-3 mb-2 flex flex-col gap-1">
-                        <p className="text-[9px] text-gray-500">분기를 선택하고 ▶ 재생을 누르세요</p>
+                        <p className="text-[9px] text-gray-500">흐름이 분기됩니다 — 경로를 선택하세요</p>
                         {branchChildren.map((child) => {
                           const childRaw = rawNodes.find((n) => n.id === child.nodeId)
                           const isPending = pendingBranchNodeId === child.nodeId
@@ -2704,7 +2725,7 @@ function GraphPageInner() {
                           return (
                             <button
                               key={child.nodeId}
-                              onClick={() => selectBranch(child.nodeId)}
+                              onClick={() => selectBranchImmediate(child.nodeId)}
                               className={`text-left text-[10px] px-2.5 py-1.5 rounded-lg border transition-colors ${
                                 isPending
                                   ? 'border-blue-500/60 bg-blue-900/30 text-blue-300'
