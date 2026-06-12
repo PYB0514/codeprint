@@ -3,13 +3,16 @@ package com.codeprint.application.community;
 
 import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.application.project.ProjectQueryService;
+import com.codeprint.domain.community.Post;
+import com.codeprint.domain.community.PostRepository;
+import com.codeprint.domain.community.port.FollowQueryPort;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Node;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,6 +22,8 @@ public class CommunityFacade {
 
     private final GraphQueryService graphQueryService;
     private final ProjectQueryService projectQueryService;
+    private final FollowQueryPort followQueryPort;
+    private final PostRepository postRepository;
 
     // 공개 프로젝트의 레포 URL 반환 — 비공개이면 empty
     public Optional<String> findPublicRepoUrl(UUID graphId, UUID userId) {
@@ -43,6 +48,15 @@ public class CommunityFacade {
                         graphQueryService.getNodes(graph.getId()),
                         graphQueryService.getEdges(graph.getId())
                 ));
+    }
+
+    // 팔로잉 유저의 게시글 목록 조회
+    public List<Post> getFollowingFeed(UUID followerId, Pageable pageable) {
+        List<UUID> followingIds = followQueryPort.findFollowingIds(followerId);
+        if (followingIds.isEmpty()) {
+            return List.of();
+        }
+        return postRepository.findByUserIdInOrderByCreatedAtDesc(followingIds, pageable);
     }
 
     // 그래프 노드·엣지 스냅샷
