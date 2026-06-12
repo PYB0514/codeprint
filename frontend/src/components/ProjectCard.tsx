@@ -105,7 +105,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
     }
     setTimeout(() => {
       setAnalysisId(null)
-      navigate(`/projects/${project.id}/graph`)
+      navigate(`/projects/${project.id}/graph?fresh=1`)
     }, 800)
   }, [primaryBranch, lastAnalyzedBranch, navigate, project.id])
 

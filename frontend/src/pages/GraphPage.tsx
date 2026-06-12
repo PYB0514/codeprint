@@ -488,6 +488,8 @@ function GraphPageInner() {
   const [outdated, setOutdated] = useState<{ branch: string; lastAnalyzedAt: string } | null>(null)
   const [freshnessError, setFreshnessError] = useState<'rate_limit' | 'github_error' | null>(null)
   const [reanalyzing, setReanalyzing] = useState(false)
+  // 분석 완료 직후 ?fresh=1로 진입했을 때 표시할 요약 토스트
+  const [analysisSummary, setAnalysisSummary] = useState<string | null>(null)
   const [showDomainBoxes, setShowDomainBoxes] = useState(true)
   // 탭 분리: null = 전체 보기, 문자열 = 해당 도메인/레이어만 표시
   const [activeDomainTab, setActiveDomainTab] = useState<string | null>(null)
@@ -966,11 +968,19 @@ function GraphPageInner() {
       )
       setNodes(styledNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
       setEdges(applyEdgeVisibility(styledEdges, false, false, false, true, false, true))
-      setCounts({
-        files: rn.filter((n) => n.type === 'FILE').length,
-        funcs: rn.filter((n) => n.type === 'FUNCTION').length,
-        edges: re.length,
-      })
+      const fileCount = rn.filter((n) => n.type === 'FILE').length
+      const funcCount = rn.filter((n) => n.type === 'FUNCTION').length
+      const dbCount = rn.filter((n) => n.type === 'DB_TABLE').length
+      const apiCount = rn.filter((n) => n.type === 'API_ENDPOINT').length
+      setCounts({ files: fileCount, funcs: funcCount, edges: re.length })
+      // 분석 완료 직후 진입 시 요약 토스트 표시
+      if (searchParams.get('fresh') === '1') {
+        const parts = [`파일 ${fileCount}개`, `함수 ${funcCount}개`]
+        if (dbCount > 0) parts.push(`DB 테이블 ${dbCount}개`)
+        if (apiCount > 0) parts.push(`API 엔드포인트 ${apiCount}개`)
+        setAnalysisSummary('분석 완료 — ' + parts.join(', '))
+        setTimeout(() => setAnalysisSummary(null), 5000)
+      }
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
       if (!isTourDone()) setTimeout(() => setTourRunning(true), 800)
     } catch {
@@ -2425,6 +2435,13 @@ function GraphPageInner() {
           position="bottom-center"
         />
       </ReactFlow>
+
+      {/* 분석 완료 요약 토스트 */}
+      {analysisSummary && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 bg-green-900 border border-green-600 text-green-200 text-sm px-4 py-2 rounded-lg shadow-lg pointer-events-none">
+          {analysisSummary}
+        </div>
+      )}
 
       {/* 팀채팅 패널 — showTeamChat 시 우측 사이드바 왼쪽에 표시 */}
       {showTeamChat && (
