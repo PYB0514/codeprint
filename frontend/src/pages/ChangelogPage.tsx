@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.68.0',
+    date: '2026-06-12',
+    title: '대시보드 첫 방문자 온보딩 가이드',
+    type: 'fix',
+    items: [
+      { category: 'UX', desc: '프로젝트가 없을 때 3단계 사용법 가이드 표시 (URL 입력 → 자동 분석 → 탐색)' },
+      { category: 'UX', desc: '공개 레포는 GitHub 토큰 없이 분석 가능함을 명시' },
+    ],
+  },
+  {
     version: 'v0.67.0',
     date: '2026-06-12',
     title: '분석 결과 품질 힌트',

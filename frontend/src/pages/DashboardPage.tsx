@@ -158,14 +158,33 @@ export default function DashboardPage() {
         </div>
 
         {projects.length === 0 ? (
-          <div className="border border-dashed border-gray-700 rounded-xl p-16 text-center text-gray-500">
-            <p className="mb-4">아직 프로젝트가 없습니다.</p>
+          <div className="border border-dashed border-gray-700 rounded-xl p-10 text-center">
+            <div className="text-4xl mb-4">🔌</div>
+            <p className="text-white font-semibold text-lg mb-2">첫 프로젝트를 만들어보세요</p>
+            <p className="text-gray-500 text-sm mb-6 max-w-sm mx-auto">
+              GitHub 레포지토리 URL을 입력하면 파일 구조, 함수 호출 흐름, DB 연결을 자동으로 분석합니다.
+            </p>
+            <div className="flex flex-col items-center gap-3 mb-8">
+              {[
+                { step: '1', text: 'GitHub 레포 URL 입력 (예: github.com/owner/repo)' },
+                { step: '2', text: '자동 분석 — 평균 10~30초 소요' },
+                { step: '3', text: '인터랙티브 회로도로 구조 탐색' },
+              ].map(({ step, text }) => (
+                <div key={step} className="flex items-center gap-3 text-sm text-gray-400">
+                  <span className="w-6 h-6 rounded-full bg-blue-600/30 border border-blue-600/50 text-blue-400 text-xs flex items-center justify-center font-semibold flex-shrink-0">
+                    {step}
+                  </span>
+                  <span>{text}</span>
+                </div>
+              ))}
+            </div>
             <button
               onClick={() => setShowModal(true)}
-              className="text-white underline text-sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition"
             >
-              첫 프로젝트 만들기
+              + 첫 프로젝트 만들기
             </button>
+            <p className="text-xs text-gray-600 mt-4">공개 레포라면 GitHub 토큰 없이도 분석 가능합니다.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
