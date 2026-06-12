@@ -11,6 +11,29 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.65.0',
+    date: '2026-06-12',
+    title: '팀 플랜 — Seat Pool 협업 관리',
+    type: 'feature',
+    items: [
+      { category: '기능', desc: '팀 생성 및 플랜 선택 (Team Starter / Growth / Business)' },
+      { category: '기능', desc: '팀 멤버 초대 및 제거 — 소유자는 석수에 포함되지 않음' },
+      { category: '기능', desc: '프로젝트별 석수 배분 현황 조회' },
+      { category: '과금', desc: 'FREE 팀 협업자 5명 지원, 팀 유료 플랜 가입 시 PRO 기능 자동 포함' },
+      { category: '인프라', desc: 'teams / team_members / team_project_allocations 테이블 추가 (V36 마이그레이션)' },
+    ],
+  },
+  {
+    version: 'v0.64.0',
+    date: '2026-06-12',
+    title: 'MCP Context 엔드포인트',
+    type: 'feature',
+    items: [
+      { category: '기능', desc: 'GET /mcp/graphs/{graphId}/context — AI 에이전트가 그래프 데이터를 읽을 수 있는 공개 엔드포인트' },
+      { category: '기능', desc: '?summary=true 모드: 대형 프로젝트에서 상위 50개 노드만 반환하여 응답 크기 절감' },
+    ],
+  },
+  {
     version: 'v0.62.0',
     date: '2026-06-12',
     title: 'URL 딥링크 — 노드 직접 공유',
