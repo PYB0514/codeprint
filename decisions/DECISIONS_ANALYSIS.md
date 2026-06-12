@@ -184,6 +184,16 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 
 ---
 
+### schema.prisma 감지 데드 코드 (2026-06-13, 멀티에이전트 코드 감사로 발견)
+
+**문제.** StaticCodeAnalyzer에 Prisma `model` 블록 파싱 분기가 있었지만, Prisma 프로젝트를 분석해도 DB_TABLE 노드가 0개였다. 코드가 존재하는데 실행된 적이 없는 데드 코드.
+
+**이유.** SourceFileWalker는 LanguageDetector 확장자 매핑을 통과한 파일만 수집하는데, `.prisma` 확장자가 매핑에 없어 schema.prisma가 수집 단계에서 걸러졌다. 분석 분기는 파일 경로 기준(`endsWith`)이라 단위 테스트로는 통과해 보였고, 수집→분석 파이프라인 통합 검증이 없어 잡히지 않았다.
+
+**결과.** LanguageDetector에 `prisma → Prisma` 등록(+SUPPORTED), 분기 조건을 `schema.prisma` → `.prisma` 전체로 확대(Prisma 5.15+ 멀티 파일 스키마 대응). SourceFileWalkerTest 신설 — 수집 단계 자체를 테스트해서 같은 유형(파서는 있는데 수집이 안 되는) 데드 코드 재발 방지. 교훈: 추출기 단위 테스트만으로는 부족하고, 파일 수집 필터와 추출기 분기 조건이 어긋나면 조용히 죽는다.
+
+---
+
 ### 비Spring 백엔드 API_CALL 엣지 0개 버그 (2026-06-13, 멀티에이전트 코드 감사로 발견)
 
 **문제.** Express/FastAPI/Gin/Rails/Laravel/Ktor 등 비Spring 백엔드 프로젝트에서 프론트→백엔드 API_CALL 엣지가 단 한 번도 생성된 적이 없었다. 풀스택 시각화라는 핵심 가치가 Java 외 스택에서 통째로 빠져 있던 것.

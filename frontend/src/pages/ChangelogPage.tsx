@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.71.3',
+    date: '2026-06-13',
+    title: 'Prisma 스키마 DB 테이블 감지 복구',
+    type: 'fix',
+    items: [
+      { category: '분석', desc: 'schema.prisma가 분석 대상에서 누락되어 Prisma 프로젝트의 DB 테이블이 표시되지 않던 버그 수정' },
+      { category: '분석', desc: 'Prisma 멀티 파일 스키마 지원 — 모든 .prisma 파일의 model 블록을 DB_TABLE 노드로 감지' },
+    ],
+  },
+  {
     version: 'v0.71.2',
     date: '2026-06-13',
     title: '비Spring 백엔드 API 연결선 버그 수정',
