@@ -39,6 +39,9 @@ export default function SettingsPage() {
   const avatarRef = useRef<HTMLInputElement>(null)
   const bgRef = useRef<HTMLInputElement>(null)
 
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
   useEffect(() => {
     axios.get<{ avatarUrl?: string | null; graphBgUrl?: string | null }>('/api/auth/me')
       .then((r) => {
@@ -111,6 +114,19 @@ export default function SettingsPage() {
   const handleDelete = async (provider: string) => {
     await axios.delete(`/api/ai/keys/${provider}`)
     setProviders((prev) => prev.map((p) => p.provider === provider ? { ...p, registered: false } : p))
+  }
+
+  // 계정 탈퇴 처리 — "삭제" 입력 확인 후 DELETE /api/auth/account 호출
+  const handleDeleteAccount = async () => {
+    if (deleteConfirm !== '삭제') return
+    setDeleteLoading(true)
+    try {
+      await axios.delete('/api/auth/account')
+      window.location.href = '/'
+    } catch {
+      alert('계정 삭제에 실패했습니다. 다시 시도해주세요.')
+      setDeleteLoading(false)
+    }
   }
 
   return (
@@ -229,6 +245,32 @@ export default function SettingsPage() {
             )
           })}
         </div>
+
+        {/* 계정 삭제 */}
+        <section className="mt-12 border border-red-800/50 rounded-xl p-5">
+          <h2 className="text-sm font-medium text-red-400 mb-1">계정 삭제</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            계정을 삭제하면 모든 프로젝트, 그래프, 게시글, 댓글이 즉시 영구 삭제됩니다.
+            이 작업은 되돌릴 수 없습니다.
+          </p>
+          <p className="text-xs text-gray-400 mb-2">확인을 위해 아래에 <strong className="text-white">삭제</strong>를 입력하세요.</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              placeholder="삭제"
+              className="flex-1 bg-gray-900 text-white text-xs px-3 py-2 rounded border border-gray-700 focus:outline-none focus:border-red-700 placeholder-gray-600"
+            />
+            <button
+              onClick={handleDeleteAccount}
+              disabled={deleteConfirm !== '삭제' || deleteLoading}
+              className="text-xs bg-red-700 text-white font-medium px-4 py-2 rounded hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {deleteLoading ? '삭제 중...' : '계정 삭제'}
+            </button>
+          </div>
+        </section>
       </main>
     </div>
   )

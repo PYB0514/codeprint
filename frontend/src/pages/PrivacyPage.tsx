@@ -67,9 +67,9 @@ export default function PrivacyPage() {
         </Section>
 
         <Section title="5. 쿠키 사용">
-          서비스는 로그인 상태 유지(JWT 토큰)를 위해 localStorage를 사용하며, 서비스 이용 통계를 위해
-          분석 쿠키를 사용할 수 있습니다. 쿠키 동의 배너를 통해 비필수 쿠키 수집을 거부할 수 있습니다.
-          거부 시 로그인 유지 등 일부 기능이 제한될 수 있습니다.
+          서비스는 로그인 상태 유지(JWT 토큰)를 위해 HttpOnly Secure 쿠키를 사용합니다. 이 쿠키는
+          브라우저 스크립트에서 접근할 수 없어 XSS 공격으로부터 보호됩니다. 서비스 이용 통계를 위한
+          별도 분석 쿠키는 현재 사용하지 않습니다.
         </Section>
 
         <Section title="6. 이용자 권리">

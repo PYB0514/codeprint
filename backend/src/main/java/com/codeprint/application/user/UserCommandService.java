@@ -46,4 +46,9 @@ public class UserCommandService {
         user.downgradeToFree();
         userRepository.save(user);
     }
+
+    // 계정 및 연관 데이터 전체 삭제 (CASCADE 처리)
+    public void deleteAccount(UUID userId) {
+        userRepository.delete(userId);
+    }
 }

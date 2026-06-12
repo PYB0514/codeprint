@@ -24,4 +24,7 @@ public interface UserRepository {
 
     // 어드민 전용 — 페이지 단위 사용자 목록 조회
     org.springframework.data.domain.Page<User> findAll(org.springframework.data.domain.Pageable pageable);
+
+    // 계정 영구 삭제 (연관 데이터 CASCADE 처리)
+    void delete(UUID id);
 }
