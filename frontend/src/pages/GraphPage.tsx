@@ -993,8 +993,11 @@ function GraphPageInner() {
         const parts = [`파일 ${fileCount}개`, `함수 ${funcCount}개`]
         if (dbCount > 0) parts.push(`DB 테이블 ${dbCount}개`)
         if (apiCount > 0) parts.push(`API 엔드포인트 ${apiCount}개`)
-        setAnalysisSummary('분석 완료 — ' + parts.join(', '))
-        setTimeout(() => setAnalysisSummary(null), 5000)
+        // 파일 수가 적으면 분석 범위 확인 유도 메시지 추가
+        const lowCoverage = fileCount > 0 && fileCount < 5
+        const suffix = lowCoverage ? ' — 파일 수가 적습니다. 레포 루트 URL인지 확인해주세요.' : ''
+        setAnalysisSummary('분석 완료 — ' + parts.join(', ') + suffix)
+        setTimeout(() => setAnalysisSummary(null), lowCoverage ? 9000 : 5000)
       }
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
       if (!isTourDone()) setTimeout(() => setTourRunning(true), 800)
@@ -2501,7 +2504,12 @@ function GraphPageInner() {
             <div className="text-3xl">🔍</div>
             <p className="text-gray-200 font-medium">분석 결과가 없습니다</p>
             <p className="text-gray-500 text-sm">지원되는 소스 파일을 찾지 못했거나, 분석이 아직 완료되지 않았을 수 있습니다.</p>
-            <div className="flex gap-2 mt-1">
+            <ul className="text-left text-xs text-gray-500 space-y-1 mt-1">
+              <li>• GitHub 레포 루트 URL인지 확인 (서브폴더 URL이면 파일 감지 제한)</li>
+              <li>• 지원 언어: Java, TypeScript, JavaScript, Python, Go, Ruby, PHP, C#</li>
+              <li>• 빈 레포 또는 README만 있는 레포는 노드가 생성되지 않음</li>
+            </ul>
+            <div className="flex gap-2 mt-2">
               <button
                 onClick={() => navigate('/dashboard')}
                 className="text-sm bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-1.5 rounded-lg"
