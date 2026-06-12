@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.70.0',
+    date: '2026-06-12',
+    title: '랜딩 페이지 URL 입력 — 로그인 후 자동 분석',
+    type: 'feature',
+    items: [
+      { category: 'UX', desc: '랜딩 히어로 섹션에 GitHub URL 입력 폼 추가 — URL 붙여넣기 한 번으로 분석까지 직행' },
+      { category: 'UX', desc: '비로그인 상태에서 URL 입력 후 OAuth 로그인 완료 시 CreateProjectModal 자동 오픈' },
+    ],
+  },
+  {
     version: 'v0.69.0',
     date: '2026-06-12',
     title: '계정 탈퇴 기능 + 개인정보처리방침 정확도 개선',
