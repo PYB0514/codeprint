@@ -3,6 +3,7 @@ package com.codeprint.infrastructure.persistence.team;
 
 import com.codeprint.domain.team.TeamMember;
 import com.codeprint.domain.team.TeamMemberRepository;
+import com.codeprint.domain.team.TeamRole;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -22,4 +23,5 @@ public class TeamMemberRepositoryImpl implements TeamMemberRepository {
     @Override public List<TeamMember> findByUserId(UUID userId) { return jpa.findByUserId(userId); }
     @Override public Optional<TeamMember> findByTeamIdAndUserId(UUID teamId, UUID userId) { return jpa.findByTeamIdAndUserId(teamId, userId); }
     @Override public long countByTeamId(UUID teamId) { return jpa.countByTeamId(teamId); }
+    @Override public long countMembersExcludingOwner(UUID teamId) { return jpa.countByTeamIdAndRoleNot(teamId, TeamRole.OWNER); }
 }

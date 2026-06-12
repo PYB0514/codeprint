@@ -34,8 +34,8 @@ public class TeamApplicationService {
     public TeamMember addMember(UUID teamId, UUID requesterId, UUID newUserId) {
         Team team = getTeamOrThrow(teamId);
         verifyOwner(team, requesterId);
-        // 석수 초과 확인
-        long currentMembers = memberRepository.countByTeamId(teamId);
+        // 석수 초과 확인 (소유자 제외 — 소유자는 석수에 포함되지 않음)
+        long currentMembers = memberRepository.countMembersExcludingOwner(teamId);
         if (team.getTotalSeats() != Integer.MAX_VALUE && currentMembers >= team.getTotalSeats()) {
             throw new IllegalStateException("팀 석수(" + team.getTotalSeats() + "석)가 가득 찼습니다.");
         }

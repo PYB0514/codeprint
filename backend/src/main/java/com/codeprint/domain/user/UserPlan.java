@@ -23,8 +23,13 @@ public enum UserPlan {
             case TEAM_STARTER  -> 15;
             case TEAM_GROWTH   -> 40;
             case TEAM_BUSINESS -> Integer.MAX_VALUE;
-            default -> 0;
+            default -> 5; // FREE: 소유자 제외 협업자 5명
         };
+    }
+
+    // PRO 이상 유료 기능 사용 가능 여부 (팀 유료 플랜 포함)
+    public boolean isPro() {
+        return this == PRO || isTeamPlan();
     }
 
     // 팀 플랜 월 요금 (원)

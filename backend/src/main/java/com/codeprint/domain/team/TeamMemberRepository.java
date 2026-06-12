@@ -20,4 +20,7 @@ public interface TeamMemberRepository {
 
     // 팀의 현재 멤버 수 (석수 초과 검증용)
     long countByTeamId(UUID teamId);
+
+    // OWNER 제외 멤버 수 (석수 초과 검증 시 소유자 제외)
+    long countMembersExcludingOwner(UUID teamId);
 }

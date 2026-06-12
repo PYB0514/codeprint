@@ -462,3 +462,17 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 2. 패키지경로: 기존 dot→slash 변환 유지. .java/.kt 외 .py/.go/.rs/.cs 확장자 추가.
 
 **결과.** TypeScript/Python/Go/Rust/C# 프로젝트에서 IMPORT 엣지가 정상 생성됨. GraphBuilder.java와 LocalAnalyzer.java 동일하게 적용.
+
+---
+
+## Team Seat Pool — 소유자 제외 및 무료 협업자 수 조정 (2026-06-12)
+
+**문제.** 팀 플랜에서 소유자(OWNER)가 석수에 포함되면, 프로젝트가 여러 개일 때 각 프로젝트의 석수 계산에서 소유자가 중복 카운트될 수 있다. 또한 FREE 기본 협업자 수를 6으로 설정했으나 같은 이유로 5가 더 안전하다.
+
+**결정.**
+1. `TeamMemberRepository`에 `countMembersExcludingOwner(teamId)` 추가 — `countByTeamIdAndRoleNot(teamId, OWNER)` JPA 파생 쿼리로 구현.
+2. `TeamApplicationService.addMember()`에서 `countByTeamId` → `countMembersExcludingOwner` 교체.
+3. `UserPlan.defaultTotalSeats()` FREE case → 5 (소유자 제외 협업자 5명).
+4. `UserPlan.isPro()` 추가 — PRO + 모든 TEAM 유료 플랜에서 AI·무제한 프로젝트 등 PRO 기능 사용 가능.
+
+**결과.** 소유자는 석수 소모 없이 모든 팀 프로젝트에 접근 가능. FREE 팀에서 최대 5명 협업자 추가 가능.
