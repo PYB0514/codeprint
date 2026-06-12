@@ -606,6 +606,20 @@ function GraphPageInner() {
       return { ...e, hidden }
     }), [])
 
+  // 클릭된 노드의 직접 연결 엣지(1단계)를 토글 상태와 무관하게 강조 표시
+  useEffect(() => {
+    if (!clickedNodeId) return
+    const connectedIds = new Set(
+      rawEdgesCache
+        .filter(e => e.source === clickedNodeId || e.target === clickedNodeId)
+        .map(e => e.id)
+    )
+    setEdges(eds => eds.map(e => {
+      if (!connectedIds.has(e.id)) return e
+      return { ...e, hidden: false, style: { ...((e.style as object) ?? {}), opacity: 1 } }
+    }))
+  }, [clickedNodeId, rawEdgesCache, setEdges])
+
   // 레이어 섹션 박스 opaque 토글 — 섹션은 원래 크기 유지 + opaqueColor로 덮고, 내부 노드 전부 hidden
   const toggleLayerOpaque = useCallback((layer: string) => {
     setOpaqueLayerSet((prev) => {
@@ -897,6 +911,7 @@ function GraphPageInner() {
     setActivePath({ nodeIds: [], edgeIds: [], edgeTypes: [] })
     setPendingBranchNodeId(null)
     setPlaybackRootNodeId(null)
+    setClickedNodeId(null)
     setNodes((nds) => nds.map((n) => ({ ...n, style: { ...n.style, outline: 'none', boxShadow: 'none' }, data: { ...n.data, playbackActive: false, playbackInPath: false } })))
     setEdges((eds) => applyEdgeVisibility(eds.map((e) => {
       const d = e.data as { type?: string; broken?: boolean } | undefined
@@ -907,7 +922,7 @@ function GraphPageInner() {
       const broken = d?.broken
       return { ...e, animated: false, style: { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : isApiCall ? '#e879f9' : isDb ? (DB_CRUD_COLOR[d?.type ?? ''] ?? '#22d3ee') : '#4b5563' } }
     }), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
-  }, [setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges])
+  }, [setNodes, setEdges, setClickedNodeId, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges])
 
   // 분기 대기 상태로만 전환 — 재생 버튼으로 확정
   const selectBranch = useCallback((nodeId: string) => {
