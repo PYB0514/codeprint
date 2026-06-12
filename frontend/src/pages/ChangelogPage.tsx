@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.67.0',
+    date: '2026-06-12',
+    title: '분석 결과 품질 힌트',
+    type: 'fix',
+    items: [
+      { category: 'UX', desc: '파일 5개 미만 감지 시 토스트에 "레포 루트 URL인지 확인" 안내 추가 (9초 유지)' },
+      { category: 'UX', desc: '빈 그래프 오버레이에 지원 언어 목록 + 분석 실패 원인 가이드 표시' },
+    ],
+  },
+  {
     version: 'v0.66.0',
     date: '2026-06-12',
     title: '노드 클릭 시 연결 엣지 자동 표시',
