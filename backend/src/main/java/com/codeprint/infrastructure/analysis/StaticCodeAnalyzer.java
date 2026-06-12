@@ -287,23 +287,47 @@ public class StaticCodeAnalyzer {
         "Thread", "Runnable", "Random", "Scanner", "File", "Path"
     );
 
-    // @Entity / Prisma model 블록에서 DB 테이블 정보 추출
+    // @Entity / Prisma / TypeORM / SQLAlchemy 등에서 DB 테이블 정보 추출
     private List<DbTableInfo> extractDbTables(String content, String language, String filePath) {
         List<DbTableInfo> result = new ArrayList<>();
 
         // Java/Kotlin: @Entity 어노테이션이 있는 클래스
         if ((language.equals("Java") || language.equals("Kotlin")) && content.contains("@Entity")) {
             String tableName = null;
-            // @Table(name = "table_name") 우선
             Matcher tableMatcher = Pattern.compile("@Table\\s*\\([^)]*name\\s*=\\s*[\"']([^\"']+)[\"']").matcher(content);
             if (tableMatcher.find()) tableName = tableMatcher.group(1);
-            // 없으면 클래스명 사용
             if (tableName == null) {
                 Matcher classMatcher = Pattern.compile("\\bclass\\s+(\\w+)").matcher(content);
                 if (classMatcher.find()) tableName = classMatcher.group(1);
             }
             if (tableName != null) {
-                String className = extractFileNameWithoutExt(filePath);
+                result.add(new DbTableInfo(tableName, extractFileNameWithoutExt(filePath)));
+            }
+        }
+
+        // TypeScript/JavaScript: TypeORM @Entity() 데코레이터
+        if ((language.equals("TypeScript") || language.equals("JavaScript")) && content.contains("@Entity")) {
+            // @Entity('table_name') 우선, 없으면 클래스명
+            String tableName = null;
+            Matcher teMatcher = Pattern.compile("@Entity\\s*\\(\\s*['\"]([^'\"]+)['\"]\\s*\\)").matcher(content);
+            if (teMatcher.find()) tableName = teMatcher.group(1);
+            if (tableName == null) {
+                Matcher classMatcher = Pattern.compile("\\bclass\\s+(\\w+)").matcher(content);
+                if (classMatcher.find()) tableName = classMatcher.group(1);
+            }
+            if (tableName != null) {
+                result.add(new DbTableInfo(tableName, extractFileNameWithoutExt(filePath)));
+            }
+        }
+
+        // Python: SQLAlchemy Base 상속 클래스 (class X(Base):)
+        if (language.equals("Python")) {
+            Matcher m = Pattern.compile("^class\\s+(\\w+)\\s*\\([^)]*Base[^)]*\\)\\s*:", Pattern.MULTILINE).matcher(content);
+            while (m.find()) {
+                String className = m.group(1);
+                // __tablename__ 우선 추출
+                Matcher tnMatcher = Pattern.compile("__tablename__\\s*=\\s*['\"]([^'\"]+)['\"]").matcher(content);
+                String tableName = tnMatcher.find() ? tnMatcher.group(1) : className;
                 result.add(new DbTableInfo(tableName, className));
             }
         }
@@ -313,6 +337,22 @@ public class StaticCodeAnalyzer {
             Matcher m = Pattern.compile("^model\\s+(\\w+)\\s*\\{", Pattern.MULTILINE).matcher(content);
             while (m.find()) {
                 result.add(new DbTableInfo(m.group(1), m.group(1)));
+            }
+        }
+
+        // Ruby: ActiveRecord (class X < ApplicationRecord)
+        if (language.equals("Ruby")) {
+            Matcher m = Pattern.compile("^class\\s+(\\w+)\\s*<\\s*(?:ApplicationRecord|ActiveRecord::Base)", Pattern.MULTILINE).matcher(content);
+            while (m.find()) {
+                result.add(new DbTableInfo(toSnakeCase(m.group(1)) + "s", m.group(1)));
+            }
+        }
+
+        // PHP: Eloquent (class X extends Model)
+        if (language.equals("PHP")) {
+            Matcher m = Pattern.compile("^class\\s+(\\w+)\\s+extends\\s+(?:Model|Eloquent)", Pattern.MULTILINE).matcher(content);
+            while (m.find()) {
+                result.add(new DbTableInfo(toSnakeCase(m.group(1)) + "s", m.group(1)));
             }
         }
 
@@ -419,38 +459,85 @@ public class StaticCodeAnalyzer {
         return result;
     }
 
-    // Java 컨트롤러에서 @*Mapping 경로 목록 추출
+    // 언어별 API 엔드포인트 경로 목록 추출 (Spring/Express/FastAPI/Flask/Gin 지원)
     // 클래스 레벨 @RequestMapping prefix + 메서드 레벨 suffix 합성 지원
     private List<String> extractControllerMappings(String content, String language) {
-        if (!language.equals("Java") && !language.equals("Kotlin")) return List.of();
         List<String> result = new ArrayList<>();
 
-        // 1단계: 클래스 레벨 @RequestMapping prefix 추출 (파일 내 첫 번째 값)
-        String classPrefix = "";
-        Matcher cm = Pattern.compile(
-            "@RequestMapping\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']+)[\"']"
-        ).matcher(content);
-        if (cm.find()) classPrefix = cm.group(1);
+        if (language.equals("Java") || language.equals("Kotlin")) {
+            // 1단계: 클래스 레벨 @RequestMapping prefix 추출 (파일 내 첫 번째 값)
+            String classPrefix = "";
+            Matcher cm = Pattern.compile(
+                "@RequestMapping\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']+)[\"']"
+            ).matcher(content);
+            if (cm.find()) classPrefix = cm.group(1);
 
-        // 2단계: 메서드 레벨 어노테이션 추출 + prefix 합성
-        // @GetMapping, @PostMapping(경로 없음), @GetMapping("/path") 모두 처리
-        Matcher mm = Pattern.compile(
-            "@(?:Get|Post|Put|Delete|Patch)Mapping(?:\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']*)[\"']\\s*\\))?",
-            Pattern.CASE_INSENSITIVE
-        ).matcher(content);
-        while (mm.find()) {
-            String methodPath = mm.group(1); // null이면 괄호 없는 어노테이션
-            if (methodPath == null) {
-                // @GetMapping 처럼 경로 없음 → 클래스 prefix만 사용
-                if (!classPrefix.isEmpty()) result.add(classPrefix);
-            } else {
-                String full = classPrefix + methodPath;
-                if (!full.isEmpty()) result.add(full);
+            // 2단계: 메서드 레벨 어노테이션 추출 + prefix 합성
+            Matcher mm = Pattern.compile(
+                "@(?:Get|Post|Put|Delete|Patch)Mapping(?:\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']*)[\"']\\s*\\))?",
+                Pattern.CASE_INSENSITIVE
+            ).matcher(content);
+            while (mm.find()) {
+                String methodPath = mm.group(1);
+                if (methodPath == null) {
+                    if (!classPrefix.isEmpty()) result.add(classPrefix);
+                } else {
+                    String full = classPrefix + methodPath;
+                    if (!full.isEmpty()) result.add(full);
+                }
+            }
+            if (result.isEmpty() && !classPrefix.isEmpty()) result.add(classPrefix);
+
+        } else if (language.equals("JavaScript") || language.equals("TypeScript")) {
+            // Express.js: router.get('/path', ...) / app.post('/path', ...)
+            Matcher m = Pattern.compile(
+                "\\b(?:router|app)\\.(get|post|put|delete|patch)\\s*\\(\\s*['\"`]([^'\"`\\n]+)['\"`]",
+                Pattern.CASE_INSENSITIVE
+            ).matcher(content);
+            while (m.find()) {
+                result.add(m.group(1).toUpperCase() + ":" + m.group(2));
+            }
+
+        } else if (language.equals("Python")) {
+            // FastAPI/Flask: @app.get('/path') / @router.post('/path')
+            Matcher m = Pattern.compile(
+                "@(?:app|router|bp|blueprint)\\.(get|post|put|delete|patch)\\s*\\(\\s*['\"`]([^'\"`\\n]+)['\"`]",
+                Pattern.CASE_INSENSITIVE
+            ).matcher(content);
+            while (m.find()) {
+                result.add(m.group(1).toUpperCase() + ":" + m.group(2));
+            }
+
+        } else if (language.equals("Go")) {
+            // Gin/Echo/Fiber: r.GET('/path', ...) / router.POST('/path', ...)
+            Matcher m = Pattern.compile(
+                "\\b\\w+\\.(GET|POST|PUT|DELETE|PATCH)\\s*\\(\\s*\"([^\"\\n]+)\"",
+                Pattern.CASE_INSENSITIVE
+            ).matcher(content);
+            while (m.find()) {
+                result.add(m.group(1).toUpperCase() + ":" + m.group(2));
+            }
+
+        } else if (language.equals("Ruby")) {
+            // Rails routes: get '/path', post '/path'
+            Matcher m = Pattern.compile(
+                "^\\s*(get|post|put|delete|patch)\\s+['\"]([^'\"\\n]+)['\"]",
+                Pattern.CASE_INSENSITIVE | Pattern.MULTILINE
+            ).matcher(content);
+            while (m.find()) {
+                result.add(m.group(1).toUpperCase() + ":" + m.group(2));
+            }
+
+        } else if (language.equals("PHP")) {
+            // Laravel: Route::get('/path', ...) / $router->post('/path', ...)
+            Matcher m = Pattern.compile(
+                "(?:Route::|\\$router->)(get|post|put|delete|patch)\\s*\\(\\s*['\"]([^'\"\\n]+)['\"]",
+                Pattern.CASE_INSENSITIVE
+            ).matcher(content);
+            while (m.find()) {
+                result.add(m.group(1).toUpperCase() + ":" + m.group(2));
             }
         }
-
-        // 메서드 어노테이션 없고 클래스 prefix만 있는 경우
-        if (result.isEmpty() && !classPrefix.isEmpty()) result.add(classPrefix);
 
         return result;
     }
@@ -473,19 +560,41 @@ public class StaticCodeAnalyzer {
         return new ArrayList<>(result);
     }
 
-    // Java @Async 어노테이션이 붙은 메서드명 추출
+    // 언어별 비동기 메서드/함수 목록 추출 (Java @Async / Python async def / TS async function)
     private List<String> extractAsyncMethods(String content, String language) {
-        if (!language.equals("Java")) return List.of();
         List<String> result = new ArrayList<>();
-        // @Async 바로 다음(0~3줄 이내)에 오는 메서드명 탐지
-        Pattern asyncPattern = Pattern.compile(
+
+        if (language.equals("Java")) {
+            // @Async 바로 다음(0~3줄 이내)에 오는 메서드명 탐지
+            Matcher m = Pattern.compile(
                 "@Async[\\s\\S]{0,200}?(?:public|protected|private)\\s+(?:\\w+\\s+)*(\\w+)\\s*\\(",
-                Pattern.MULTILINE);
-        Matcher m = asyncPattern.matcher(content);
-        while (m.find()) {
-            String name = m.group(1);
-            if (!isKeyword(name)) result.add(name);
+                Pattern.MULTILINE
+            ).matcher(content);
+            while (m.find()) {
+                String name = m.group(1);
+                if (!isKeyword(name)) result.add(name);
+            }
+
+        } else if (language.equals("Python")) {
+            // async def func_name(
+            Matcher m = Pattern.compile("^\\s*async\\s+def\\s+(\\w+)\\s*\\(", Pattern.MULTILINE).matcher(content);
+            while (m.find()) {
+                String name = m.group(1);
+                if (!isKeyword(name)) result.add(name);
+            }
+
+        } else if (language.equals("TypeScript") || language.equals("JavaScript")) {
+            // async function name( / const name = async ( / async name(
+            Matcher m = Pattern.compile(
+                "(?:async\\s+function\\s+(\\w+)|(?:const|let|var)\\s+(\\w+)\\s*=\\s*async\\s*(?:\\(|\\w))",
+                Pattern.MULTILINE
+            ).matcher(content);
+            while (m.find()) {
+                String name = m.group(1) != null ? m.group(1) : m.group(2);
+                if (name != null && !isKeyword(name)) result.add(name);
+            }
         }
+
         return result;
     }
 }

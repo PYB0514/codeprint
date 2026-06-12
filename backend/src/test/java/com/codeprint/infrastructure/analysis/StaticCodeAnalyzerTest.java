@@ -670,6 +670,151 @@ class StaticCodeAnalyzerTest {
         assertThat(result.jsxComponents()).isEmpty();
     }
 
+    // ── 다국어 API 엔드포인트 감지 ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Express.js router.get/post에서 API 경로를 추출한다")
+    void Express_API_엔드포인트_추출() throws IOException {
+        Path file = tempDir.resolve("userRouter.js");
+        Files.writeString(file, """
+                const express = require('express');
+                const router = express.Router();
+                router.get('/users', getUsers);
+                router.post('/users', createUser);
+                router.delete('/users/:id', deleteUser);
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "JavaScript");
+
+        assertThat(result.controllerMappings()).contains("GET:/users", "POST:/users", "DELETE:/users/:id");
+    }
+
+    @Test
+    @DisplayName("FastAPI @app.get/post에서 API 경로를 추출한다")
+    void FastAPI_엔드포인트_추출() throws IOException {
+        Path file = writePyFile("""
+                from fastapi import FastAPI
+                app = FastAPI()
+
+                @app.get("/items")
+                async def get_items():
+                    pass
+
+                @app.post("/items")
+                async def create_item():
+                    pass
+
+                @router.put("/items/{item_id}")
+                async def update_item():
+                    pass
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.controllerMappings()).contains("GET:/items", "POST:/items", "PUT:/items/{item_id}");
+    }
+
+    @Test
+    @DisplayName("Go Gin r.GET/POST에서 API 경로를 추출한다")
+    void GoGin_엔드포인트_추출() throws IOException {
+        Path file = tempDir.resolve("main.go");
+        Files.writeString(file, """
+                package main
+                import "github.com/gin-gonic/gin"
+                func main() {
+                    r := gin.Default()
+                    r.GET("/users", getUsers)
+                    r.POST("/users", createUser)
+                    r.DELETE("/users/:id", deleteUser)
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.controllerMappings()).contains("GET:/users", "POST:/users", "DELETE:/users/:id");
+    }
+
+    // ── 다국어 DB 엔티티 감지 ────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("TypeORM @Entity() 데코레이터에서 DB 테이블명을 추출한다")
+    void TypeORM_Entity_추출() throws IOException {
+        Path file = tempDir.resolve("User.ts");
+        Files.writeString(file, """
+                import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+                @Entity('users')
+                export class User {
+                    @PrimaryGeneratedColumn()
+                    id: number;
+                    @Column()
+                    name: string;
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.dbTables()).hasSize(1);
+        assertThat(result.dbTables().get(0).tableName()).isEqualTo("users");
+    }
+
+    @Test
+    @DisplayName("SQLAlchemy Base 상속 클래스에서 DB 테이블명을 추출한다")
+    void SQLAlchemy_Model_추출() throws IOException {
+        Path file = writePyFile("""
+                from sqlalchemy import Column, String
+                from database import Base
+
+                class User(Base):
+                    __tablename__ = 'users'
+                    id = Column(String, primary_key=True)
+                    name = Column(String)
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.dbTables()).hasSize(1);
+        assertThat(result.dbTables().get(0).tableName()).isEqualTo("users");
+    }
+
+    // ── 다국어 비동기 메서드 감지 ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Python async def 함수명을 asyncMethods에 포함한다")
+    void Python_async_def_감지() throws IOException {
+        Path file = writePyFile("""
+                async def fetch_data(url):
+                    pass
+
+                def sync_func():
+                    pass
+
+                async def process_items():
+                    pass
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.asyncMethods()).containsExactlyInAnyOrder("fetch_data", "process_items");
+        assertThat(result.asyncMethods()).doesNotContain("sync_func");
+    }
+
+    @Test
+    @DisplayName("TypeScript async function을 asyncMethods에 포함한다")
+    void TypeScript_async_function_감지() throws IOException {
+        Path file = writeTsFile("""
+                async function fetchProjects(): Promise<Project[]> {
+                    return [];
+                }
+                const loadUser = async () => { return null; };
+                function syncHelper() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.asyncMethods()).contains("fetchProjects", "loadUser");
+        assertThat(result.asyncMethods()).doesNotContain("syncHelper");
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {
