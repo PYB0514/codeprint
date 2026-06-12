@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.62.0',
+    date: '2026-06-12',
+    title: 'URL 딥링크 — 노드 직접 공유',
+    type: 'feature',
+    items: [
+      { category: 'UX', desc: '함수 노드 사이드바에 🔗 버튼 추가 — 클릭 시 해당 노드 선택 상태가 포함된 URL을 클립보드에 복사' },
+      { category: 'UX', desc: '?nodeId= URL 파라미터로 그래프 접속 시 해당 노드 자동 선택 + 화면 이동' },
+    ],
+  },
+  {
     version: 'v0.61.0',
     date: '2026-06-12',
     title: '커뮤니티 갤러리 탭',
