@@ -490,7 +490,7 @@ public class StaticCodeAnalyzer {
         return dot > 0 ? name.substring(0, dot) : name;
     }
 
-    // TypeScript/JS 파일에서 axios HTTP 호출 경로 추출 ("METHOD:/path" 형식)
+    // TypeScript/JS 파일에서 axios·fetch HTTP 호출 경로 추출 ("METHOD:/path" 형식)
     private List<String> extractApiCalls(String content, String language) {
         if (!language.equals("TypeScript") && !language.equals("JavaScript")) return List.of();
         List<String> result = new ArrayList<>();
@@ -507,6 +507,25 @@ public class StaticCodeAnalyzer {
             if (path.startsWith("/")) {
                 result.add(method + ":" + path);
             }
+        }
+
+        // fetch('/api/...', { method: 'POST' }) — 메서드가 URL이 아닌 옵션 객체에 있고, 없으면 GET
+        Pattern fetchPattern = Pattern.compile("\\bfetch\\s*\\(\\s*['\"`]([^'\"`\\n]+)['\"`]");
+        Pattern methodOption = Pattern.compile("method\\s*:\\s*['\"`](\\w+)['\"`]", Pattern.CASE_INSENSITIVE);
+        Matcher fm = fetchPattern.matcher(content);
+        while (fm.find()) {
+            String path = fm.group(1).replaceAll("\\$\\{[^}]+}", "*");
+            if (!path.startsWith("/")) continue;
+            // method 옵션 탐색 범위: 현재 호출 이후 ~ 문장 끝(;) 또는 다음 fetch 전까지 (다음 호출의 옵션 오인 방지)
+            String window = content.substring(fm.end(), Math.min(fm.end() + 300, content.length()));
+            int boundary = window.length();
+            int semicolon = window.indexOf(';');
+            if (semicolon >= 0) boundary = Math.min(boundary, semicolon);
+            int nextFetch = window.indexOf("fetch(");
+            if (nextFetch >= 0) boundary = Math.min(boundary, nextFetch);
+            Matcher om = methodOption.matcher(window.substring(0, boundary));
+            String method = om.find() ? om.group(1).toUpperCase() : "GET";
+            result.add(method + ":" + path);
         }
         return result;
     }

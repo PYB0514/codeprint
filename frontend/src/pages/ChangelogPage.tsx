@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.71.4',
+    date: '2026-06-13',
+    title: '프론트 fetch() API 호출 감지',
+    type: 'feature',
+    items: [
+      { category: '분석', desc: 'axios 없이 표준 fetch()를 쓰는 프론트엔드에서도 프론트→백엔드 API_CALL 연결선 생성' },
+      { category: '분석', desc: 'fetch 옵션 객체의 method 인식 (없으면 GET), 템플릿 리터럴 경로 정규화' },
+    ],
+  },
+  {
     version: 'v0.71.3',
     date: '2026-06-13',
     title: 'Prisma 스키마 DB 테이블 감지 복구',

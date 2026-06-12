@@ -360,6 +360,80 @@ class StaticCodeAnalyzerTest {
         assertThat(result.apiCalls()).anyMatch(c -> c.startsWith("PUT:"));
     }
 
+    // ── fetch() API 호출 추출 ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("fetch() 호출은 method 옵션이 없으면 GET으로 추출한다")
+    void fetch_기본_GET_추출() throws IOException {
+        Path file = writeTsFile("""
+                export const getProjects = async () => {
+                    const res = await fetch('/api/projects');
+                    return res.json();
+                };
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.apiCalls()).contains("GET:/api/projects");
+    }
+
+    @Test
+    @DisplayName("fetch() 옵션 객체의 method를 HTTP 메서드로 추출한다")
+    void fetch_method_옵션_추출() throws IOException {
+        Path file = writeTsFile("""
+                export const createProject = async (data: unknown) => {
+                    const res = await fetch('/api/projects', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data),
+                    });
+                    return res.json();
+                };
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.apiCalls()).contains("POST:/api/projects");
+    }
+
+    @Test
+    @DisplayName("fetch() 템플릿 리터럴 경로의 ${}를 *로 정규화한다")
+    void fetch_템플릿_리터럴_정규화() throws IOException {
+        Path file = writeTsFile("""
+                export const deleteProject = (id: string) =>
+                    fetch(`/api/projects/${id}`, { method: 'DELETE' });
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.apiCalls()).contains("DELETE:/api/projects/*");
+    }
+
+    @Test
+    @DisplayName("외부 URL fetch()는 API 호출로 추출하지 않는다")
+    void fetch_외부_URL_제외() throws IOException {
+        Path file = writeTsFile("""
+                const checkStatus = () => fetch('https://status.example.com/health');
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.apiCalls()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("연속된 fetch() 호출에서 다음 호출의 method를 가져오지 않는다")
+    void fetch_연속_호출_method_혼동_방지() throws IOException {
+        Path file = writeTsFile("""
+                const a = () => fetch('/api/first');
+                const b = () => fetch('/api/second', { method: 'DELETE' });
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.apiCalls()).contains("GET:/api/first", "DELETE:/api/second");
+    }
+
     // ── DB 테이블 추출 ─────────────────────────────────────────────────────
 
     @Test
