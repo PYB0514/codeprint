@@ -315,4 +315,30 @@ class GraphWarningServiceTest {
         );
         assertThat(crossDomain(warnings)).isEmpty();
     }
+
+    // --- fingerprint (suppress 식별자) ---
+
+    @Test
+    @DisplayName("fingerprint — 동일 type+message는 동일 값(안정적), 다르면 다른 값, 64자 16진")
+    void fingerprint_stableAndDistinct() {
+        String a = GraphWarningService.fingerprint("CROSS_DOMAIN_CALL", "msg");
+        assertThat(a).isEqualTo(GraphWarningService.fingerprint("CROSS_DOMAIN_CALL", "msg"));
+        assertThat(a).isNotEqualTo(GraphWarningService.fingerprint("DEAD_CODE", "msg"));
+        assertThat(a).isNotEqualTo(GraphWarningService.fingerprint("CROSS_DOMAIN_CALL", "other"));
+        assertThat(a).hasSize(64).matches("[0-9a-f]{64}");
+    }
+
+    @Test
+    @DisplayName("detect — 각 경고에 64자 fingerprint 필드가 부여됨")
+    void detect_attachesFingerprint() {
+        Node a = fileNode("A");
+        Node b = fileNode("B");
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(a, b),
+                List.of(importEdge(a.getId(), b.getId()), importEdge(b.getId(), a.getId()))
+        );
+        assertThat(warnings).isNotEmpty();
+        assertThat(warnings.get(0).get("fingerprint")).isInstanceOf(String.class);
+        assertThat((String) warnings.get(0).get("fingerprint")).hasSize(64);
+    }
 }
