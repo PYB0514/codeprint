@@ -134,7 +134,8 @@ const NON_DOMAIN_FOLDERS = new Set([
   'endpoint', 'endpoints', 'graphql', 'v1', 'v2', 'handler', 'handlers',
 ])
 
-// 도메인 판별 시 제거할 클래스 기술 접미사 (예: GraphController → Graph)
+// 도메인 판별 시 제거할 기술 접미사 (예: GraphController → Graph, ShareGraphPage → ShareGraph)
+// 백엔드 클래스 접미사 + 프론트 UI 래퍼 접미사 모두 포함
 const CLASS_SUFFIXES = [
   'RestController', 'Controller', 'ServiceImpl', 'Service', 'RepositoryImpl',
   'Repository', 'Configuration', 'Config', 'Entity', 'Request', 'Response',
@@ -142,24 +143,44 @@ const CLASS_SUFFIXES = [
   'Exception', 'Listener', 'Event', 'Validator', 'Filter', 'Resolver',
   'Converter', 'Manager', 'Runner', 'Scheduler', 'Client', 'Gateway',
   'Command', 'Query', 'Dto', 'Vo', 'Impl',
+  'Page', 'View', 'Screen', 'Modal', 'Panel', 'Section', 'Card',
+  'Banner', 'Overlay', 'Tour', 'Layout', 'Context', 'Hook', 'Form',
+  'Header', 'Footer',
 ]
 
-// 파일명에서 도메인을 유추 — 알려진 도메인 집합에 매칭될 때만 반환 (파편화 방지)
+// 토큰이 알려진 도메인인지 — 단/복수형 차이를 흡수 (예: teams→team, messages→message)
+function resolveDomain(token: string, knownDomains: Set<string>): string | null {
+  if (knownDomains.has(token)) return token
+  if (token.endsWith('s') && knownDomains.has(token.slice(0, -1))) return token.slice(0, -1)
+  if (token.endsWith('es') && knownDomains.has(token.slice(0, -2))) return token.slice(0, -2)
+  return null
+}
+
+// 파일명에서 도메인을 유추 — 알려진 도메인 집합에 매칭될 때만 반환 (없는 도메인을 만들지 않으므로 파편화 없음)
 function domainFromFilename(filePath: string, knownDomains: Set<string>): string | null {
   const fileName = filePath.replace(/\\/g, '/').split('/').pop() ?? ''
   let base = fileName.replace(/\.[^.]+$/, '')
   for (const suf of CLASS_SUFFIXES) {
     if (base.length > suf.length && base.endsWith(suf)) { base = base.slice(0, -suf.length); break }
   }
-  // PascalCase/camelCase → 토큰 분리 후 선두 토큰부터 누적해 가장 긴 매칭 도메인 채택
   const tokens = base.replace(/([a-z0-9])([A-Z])/g, '$1 $2').split(/[\s_-]+/).filter(Boolean).map(t => t.toLowerCase())
+
+  // 1. 선두 토큰부터 누적 매칭 — 복합어 도메인 우선 (예: UserAccount → useraccount)
   let best: string | null = null
   let acc = ''
   for (const t of tokens) {
     acc += t
-    if (knownDomains.has(acc)) best = acc
+    const m = resolveDomain(acc, knownDomains)
+    if (m) best = m
   }
-  return best
+  if (best) return best
+
+  // 2. 선두 매칭 실패 시 개별 토큰에서 도메인 탐색 (예: ShareGraphPage → graph, CreateProjectModal → project)
+  for (const t of tokens) {
+    const m = resolveDomain(t, knownDomains)
+    if (m) return m
+  }
+  return null
 }
 
 // 경로 기반으로 확실히 식별되는 도메인 집합을 수집 — 파일명 유추의 화이트리스트로 사용

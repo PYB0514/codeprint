@@ -15,6 +15,11 @@
 
 **결과.** 실제 백엔드 219개 파일 검증: "api" 도메인 완전 소멸, 컨트롤러 29개 중 25개가 올바른 바운디드 컨텍스트(graph/community/user/analysis 등)로 귀속. 나머지 4종(Admin/Auth/Dev/Feedback/Mcp/GlobalExceptionHandler 등)은 대응 컨텍스트가 없어 `common` 유지 — DDD상 올바른 분류. `extractDomain`은 `knownDomains` 인자가 없으면 기존 동작(파일명 추론 비활성)이라 하위 호환. GraphPage의 탭 필터·범례·색상 6개 호출부도 동일 `knownDomains`를 공유시켜 레이아웃과 결과 일치 보장.
 
+**후속 — 프론트 페이지/컴포넌트까지 귀속 확장.** 위 수정 직후 사용자 요청: "common의 page 같은 것도 도메인에 붙일 수 없나?" 프론트엔드는 `pages/`·`components/`가 평평한 구조라 경로상 도메인 신호가 없어 대부분 `common`에 남았다.
+- 핵심 안전성: **파일명 토큰을 "이미 알려진 도메인 집합"에만 매칭** → 새 도메인을 만들지 않으므로 원작자가 우려한 파편화가 원천적으로 불가능. 이 불변식 덕에 매칭을 공격적으로 해도 안전.
+- 3가지 보강: ①UI 래퍼 접미사(Page/View/Modal/Panel/Section/Card/Layout 등) 제거 추가, ②단·복수형 흡수(`resolveDomain` — teams→team, messages→message), ③선두 누적 매칭 실패 시 개별 토큰 스캔(ShareGraphPage→graph, CreateProjectModal→project).
+- 결과(백엔드+프론트 267개 파일 검증): `common` 42개로 수렴, 남은 건 전부 도메인 무관(인프라 config, 앱 진입점, AppHeader/Footer/WarningPanel 같은 전역 chrome, Login/Settings/Privacy 등 도메인 없는 페이지). 오귀속 0건.
+
 ---
 
 ## 버그
