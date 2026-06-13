@@ -305,6 +305,30 @@ class GraphBuilderTest {
         assertThat(graph.getTotalFileCount()).isEqualTo(1);
     }
 
+    // ── B-8: edgeIdentifier callee 파일 포함 (dedup 정확도) ─────────────────
+
+    @Test
+    @DisplayName("FUNCTION_CALL edgeIdentifier에 callee 파일명이 포함된다 — 동명 함수 dedup 방지")
+    void FUNCTION_CALL_edgeIdentifier_callee_파일명_포함() {
+        // B-8 버그: callee 파일명 없이 "callerFile-callerFunc-calls-calleeFunc" 형태라서
+        // 동명 함수가 다른 파일에 있을 때 잘못된 dedup이 발생했던 문제 방지
+        ParsedFile caller = parsedFileWithCalls("src/ControllerA.java", "Java",
+                List.of("doWork"), Map.of("doWork", List.of("save")));
+        ParsedFile callee = parsedFile("src/ServiceB.java", "Java", List.of("save"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, callee));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean identifierContainsCalleeFile = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .filter(e -> e.getEdgeIdentifier().contains("doWork") && e.getEdgeIdentifier().contains("save"))
+                .anyMatch(e -> e.getEdgeIdentifier().contains("ServiceB"));
+
+        assertThat(identifierContainsCalleeFile).isTrue();
+    }
+
     // ── API_CALL 엣지 생성 (비Spring 백엔드 매핑) ───────────────────────────
 
     @Test
