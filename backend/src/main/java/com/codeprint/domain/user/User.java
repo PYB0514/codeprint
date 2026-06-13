@@ -2,6 +2,7 @@
 package com.codeprint.domain.user;
 
 import com.codeprint.shared.jpa.AesEncryptionConverter;
+import com.codeprint.shared.plan.UserPlan;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;

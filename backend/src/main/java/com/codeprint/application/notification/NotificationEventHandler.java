@@ -1,10 +1,10 @@
 // 도메인 이벤트를 수신하여 알림을 생성하는 이벤트 핸들러
 package com.codeprint.application.notification;
 
-import com.codeprint.domain.community.CommentAddedEvent;
-import com.codeprint.domain.community.PostLikedEvent;
-import com.codeprint.domain.message.MessageSentEvent;
-import com.codeprint.domain.user.UserFollowedEvent;
+import com.codeprint.shared.event.CommentAddedEvent;
+import com.codeprint.shared.event.PostLikedEvent;
+import com.codeprint.shared.event.MessageSentEvent;
+import com.codeprint.shared.event.UserFollowedEvent;
 import com.codeprint.infrastructure.push.WebPushService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;

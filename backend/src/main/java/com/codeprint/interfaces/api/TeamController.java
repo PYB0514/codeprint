@@ -6,7 +6,7 @@ import com.codeprint.domain.team.Team;
 import com.codeprint.domain.team.TeamMember;
 import com.codeprint.domain.team.TeamProjectAllocation;
 import com.codeprint.domain.user.User;
-import com.codeprint.domain.user.UserPlan;
+import com.codeprint.shared.plan.UserPlan;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;

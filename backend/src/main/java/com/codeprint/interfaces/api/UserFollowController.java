@@ -4,7 +4,7 @@ package com.codeprint.interfaces.api;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserFollow;
 import com.codeprint.domain.user.UserFollowRepository;
-import com.codeprint.domain.user.UserFollowedEvent;
+import com.codeprint.shared.event.UserFollowedEvent;
 import com.codeprint.domain.user.UserRepository;
 import com.codeprint.infrastructure.storage.S3Service;
 import lombok.RequiredArgsConstructor;

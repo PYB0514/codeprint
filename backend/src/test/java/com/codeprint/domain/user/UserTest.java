@@ -1,6 +1,7 @@
 // User 도메인 엔티티 단위 테스트 — 상태 전이 및 역할 관리 회귀 방지
 package com.codeprint.domain.user;
 
+import com.codeprint.shared.plan.UserPlan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

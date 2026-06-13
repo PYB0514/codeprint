@@ -2,6 +2,22 @@
 
 ---
 
+## CROSS_CONTEXT_IMPORT 위반 해소 — 통합 이벤트 + UserPlan을 Shared로 이동 (2026-06-13)
+
+**문제.** 전체 구조 DDD 재점검에서 CROSS_CONTEXT_IMPORT 7건 확인. 그 중 5건이 두 패턴.
+- `application/notification`의 `NotificationEventHandler`가 타 컨텍스트 도메인 이벤트 4종(`CommentAddedEvent`(community)·`PostLikedEvent`(community)·`MessageSentEvent`(message)·`UserFollowedEvent`(user))을 직접 import.
+- `application/team`의 `TeamApplicationService`가 `domain/user`의 `UserPlan` enum을 직접 import.
+
+**원인.** 두 경우 모두 "공유돼야 할 계약(contract)"이 특정 컨텍스트의 domain 패키지에 들어 있어서, 소비 측이 타 컨텍스트 domain을 import할 수밖에 없었다.
+
+**결정.**
+- 이벤트 4종 → `shared/event/`로 이동(published language). 페이로드가 이미 UUID+원시값 record라 내용 변경 없이 패키지만 이동 — 발행 측(컨트롤러)·구독 측(notification) 모두 shared 계약에 의존. Spring 이벤트는 타입 기준 라우팅이라 동작 불변.
+- `UserPlan` → `shared/plan/`로 승격(Shared Kernel). 플랜은 user·team·project가 공유하는 어휘이고 이미 `TEAM_*`·`defaultTotalSeats`·`monthlyPrice` 등 팀 로직이 얹혀 있었음. `@Enumerated`는 `name()`/ordinal로 매핑되어 패키지 변경이 DB에 영향 없음 → 마이그레이션 불필요(V38 교훈대로 실제 매핑 확인 후 판단).
+
+**탈락안.** team→user에 포트(`PlanPort`)를 추가하는 방안 — enum 하나를 위한 포트/어댑터는 과한 간접화. 플랜이 진짜 공유 개념이므로 Shared Kernel 승격이 더 단순하고 의도에 맞음.
+
+**결과.** `compileJava`/`compileTestJava`/`test` 전부 통과. 동일 패키지에서 unqualified로 쓰던 `User`/`UserTest`/`UserPlanTest`에 import 추가. CROSS_CONTEXT_IMPORT 7→2(community→graph 2건만 잔존, 별도 PR). community→graph는 포트+어댑터 리팩토링이라 API 응답 회귀 위험이 있어 분리.
+
 ## freshness 엔드포인트 github_error 원인 분석 (2026-06-11)
 
 **문제.** `GET /api/projects/{id}/freshness`가 항상 `{"isOutdated":false,"reason":"github_error"}`를 반환해 "재분석 필요" 배너가 한 번도 뜨지 않았다.

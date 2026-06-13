@@ -4,7 +4,7 @@ package com.codeprint.interfaces.api;
 import com.codeprint.application.message.MessageApplicationService;
 import com.codeprint.application.message.UserSummaryDto;
 import com.codeprint.domain.message.DirectMessage;
-import com.codeprint.domain.message.MessageSentEvent;
+import com.codeprint.shared.event.MessageSentEvent;
 import com.codeprint.domain.user.User;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
