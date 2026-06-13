@@ -189,7 +189,7 @@ public class GraphWarningService {
     }
 
     // interfaces/ 또는 application/ 레이어가 infrastructure/persistence/ 를 직접 IMPORT — DB 레이어 우회
-    // FUNCTION_CALL 엣지는 Tree-sitter가 인터페이스 호출을 구현체로 오추적하므로 제외
+    // FUNCTION_CALL 엣지는 정규식 분석기가 인터페이스 호출을 구현체로 오추적하므로 제외
     private List<Map<String, Object>> detectDbLayerBypass(List<Node> nodes, List<Edge> edges) {
         Map<UUID, String> nodeFilePaths = new HashMap<>();
         Map<UUID, String> nameMap = new HashMap<>();
