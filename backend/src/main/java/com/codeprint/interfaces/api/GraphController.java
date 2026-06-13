@@ -7,6 +7,7 @@ import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.application.graph.GraphWarningService;
 import com.codeprint.application.graph.NodeStyleService;
+import com.codeprint.application.graph.WarningSuppressionService;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.Node;
@@ -26,6 +27,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -37,6 +39,7 @@ public class GraphController {
     private final GraphFacade graphFacade;
     private final GraphDiffService graphDiffService;
     private final GraphWarningService graphWarningService;
+    private final WarningSuppressionService warningSuppressionService;
     private final NodeStyleService nodeStyleService;
     private final UserRepository userRepository;
     private final S3Service s3Service;
@@ -109,7 +112,8 @@ public class GraphController {
                             ))
                             .toList();
 
-                    List<Map<String, Object>> warnings = graphQueryService.getWarnings(graph.getId());
+                    List<Map<String, Object>> warnings =
+                            filterSuppressed(graph.getProjectId(), graphQueryService.getWarnings(graph.getId()));
 
                     // 그래프는 재분석 전까지 변경되지 않으므로 5분 브라우저 캐시 허용
                     Map<String, Object> body = new java.util.LinkedHashMap<>();
@@ -177,7 +181,8 @@ public class GraphController {
                             ))
                             .toList();
 
-                    List<Map<String, Object>> warnings = graphQueryService.getWarnings(graph.getId());
+                    List<Map<String, Object>> warnings =
+                            filterSuppressed(graph.getProjectId(), graphQueryService.getWarnings(graph.getId()));
 
                     // 공개 그래프는 누구나 접근 가능하므로 public 캐시 허용
                     Map<String, Object> body = new java.util.LinkedHashMap<>();
@@ -282,5 +287,14 @@ public class GraphController {
         double y = body.getOrDefault("y", 0.0);
         graphCommandService.updateNodePosition(nodeId, x, y);
         return ResponseEntity.ok().build();
+    }
+
+    // 프로젝트에서 suppress(숨김)된 fingerprint의 경고를 제외하고 반환
+    private List<Map<String, Object>> filterSuppressed(UUID projectId, List<Map<String, Object>> warnings) {
+        Set<String> suppressed = warningSuppressionService.getSuppressedFingerprints(projectId);
+        if (suppressed.isEmpty()) return warnings;
+        return warnings.stream()
+                .filter(w -> !suppressed.contains(w.get("fingerprint")))
+                .toList();
     }
 }

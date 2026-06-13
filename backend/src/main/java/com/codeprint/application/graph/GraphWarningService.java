@@ -30,7 +30,25 @@ public class GraphWarningService {
             warnings.addAll(detectDomainInfraImport(nodes, edges));
             warnings.addAll(detectCrossDomainFunctionCall(nodes, edges));
         }
+        // 각 경고에 안정적 fingerprint 부여 (type+message 기반) — 재분석으로 그래프가 바뀌어도 동일 경고면 동일 값 → suppress 식별용
+        for (Map<String, Object> w : warnings) {
+            w.put("fingerprint", fingerprint((String) w.get("type"), (String) w.get("message")));
+        }
         return warnings;
+    }
+
+    // 경고의 안정적 식별자 — SHA-256(type + "|" + message) 16진 문자열. message는 파일명·도메인명 등 안정적 의미 내용에서 파생됨.
+    static String fingerprint(String type, String message) {
+        try {
+            byte[] hash = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(((type == null ? "" : type) + "|" + (message == null ? "" : message))
+                            .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(hash.length * 2);
+            for (byte b : hash) sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
     }
 
     // 노드 파일 경로에서 DDD 레이어(/domain/, /application/, /infrastructure/)가 2개 이상 발견되면 DDD 프로젝트로 판단

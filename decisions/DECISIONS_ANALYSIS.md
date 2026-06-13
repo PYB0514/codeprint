@@ -36,6 +36,21 @@
 
 **적대적 리뷰 반영(3-렌즈).** ⓐ JDK 이름을 공유 `FRAMEWORK_CALL_NAMES`에 넣으면 같은 set을 쓰는 `detectDeadCode`가 `add`/`get`/`map` 명명 도메인 메서드를 dead-code에서 누락 → **별도 set `JDK_COLLECTION_CALL_NAMES`로 분리**해 dead-code 탐지 완전 불변. ⓑ `map`/`filter`/`collect`/`merge`/`flatMap`은 도메인 메서드일 수 있고 Codeprint 0 달성에 불필요 → 제외. ⓒ trade-off 정직화: 이 필터는 정밀도(오탐 0) 우선이며, **동명·framework명 메서드를 쓰는 실제 cross-domain 호출은 놓칠 수 있다.** `CROSS_CONTEXT_IMPORT`는 application→domain IMPORT만 보완 검출하고 domain→domain·application→application은 커버하지 않으므로 "신호 손실 없음"은 과장 — bare-name 해석 자체가 신뢰 불가한 영역을 정리한 것으로 이해해야 함. domain→domain 등 경계 확장 검출은 별도 작업(백로그).
 
+### C-15: 경고 suppress(숨김) — fingerprint 기반 식별 (2026-06-14)
+
+**문제.** 사용자가 오탐이거나 의도된 패턴인 경고를 프로젝트 단위로 숨길 수 있어야 한다(로드맵 C-12). 그러나 경고는 그래프 조회 시 즉석 계산되고(`GraphQueryService.getWarnings`) 안정적 식별자가 없었다. 경고의 `nodeIds`/`edgeIds`는 UUID라 재분석 시 매번 바뀌어 suppress 대상을 안정적으로 지목할 수 없다.
+
+**이유/설계.** 경고 message는 파일 경로·함수명·도메인명 등 **안정적 의미 내용**에서 파생되고 UUID를 포함하지 않는다. 따라서 `fingerprint = SHA-256(type + "|" + message)`는 재분석으로 그래프(UUID)가 바뀌어도 동일 경고면 동일 값이다. 이를 경고 응답에 `fingerprint` 필드로 추가하고, `(project_id, fingerprint)`를 저장해 그래프 조회 시 필터링한다.
+
+- **scope = project**: graphId가 아닌 projectId 기준 저장 → 재분석(새 graphId)에도 suppress 유지.
+- **GraphWarningService.detect**가 모든 경고에 fingerprint 부여(한 곳에서 일괄).
+- 필터링: `GraphController.getGraph`/`getPublicGraph`가 프로젝트의 suppress된 fingerprint를 제외(경고 @Cacheable 캐시는 raw 유지, suppress는 요청 시점 필터 → suppress 변경이 캐시 무효화 불필요).
+- API: `POST/DELETE /api/projects/{projectId}/warnings/suppress` — `GraphFacade.verifyProjectOwnership`로 소유자만.
+
+**알려진 한계.** message에 가변 수치가 포함된 경고(예: HIGH_FAN_OUT "N개 함수 호출")는 N이 바뀌면 fingerprint도 바뀌어 suppress가 풀린다. v1에서는 허용(수치가 바뀌면 상황이 달라진 것으로 간주). 필요 시 추후 type+노드명 기반으로 정교화.
+
+**런타임 검증 상태(보류).** 마이그레이션 V39(`warning_suppressions`)는 실제 스키마에 ROLLBACK 트랜잭션으로 실행 검증 완료(테이블·FK·인덱스·UNIQUE 정상, 엔티티 컬럼과 일치). 단, **작업 시점에 백엔드가 다운**(외부 원인)돼 있어 Flyway 실제 적용 + 엔드포인트 와이어링 런타임 검증은 사용자가 백엔드를 재시작한 뒤 수행해야 한다 — 그 전까지 머지 보류. 프론트 UI(WarningPanel suppress 버튼)는 후속 PR.
+
 ## 버그
 
 ### B-8: FUNCTION_CALL edgeIdentifier callee 파일명 누락 (2026-06-13)
