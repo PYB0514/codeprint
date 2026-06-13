@@ -20,6 +20,11 @@
 - 3가지 보강: ①UI 래퍼 접미사(Page/View/Modal/Panel/Section/Card/Layout 등) 제거 추가, ②단·복수형 흡수(`resolveDomain` — teams→team, messages→message), ③선두 누적 매칭 실패 시 개별 토큰 스캔(ShareGraphPage→graph, CreateProjectModal→project).
 - 결과(백엔드+프론트 267개 파일 검증): `common` 42개로 수렴, 남은 건 전부 도메인 무관(인프라 config, 앱 진입점, AppHeader/Footer/WarningPanel 같은 전역 chrome, Login/Settings/Privacy 등 도메인 없는 페이지). 오귀속 0건.
 
+**후속 2 — 도메인 박스가 가로로 무한정 길어지던 레이아웃.** 사용자 스크린샷: `common`처럼 그룹이 많은 도메인이 한 줄짜리 초장방형 스트립으로 표시됨.
+- 원인: `buildDomainPositions`의 도메인 내부 레이아웃이 그룹을 단일 가로 행에 무한 배치(`x += l.w + GROUP_GAP`, y 고정). PR #144 "1열 우측정렬" 설계의 부작용 — 그룹이 적을 땐 괜찮지만 common(그룹 ~18개)에서 폭이 2600px 이상으로 폭주.
+- 해결: 그룹을 그리드로 줄바꿈. 목표 행 수를 `round(√(n/2.5))`로 잡아 가로로 약간 넓은 직사각형을 만들고, 누적 폭이 `maxRowW`를 넘으면 다음 행으로. (계수 2.5는 그래프가 세로보다 가로로 읽기 편한 점 반영.)
+- 검증: 그룹 수별 시뮬레이션 — 3개→1행(448×148), 18개→3행(880×356), 42개→5행(1456×564). 모두 화면 친화적 비율로 수렴.
+
 ---
 
 ## 버그

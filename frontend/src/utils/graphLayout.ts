@@ -292,16 +292,31 @@ function buildDomainPositions(
       return (LAYER_COLUMN[layerA] ?? 99) - (LAYER_COLUMN[layerB] ?? 99)
     })
 
+    // 그룹을 한 줄에 몰지 않고 그리드로 줄바꿈 — 도메인 박스가 가로로 무한정 길어지는 것 방지
+    // 가로로 약간 넓은 직사각형이 되도록 목표 행 수를 √(n/2.5)로 잡고 그 너비를 넘으면 줄바꿈
+    const widths = sorted.map((k) => groupLayouts.get(k)!.w)
+    const widest = widths.length ? Math.max(...widths) : 0
+    const sumW = widths.reduce((s, w) => s + w + GROUP_GAP, 0)
+    const desiredRows = Math.max(1, Math.round(Math.sqrt(sorted.length / 2.5)))
+    const maxRowW = Math.max(widest, sumW / desiredRows)
+
     const offsets = new Map<string, { x: number; y: number }>()
-    let x = DOMAIN_PAD, maxH = 0
+    const top = DOMAIN_PAD + DOMAIN_LABEL_H
+    let x = DOMAIN_PAD, y = top, rowH = 0, contentW = 0
     sorted.forEach((key) => {
       const l = groupLayouts.get(key)!
-      offsets.set(key, { x, y: DOMAIN_PAD + DOMAIN_LABEL_H })
+      if (x > DOMAIN_PAD && x + l.w > DOMAIN_PAD + maxRowW) {
+        x = DOMAIN_PAD
+        y += rowH + GROUP_GAP
+        rowH = 0
+      }
+      offsets.set(key, { x, y })
       x += l.w + GROUP_GAP
-      maxH = Math.max(maxH, l.h)
+      contentW = Math.max(contentW, x - GROUP_GAP)
+      rowH = Math.max(rowH, l.h)
     })
-    const totalW = x - GROUP_GAP + DOMAIN_PAD
-    const totalH = DOMAIN_LABEL_H + DOMAIN_PAD + maxH + DOMAIN_PAD
+    const totalW = contentW + DOMAIN_PAD
+    const totalH = (y + rowH) + DOMAIN_PAD
 
     domainInternalLayouts.set(_domain, { w: totalW, h: totalH, groupOffsets: offsets })
   })
