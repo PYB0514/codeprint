@@ -184,6 +184,16 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 
 ---
 
+### C#/Go 함수 호출 추출 — PascalCase 분기 (2026-06-13, 로드맵 Phase B-6)
+
+**문제.** 함수 호출 추출 정규식이 `\b([a-z]...)\(`로 소문자 시작을 강제했다. C# 메서드는 PascalCase, Go exported 함수는 대문자 시작이라 C#/Go 레포는 FUNCTION_CALL 엣지가 사실상 0개 — 함수 노드만 떠 있고 호출 흐름이 안 보였다.
+
+**이유.** 언어별 분기로 해결. C#/Go(`pascalMethods`)는 호출 패턴을 `[A-Za-z_]` 시작으로 완화하되, `new ClassName(` 인스턴스화가 호출로 오인되지 않도록 `(?<!new\s)` 부정 룩비하인드 추가(인스턴스화는 INSTANTIATION 엣지가 별도 처리). 한정 호출(`Receiver.method()`)도 C#/Go는 메서드명 대문자 허용. 소문자 언어(Java/TS/Python 등)는 기존 패턴 그대로 — 대문자 생성자 오인 방지 유지.
+
+**결과.** C#/Go 교차 파일 호출(Controller.cs → Service.cs)이 그래프에 표시됨. TDD로 진행 — C#/Go 호출 추출 2개(실패 후 통과) + new 제외 + Java 소문자 회귀 2개. 같은 파일 내 호출은 여전히 GraphBuilder가 스킵(B-7 별건). 전체 116개 통과.
+
+---
+
 ### 대형 레포 500파일 절단 안내 — 저장 위치 결정 (2026-06-13)
 
 **문제.** SourceFileWalker가 MAX_FILES=500으로 잘랐는데, 초과분이 조용히 버려져 사용자는 그래프가 전체라고 오인했다. 어떤 파일이 빠졌는지 알 길이 없었다.
