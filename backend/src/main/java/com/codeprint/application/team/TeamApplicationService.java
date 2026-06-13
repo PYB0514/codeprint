@@ -2,7 +2,7 @@
 package com.codeprint.application.team;
 
 import com.codeprint.domain.team.*;
-import com.codeprint.domain.user.UserPlan;
+import com.codeprint.shared.plan.UserPlan;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

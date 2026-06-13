@@ -3,10 +3,10 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.application.community.CommunityFacade;
 import com.codeprint.application.community.PostCommandService;
-import com.codeprint.domain.community.CommentAddedEvent;
+import com.codeprint.shared.event.CommentAddedEvent;
 import com.codeprint.domain.community.Comment;
 import com.codeprint.domain.community.Post;
-import com.codeprint.domain.community.PostLikedEvent;
+import com.codeprint.shared.event.PostLikedEvent;
 import com.codeprint.domain.community.PostBookmark;
 import com.codeprint.domain.community.PostBookmarkRepository;
 import com.codeprint.domain.community.PostLike;

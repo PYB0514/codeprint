@@ -1,6 +1,7 @@
 // UserPlan 경계 조건 단위 테스트 — 프로젝트 수 제한 비즈니스 규칙 회귀 방지
 package com.codeprint.domain.user;
 
+import com.codeprint.shared.plan.UserPlan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

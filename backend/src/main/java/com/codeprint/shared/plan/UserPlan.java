@@ -1,5 +1,5 @@
-// 사용자 플랜 열거형 (FREE / PRO / TEAM_*)
-package com.codeprint.domain.user;
+// 구독 플랜 열거형 (FREE / PRO / TEAM_*) — user·team·project 공유 어휘 (Shared Kernel)
+package com.codeprint.shared.plan;
 
 public enum UserPlan {
     FREE, PRO, TEAM_STARTER, TEAM_GROWTH, TEAM_BUSINESS;

@@ -1,5 +1,5 @@
-// 댓글 작성 도메인 이벤트 — 알림 발송 side effect 분리용
-package com.codeprint.domain.community;
+// 댓글 작성 통합 이벤트 (published language) — 컨텍스트 간 알림 발송용
+package com.codeprint.shared.event;
 
 import java.util.UUID;
 
