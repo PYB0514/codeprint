@@ -92,6 +92,8 @@ function ShareGraphInner() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [warnings, setWarnings] = useState<{ type: string; nodeIds: string[]; message: string }[]>([])
+  // 대형 레포 절단 안내 — 전체 대상 파일 수 > 분석된 파일 수일 때 표시
+  const [truncation, setTruncation] = useState<{ analyzed: number; total: number } | null>(null)
   const [graphId, setGraphId] = useState<string | null>(null)
   const [chatInput, setChatInput] = useState('')
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
@@ -131,10 +133,14 @@ function ShareGraphInner() {
 
     Promise.all([graphPromise, presetPromise])
       .then(([graphRes, presetRes]) => {
-        const raw = graphRes.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; message: string }[]; ownerBgUrl?: string | null }
+        const raw = graphRes.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; message: string }[]; ownerBgUrl?: string | null; analyzedFileCount?: number; totalFileCount?: number }
         if (raw.warnings) setWarnings(raw.warnings)
         setGraphId(raw.graphId)
         if (raw.ownerBgUrl) setOwnerBgUrl(raw.ownerBgUrl)
+        // 500개 초과 절단 시에만 안내 (기존 그래프는 카운트 없음)
+        if (raw.totalFileCount != null && raw.analyzedFileCount != null && raw.totalFileCount > raw.analyzedFileCount) {
+          setTruncation({ analyzed: raw.analyzedFileCount, total: raw.totalFileCount })
+        }
 
         const cfg = (presetRes?.data?.config ?? {}) as Record<string, unknown>
         const lp = (cfg.layoutPreset as LayoutPreset) ?? 'layer'
@@ -263,6 +269,16 @@ function ShareGraphInner() {
           </button>
         </div>
       </div>
+
+      {/* 대형 레포 절단 안내 */}
+      {truncation && (
+        <div className="flex items-center justify-between px-4 py-1.5 bg-orange-900/80 border-b border-orange-700 text-orange-300 text-xs shrink-0">
+          <span>
+            📦 대형 레포 — 전체 <strong>{truncation.total.toLocaleString()}</strong>개 파일 중 <strong>{truncation.analyzed.toLocaleString()}</strong>개만 분석되었습니다. 그래프는 일부 구조만 표시합니다.
+          </span>
+          <button onClick={() => setTruncation(null)} className="text-orange-500 hover:text-orange-200 ml-4">✕</button>
+        </div>
+      )}
 
       {/* 본문 */}
       <div className="flex-1 flex overflow-hidden">

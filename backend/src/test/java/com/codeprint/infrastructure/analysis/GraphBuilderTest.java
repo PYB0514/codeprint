@@ -280,6 +280,30 @@ class GraphBuilderTest {
         assertThat(hasCallEdge).isTrue();
     }
 
+    // ── 파일 수 카운트 기록 (대형 레포 절단 안내) ───────────────────────────
+
+    @Test
+    @DisplayName("전체 대상 파일 수를 그래프에 기록한다 — 절단 시 totalFileCount > analyzedFileCount")
+    void 절단_파일_수_기록() {
+        ParsedFile file = parsedFile("src/A.java", "Java", List.of("doWork"), Map.of());
+
+        Graph graph = graphBuilder.build(projectId, analysisId, List.of(file), 712);
+
+        assertThat(graph.getAnalyzedFileCount()).isEqualTo(1);
+        assertThat(graph.getTotalFileCount()).isEqualTo(712);
+    }
+
+    @Test
+    @DisplayName("3-인자 build는 전체 대상 수 = 분석 파일 수로 기록한다 (절단 없음)")
+    void 기본_build_카운트_일치() {
+        ParsedFile file = parsedFile("src/A.java", "Java", List.of("doWork"), Map.of());
+
+        Graph graph = graphBuilder.build(projectId, analysisId, List.of(file));
+
+        assertThat(graph.getAnalyzedFileCount()).isEqualTo(1);
+        assertThat(graph.getTotalFileCount()).isEqualTo(1);
+    }
+
     // ── API_CALL 엣지 생성 (비Spring 백엔드 매핑) ───────────────────────────
 
     @Test

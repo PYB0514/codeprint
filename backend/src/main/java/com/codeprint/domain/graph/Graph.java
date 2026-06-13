@@ -31,6 +31,12 @@ public class Graph {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "analyzed_file_count")
+    private Integer analyzedFileCount;
+
+    @Column(name = "total_file_count")
+    private Integer totalFileCount;
+
     // 프로젝트 ID와 분석 ID로 새 그래프 인스턴스 생성
     public static Graph create(UUID projectId, UUID analysisId) {
         Graph graph = new Graph();
@@ -45,6 +51,12 @@ public class Graph {
     // updatedAt 타임스탬프를 현재 시각으로 갱신
     public void touch() {
         this.updatedAt = Instant.now();
+    }
+
+    // 분석된 파일 수와 전체 대상 파일 수 기록 — 대형 레포 절단 안내용
+    public void recordFileCounts(int analyzed, int total) {
+        this.analyzedFileCount = analyzed;
+        this.totalFileCount = total;
     }
 
     // UUID를 GraphId Value Object로 변환하여 반환

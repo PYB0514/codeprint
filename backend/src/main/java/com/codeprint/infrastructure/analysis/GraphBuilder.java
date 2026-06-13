@@ -21,7 +21,13 @@ public class GraphBuilder {
 
     // 분석된 파일 목록으로 그래프와 노드/엣지를 생성하여 저장
     public Graph build(UUID projectId, UUID analysisId, List<ParsedFile> parsedFiles) {
+        return build(projectId, analysisId, parsedFiles, parsedFiles.size());
+    }
+
+    // 전체 대상 파일 수 포함 빌드 — MAX_FILES 절단 시 totalFileCount가 분석 파일 수보다 큼
+    public Graph build(UUID projectId, UUID analysisId, List<ParsedFile> parsedFiles, int totalFileCount) {
         Graph graph = Graph.create(projectId, analysisId);
+        graph.recordFileCounts(parsedFiles.size(), totalFileCount);
         graphRepository.save(graph);
 
         UUID graphId = graph.getId();

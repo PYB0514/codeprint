@@ -32,7 +32,7 @@ public class LocalAnalyzer {
         SourceFileWalker walker = new SourceFileWalker();
         StaticCodeAnalyzer analyzer = new StaticCodeAnalyzer();
 
-        List<Path> files = walker.walk(rootDir);
+        List<Path> files = walker.walk(rootDir).files();
         System.out.println("소스 파일 수: " + files.size());
 
         UUID graphId = UUID.randomUUID();

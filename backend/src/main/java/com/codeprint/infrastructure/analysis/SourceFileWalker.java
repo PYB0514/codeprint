@@ -20,17 +20,18 @@ public class SourceFileWalker {
 
     private static final int MAX_FILES = 500;
 
-    // 레포 루트에서 지원 언어 소스 파일을 최대 500개 수집
-    public List<Path> walk(Path repoRoot) throws IOException {
+    // 레포 루트에서 지원 언어 소스 파일을 최대 500개 수집 — 전체 대상 수를 함께 반환 (절단 감지)
+    public WalkResult walk(Path repoRoot) throws IOException {
         try (Stream<Path> stream = Files.walk(repoRoot)) {
-            return stream
+            List<Path> eligible = stream
                     .filter(Files::isRegularFile)
                     .filter(p -> !isInSkipDir(repoRoot, p))
                     .filter(p -> LanguageDetector.detect(p.getFileName().toString())
                             .map(LanguageDetector::isSupported)
                             .orElse(false))
-                    .limit(MAX_FILES)
                     .toList();
+            List<Path> files = eligible.size() > MAX_FILES ? eligible.subList(0, MAX_FILES) : eligible;
+            return new WalkResult(files, eligible.size());
         }
     }
 
