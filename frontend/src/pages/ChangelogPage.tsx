@@ -11,6 +11,17 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.72.2',
+    date: '2026-06-13',
+    title: 'Cross-Domain 호출 경고 오탐 제거 — 정확도 대폭 개선',
+    type: 'fix',
+    items: [
+      { category: '경고', desc: '정규식 분석기가 클래스명 없는 함수 호출(get·add·save·findById·of 등)을 엉뚱한 도메인 파일로 오추적해 "Cross-Domain 직접 호출" 경고가 대량 오탐되던 문제 수정 — getter/setter·JPA·JDK 컬렉션·Optional 메서드를 경고 대상에서 제외' },
+      { category: '경고', desc: '동일한 함수명이 여러 도메인에 존재할 때는 호출 대상을 신뢰할 수 없으므로 Cross-Domain 경고에서 제외 — 실제 경계 위반은 import 기반 경고가 계속 잡음' },
+      { category: '경고', desc: '테스트 코드(src/test, __tests__, *.test/*.spec)의 호출은 아키텍처 경고 대상에서 제외' },
+    ],
+  },
+  {
     version: 'v0.72.1',
     date: '2026-06-13',
     title: '도메인 뷰 분류 정확도 개선 — 컨트롤러를 올바른 도메인에 귀속',

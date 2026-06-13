@@ -322,6 +322,17 @@ public class GraphWarningService {
         "defaultStyle", "empty", "none", "zero"
     );
 
+    // JDK 컬렉션·Optional 메서드 — JDK 타입에서 호출되어 bare-name으로 오추적됨.
+    // detectCrossDomainFunctionCall 전용 — detectDeadCode가 쓰는 FRAMEWORK_CALL_NAMES와 분리해 dead-code 탐지에는 영향 없음.
+    // map/filter/merge 등 도메인 메서드일 수 있는 Stream 변환 동사는 제외(오탐 회피보다 실제 메서드 보존 우선).
+    private static final Set<String> JDK_COLLECTION_CALL_NAMES = Set.of(
+        "get", "set", "add", "addAll", "put", "putAll", "remove", "removeAll",
+        "contains", "containsKey", "clear", "size", "isEmpty", "keySet", "values",
+        "entrySet", "stream", "forEach", "orElse", "orElseGet", "orElseThrow",
+        "ifPresent", "getOrDefault", "computeIfAbsent", "anyMatch", "allMatch",
+        "noneMatch", "findFirst", "toList"
+    );
+
     // getter/setter·Spring 콜백·JPA 파생쿼리·생성자 패턴 — 정적 분석으로 호출 추적 불가
     private static boolean isFrameworkCallPattern(String name) {
         if (name == null || name.isEmpty()) return false;
@@ -454,6 +465,15 @@ public class GraphWarningService {
             nameMap.put(n.getId(), n.getName());
         }
 
+        // 함수명 → 등장 도메인 집합 — 동일 이름이 2개 이상 도메인에 있으면 bare-name 해석이 모호 → 오탐 제외용
+        Map<String, Set<String>> funcNameToDomains = new HashMap<>();
+        for (Node n : nodes) {
+            if (n.getType() != NodeType.FUNCTION) continue;
+            String domain = extractBoundedContext(n.getFilePath() != null ? n.getFilePath() : "");
+            if (domain == null) continue;
+            funcNameToDomains.computeIfAbsent(n.getName(), k -> new HashSet<>()).add(domain);
+        }
+
         List<Map<String, Object>> warnings = new ArrayList<>();
         for (Edge e : edges) {
             if (e.getType() != EdgeType.FUNCTION_CALL) continue;
@@ -462,6 +482,8 @@ public class GraphWarningService {
 
             // infrastructure/ 레이어는 여러 도메인을 브릿지하는 역할 — cross-domain 허용
             if (srcPath.contains("/infrastructure/") || tgtPath.contains("/infrastructure/")) continue;
+            // 테스트 코드는 아키텍처 위반 대상이 아님
+            if (isTestPath(srcPath) || isTestPath(tgtPath)) continue;
 
             String srcDomain = extractBoundedContext(srcPath);
             String tgtDomain = extractBoundedContext(tgtPath);
@@ -475,6 +497,14 @@ public class GraphWarningService {
 
             String srcName = nameMap.getOrDefault(e.getSourceNodeId(), srcDomain);
             String tgtName = nameMap.getOrDefault(e.getTargetNodeId(), tgtDomain);
+
+            // 정규식 분석기가 클래스 한정자 없는 호출(get/save/of 등)을 임의 파일로 오추적 — getter/setter·JPA·팩토리·JDK 컬렉션 패턴 제외
+            if (FRAMEWORK_CALL_NAMES.contains(tgtName) || JDK_COLLECTION_CALL_NAMES.contains(tgtName)
+                    || isFrameworkCallPattern(tgtName)) continue;
+            // 동일 함수명이 2개 이상 도메인에 존재하면 bare-name 해석을 신뢰할 수 없어 제외 (오탐 회피 우선).
+            // 트레이드오프: 동명 메서드를 쓰는 실제 cross-domain 호출은 놓칠 수 있음 — application→domain 위반은 IMPORT 기반 CROSS_CONTEXT_IMPORT가 보완 검출.
+            Set<String> domainsWithName = funcNameToDomains.get(tgtName);
+            if (domainsWithName != null && domainsWithName.size() >= 2) continue;
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "CROSS_DOMAIN_CALL");
             w.put("severity", "MEDIUM");
@@ -487,6 +517,15 @@ public class GraphWarningService {
             warnings.add(w);
         }
         return warnings;
+    }
+
+    // 테스트 소스 경로 여부 — src/test(JVM), __tests__, *.test.*, *.spec.*(JS/TS) 패턴.
+    // "/test/" 단독 매칭은 "test"라는 이름의 비즈니스 도메인(예: 시험·퀴즈)을 오인하므로 "/src/test/"로 한정.
+    private static boolean isTestPath(String path) {
+        if (path == null) return false;
+        return path.contains("/src/test/") || path.contains("\\src\\test\\")
+                || path.contains("/__tests__/") || path.contains("\\__tests__\\")
+                || path.contains(".test.") || path.contains(".spec.");
     }
 
     // 파일 경로에서 Bounded Context 이름 추출 (domain/X, application/X, infrastructure/X → X)

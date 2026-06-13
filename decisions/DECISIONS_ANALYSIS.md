@@ -22,6 +22,20 @@
 - MEDIUM: CROSS_DOMAIN_CALL, ASYNC_SELF_CALL, MISSING_CONVERTER_MIGRATION, BROKEN_INTERFACE_CHAIN — 다음 스프린트
 - LOW: DEAD_CODE, HIGH_FAN_OUT — 참고용
 
+### C-14: CROSS_DOMAIN_CALL 오탐 제거 — detector 레벨 필터링 (2026-06-13)
+
+**문제.** Codeprint 자체 분석 시 `CROSS_DOMAIN_CALL`이 135건(production 리포트 기준 181건) 발생, 거의 전부 오탐. `getNodes`/`getProjectId`(getter), `findById`/`findUsernameById`(JPA), `save`/`of`(팩토리), `get`/`add`(JDK 컬렉션) 같은 흔한 메서드가 엉뚱한 도메인으로 연결됨. CLAUDE.md §10은 Codeprint 자체에서 이 경고가 0이어야 한다고 규정.
+
+**근본 원인.** `GraphBuilder`의 FUNCTION_CALL 해석(`GraphBuilder.java:130-152`)이 클래스 한정자 없는 호출(`calleeEntry`에 `::` 없음)을 같은 이름 함수를 가진 첫 파일로 임의 연결. `Map.get`/`List.add`/`Optional.get` 등 JDK 호출이 우연히 동명 함수가 있는 도메인으로 매칭됨.
+
+**선택지.**
+- (A) `GraphBuilder`에서 bare-name 엣지 생성 자체를 중단 — 흐름 재생(FUNCTION_CALL 엣지 사용)에 영향, 회귀 위험 큼. 탈락.
+- (B) detector(`detectCrossDomainFunctionCall`)에서만 필터링 — 엣지 생성·흐름 재생 영향 0, 경고만 정확해짐. **채택.** `detectDbLayerBypass`가 이미 "FUNCTION_CALL은 정규식 분석기가 오추적하므로 IMPORT만 신뢰"하는 동일 전례 있음.
+
+**결과.** detector에 3개 필터 추가 — ① 테스트 소스 경로 제외(`isTestPath`, `/src/test/`·`__tests__`·`*.test`/`*.spec`로 한정해 "test"라는 비즈니스 도메인 오인 방지), ② callee가 framework 패턴(`FRAMEWORK_CALL_NAMES`+`isFrameworkCallPattern`)이거나 JDK 컬렉션/Optional 메서드(`JDK_COLLECTION_CALL_NAMES`)면 제외, ③ 동일 함수명이 2개 이상 도메인에 존재하면 bare-name 모호로 제외. 검증: `analyzeLocal` 기준 135 → 27 → **0**. 회귀 테스트 5종 추가(`GraphWarningServiceTest`).
+
+**적대적 리뷰 반영(3-렌즈).** ⓐ JDK 이름을 공유 `FRAMEWORK_CALL_NAMES`에 넣으면 같은 set을 쓰는 `detectDeadCode`가 `add`/`get`/`map` 명명 도메인 메서드를 dead-code에서 누락 → **별도 set `JDK_COLLECTION_CALL_NAMES`로 분리**해 dead-code 탐지 완전 불변. ⓑ `map`/`filter`/`collect`/`merge`/`flatMap`은 도메인 메서드일 수 있고 Codeprint 0 달성에 불필요 → 제외. ⓒ trade-off 정직화: 이 필터는 정밀도(오탐 0) 우선이며, **동명·framework명 메서드를 쓰는 실제 cross-domain 호출은 놓칠 수 있다.** `CROSS_CONTEXT_IMPORT`는 application→domain IMPORT만 보완 검출하고 domain→domain·application→application은 커버하지 않으므로 "신호 손실 없음"은 과장 — bare-name 해석 자체가 신뢰 불가한 영역을 정리한 것으로 이해해야 함. domain→domain 등 경계 확장 검출은 별도 작업(백로그).
+
 ## 버그
 
 ### B-8: FUNCTION_CALL edgeIdentifier callee 파일명 누락 (2026-06-13)
