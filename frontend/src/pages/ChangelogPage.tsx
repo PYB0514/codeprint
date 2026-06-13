@@ -11,6 +11,18 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.72.1',
+    date: '2026-06-13',
+    title: '도메인 뷰 분류 정확도 개선 — 컨트롤러를 올바른 도메인에 귀속',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: '도메인 뷰에서 interfaces/api 폴더의 컨트롤러들이 모두 "api"라는 가짜 도메인 하나로 묶이던 문제 수정 — GraphController는 graph, UserController는 user처럼 파일명 기준으로 실제 도메인에 배치' },
+      { category: '그래프', desc: '프론트엔드 페이지·컴포넌트도 도메인에 귀속 — ShareGraphPage→graph, TeamsPage→team, MessagesPage→message, CreateProjectModal→project 등 (단·복수형, Page/Panel/Modal 등 UI 접미사 인식)' },
+      { category: '그래프', desc: '도메인을 식별할 수 없는 파일이 "common"에 과도하게 쌓이던 현상 완화 — 경로/파일명이 실제 존재하는 도메인에 매칭될 때만 적용해 파편화 없이 정확도만 향상' },
+      { category: '그래프', desc: '도메인 뷰에서 그룹이 한 줄로만 배치돼 박스가 가로로 끝없이 길어지던 문제 수정 — 그룹을 그리드로 줄바꿈해 화면에 맞는 직사각형으로 표시' },
+    ],
+  },
+  {
     version: 'v0.72.0',
     date: '2026-06-13',
     title: '경고 엔진 일반화 — 비DDD 프로젝트 지원 + severity 구분',

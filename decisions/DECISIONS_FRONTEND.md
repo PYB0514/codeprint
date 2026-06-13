@@ -2,6 +2,31 @@
 
 ---
 
+## 도메인 뷰 분류 — 컨트롤러가 가짜 "api" 도메인에 몰리던 문제 (2026-06-13)
+
+**문제.** 도메인 뷰에서 `interfaces/api/` 폴더의 컨트롤러 29개가 전부 "api"라는 단일 도메인 박스에 묶이고, 그 외 다수 파일은 "common"에 쌓여 도메인 구분이 무의미했다.
+
+**원인.** `extractDomain`이 "레이어 키워드 다음 첫 서브폴더 = 도메인" 규칙만 사용. `interfaces/api/GraphController.java`는 레이어가 `interfaces`, 첫 서브폴더가 `api`이므로 도메인이 `api`로 판정됨. 그러나 `api`는 도메인이 아니라 전달 방식(기술 분류)일 뿐이다. 원작자는 파일명 기반 추출이 파편화를 유발한다는 이유로 의도적으로 배제했었다.
+
+**해결 방법 선택.**
+- 탈락 1: `api`를 NON_DOMAIN_FOLDERS에 넣기만 함 → 컨트롤러가 전부 `common`으로 빠져 오히려 악화.
+- 탈락 2: 파일명에서 무조건 도메인 추출 → `NodeStyleController`→nodestyle, `UserFollowController`→userfollow 식으로 파편화(원작자가 우려한 문제 재현).
+- 채택: **2-pass 화이트리스트 매칭.** ①경로로 확실히 식별되는 도메인 집합(`buildKnownDomains`)을 먼저 수집 → ②구조 폴더만 있는 파일은 파일명에서 기술 접미사(Controller/Service 등)를 떼고 PascalCase 토큰을 누적 매칭하되, **알려진 도메인에 일치할 때만** 채택. 일치 없으면 `common`. 파편화 없이 정확도만 확보.
+
+**결과.** 실제 백엔드 219개 파일 검증: "api" 도메인 완전 소멸, 컨트롤러 29개 중 25개가 올바른 바운디드 컨텍스트(graph/community/user/analysis 등)로 귀속. 나머지 4종(Admin/Auth/Dev/Feedback/Mcp/GlobalExceptionHandler 등)은 대응 컨텍스트가 없어 `common` 유지 — DDD상 올바른 분류. `extractDomain`은 `knownDomains` 인자가 없으면 기존 동작(파일명 추론 비활성)이라 하위 호환. GraphPage의 탭 필터·범례·색상 6개 호출부도 동일 `knownDomains`를 공유시켜 레이아웃과 결과 일치 보장.
+
+**후속 — 프론트 페이지/컴포넌트까지 귀속 확장.** 위 수정 직후 사용자 요청: "common의 page 같은 것도 도메인에 붙일 수 없나?" 프론트엔드는 `pages/`·`components/`가 평평한 구조라 경로상 도메인 신호가 없어 대부분 `common`에 남았다.
+- 핵심 안전성: **파일명 토큰을 "이미 알려진 도메인 집합"에만 매칭** → 새 도메인을 만들지 않으므로 원작자가 우려한 파편화가 원천적으로 불가능. 이 불변식 덕에 매칭을 공격적으로 해도 안전.
+- 3가지 보강: ①UI 래퍼 접미사(Page/View/Modal/Panel/Section/Card/Layout 등) 제거 추가, ②단·복수형 흡수(`resolveDomain` — teams→team, messages→message), ③선두 누적 매칭 실패 시 개별 토큰 스캔(ShareGraphPage→graph, CreateProjectModal→project).
+- 결과(백엔드+프론트 267개 파일 검증): `common` 42개로 수렴, 남은 건 전부 도메인 무관(인프라 config, 앱 진입점, AppHeader/Footer/WarningPanel 같은 전역 chrome, Login/Settings/Privacy 등 도메인 없는 페이지). 오귀속 0건.
+
+**후속 2 — 도메인 박스가 가로로 무한정 길어지던 레이아웃.** 사용자 스크린샷: `common`처럼 그룹이 많은 도메인이 한 줄짜리 초장방형 스트립으로 표시됨.
+- 원인: `buildDomainPositions`의 도메인 내부 레이아웃이 그룹을 단일 가로 행에 무한 배치(`x += l.w + GROUP_GAP`, y 고정). PR #144 "1열 우측정렬" 설계의 부작용 — 그룹이 적을 땐 괜찮지만 common(그룹 ~18개)에서 폭이 2600px 이상으로 폭주.
+- 해결: 그룹을 그리드로 줄바꿈. 목표 행 수를 `round(√(n/2.5))`로 잡아 가로로 약간 넓은 직사각형을 만들고, 누적 폭이 `maxRowW`를 넘으면 다음 행으로. (계수 2.5는 그래프가 세로보다 가로로 읽기 편한 점 반영.)
+- 검증: 그룹 수별 시뮬레이션 — 3개→1행(448×148), 18개→3행(880×356), 42개→5행(1456×564). 모두 화면 친화적 비율로 수렴.
+
+---
+
 ## 버그
 
 ### GraphPage fetchGraph 무한 재요청 루프 (2026-06-11)

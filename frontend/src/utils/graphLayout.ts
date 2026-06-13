@@ -129,10 +129,72 @@ const NON_DOMAIN_FOLDERS = new Set([
   'persistence', 'repository', 'repositories',
   'com', 'org', 'net', 'io', 'co', 'kr',
   'util', 'utils', 'helper', 'helpers', 'lib', 'libs', 'generated',
+  // 기술 분류용 구조 폴더 — 도메인이 아니라 전달 방식(예: interfaces/api)일 뿐
+  'api', 'rest', 'web', 'websocket', 'ws', 'controller', 'controllers',
+  'endpoint', 'endpoints', 'graphql', 'v1', 'v2', 'handler', 'handlers',
 ])
 
+// 도메인 판별 시 제거할 기술 접미사 (예: GraphController → Graph, ShareGraphPage → ShareGraph)
+// 백엔드 클래스 접미사 + 프론트 UI 래퍼 접미사 모두 포함
+const CLASS_SUFFIXES = [
+  'RestController', 'Controller', 'ServiceImpl', 'Service', 'RepositoryImpl',
+  'Repository', 'Configuration', 'Config', 'Entity', 'Request', 'Response',
+  'Mapper', 'Handler', 'Facade', 'Factory', 'Provider', 'Adapter', 'Port',
+  'Exception', 'Listener', 'Event', 'Validator', 'Filter', 'Resolver',
+  'Converter', 'Manager', 'Runner', 'Scheduler', 'Client', 'Gateway',
+  'Command', 'Query', 'Dto', 'Vo', 'Impl',
+  'Page', 'View', 'Screen', 'Modal', 'Panel', 'Section', 'Card',
+  'Banner', 'Overlay', 'Tour', 'Layout', 'Context', 'Hook', 'Form',
+  'Header', 'Footer',
+]
+
+// 토큰이 알려진 도메인인지 — 단/복수형 차이를 흡수 (예: teams→team, messages→message)
+function resolveDomain(token: string, knownDomains: Set<string>): string | null {
+  if (knownDomains.has(token)) return token
+  if (token.endsWith('s') && knownDomains.has(token.slice(0, -1))) return token.slice(0, -1)
+  if (token.endsWith('es') && knownDomains.has(token.slice(0, -2))) return token.slice(0, -2)
+  return null
+}
+
+// 파일명에서 도메인을 유추 — 알려진 도메인 집합에 매칭될 때만 반환 (없는 도메인을 만들지 않으므로 파편화 없음)
+function domainFromFilename(filePath: string, knownDomains: Set<string>): string | null {
+  const fileName = filePath.replace(/\\/g, '/').split('/').pop() ?? ''
+  let base = fileName.replace(/\.[^.]+$/, '')
+  for (const suf of CLASS_SUFFIXES) {
+    if (base.length > suf.length && base.endsWith(suf)) { base = base.slice(0, -suf.length); break }
+  }
+  const tokens = base.replace(/([a-z0-9])([A-Z])/g, '$1 $2').split(/[\s_-]+/).filter(Boolean).map(t => t.toLowerCase())
+
+  // 1. 선두 토큰부터 누적 매칭 — 복합어 도메인 우선 (예: UserAccount → useraccount)
+  let best: string | null = null
+  let acc = ''
+  for (const t of tokens) {
+    acc += t
+    const m = resolveDomain(acc, knownDomains)
+    if (m) best = m
+  }
+  if (best) return best
+
+  // 2. 선두 매칭 실패 시 개별 토큰에서 도메인 탐색 (예: ShareGraphPage → graph, CreateProjectModal → project)
+  for (const t of tokens) {
+    const m = resolveDomain(t, knownDomains)
+    if (m) return m
+  }
+  return null
+}
+
+// 경로 기반으로 확실히 식별되는 도메인 집합을 수집 — 파일명 유추의 화이트리스트로 사용
+export function buildKnownDomains(filePaths: string[], commonPrefix: string): Set<string> {
+  const set = new Set<string>()
+  filePaths.forEach((p) => {
+    const d = extractDomain(p, commonPrefix)
+    if (d !== 'common') set.add(d)
+  })
+  return set
+}
+
 //파일 경로에서 도메인을 동적으로 추출 — 어떤 프로젝트 구조에서도 작동
-export function extractDomain(filePath: string, commonPrefix: string): string {
+export function extractDomain(filePath: string, commonPrefix: string, knownDomains?: Set<string>): string {
   const rel = filePath.startsWith(commonPrefix) ? filePath.slice(commonPrefix.length) : filePath
   const parts = rel.replace(/\\/g, '/').split('/').filter(Boolean)
 
@@ -150,6 +212,13 @@ export function extractDomain(filePath: string, commonPrefix: string): string {
       if (!NON_DOMAIN_FOLDERS.has(sub) && sub.length > 1) return sub
     }
     break
+  }
+
+  // 2. 구조 폴더(interfaces/api 등)만 있어 경로로 도메인을 못 찾으면 파일명에서 유추
+  //    — 알려진 도메인에 매칭될 때만. 예: GraphController → graph
+  if (knownDomains) {
+    const fromName = domainFromFilename(filePath, knownDomains)
+    if (fromName) return fromName
   }
 
   // 레이어 키워드 기반 구조가 없으면 common으로 분류 — 파일명 기반 추출은 파편화 유발
@@ -188,7 +257,8 @@ export function buildDomainColorMap(
 function buildDomainPositions(
   groups: Map<string, RawNode[]>,
   groupLayouts: Map<string, { files: Array<{ file: RawNode; x: number; y: number }>; w: number; h: number }>,
-  commonPrefix: string
+  commonPrefix: string,
+  knownDomains: Set<string>
 ): {
   positions: Map<string, { x: number; y: number }>
   domainBounds: Map<string, { x: number; y: number; w: number; h: number; domain: string }>
@@ -201,7 +271,7 @@ function buildDomainPositions(
   // 그룹 → 도메인 매핑 (그룹에 속한 첫 번째 파일의 경로로 판단)
   const groupDomain = new Map<string, string>()
   groups.forEach((files, key) => {
-    const domain = files.length > 0 ? extractDomain(files[0].filePath, commonPrefix) : 'common'
+    const domain = files.length > 0 ? extractDomain(files[0].filePath, commonPrefix, knownDomains) : 'common'
     groupDomain.set(key, domain)
   })
 
@@ -222,16 +292,31 @@ function buildDomainPositions(
       return (LAYER_COLUMN[layerA] ?? 99) - (LAYER_COLUMN[layerB] ?? 99)
     })
 
+    // 그룹을 한 줄에 몰지 않고 그리드로 줄바꿈 — 도메인 박스가 가로로 무한정 길어지는 것 방지
+    // 가로로 약간 넓은 직사각형이 되도록 목표 행 수를 √(n/2.5)로 잡고 그 너비를 넘으면 줄바꿈
+    const widths = sorted.map((k) => groupLayouts.get(k)!.w)
+    const widest = widths.length ? Math.max(...widths) : 0
+    const sumW = widths.reduce((s, w) => s + w + GROUP_GAP, 0)
+    const desiredRows = Math.max(1, Math.round(Math.sqrt(sorted.length / 2.5)))
+    const maxRowW = Math.max(widest, sumW / desiredRows)
+
     const offsets = new Map<string, { x: number; y: number }>()
-    let x = DOMAIN_PAD, maxH = 0
+    const top = DOMAIN_PAD + DOMAIN_LABEL_H
+    let x = DOMAIN_PAD, y = top, rowH = 0, contentW = 0
     sorted.forEach((key) => {
       const l = groupLayouts.get(key)!
-      offsets.set(key, { x, y: DOMAIN_PAD + DOMAIN_LABEL_H })
+      if (x > DOMAIN_PAD && x + l.w > DOMAIN_PAD + maxRowW) {
+        x = DOMAIN_PAD
+        y += rowH + GROUP_GAP
+        rowH = 0
+      }
+      offsets.set(key, { x, y })
       x += l.w + GROUP_GAP
-      maxH = Math.max(maxH, l.h)
+      contentW = Math.max(contentW, x - GROUP_GAP)
+      rowH = Math.max(rowH, l.h)
     })
-    const totalW = x - GROUP_GAP + DOMAIN_PAD
-    const totalH = DOMAIN_LABEL_H + DOMAIN_PAD + maxH + DOMAIN_PAD
+    const totalW = contentW + DOMAIN_PAD
+    const totalH = (y + rowH) + DOMAIN_PAD
 
     domainInternalLayouts.set(_domain, { w: totalW, h: totalH, groupOffsets: offsets })
   })
@@ -380,6 +465,9 @@ export function buildLayout(
 
   const commonPrefix = findCommonPrefix(fileNodes.map((f) => f.filePath.replace(/\\/g, '/')))
 
+  // 경로로 확실히 식별되는 도메인 집합 — interfaces/api 컨트롤러를 파일명으로 올바른 도메인에 귀속
+  const knownDomains = buildKnownDomains(fileNodes.map((f) => f.filePath), commonPrefix)
+
   // 파일별 함수 목록
   const funcsByFile = new Map<string, RawNode[]>()
   fileNodes.forEach((f) => funcsByFile.set(f.id, []))
@@ -444,7 +532,7 @@ export function buildLayout(
     groups.forEach((files, key) => {
       const byDomain = new Map<string, RawNode[]>()
       files.forEach(f => {
-        const d = extractDomain(f.filePath, commonPrefix)
+        const d = extractDomain(f.filePath, commonPrefix, knownDomains)
         if (!byDomain.has(d)) byDomain.set(d, [])
         byDomain.get(d)!.push(f)
       })
@@ -531,7 +619,7 @@ export function buildLayout(
   let groupPositions: Map<string, { x: number; y: number }>
   let domainBoundsResult: Map<string, { x: number; y: number; w: number; h: number; domain: string }> | undefined
   if (layoutPreset === 'domain') {
-    const domainResult = buildDomainPositions(effectiveGroups, effectiveGroupLayouts, commonPrefix)
+    const domainResult = buildDomainPositions(effectiveGroups, effectiveGroupLayouts, commonPrefix, knownDomains)
     groupPositions = domainResult.positions
     domainBoundsResult = domainResult.domainBounds
   } else {
@@ -648,7 +736,7 @@ export function buildLayout(
     let groupPos: { x: number; y: number }
 
     if (layoutPreset === 'domain' && domainBoundsResult) {
-      const fileDomain = groupFiles.length > 0 ? extractDomain(groupFiles[0].filePath, commonPrefix) : 'common'
+      const fileDomain = groupFiles.length > 0 ? extractDomain(groupFiles[0].filePath, commonPrefix, knownDomains) : 'common'
       const domainBounds = domainBoundsResult.get(fileDomain)
       if (domainBounds) {
         parentSectionId = `domain-section-${fileDomain}`
@@ -687,7 +775,7 @@ export function buildLayout(
       const filePos = isDomainMode
         ? { x: groupPos!.x + GROUP_PAD + x, y: groupPos!.y + GROUP_HEADER + GROUP_PAD + y }
         : { x: GROUP_PAD + x, y: GROUP_HEADER + GROUP_PAD + y }
-      const fileDomain = extractDomain(file.filePath, commonPrefix)
+      const fileDomain = extractDomain(file.filePath, commonPrefix, knownDomains)
       const palette = LAYER_PALETTE[layer] ?? DEFAULT_LAYER_PALETTE
       result.push({
         id: file.id,

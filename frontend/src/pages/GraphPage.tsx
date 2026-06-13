@@ -17,7 +17,7 @@ import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
 import { buildLayout, downloadTreeText, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry, ColumnInfo } from '../utils/graphLayout'
-import { extractDomain, buildDomainColorMap } from '../utils/graphLayout'
+import { extractDomain, buildDomainColorMap, buildKnownDomains } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
@@ -447,6 +447,12 @@ function GraphPageInner() {
     return paths.reduce((a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i++; return a.slice(0, i) }, paths[0])
   }, [rawNodes])
 
+  // 경로로 식별되는 도메인 집합 — extractDomain의 파일명 유추 화이트리스트 (레이아웃과 동일 결과 보장)
+  const knownDomains = useMemo(
+    () => buildKnownDomains(rawNodes.filter(n => n.type === 'FILE').map(n => n.filePath), commonPrefix),
+    [rawNodes, commonPrefix]
+  )
+
   const [hiddenNodeTypes, setHiddenNodeTypes] = useState<Set<string>>(new Set())
   const [nodeSearchQuery, setNodeSearchQuery] = useState('')
   const [counts, setCounts] = useState({ files: 0, funcs: 0, edges: 0 })
@@ -673,7 +679,7 @@ function GraphPageInner() {
 
   // 도메인 범례 클릭 — 해당 도메인의 흐름 재생 진입점 목록을 사이드바에 표시
   const openDomainFlows = useCallback((domain: string, color: string) => {
-    const domainNodes = rawNodes.filter(n => extractDomain(n.filePath, commonPrefix) === domain)
+    const domainNodes = rawNodes.filter(n => extractDomain(n.filePath, commonPrefix, knownDomains) === domain)
     const domainNodeIds = new Set(domainNodes.map(n => n.id))
     const entryPoints = [
       ...domainNodes.filter(n => n.type === 'API_ENDPOINT'),
@@ -697,7 +703,7 @@ function GraphPageInner() {
     })
     setSidebar({ kind: 'domain-summary', domainName: domain, color, flows })
     setRightCollapsed(false)
-  }, [rawNodes, rawEdgesCache, commonPrefix])
+  }, [rawNodes, rawEdgesCache, commonPrefix, knownDomains])
 
   // 파일 연결 보기 — 사이드바 오픈 콜백
   const openFileSidebar = useCallback((data: FileSidebarData) => {
@@ -1727,7 +1733,7 @@ function GraphPageInner() {
     if (node.type === 'sectionNode' && layoutPreset === 'domain') {
       const domainName = (node.data?.layer as string ?? '').toLowerCase()
       const palette = domainColorMap.get(domainName) ?? { color: '#6b7280' }
-      const domainNodes = rawNodes.filter(n => extractDomain(n.filePath, commonPrefix) === domainName)
+      const domainNodes = rawNodes.filter(n => extractDomain(n.filePath, commonPrefix, knownDomains) === domainName)
       const domainNodeIds = new Set(domainNodes.map(n => n.id))
       const entryPoints2 = [
         ...domainNodes.filter(n => n.type === 'API_ENDPOINT'),
@@ -1791,7 +1797,7 @@ function GraphPageInner() {
     }
 
     openFuncNode(node.id)
-  }, [rawNodes, rawEdgesCache, commonPrefix, layoutPreset, openFuncNode, startPlayback, resetPlayback])
+  }, [rawNodes, rawEdgesCache, commonPrefix, knownDomains, layoutPreset, openFuncNode, startPlayback, resetPlayback])
 
   // 노드 배경색 변경 — PUT API 호출 후 즉시 UI 반영
   const handleNodeColorChange = useCallback(async (nodeId: string, bgColor: string) => {
@@ -1821,11 +1827,11 @@ function GraphPageInner() {
         return parts.some(p => p.toLowerCase() === activeDomainTab)
       } else {
         // 도메인형: extractDomain 기준
-        return extractDomain(n.filePath, commonPrefix) === activeDomainTab
+        return extractDomain(n.filePath, commonPrefix, knownDomains) === activeDomainTab
       }
     })
     return new Set(visibleRaw.map(n => n.id))
-  }, [activeDomainTab, rawNodes, commonPrefix, layoutPreset])
+  }, [activeDomainTab, rawNodes, commonPrefix, knownDomains, layoutPreset])
 
   const displayNodes = useMemo(() => {
     let result = showDomainBoxes ? nodes : nodes.filter(n => n.type !== 'sectionNode')
@@ -1887,7 +1893,7 @@ function GraphPageInner() {
       // 도메인별 노드 수 계산 — 최소 3개 이상인 도메인만 탭으로 노출 (파일명 기반 파편화 방지)
       const domainCounts = new Map<string, number>()
       rawNodes.forEach(n => {
-        const d = extractDomain(n.filePath, commonPrefix)
+        const d = extractDomain(n.filePath, commonPrefix, knownDomains)
         domainCounts.set(d, (domainCounts.get(d) ?? 0) + 1)
       })
       const MIN_NODES = 3
@@ -1900,13 +1906,13 @@ function GraphPageInner() {
           return a.localeCompare(b)
         })
     }
-  }, [rawNodes, commonPrefix, layoutPreset])
+  }, [rawNodes, commonPrefix, knownDomains, layoutPreset])
 
   // 도메인 색상 맵 — 발견된 도메인 이름으로 동적 생성
   const domainColorMap = useMemo(() => {
-    const domains = rawNodes.map(n => extractDomain(n.filePath, commonPrefix))
+    const domains = rawNodes.map(n => extractDomain(n.filePath, commonPrefix, knownDomains))
     return buildDomainColorMap(domains)
-  }, [rawNodes, commonPrefix])
+  }, [rawNodes, commonPrefix, knownDomains])
 
   // MiniMap 노드 색상 함수 — 인라인 선언 시 매 렌더 MiniMap 전체 재렌더 유발
   const minimapNodeColor = useCallback((n: Node) => {
