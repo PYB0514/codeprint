@@ -50,6 +50,18 @@
 
 **알려진 한계/후속.** `DonationApplicationService`(application/donation)도 `TossPaymentsService`를 concrete로 직접 주입하는 동일 종류 위반이 있으나 다른 컨텍스트라 본 PR 범위 밖 — `PaymentGatewayPort` 도입으로 donation은 영향 없음(concrete 주입 유지). 별도 정리 필요. DEAD_CODE가 5→6으로 늘었는데 새 항목 `confirmPayment`는 LocalAnalyzer의 단순 buildGraph가 인터페이스→구현 디스패치를 추적 못 해 생긴 false positive(기존 JPA `@Converter`·`monthlyPrice`와 동종) — 실제로 포트 경유 호출됨.
 
+## donation의 결제 게이트웨이 직접 의존 제거 — donation 전용 포트 (2026-06-14)
+
+**문제.** PR #252(payment)와 동일 종류의 잔존 위반. `DonationApplicationService`(application/donation)가 `infrastructure.payment.TossPaymentsService`를 concrete로 직접 주입(application→infrastructure 레이어 위반 + donation→payment 인프라 cross-context).
+
+**이유.** payment·donation 두 컨텍스트가 같은 외부 PG(토스) 승인을 사용한다. 외부 시스템 호출을 추상화하는 아웃바운드 포트로 의존을 역전해야 한다.
+
+**선택지.**
+- (A) donation 전용 포트 `domain/donation/port/PaymentGatewayPort` 신설, `TossPaymentsService`가 payment·donation 양쪽 포트를 모두 구현. 인터페이스가 중복되지만 각 바운디드 컨텍스트가 자기 아웃바운드 포트를 독립 소유 — §10 MSA-ready 원칙에 부합하고 컨텍스트별 진화 가능. **채택.**
+- (B) `PaymentGatewayPort`를 shared/로 승격해 양 컨텍스트가 공유. 중복은 없으나 아웃바운드 포트를 Shared Kernel에 두는 것은 비표준이고(공유 커널은 값객체·이벤트용), PR #252에서 만든 payment 포트를 이동해야 함. 탈락.
+
+**결과.** `domain/donation/port/PaymentGatewayPort`(payment의 것과 동일 시그니처) 신설, `TossPaymentsService`가 `implements PaymentGatewayPort, ...donation.port.PaymentGatewayPort`(동일 시그니처라 단일 `confirmPayment` @Override가 양쪽 충족). `DonationApplicationService`는 concrete 대신 donation 포트 주입. confirm 동작(멱등 `existsByOrderId` → return 포함) 보존. 검증: 컴파일·전체 테스트 green, analyzeLocal 경계 위반 0 유지(DEAD_CODE 6→7은 인터페이스 디스패치 false positive), 런타임 health UP + `GET /api/donations` 200(findAll E2E 동작)·confirm 302로 새 포트 와이어링 확인. 이로써 payment·donation 양쪽 모두 결제 게이트웨이를 포트 경유로 호출.
+
 ## freshness 엔드포인트 github_error 원인 분석 (2026-06-11)
 
 **문제.** `GET /api/projects/{id}/freshness`가 항상 `{"isOutdated":false,"reason":"github_error"}`를 반환해 "재분석 필요" 배너가 한 번도 뜨지 않았다.
