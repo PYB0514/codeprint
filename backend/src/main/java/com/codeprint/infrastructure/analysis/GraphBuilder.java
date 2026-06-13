@@ -328,6 +328,39 @@ public class GraphBuilder {
             }
         }
 
+        // raw SQL 문자열에서 추출한 테이블 접근 — DB_TABLE 노드 생성(ORM 미감지 테이블만) + DB_READ/WRITE 엣지
+        // rawSqlTableNodeIds: 테이블명(소문자) → 노드 ID (ORM 경유 이미 생성된 것 재사용)
+        Map<String, UUID> rawSqlTableNodeIds = new HashMap<>();
+        // ORM 경로로 이미 생성된 테이블 노드를 테이블명(소문자)으로 역인덱싱
+        for (Map.Entry<String, UUID> entry : entityClassToTableNodeId.entrySet()) {
+            rawSqlTableNodeIds.put(entry.getKey().toLowerCase(), entry.getValue());
+        }
+
+        for (ParsedFile pf : parsedFiles) {
+            if (pf.rawSqlAccesses().isEmpty()) continue;
+            UUID fileId = fileNodeIds.get(pf.filePath());
+            if (fileId == null) continue;
+            String fileBase = extractFileName(pf.filePath());
+
+            for (RawSqlAccess access : pf.rawSqlAccesses()) {
+                String tableName = access.tableName();
+                // 이미 ORM으로 생성된 테이블이면 재사용, 없으면 새로 생성
+                UUID tableNodeId = rawSqlTableNodeIds.computeIfAbsent(tableName, name -> {
+                    Node tableNode = Node.create(graphId, NodeType.DB_TABLE, name, pf.filePath(), pf.language());
+                    tableNode.updateMetadata(Map.of("source", "raw_sql"));
+                    graphRepository.saveNode(tableNode);
+                    return tableNode.getId();
+                });
+
+                EdgeType edgeType = access.isWrite() ? EdgeType.DB_WRITE : EdgeType.DB_READ;
+                String edgeId = fileBase + "-rawsql-" + edgeType.name().toLowerCase() + "-" + tableName;
+                if (!usedDbEdgeIds.contains(edgeId)) {
+                    usedDbEdgeIds.add(edgeId);
+                    graphRepository.saveEdge(Edge.create(graphId, edgeId, edgeType, fileId, tableNodeId));
+                }
+            }
+        }
+
         // 파일 간 INSTANTIATION 엣지 생성 — new ClassName() 패턴으로 인스턴스화된 클래스의 파일과 연결
         // 클래스명(확장자 제거 파일명) → 파일 노드 ID 인덱스
         Map<String, UUID> classNameToFileId = new HashMap<>();

@@ -1137,6 +1137,115 @@ class StaticCodeAnalyzerTest {
         assertThat(result.asyncMethods()).doesNotContain("syncHelper");
     }
 
+    // ── Phase B-9: raw SQL DB 감지 ────────────────────────────────────────
+
+    @Test
+    @DisplayName("Java JDBC raw SQL SELECT FROM에서 DB_TABLE READ 감지")
+    void Java_JDBC_SELECT_감지() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class UserDao {
+                    public User findById(long id) {
+                        String sql = "SELECT * FROM users WHERE id = ?";
+                        return jdbcTemplate.queryForObject(sql, rowMapper, id);
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.rawSqlAccesses()).anyMatch(a -> a.tableName().equals("users") && !a.isWrite());
+    }
+
+    @Test
+    @DisplayName("Go database/sql INSERT INTO에서 DB_TABLE WRITE 감지")
+    void Go_INSERT_INTO_감지() throws IOException {
+        Path file = tempDir.resolve("user_repo.go");
+        Files.writeString(file, """
+                package repo
+
+                func (r *UserRepo) Create(u *User) error {
+                    _, err := r.db.Exec("INSERT INTO users (name, email) VALUES (?, ?)", u.Name, u.Email)
+                    return err
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.rawSqlAccesses()).anyMatch(a -> a.tableName().equals("users") && a.isWrite());
+    }
+
+    @Test
+    @DisplayName("Python raw SQL UPDATE에서 WRITE 감지")
+    void Python_UPDATE_감지() throws IOException {
+        Path file = writePyFile("""
+                def update_user(conn, user_id, name):
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE users SET name = %s WHERE id = %s", (name, user_id))
+                    conn.commit()
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.rawSqlAccesses()).anyMatch(a -> a.tableName().equals("users") && a.isWrite());
+    }
+
+    @Test
+    @DisplayName("C# Dapper raw SQL SELECT에서 READ 감지")
+    void CSharp_Dapper_SELECT_감지() throws IOException {
+        Path file = tempDir.resolve("UserRepo.cs");
+        Files.writeString(file, """
+                public class UserRepo {
+                    public IEnumerable<User> GetAll() {
+                        return conn.Query<User>("SELECT * FROM users");
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.rawSqlAccesses()).anyMatch(a -> a.tableName().equals("users") && !a.isWrite());
+    }
+
+    @Test
+    @DisplayName("raw SQL DELETE FROM에서 WRITE 감지")
+    void DELETE_FROM_감지() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class CleanupJob {
+                    public void run() {
+                        jdbc.execute("DELETE FROM expired_tokens WHERE created_at < ?");
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.rawSqlAccesses()).anyMatch(a -> a.tableName().equals("expired_tokens") && a.isWrite());
+    }
+
+    @Test
+    @DisplayName("같은 파일에서 여러 테이블을 읽고 쓰는 raw SQL을 모두 감지한다")
+    void 복수_테이블_raw_SQL_감지() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class OrderDao {
+                    public void process() {
+                        jdbc.query("SELECT * FROM orders WHERE status = ?", rowMapper, "PENDING");
+                        jdbc.update("INSERT INTO payments (order_id, amount) VALUES (?, ?)", orderId, amount);
+                        jdbc.query("SELECT id FROM users WHERE active = 1", rowMapper2);
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.rawSqlAccesses())
+            .anyMatch(a -> a.tableName().equals("orders") && !a.isWrite())
+            .anyMatch(a -> a.tableName().equals("payments") && a.isWrite())
+            .anyMatch(a -> a.tableName().equals("users") && !a.isWrite());
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {

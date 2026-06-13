@@ -243,3 +243,19 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **감지 대상.** `schema.prisma`, `schema.sql`, `*.migration.sql`, JPA Entity 클래스.
 
 **이유.** 모든 프로젝트가 감지 가능한 스키마 파일을 갖고 있지 않다. 강제하면 분석 자체가 불가능해지므로 단계적 fallback이 필요.
+
+---
+
+### raw SQL DB 감지 방식 선택 (2026-06-13, Phase B-9)
+
+**문제.** ORM(JPA/@Entity, Prisma, SQLAlchemy, ActiveRecord 등)을 사용하지 않는 프로젝트(Go database/sql, C# Dapper/ADO.NET, Java JDBC 등)에서 DB_TABLE 노드와 DB_READ/WRITE 엣지가 0개였다. 코드에서 DB 접근이 일어나는 게 그래프에 전혀 보이지 않음.
+
+**이유.** 기존 `extractDbTables`는 ORM 어노테이션/상속 패턴만 감지. raw SQL 문자열 파싱 로직이 없었다.
+
+**결정: SQL 문자열 리터럴 스캔 방식.**
+- 대안 1 (채택): 파일 내 문자열 리터럴을 스캔해 `SELECT ... FROM`, `INSERT INTO`, `UPDATE ... SET`, `DELETE FROM` 패턴으로 테이블명 추출.
+  - 장점: 언어 무관, 구현 단순, 마이그레이션 불필요.
+  - 단점: 문자열 리터럴 내 SQL이 아닌 텍스트에서 오인식 가능성. 멀티라인 SQL 처리 범위 제한(리터럴 하나 내부만).
+- 대안 2 (탈락): AST 파싱으로 SQL 값을 정확히 추출. 구현 복잡도가 높고 현재 엔진이 정규식 기반이라 방향 불일치.
+
+**결과.** `extractRawSqlAccesses` 메서드 추가. `RawSqlAccess(tableName, isWrite)` 레코드로 결과 전달. `ParsedFile`에 `rawSqlAccesses` 필드 추가. `GraphBuilder`에서 ORM 기생성 테이블 재사용(중복 방지) + raw SQL 전용 테이블 노드 생성(metadata.source="raw_sql") + DB_READ/DB_WRITE 엣지 생성. TDD 6케이스(Java/Go/Python/C# × SELECT/INSERT/UPDATE/DELETE).

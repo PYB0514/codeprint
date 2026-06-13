@@ -33,8 +33,9 @@ public class StaticCodeAnalyzer {
         List<String> implementedInterfaces = extractImplementedInterfaces(content, language);
         List<String> asyncMethods = extractAsyncMethods(content, language);
         List<String> jsxComponents = extractJsxComponents(content, relativePath);
+        List<RawSqlAccess> rawSqlAccesses = extractRawSqlAccesses(content);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses);
     }
 
     // 파일 상단 첫 번째 주석 추출
@@ -672,6 +673,57 @@ public class StaticCodeAnalyzer {
         return Set.of("if", "else", "for", "while", "switch", "try", "catch", "return",
                 "new", "class", "interface", "enum", "void", "int", "long", "boolean",
                 "String", "List", "Map", "Set", "var", "val", "let", "const").contains(name);
+    }
+
+    // SQL 문자열 리터럴에서 테이블 접근 정보(테이블명 + READ/WRITE) 추출 — 언어 무관
+    private List<RawSqlAccess> extractRawSqlAccesses(String content) {
+        List<RawSqlAccess> result = new ArrayList<>();
+
+        // 문자열 리터럴 내부의 SQL 쿼리만 스캔 — 작은따옴표·큰따옴표·백틱 문자열 탐색
+        Pattern literalPattern = Pattern.compile("[\"'`]([^\"'`\\n]{5,500})[\"'`]");
+        Matcher lm = literalPattern.matcher(content);
+        while (lm.find()) {
+            String literal = lm.group(1).trim();
+            // SQL 키워드가 포함된 리터럴만 처리 (대소문자 무관)
+            String upper = literal.toUpperCase();
+            if (!upper.contains("SELECT ") && !upper.contains("INSERT ") &&
+                !upper.contains("UPDATE ") && !upper.contains("DELETE ")) continue;
+
+            // SELECT ... FROM table_name
+            Matcher selectMatcher = Pattern.compile(
+                "\\bSELECT\\b.+?\\bFROM\\s+(\\w+)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+            ).matcher(literal);
+            while (selectMatcher.find()) {
+                result.add(new RawSqlAccess(selectMatcher.group(1).toLowerCase(), false));
+            }
+
+            // INSERT INTO table_name
+            Matcher insertMatcher = Pattern.compile(
+                "\\bINSERT\\s+INTO\\s+(\\w+)", Pattern.CASE_INSENSITIVE
+            ).matcher(literal);
+            while (insertMatcher.find()) {
+                result.add(new RawSqlAccess(insertMatcher.group(1).toLowerCase(), true));
+            }
+
+            // UPDATE table_name SET
+            Matcher updateMatcher = Pattern.compile(
+                "\\bUPDATE\\s+(\\w+)\\s+SET", Pattern.CASE_INSENSITIVE
+            ).matcher(literal);
+            while (updateMatcher.find()) {
+                result.add(new RawSqlAccess(updateMatcher.group(1).toLowerCase(), true));
+            }
+
+            // DELETE FROM table_name
+            Matcher deleteMatcher = Pattern.compile(
+                "\\bDELETE\\s+FROM\\s+(\\w+)", Pattern.CASE_INSENSITIVE
+            ).matcher(literal);
+            while (deleteMatcher.find()) {
+                result.add(new RawSqlAccess(deleteMatcher.group(1).toLowerCase(), true));
+            }
+        }
+
+        // 중복 제거 (같은 파일에서 동일 테이블 같은 타입 접근 반복 시)
+        return result.stream().distinct().collect(java.util.stream.Collectors.toList());
     }
 
     // .tsx/.jsx 파일에서 JSX 컴포넌트 사용 추출 — <ComponentName 패턴 (대문자 시작)
