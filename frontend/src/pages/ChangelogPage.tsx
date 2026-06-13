@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.71.5',
+    date: '2026-06-13',
+    title: '대형 레포 분석 범위 안내',
+    type: 'fix',
+    items: [
+      { category: '분석', desc: '500개 초과 대형 레포는 일부 파일만 분석됨 — 그래프 상단에 "전체 N개 중 M개 분석" 안내 배너 표시' },
+      { category: 'UX', desc: '공유 그래프에도 동일 안내 적용 — 받은 사람이 일부 구조임을 알 수 있음' },
+    ],
+  },
+  {
     version: 'v0.71.4',
     date: '2026-06-13',
     title: '프론트 fetch() API 호출 감지',

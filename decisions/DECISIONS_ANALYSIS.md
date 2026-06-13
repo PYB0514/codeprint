@@ -184,6 +184,18 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 
 ---
 
+### 대형 레포 500파일 절단 안내 — 저장 위치 결정 (2026-06-13)
+
+**문제.** SourceFileWalker가 MAX_FILES=500으로 잘랐는데, 초과분이 조용히 버려져 사용자는 그래프가 전체라고 오인했다. 어떤 파일이 빠졌는지 알 길이 없었다.
+
+**이유.** 저장 위치 후보 ① analyses ② graphs ③ 토스트만. ③은 탈락 — 절단 사실은 나중에 볼 때도, 공유받은 사람에게도 따라다녀야 한다. 그래프 화면 API가 graph 기준이라 ② graphs 테이블에 `analyzed_file_count`/`total_file_count`(V37, nullable)로 결정. nullable이라 기존 그래프는 NULL → 배너 미표시 → 하위 호환 보장.
+
+**결과.** SourceFileWalker가 `List<Path>` 대신 `WalkResult(files, totalEligible)` 반환. GraphBuilder는 4-인자 오버로드 추가 + 기존 3-인자는 위임(기존 테스트·LocalAnalyzer 무수정, Surgical Changes). 응답에 카운트 포함(절단 시에만), GraphPage/ShareGraphPage 상단 주황 배너. SourceFileWalkerTest에 절단 감지 2케이스, GraphBuilderTest에 카운트 기록 2케이스 추가. 로컬에서 V37 마이그레이션 실제 적용 확인(flyway_schema_history success=t, 컬럼 2개 생성 확인).
+
+**부수 발견(ERROR_TRACKER B-1 재발).** SourceFileWalkerTest를 PowerShell `Set-Content -Encoding utf8`로 치환했더니 BOM이 삽입돼 컴파일 깨짐. Java 소스는 Write/Edit 도구로만 수정하는 규칙 재확인.
+
+---
+
 ### fetch() API 호출 감지 — method 옵션 탐색 범위 설계 (2026-06-13)
 
 **문제.** fetch는 axios와 달리 HTTP 메서드가 URL이 아닌 두 번째 인자 옵션 객체(`{ method: 'POST' }`)에 있다. 정규식 한 번으로 URL과 메서드를 동시에 잡을 수 없다.

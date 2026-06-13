@@ -490,6 +490,8 @@ function GraphPageInner() {
   const [reanalyzing, setReanalyzing] = useState(false)
   // 분석 완료 직후 ?fresh=1로 진입했을 때 표시할 요약 토스트
   const [analysisSummary, setAnalysisSummary] = useState<string | null>(null)
+  // 대형 레포 절단 안내 — 전체 대상 파일 수 > 분석된 파일 수일 때 배너 표시
+  const [truncation, setTruncation] = useState<{ analyzed: number; total: number } | null>(null)
   const [showDomainBoxes, setShowDomainBoxes] = useState(true)
   // 탭 분리: null = 전체 보기, 문자열 = 해당 도메인/레이어만 표시
   const [activeDomainTab, setActiveDomainTab] = useState<string | null>(null)
@@ -978,8 +980,14 @@ function GraphPageInner() {
   const fetchGraph = useCallback(async () => {
     try {
       const res = await axios.get(`/api/projects/${projectId}/graph`)
-      const { graphId: gid, nodes: rn, edges: re, warnings: w } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; edgeIds?: string[]; message: string }[] }
+      const { graphId: gid, nodes: rn, edges: re, warnings: w, analyzedFileCount, totalFileCount } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; edgeIds?: string[]; message: string }[]; analyzedFileCount?: number; totalFileCount?: number }
       setGraphId(gid)
+      // 500개 초과 절단 시에만 안내 배너 (기존 그래프는 카운트 없음)
+      setTruncation(
+        totalFileCount != null && analyzedFileCount != null && totalFileCount > analyzedFileCount
+          ? { analyzed: analyzedFileCount, total: totalFileCount }
+          : null
+      )
       const warningList = w ?? []
       setWarnings(warningList)
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebarRef.current)
@@ -2035,8 +2043,18 @@ function GraphPageInner() {
         </div>
       )}
 
+      {/* 대형 레포 절단 안내 — 전체 파일 일부만 분석된 그래프 */}
+      {!outdated && !freshnessError && truncation && (
+        <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-1.5 bg-orange-900/80 border-b border-orange-700 text-orange-300 text-xs backdrop-blur-sm">
+          <span>
+            📦 대형 레포 — 전체 <strong>{truncation.total.toLocaleString()}</strong>개 파일 중 <strong>{truncation.analyzed.toLocaleString()}</strong>개만 분석되었습니다. 그래프는 일부 구조만 표시합니다.
+          </span>
+          <button onClick={() => setTruncation(null)} className="text-orange-500 hover:text-orange-200 ml-4">✕</button>
+        </div>
+      )}
+
       {/* 상단 바 — 내비 + 통계만 */}
-      <div className="absolute z-10 flex items-center gap-3" style={{ top: (outdated || freshnessError) ? '44px' : '16px', left: leftOpen ? `${leftWidth + 8}px` : '20px' }}>
+      <div className="absolute z-10 flex items-center gap-3" style={{ top: (outdated || freshnessError || truncation) ? '44px' : '16px', left: leftOpen ? `${leftWidth + 8}px` : '20px' }}>
         <button
           onClick={() => navigate('/dashboard')}
           className="bg-gray-800 hover:bg-gray-700 text-white text-sm px-3 py-1.5 rounded-lg"

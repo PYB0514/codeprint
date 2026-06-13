@@ -112,14 +112,19 @@ public class GraphController {
                     List<Map<String, Object>> warnings = graphQueryService.getWarnings(graph.getId());
 
                     // 그래프는 재분석 전까지 변경되지 않으므로 5분 브라우저 캐시 허용
+                    Map<String, Object> body = new java.util.LinkedHashMap<>();
+                    body.put("graphId", graph.getId().toString());
+                    body.put("nodes", nodeData);
+                    body.put("edges", edgeData);
+                    body.put("warnings", warnings);
+                    // 대형 레포 절단 안내 — 기존 그래프(NULL)는 미포함
+                    if (graph.getTotalFileCount() != null) {
+                        body.put("analyzedFileCount", graph.getAnalyzedFileCount());
+                        body.put("totalFileCount", graph.getTotalFileCount());
+                    }
                     return ResponseEntity.ok()
                             .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePrivate())
-                            .body(Map.of(
-                                    "graphId", graph.getId().toString(),
-                                    "nodes", nodeData,
-                                    "edges", edgeData,
-                                    "warnings", warnings
-                            ));
+                            .body(body);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -181,6 +186,11 @@ public class GraphController {
                     body.put("edges", edgeData);
                     body.put("warnings", warnings);
                     body.put("ownerBgUrl", ownerBgUrl);
+                    // 대형 레포 절단 안내 — 기존 그래프(NULL)는 미포함
+                    if (graph.getTotalFileCount() != null) {
+                        body.put("analyzedFileCount", graph.getAnalyzedFileCount());
+                        body.put("totalFileCount", graph.getTotalFileCount());
+                    }
                     return ResponseEntity.ok()
                             .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePublic())
                             .body(body);

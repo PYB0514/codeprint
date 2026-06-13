@@ -49,8 +49,9 @@ public class AnalysisRunner {
             log.info("클론 완료: {}", repoDir);
             progressHandler.sendProgress(analysisId, 30, "RUNNING");
 
-            List<Path> sourceFiles = sourceFileWalker.walk(repoDir);
-            log.info("소스 파일 수: {}", sourceFiles.size());
+            WalkResult walkResult = sourceFileWalker.walk(repoDir);
+            List<Path> sourceFiles = walkResult.files();
+            log.info("소스 파일 수: {} (전체 대상 {})", sourceFiles.size(), walkResult.totalEligible());
             progressHandler.sendProgress(analysisId, 40, "RUNNING");
 
             final Path finalRepoDir = repoDir;
@@ -68,7 +69,7 @@ public class AnalysisRunner {
                     .toList();
             progressHandler.sendProgress(analysisId, 70, "RUNNING");
 
-            graphBuilder.build(projectId, analysisId, parsedFiles);
+            graphBuilder.build(projectId, analysisId, parsedFiles, walkResult.totalEligible());
             progressHandler.sendProgress(analysisId, 95, "RUNNING");
 
             // 분석 완료 시점의 브랜치 최신 커밋 SHA 저장

@@ -38,7 +38,7 @@ class SourceFileWalkerTest {
                 """);
         Files.writeString(tempDir.resolve("app.ts"), "export const x = 1;");
 
-        List<Path> files = walker.walk(tempDir);
+        List<Path> files = walker.walk(tempDir).files();
 
         assertThat(files).anyMatch(p -> p.getFileName().toString().equals("schema.prisma"));
         assertThat(files).anyMatch(p -> p.getFileName().toString().equals("app.ts"));
@@ -50,7 +50,7 @@ class SourceFileWalkerTest {
         Files.writeString(tempDir.resolve("README.md"), "# readme");
         Files.writeString(tempDir.resolve("User.java"), "public class User {}");
 
-        List<Path> files = walker.walk(tempDir);
+        List<Path> files = walker.walk(tempDir).files();
 
         assertThat(files).hasSize(1);
         assertThat(files.get(0).getFileName().toString()).isEqualTo("User.java");
@@ -63,9 +63,34 @@ class SourceFileWalkerTest {
         Files.writeString(tempDir.resolve("node_modules/pkg/index.js"), "module.exports = {};");
         Files.writeString(tempDir.resolve("index.js"), "const a = 1;");
 
-        List<Path> files = walker.walk(tempDir);
+        List<Path> files = walker.walk(tempDir).files();
 
         assertThat(files).hasSize(1);
         assertThat(files.get(0).getFileName().toString()).isEqualTo("index.js");
+    }
+
+    @Test
+    @DisplayName("500개 초과 시 절단되고 전체 대상 수가 함께 반환된다")
+    void 최대_파일_수_절단_감지() throws IOException {
+        for (int i = 0; i < 502; i++) {
+            Files.writeString(tempDir.resolve("File" + i + ".java"), "public class File" + i + " {}");
+        }
+
+        WalkResult result = walker.walk(tempDir);
+
+        assertThat(result.files()).hasSize(500);
+        assertThat(result.totalEligible()).isEqualTo(502);
+    }
+
+    @Test
+    @DisplayName("500개 이하면 전체 대상 수와 수집 수가 같다")
+    void 절단_없음_카운트_일치() throws IOException {
+        Files.writeString(tempDir.resolve("A.java"), "public class A {}");
+        Files.writeString(tempDir.resolve("B.java"), "public class B {}");
+
+        WalkResult result = walker.walk(tempDir);
+
+        assertThat(result.files()).hasSize(2);
+        assertThat(result.totalEligible()).isEqualTo(2);
     }
 }
