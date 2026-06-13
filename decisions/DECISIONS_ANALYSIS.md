@@ -6,6 +6,14 @@
 
 ## 버그
 
+### B-8: FUNCTION_CALL edgeIdentifier callee 파일명 누락 (2026-06-13)
+
+**문제.** `edgeIdentifier`가 `"callerFile-callerFunc-calls-calleeFunc"` 형태여서 callee 파일 정보가 없었다. 동일한 caller 함수에서 동일한 이름의 함수를 두 번 호출하는 경우(다른 파일에서 각각 resolve될 때도) 두 번째 엣지가 중복으로 제거되는 버그.
+
+**이유.** `usedEdgeIds` Set이 identifier 기준으로 dedup하는데, callee 파일이 다르더라도 identifier가 같으면 두 번째를 건너뜀.
+
+**결과.** `extractFileName(bestMatch.filePath())`를 identifier에 추가해 `"callerFile-callerFunc-calls-calleeFile-calleeFunc"` 형태로 변경. 기존 FUNCTION_CALL 엣지는 V38 마이그레이션으로 전부 삭제 — 재분석 시 새 identifier로 재생성됨.
+
 ### 함수 주석 추출 — 멀티라인 파라미터 미인식
 
 **문제.** 파라미터가 여러 줄에 걸친 함수의 한국어 주석이 추출되지 않았다.

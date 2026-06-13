@@ -155,7 +155,7 @@ public class GraphBuilder {
                     UUID calleeFuncId = funcNodeIds.get(bestMatch.filePath() + "::" + calleeFunc);
                     if (calleeFuncId == null) continue;
 
-                    String edgeIdentifier = extractFileName(callerFile.filePath()) + "-" + callerFunc + "-calls-" + calleeFunc;
+                    String edgeIdentifier = extractFileName(callerFile.filePath()) + "-" + callerFunc + "-calls-" + extractFileName(bestMatch.filePath()) + "-" + calleeFunc;
                     if (usedEdgeIds.contains(edgeIdentifier)) continue;
                     usedEdgeIds.add(edgeIdentifier);
 
