@@ -4,6 +4,24 @@
 
 ---
 
+## 설계 결정
+
+### C-11: DDD 경고 비DDD 프로젝트 게이팅 (2026-06-13)
+
+**문제.** `detectDbLayerBypass`, `detectCrossContextDomainImport`, `detectDomainInfraImport`, `detectCrossDomainFunctionCall` 4종이 `/application/`, `/domain/`, `/infrastructure/` 경로를 전제로 동작 — Express/Rails 등 비DDD 프로젝트에서 100% 오탐.
+
+**이유.** 경고 엔진이 Codeprint 자체 구조를 기준으로 설계됐고, 다른 프로젝트를 분석하기 시작하면서 문제가 드러남.
+
+**결과.** `isDddProject()` 메서드 추가: 노드 파일 경로에서 DDD 레이어(`/domain/`, `/application/`, `/infrastructure/`) 2종 이상 발견 시 DDD 프로젝트로 판단. 1종만 있는 경우(우연히 `/application/` 폴더 하나)는 DDD로 판단하지 않아 오탐 방지.
+
+### C-13: 경고 severity 구분 (2026-06-13)
+
+**결정.** 각 경고에 `severity: HIGH|MEDIUM|LOW` 필드 추가. 백엔드 `GraphWarningService.java`에서 경고 생성 시 삽입, 프론트 `WarningPanel.tsx`에서 배지 표시 및 HIGH→LOW 순서로 정렬.
+
+- HIGH: CYCLIC_IMPORT, DB_LAYER_BYPASS, DOMAIN_IMPORTS_INFRA, CROSS_CONTEXT_IMPORT — 즉시 수정 필요
+- MEDIUM: CROSS_DOMAIN_CALL, ASYNC_SELF_CALL, MISSING_CONVERTER_MIGRATION, BROKEN_INTERFACE_CHAIN — 다음 스프린트
+- LOW: DEAD_CODE, HIGH_FAN_OUT — 참고용
+
 ## 버그
 
 ### B-8: FUNCTION_CALL edgeIdentifier callee 파일명 누락 (2026-06-13)
