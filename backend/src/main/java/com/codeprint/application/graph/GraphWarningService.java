@@ -20,14 +20,30 @@ public class GraphWarningService {
         warnings.addAll(detectCyclicImports(nodes, edges));
         warnings.addAll(detectBrokenInterfaceChains(nodes, edges));
         warnings.addAll(detectAsyncSelfCalls(nodes, edges));
-        warnings.addAll(detectDbLayerBypass(nodes, edges));
-        warnings.addAll(detectCrossContextDomainImport(nodes, edges));
-        warnings.addAll(detectDomainInfraImport(nodes, edges));
-        warnings.addAll(detectCrossDomainFunctionCall(nodes, edges));
         warnings.addAll(detectMissingConverterMigration(nodes));
         warnings.addAll(detectDeadCode(nodes, edges));
         warnings.addAll(detectHighFanOut(nodes, edges));
+        // DDD 폴더 구조(/domain/, /application/, /infrastructure/)를 사용하는 프로젝트에만 적용
+        if (isDddProject(nodes)) {
+            warnings.addAll(detectDbLayerBypass(nodes, edges));
+            warnings.addAll(detectCrossContextDomainImport(nodes, edges));
+            warnings.addAll(detectDomainInfraImport(nodes, edges));
+            warnings.addAll(detectCrossDomainFunctionCall(nodes, edges));
+        }
         return warnings;
+    }
+
+    // 노드 파일 경로에서 DDD 레이어(/domain/, /application/, /infrastructure/)가 2개 이상 발견되면 DDD 프로젝트로 판단
+    private boolean isDddProject(List<Node> nodes) {
+        Set<String> foundLayers = new HashSet<>();
+        for (Node n : nodes) {
+            String fp = n.getFilePath() != null ? n.getFilePath() : "";
+            if (fp.contains("/domain/")) foundLayers.add("domain");
+            if (fp.contains("/application/")) foundLayers.add("application");
+            if (fp.contains("/infrastructure/")) foundLayers.add("infrastructure");
+            if (foundLayers.size() >= 2) return true;
+        }
+        return false;
     }
 
     // IMPORT 엣지에서 순환 의존 탐지 (DFS 사이클 검출)
@@ -76,6 +92,7 @@ public class GraphWarningService {
             }
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "CYCLIC_IMPORT");
+            w.put("severity", "HIGH");
             w.put("nodeIds", cycle.stream().map(UUID::toString).toList());
             w.put("edgeIds", edgeIds);
             w.put("message", "순환 의존: " + String.join(" → ", names));
@@ -137,6 +154,7 @@ public class GraphWarningService {
             if (!implTargets.contains(n.getId())) {
                 Map<String, Object> w = new LinkedHashMap<>();
                 w.put("type", "BROKEN_INTERFACE_CHAIN");
+                w.put("severity", "MEDIUM");
                 w.put("nodeIds", List.of(n.getId().toString()));
                 w.put("edgeIds", List.of());
                 w.put("message", "인터페이스 체인 끊김: " + n.getName() + " — 구현체 메서드로 가는 엣지 없음");
@@ -177,6 +195,7 @@ public class GraphWarningService {
             if (!sourceFile.isEmpty() && sourceFile.equals(targetFile)) {
                 Map<String, Object> w = new LinkedHashMap<>();
                 w.put("type", "ASYNC_SELF_CALL");
+                w.put("severity", "MEDIUM");
                 w.put("nodeIds", List.of(source.toString(), target.toString()));
                 w.put("edgeIds", List.of(e.getId().toString()));
                 w.put("message", "@Async 자기 호출: " + nameMap.getOrDefault(source, source.toString())
@@ -216,6 +235,7 @@ public class GraphWarningService {
 
                 Map<String, Object> w = new LinkedHashMap<>();
                 w.put("type", "DB_LAYER_BYPASS");
+                w.put("severity", "HIGH");
                 w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
                 w.put("edgeIds", List.of(e.getId().toString()));
                 w.put("message", "DB 레이어 우회: " + nameMap.getOrDefault(e.getSourceNodeId(), srcPath)
@@ -248,6 +268,7 @@ public class GraphWarningService {
             if (srcContext != null && tgtContext != null && !srcContext.equals(tgtContext)) {
                 Map<String, Object> w = new LinkedHashMap<>();
                 w.put("type", "CROSS_CONTEXT_IMPORT");
+                w.put("severity", "HIGH");
                 w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
                 w.put("edgeIds", List.of(e.getId().toString()));
                 w.put("message", "DDD 컨텍스트 경계 위반: application/" + srcContext + " → domain/" + tgtContext
@@ -379,6 +400,7 @@ public class GraphWarningService {
 
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "DEAD_CODE");
+            w.put("severity", "LOW");
             w.put("nodeIds", List.of(n.getId().toString()));
             w.put("edgeIds", List.of());
             w.put("message", "데드 코드 후보: " + name + " — 이 함수를 호출하는 곳이 없습니다");
@@ -410,6 +432,7 @@ public class GraphWarningService {
                 String srcContext = extractContextFromDomainPath(srcPath);
                 Map<String, Object> w = new LinkedHashMap<>();
                 w.put("type", "DOMAIN_IMPORTS_INFRA");
+                w.put("severity", "HIGH");
                 w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
                 w.put("edgeIds", List.of(e.getId().toString()));
                 w.put("message", "DDD 의존 방향 위반: domain/"
@@ -454,6 +477,7 @@ public class GraphWarningService {
             String tgtName = nameMap.getOrDefault(e.getTargetNodeId(), tgtDomain);
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "CROSS_DOMAIN_CALL");
+            w.put("severity", "MEDIUM");
             w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
             w.put("edgeIds", List.of(e.getId().toString()));
             w.put("message", "Cross-Domain 직접 호출: " + srcDomain + "/" + srcName
@@ -500,6 +524,7 @@ public class GraphWarningService {
             if (entry.getValue() <= THRESHOLD) continue;
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "HIGH_FAN_OUT");
+            w.put("severity", "LOW");
             w.put("nodeIds", List.of(entry.getKey().toString()));
             w.put("edgeIds", List.of());
             w.put("message", "과도한 의존: " + nameMap.getOrDefault(entry.getKey(), entry.getKey().toString())
@@ -533,6 +558,7 @@ public class GraphWarningService {
 
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "MISSING_CONVERTER_MIGRATION");
+            w.put("severity", "MEDIUM");
             w.put("nodeIds", List.of(n.getId().toString()));
             w.put("edgeIds", List.of());
             w.put("message", "@Convert 컨버터 감지: " + n.getName()

@@ -11,6 +11,25 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.72.0',
+    date: '2026-06-13',
+    title: '경고 엔진 일반화 — 비DDD 프로젝트 지원 + severity 구분',
+    type: 'feature',
+    items: [
+      { category: '경고', desc: 'Express/Rails/Django 등 DDD 폴더 구조가 없는 프로젝트에서 DDD 전용 경고(DB 레이어 우회, 컨텍스트 경계 위반 등)가 오탐되던 문제 수정 — DDD 레이어 2종 이상 감지 시에만 활성화' },
+      { category: '경고', desc: '모든 경고에 심각도(HIGH/MEDIUM/LOW) 구분 추가 — 경고 패널에서 HIGH부터 순서대로 표시, 각 항목에 색상 배지 표시' },
+    ],
+  },
+  {
+    version: 'v0.71.8',
+    date: '2026-06-13',
+    title: '함수 호출 엣지 정확도 개선',
+    type: 'fix',
+    items: [
+      { category: '분석', desc: '동명 함수가 여러 파일에 있을 때 엣지 중복 제거 키에 callee 파일 정보가 빠져 있던 버그 수정 — 재분석 시 더 정확한 호출 연결선 표시' },
+    ],
+  },
+  {
     version: 'v0.71.7',
     date: '2026-06-13',
     title: 'raw SQL DB 연결 감지',
