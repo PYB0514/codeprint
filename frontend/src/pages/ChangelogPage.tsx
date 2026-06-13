@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.71.6',
+    date: '2026-06-13',
+    title: 'C#/Go 함수 호출 흐름 감지',
+    type: 'fix',
+    items: [
+      { category: '분석', desc: 'C# PascalCase 메서드와 Go 대문자 함수 호출이 인식되지 않아 호출 엣지가 거의 없던 문제 수정' },
+      { category: '분석', desc: 'C#/Go 프로젝트에서도 파일 간 함수 호출 흐름이 그래프에 표시됨' },
+    ],
+  },
+  {
     version: 'v0.71.5',
     date: '2026-06-13',
     title: '대형 레포 분석 범위 안내',

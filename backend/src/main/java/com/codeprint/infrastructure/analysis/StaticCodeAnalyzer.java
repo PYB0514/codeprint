@@ -223,10 +223,16 @@ public class StaticCodeAnalyzer {
         Pattern funcDefPattern = getFunctionPattern(language);
         if (funcDefPattern == null) return result;
 
-        // 함수 호출 패턴: 식별자 뒤에 '(' — 키워드·생성자(대문자 시작) 제외
-        Pattern callPattern = Pattern.compile("\\b([a-z][a-zA-Z0-9_]*)\\s*\\(");
-        // 정적 팩토리/클래스 메서드 호출: ClassName.method() — 클래스명 대문자 시작
-        Pattern qualifiedCallPattern = Pattern.compile("\\b([A-Z][a-zA-Z0-9_]*)\\.([a-z][a-zA-Z0-9_]*)\\s*\\(");
+        // C#/Go는 메서드명이 PascalCase 관례 — 대문자 시작 호출도 인식 (new 인스턴스화는 제외)
+        boolean pascalMethods = "C#".equals(language) || "Go".equals(language);
+        // 함수 호출 패턴: 식별자 뒤에 '(' — 키워드 제외. 소문자 언어는 생성자(대문자) 제외, C#/Go는 대문자 허용
+        Pattern callPattern = pascalMethods
+                ? Pattern.compile("(?<!new\\s)\\b([A-Za-z_][a-zA-Z0-9_]*)\\s*\\(")
+                : Pattern.compile("\\b([a-z][a-zA-Z0-9_]*)\\s*\\(");
+        // 정적/한정 호출: Receiver.method() — C#/Go는 메서드명도 PascalCase 허용
+        Pattern qualifiedCallPattern = pascalMethods
+                ? Pattern.compile("\\b([A-Z][a-zA-Z0-9_]*)\\.([A-Za-z_][a-zA-Z0-9_]*)\\s*\\(")
+                : Pattern.compile("\\b([A-Z][a-zA-Z0-9_]*)\\.([a-z][a-zA-Z0-9_]*)\\s*\\(");
 
         Matcher defMatcher = funcDefPattern.matcher(content);
         List<int[]> funcBoundaries = new ArrayList<>(); // [nameGroupStart, bodyStart]

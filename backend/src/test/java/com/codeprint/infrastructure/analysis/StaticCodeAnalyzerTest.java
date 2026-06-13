@@ -277,6 +277,91 @@ class StaticCodeAnalyzerTest {
         assertThat(result.functionCalls().get("build")).contains("createNodes", "createEdges");
     }
 
+    // ── C#/Go PascalCase 함수 호출 추출 ──────────────────────────────────────
+
+    @Test
+    @DisplayName("C# PascalCase 메서드 호출을 functionCalls에 추출한다")
+    void CSharp_PascalCase_호출_추출() throws IOException {
+        // 회귀: 호출 패턴이 소문자 시작만 인정해 C# PascalCase 메서드 호출이 0개였던 버그
+        Path file = tempDir.resolve("UserService.cs");
+        Files.writeString(file, """
+                public class UserService {
+                    public User CreateUser(string name) {
+                        Validate(name);
+                        return Save(name);
+                    }
+                    private void Validate(string name) {}
+                    private User Save(string name) { return null; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.functionCalls()).containsKey("CreateUser");
+        assertThat(result.functionCalls().get("CreateUser")).contains("Validate", "Save");
+    }
+
+    @Test
+    @DisplayName("Go 대문자 시작 함수 호출을 functionCalls에 추출한다")
+    void Go_대문자_함수_호출_추출() throws IOException {
+        Path file = tempDir.resolve("main.go");
+        Files.writeString(file, """
+                package main
+
+                func Run() {
+                    CreateUser("a")
+                    validate()
+                }
+
+                func CreateUser(name string) {}
+
+                func validate() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.functionCalls()).containsKey("Run");
+        assertThat(result.functionCalls().get("Run")).contains("CreateUser", "validate");
+    }
+
+    @Test
+    @DisplayName("C# new 인스턴스화는 functionCalls에 호출로 포함되지 않는다")
+    void CSharp_new_인스턴스화_제외() throws IOException {
+        Path file = tempDir.resolve("Factory.cs");
+        Files.writeString(file, """
+                public class Factory {
+                    public User Make() {
+                        return new User();
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.functionCalls().getOrDefault("Make", java.util.List.of())).doesNotContain("User");
+    }
+
+    @Test
+    @DisplayName("Java 소문자 호출 규칙은 영향받지 않는다 (회귀)")
+    void Java_소문자_호출_규칙_유지() throws IOException {
+        // C#/Go 분기 추가가 Java 호출 추출(대문자 생성자 제외)을 깨지 않는지 확인
+        Path file = writeJavaFile("""
+                package com.example;
+                public class UserService {
+                    public void run() {
+                        validate();
+                        User u = new User();
+                    }
+                    private void validate() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionCalls().get("run")).contains("validate");
+        assertThat(result.functionCalls().getOrDefault("run", java.util.List.of())).doesNotContain("User");
+    }
+
     // ── implements 추출 ────────────────────────────────────────────────────
 
     @Test
