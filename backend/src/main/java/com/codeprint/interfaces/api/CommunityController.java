@@ -12,8 +12,6 @@ import com.codeprint.domain.community.PostBookmarkRepository;
 import com.codeprint.domain.community.PostLike;
 import com.codeprint.domain.community.PostLikeRepository;
 import com.codeprint.domain.community.PostRepository;
-import com.codeprint.domain.graph.Edge;
-import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
 import jakarta.validation.Valid;
@@ -130,31 +128,31 @@ public class CommunityController {
         return communityFacade.getGraphSnapshot(post.getGraphId())
                 .map(snapshot -> {
                     List<Map<String, Object>> nodeData = snapshot.nodes().stream()
-                            .filter(n -> !n.isHidden())
+                            .filter(n -> !n.hidden())
                             .map(n -> {
                                 Map<String, Object> node = new java.util.LinkedHashMap<>();
-                                node.put("id", n.getId().toString());
-                                node.put("type", n.getType().name());
-                                node.put("name", n.getName());
-                                node.put("filePath", n.getFilePath() != null ? n.getFilePath() : "");
-                                node.put("language", n.getLanguage() != null ? n.getLanguage() : "");
-                                node.put("posX", n.getPosX());
-                                node.put("posY", n.getPosY());
-                                if (n.getMetadata() != null && n.getMetadata().containsKey("comment")) {
-                                    node.put("comment", n.getMetadata().get("comment"));
+                                node.put("id", n.id().toString());
+                                node.put("type", n.type());
+                                node.put("name", n.name());
+                                node.put("filePath", n.filePath() != null ? n.filePath() : "");
+                                node.put("language", n.language() != null ? n.language() : "");
+                                node.put("posX", n.posX());
+                                node.put("posY", n.posY());
+                                if (n.comment() != null) {
+                                    node.put("comment", n.comment());
                                 }
                                 return node;
                             })
                             .toList();
 
                     List<Map<String, Object>> edgeData = snapshot.edges().stream()
-                            .filter(e -> !e.isHidden())
+                            .filter(e -> !e.hidden())
                             .map(e -> Map.<String, Object>of(
-                                    "id", e.getId().toString(),
-                                    "type", e.getType().name(),
-                                    "source", e.getSourceNodeId().toString(),
-                                    "target", e.getTargetNodeId().toString(),
-                                    "edgeIdentifier", e.getEdgeIdentifier()
+                                    "id", e.id().toString(),
+                                    "type", e.type(),
+                                    "source", e.source().toString(),
+                                    "target", e.target().toString(),
+                                    "edgeIdentifier", e.edgeIdentifier()
                             ))
                             .toList();
 

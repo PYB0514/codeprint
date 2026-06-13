@@ -18,6 +18,20 @@
 
 **결과.** `compileJava`/`compileTestJava`/`test` 전부 통과. 동일 패키지에서 unqualified로 쓰던 `User`/`UserTest`/`UserPlanTest`에 import 추가. CROSS_CONTEXT_IMPORT 7→2(community→graph 2건만 잔존, 별도 PR). community→graph는 포트+어댑터 리팩토링이라 API 응답 회귀 위험이 있어 분리.
 
+## CROSS_CONTEXT_IMPORT 잔존 2건 해소 — community→graph 포트 역전 (2026-06-14)
+
+**문제.** `application/community/CommunityFacade`가 ① `application/graph/GraphQueryService`·`application/project/ProjectQueryService`를 직접 주입(application→application cross-context, §10 금지)하고 ② `domain/graph/Edge`·`Node`를 직접 import(CROSS_CONTEXT_IMPORT 2건). #249에서 분리해 둔 마지막 잔존 위반.
+
+**이유.** community가 게시글에 첨부된 그래프를 렌더하려면 graph 데이터가 필요한데, 그 의존을 graph 컨텍스트 방향으로 직접 끌어다 썼다. 경계를 넘는 의존을 community가 소유하는 포트로 역전(DIP)해야 한다.
+
+**선택지.**
+- (A) 포트가 `domain/graph/Node`·`Edge`를 그대로 반환 — `domain/community/port`가 `domain/graph`를 import하게 되어 domain→domain cross-context로 위반이 이동할 뿐. 탈락.
+- (B) 포트가 community 소유 view(`NodeView`/`EdgeView`/`GraphSnapshot`)를 반환(published language), 어댑터가 graph 모델→view 매핑 — graph 도메인 모델 완전 비노출. **채택.**
+
+**결과.** `domain/community/port/GraphReadPort`(+NodeView/EdgeView/GraphSnapshot record)·`ProjectReadPort` 선언, `infrastructure/adapter/GraphReadAdapter`·`ProjectReadAdapter`가 `GraphQueryService`/`ProjectQueryService`를 호출해 구현(ACL — infrastructure→application은 미검출·허용). `CommunityFacade`는 포트만 주입, `domain.graph` import 제거. `CommunityController.getPostGraph`를 view 접근자로 전환하고 orphan된 `Node`/`Edge` import 제거.
+
+`findPublicRepoUrl`의 소유권 검증+공개 검증+예외 시 empty 동작과 `getPostGraph`의 JSON 필드/순서/null 가드를 byte-identical하게 보존. 검증: `analyzeLocal` CROSS_CONTEXT_IMPORT **2→0**, 전체 테스트 green, 실제 그래프 첨부 글 엔드포인트(`/posts/{id}/graph`)에서 nodes 1002·edges 1125가 동일 필드(`id,type,name,filePath,language,posX,posY,comment` / `id,type,source,target,edgeIdentifier`)로 정상 반환 확인. 이로써 Codeprint 자체의 CROSS_DOMAIN_CALL·CROSS_CONTEXT_IMPORT·DOMAIN_IMPORTS_INFRA 전부 0(§10 충족).
+
 ## freshness 엔드포인트 github_error 원인 분석 (2026-06-11)
 
 **문제.** `GET /api/projects/{id}/freshness`가 항상 `{"isOutdated":false,"reason":"github_error"}`를 반환해 "재분석 필요" 배너가 한 번도 뜨지 않았다.
