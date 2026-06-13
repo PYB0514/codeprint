@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.71.7',
+    date: '2026-06-13',
+    title: 'raw SQL DB 연결 감지',
+    type: 'fix',
+    items: [
+      { category: '분석', desc: 'ORM 없이 raw SQL을 쓰는 프로젝트(Go database/sql, C# Dapper, Java JDBC 등)에서 DB 연결 엣지가 표시되지 않던 문제 수정' },
+      { category: '분석', desc: 'SELECT/INSERT/UPDATE/DELETE 구문에서 테이블명을 추출해 DB_TABLE 노드와 DB_READ/WRITE 엣지를 자동 생성' },
+    ],
+  },
+  {
     version: 'v0.71.6',
     date: '2026-06-13',
     title: 'C#/Go 함수 호출 흐름 감지',
