@@ -245,4 +245,74 @@ class GraphWarningServiceTest {
         );
         assertThat(warnings.stream().filter(w -> "MISSING_CONVERTER_MIGRATION".equals(w.get("type"))).toList()).isEmpty();
     }
+
+    private List<Map<String, Object>> crossDomain(List<Map<String, Object>> warnings) {
+        return warnings.stream().filter(w -> "CROSS_DOMAIN_CALL".equals(w.get("type"))).toList();
+    }
+
+    @Test
+    @DisplayName("도메인 경계 넘는 FUNCTION_CALL (고유·비프레임워크 이름) — CROSS_DOMAIN_CALL 경고")
+    void crossDomainCall_genuineViolation_detected() {
+        Node src = funcNodeWithPath("placeOrder", "/com/example/application/order/OrderService.java");
+        Node tgt = funcNodeWithPath("reserveStock", "/com/example/domain/inventory/InventoryService.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(src, tgt),
+                List.of(callEdge(src.getId(), tgt.getId(), false))
+        );
+        assertThat(crossDomain(warnings)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("getter 등 프레임워크 패턴 callee — CROSS_DOMAIN_CALL 제외 (정규식 오추적)")
+    void crossDomainCall_frameworkPatternName_excluded() {
+        Node src = funcNodeWithPath("placeOrder", "/com/example/application/order/OrderService.java");
+        Node tgt = funcNodeWithPath("getNodes", "/com/example/domain/graph/Graph.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(src, tgt),
+                List.of(callEdge(src.getId(), tgt.getId(), false))
+        );
+        assertThat(crossDomain(warnings)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("JDK 컬렉션 메서드(add) callee — CROSS_DOMAIN_CALL 제외")
+    void crossDomainCall_jdkCollectionName_excluded() {
+        Node src = funcNodeWithPath("placeOrder", "/com/example/application/order/OrderService.java");
+        Node tgt = funcNodeWithPath("add", "/com/example/domain/team/Team.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(src, tgt),
+                List.of(callEdge(src.getId(), tgt.getId(), false))
+        );
+        assertThat(crossDomain(warnings)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("동일 이름이 2개 도메인에 존재 — bare-name 모호로 CROSS_DOMAIN_CALL 제외")
+    void crossDomainCall_ambiguousName_excluded() {
+        Node src = funcNodeWithPath("placeOrder", "/com/example/application/order/OrderService.java");
+        Node tgt = funcNodeWithPath("validate", "/com/example/domain/inventory/InventoryService.java");
+        Node dup = funcNodeWithPath("validate", "/com/example/domain/payment/PaymentService.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(src, tgt, dup),
+                List.of(callEdge(src.getId(), tgt.getId(), false))
+        );
+        assertThat(crossDomain(warnings)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("테스트 코드 경로(src/test)의 cross-domain 호출 — CROSS_DOMAIN_CALL 제외")
+    void crossDomainCall_testPath_excluded() {
+        Node src = funcNodeWithPath("setUp", "/backend/src/test/java/com/example/application/order/OrderServiceTest.java");
+        Node tgt = funcNodeWithPath("reserveStock", "/backend/src/main/java/com/example/domain/inventory/InventoryService.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(src, tgt),
+                List.of(callEdge(src.getId(), tgt.getId(), false))
+        );
+        assertThat(crossDomain(warnings)).isEmpty();
+    }
 }
