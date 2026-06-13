@@ -32,6 +32,24 @@
 
 `findPublicRepoUrl`의 소유권 검증+공개 검증+예외 시 empty 동작과 `getPostGraph`의 JSON 필드/순서/null 가드를 byte-identical하게 보존. 검증: `analyzeLocal` CROSS_CONTEXT_IMPORT **2→0**, 전체 테스트 green, 실제 그래프 첨부 글 엔드포인트(`/posts/{id}/graph`)에서 nodes 1002·edges 1125가 동일 필드(`id,type,name,filePath,language,posX,posY,comment` / `id,type,source,target,edgeIdentifier`)로 정상 반환 확인. 이로써 Codeprint 자체의 CROSS_DOMAIN_CALL·CROSS_CONTEXT_IMPORT·DOMAIN_IMPORTS_INFRA 전부 0(§10 충족).
 
+## Payment 레이어 위반 해소 — application 레이어 + 헥사고날 포트 도입 (2026-06-14)
+
+**문제.** `PaymentController`가 ① 주문 생성·소유권/금액 검증·결제 승인·Pro 승급의 오케스트레이션을 컨트롤러에서 직접 수행(비즈니스 로직이 interfaces 레이어에), ② `infrastructure.payment.TossPaymentsService`를 직접 호출(interfaces→infrastructure), ③ `domain.user.UserRepository`로 user 도메인을 직접 변경(cross-context 쓰기). 자동 검출되는 경고는 없지만 §10 레이어·경계 규칙 위반. 사용자가 "7건 + Payment" 전부 수정 선택.
+
+**이유.** payment는 외부 PG(토스) 호출과 결제 승인 규칙(멱등·소유권·금액)이 있는 핵심 도메인이라 application 레이어로 분리하고, 외부 의존(PG·user 승급)을 포트로 역전해야 MSA-ready 슬라이스가 된다.
+
+**결정.**
+- `application/payment/PaymentApplicationService` 신설 — `prepare`/`confirm` 오케스트레이션. `confirm`은 멱등(`ALREADY_CONFIRMED`)·소유권(`FORBIDDEN`)·금액(`AMOUNT_MISMATCH`)·정상(`OK`)을 `ConfirmOutcome` enum으로 반환, 컨트롤러가 HTTP로 매핑(403/400/200). 주문 부재는 기존대로 `IllegalArgumentException`.
+- `domain/payment/port/PaymentGatewayPort` — 외부 결제 승인 추상화. `TossPaymentsService`가 구현(`implements`). application→infrastructure 직접 의존 제거.
+- `domain/payment/port/UserUpgradePort` — Pro 승급 cross-context 호출 역전. `infrastructure/adapter/UserUpgradeAdapter`가 `UserRepository`로 구현.
+- `PaymentController`는 `PaymentApplicationService`만 주입. `@AuthenticationPrincipal User`는 Spring Security 전역 주입 패턴이라 유지(앱 전역 컨트롤러 공통).
+
+**보존.** prepare 응답(`orderId/amount/orderName/customerName/customerKey/clientKey`)·confirm 응답(`already_confirmed`/403/400/`ok`)·`upgradeToPro` no-op(대상 부재) 동작 1:1 보존.
+
+**검증.** §4 TDD — `PaymentApplicationServiceTest` 6종(confirm 4분기 + 주문부재 예외 + prepare, Mockito). 전체 테스트 green, `analyzeLocal` CROSS_DOMAIN_CALL·CROSS_CONTEXT_IMPORT 0 유지, HIGH_FAN_OUT 12→11(오케스트레이션 분리 효과). 런타임 — `/actuator/health` UP + payment 엔드포인트 302(미인증, 500/404 아님)로 신규 빈 와이어링 확인. 실제 토스 결제 E2E는 자격증명 부재로 TDD 대체.
+
+**알려진 한계/후속.** `DonationApplicationService`(application/donation)도 `TossPaymentsService`를 concrete로 직접 주입하는 동일 종류 위반이 있으나 다른 컨텍스트라 본 PR 범위 밖 — `PaymentGatewayPort` 도입으로 donation은 영향 없음(concrete 주입 유지). 별도 정리 필요. DEAD_CODE가 5→6으로 늘었는데 새 항목 `confirmPayment`는 LocalAnalyzer의 단순 buildGraph가 인터페이스→구현 디스패치를 추적 못 해 생긴 false positive(기존 JPA `@Converter`·`monthlyPrice`와 동종) — 실제로 포트 경유 호출됨.
+
 ## freshness 엔드포인트 github_error 원인 분석 (2026-06-11)
 
 **문제.** `GET /api/projects/{id}/freshness`가 항상 `{"isOutdated":false,"reason":"github_error"}`를 반환해 "재분석 필요" 배너가 한 번도 뜨지 않았다.
