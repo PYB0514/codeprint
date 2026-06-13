@@ -2,6 +2,21 @@
 
 ---
 
+## 도메인 뷰 분류 — 컨트롤러가 가짜 "api" 도메인에 몰리던 문제 (2026-06-13)
+
+**문제.** 도메인 뷰에서 `interfaces/api/` 폴더의 컨트롤러 29개가 전부 "api"라는 단일 도메인 박스에 묶이고, 그 외 다수 파일은 "common"에 쌓여 도메인 구분이 무의미했다.
+
+**원인.** `extractDomain`이 "레이어 키워드 다음 첫 서브폴더 = 도메인" 규칙만 사용. `interfaces/api/GraphController.java`는 레이어가 `interfaces`, 첫 서브폴더가 `api`이므로 도메인이 `api`로 판정됨. 그러나 `api`는 도메인이 아니라 전달 방식(기술 분류)일 뿐이다. 원작자는 파일명 기반 추출이 파편화를 유발한다는 이유로 의도적으로 배제했었다.
+
+**해결 방법 선택.**
+- 탈락 1: `api`를 NON_DOMAIN_FOLDERS에 넣기만 함 → 컨트롤러가 전부 `common`으로 빠져 오히려 악화.
+- 탈락 2: 파일명에서 무조건 도메인 추출 → `NodeStyleController`→nodestyle, `UserFollowController`→userfollow 식으로 파편화(원작자가 우려한 문제 재현).
+- 채택: **2-pass 화이트리스트 매칭.** ①경로로 확실히 식별되는 도메인 집합(`buildKnownDomains`)을 먼저 수집 → ②구조 폴더만 있는 파일은 파일명에서 기술 접미사(Controller/Service 등)를 떼고 PascalCase 토큰을 누적 매칭하되, **알려진 도메인에 일치할 때만** 채택. 일치 없으면 `common`. 파편화 없이 정확도만 확보.
+
+**결과.** 실제 백엔드 219개 파일 검증: "api" 도메인 완전 소멸, 컨트롤러 29개 중 25개가 올바른 바운디드 컨텍스트(graph/community/user/analysis 등)로 귀속. 나머지 4종(Admin/Auth/Dev/Feedback/Mcp/GlobalExceptionHandler 등)은 대응 컨텍스트가 없어 `common` 유지 — DDD상 올바른 분류. `extractDomain`은 `knownDomains` 인자가 없으면 기존 동작(파일명 추론 비활성)이라 하위 호환. GraphPage의 탭 필터·범례·색상 6개 호출부도 동일 `knownDomains`를 공유시켜 레이아웃과 결과 일치 보장.
+
+---
+
 ## 버그
 
 ### GraphPage fetchGraph 무한 재요청 루프 (2026-06-11)

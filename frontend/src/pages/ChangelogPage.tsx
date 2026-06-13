@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.72.1',
+    date: '2026-06-13',
+    title: '도메인 뷰 분류 정확도 개선 — 컨트롤러를 올바른 도메인에 귀속',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: '도메인 뷰에서 interfaces/api 폴더의 컨트롤러들이 모두 "api"라는 가짜 도메인 하나로 묶이던 문제 수정 — GraphController는 graph, UserController는 user처럼 파일명 기준으로 실제 도메인에 배치' },
+      { category: '그래프', desc: '도메인을 식별할 수 없는 파일이 "common"에 과도하게 쌓이던 현상 완화 — 경로로 확인된 실제 도메인에 매칭될 때만 파일명 추론 적용해 파편화 방지' },
+    ],
+  },
+  {
     version: 'v0.72.0',
     date: '2026-06-13',
     title: '경고 엔진 일반화 — 비DDD 프로젝트 지원 + severity 구분',

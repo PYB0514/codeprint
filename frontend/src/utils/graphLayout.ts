@@ -129,10 +129,51 @@ const NON_DOMAIN_FOLDERS = new Set([
   'persistence', 'repository', 'repositories',
   'com', 'org', 'net', 'io', 'co', 'kr',
   'util', 'utils', 'helper', 'helpers', 'lib', 'libs', 'generated',
+  // 기술 분류용 구조 폴더 — 도메인이 아니라 전달 방식(예: interfaces/api)일 뿐
+  'api', 'rest', 'web', 'websocket', 'ws', 'controller', 'controllers',
+  'endpoint', 'endpoints', 'graphql', 'v1', 'v2', 'handler', 'handlers',
 ])
 
+// 도메인 판별 시 제거할 클래스 기술 접미사 (예: GraphController → Graph)
+const CLASS_SUFFIXES = [
+  'RestController', 'Controller', 'ServiceImpl', 'Service', 'RepositoryImpl',
+  'Repository', 'Configuration', 'Config', 'Entity', 'Request', 'Response',
+  'Mapper', 'Handler', 'Facade', 'Factory', 'Provider', 'Adapter', 'Port',
+  'Exception', 'Listener', 'Event', 'Validator', 'Filter', 'Resolver',
+  'Converter', 'Manager', 'Runner', 'Scheduler', 'Client', 'Gateway',
+  'Command', 'Query', 'Dto', 'Vo', 'Impl',
+]
+
+// 파일명에서 도메인을 유추 — 알려진 도메인 집합에 매칭될 때만 반환 (파편화 방지)
+function domainFromFilename(filePath: string, knownDomains: Set<string>): string | null {
+  const fileName = filePath.replace(/\\/g, '/').split('/').pop() ?? ''
+  let base = fileName.replace(/\.[^.]+$/, '')
+  for (const suf of CLASS_SUFFIXES) {
+    if (base.length > suf.length && base.endsWith(suf)) { base = base.slice(0, -suf.length); break }
+  }
+  // PascalCase/camelCase → 토큰 분리 후 선두 토큰부터 누적해 가장 긴 매칭 도메인 채택
+  const tokens = base.replace(/([a-z0-9])([A-Z])/g, '$1 $2').split(/[\s_-]+/).filter(Boolean).map(t => t.toLowerCase())
+  let best: string | null = null
+  let acc = ''
+  for (const t of tokens) {
+    acc += t
+    if (knownDomains.has(acc)) best = acc
+  }
+  return best
+}
+
+// 경로 기반으로 확실히 식별되는 도메인 집합을 수집 — 파일명 유추의 화이트리스트로 사용
+export function buildKnownDomains(filePaths: string[], commonPrefix: string): Set<string> {
+  const set = new Set<string>()
+  filePaths.forEach((p) => {
+    const d = extractDomain(p, commonPrefix)
+    if (d !== 'common') set.add(d)
+  })
+  return set
+}
+
 //파일 경로에서 도메인을 동적으로 추출 — 어떤 프로젝트 구조에서도 작동
-export function extractDomain(filePath: string, commonPrefix: string): string {
+export function extractDomain(filePath: string, commonPrefix: string, knownDomains?: Set<string>): string {
   const rel = filePath.startsWith(commonPrefix) ? filePath.slice(commonPrefix.length) : filePath
   const parts = rel.replace(/\\/g, '/').split('/').filter(Boolean)
 
@@ -150,6 +191,13 @@ export function extractDomain(filePath: string, commonPrefix: string): string {
       if (!NON_DOMAIN_FOLDERS.has(sub) && sub.length > 1) return sub
     }
     break
+  }
+
+  // 2. 구조 폴더(interfaces/api 등)만 있어 경로로 도메인을 못 찾으면 파일명에서 유추
+  //    — 알려진 도메인에 매칭될 때만. 예: GraphController → graph
+  if (knownDomains) {
+    const fromName = domainFromFilename(filePath, knownDomains)
+    if (fromName) return fromName
   }
 
   // 레이어 키워드 기반 구조가 없으면 common으로 분류 — 파일명 기반 추출은 파편화 유발
@@ -188,7 +236,8 @@ export function buildDomainColorMap(
 function buildDomainPositions(
   groups: Map<string, RawNode[]>,
   groupLayouts: Map<string, { files: Array<{ file: RawNode; x: number; y: number }>; w: number; h: number }>,
-  commonPrefix: string
+  commonPrefix: string,
+  knownDomains: Set<string>
 ): {
   positions: Map<string, { x: number; y: number }>
   domainBounds: Map<string, { x: number; y: number; w: number; h: number; domain: string }>
@@ -201,7 +250,7 @@ function buildDomainPositions(
   // 그룹 → 도메인 매핑 (그룹에 속한 첫 번째 파일의 경로로 판단)
   const groupDomain = new Map<string, string>()
   groups.forEach((files, key) => {
-    const domain = files.length > 0 ? extractDomain(files[0].filePath, commonPrefix) : 'common'
+    const domain = files.length > 0 ? extractDomain(files[0].filePath, commonPrefix, knownDomains) : 'common'
     groupDomain.set(key, domain)
   })
 
@@ -380,6 +429,9 @@ export function buildLayout(
 
   const commonPrefix = findCommonPrefix(fileNodes.map((f) => f.filePath.replace(/\\/g, '/')))
 
+  // 경로로 확실히 식별되는 도메인 집합 — interfaces/api 컨트롤러를 파일명으로 올바른 도메인에 귀속
+  const knownDomains = buildKnownDomains(fileNodes.map((f) => f.filePath), commonPrefix)
+
   // 파일별 함수 목록
   const funcsByFile = new Map<string, RawNode[]>()
   fileNodes.forEach((f) => funcsByFile.set(f.id, []))
@@ -444,7 +496,7 @@ export function buildLayout(
     groups.forEach((files, key) => {
       const byDomain = new Map<string, RawNode[]>()
       files.forEach(f => {
-        const d = extractDomain(f.filePath, commonPrefix)
+        const d = extractDomain(f.filePath, commonPrefix, knownDomains)
         if (!byDomain.has(d)) byDomain.set(d, [])
         byDomain.get(d)!.push(f)
       })
@@ -531,7 +583,7 @@ export function buildLayout(
   let groupPositions: Map<string, { x: number; y: number }>
   let domainBoundsResult: Map<string, { x: number; y: number; w: number; h: number; domain: string }> | undefined
   if (layoutPreset === 'domain') {
-    const domainResult = buildDomainPositions(effectiveGroups, effectiveGroupLayouts, commonPrefix)
+    const domainResult = buildDomainPositions(effectiveGroups, effectiveGroupLayouts, commonPrefix, knownDomains)
     groupPositions = domainResult.positions
     domainBoundsResult = domainResult.domainBounds
   } else {
@@ -648,7 +700,7 @@ export function buildLayout(
     let groupPos: { x: number; y: number }
 
     if (layoutPreset === 'domain' && domainBoundsResult) {
-      const fileDomain = groupFiles.length > 0 ? extractDomain(groupFiles[0].filePath, commonPrefix) : 'common'
+      const fileDomain = groupFiles.length > 0 ? extractDomain(groupFiles[0].filePath, commonPrefix, knownDomains) : 'common'
       const domainBounds = domainBoundsResult.get(fileDomain)
       if (domainBounds) {
         parentSectionId = `domain-section-${fileDomain}`
@@ -687,7 +739,7 @@ export function buildLayout(
       const filePos = isDomainMode
         ? { x: groupPos!.x + GROUP_PAD + x, y: groupPos!.y + GROUP_HEADER + GROUP_PAD + y }
         : { x: GROUP_PAD + x, y: GROUP_HEADER + GROUP_PAD + y }
-      const fileDomain = extractDomain(file.filePath, commonPrefix)
+      const fileDomain = extractDomain(file.filePath, commonPrefix, knownDomains)
       const palette = LAYER_PALETTE[layer] ?? DEFAULT_LAYER_PALETTE
       result.push({
         id: file.id,
