@@ -1,4 +1,4 @@
-// 토스페이먼츠 결제 승인 API 호출 서비스 (PaymentGatewayPort의 토스 구현체)
+// 토스페이먼츠 결제 승인 API 호출 서비스 (payment·donation PaymentGatewayPort의 토스 구현체)
 package com.codeprint.infrastructure.payment;
 
 import com.codeprint.domain.payment.port.PaymentGatewayPort;
@@ -14,7 +14,8 @@ import java.util.Map;
 
 @Slf4j
 @Service
-public class TossPaymentsService implements PaymentGatewayPort {
+public class TossPaymentsService implements PaymentGatewayPort,
+        com.codeprint.domain.donation.port.PaymentGatewayPort {
 
     private final RestClient restClient;
     private final String encodedSecretKey;

@@ -3,7 +3,7 @@ package com.codeprint.application.donation;
 
 import com.codeprint.domain.donation.Donation;
 import com.codeprint.domain.donation.DonationRepository;
-import com.codeprint.infrastructure.payment.TossPaymentsService;
+import com.codeprint.domain.donation.port.PaymentGatewayPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,7 +17,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DonationApplicationService {
 
-    private final TossPaymentsService tossPaymentsService;
+    private final PaymentGatewayPort paymentGateway;
     private final DonationRepository donationRepository;
 
     // 토스 결제 승인 후 후원 내역 저장
@@ -28,7 +28,7 @@ public class DonationApplicationService {
             return;
         }
 
-        tossPaymentsService.confirmPayment(paymentKey, orderId, amount);
+        paymentGateway.confirmPayment(paymentKey, orderId, amount);
 
         Donation donation = Donation.create(userId, username, amount, paymentKey, orderId);
         donationRepository.save(donation);
