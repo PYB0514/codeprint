@@ -813,7 +813,8 @@ export function buildLayout(
         },
       })
 
-      // 함수 노드 — 도메인 뷰: 도메인 섹션 기준 상대 좌표, 계층 뷰: 파일 안 상대 좌표
+      // 함수 노드 — 도메인/계층 뷰 모두 파일의 자식으로 배치 (파일 안 상대 좌표).
+      // 파일을 드래그하면 함수도 자식으로 함께 이동해 빈 박스로 분리되지 않는다.
       const funcs = funcsByFile.get(file.id) ?? []
       funcs.forEach((fn, i) => {
         const fc = i % size.cols
@@ -822,10 +823,9 @@ export function buildLayout(
         const fnRelY = FILE_PAD_TOP + fr * (FUNC_H + FUNC_PAD)
         result.push({
           id: fn.id,
-          ...(isDomainMode ? { parentId: parentSectionId! } : { parentId: file.id, extent: 'parent' as const }),
-          position: isDomainMode
-            ? { x: filePos.x + fnRelX, y: filePos.y + fnRelY }
-            : { x: fnRelX, y: fnRelY },
+          parentId: file.id,
+          extent: 'parent' as const,
+          position: { x: fnRelX, y: fnRelY },
           // 함수 박스 너비 110px, 좌우 패딩 8px → 102px / ~6px per char ≈ 17자
           data: { label: getLabel(fn, 17), name: fn.name, comment: fn.comment, userLabel: fn.userLabel, userNote: fn.userNote, layer, domain: fileDomain },
           style: {

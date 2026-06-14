@@ -514,7 +514,7 @@ function GraphPageInner() {
   const [shareSubmitting, setShareSubmitting] = useState(false)
   const flowRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const { getNodes, fitView, screenToFlowPosition } = useReactFlow()
+  const { getNodes, fitView, fitBounds, screenToFlowPosition } = useReactFlow()
 
   // 검색 결과 노드로 fitView 이동
   const handleSearchNodeClick = useCallback((nodeId: string) => {
@@ -542,6 +542,8 @@ function GraphPageInner() {
   const [playbackPlaying, setPlaybackPlaying] = useState(false)
   const playbackSpeed = 1200
   const playbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 재생이 막 시작됐는지 — 클릭 직후 화면이 흐름 루트로 튀지 않도록 첫 fitView를 건너뛰는 플래그
+  const playbackJustStarted = useRef(false)
   const [callTree, setCallTree] = useState<CallTreeNode | null>(null)
   const [activePath, setActivePath] = useState<{ nodeIds: string[]; edgeIds: string[]; edgeTypes: string[] }>({ nodeIds: [], edgeIds: [], edgeTypes: [] })
   // 현재 경로의 엣지 ID 집합 — 재생 중 visibility 관리용
@@ -670,13 +672,6 @@ function GraphPageInner() {
     })
   }, [setNodes])
 
-  // 범례 도메인 클릭 시 해당 도메인 섹션으로 fitView 이동
-  // 도메인 섹션으로 뷰포트 이동
-  const handleFitToDomain = useCallback((domain: string) => {
-    const section = getNodes().find((n) => n.id === `domain-section-${domain}`)
-    if (section) fitView({ nodes: [section], duration: 400, padding: 0.15 })
-  }, [getNodes, fitView])
-
   // 도메인 범례 클릭 — 해당 도메인의 흐름 재생 진입점 목록을 사이드바에 표시
   const openDomainFlows = useCallback((domain: string, color: string) => {
     const domainNodes = rawNodes.filter(n => extractDomain(n.filePath, commonPrefix, knownDomains) === domain)
@@ -803,8 +798,13 @@ function GraphPageInner() {
   // 흐름 재생 — 수동/자동 스텝 이동 시 현재 노드 위치로 화면 전환
   useEffect(() => {
     if (playbackItems.length === 0 || playbackCursor < 0) return
-    fitView({ nodes: [{ id: playbackItems[playbackCursor].id }], duration: 300, padding: 0.5, maxZoom: 1.5 })
-  }, [playbackCursor, playbackItems, fitView])
+    // 클릭으로 막 시작된 재생은 화면을 옮기지 않음 (흐름 루트로 튀는 현상 방지) — 이후 수동/자동 스텝부터 따라감
+    if (playbackJustStarted.current) { playbackJustStarted.current = false; return }
+    const targetId = playbackItems[playbackCursor].id
+    // 현재 화면에 렌더된 노드만 대상으로 이동 (도메인 필터 밖 노드로 빈 곳에 튀는 것 방지)
+    if (!getNodes().some(n => n.id === targetId)) return
+    fitView({ nodes: [{ id: targetId }], duration: 300, padding: 0.5, maxZoom: 1.5 })
+  }, [playbackCursor, playbackItems, fitView, getNodes])
 
   // 흐름 재생 — 자동 진행 타이머 (분기점에서 자동 일시정지)
   useEffect(() => {
@@ -837,6 +837,7 @@ function GraphPageInner() {
     setCallTree(tree)
     setActivePath({ nodeIds: defaultNodeIds, edgeIds: defaultEdgeIds, edgeTypes: defaultEdgeTypes })
     setPlaybackItems(items)
+    playbackJustStarted.current = true
     setPlaybackCursor(0)
     setPlaybackPlaying(false)
     setPendingBranchNodeId(null)
@@ -1833,6 +1834,9 @@ function GraphPageInner() {
     return new Set(visibleRaw.map(n => n.id))
   }, [activeDomainTab, rawNodes, commonPrefix, knownDomains, layoutPreset])
 
+  // DB 테이블 노드 ID 집합 — 탭(단일 도메인) 활성 시 DB를 도메인 옆으로 재배치하는 데 사용
+  const dbTableIdSet = useMemo(() => new Set(rawNodes.filter(n => n.type === 'DB_TABLE').map(n => n.id)), [rawNodes])
+
   const displayNodes = useMemo(() => {
     let result = showDomainBoxes ? nodes : nodes.filter(n => n.type !== 'sectionNode')
     if (tabFilteredNodeIds) {
@@ -1853,8 +1857,31 @@ function GraphPageInner() {
         return false
       })
     }
+    // 탭(단일 도메인) 활성 시 — 관련 DB 테이블을 도메인 섹션 바로 아래에 붙여 배치
+    // (전역 DB 열 위치에서 도메인 옆으로. 우측 흐름 사이드바에 가리지 않도록 아래쪽·도메인 폭 안에서 줄바꿈)
+    if (activeDomainTab && layoutPreset === 'domain') {
+      const section = nodes.find(n => n.id === `domain-section-${activeDomainTab}`)
+      if (section) {
+        const sx = section.position.x
+        const sy = section.position.y
+        const sw = (section.style?.width as number) ?? (section.width as number) ?? 0
+        const sh = (section.style?.height as number) ?? (section.height as number) ?? 0
+        const GAP = 16
+        let cx = sx, cy = sy + sh + 48, rowH = 0
+        result = result.map(n => {
+          if (!dbTableIdSet.has(n.id)) return n
+          const w = (n.width as number) ?? (n.style?.width as number) ?? 160
+          const h = (n.height as number) ?? (n.style?.height as number) ?? 48
+          if (cx > sx && cx + w > sx + Math.max(sw, w)) { cx = sx; cy += rowH + GAP; rowH = 0 }
+          const pos = { x: cx, y: cy }
+          cx += w + GAP
+          rowH = Math.max(rowH, h)
+          return { ...n, position: pos }
+        })
+      }
+    }
     return result
-  }, [showDomainBoxes, nodes, tabFilteredNodeIds, activeDomainTab])
+  }, [showDomainBoxes, nodes, tabFilteredNodeIds, activeDomainTab, layoutPreset, dbTableIdSet])
 
   // 탭 필터링된 엣지 — 양쪽 노드가 모두 표시될 때만 보여줌
   // 현재 사이드바에서 열린 노드 ID (엣지 온디맨드 표시용)
@@ -1867,9 +1894,13 @@ function GraphPageInner() {
   }, [sidebar])
 
   const displayEdges = useMemo(() => {
-    const baseEdges = tabFilteredNodeIds
+    let baseEdges = tabFilteredNodeIds
       ? edges.filter(e => tabFilteredNodeIds.has(e.source) && tabFilteredNodeIds.has(e.target))
       : []
+    // 도메인 활성 시 — 그 도메인의 DB 연결선을 토글과 무관하게 표시 (DB가 도메인에 붙어있음을 시각화)
+    if (activeDomainTab) {
+      baseEdges = baseEdges.map(e => isDbEdgeType((e.data as { type?: string } | undefined)?.type) ? { ...e, hidden: false } : e)
+    }
     // 노드가 선택됐으면 그 노드에 연결된 엣지 추가 표시 (탭 내부 + 전체 탭 모두)
     if (focusedNodeId) {
       const connectedEdges = edges.filter(e => e.source === focusedNodeId || e.target === focusedNodeId)
@@ -1878,7 +1909,7 @@ function GraphPageInner() {
       return combined
     }
     return baseEdges
-  }, [edges, tabFilteredNodeIds, focusedNodeId])
+  }, [edges, tabFilteredNodeIds, focusedNodeId, activeDomainTab])
 
   // 현재 레이아웃 기준으로 사용 가능한 탭 목록
   const availableTabs = useMemo(() => {
@@ -1913,6 +1944,46 @@ function GraphPageInner() {
     const domains = rawNodes.map(n => extractDomain(n.filePath, commonPrefix, knownDomains))
     return buildDomainColorMap(domains)
   }, [rawNodes, commonPrefix, knownDomains])
+
+  // 도메인 활성화 — 좌측 도메인 클릭 시 [그래프 필터 + 우측 흐름 패널 + 확대]를 한 번에 수행 (상단 탭 기능 통합)
+  const activateDomain = useCallback((key: string) => {
+    setActiveDomainTab(key)
+    if (layoutPreset === 'domain') {
+      const color = domainColorMap.get(key)?.color ?? '#6b7280'
+      openDomainFlows(key, color)
+    }
+  }, [layoutPreset, domainColorMap, openDomainFlows])
+
+  // 전체 보기로 리셋 — 필터 해제 + 도메인 요약 사이드바 닫기 + 전체 맞춤
+  const resetDomainTab = useCallback(() => {
+    setActiveDomainTab(null)
+    setSidebar(prev => prev?.kind === 'domain-summary' ? null : prev)
+    setTimeout(() => fitView({ duration: 400, padding: 0.1 }), 60)
+  }, [fitView])
+
+  // 도메인 활성 시 해당 도메인 섹션(+아래 붙은 DB)이 화면을 채우도록 확대.
+  // 섹션 좌표·크기는 필터와 무관하게 항상 고정이라, 명시적 사각형(fitBounds)으로 맞추면
+  // 대량 노드 교체 직후 React Flow 스토어가 정착되기 전에도 정확히 맞춰진다 (측정 race 회피)
+  useEffect(() => {
+    if (!activeDomainTab) return
+    const t = setTimeout(() => {
+      const sectionId = (layoutPreset === 'domain' ? 'domain-section-' : 'layer-section-') + activeDomainTab
+      const section = getNodes().find(n => n.id === sectionId)
+      if (!section) { fitView({ duration: 450, padding: 0.12 }); return }
+      const sx = section.position.x
+      const sy = section.position.y
+      const sw = (section.style?.width as number) ?? (section.width as number) ?? 600
+      const sh = (section.style?.height as number) ?? (section.height as number) ?? 400
+      // 도메인 아래 붙은 DB 영역 높이 추정 (displayNodes 배치 규칙과 동일: 섹션 폭 안에서 줄바꿈)
+      let dbCount = 0
+      if (layoutPreset === 'domain' && tabFilteredNodeIds) dbTableIdSet.forEach(id => { if (tabFilteredNodeIds.has(id)) dbCount++ })
+      const perRow = Math.max(1, Math.floor(sw / (160 + 16)))
+      const rows = Math.ceil(dbCount / perRow)
+      const dbAreaH = dbCount > 0 ? 48 + rows * (48 + 16) : 0
+      fitBounds({ x: sx, y: sy, width: sw, height: sh + dbAreaH }, { duration: 0, padding: 0.12 })
+    }, 80)
+    return () => clearTimeout(t)
+  }, [activeDomainTab, layoutPreset, fitView, fitBounds, getNodes, tabFilteredNodeIds, dbTableIdSet])
 
   // MiniMap 노드 색상 함수 — 인라인 선언 시 매 렌더 MiniMap 전체 재렌더 유발
   const minimapNodeColor = useCallback((n: Node) => {
@@ -2333,50 +2404,46 @@ function GraphPageInner() {
             <LeftSection title="범례">
               {layoutPreset === 'domain' && (
                 <>
-                  <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">도메인</p>
+                  <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">도메인 (클릭 = 해당 도메인만 보기)</p>
+                  {/* 전체 보기 — 필터 해제 (상단 탭바의 '전체' 대체) */}
+                  <button
+                    onClick={resetDomainTab}
+                    className={`w-full text-left text-xs px-1.5 py-1 mb-1 rounded transition-colors ${
+                      activeDomainTab === null ? 'bg-blue-700/40 text-blue-200' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                    }`}
+                  >
+                    전체 보기
+                  </button>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mb-2">
-                  {[
-                    { label: 'Project',       color: '#3b82f6', key: 'project' },
-                    { label: 'User',          color: '#10b981', key: 'user' },
-                    { label: 'Graph',         color: '#8b5cf6', key: 'graph' },
-                    { label: 'Analysis',      color: '#f59e0b', key: 'analysis' },
-                    { label: 'Community',     color: '#06b6d4', key: 'community' },
-                    { label: 'AI',            color: '#e879f9', key: 'ai' },
-                    { label: 'Notice',        color: '#f97316', key: 'notice' },
-                    { label: 'Donation',      color: '#4ade80', key: 'donation' },
-                    { label: 'Collaboration', color: '#fb7185', key: 'collaboration' },
-                    { label: 'Common',        color: '#6b7280', key: 'common' },
-                  ].map(({ label, color, key }) => {
-                    const active = opaqueDomainSet.has(key)
+                  {availableTabs.map((key) => {
+                    const color = domainColorMap.get(key)?.color ?? '#6b7280'
+                    const label = key.charAt(0).toUpperCase() + key.slice(1)
+                    const opaque = opaqueDomainSet.has(key)
+                    const active = activeDomainTab === key
                     return (
-                      <div key={key} className="flex items-center gap-1.5 py-0.5">
+                      <div key={key} className={`flex items-center gap-1.5 py-0.5 px-1 rounded ${active ? 'bg-gray-800/80' : ''}`}>
                         <button
                           onClick={() => toggleDomainOpaque(key)}
-                          title={active ? '내용 표시' : '내용 가리기'}
+                          title={opaque ? '내용 표시' : '내용 가리기'}
                           style={{
                             width: 16, height: 16, borderRadius: 3,
                             border: `1px solid ${color}88`,
-                            background: active ? color : `${color}22`,
-                            color: active ? '#fff' : color,
+                            background: opaque ? color : `${color}22`,
+                            color: opaque ? '#fff' : color,
                             fontSize: 9, cursor: 'pointer',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             flexShrink: 0,
                           }}
                         >
-                          {active ? '◑' : '○'}
+                          {opaque ? '◑' : '○'}
                         </button>
                         <span
-                          className="text-gray-400 text-xs truncate cursor-pointer hover:text-white transition-colors flex-1 min-w-0"
-                          onClick={() => openDomainFlows(key, color)}
-                          title="이 도메인의 흐름 목록 보기"
+                          className={`text-xs truncate cursor-pointer transition-colors flex-1 min-w-0 ${active ? 'text-white font-semibold' : 'text-gray-400 hover:text-white'}`}
+                          onClick={() => activateDomain(key)}
+                          title="이 도메인만 보기 + 흐름 목록"
                         >
                           {label}
                         </span>
-                        <button
-                          onClick={() => handleFitToDomain(key)}
-                          title="이 도메인으로 이동"
-                          className="text-gray-600 hover:text-gray-300 transition-colors flex-shrink-0 text-[9px] leading-none"
-                        >→</button>
                       </div>
                     )
                   })}
@@ -2399,7 +2466,15 @@ function GraphPageInner() {
               )}
               {layoutPreset === 'layer' && (
                 <>
-                  <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">계층형 레이어</p>
+                  <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">계층형 레이어 (클릭 = 해당 레이어만 보기)</p>
+                  <button
+                    onClick={resetDomainTab}
+                    className={`w-full text-left text-xs px-1.5 py-1 mb-1 rounded transition-colors ${
+                      activeDomainTab === null ? 'bg-blue-700/40 text-blue-200' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                    }`}
+                  >
+                    전체 보기
+                  </button>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
                   {[
                     { label: 'Domain',        color: '#3b82f6', key: 'domain' },
@@ -2411,25 +2486,33 @@ function GraphPageInner() {
                     { label: 'Hooks/Utils',   color: '#f97316', key: 'hooks' },
                     { label: 'Database',      color: '#ef4444', key: 'database' },
                   ].map(({ label, color, key }) => {
-                    const active = opaqueLayerSet.has(key)
+                    const opaque = opaqueLayerSet.has(key)
+                    const clickable = availableTabs.includes(key)
+                    const active = activeDomainTab === key
                     return (
-                      <div key={key} className="flex items-center gap-1.5 py-0.5">
+                      <div key={key} className={`flex items-center gap-1.5 py-0.5 px-1 rounded ${active ? 'bg-gray-800/80' : ''}`}>
                         <button
                           onClick={() => toggleLayerOpaque(key)}
-                          title={active ? '내용 표시' : '내용 가리기'}
+                          title={opaque ? '내용 표시' : '내용 가리기'}
                           style={{
                             width: 16, height: 16, borderRadius: 3,
                             border: `1px solid ${color}88`,
-                            background: active ? color : `${color}22`,
-                            color: active ? '#fff' : color,
+                            background: opaque ? color : `${color}22`,
+                            color: opaque ? '#fff' : color,
                             fontSize: 9, cursor: 'pointer',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             flexShrink: 0,
                           }}
                         >
-                          {active ? '◑' : '○'}
+                          {opaque ? '◑' : '○'}
                         </button>
-                        <span className="text-gray-400 text-xs truncate">{label}</span>
+                        <span
+                          className={`text-xs truncate flex-1 min-w-0 ${clickable ? 'cursor-pointer' : ''} ${active ? 'text-white font-semibold' : 'text-gray-400'} ${clickable ? 'hover:text-white' : ''}`}
+                          onClick={clickable ? () => activateDomain(key) : undefined}
+                          title={clickable ? '이 레이어만 보기' : undefined}
+                        >
+                          {label}
+                        </span>
                       </div>
                     )
                   })}
@@ -2473,47 +2556,6 @@ function GraphPageInner() {
             style={{ userSelect: 'none' }}
           />
         </aside>
-      )}
-
-      {/* 도메인/레이어 탭바 — ReactFlow 캔버스 상단에 오버레이 */}
-      {availableTabs.length > 0 && (
-        <div
-          className="absolute top-0 z-20 flex items-center gap-0.5 px-2 py-1 bg-gray-950/90 border-b border-gray-800 backdrop-blur-sm overflow-x-auto"
-          style={{
-            left: leftOpen ? `${leftWidth}px` : '0px',
-            right: rightCollapsed ? '40px' : `${rightWidth}px`,
-          }}
-        >
-          <button
-            onClick={() => { setActiveDomainTab(null); fitView({ duration: 400, padding: 0.1 }) }}
-            className={`flex-shrink-0 text-xs px-3 py-1 rounded transition-colors ${
-              activeDomainTab === null
-                ? 'bg-blue-700/60 text-blue-200 border border-blue-600/60'
-                : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-            }`}
-          >
-            전체
-          </button>
-          {availableTabs.map(tab => {
-            const color = layoutPreset === 'domain'
-              ? (domainColorMap.get(tab)?.color ?? '#6b7280')
-              : '#6b7280'
-            const isActive = activeDomainTab === tab
-            return (
-              <button
-                key={tab}
-                onClick={() => { setActiveDomainTab(tab); fitView({ duration: 400, padding: 0.1 }) }}
-                className={`flex-shrink-0 text-xs px-3 py-1 rounded transition-colors flex items-center gap-1.5 ${
-                  isActive ? 'text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-                }`}
-                style={isActive ? { background: `${color}33`, border: `1px solid ${color}66` } : {}}
-              >
-                <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: color }} />
-                {tab}
-              </button>
-            )
-          })}
-        </div>
       )}
 
       <ReactFlow
