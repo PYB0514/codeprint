@@ -66,6 +66,9 @@ public class GraphBuilder {
                 if (pf.asyncMethods() != null && pf.asyncMethods().contains(funcName)) {
                     meta.put("isAsync", true);
                 }
+                if (pf.frameworkAnnotatedMethods() != null && pf.frameworkAnnotatedMethods().contains(funcName)) {
+                    meta.put("isFrameworkAnnotated", true);
+                }
                 funcNode.updateMetadata(meta);
                 graphRepository.saveNode(funcNode);
                 funcNodeIds.put(pf.filePath() + "::" + funcName, funcNode.getId());

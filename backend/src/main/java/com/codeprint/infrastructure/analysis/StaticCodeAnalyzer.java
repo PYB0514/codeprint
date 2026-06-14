@@ -34,8 +34,9 @@ public class StaticCodeAnalyzer {
         List<String> asyncMethods = extractAsyncMethods(content, language);
         List<String> jsxComponents = extractJsxComponents(content, relativePath);
         List<RawSqlAccess> rawSqlAccesses = extractRawSqlAccesses(content);
+        List<String> frameworkAnnotatedMethods = extractFrameworkAnnotatedMethods(content, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods);
     }
 
     // 파일 상단 첫 번째 주석 추출
@@ -773,5 +774,76 @@ public class StaticCodeAnalyzer {
         }
 
         return result;
+    }
+
+    // 프레임워크/런타임이 호출하는 메서드를 표시하는 어노테이션 — 부착 메서드는 코드상 호출부가 없어도 dead 아님
+    private static final Set<String> JAVA_FRAMEWORK_ANNOTATIONS = Set.of(
+        // Spring Web MVC 핸들러
+        "GetMapping", "PostMapping", "PutMapping", "DeleteMapping", "PatchMapping", "RequestMapping",
+        "InitBinder", "ModelAttribute", "ExceptionHandler",
+        // Spring DI/라이프사이클 — 컨테이너가 호출
+        "Bean", "EventListener", "Scheduled", "PostConstruct", "PreDestroy",
+        // 인터페이스 구현/오버라이드 — 다형성 디스패치로 호출
+        "Override",
+        // 테스트 — 프레임워크가 리플렉션으로 호출
+        "Test", "BeforeEach", "AfterEach", "BeforeAll", "AfterAll", "ParameterizedTest", "RepeatedTest"
+    );
+
+    // 어노테이션/데코레이터가 붙은 메서드명 추출 — 프레임워크가 호출하므로 FUNCTION_CALL 엣지가 없어도 dead 아님
+    private List<String> extractFrameworkAnnotatedMethods(String content, String language) {
+        List<String> result = new ArrayList<>();
+        String[] lines = content.split("\n");
+
+        if (language.equals("Java") || language.equals("Kotlin")) {
+            for (int i = 0; i < lines.length; i++) {
+                String ann = leadingAnnotationName(lines[i]);
+                if (ann == null || !JAVA_FRAMEWORK_ANNOTATIONS.contains(ann)) continue;
+                String name = methodNameAfterAnnotation(lines, i, null);
+                if (name != null) result.add(name);
+            }
+        } else if (language.equals("Python")) {
+            // 데코레이터(@app.route, @pytest.fixture, @property 등)가 붙은 def — 프레임워크 등록·런타임 호출
+            for (int i = 0; i < lines.length; i++) {
+                if (!lines[i].trim().startsWith("@")) continue;
+                String name = methodNameAfterAnnotation(lines, i, "def");
+                if (name != null) result.add(name);
+            }
+        } else if (language.equals("TypeScript") || language.equals("JavaScript")) {
+            // 데코레이터(@Get, @Injectable 등 NestJS) 부착 메서드
+            for (int i = 0; i < lines.length; i++) {
+                if (!lines[i].trim().startsWith("@")) continue;
+                String name = methodNameAfterAnnotation(lines, i, null);
+                if (name != null) result.add(name);
+            }
+        }
+        return result;
+    }
+
+    // 줄 앞쪽이 @로 시작하면 어노테이션 이름 반환 (없으면 null)
+    private String leadingAnnotationName(String line) {
+        String t = line.trim();
+        if (!t.startsWith("@")) return null;
+        int j = 1;
+        while (j < t.length() && (Character.isLetterOrDigit(t.charAt(j)) || t.charAt(j) == '_')) j++;
+        return j > 1 ? t.substring(1, j) : null;
+    }
+
+    // 어노테이션 줄(start)부터 앞쪽 어노테이션을 벗겨가며 메서드 시그니처 줄에서 메서드명 추출
+    private String methodNameAfterAnnotation(String[] lines, int start, String defKeyword) {
+        for (int k = start; k < Math.min(lines.length, start + 9); k++) {
+            // 줄 앞쪽의 어노테이션/데코레이터(@Name·@a.b.c·@Name(...))를 제거
+            String line = lines[k].replaceAll("^\\s*(?:@[\\w.]+(?:\\([^)]*\\))?\\s*)+", "").trim();
+            if (line.isEmpty() || line.startsWith("//") || line.startsWith("*") || line.startsWith("/*")) continue;
+            Matcher m = (defKeyword == null)
+                    ? Pattern.compile("([A-Za-z_]\\w*)\\s*\\(").matcher(line)
+                    : Pattern.compile(defKeyword + "\\s+(\\w+)\\s*\\(").matcher(line);
+            if (m.find()) {
+                String name = m.group(1);
+                return isKeyword(name) ? null : name;
+            }
+            // 시그니처가 아닌 줄(필드 선언 등)을 만나면 중단
+            return null;
+        }
+        return null;
     }
 }
