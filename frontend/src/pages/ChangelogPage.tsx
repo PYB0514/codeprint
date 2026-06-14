@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.76.0',
+    date: '2026-06-14',
+    title: '관리자 플랜 변경 — 감사 로그가 남는 인가된 액션',
+    type: 'feature',
+    items: [
+      { category: '관리자', desc: '관리자 대시보드에서 사용자 플랜을 FREE↔PRO로 변경 가능 — 변경 시 사유 입력 필수, 누가·언제·무엇을·왜 바꿨는지 감사 로그로 기록' },
+      { category: '관리자', desc: '플랜 변경 감사 로그 목록 표시 — 모든 변경이 추적되는 인가된 관리 기능(결제 우회 백도어가 아님)' },
+    ],
+  },
+  {
     version: 'v0.75.2',
     date: '2026-06-14',
     title: '데드 코드 경고 오탐 대폭 감소 — 프레임워크 핸들러·던더·테스트 제외',

@@ -2,6 +2,26 @@
 
 ---
 
+## 관리자 플랜 변경 — backdoor 대신 감사 로그 남는 인가 액션 (2026-06-14)
+
+**문제.** 사용자가 "내 계정을 PRO로 바꾸는 우회로"를 물음. 결제 우회 backdoor(숨김 엔드포인트·매직 파라미터·하드코딩)는 유료 서비스에 심각한 보안 구멍 — 노출 시 자가 업그레이드 가능, SECURITY_POLICY 원칙 위반.
+
+**선택지.**
+- 탈락 1: backdoor(숨김 경로/하드코딩) — 보안 구멍. 거절.
+- 탈락 2: dev DB 수동 `UPDATE users SET plan` — 1회성 테스트엔 가능하나 기록 안 남고 프로덕션 부적합.
+- 탈락 3: 가짜 toss_payment_orders 삽입 — 결제 데이터 정합성(만료·환불·매출 집계) 깨짐.
+- 채택: **ADMIN 인가 + 감사 로그 액션.** `POST /api/admin/users/{id}/plan`(`@PreAuthorize("hasRole('ADMIN')")` + SecurityConfig `/api/admin/**` URL 게이트 이중 방어), 사유 필수(`@Valid`), 별도 `plan_grant_logs`(V40)에 actor·target·old→new·reason·시각 기록(자기 부여도 기록).
+
+**결정 세부.**
+- 감사 테이블은 **plan_grant_logs 전용**(범용 admin_action_logs 대신 — §2 단순성, 추후 다른 admin 액션 생기면 일반화).
+- 대상 plan은 **FREE/PRO만** 허용(팀 플랜은 seat-pool 별도 경로). 그 외 400.
+- 결제 주문을 위조하지 않고 grant를 **별도 기록**으로 모델링 → 결제 데이터 정합성 보존.
+- 기존 도메인 메서드 `User.upgradeToPro()`/`downgradeToFree()` 재사용(신규 상태전이 로직 없음 → 컨트롤러 런타임 검증 대상, 별도 TDD 불요).
+
+**결과.** 6대 보안 조건(서버 인가·감사·정합성·검증·자기부여 기록·admin 계정 보호) 충족. 전체 테스트 통과(V40 Flyway 컨텍스트 적용 확인). 실서버 검증(V40 dev 적용·grant·감사 로그·UI)은 백엔드 재기동 후.
+
+---
+
 ## CROSS_CONTEXT_IMPORT 위반 해소 — 통합 이벤트 + UserPlan을 Shared로 이동 (2026-06-13)
 
 **문제.** 전체 구조 DDD 재점검에서 CROSS_CONTEXT_IMPORT 7건 확인. 그 중 5건이 두 패턴.
