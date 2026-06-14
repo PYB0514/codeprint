@@ -1,8 +1,35 @@
 # 코드 분석 엔진 시행착오 & 설계 결정
 
-> Tree-sitter 기반 정적 분석, GraphBuilder, 함수 주석 추출 관련 기록.
+> 정규식 기반 정적 분석, GraphBuilder, 함수 주석 추출 관련 기록.
 
 ---
+
+## C-13: 경고 오탐률 벤치마크 — DEAD_CODE가 압도적 오탐원 (2026-06-14)
+
+**목적.** 유명 오픈소스 레포를 분석해 언어 무관 detector 4종(DEAD_CODE·HIGH_FAN_OUT·CYCLIC_IMPORT·BROKEN_INTERFACE_CHAIN)의 실제 오탐률 측정. (DDD 전용 경고는 v0.72.0 이후 비DDD 게이팅돼 일반 레포엔 안 뜸.)
+
+**방법.** 웹앱으로 분석(백엔드 가동 중이라 analyzeLocal 대신 실서버 분석), 경고를 타입별 집계 후 표본을 참/오탐 판정.
+
+**측정 결과.**
+
+| 레포 | 언어 | 파일 | 함수 | 경고 | DEAD_CODE | HIGH_FAN_OUT | CYCLIC | BROKEN_IF |
+|---|---|---|---|---|---|---|---|---|
+| spring-petclinic | Java(앱) | 47 | 96 | 23 | 21 (전부 오탐) | 2 | 0 | 0 |
+| psf/requests | Python(라이브러리) | 37 | 711 | 597 | 595 (≈84% 함수가 dead) | 2(추정) | 0 | 0 |
+
+**DEAD_CODE 오탐 원인 (전수/표본 판정).**
+- **petclinic 21건 = 100% 오탐.** 전부 프레임워크 호출: Spring MVC 핸들러(@GetMapping/@PostMapping), @InitBinder, @ModelAttribute, @Bean 팩토리, 인터페이스 구현(Formatter.print·Validator.supports), WebMvcConfigurer.addInterceptors 오버라이드, RuntimeHintsRegistrar.registerHints. 호출부가 코드에 없을 뿐 전부 실사용.
+- **requests 595건 ≈ 거의 전부 오탐.** Python 던더 메서드(`__init__`·`__iter__`·`__enter__`·`__exit__`·`__getitem__`·`__getstate__` 등, 런타임이 호출), pytest 테스트 함수(`test_*`), 공개 API(get·options·set_cookie). 함수 711개 중 595개를 dead로 표시 = 사실상 노이즈.
+- 부차 발견: requests에서 **DB_TABLE 4개 오검출**(DB 없는 라이브러리 — raw SQL 정규식이 문자열/픽스처를 오매칭, B-9 후속 정밀화 필요).
+
+**결론.** v0.72.4가 Repository/Port 인터페이스 디스패치 오탐만 제거했지만, DEAD_CODE는 여전히 ①어노테이션/데코레이터 부착 메서드(프레임워크 콜백) ②인터페이스/오버라이드 구현 ③Python 던더 ④테스트 함수 ⑤라이브러리 공개 API 를 전부 오탐. 표준 프레임워크 앱·라이브러리에서 오탐률이 사실상 100%에 수렴 → **현재 형태로는 신뢰 불가.**
+
+**수정 방향(다음 작업, 백엔드 내린 뒤 TDD 필수 — `GraphWarningService.detectDeadCode`).**
+1. Python 던더(`__\w+__`) 제외 — 즉효·확실.
+2. 어노테이션/데코레이터 부착 메서드 제외 (analyzer가 현재 어노테이션을 버려서 detector가 못 봄 → 부착 여부 플래그 보존 필요).
+3. 인터페이스/오버라이드 구현 제외 범위를 Repository/Port 너머로 확장.
+4. 테스트 경로/함수(`src/test`·`*Test`·`test_*`·`*.spec`) 제외 — DDD 경고는 이미 제외 중, DEAD_CODE/HIGH_FAN_OUT에도 적용.
+> DEAD_CODE는 GraphWarningService(반복 FP 이력)라 회귀 테스트 의무. B-10(주석/문자열 전처리 부재)도 오탐에 기여하므로 함께 검토.
 
 ## 설계 결정
 
