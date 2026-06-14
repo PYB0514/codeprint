@@ -316,6 +316,64 @@ class GraphWarningServiceTest {
         assertThat(crossDomain(warnings)).isEmpty();
     }
 
+    // --- DEAD_CODE 오탐 제외 ---
+
+    // 특정 노드가 DEAD_CODE로 플래그됐는지 확인
+    private boolean isDeadCode(List<Map<String, Object>> warnings, UUID nodeId) {
+        return warnings.stream()
+                .filter(w -> "DEAD_CODE".equals(w.get("type")))
+                .anyMatch(w -> ((List<?>) w.get("nodeIds")).contains(nodeId.toString()));
+    }
+
+    @Test
+    @DisplayName("JPA AttributeConverter 메서드(convertToDatabaseColumn) — Hibernate 리플렉션 호출이라 DEAD_CODE 제외")
+    void deadCode_jpaConverter_excluded() {
+        Node conv = funcNodeWithPath("convertToDatabaseColumn", "/com/example/shared/jpa/AesEncryptionConverter.java");
+        List<Map<String, Object>> warnings = service.detect(List.of(conv), List.of());
+        assertThat(isDeadCode(warnings, conv.getId())).isFalse();
+    }
+
+    @Test
+    @DisplayName("도메인 Repository 인터페이스 선언 메서드 — 같은 이름 호출이 있으면 디스패치로 보고 DEAD_CODE 제외")
+    void deadCode_domainInterfaceDispatch_excluded() {
+        Node caller = funcNodeWithPath("removeUser", "/com/example/application/user/UserCommandService.java");
+        Node impl = funcNodeWithPath("delete", "/com/example/infrastructure/persistence/user/UserRepositoryImpl.java");
+        Node iface = funcNodeWithPath("delete", "/com/example/domain/user/UserRepository.java");
+        // 호출은 구현체로 향함 — 인터페이스 선언 노드엔 인바운드 엣지 없음
+        Edge call = callEdge(caller.getId(), impl.getId(), false);
+
+        List<Map<String, Object>> warnings = service.detect(List.of(caller, impl, iface), List.of(call));
+        assertThat(isDeadCode(warnings, iface.getId())).isFalse();
+    }
+
+    @Test
+    @DisplayName("도메인 port 인터페이스 메서드(confirmPayment) — 같은 이름 호출 있으면 DEAD_CODE 제외")
+    void deadCode_domainPortDispatch_excluded() {
+        Node caller = funcNodeWithPath("confirmDonation", "/com/example/application/donation/DonationApplicationService.java");
+        Node impl = funcNodeWithPath("confirmPayment", "/com/example/infrastructure/payment/TossPaymentsService.java");
+        Node port = funcNodeWithPath("confirmPayment", "/com/example/domain/donation/port/PaymentGatewayPort.java");
+        Edge call = callEdge(caller.getId(), impl.getId(), false);
+
+        List<Map<String, Object>> warnings = service.detect(List.of(caller, impl, port), List.of(call));
+        assertThat(isDeadCode(warnings, port.getId())).isFalse();
+    }
+
+    @Test
+    @DisplayName("호출되지 않는 일반 함수(shared/) — DEAD_CODE 여전히 감지 (과잉 억제 방지)")
+    void deadCode_genuinelyUnused_stillDetected() {
+        Node unused = funcNodeWithPath("monthlyPrice", "/com/example/shared/plan/UserPlan.java");
+        List<Map<String, Object>> warnings = service.detect(List.of(unused), List.of());
+        assertThat(isDeadCode(warnings, unused.getId())).isTrue();
+    }
+
+    @Test
+    @DisplayName("아무 데서도 호출 안 되는 인터페이스 메서드 — DEAD_CODE 여전히 감지")
+    void deadCode_uncalledInterfaceMethod_stillDetected() {
+        Node iface = funcNodeWithPath("neverCalledQuery", "/com/example/domain/user/UserRepository.java");
+        List<Map<String, Object>> warnings = service.detect(List.of(iface), List.of());
+        assertThat(isDeadCode(warnings, iface.getId())).isTrue();
+    }
+
     // --- fingerprint (suppress 식별자) ---
 
     @Test
