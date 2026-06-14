@@ -1,18 +1,27 @@
 // 어드민 전용 API — 통계 조회, 사용자 목록·정지·복구
 package com.codeprint.interfaces.api;
 
+import com.codeprint.domain.admin.PlanGrantLog;
+import com.codeprint.domain.admin.PlanGrantLogRepository;
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.project.ProjectRepository;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -23,6 +32,10 @@ public class AdminController {
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
     private final AnalysisRepository analysisRepository;
+    private final PlanGrantLogRepository planGrantLogRepository;
+
+    // 플랜 변경 요청 DTO (사유 필수 — 감사 기록용)
+    record PlanGrantRequest(@NotBlank String plan, @NotBlank @Size(max = 500) String reason) {}
 
     // 서비스 전체 통계 조회
     @GetMapping("/stats")
@@ -71,6 +84,50 @@ public class AdminController {
                     return ResponseEntity.ok(Map.of("message", "계정이 복구되었습니다.", "enabled", true));
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    // 사용자 플랜 변경 (FREE↔PRO) — 감사 로그를 남기는 인가된 관리자 액션. 결제 주문을 위조하지 않고 별도 grant 기록으로 모델링.
+    @PostMapping("/users/{id}/plan")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> changePlan(@PathVariable UUID id,
+                                        @Valid @RequestBody PlanGrantRequest req,
+                                        @AuthenticationPrincipal User admin) {
+        String target = req.plan().toUpperCase();
+        if (!target.equals("FREE") && !target.equals("PRO")) {
+            return ResponseEntity.badRequest().body(Map.of("message", "plan은 FREE 또는 PRO만 가능합니다. (팀 플랜은 별도 경로)"));
+        }
+        Optional<User> opt = userRepository.findById(id);
+        if (opt.isEmpty()) return ResponseEntity.notFound().build();
+
+        User user = opt.get();
+        String oldPlan = user.getPlan().name();
+        if (target.equals(oldPlan)) {
+            return ResponseEntity.ok(Map.of("message", "이미 해당 플랜입니다.", "plan", oldPlan));
+        }
+        if (target.equals("PRO")) user.upgradeToPro();
+        else user.downgradeToFree();
+        userRepository.save(user);
+        // 감사 로그 — 자기 자신에게 부여하는 경우도 기록 (권한 남용 추적)
+        planGrantLogRepository.save(PlanGrantLog.create(admin.getId(), id, oldPlan, target, req.reason()));
+        return ResponseEntity.ok(Map.of("message", "플랜이 변경되었습니다.", "plan", target));
+    }
+
+    // 플랜 변경 감사 로그 최근 50건 조회
+    @GetMapping("/plan-grants")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> recentPlanGrants() {
+        List<Map<String, Object>> logs = planGrantLogRepository.findTop50ByOrderByCreatedAtDesc().stream()
+                .map(l -> Map.<String, Object>of(
+                        "id", l.getId().toString(),
+                        "actorAdminId", l.getActorAdminId().toString(),
+                        "targetUserId", l.getTargetUserId().toString(),
+                        "oldPlan", l.getOldPlan(),
+                        "newPlan", l.getNewPlan(),
+                        "reason", l.getReason(),
+                        "createdAt", l.getCreatedAt().toString()
+                ))
+                .toList();
+        return ResponseEntity.ok(logs);
     }
 
     // User 엔티티를 응답 Map으로 변환

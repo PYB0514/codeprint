@@ -33,6 +33,16 @@ interface NoticeItem {
   createdAt: string
 }
 
+interface PlanGrant {
+  id: string
+  actorAdminId: string
+  targetUserId: string
+  oldPlan: string
+  newPlan: string
+  reason: string
+  createdAt: string
+}
+
 // 관리자 대시보드 페이지
 export default function AdminPage() {
   const [stats, setStats] = useState<Stats | null>(null)
@@ -47,6 +57,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [jvmMetrics, setJvmMetrics] = useState<JvmMetrics | null>(null)
+  const [planGrants, setPlanGrants] = useState<PlanGrant[]>([])
 
   // 통계 및 사용자 목록 로드
   useEffect(() => {
@@ -96,6 +107,30 @@ export default function AdminPage() {
       .then((res) => setNotices(res.data))
       .catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 플랜 변경 감사 로그 로드
+  const loadPlanGrants = () => {
+    axios.get('/api/admin/plan-grants')
+      .then((res) => setPlanGrants(res.data))
+      .catch(() => {})
+  }
+
+  useEffect(() => { loadPlanGrants() }, [])
+
+  // 사용자 플랜 변경 (FREE↔PRO) — 사유 입력 필수, 감사 로그 기록
+  const changePlan = async (user: UserItem) => {
+    const target = user.plan === 'PRO' ? 'FREE' : 'PRO'
+    const reason = prompt(`${user.username}의 플랜을 ${user.plan} → ${target}로 변경합니다.\n사유를 입력하세요 (감사 로그에 기록됩니다):`)
+    if (reason === null) return
+    if (!reason.trim()) { alert('사유는 필수입니다.'); return }
+    try {
+      const res = await axios.post(`/api/admin/users/${user.id}/plan`, { plan: target, reason: reason.trim() })
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, plan: res.data.plan } : u))
+      loadPlanGrants()
+    } catch {
+      alert('플랜 변경에 실패했습니다.')
+    }
+  }
 
   // 계정 정지 또는 복구 처리
   const toggleUser = async (user: UserItem) => {
@@ -318,18 +353,26 @@ export default function AdminPage() {
                   </td>
                   <td className="px-6 py-3 text-gray-400">{user.createdAt.slice(0, 10)}</td>
                   <td className="px-6 py-3">
-                    {user.role !== 'ADMIN' && (
+                    <div className="flex gap-2">
                       <button
-                        onClick={() => toggleUser(user)}
-                        className={`text-xs px-3 py-1 rounded transition-colors ${
-                          user.enabled
-                            ? 'bg-red-900/60 hover:bg-red-800 text-red-300'
-                            : 'bg-green-900/60 hover:bg-green-800 text-green-300'
-                        }`}
+                        onClick={() => changePlan(user)}
+                        className="text-xs px-3 py-1 rounded bg-purple-900/60 hover:bg-purple-800 text-purple-300 transition-colors"
                       >
-                        {user.enabled ? '정지' : '복구'}
+                        {user.plan === 'PRO' ? 'FREE로' : 'PRO로'}
                       </button>
-                    )}
+                      {user.role !== 'ADMIN' && (
+                        <button
+                          onClick={() => toggleUser(user)}
+                          className={`text-xs px-3 py-1 rounded transition-colors ${
+                            user.enabled
+                              ? 'bg-red-900/60 hover:bg-red-800 text-red-300'
+                              : 'bg-green-900/60 hover:bg-green-800 text-green-300'
+                          }`}
+                        >
+                          {user.enabled ? '정지' : '복구'}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -344,6 +387,44 @@ export default function AdminPage() {
               <button disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}
                 className="px-3 py-1 rounded bg-gray-800 text-gray-300 disabled:opacity-40 hover:bg-gray-700 text-sm">다음</button>
             </div>
+          )}
+        </div>
+
+        {/* 플랜 변경 감사 로그 */}
+        <div className="bg-gray-900 rounded-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">플랜 변경 감사 로그</h2>
+            <span className="text-xs text-gray-500">최근 50건 · 모든 변경 기록</span>
+          </div>
+          {planGrants.length === 0 ? (
+            <p className="px-6 py-4 text-sm text-gray-500">플랜 변경 이력이 없습니다.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-gray-400 border-b border-gray-800">
+                  <th className="text-left px-6 py-3">일시</th>
+                  <th className="text-left px-6 py-3">대상 사용자</th>
+                  <th className="text-left px-6 py-3">변경</th>
+                  <th className="text-left px-6 py-3">사유</th>
+                  <th className="text-left px-6 py-3">처리 관리자</th>
+                </tr>
+              </thead>
+              <tbody>
+                {planGrants.map((g) => (
+                  <tr key={g.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                    <td className="px-6 py-3 text-gray-400 whitespace-nowrap">{g.createdAt.slice(0, 19).replace('T', ' ')}</td>
+                    <td className="px-6 py-3 text-gray-400 font-mono text-xs">{g.targetUserId.slice(0, 8)}</td>
+                    <td className="px-6 py-3">
+                      <span className="text-gray-500">{g.oldPlan}</span>
+                      <span className="text-gray-600 mx-1">→</span>
+                      <span className={g.newPlan === 'PRO' ? 'text-purple-300 font-semibold' : 'text-gray-300'}>{g.newPlan}</span>
+                    </td>
+                    <td className="px-6 py-3 text-gray-300 max-w-[300px] truncate">{g.reason}</td>
+                    <td className="px-6 py-3 text-gray-500 font-mono text-xs">{g.actorAdminId.slice(0, 8)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </div>
