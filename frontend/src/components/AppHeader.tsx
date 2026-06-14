@@ -145,6 +145,9 @@ export default function AppHeader({ onLogin }: Props) {
         <button onClick={() => navigate('/changelog')} className="text-gray-400 hover:text-white transition-colors">
           패치노트
         </button>
+        <button onClick={() => navigate('/how-it-works')} className="text-gray-400 hover:text-white transition-colors">
+          작동 방식
+        </button>
         <button onClick={() => navigate('/teams')} className="text-gray-400 hover:text-white transition-colors">
           팀
         </button>
