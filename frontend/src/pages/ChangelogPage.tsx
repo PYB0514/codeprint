@@ -1,7 +1,7 @@
 ﻿// 서비스 버전별 패치노트를 공개하는 페이지
 import AppHeader from '../components/AppHeader'
 
-interface Release {
+export interface Release {
   version: string
   date: string
   title: string
@@ -9,7 +9,17 @@ interface Release {
   items: { category: string; desc: string }[]
 }
 
-const RELEASES: Release[] = [
+export const RELEASES: Release[] = [
+  {
+    version: 'v0.75.0',
+    date: '2026-06-14',
+    title: '기능 발전사 페이지 — 주요 기능이 버전을 거쳐 자란 과정',
+    type: 'feature',
+    items: [
+      { category: '프론트', desc: '헤더에 "발전사"(/evolution) 추가 — 패치노트가 버전 축이라면 발전사는 기능 축. 경고엔진·분석엔진·그래프시각화 세 주요 기능이 어떤 마일스톤을 거쳐 자랐는지를 서사와 타임라인으로 정리' },
+      { category: '프론트', desc: '전체 릴리스를 나열하지 않고 각 기능의 핵심 마일스톤 버전만 선별해 표시 — 패치노트(/changelog)의 RELEASES를 단일 소스로 재사용' },
+    ],
+  },
   {
     version: 'v0.74.0',
     date: '2026-06-14',
