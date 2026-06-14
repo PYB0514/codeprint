@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.75.1',
+    date: '2026-06-14',
+    title: '랜딩페이지 분석 엔진 표기 정정 — "Tree-sitter" → 정규식',
+    type: 'fix',
+    items: [
+      { category: '프론트', desc: '랜딩페이지가 분석 엔진을 "Tree-sitter 기반"으로 잘못 표기하던 것을 "정규식 기반"으로 정정 — 실제 엔진은 언어별 정규식 정적 분석. 히어로 배지·사용법 설명·그래프 목업 노드 3곳 수정' },
+    ],
+  },
+  {
     version: 'v0.75.0',
     date: '2026-06-14',
     title: '기능 발전사 페이지 — 주요 기능이 버전을 거쳐 자란 과정',
