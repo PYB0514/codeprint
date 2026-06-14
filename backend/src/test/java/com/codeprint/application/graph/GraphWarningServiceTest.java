@@ -419,6 +419,53 @@ class GraphWarningServiceTest {
         assertThat(isDeadCode(warnings, jest.getId())).isFalse();
     }
 
+    // DEAD_CODE 타입 경고만 필터
+    private List<Map<String, Object>> deadCodeWarnings(List<Map<String, Object>> warnings) {
+        return warnings.stream().filter(w -> "DEAD_CODE".equals(w.get("type"))).toList();
+    }
+
+    @Test
+    @DisplayName("미호출 비율 15% 초과(40/40=100%) — 개별 경고 대신 단일 신뢰도 안내로 치환 (C-13 게이트)")
+    void deadCode_lowConfidenceGate_collapsesToSingleNotice() {
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            nodes.add(funcNodeWithPath("calc" + i, "/com/example/shared/calc/Calc" + i + ".java"));
+        }
+        List<Map<String, Object>> dead = deadCodeWarnings(service.detect(nodes, List.of()));
+        assertThat(dead).hasSize(1);
+        assertThat((String) dead.get(0).get("message")).contains("미호출 함수 비율");
+        assertThat((List<?>) dead.get(0).get("nodeIds")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("미호출 비율 15% 이하(3/43≈7%) — 게이트 미발동, 개별 DEAD_CODE 경고 유지")
+    void deadCode_belowGateThreshold_keepsIndividualWarnings() {
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        // application/ 함수 40개 — dead 후보에서 제외되지만 전체 함수 수(분모)에는 포함
+        for (int i = 0; i < 40; i++) {
+            nodes.add(funcNodeWithPath("svc" + i, "/com/example/application/order/Svc" + i + ".java"));
+        }
+        // 진짜 미호출 함수 3개 (shared/)
+        for (int i = 0; i < 3; i++) {
+            nodes.add(funcNodeWithPath("dead" + i, "/com/example/shared/calc/Dead" + i + ".java"));
+        }
+        List<Map<String, Object>> dead = deadCodeWarnings(service.detect(nodes, List.of()));
+        assertThat(dead).hasSize(3);
+        assertThat(dead).allSatisfy(w -> assertThat((List<?>) w.get("nodeIds")).isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("함수 수 30개 미만(5/5=100%)은 게이트 미적용 — 소형 그래프 개별 경고 유지")
+    void deadCode_smallGraph_notGated() {
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            nodes.add(funcNodeWithPath("calc" + i, "/com/example/shared/calc/Calc" + i + ".java"));
+        }
+        List<Map<String, Object>> dead = deadCodeWarnings(service.detect(nodes, List.of()));
+        assertThat(dead).hasSize(5);
+        assertThat(dead).allSatisfy(w -> assertThat((List<?>) w.get("nodeIds")).isNotEmpty());
+    }
+
     // --- fingerprint (suppress 식별자) ---
 
     @Test

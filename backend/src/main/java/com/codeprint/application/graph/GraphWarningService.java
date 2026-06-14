@@ -393,6 +393,12 @@ public class GraphWarningService {
         return false;
     }
 
+    // DEAD_CODE 신뢰도 게이트 — 미호출 함수 비율이 이 값을 넘으면 호출 추출 자체가 불완전하다고 보고 개별 경고를 생략한다.
+    // 캘리브레이션(2026-06-15 실측): 정상 Java 레포 codeprint 0.1%·petclinic 1.0%, 호출 추출이 약한 Python requests 22.6%.
+    private static final double DEAD_CODE_UNTRUSTWORTHY_RATIO = 0.15;
+    // 함수 수가 적으면 비율이 통계적으로 불안정 — 소형 그래프는 게이트 미적용 (기존 미호출 함수 1~2개 케이스 보호)
+    private static final int DEAD_CODE_MIN_FUNCTIONS = 30;
+
     // FUNCTION 노드 중 아무 FUNCTION_CALL 엣지도 받지 않는 함수 — 데드 코드 후보
     // 아래 5가지 패턴은 정적 분석으로 호출 추적이 불가능하여 false positive 발생:
     //   1. JSX 렌더 (<App />) — React.createElement 호출, FUNCTION_CALL 엣지로 연결 안 됨
@@ -470,6 +476,21 @@ public class GraphWarningService {
             w.put("edgeIds", List.of());
             w.put("message", "데드 코드 후보: " + name + " — 이 함수를 호출하는 곳이 없습니다");
             warnings.add(w);
+        }
+
+        // 신뢰도 게이트 — 미호출 비율이 임계를 넘으면 호출 추출이 약한 것이므로 개별 경고 대신 단일 안내로 치환
+        long totalFunctions = nodes.stream().filter(n -> n.getType() == NodeType.FUNCTION).count();
+        if (totalFunctions >= DEAD_CODE_MIN_FUNCTIONS
+                && (double) warnings.size() / totalFunctions >= DEAD_CODE_UNTRUSTWORTHY_RATIO) {
+            int pct = (int) Math.round((double) warnings.size() / totalFunctions * 100);
+            Map<String, Object> gate = new LinkedHashMap<>();
+            gate.put("type", "DEAD_CODE");
+            gate.put("severity", "LOW");
+            gate.put("nodeIds", List.of());
+            gate.put("edgeIds", List.of());
+            gate.put("message", "미호출 함수 비율 " + pct + "% (" + warnings.size() + "/" + totalFunctions
+                    + ") — 호출 추출 신뢰도가 낮아 개별 DEAD_CODE 경고를 생략했습니다. 동적 디스패치가 많은 언어·패턴일 수 있습니다");
+            return List.of(gate);
         }
         return warnings;
     }
