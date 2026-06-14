@@ -322,6 +322,8 @@ public class GraphWarningService {
         // JPA/공통 레포지토리 메서드 (Spring 런타임 프록시로 호출)
         "findById", "findAll", "findAllById", "save", "saveAll", "deleteById",
         "deleteAll", "existsById", "count",
+        // JPA AttributeConverter — Hibernate가 영속화/조회 시 리플렉션으로 호출
+        "convertToDatabaseColumn", "convertToEntityAttribute",
         // Object 기본 메서드
         "toString", "equals", "hashCode", "compareTo",
         // Java lifecycle
@@ -382,10 +384,18 @@ public class GraphWarningService {
     //   4. 콜백 참조(addEventListener(handler)) — 값으로 전달, "호출"이 아님
     //   5. React 컴포넌트(대문자 시작 tsx 함수) — export 후 JSX로 사용
     private List<Map<String, Object>> detectDeadCode(List<Node> nodes, List<Edge> edges) {
+        Map<UUID, String> idToName = new HashMap<>();
+        for (Node n : nodes) idToName.put(n.getId(), n.getName());
+
         Set<UUID> calledFuncIds = new HashSet<>();
+        // FUNCTION_CALL 타깃의 함수명 — 인터페이스→구현체 다형성 디스패치로 인터페이스 선언 노드엔
+        // 인바운드 엣지가 없어도, 같은 이름의 호출이 존재하면 사용 중으로 판단하기 위함
+        Set<String> calledFuncNames = new HashSet<>();
         for (Edge e : edges) {
             if (e.getType() == EdgeType.FUNCTION_CALL) {
                 calledFuncIds.add(e.getTargetNodeId());
+                String tn = idToName.get(e.getTargetNodeId());
+                if (tn != null) calledFuncNames.add(tn);
             }
         }
 
@@ -415,6 +425,11 @@ public class GraphWarningService {
             if (fp.contains("/application/")) continue;
             // infrastructure/ 레이어 — Spring @Bean, @EventListener, Filter 등 프레임워크 진입점 다수
             if (fp.contains("/infrastructure/")) continue;
+            // domain/ Repository·Port 인터페이스 선언 메서드 — 구현체가 인터페이스를 통해 호출(다형성 디스패치).
+            // 같은 이름의 FUNCTION_CALL이 존재하면 사용 중으로 간주 (미호출이면 여전히 데드 코드로 감지).
+            boolean isDomainInterfaceDecl = fp.contains("/domain/")
+                    && (fp.endsWith("Repository.java") || fp.endsWith("Port.java") || fp.contains("/port/"));
+            if (isDomainInterfaceDecl && calledFuncNames.contains(name)) continue;
 
             Map<String, Object> meta = n.getMetadata();
             if (meta != null) {

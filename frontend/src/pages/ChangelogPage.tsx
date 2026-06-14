@@ -11,6 +11,16 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: 'v0.72.4',
+    date: '2026-06-14',
+    title: '데드 코드 경고 오탐 감소 — JPA 컨버터·인터페이스 메서드 제외',
+    type: 'fix',
+    items: [
+      { category: '경고', desc: 'JPA 암호화 컨버터 메서드(convertToDatabaseColumn 등)가 "데드 코드"로 오탐되던 문제 수정 — Hibernate가 내부적으로 호출하는 메서드라 호출 흔적이 코드에 없을 뿐, 실제로는 사용 중' },
+      { category: '경고', desc: 'Repository·Port 인터페이스 선언 메서드가 데드 코드로 오탐되던 문제 수정 — 구현체를 인터페이스를 통해 호출하면 선언부에 직접 연결이 안 잡히던 한계 보정. 같은 이름의 호출이 있으면 사용 중으로 인식 (한 번도 호출 안 되는 메서드는 계속 감지)' },
+    ],
+  },
+  {
     version: 'v0.72.3',
     date: '2026-06-14',
     title: '도메인 뷰 조작성 개선 — 사이드바로 탭 통합·DB 인접 배치·색상 통일·튐 수정',

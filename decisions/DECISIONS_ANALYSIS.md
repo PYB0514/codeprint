@@ -51,6 +51,23 @@
 
 **런타임 검증 상태(보류).** 마이그레이션 V39(`warning_suppressions`)는 실제 스키마에 ROLLBACK 트랜잭션으로 실행 검증 완료(테이블·FK·인덱스·UNIQUE 정상, 엔티티 컬럼과 일치). 단, **작업 시점에 백엔드가 다운**(외부 원인)돼 있어 Flyway 실제 적용 + 엔드포인트 와이어링 런타임 검증은 사용자가 백엔드를 재시작한 뒤 수행해야 한다 — 그 전까지 머지 보류. 프론트 UI(WarningPanel suppress 버튼)는 후속 PR.
 
+### C-16: DEAD_CODE 오탐 제거 — JPA Converter + 도메인 인터페이스 디스패치 (2026-06-14)
+
+**문제.** Codeprint 자체 분석 시 DEAD_CODE 8건 중 7건이 오탐. 근본 원인 2종으로 수렴.
+- (A) JPA `AttributeConverter`의 `convertToDatabaseColumn`/`convertToEntityAttribute` — Hibernate가 영속화/조회 시 리플렉션으로 호출해 코드에 명시적 호출 엣지가 없음(`/shared/jpa/` 경로라 기존 레이어 제외 필터에도 안 걸림).
+- (B) 도메인 Repository·Port **인터페이스 선언 메서드**(`sumAllocatedSeatsByTeamId`, `confirmPayment`×2, `delete`×2) — 호출은 인터페이스로 가고 구현체(`/infrastructure/`)는 이미 제외되지만, 인터페이스 선언 노드(`/domain/`)엔 인바운드 FUNCTION_CALL 엣지가 없어 플래그됨(다형성 디스패치 + 메서드 레퍼런스 `::` 미파싱).
+
+**선택지.**
+- (A) 분석기(`extractFunctionCalls`)가 `::` 메서드 레퍼런스를 호출로 파싱하도록 수정 — 그래프 엣지 출력 변경·재분석 필요, 영향 범위 큼. 이번 스코프에서 탈락(후속 그래프 품질 작업으로 분리).
+- (B) detector(`detectDeadCode`)에서만 보정 — 엣지/그래프 불변, 경고만 정확해짐. **채택.** C-14(CROSS_DOMAIN_CALL)와 동일 전략(detector-레벨 필터).
+
+**결과.**
+- `FRAMEWORK_CALL_NAMES`에 `convertToDatabaseColumn`/`convertToEntityAttribute` 추가.
+- `detectDeadCode`가 FUNCTION_CALL 타깃의 **함수명 집합**(`calledFuncNames`)을 수집 → 후보가 `/domain/`의 `*Repository.java`/`*Port.java`/`/port/` 선언 메서드이고 같은 이름의 호출이 존재하면 사용 중으로 간주해 제외. **미호출 인터페이스 메서드는 여전히 데드코드로 감지**(과잉 억제 방지).
+- `monthlyPrice`(차후 기능용으로 의도적으로 남긴 미사용 메서드)는 진짜 미호출이므로 경고 유지 — C-12 suppress 대상.
+
+**검증.** `GraphWarningServiceTest`에 회귀 5종 추가(실제 파일 경로·메서드명 재현): Converter 제외 / 인터페이스·포트 디스패치 제외 / 미사용 일반 함수 감지 유지 / 미호출 인터페이스 메서드 감지 유지. detect()는 순수 함수라 단위 테스트가 엔드포인트 동작과 동치 — 전체 재분석 e2e는 백엔드 기동 필요(사용자 재분석 시 7→1 확인).
+
 ## 버그
 
 ### B-8: FUNCTION_CALL edgeIdentifier callee 파일명 누락 (2026-06-13)
