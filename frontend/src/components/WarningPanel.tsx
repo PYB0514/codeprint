@@ -26,7 +26,7 @@ const SEVERITY_STYLE: Record<string, { label: string; bg: string; text: string }
   LOW:    { label: 'LOW',    bg: 'bg-gray-800/40',   text: 'text-gray-400' },
 }
 
-const WARNING_META: Record<string, { label: string; desc: string; color: string; severity: string }> = {
+export const WARNING_META: Record<string, { label: string; desc: string; color: string; severity: string }> = {
   CYCLIC_IMPORT:               { label: '순환 의존',              desc: 'A→B→A IMPORT 사이클',                                       color: '#f97316', severity: 'HIGH'   },
   BROKEN_INTERFACE_CHAIN:      { label: '인터페이스 미구현',       desc: '구현체 엣지 없는 인터페이스 메서드',                           color: '#ef4444', severity: 'MEDIUM' },
   ASYNC_SELF_CALL:             { label: '@Async 자기 호출',        desc: '프록시 우회로 비동기 무시됨',                                  color: '#eab308', severity: 'MEDIUM' },
