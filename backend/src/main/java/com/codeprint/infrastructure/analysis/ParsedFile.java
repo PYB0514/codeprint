@@ -21,5 +21,6 @@ public record ParsedFile(
         List<String> implementedInterfaces,       // "class Foo implements Bar" 에서 추출한 인터페이스명 목록
         List<String> asyncMethods,               // @Async 어노테이션이 붙은 메서드명 목록
         List<String> jsxComponents,              // .tsx/.jsx 에서 사용된 JSX 컴포넌트명 목록 (<ComponentName 패턴)
-        List<RawSqlAccess> rawSqlAccesses        // raw SQL 문자열에서 추출한 테이블 접근 목록
+        List<RawSqlAccess> rawSqlAccesses,       // raw SQL 문자열에서 추출한 테이블 접근 목록
+        List<String> frameworkAnnotatedMethods   // 프레임워크 어노테이션/데코레이터가 붙은 메서드명 목록 (런타임이 호출 → DEAD_CODE 제외용)
 ) {}

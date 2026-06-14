@@ -11,6 +11,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.75.2',
+    date: '2026-06-14',
+    title: '데드 코드 경고 오탐 대폭 감소 — 프레임워크 핸들러·던더·테스트 제외',
+    type: 'fix',
+    items: [
+      { category: '경고', desc: '프레임워크가 호출하는 메서드(@GetMapping·@Bean·@InitBinder·@Override 등 Spring 핸들러, NestJS/FastAPI 데코레이터)를 "데드 코드"로 오탐하던 문제 수정 — 코드에 직접 호출부가 없어도 런타임에 호출되므로 제외' },
+      { category: '경고', desc: 'Python 던더 메서드(__init__·__iter__ 등)와 테스트 코드(테스트 디렉터리·*Tests.java·*.spec·pytest test_* 함수)를 데드 코드 후보에서 제외' },
+      { category: '경고', desc: '유명 오픈소스 레포 분석으로 측정한 오탐 패턴을 반영 — 표준 Spring 앱에서 데드 코드 오탐이 사실상 사라짐' },
+    ],
+  },
+  {
     version: 'v0.75.1',
     date: '2026-06-14',
     title: '랜딩페이지 분석 엔진 표기 정정 — "Tree-sitter" → 정규식',

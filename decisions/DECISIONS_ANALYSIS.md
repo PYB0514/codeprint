@@ -31,6 +31,13 @@
 4. 테스트 경로/함수(`src/test`·`*Test`·`test_*`·`*.spec`) 제외 — DDD 경고는 이미 제외 중, DEAD_CODE/HIGH_FAN_OUT에도 적용.
 > DEAD_CODE는 GraphWarningService(반복 FP 이력)라 회귀 테스트 의무. B-10(주석/문자열 전처리 부재)도 오탐에 기여하므로 함께 검토.
 
+**구현 (2026-06-14, 후속 — 1·3·4 완료, 가테는 분리).**
+- ①Python 던더(`__\w+__`) 제외 — `detectDeadCode` 이름 기반.
+- ③프레임워크 어노테이션/데코레이터 제외 — `StaticCodeAnalyzer.extractFrameworkAnnotatedMethods` 신설(Java @GetMapping/@PostMapping/@Put/@Delete/@Patch/@RequestMapping/@InitBinder/@ModelAttribute/@Bean/@EventListener/@Scheduled/@PostConstruct/@PreDestroy/@Override/@ExceptionHandler/@Test 계열; Python·TS 데코레이터) → `ParsedFile.frameworkAnnotatedMethods` → GraphBuilder `isFrameworkAnnotated` 메타 → detector 제외. (기존 isBean/isEventListener/isScheduled 메타는 GraphBuilder가 설정하지 않던 사실상 no-op이었음 — 이 플래그로 대체·보강.)
+- ④테스트 제외 확장 — `isTestArtifact`: 경로 `/test/`·`/tests/`·`__tests__`, 파일명 `*Test(s).java`·`*.spec/test.{ts,tsx,js,jsx}`·`_test.go`·`_test.py`, 함수명 `test_*`.
+- 회귀 테스트: GraphWarningServiceTest 5종 + StaticCodeAnalyzerTest 2종. 전체 스위트 통과.
+- **분리(별건): 신뢰도 게이트** — requests처럼 호출 추출이 약해 함수 대다수가 미호출로 보이는 케이스(84%)는 위 제외로도 안 잡힘. "미호출 비율 과다 시 DEAD_CODE 억제"는 임계값 캘리브레이션이 필요해 추후. 검증: petclinic 21→대폭 감소 예상(addVisit 등 소수 잔존), 실서버 재분석은 백엔드 재기동 후.
+
 ## 설계 결정
 
 ### C-11: DDD 경고 비DDD 프로젝트 게이팅 (2026-06-13)

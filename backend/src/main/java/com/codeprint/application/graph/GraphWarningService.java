@@ -376,6 +376,23 @@ public class GraphWarningService {
         return false;
     }
 
+    // 테스트 코드 여부 — 경로·파일명·함수명 패턴 (JUnit·pytest·jest/vitest·Go test)
+    private boolean isTestArtifact(String fp, String name) {
+        if (fp.contains("/test/") || fp.contains("\\test\\")
+                || fp.contains("/tests/") || fp.contains("\\tests\\")
+                || fp.contains("/__tests__/") || fp.contains("\\__tests__\\")) return true;
+        if (fp.endsWith("Test.java") || fp.endsWith("Tests.java")
+                || fp.endsWith("Test.kt") || fp.endsWith("Tests.kt")
+                || fp.endsWith(".test.ts") || fp.endsWith(".test.tsx")
+                || fp.endsWith(".test.js") || fp.endsWith(".test.jsx")
+                || fp.endsWith(".spec.ts") || fp.endsWith(".spec.tsx")
+                || fp.endsWith(".spec.js") || fp.endsWith(".spec.jsx")
+                || fp.endsWith("_test.go") || fp.endsWith("_test.py")) return true;
+        // pytest 관례 — test_ 로 시작하는 함수
+        if (name.startsWith("test_")) return true;
+        return false;
+    }
+
     // FUNCTION 노드 중 아무 FUNCTION_CALL 엣지도 받지 않는 함수 — 데드 코드 후보
     // 아래 5가지 패턴은 정적 분석으로 호출 추적이 불가능하여 false positive 발생:
     //   1. JSX 렌더 (<App />) — React.createElement 호출, FUNCTION_CALL 엣지로 연결 안 됨
@@ -407,8 +424,10 @@ public class GraphWarningService {
             String fp = n.getFilePath() != null ? n.getFilePath() : "";
             String name = n.getName() != null ? n.getName() : "";
 
-            // 테스트 코드 제외
-            if (fp.contains("/test/") || fp.contains("\\test\\")) continue;
+            // Python 던더 메서드(__init__·__iter__ 등) — 런타임이 호출, 이름으로 불리지 않음
+            if (name.length() > 4 && name.startsWith("__") && name.endsWith("__")) continue;
+            // 테스트 코드 제외 (경로·파일명·함수명 패턴)
+            if (isTestArtifact(fp, name)) continue;
             // interfaces/ 레이어 — 컨트롤러, WebSocket 핸들러 등 외부 진입점
             if (fp.contains("/interfaces/")) continue;
             // React 컴포넌트 — .tsx 파일에서 대문자 시작 함수 (JSX로 렌더링되므로 FUNCTION_CALL 엣지 없음)
@@ -440,6 +459,8 @@ public class GraphWarningService {
                 if (Boolean.TRUE.equals(meta.get("isEventListener"))) continue;
                 if (Boolean.TRUE.equals(meta.get("isScheduled"))) continue;
                 if (Boolean.TRUE.equals(meta.get("isBean"))) continue;
+                // 프레임워크 어노테이션/데코레이터(@GetMapping·@Bean·@Override·@InitBinder·Python 데코레이터 등) — 런타임이 호출
+                if (Boolean.TRUE.equals(meta.get("isFrameworkAnnotated"))) continue;
             }
 
             Map<String, Object> w = new LinkedHashMap<>();

@@ -374,6 +374,51 @@ class GraphWarningServiceTest {
         assertThat(isDeadCode(warnings, iface.getId())).isTrue();
     }
 
+    @Test
+    @DisplayName("Python 던더 메서드(__init__) — 런타임 호출이라 DEAD_CODE 제외 (C-13)")
+    void deadCode_pythonDunder_excluded() {
+        Node dunder = Node.create(graphId, NodeType.FUNCTION, "__init__", "/requests/models.py", "Python");
+        List<Map<String, Object>> warnings = service.detect(List.of(dunder), List.of());
+        assertThat(isDeadCode(warnings, dunder.getId())).isFalse();
+    }
+
+    @Test
+    @DisplayName("던더 아님(__private, 트레일링 __ 없음) — DEAD_CODE 여전히 감지 (과잉 억제 방지)")
+    void deadCode_notDunder_stillDetected() {
+        Node n = Node.create(graphId, NodeType.FUNCTION, "__private", "/shared/util.py", "Python");
+        List<Map<String, Object>> warnings = service.detect(List.of(n), List.of());
+        assertThat(isDeadCode(warnings, n.getId())).isTrue();
+    }
+
+    @Test
+    @DisplayName("프레임워크 어노테이션 메서드(isFrameworkAnnotated 메타) — DEAD_CODE 제외 (C-13)")
+    void deadCode_frameworkAnnotated_excluded() {
+        Node handler = funcNodeWithPath("welcome", "/petclinic/system/WelcomeController.java");
+        handler.updateMetadata(Map.of("isFrameworkAnnotated", true));
+        List<Map<String, Object>> warnings = service.detect(List.of(handler), List.of());
+        assertThat(isDeadCode(warnings, handler.getId())).isFalse();
+    }
+
+    @Test
+    @DisplayName("테스트 디렉터리(/tests/)·pytest 함수(test_*) — DEAD_CODE 제외 (C-13)")
+    void deadCode_testArtifacts_excluded() {
+        Node testsDir = Node.create(graphId, NodeType.FUNCTION, "helper", "/requests/tests/utils.py", "Python");
+        Node pytestFn = Node.create(graphId, NodeType.FUNCTION, "test_get_returns_200", "/requests/api.py", "Python");
+        List<Map<String, Object>> warnings = service.detect(List.of(testsDir, pytestFn), List.of());
+        assertThat(isDeadCode(warnings, testsDir.getId())).isFalse();
+        assertThat(isDeadCode(warnings, pytestFn.getId())).isFalse();
+    }
+
+    @Test
+    @DisplayName("테스트 파일명(*Tests.java·*.spec.ts) — /test/ 경로 밖이어도 DEAD_CODE 제외 (C-13)")
+    void deadCode_testFileNames_excluded() {
+        Node junit = funcNodeWithPath("george", "/petclinic/owner/OwnerControllerTests.java");
+        Node jest = Node.create(graphId, NodeType.FUNCTION, "renders", "/src/app/Button.spec.ts", "TypeScript");
+        List<Map<String, Object>> warnings = service.detect(List.of(junit, jest), List.of());
+        assertThat(isDeadCode(warnings, junit.getId())).isFalse();
+        assertThat(isDeadCode(warnings, jest.getId())).isFalse();
+    }
+
     // --- fingerprint (suppress 식별자) ---
 
     @Test

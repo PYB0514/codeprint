@@ -1246,6 +1246,61 @@ class StaticCodeAnalyzerTest {
             .anyMatch(a -> a.tableName().equals("users") && !a.isWrite());
     }
 
+    // ── 회귀: 프레임워크 어노테이션 메서드 추출 (C-13 DEAD_CODE 오탐 수정) ────────
+
+    @Test
+    @DisplayName("Java 프레임워크 어노테이션(@GetMapping·@InitBinder·@Bean·@Override) 메서드를 추출한다")
+    void 프레임워크_어노테이션_메서드_추출_Java() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class OwnerController {
+                    @GetMapping("/owners/new")
+                    public String initCreationForm(Map<String, Object> model) { return "x"; }
+
+                    @InitBinder
+                    public void setAllowedFields(WebDataBinder dataBinder) { }
+
+                    @Bean
+                    public LocaleResolver localeResolver() { return null; }
+
+                    @Override
+                    public void addInterceptors(InterceptorRegistry registry) { }
+
+                    public String notAnnotated() { return "y"; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.frameworkAnnotatedMethods())
+                .contains("initCreationForm", "setAllowedFields", "localeResolver", "addInterceptors")
+                .doesNotContain("notAnnotated");
+    }
+
+    @Test
+    @DisplayName("Python 데코레이터(@property·@app.route) 부착 def를 추출한다")
+    void 데코레이터_Python_def_추출() throws IOException {
+        Path file = writePyFile("""
+                class Api:
+                    @property
+                    def status(self):
+                        return self._status
+
+                    @app.route("/health")
+                    def health():
+                        return "ok"
+
+                    def plain(self):
+                        return 1
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.frameworkAnnotatedMethods())
+                .contains("status", "health")
+                .doesNotContain("plain");
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {
