@@ -2,6 +2,7 @@
 
 > 유지보수자용. 사용자 대상 요약 페이지는 `/how-it-works`(`frontend/src/pages/HowItWorksPage.tsx`).
 > 경고 타입 라벨/색/심각도 단일 소스 → `WarningPanel.tsx`의 `WARNING_META`.
+> 상위 아키텍처(바운디드 컨텍스트·데이터 모델·하위 호환성) → [`ARCHITECTURE.md`](ARCHITECTURE.md) · 프로젝트 개요 → [`PROJECT.md`](PROJECT.md)
 
 ---
 
