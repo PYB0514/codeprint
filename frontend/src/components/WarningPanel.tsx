@@ -6,11 +6,17 @@ interface Warning {
   severity?: 'HIGH' | 'MEDIUM' | 'LOW'
   nodeIds: string[]
   message: string
+  fingerprint?: string
 }
 
 interface Props {
   warnings: Warning[]
   onNodeNavigate?: (nodeId: string) => void
+  // 경고 숨기기 — 프로젝트 소유자에게만 전달됨 (없으면 버튼 미표시)
+  onSuppress?: (w: Warning) => void
+  // 이번 세션에 숨긴 경고 목록 + 복원 핸들러
+  suppressed?: Warning[]
+  onRestore?: (w: Warning) => void
 }
 
 const SEVERITY_ORDER: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
@@ -34,7 +40,7 @@ const WARNING_META: Record<string, { label: string; desc: string; color: string;
 }
 
 // 경고 목록을 타입별로 그룹핑하여 severity 순(HIGH→MEDIUM→LOW)으로 표시
-export default function WarningPanel({ warnings, onNodeNavigate }: Props) {
+export default function WarningPanel({ warnings, onNodeNavigate, onSuppress, suppressed, onRestore }: Props) {
   const grouped = new Map<string, Warning[]>()
   for (const w of warnings) {
     if (!grouped.has(w.type)) grouped.set(w.type, [])
@@ -50,14 +56,47 @@ export default function WarningPanel({ warnings, onNodeNavigate }: Props) {
   return (
     <div className="flex flex-col gap-2">
       {sortedEntries.map(([type, items]) => (
-        <WarningGroup key={type} type={type} items={items} onNodeNavigate={onNodeNavigate} />
+        <WarningGroup key={type} type={type} items={items} onNodeNavigate={onNodeNavigate} onSuppress={onSuppress} />
       ))}
+      {suppressed && suppressed.length > 0 && (
+        <SuppressedGroup items={suppressed} onRestore={onRestore} />
+      )}
+    </div>
+  )
+}
+
+// 이번 세션에 숨긴 경고 — 접이식 목록 + 복원 버튼
+function SuppressedGroup({ items, onRestore }: { items: Warning[]; onRestore?: (w: Warning) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="pl-2 border-l-2 border-gray-700/40 mt-1">
+      <button onClick={() => setOpen(o => !o)} className="flex items-center gap-1.5 w-full text-left">
+        <span className="text-xs font-semibold text-gray-400">숨긴 경고</span>
+        <span className="text-xs text-gray-500">({items.length})</span>
+        <span className="ml-auto text-gray-500 text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="flex flex-col gap-1 mt-1">
+          {items.map((w, i) => (
+            <div key={i} className="flex items-center gap-1 text-[11px] text-gray-400 bg-gray-800/30 border border-gray-700/30 rounded px-1.5 py-1 leading-snug">
+              <span className="flex-1 line-through opacity-70">{w.message.replace(/^[^:]+:\s*/, '')}</span>
+              {onRestore && (
+                <button
+                  onClick={() => onRestore(w)}
+                  className="shrink-0 text-[10px] text-cyan-400 hover:text-cyan-300 px-1"
+                  title="경고 복원"
+                >복원</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
 // 경고 타입별 접기/펼치기 그룹
-function WarningGroup({ type, items, onNodeNavigate }: { type: string; items: Warning[]; onNodeNavigate?: (nodeId: string) => void }) {
+function WarningGroup({ type, items, onNodeNavigate, onSuppress }: { type: string; items: Warning[]; onNodeNavigate?: (nodeId: string) => void; onSuppress?: (w: Warning) => void }) {
   const [open, setOpen] = useState(true)
   const meta = WARNING_META[type] ?? { label: type, desc: '', color: '#eab308', severity: 'MEDIUM' }
   const severity = items[0]?.severity ?? meta.severity ?? 'MEDIUM'
@@ -82,13 +121,24 @@ function WarningGroup({ type, items, onNodeNavigate }: { type: string; items: Wa
       {open && (
         <div className="flex flex-col gap-1 mt-1">
           {items.map((w, i) => (
-            <button
+            <div
               key={i}
-              onClick={() => onNodeNavigate && w.nodeIds[0] && onNodeNavigate(w.nodeIds[0])}
-              className="w-full text-left text-[11px] text-yellow-200/80 bg-yellow-900/10 border border-yellow-800/30 rounded px-1.5 py-1 leading-snug hover:bg-yellow-900/20 hover:border-yellow-700/50 transition-colors"
+              className="flex items-stretch gap-1 text-[11px] bg-yellow-900/10 border border-yellow-800/30 rounded leading-snug hover:bg-yellow-900/20 hover:border-yellow-700/50 transition-colors"
             >
-              {w.message.replace(/^[^:]+:\s*/, '')}
-            </button>
+              <button
+                onClick={() => onNodeNavigate && w.nodeIds[0] && onNodeNavigate(w.nodeIds[0])}
+                className="flex-1 text-left text-yellow-200/80 px-1.5 py-1"
+              >
+                {w.message.replace(/^[^:]+:\s*/, '')}
+              </button>
+              {onSuppress && w.fingerprint && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onSuppress(w) }}
+                  className="shrink-0 text-gray-500 hover:text-gray-300 px-1.5"
+                  title="이 경고 숨기기"
+                >✕</button>
+              )}
+            </div>
           ))}
         </div>
       )}

@@ -588,9 +588,35 @@ function GraphPageInner() {
   const { state: collabState, publishCursor, publishSelection } = useCollaboration(collabSessionId, currentUserId)
 
   // 런타임 경고 상태
-  const [warnings, setWarnings] = useState<{ type: string; nodeIds: string[]; edgeIds?: string[]; message: string }[]>([])
+  const [warnings, setWarnings] = useState<{ type: string; severity?: 'HIGH' | 'MEDIUM' | 'LOW'; nodeIds: string[]; edgeIds?: string[]; message: string; fingerprint?: string }[]>([])
+  // 이번 세션에 숨긴 경고 — 복원(unsuppress)용
+  const [suppressedWarnings, setSuppressedWarnings] = useState<{ type: string; severity?: 'HIGH' | 'MEDIUM' | 'LOW'; nodeIds: string[]; edgeIds?: string[]; message: string; fingerprint?: string }[]>([])
   // publishCursorRef를 항상 최신 publishCursor로 유지
   publishCursorRef.current = publishCursor
+
+  // 경고 숨기기 — 서버에 suppress 저장 후 패널에서 제거, 세션 복원 목록으로 이동
+  const handleSuppressWarning = useCallback(async (w: { type: string; fingerprint?: string }) => {
+    if (!projectId || !w.fingerprint) return
+    try {
+      await axios.post(`/api/projects/${projectId}/warnings/suppress`, { fingerprint: w.fingerprint, type: w.type })
+      setWarnings(prev => prev.filter(x => x.fingerprint !== w.fingerprint))
+      setSuppressedWarnings(prev => [...prev, w as typeof prev[number]])
+    } catch {
+      alert('경고 숨기기에 실패했습니다.')
+    }
+  }, [projectId])
+
+  // 숨긴 경고 복원 — 서버 suppress 해제 후 경고 목록으로 복귀
+  const handleRestoreWarning = useCallback(async (w: { fingerprint?: string }) => {
+    if (!projectId || !w.fingerprint) return
+    try {
+      await axios.delete(`/api/projects/${projectId}/warnings/suppress/${w.fingerprint}`)
+      setSuppressedWarnings(prev => prev.filter(x => x.fingerprint !== w.fingerprint))
+      setWarnings(prev => [...prev, w as typeof prev[number]])
+    } catch {
+      alert('경고 복원에 실패했습니다.')
+    }
+  }, [projectId])
 
   // 뷰 프리셋 상태
   const [presets, setPresets] = useState<{ slot: number; name: string; config: Record<string, unknown>; isDefault: boolean }[]>([])
@@ -987,7 +1013,7 @@ function GraphPageInner() {
   const fetchGraph = useCallback(async () => {
     try {
       const res = await axios.get(`/api/projects/${projectId}/graph`)
-      const { graphId: gid, nodes: rn, edges: re, warnings: w, analyzedFileCount, totalFileCount } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; edgeIds?: string[]; message: string }[]; analyzedFileCount?: number; totalFileCount?: number }
+      const { graphId: gid, nodes: rn, edges: re, warnings: w, analyzedFileCount, totalFileCount } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; severity?: 'HIGH' | 'MEDIUM' | 'LOW'; nodeIds: string[]; edgeIds?: string[]; message: string; fingerprint?: string }[]; analyzedFileCount?: number; totalFileCount?: number }
       setGraphId(gid)
       // 500개 초과 절단 시에만 안내 배너 (기존 그래프는 카운트 없음)
       setTruncation(
@@ -2534,7 +2560,7 @@ function GraphPageInner() {
             </LeftSection>
 
             {/* 런타임 경고 패널 */}
-            {warnings.length > 0 && (
+            {(warnings.length > 0 || suppressedWarnings.length > 0) && (
               <LeftSection title={`경고 (${warnings.length})`} headerRight={
                 <button
                   onClick={() => downloadWarningsMd(warnings)}
@@ -2544,7 +2570,13 @@ function GraphPageInner() {
                   ↓ MD
                 </button>
               }>
-                <WarningPanel warnings={warnings} onNodeNavigate={handleSearchNodeClick} />
+                <WarningPanel
+                  warnings={warnings}
+                  onNodeNavigate={handleSearchNodeClick}
+                  onSuppress={handleSuppressWarning}
+                  suppressed={suppressedWarnings}
+                  onRestore={handleRestoreWarning}
+                />
               </LeftSection>
             )}
           </div>
