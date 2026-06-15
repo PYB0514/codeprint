@@ -59,7 +59,7 @@ public class PrReviewService {
         return result;
     }
 
-    // 프로젝트에서 suppress(숨김)된 경고를 PR 코멘트 대상에서 제외
+    // 프로젝트에서 숨김 처리된 경고를 PR 코멘트 대상에서 제외
     private List<Map<String, Object>> filterSuppressed(UUID projectId, List<Map<String, Object>> warnings) {
         java.util.Set<String> suppressed = warningDetectionPort.suppressedFingerprints(projectId);
         if (suppressed.isEmpty()) return warnings;

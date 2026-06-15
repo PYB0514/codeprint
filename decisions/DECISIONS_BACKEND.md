@@ -662,4 +662,6 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 4. **비동기 실행으로 GitHub 타임아웃 회피** — webhook은 ~10초 안에 응답해야 하나 clone+분석은 그보다 오래 걸림. 서명검증·파싱·역해석만 동기로 하고 즉시 202 반환, 실제 `review()`는 별도 빈 `PrReviewRunner.@Async reviewAsync`로 분리(같은 빈 @Async 자기호출 프록시 우회 + `ASYNC_SELF_CALL` 경고 회피).
 5. **suppress 경고 PR 코멘트 제외** — `WarningDetectionPort.suppressedFingerprints(projectId)` 추가, `PrReviewService.review`에서 fingerprint 필터. Tier 0/1 공통 적용(소유자가 숨긴 경고가 PR마다 재등장하지 않도록).
 
-**결과.** 정적검증(compileJava+test) 및 로컬 서명 요청 E2E는 백엔드 재기동 후. 실제 활성화(레포 webhook URL 등록 + `GITHUB_WEBHOOK_SECRET` env)는 사용자 동반 외부 작업 — 코드/테스트는 외부설정 0으로 완주.
+**결과.** 정적검증(compileJava+test 전체 green) 완료. 로컬 서명 E2E 라이브 검증 완료(2026-06-16): ① 서명없음/오서명 → 401 ② 올바른 서명+ping → 200 ignored ③ 올바른 서명+PR opened+미존재 repo → 200 ignored ④ **도그푸딩**: 올바른 서명+codeprint 실 PR #281 payload → 202 → 비동기 분석 → PR #281에 경고 코멘트 실제 게시(소유자 토큰). 실제 활성화(레포 webhook URL 등록 + `GITHUB_WEBHOOK_SECRET` env)는 사용자 동반 외부 작업 — 코드/테스트는 외부설정 0으로 완주.
+
+**도그푸딩 부수 발견 — CROSS_DOMAIN_CALL 오탐(B-10 발현).** #281 자기 분석이 `analysis/review → graph/suppress` CROSS_DOMAIN_CALL을 1건 보고. 근본 원인은 아키텍처 위반이 아니라 `PrReviewService`의 한국어 주석 `suppress(숨김)된`을 정규식 분석기가 주석 미제거 상태에서 `suppress()` 함수 호출로 오인(탐지기가 port/adapter/infra 경유는 제외하므로 review→graph/suppress 엣지는 주석 외 경로로 생성 불가). suppress는 `WarningDetectionPort`로 올바르게 우회돼 실제 위반 아님. **수정: 주석에서 `영문단어(` 패턴 제거**(`suppress(숨김)된`→`숨김 처리된`). 근본 해결은 B-10(주석/문자열 전처리)이나 광범위·설계합의 필요 — 별건. "PR 리뷰 기능이 자기 PR의 분석기 오탐까지 드러냄".
