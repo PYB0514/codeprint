@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.80.0',
+    date: '2026-06-15',
+    title: 'NestJS 분석 지원 — 컨트롤러 데코레이터 API 인식',
+    type: 'feature',
+    items: [
+      { category: '분석', desc: 'NestJS @Controller + @Get/@Post 데코레이터를 API 엔드포인트로 인식 — 클래스 경로 prefix와 메서드 경로를 합성. 그동안 TypeScript/JavaScript는 Express만 잡혀 NestJS 프로젝트는 API 노드가 비어 있던 문제 해소' },
+    ],
+  },
+  {
     version: 'v0.79.0',
     date: '2026-06-15',
     title: 'Django 분석 지원 — ORM 모델·URL 라우팅 인식',

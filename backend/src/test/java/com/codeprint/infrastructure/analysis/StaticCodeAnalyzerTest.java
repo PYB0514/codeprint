@@ -849,6 +849,47 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("NestJS @Controller prefix + @Get/@Post 데코레이터를 합성해 API 경로를 추출한다")
+    void NestJS_엔드포인트_추출() throws IOException {
+        Path file = tempDir.resolve("cats.controller.ts");
+        Files.writeString(file, """
+                import { Controller, Get, Post } from '@nestjs/common';
+
+                @Controller('cats')
+                export class CatsController {
+                    @Get()
+                    findAll() {}
+
+                    @Get(':id')
+                    findOne() {}
+
+                    @Post()
+                    create() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.controllerMappings()).contains("GET:/cats", "GET:/cats/:id", "POST:/cats");
+    }
+
+    @Test
+    @DisplayName("NestJS @Controller가 없는 파일에서는 @Get/@Post를 엔드포인트로 잡지 않는다")
+    void NestJS_컨트롤러_없으면_미추출() throws IOException {
+        Path file = tempDir.resolve("not-a-controller.ts");
+        Files.writeString(file, """
+                class Foo {
+                    @Get('bar')
+                    something() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.controllerMappings()).isEmpty();
+    }
+
+    @Test
     @DisplayName("FastAPI @app.get/post에서 API 경로를 추출한다")
     void FastAPI_엔드포인트_추출() throws IOException {
         Path file = writePyFile("""

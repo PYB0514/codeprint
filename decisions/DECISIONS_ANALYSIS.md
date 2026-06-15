@@ -4,6 +4,21 @@
 
 ---
 
+## NestJS 분석 커버리지 추가 — @Controller + 메서드 데코레이터 (2026-06-15)
+
+**문제.** TS/JS API 감지가 Express(`router.get`/`app.post`)만 커버. TS 백엔드 주류 프레임워크 NestJS(데코레이터 기반)가 누락.
+
+**구현.** TS/JS 분기에 NestJS 추가 — `@Controller('prefix')` 클래스 prefix + `@Get('sub')`/`@Post()` 메서드 데코레이터를 Java Spring과 동일하게 prefix+suffix 합성. `@Get()`(인자 없음)→prefix 단독, 중복 슬래시 정규화.
+
+**설계 결정.**
+- **`@Controller` 포함 파일에 한정.** `@Get`/`@Post` 데코레이터만으로 매칭하면 비-NestJS 데코레이터(다른 라이브러리·게터)를 오인식 → 파일에 `@Controller`가 있을 때만 메서드 데코레이터를 추출. 회귀 테스트로 "컨트롤러 없으면 미추출" 고정.
+- **PascalCase 케이스 민감.** `@Get`/`@Post`만 매칭(소문자 `@get` 제외) — NestJS 데코레이터는 PascalCase. Express(소문자 메서드)와 비충돌(NestJS 파일엔 `app.get(`/`router.get(` 없음).
+- 메서드·경로 둘 다 데코레이터에 명시돼 Django 라우팅(메서드 불명→GET)과 달리 정확.
+
+**검증.** StaticCodeAnalyzerTest 신규 2종(@Controller prefix 합성·컨트롤러 없으면 미추출) + 전체 73건 통과. 순수 추출 로직(TDD 대상), 마이그레이션·런타임 없음.
+
+---
+
 ## Django 분석 커버리지 추가 — ORM(DB) + URL 라우팅(API) (2026-06-15)
 
 **문제.** Python 분석이 SQLAlchemy(DB)·FastAPI/Flask(API)만 커버. Python 최대 웹 프레임워크 Django가 누락 → Django 프로젝트는 DB_TABLE·API_ENDPOINT 노드가 거의 안 생김.
