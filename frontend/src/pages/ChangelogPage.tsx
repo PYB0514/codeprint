@@ -11,6 +11,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.77.0',
+    date: '2026-06-15',
+    title: '관리자 일일 다이제스트 — 매일 운영 지표 자동 요약·알림',
+    type: 'feature',
+    items: [
+      { category: '관리자', desc: '매일 09:00(KST) 전일 운영 지표(신규 가입·활성 사용자·분석 수·분석 실패율·결제·신규 문의)를 자동 집계해 관리자에게 인앱 알림 + 웹푸시로 발송 — 외부 메일 인프라 없이 기존 알림 채널 재사용' },
+      { category: '관리자', desc: '이상 신호 자동 감지 — 분석 실패율 20% 초과, 활성 사용자·분석 수 전일 대비 ±50% 급변 시 경고 표시. 관리자 대시보드에 다이제스트 패널 + "지금 생성" 버튼 추가' },
+      { category: '백엔드', desc: 'GET /mcp/admin/stats — AI 에이전트(Cowork/Claude Code)가 서비스 운영 지표를 MCP로 조회 가능(ADMIN 인증). 일별 스냅샷 저장으로 전일 대비 추세 비교' },
+    ],
+  },
+  {
     version: 'v0.76.1',
     date: '2026-06-15',
     title: '데드 코드 신뢰도 게이트 — 호출 추출이 약한 레포에서 경고 폭주 억제',

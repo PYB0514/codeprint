@@ -2,6 +2,7 @@
 package com.codeprint.application.notification;
 
 import com.codeprint.shared.event.CommentAddedEvent;
+import com.codeprint.shared.event.DailyDigestReadyEvent;
 import com.codeprint.shared.event.PostLikedEvent;
 import com.codeprint.shared.event.MessageSentEvent;
 import com.codeprint.shared.event.UserFollowedEvent;
@@ -9,6 +10,8 @@ import com.codeprint.infrastructure.push.WebPushService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -53,6 +56,15 @@ public class NotificationEventHandler {
         if (!event.likerId().equals(event.postOwnerId())) {
             notificationService.create(event.postOwnerId(), "LIKE",
                     event.likerUsername() + "님이 게시글을 좋아합니다.", "/community?postId=" + event.postId());
+        }
+    }
+
+    // 일일 다이제스트 — 관리자에게 인앱 알림 + 웹푸시 발송
+    @EventListener
+    public void onDailyDigestReady(DailyDigestReadyEvent event) {
+        for (UUID adminId : event.adminIds()) {
+            notificationService.create(adminId, "ADMIN_DIGEST", event.message(), "/admin");
+            webPushService.sendToUser(adminId, "Codeprint 일일 다이제스트", event.message());
         }
     }
 }

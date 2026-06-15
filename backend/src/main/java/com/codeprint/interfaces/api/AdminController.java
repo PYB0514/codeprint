@@ -1,6 +1,8 @@
 // 어드민 전용 API — 통계 조회, 사용자 목록·정지·복구
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.admin.AdminDigestService;
+import com.codeprint.application.admin.Digest;
 import com.codeprint.domain.admin.PlanGrantLog;
 import com.codeprint.domain.admin.PlanGrantLogRepository;
 import com.codeprint.domain.analysis.AnalysisRepository;
@@ -33,6 +35,9 @@ public class AdminController {
     private final ProjectRepository projectRepository;
     private final AnalysisRepository analysisRepository;
     private final PlanGrantLogRepository planGrantLogRepository;
+    private final AdminDigestService adminDigestService;
+
+    private static final java.time.ZoneId KST = java.time.ZoneId.of("Asia/Seoul");
 
     // 플랜 변경 요청 DTO (사유 필수 — 감사 기록용)
     record PlanGrantRequest(@NotBlank String plan, @NotBlank @Size(max = 500) String reason) {}
@@ -45,6 +50,25 @@ public class AdminController {
                 "totalProjects", projectRepository.count(),
                 "totalAnalyses", analysisRepository.count()
         ));
+    }
+
+    // 최신 일일 다이제스트 조회 (저장된 스냅샷 기준)
+    @GetMapping("/digest")
+    public ResponseEntity<?> getDigest() {
+        Optional<Digest> digest = adminDigestService.latestStoredDigest();
+        return digest.isPresent()
+                ? ResponseEntity.ok(digest.get())
+                : ResponseEntity.ok(Map.of("message", "아직 집계된 다이제스트가 없습니다"));
+    }
+
+    // 다이제스트 수동 생성·발송 (기본: 전일) — 데모·검증용
+    @PostMapping("/digest/run")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> runDigest(@RequestParam(required = false) String date) {
+        java.time.LocalDate target = date != null
+                ? java.time.LocalDate.parse(date)
+                : java.time.LocalDate.now(KST).minusDays(1);
+        return ResponseEntity.ok(adminDigestService.runFor(target));
     }
 
     // 사용자 목록 페이지 조회 (최신 가입 순)
