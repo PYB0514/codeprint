@@ -4,6 +4,24 @@
 
 ---
 
+## Django 분석 커버리지 추가 — ORM(DB) + URL 라우팅(API) (2026-06-15)
+
+**문제.** Python 분석이 SQLAlchemy(DB)·FastAPI/Flask(API)만 커버. Python 최대 웹 프레임워크 Django가 누락 → Django 프로젝트는 DB_TABLE·API_ENDPOINT 노드가 거의 안 생김.
+
+**구현.**
+- **DB**: `class X(...models.Model...):` → DB_TABLE. 모델 본문(다음 최상위 `^class`까지)을 잘라 ① `abstract = True`면 제외(실 테이블 없음), ② `Meta.db_table` 있으면 그 값, 없으면 소문자 클래스명. 블록 경계는 `nextTopLevelClassIndex`(MULTILINE `^class`)로 — 들여쓴 `class Meta:`는 `^class`에 안 걸려 모델만 경계가 됨.
+- **API**: `path('route/', view)` / `re_path(r'^route$', view)` → `GET:/route`. 콤마(둘째 인자=뷰) 요구로 단일 인자 `path()` 호출 오매칭 차단. `r` prefix 허용.
+
+**설계 결정.**
+- **테이블명 = 소문자 클래스명**(앱 prefix 생략). Django 실제 기본은 `{app_label}_{model}`이나 단일 파일에서 app_label을 신뢰성 있게 못 구함 → 모델명 식별이 그래프 목적에 충분. db_table 명시 시 그 값 우선. (다른 ORM도 근사: Rails 복수형, GORM snake+s.)
+- **메서드 GET 기본.** Django는 urls.py(경로)와 뷰(메서드)가 분리돼 urls.py만으로 메서드 불명 → 기존 "메서드 불명→GET" 관례 따름(Spring `@RequestMapping` 메서드 없을 때와 동일).
+- **re_path 앵커 제거.** TDD 1차에서 `r'^api/health$'`가 `GET:/^api/health$`로 누출 → 정규식 앵커 `^`·`$`는 경로가 아니므로 strip(`GET:/api/health`). 테스트가 잡아낸 설계 보정.
+- 모델/SQLAlchemy 패턴 비충돌: `models.Model`엔 "Base" 없고 `(Base)`엔 "models.Model" 없음 → 교차 매칭 0(기존 SQLAlchemy 테스트 그대로 통과).
+
+**검증.** StaticCodeAnalyzerTest 신규 4종(ORM 기본 2모델·Meta.db_table 우선·추상 제외·path/re_path 라우팅) + 전체 71건 통과. 마이그레이션·런타임 없음(순수 추출 로직 = TDD 대상).
+
+---
+
 ## C-13: 경고 오탐률 벤치마크 — DEAD_CODE가 압도적 오탐원 (2026-06-14)
 
 **목적.** 유명 오픈소스 레포를 분석해 언어 무관 detector 4종(DEAD_CODE·HIGH_FAN_OUT·CYCLIC_IMPORT·BROKEN_INTERFACE_CHAIN)의 실제 오탐률 측정. (DDD 전용 경고는 v0.72.0 이후 비DDD 게이팅돼 일반 레포엔 안 뜸.)
