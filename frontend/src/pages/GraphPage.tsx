@@ -466,7 +466,7 @@ function GraphPageInner() {
   const [aiGeneratedCode, setAiGeneratedCode] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [sidebar, setSidebar] = useState<SidebarContent | null>(null)
-  const [rightCollapsed, setRightCollapsed] = useState(false)
+  const [rightCollapsed, setRightCollapsed] = useState(true)
   const [leftOpen, setLeftOpen] = useState(true)
   const [leftWidth, setLeftWidth] = useState(220)
   const [rightWidth, setRightWidth] = useState(320)
@@ -1315,6 +1315,14 @@ function GraphPageInner() {
     }
   }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges])
 
+  // 현재 보는 버전 라벨 표시용 — 버전 목록을 조용히 로드 (graphId 변경 시 갱신)
+  useEffect(() => {
+    if (!projectId || !graphId) return
+    axios.get(`/api/projects/${projectId}/graphs`)
+      .then(res => setVersions(res.data))
+      .catch(() => {})
+  }, [projectId, graphId])
+
   // 노드 라벨 표시 모드를 이름/주석 간 전환
   const toggleLabelMode = useCallback(() => {
     const next: LabelMode = labelMode === 'name' ? 'comment' : 'name'
@@ -2091,23 +2099,12 @@ function GraphPageInner() {
     )
   }
 
+  const currentVersion = versions.find((v) => v.graphId === graphId)
+
   return (
     <div className="app-page" style={{ width: '100vw', height: '100vh', background: '#030712', display: 'flex', flexDirection: 'column' }}>
       <div style={{ position: 'relative' }}>
         <AppHeader />
-        {projectId && currentUserId && (
-          <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', zIndex: 50 }}>
-            <CollaborationPanel
-              graphId={projectId}
-              myUserId={currentUserId}
-              participants={collabState.participants}
-              connected={collabState.connected}
-              sessionId={collabSessionId}
-              inviteCode={collabInviteCode}
-              onSessionReady={(sid, code) => { setCollabSessionId(sid); setCollabInviteCode(code) }}
-            />
-          </div>
-        )}
       </div>
     <div ref={flowRef} style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
@@ -2186,6 +2183,18 @@ function GraphPageInner() {
         >
           💬 팀채팅
         </button>
+        {/* 협업 세션 — 팀채팅 옆 */}
+        {projectId && currentUserId && (
+          <CollaborationPanel
+            graphId={projectId}
+            myUserId={currentUserId}
+            participants={collabState.participants}
+            connected={collabState.connected}
+            sessionId={collabSessionId}
+            inviteCode={collabInviteCode}
+            onSessionReady={(sid, code) => { setCollabSessionId(sid); setCollabInviteCode(code) }}
+          />
+        )}
         {/* 키보드 단축키 도움말 */}
         <div className="relative group">
           <button className="text-gray-500 hover:text-gray-300 text-xs w-6 h-6 rounded-full border border-gray-700 hover:border-gray-500 flex items-center justify-center transition-colors">
@@ -2225,7 +2234,7 @@ function GraphPageInner() {
             >
               Codeprint
             </button>
-            <button onClick={() => setLeftOpen(false)} className="text-gray-600 hover:text-white text-sm leading-none" title="사이드바 접기">‹</button>
+            <button onClick={() => setLeftOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-md bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white text-lg leading-none transition-colors" title="사이드바 접기">‹</button>
           </div>
 
           <div className="flex flex-col gap-0 flex-1">
@@ -2316,6 +2325,15 @@ function GraphPageInner() {
 
             {/* 버전 기록 */}
             <LeftSection title="버전 기록">
+              {currentVersion && (
+                <div className="text-[11px] px-1 pb-1.5 leading-tight">
+                  <span className="text-gray-500">현재 보는 버전</span><br />
+                  <span className="text-blue-400">{currentVersion.branch}</span>{' '}
+                  <span className="text-gray-500">
+                    {new Date(currentVersion.createdAt).toLocaleString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              )}
               <button
                 onClick={handleLoadVersions}
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300"
@@ -2649,7 +2667,7 @@ function GraphPageInner() {
       {showTeamChat && (
         <div
           className="absolute top-0 h-full z-30"
-          style={{ right: rightCollapsed ? '40px' : `${rightWidth}px`, width: '280px' }}
+          style={{ right: rightCollapsed ? '0px' : `${rightWidth}px`, width: '280px' }}
         >
           <TeamChatPanel
             roomId={graphId}
@@ -2658,15 +2676,15 @@ function GraphPageInner() {
         </div>
       )}
 
-      {/* 우측 사이드바 — 항상 표시 */}
+      {/* 우측 사이드바 — 기본 숨김, 노드/도메인/파일 클릭 시 등장 (접힘 시 영역 없이 화살표 버튼만) */}
       <aside
-        className="absolute right-0 top-0 h-full bg-gray-950 border-l border-gray-800 z-40 flex flex-col shadow-2xl transition-all duration-200"
-        style={{ width: rightCollapsed ? '40px' : `${rightWidth}px` }}
+        className={`absolute right-0 top-0 h-full z-40 flex flex-col transition-all duration-200 ${rightCollapsed ? '' : 'bg-gray-950 border-l border-gray-800 shadow-2xl'}`}
+        style={{ width: rightCollapsed ? '0px' : `${rightWidth}px` }}
       >
-        {/* collapse 핸들 */}
+        {/* collapse 핸들 — 접힘 시 화면에 이것만 보임 */}
         <button
           onClick={() => setRightCollapsed((v) => !v)}
-          className="absolute -left-3 top-1/2 -translate-y-1/2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10"
+          className="absolute -left-3 top-1/2 -translate-y-1/2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white rounded-full w-7 h-7 flex items-center justify-center text-sm z-10 shadow-lg"
           title={rightCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
         >
           {rightCollapsed ? '‹' : '›'}
