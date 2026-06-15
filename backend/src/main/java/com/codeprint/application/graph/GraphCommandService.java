@@ -66,4 +66,31 @@ public class GraphCommandService {
         node.updateAnnotation(userLabel, userNote);
         graphRepository.saveNode(node);
     }
+
+    // 그래프 버전을 고정 슬롯에 고정 — 같은 슬롯 기존 점유분은 해제(덮어쓰기). 그래프가 프로젝트 소속인지 검증
+    public void pinGraph(UUID projectId, UUID graphId, int slot) {
+        requireGraphInProject(projectId, graphId);
+        graphRepository.clearPinnedSlot(projectId, slot);
+        // clearPinnedSlot이 영속성 컨텍스트를 초기화하므로 최신 상태로 재조회 후 고정
+        Graph graph = requireGraphInProject(projectId, graphId);
+        graph.pin(slot);
+        graphRepository.save(graph);
+    }
+
+    // 그래프 버전 고정 해제 — 그래프가 프로젝트 소속인지 검증
+    public void unpinGraph(UUID projectId, UUID graphId) {
+        Graph graph = requireGraphInProject(projectId, graphId);
+        graph.unpin();
+        graphRepository.save(graph);
+    }
+
+    // 그래프 조회 + 프로젝트 소속 검증 (IDOR 방지)
+    private Graph requireGraphInProject(UUID projectId, UUID graphId) {
+        Graph graph = graphRepository.findById(graphId)
+                .orElseThrow(() -> new IllegalArgumentException("Graph not found: " + graphId));
+        if (!graph.getProjectId().equals(projectId)) {
+            throw new IllegalArgumentException("그래프가 프로젝트에 속하지 않습니다: " + graphId);
+        }
+        return graph;
+    }
 }

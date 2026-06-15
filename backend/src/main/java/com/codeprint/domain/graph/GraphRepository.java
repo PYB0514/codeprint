@@ -36,4 +36,7 @@ public interface GraphRepository {
 
     // 프로젝트의 최신 그래프 조회
     Optional<Graph> findTopByProjectIdOrderByCreatedAtDesc(UUID projectId);
+
+    // 같은 프로젝트의 지정 고정 슬롯을 비움 (고정 덮어쓰기용)
+    void clearPinnedSlot(UUID projectId, int slot);
 }

@@ -15,6 +15,10 @@ import com.codeprint.domain.graph.NodeType;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
 import com.codeprint.infrastructure.storage.S3Service;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -51,6 +55,32 @@ public class GraphController {
             @AuthenticationPrincipal User user) {
         return ResponseEntity.ok(graphFacade.getGraphVersionsWithBranch(projectId, user.getId()));
     }
+
+    // 그래프 버전을 고정 슬롯(1~5)에 고정 — 소유자만, 같은 슬롯 기존 고정은 덮어쓰기
+    @PutMapping("/api/projects/{projectId}/graphs/{graphId}/pin")
+    public ResponseEntity<Void> pinGraph(
+            @PathVariable UUID projectId,
+            @PathVariable UUID graphId,
+            @Valid @RequestBody PinRequest request,
+            @AuthenticationPrincipal User user) {
+        graphFacade.verifyProjectOwnership(projectId, user.getId());
+        graphCommandService.pinGraph(projectId, graphId, request.slot());
+        return ResponseEntity.ok().build();
+    }
+
+    // 그래프 버전 고정 해제 — 소유자만
+    @DeleteMapping("/api/projects/{projectId}/graphs/{graphId}/pin")
+    public ResponseEntity<Void> unpinGraph(
+            @PathVariable UUID projectId,
+            @PathVariable UUID graphId,
+            @AuthenticationPrincipal User user) {
+        graphFacade.verifyProjectOwnership(projectId, user.getId());
+        graphCommandService.unpinGraph(projectId, graphId);
+        return ResponseEntity.ok().build();
+    }
+
+    // 고정 요청 — slot은 1~5 필수
+    public record PinRequest(@NotNull @Min(1) @Max(5) Integer slot) {}
 
     // 프로젝트의 최신 그래프(노드+엣지)를 조회 — graphId 지정 시 해당 버전 반환
     @GetMapping("/api/projects/{projectId}/graph")

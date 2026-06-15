@@ -489,7 +489,9 @@ function GraphPageInner() {
   const [showTeamChat, setShowTeamChat] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [showVersions, setShowVersions] = useState(false)
-  const [versions, setVersions] = useState<{ graphId: string; createdAt: string; branch: string }[]>([])
+  const [versions, setVersions] = useState<{ graphId: string; createdAt: string; branch: string; pinnedSlot: number | null }[]>([])
+  const [showRetentionInfo, setShowRetentionInfo] = useState(false)
+  const [pinMenuGraphId, setPinMenuGraphId] = useState<string | null>(null)
   const [loadingVersions, setLoadingVersions] = useState(false)
   const [outdated, setOutdated] = useState<{ branch: string; lastAnalyzedAt: string } | null>(null)
   const [freshnessError, setFreshnessError] = useState<'rate_limit' | 'github_error' | null>(null)
@@ -1322,6 +1324,36 @@ function GraphPageInner() {
       .then(res => setVersions(res.data))
       .catch(() => {})
   }, [projectId, graphId])
+
+  // 버전 목록을 다시 불러옴 (고정/해제 후 갱신용)
+  const refreshVersions = useCallback(async () => {
+    if (!projectId) return
+    try {
+      const res = await axios.get(`/api/projects/${projectId}/graphs`)
+      setVersions(res.data)
+    } catch { /* 무시 */ }
+  }, [projectId])
+
+  // 버전을 고정 슬롯(1~5)에 고정 — 사용 중 슬롯이면 덮어쓰기
+  const handlePin = useCallback(async (gId: string, slot: number) => {
+    try {
+      await axios.put(`/api/projects/${projectId}/graphs/${gId}/pin`, { slot })
+      setPinMenuGraphId(null)
+      await refreshVersions()
+    } catch {
+      setError('버전 고정에 실패했습니다.')
+    }
+  }, [projectId, refreshVersions])
+
+  // 버전 고정 해제
+  const handleUnpin = useCallback(async (gId: string) => {
+    try {
+      await axios.delete(`/api/projects/${projectId}/graphs/${gId}/pin`)
+      await refreshVersions()
+    } catch {
+      setError('고정 해제에 실패했습니다.')
+    }
+  }, [projectId, refreshVersions])
 
   // 노드 라벨 표시 모드를 이름/주석 간 전환
   const toggleLabelMode = useCallback(() => {
@@ -2324,16 +2356,52 @@ function GraphPageInner() {
             </LeftSection>
 
             {/* 버전 기록 */}
-            <LeftSection title="버전 기록">
+            <LeftSection title="버전 기록" headerRight={
+              <button
+                onClick={() => setShowRetentionInfo(v => !v)}
+                title="버전 보관 정책"
+                className={`w-4 h-4 rounded-full border text-[10px] leading-none flex items-center justify-center ${showRetentionInfo ? 'border-blue-500 text-blue-400' : 'border-gray-600 text-gray-500 hover:text-gray-300'}`}
+              >
+                ?
+              </button>
+            }>
+              {showRetentionInfo && (
+                <div className="text-[11px] text-gray-400 bg-gray-800/60 rounded p-2 mb-1.5 leading-relaxed">
+                  최근 <span className="text-gray-200">10개</span> 버전만 자동 보관됩니다. 그보다 오래된 버전은 새 분석 시 <span className="text-gray-200">자동 삭제</span>(노드 메모·색상 포함)됩니다. 계속 보관하려면 아래 <span className="text-amber-400">📌</span> 로 최대 <span className="text-gray-200">5개</span>까지 슬롯에 고정하세요.
+                </div>
+              )}
               {currentVersion && (
-                <div className="text-[11px] px-1 pb-1.5 leading-tight">
+                <div className="text-[11px] px-1 pb-1 leading-tight">
                   <span className="text-gray-500">현재 보는 버전</span><br />
                   <span className="text-blue-400">{currentVersion.branch}</span>{' '}
                   <span className="text-gray-500">
                     {new Date(currentVersion.createdAt).toLocaleString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                   </span>
+                  {currentVersion.pinnedSlot && <span className="text-amber-400"> · 📌{currentVersion.pinnedSlot} 고정됨</span>}
                 </div>
               )}
+              {/* 고정 슬롯 표시 — 채워진 슬롯 클릭 시 해당 버전 로드 */}
+              <div className="px-1 pb-1.5">
+                <span className="text-[10px] text-gray-500">고정 슬롯</span>
+                <div className="flex gap-1 mt-0.5">
+                  {[1, 2, 3, 4, 5].map((slot) => {
+                    const g = versions.find((x) => x.pinnedSlot === slot)
+                    return (
+                      <button
+                        key={slot}
+                        disabled={!g}
+                        onClick={() => g && handleLoadVersion(g.graphId)}
+                        title={g ? `슬롯 ${slot}: ${g.branch} ${new Date(g.createdAt).toLocaleDateString('ko-KR')}` : `슬롯 ${slot}: 비어 있음`}
+                        className={`w-6 h-6 text-[10px] rounded border flex items-center justify-center transition-colors ${
+                          g ? 'bg-amber-900/40 border-amber-700 text-amber-300 hover:bg-amber-900/70' : 'border-gray-700 text-gray-600'
+                        }`}
+                      >
+                        {slot}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
               <button
                 onClick={handleLoadVersions}
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300"
@@ -2341,27 +2409,60 @@ function GraphPageInner() {
                 {showVersions ? '▲ 닫기' : '▼ 버전 목록 보기'}
               </button>
               {showVersions && (
-                <div className="mt-1 flex flex-col gap-1 max-h-48 overflow-y-auto">
+                <div className="mt-1 flex flex-col gap-1 max-h-60 overflow-y-auto">
                   {loadingVersions ? (
                     <p className="text-xs text-gray-500 px-1">불러오는 중...</p>
                   ) : versions.length === 0 ? (
                     <p className="text-xs text-gray-500 px-1">버전 없음</p>
                   ) : (
                     versions.map((v, i) => (
-                      <button
-                        key={v.graphId}
-                        onClick={() => handleLoadVersion(v.graphId)}
-                        className={`w-full text-left text-xs px-2 py-1.5 rounded hover:bg-gray-700 transition-colors ${
-                          v.graphId === graphId ? 'bg-gray-700 text-white' : 'bg-gray-800/40 text-gray-400'
-                        }`}
-                      >
-                        <span className="text-gray-300">{i === 0 ? '최신 ' : ''}</span>
-                        <span className="text-blue-400">{v.branch}</span>
-                        <br />
-                        <span className="text-gray-500">
-                          {new Date(v.createdAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </button>
+                      <div key={v.graphId} className="flex flex-col">
+                        <div className="flex items-stretch gap-1">
+                          <button
+                            onClick={() => handleLoadVersion(v.graphId)}
+                            className={`flex-1 text-left text-xs px-2 py-1.5 rounded hover:bg-gray-700 transition-colors ${
+                              v.graphId === graphId ? 'bg-gray-700 text-white' : 'bg-gray-800/40 text-gray-400'
+                            }`}
+                          >
+                            <span className="text-gray-300">{i === 0 ? '최신 ' : ''}</span>
+                            <span className="text-blue-400">{v.branch}</span>
+                            {v.pinnedSlot && <span className="text-amber-400"> 📌{v.pinnedSlot}</span>}
+                            <br />
+                            <span className="text-gray-500">
+                              {new Date(v.createdAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => v.pinnedSlot ? handleUnpin(v.graphId) : setPinMenuGraphId(pinMenuGraphId === v.graphId ? null : v.graphId)}
+                            title={v.pinnedSlot ? `슬롯 ${v.pinnedSlot} 고정 해제` : '슬롯에 고정'}
+                            className={`px-2 rounded text-sm flex-shrink-0 transition-colors ${
+                              v.pinnedSlot ? 'bg-amber-900/50 text-amber-300 hover:bg-amber-900/80' : 'bg-gray-800/60 text-gray-500 hover:text-amber-300'
+                            }`}
+                          >
+                            📌
+                          </button>
+                        </div>
+                        {pinMenuGraphId === v.graphId && !v.pinnedSlot && (
+                          <div className="mt-1 ml-1 p-2 bg-gray-800 rounded flex flex-col gap-1">
+                            <span className="text-[10px] text-gray-500">고정할 슬롯 선택 (사용 중 슬롯 선택 시 덮어쓰기)</span>
+                            {[1, 2, 3, 4, 5].map((slot) => {
+                              const occupant = versions.find((x) => x.pinnedSlot === slot)
+                              return (
+                                <button
+                                  key={slot}
+                                  onClick={() => handlePin(v.graphId, slot)}
+                                  className="text-left text-[11px] px-2 py-1 rounded bg-gray-900/60 hover:bg-gray-700 text-gray-300"
+                                >
+                                  <span className="text-amber-400 mr-1">슬롯 {slot}</span>
+                                  {occupant
+                                    ? <span className="text-gray-500">{occupant.branch} {new Date(occupant.createdAt).toLocaleDateString('ko-KR')} (덮어쓰기)</span>
+                                    : <span className="text-gray-600">비어 있음</span>}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
                     ))
                   )}
                 </div>

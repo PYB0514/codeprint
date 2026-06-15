@@ -447,6 +447,11 @@ public class GraphBuilder {
             }
         }
 
+        // 보존 정책 — 방금 만든 버전 포함 비고정 최근 N개만 유지, 초과분 삭제 (cascade로 노드/엣지/코멘트/스타일/프리셋 함께 제거)
+        // analysis 컨텍스트가 graph 애플리케이션 서비스를 주입받지 않도록, 그래프 저장을 이미 담당하는 빌더에서 도메인 정책을 직접 적용
+        GraphRetentionPolicy.selectEvictable(graphRepository.findByProjectId(projectId))
+                .forEach(old -> graphRepository.deleteById(old.getId()));
+
         return graph;
     }
 

@@ -2,6 +2,24 @@
 
 ---
 
+## 그래프 버전 보존 정책 — 최근 10개 유지 + 고정 5슬롯 (2026-06-15)
+
+**문제.** 프로젝트당 분석할 때마다 그래프 버전이 무제한 누적(삭제 로직 없음) → 저장공간 낭비. 사용자가 "최근 10개만 + 원하는 5개 고정" 요청.
+
+**이유 → 결정.**
+1. **삭제 트리거 위치 = GraphBuilder.** 보존 정책 적용은 "새 버전 생성 직후"가 자연스러운데, 호출처가 `AnalysisRunner`·`PrReviewService`(둘 다 **analysis 컨텍스트**)다. 여기서 graph 애플리케이션 서비스를 주입하면 §10 cross-context(application/A→application/B) 위반. 반면 `GraphBuilder`는 이미 `GraphRepository`(domain/graph)로 그래프 영속화를 담당하는 infra 어댑터 → **순수 도메인 정책 `GraphRetentionPolicy`(domain/graph)** 를 만들고 빌더가 호출+삭제. 두 호출처 모두 자동 적용. 정책 로직은 순수 함수라 단위 테스트(경계 10/고정 제외/빈 목록 4종).
+2. **고정 = `graphs.pinned_slot`(1~5) 단일 컬럼.** 별도 pinned 테이블 대신 컬럼 + `(project_id, pinned_slot)` partial unique index로 "프로젝트당 슬롯 유일" 보장. 고정 버전은 `selectEvictable`에서 비고정 카운트·삭제 대상 모두 제외. 기존 "뷰 프리셋"(화면 설정 5슬롯)과는 **별개 개념**(버전 스냅샷 보호).
+3. **덮어쓰기 unique 충돌 회피.** 슬롯 점유 상태에서 다른 그래프를 같은 슬롯에 고정 시, 엔티티 두 개를 dirty로 두면 Hibernate flush 순서에 따라 partial unique index 위반 가능. → `clearPinnedSlot` **벌크 `@Modifying`(flushAutomatically+clearAutomatically)** 으로 기존 점유를 먼저 즉시 NULL 처리 후, 영속성 컨텍스트 초기화 → 대상 그래프 재조회 후 pin. (clearAutomatically 없이 같은 슬롯 재고정 시 dirty 미감지로 NULL 잔류하는 함정 회피.)
+4. **삭제 cascade.** 그래프 행 삭제 시 nodes/edges/node_styles/edge_styles/graph_view_presets/node_comments 모두 DB `ON DELETE CASCADE`로 함께 제거. warning은 비저장(런타임 계산), warning_suppressions는 project 스코프라 무관.
+
+**알려진 부작용.** `posts.graph_id`는 `ON DELETE SET NULL` → 커뮤니티에 공유한 그래프 버전이 보존 정책으로 삭제되면 해당 게시글의 그래프 링크가 NULL이 됨(게시글 자체는 유지, graceful). 최근 10개·고정 범위 밖의 오래된 버전만 해당되므로 실사용 충돌 가능성은 낮으나, 필요 시 후속으로 "게시글 참조 버전도 보존" 추가 가능.
+
+**기동 시 스키마 검증 버그(B-12).** 첫 재기동에서 `Schema-validation: wrong column type [pinned_slot]: found int2(SMALLINT), expecting integer` → 컨텍스트 로드 실패. 원인: V44는 `SMALLINT`인데 엔티티 필드를 `Integer`(int4)로 매핑. 값이 1~5라 SMALLINT가 적절하므로 마이그레이션은 두고 **엔티티 필드를 `Short`로 변경**해 매핑 일치. ⚠️ `./gradlew test`는 이 오류를 못 잡음(테스트가 실 postgres validate를 안 거침) → 컬럼타입↔JPA래퍼타입 검증은 실제 기동으로만 가능.
+
+**결과.** 컴파일 + `GraphRetentionPolicyTest` 4종 + 전체 테스트 통과. pin/unpin REST(소유권+프로젝트 소속 검증), 버전 목록 응답에 `pinnedSlot`. 라이브 검증(V44 적용·11번째 분석 시 최오래 삭제·고정 보호·덮어쓰기)은 백엔드 재기동 후.
+
+---
+
 ## Phase D — GitHub PR 연동 MVP Tier 0 (수동 트리거) (2026-06-15)
 
 **목표.** 제품 실제 MVP "머지 전 자동 경고"의 첫 슬라이스. PR head 브랜치를 분석해 구조 경고를 PR 코멘트로 게시.

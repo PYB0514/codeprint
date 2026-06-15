@@ -46,6 +46,7 @@ public class GraphFacade {
                     item.put("graphId", graph.getId().toString());
                     item.put("createdAt", graph.getCreatedAt().toString());
                     item.put("branch", branch);
+                    item.put("pinnedSlot", graph.getPinnedSlot());
                     return item;
                 })
                 .toList();
