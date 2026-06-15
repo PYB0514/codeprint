@@ -21,6 +21,7 @@ import { extractDomain, buildDomainColorMap, buildKnownDomains } from '../utils/
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
+import SketchNode from '../components/SketchNode'
 import OnboardingTour, { isTourDone } from '../components/OnboardingTour'
 import AppHeader from '../components/AppHeader'
 import { useCollaboration } from '../hooks/useCollaboration'
@@ -30,7 +31,7 @@ import WarningPanel from '../components/WarningPanel'
 import TeamChatPanel from '../components/TeamChatPanel'
 import AiAnalysisSection from '../components/AiAnalysisSection'
 
-const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
+const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode, sketch: SketchNode }
 
 interface FuncCallChainEntry {
   funcName: string
@@ -493,6 +494,10 @@ function GraphPageInner() {
   const [showRetentionInfo, setShowRetentionInfo] = useState(false)
   const [pinMenuGraphId, setPinMenuGraphId] = useState<string | null>(null)
   const [loadingVersions, setLoadingVersions] = useState(false)
+
+  // 스케치 모드 (슈퍼 바이브 코딩 P0) — 기존 구조 위에 설계용 노드를 자유 배치. 현재 localStorage 임시 저장
+  const [sketchMode, setSketchMode] = useState(false)
+  const [sketchNodes, setSketchNodes] = useState<{ id: string; label: string; x: number; y: number }[]>([])
   const [outdated, setOutdated] = useState<{ branch: string; lastAnalyzedAt: string } | null>(null)
   const [freshnessError, setFreshnessError] = useState<'rate_limit' | 'github_error' | null>(null)
   const [reanalyzing, setReanalyzing] = useState(false)
@@ -1355,6 +1360,53 @@ function GraphPageInner() {
     }
   }, [projectId, refreshVersions])
 
+  // 스케치 노드를 프로젝트별 localStorage에서 로드
+  useEffect(() => {
+    if (!projectId) return
+    try {
+      const raw = localStorage.getItem(`sketch:${projectId}`)
+      setSketchNodes(raw ? JSON.parse(raw) : [])
+    } catch { setSketchNodes([]) }
+  }, [projectId])
+
+  // 스케치 노드 변경 시 localStorage에 저장
+  useEffect(() => {
+    if (!projectId) return
+    try { localStorage.setItem(`sketch:${projectId}`, JSON.stringify(sketchNodes)) } catch { /* 무시 */ }
+  }, [projectId, sketchNodes])
+
+  // 설계 노드 추가 — 화면에 겹치지 않도록 약간씩 오프셋
+  const addSketchNode = useCallback(() => {
+    setSketchNodes(prev => {
+      const n = prev.length
+      return [...prev, { id: `sketch-${Date.now()}`, label: '새 설계 노드', x: 120 + (n % 5) * 60, y: 120 + (n % 5) * 60 }]
+    })
+  }, [])
+
+  // 설계 노드 삭제
+  const deleteSketchNode = useCallback((id: string) => {
+    setSketchNodes(prev => prev.filter(s => s.id !== id))
+  }, [])
+
+  // 설계 노드 라벨 변경
+  const relabelSketchNode = useCallback((id: string, label: string) => {
+    setSketchNodes(prev => prev.map(s => s.id === id ? { ...s, label } : s))
+  }, [])
+
+  // 노드 변경 핸들러 — 스케치 노드 위치 변경은 sketchNodes에 반영(나머지는 기존 처리). sketch id는 useNodesState가 무시
+  const handleNodesChange = useCallback((changes: Parameters<typeof onNodesChange>[0]) => {
+    const sketchIds = new Set(sketchNodes.map(s => s.id))
+    const moves = changes.filter((c): c is Extract<typeof c, { type: 'position' }> =>
+      c.type === 'position' && 'position' in c && !!c.position && sketchIds.has(c.id))
+    if (moves.length) {
+      setSketchNodes(prev => prev.map(s => {
+        const m = moves.find(c => c.id === s.id)
+        return m && m.position ? { ...s, x: m.position.x, y: m.position.y } : s
+      }))
+    }
+    onNodesChange(changes)
+  }, [sketchNodes, onNodesChange])
+
   // 노드 라벨 표시 모드를 이름/주석 간 전환
   const toggleLabelMode = useCallback(() => {
     const next: LabelMode = labelMode === 'name' ? 'comment' : 'name'
@@ -1946,8 +1998,20 @@ function GraphPageInner() {
         })
       }
     }
+    // 스케치 노드를 기존 레이아웃 위에 덧붙임 (buildLayout을 거치지 않는 별도 레이어 — 기존 노드 합성에 영향 없음)
+    if (sketchNodes.length > 0) {
+      const sketchRF = sketchNodes.map(s => ({
+        id: s.id,
+        type: 'sketch',
+        position: { x: s.x, y: s.y },
+        data: { label: s.label, onDelete: deleteSketchNode, onRelabel: relabelSketchNode },
+        draggable: true,
+        zIndex: 1000,
+      })) as unknown as typeof result
+      return [...result, ...sketchRF]
+    }
     return result
-  }, [showDomainBoxes, nodes, tabFilteredNodeIds, activeDomainTab, layoutPreset, dbTableIdSet])
+  }, [showDomainBoxes, nodes, tabFilteredNodeIds, activeDomainTab, layoutPreset, dbTableIdSet, sketchNodes, deleteSketchNode, relabelSketchNode])
 
   // 탭 필터링된 엣지 — 양쪽 노드가 모두 표시될 때만 보여줌
   // 현재 사이드바에서 열린 노드 ID (엣지 온디맨드 표시용)
@@ -2355,6 +2419,32 @@ function GraphPageInner() {
               </button>
             </LeftSection>
 
+            {/* 스케치 (슈퍼 바이브 코딩 P0, 베타) */}
+            <LeftSection title="✏️ 스케치 (베타)">
+              <button
+                onClick={() => setSketchMode(v => !v)}
+                className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
+                  sketchMode ? 'bg-purple-900/50 text-purple-200 hover:bg-purple-900/70' : 'bg-gray-800/60 text-gray-300 hover:bg-gray-800'
+                }`}
+              >
+                {sketchMode ? '✓ 스케치 모드 켜짐' : '○ 스케치 모드 켜기'}
+              </button>
+              {sketchMode && (
+                <div className="mt-1 flex flex-col gap-1">
+                  <button
+                    onClick={addSketchNode}
+                    className="w-full text-left text-xs px-2 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white"
+                  >
+                    + 설계 노드 추가
+                  </button>
+                  <p className="text-[11px] text-gray-500 leading-relaxed px-1">
+                    기존 구조 위에 새 노드를 자유롭게 배치·이동. 점선 보라색이 설계 노드입니다. 현재 이 브라우저에만 임시 저장됩니다.
+                    {sketchNodes.length > 0 && <span className="text-purple-400"> · {sketchNodes.length}개</span>}
+                  </p>
+                </div>
+              )}
+            </LeftSection>
+
             {/* 버전 기록 */}
             <LeftSection title="버전 기록" headerRight={
               <button
@@ -2713,7 +2803,7 @@ function GraphPageInner() {
         nodes={displayNodes}
         edges={displayEdges}
         nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
+        onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onEdgeMouseEnter={handleEdgeMouseEnter}
         onEdgeMouseLeave={handleEdgeMouseLeave}
