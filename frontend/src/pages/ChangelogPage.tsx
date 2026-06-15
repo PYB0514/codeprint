@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.85.1',
+    date: '2026-06-16',
+    title: '도메인 뷰 레이아웃 개편 — DB 중앙 + 도메인 그리드 배치',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: '도메인 뷰가 세로 1열로 길어지던 것을 개편 — 데이터베이스를 화면 중앙에 두고 도메인들을 그 주위로 격자 배치. 프로젝트가 커져 도메인이 많아져도 16:9 화면을 가로로 넓게 활용해 한눈에 보기 쉬움' },
+    ],
+  },
+  {
     version: 'v0.85.0',
     date: '2026-06-16',
     title: '스케치 모드 (베타) — 그래프 위에 설계 노드를 직접 그리기',
