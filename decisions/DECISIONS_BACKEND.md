@@ -2,6 +2,26 @@
 
 ---
 
+## DAU 정밀화 — refresh_tokens 프록시 → users.last_active_at (2026-06-15)
+
+**문제.** 일일 다이제스트(#271)의 활성 사용자(DAU)가 `count(DISTINCT user_id) FROM refresh_tokens WHERE created_at in window` 프록시였음. refresh_tokens는 로그인/토큰 회전 시에만 생성 → access token이 유효한 채 하루 종일 쓰는 사용자를 누락해 DAU를 구조적으로 과소 집계.
+
+**선택지.**
+- 탈락 1: 활동 로그 테이블(user_activity, 사용자×일 1행) — 과거 일별 DAU를 완벽 집계하나 핫패스마다 INSERT + 테이블 비대. §2 단순성 위반, 현 규모에 과도.
+- 탈락 2: `last_active_at` 단일 컬럼 + 매 요청 무조건 UPDATE — 인증 필터가 매 요청 실행되므로 write 폭주.
+- 채택: **`users.last_active_at`(V43, nullable) + 쓰로틀 도메인 메서드.** `User.recordActivity(now)`가 마지막 기록이 10분 이내면 no-op(false), 초과면 갱신(true). JwtAuthenticationFilter는 true일 때만 `save()`. DAU = `count(*) FROM users WHERE last_active_at in [start,end)`.
+
+**결정 세부.**
+- 쓰로틀 10분 → 사용자당 10분에 최대 1회 write. DAU는 일 단위 granularity라 충분.
+- 쓰로틀 판정은 도메인 메서드(테스트 가능, 분기 2 + 경계). `recordActivity`는 `updatedAt`을 건드리지 않음 — 활동 시각과 프로필 변경 시각 의미 분리.
+- DDD: 활동 기록은 User Aggregate 자신의 컬럼이므로 도메인 메서드 + save(merge). 쓰로틀로 write가 희소해 merge의 추가 SELECT 비용 무시 가능 → @Modifying 벌크 쿼리(애그리거트 우회)보다 도메인 일관성 우선.
+
+**한계(의도된 트레이드오프).** 단일 컬럼이라 "윈도 내 *최근* 활동" 기준 — 다이제스트가 전일을 익일 09:00 KST에 집계하므로, 전일 활동 후 익일 00:00~09:00에 재방문한 사용자는 last_active_at이 윈도를 벗어나 전일 DAU에서 누락(경미한 과소). 그래도 refresh 프록시(비재로그인 활동 전부 누락)보다 항상 정확. 완벽한 과거 일별 DAU가 필요해지면 활동 로그 테이블로 승격. 배포 직후엔 기존 사용자 last_active_at=NULL이라 활동 누적 전까지 0에서 self-heal.
+
+**결과.** UserTest 4종(최초/쓰로틀이내/쓰로틀초과/updatedAt 불변) 추가. DailyMetrics 형상 불변이라 AdminDigestServiceTest 무영향. (검증: compileJava/test는 백엔드 정지 후, V43 적용 + 라이브 DAU는 재기동 후.)
+
+---
+
 ## 관리자 플랜 변경 — backdoor 대신 감사 로그 남는 인가 액션 (2026-06-14)
 
 **문제.** 사용자가 "내 계정을 PRO로 바꾸는 우회로"를 물음. 결제 우회 backdoor(숨김 엔드포인트·매직 파라미터·하드코딩)는 유료 서비스에 심각한 보안 구멍 — 노출 시 자가 업그레이드 가능, SECURITY_POLICY 원칙 위반.

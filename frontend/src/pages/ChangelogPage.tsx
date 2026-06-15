@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.78.1',
+    date: '2026-06-15',
+    title: '일일 다이제스트 활성 사용자(DAU) 집계 정밀화',
+    type: 'fix',
+    items: [
+      { category: '관리자', desc: '다이제스트의 활성 사용자 수를 로그인 토큰 발급 기준(재로그인 시에만 집계)에서 실제 요청 활동 기준으로 변경 — 토큰이 유효한 채 하루 종일 사용하는 사용자를 누락하던 구조적 과소 집계 해소' },
+    ],
+  },
+  {
     version: 'v0.78.0',
     date: '2026-06-15',
     title: '관리자 문의 처리 추적 — 미처리 문의를 읽고 완료 표시',

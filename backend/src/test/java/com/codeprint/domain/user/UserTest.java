@@ -5,6 +5,9 @@ import com.codeprint.shared.plan.UserPlan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class UserTest {
@@ -77,5 +80,55 @@ class UserTest {
 
         assertThat(user.getGithubAccessToken()).isEqualTo("gho_newtoken");
         assertThat(user.getUpdatedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("recordActivity() — 최초 활동: lastActiveAt 갱신 + true 반환")
+    void recordActivity_firstTime_updates() {
+        User user = User.create(1L, "a@github.com", "a");
+        Instant now = Instant.now();
+
+        boolean updated = user.recordActivity(now);
+
+        assertThat(updated).isTrue();
+        assertThat(user.getLastActiveAt()).isEqualTo(now);
+    }
+
+    @Test
+    @DisplayName("recordActivity() — 쓰로틀 이내 재호출: no-op + false 반환")
+    void recordActivity_withinThrottle_noOp() {
+        User user = User.create(1L, "a@github.com", "a");
+        Instant first = Instant.now();
+        user.recordActivity(first);
+
+        boolean updated = user.recordActivity(first.plus(5, ChronoUnit.MINUTES));
+
+        assertThat(updated).isFalse();
+        assertThat(user.getLastActiveAt()).isEqualTo(first);
+    }
+
+    @Test
+    @DisplayName("recordActivity() — 쓰로틀 초과 재호출: lastActiveAt 갱신 + true 반환")
+    void recordActivity_afterThrottle_updates() {
+        User user = User.create(1L, "a@github.com", "a");
+        Instant first = Instant.now();
+        user.recordActivity(first);
+        Instant later = first.plus(11, ChronoUnit.MINUTES);
+
+        boolean updated = user.recordActivity(later);
+
+        assertThat(updated).isTrue();
+        assertThat(user.getLastActiveAt()).isEqualTo(later);
+    }
+
+    @Test
+    @DisplayName("recordActivity() — 활동 기록은 updatedAt을 건드리지 않음 (프로필 변경 시각과 분리)")
+    void recordActivity_doesNotTouchUpdatedAt() {
+        User user = User.create(1L, "a@github.com", "a");
+        Instant before = user.getUpdatedAt();
+
+        user.recordActivity(Instant.now().plus(1, ChronoUnit.HOURS));
+
+        assertThat(user.getUpdatedAt()).isEqualTo(before);
     }
 }

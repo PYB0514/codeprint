@@ -23,8 +23,8 @@ public class AdminMetricsQuery {
         Timestamp e = Timestamp.from(end);
         return new DailyMetrics(
                 count("SELECT count(*) FROM users WHERE created_at >= :start AND created_at < :end", s, e),
-                // 활성 사용자 근사 — 로그인 토큰 발급 기준 고유 사용자 (활동 추적 컬럼 부재로 인한 프록시)
-                count("SELECT count(DISTINCT user_id) FROM refresh_tokens WHERE created_at >= :start AND created_at < :end", s, e),
+                // 활성 사용자(DAU) — 구간 내 마지막 활동이 기록된 사용자 수 (users.last_active_at 기준)
+                count("SELECT count(*) FROM users WHERE last_active_at >= :start AND last_active_at < :end", s, e),
                 count("SELECT count(*) FROM projects WHERE created_at >= :start AND created_at < :end", s, e),
                 count("SELECT count(*) FROM analyses WHERE created_at >= :start AND created_at < :end", s, e),
                 count("SELECT count(*) FROM analyses WHERE status = 'FAILED' AND created_at >= :start AND created_at < :end", s, e),
