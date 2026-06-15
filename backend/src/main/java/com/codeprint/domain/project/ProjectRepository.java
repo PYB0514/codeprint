@@ -16,6 +16,9 @@ public interface ProjectRepository {
     // 사용자 ID로 프로젝트 목록 조회
     List<Project> findByUserId(UUID userId);
 
+    // GitHub 레포 URL로 프로젝트 목록 조회 (.git 접미사·대소문자 무시) — webhook이 repo로 프로젝트 역해석
+    List<Project> findByRepoUrl(String repoHttpsUrl);
+
     // 사용자 ID로 프로젝트 수 조회
     int countByUserId(UUID userId);
 
