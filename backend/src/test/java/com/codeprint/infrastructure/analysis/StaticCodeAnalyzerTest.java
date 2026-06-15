@@ -976,6 +976,91 @@ class StaticCodeAnalyzerTest {
         assertThat(result.dbTables().get(0).tableName()).isEqualTo("users");
     }
 
+    // ── Django ORM / URL 라우팅 감지 ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("Django models.Model 상속 클래스에서 DB 테이블명(소문자 클래스명)을 추출한다")
+    void Django_Model_추출() throws IOException {
+        Path file = writePyFile("""
+                from django.db import models
+
+                class BlogPost(models.Model):
+                    title = models.CharField(max_length=200)
+
+                class Comment(models.Model):
+                    body = models.TextField()
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.dbTables()).extracting(DbTableInfo::tableName)
+                .containsExactlyInAnyOrder("blogpost", "comment");
+    }
+
+    @Test
+    @DisplayName("Django Meta.db_table이 규칙 기반 테이블명을 덮어쓴다")
+    void Django_Meta_db_table_우선() throws IOException {
+        Path file = writePyFile("""
+                from django.db import models
+
+                class User(models.Model):
+                    name = models.CharField(max_length=100)
+
+                    class Meta:
+                        db_table = 'auth_user'
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.dbTables()).hasSize(1);
+        assertThat(result.dbTables().get(0).tableName()).isEqualTo("auth_user");
+        assertThat(result.dbTables().get(0).className()).isEqualTo("User");
+    }
+
+    @Test
+    @DisplayName("Django 추상 모델(abstract = True)은 DB 테이블로 추출하지 않는다")
+    void Django_추상모델_제외() throws IOException {
+        Path file = writePyFile("""
+                from django.db import models
+
+                class TimeStamped(models.Model):
+                    created_at = models.DateTimeField(auto_now_add=True)
+
+                    class Meta:
+                        abstract = True
+
+                class Article(models.Model):
+                    title = models.CharField(max_length=200)
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.dbTables()).extracting(DbTableInfo::tableName)
+                .containsExactly("article");
+    }
+
+    @Test
+    @DisplayName("Django urls.py path/re_path에서 API 경로를 추출한다(메서드 불명 → GET)")
+    void Django_URL_라우팅_추출() throws IOException {
+        Path file = writePyFile("""
+                from django.urls import path, re_path
+                from . import views
+
+                urlpatterns = [
+                    path('api/articles/', views.article_list),
+                    path('api/articles/<int:pk>/', views.article_detail),
+                    re_path(r'^api/health$', views.health),
+                ]
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.controllerMappings()).contains(
+                "GET:/api/articles/",
+                "GET:/api/articles/<int:pk>/",
+                "GET:/api/health");
+    }
+
     // ── Prisma 스키마 DB 테이블 감지 ─────────────────────────────────────────
 
     @Test

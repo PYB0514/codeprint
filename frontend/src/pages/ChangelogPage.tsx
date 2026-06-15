@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.79.0',
+    date: '2026-06-15',
+    title: 'Django 분석 지원 — ORM 모델·URL 라우팅 인식',
+    type: 'feature',
+    items: [
+      { category: '분석', desc: 'Django ORM(class X(models.Model)) 모델을 DB 테이블로 인식 — 추상 모델 제외, Meta.db_table 지정 시 그 이름 사용. 그동안 Python은 SQLAlchemy만 잡혀 Django 프로젝트는 DB 노드가 비어 있던 문제 해소' },
+      { category: '분석', desc: 'Django urls.py의 path()/re_path() URL 라우팅을 API 엔드포인트로 인식 — Django 프로젝트도 API 노드가 그래프에 표시됨' },
+    ],
+  },
+  {
     version: 'v0.78.1',
     date: '2026-06-15',
     title: '일일 다이제스트 활성 사용자(DAU) 집계 정밀화',

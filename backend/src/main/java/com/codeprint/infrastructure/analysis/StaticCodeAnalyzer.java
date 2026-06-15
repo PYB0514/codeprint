@@ -340,6 +340,20 @@ public class StaticCodeAnalyzer {
             }
         }
 
+        // Python: Django ORM (class X(models.Model):) — 추상 모델 제외, Meta.db_table 우선
+        if (language.equals("Python")) {
+            Matcher m = Pattern.compile("^class\\s+(\\w+)\\s*\\([^)]*\\bmodels\\.Model\\b[^)]*\\)\\s*:", Pattern.MULTILINE).matcher(content);
+            while (m.find()) {
+                String className = m.group(1);
+                // 모델 본문(다음 최상위 class 전까지)에서 추상 여부·db_table 판정
+                String block = content.substring(m.end(), nextTopLevelClassIndex(content, m.end()));
+                if (Pattern.compile("\\babstract\\s*=\\s*True\\b").matcher(block).find()) continue;
+                Matcher dbt = Pattern.compile("\\bdb_table\\s*=\\s*['\"]([^'\"]+)['\"]").matcher(block);
+                String tableName = dbt.find() ? dbt.group(1) : className.toLowerCase();
+                result.add(new DbTableInfo(tableName, className));
+            }
+        }
+
         // Prisma 스키마 파일: model 블록 (멀티 파일 스키마 지원 — 모든 .prisma 대상)
         if (filePath.endsWith(".prisma")) {
             Matcher m = Pattern.compile("^model\\s+(\\w+)\\s*\\{", Pattern.MULTILINE).matcher(content);
@@ -485,6 +499,12 @@ public class StaticCodeAnalyzer {
         return result;
     }
 
+    // 파이썬 최상위(class Meta 등 들여쓰기 제외) class 선언 사이의 블록 끝 인덱스 — 없으면 EOF
+    private int nextTopLevelClassIndex(String content, int from) {
+        Matcher m = Pattern.compile("^class\\s+\\w+", Pattern.MULTILINE).matcher(content);
+        return m.find(from) ? m.start() : content.length();
+    }
+
     // camelCase → snake_case 변환
     private String toSnakeCase(String camel) {
         return camel.replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase();
@@ -596,6 +616,17 @@ public class StaticCodeAnalyzer {
             ).matcher(content);
             while (m.find()) {
                 result.add(m.group(1).toUpperCase() + ":" + m.group(2));
+            }
+
+            // Django: path('route/', view) / re_path(r'^route$', view) — urls.py.
+            // HTTP 메서드는 뷰에서 결정되므로 urls.py만으로는 알 수 없어 GET 기본(기존 메서드 불명→GET 관례)
+            Matcher dj = Pattern.compile(
+                "\\b(?:re_)?path\\s*\\(\\s*r?['\"]([^'\"\\n]*)['\"]\\s*,"
+            ).matcher(content);
+            while (dj.find()) {
+                // re_path 정규식 앵커(^ … $)는 경로가 아니므로 제거
+                String path = dj.group(1).replaceAll("^\\^", "").replaceAll("\\$$", "");
+                result.add("GET:" + (path.startsWith("/") ? path : "/" + path));
             }
 
         } else if (language.equals("Go")) {
