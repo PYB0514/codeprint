@@ -253,15 +253,17 @@ export function buildDomainColorMap(
   return map
 }
 
-// 도메인 뷰 — 바운디드 컨텍스트별로 그룹을 묶어 1열 우측정렬로 배치 (DB 섹션이 우측에 붙도록)
+// 도메인 뷰 — 바운디드 컨텍스트별로 그룹을 묶어 그리드 배치, 중앙 칸은 DB 자리로 비움 (전체 16:9 목표)
 function buildDomainPositions(
   groups: Map<string, RawNode[]>,
   groupLayouts: Map<string, { files: Array<{ file: RawNode; x: number; y: number }>; w: number; h: number }>,
   commonPrefix: string,
-  knownDomains: Set<string>
+  knownDomains: Set<string>,
+  dbTableCount: number
 ): {
   positions: Map<string, { x: number; y: number }>
   domainBounds: Map<string, { x: number; y: number; w: number; h: number; domain: string }>
+  dbSlot?: { x: number; y: number; w: number; h: number }
 } {
   const GROUP_GAP = 24
   const DOMAIN_PAD = 20
@@ -321,41 +323,99 @@ function buildDomainPositions(
     domainInternalLayouts.set(_domain, { w: totalW, h: totalH, groupOffsets: offsets })
   })
 
-  // 도메인 박스를 1열로 배치 — 오른쪽 끝을 맞춰 우측정렬 (DB 섹션에 최대한 가깝게)
-  // 파일 수 내림차순으로 정렬 (규모가 큰 도메인 먼저), common 항상 마지막
+  // 도메인 박스를 테이블 그리드로 배치 — 중앙 칸을 DB에 비워두고 도메인을 사방에 채움, 전체 16:9 목표.
+  // 열별 너비·행별 높이를 따로 잡아(HTML 테이블식) 거대 도메인 1개가 전체를 키우지 않도록 함.
+  // common 항상 마지막, 나머지는 이름순
   const domainOrder = [...domainGroups.keys()].sort((a, b) => {
     if (a === 'common') return 1
     if (b === 'common') return -1
     return a.localeCompare(b)
   })
 
-  // 전체 최대 너비 계산 (우측 정렬 기준선)
-  let maxDomainW = 0
+  const n = domainOrder.length
+  const hasDb = dbTableCount > 0
+  const totalCells = n + (hasDb ? 1 : 0)
+
+  // DB 블록 희망 크기 — 테이블을 정사각형에 가깝게 격자 배치 (중앙 칸 최소 크기)
+  const DB_W = 160, DB_H = 48, DB_GAP = 16
+  const dbCols = Math.max(1, Math.ceil(Math.sqrt(dbTableCount)))
+  const dbRows = Math.max(1, Math.ceil(dbTableCount / dbCols))
+  const dbDesiredW = hasDb ? dbCols * DB_W + (dbCols - 1) * DB_GAP + 40 : 0
+  const dbDesiredH = hasDb ? dbRows * DB_H + (dbRows - 1) * DB_GAP + 56 : 0
+
+  // 열/행 수 결정 — 빈 칸 최소화(꽉 찬 격자일수록 중앙 정렬이 정확)를 우선, 동률이면 16:9에 가깝게.
+  // 평균 박스 크기로 종횡비 추정(이상치에 둔감).
+  const avgW = domainOrder.reduce((s, d) => s + domainInternalLayouts.get(d)!.w, 0) / Math.max(1, n)
+  const avgH = domainOrder.reduce((s, d) => s + domainInternalLayouts.get(d)!.h, 0) / Math.max(1, n)
+  const targetAspect = 16 / 9
+  let cols = 1, rows = totalCells, bestScore = Infinity
+  for (let c = 1; c <= totalCells; c++) {
+    const r = Math.ceil(totalCells / c)
+    const waste = c * r - totalCells
+    const aspect = (c * avgW) / (r * avgH)
+    const score = waste * 100 + Math.abs(aspect - targetAspect)
+    if (score < bestScore) { bestScore = score; cols = c; rows = r }
+  }
+
+  // DB가 들어갈 중앙 칸 (가운데 행·열)
+  const centerR = Math.floor(rows / 2)
+  const centerC = Math.floor(cols / 2)
+  const centerIdx = hasDb ? centerR * cols + centerC : -1
+
+  // 도메인을 셀 인덱스에 할당 (DB 중앙 칸은 건너뜀)
+  const cellDomain = new Map<number, string>() // cellIdx → domain
+  let cellIdx = 0
   domainOrder.forEach((d) => {
-    const layout = domainInternalLayouts.get(d)!
-    maxDomainW = Math.max(maxDomainW, layout.w)
+    if (cellIdx === centerIdx) cellIdx++
+    cellDomain.set(cellIdx, d)
+    cellIdx++
   })
+
+  // 열별 너비·행별 높이 = 해당 열/행에 속한 도메인 박스의 최대치 (+ DB는 중앙 열/행에 반영)
+  const colW = new Array(cols).fill(0)
+  const rowH = new Array(rows).fill(0)
+  cellDomain.forEach((d, idx) => {
+    const r = Math.floor(idx / cols), c = idx % cols
+    const l = domainInternalLayouts.get(d)!
+    colW[c] = Math.max(colW[c], l.w)
+    rowH[r] = Math.max(rowH[r], l.h)
+  })
+  if (hasDb) {
+    colW[centerC] = Math.max(colW[centerC], dbDesiredW)
+    rowH[centerR] = Math.max(rowH[centerR], dbDesiredH)
+  }
+  // 빈 열/행도 최소 크기 보장
+  for (let c = 0; c < cols; c++) colW[c] = Math.max(colW[c], 160)
+  for (let r = 0; r < rows; r++) rowH[r] = Math.max(rowH[r], 100)
+
+  const COL_GAP = GROUP_GAP * 2
+  // 열/행 시작 좌표 누적
+  const colX = new Array(cols).fill(0)
+  for (let c = 1; c < cols; c++) colX[c] = colX[c - 1] + colW[c - 1] + COL_GAP
+  const rowY = new Array(rows).fill(0)
+  for (let r = 1; r < rows; r++) rowY[r] = rowY[r - 1] + rowH[r - 1] + DOMAIN_ROW_GAP
 
   const domainBounds = new Map<string, { x: number; y: number; w: number; h: number; domain: string }>()
   const groupPositions = new Map<string, { x: number; y: number }>()
 
-  let curY = 0
-  domainOrder.forEach((d) => {
+  // 각 도메인을 자기 셀 안에서 중앙 정렬
+  cellDomain.forEach((d, idx) => {
+    const r = Math.floor(idx / cols), c = idx % cols
     const layout = domainInternalLayouts.get(d)!
-    // 우측정렬: 오른쪽 끝을 maxDomainW에 맞춤
-    const dx = maxDomainW - layout.w
-    const dy = curY
-
+    const dx = colX[c] + (colW[c] - layout.w) / 2
+    const dy = rowY[r] + (rowH[r] - layout.h) / 2
     domainBounds.set(d, { x: dx, y: dy, w: layout.w, h: layout.h, domain: d })
-
     layout.groupOffsets.forEach((off, key) => {
       groupPositions.set(key, { x: dx + off.x, y: dy + off.y })
     })
-
-    curY += layout.h + DOMAIN_ROW_GAP
   })
 
-  return { positions: groupPositions, domainBounds }
+  // DB 중앙 칸 영역
+  const dbSlot = hasDb
+    ? { x: colX[centerC], y: rowY[centerR], w: colW[centerC], h: rowH[centerR] }
+    : undefined
+
+  return { positions: groupPositions, domainBounds, dbSlot }
 }
 
 export interface FuncCallEntry {
@@ -616,12 +676,15 @@ export function buildLayout(
     })
 
   // 레이아웃 프리셋에 따라 그룹 위치 계산
+  const dbTableCount = rawNodes.filter((n) => n.type === 'DB_TABLE').length
   let groupPositions: Map<string, { x: number; y: number }>
   let domainBoundsResult: Map<string, { x: number; y: number; w: number; h: number; domain: string }> | undefined
+  let dbSlotResult: { x: number; y: number; w: number; h: number } | undefined
   if (layoutPreset === 'domain') {
-    const domainResult = buildDomainPositions(effectiveGroups, effectiveGroupLayouts, commonPrefix, knownDomains)
+    const domainResult = buildDomainPositions(effectiveGroups, effectiveGroupLayouts, commonPrefix, knownDomains, dbTableCount)
     groupPositions = domainResult.positions
     domainBoundsResult = domainResult.domainBounds
+    dbSlotResult = domainResult.dbSlot
   } else {
     groupPositions = buildLayerPositions(groups, groupLayouts)
   }
@@ -848,20 +911,67 @@ export function buildLayout(
   })
 
   // DB_TABLE 노드 배치
-  // 계층: 그래프 상단 가로 행 / 허브: 전체 그룹 오른쪽 세로 열
+  // 도메인 뷰: 그리드 중앙 칸에 테이블을 격자로 / 그 외: 전체 그룹 오른쪽 세로 열
   const dbTableNodes = rawNodes.filter((n) => n.type === 'DB_TABLE')
   if (dbTableNodes.length > 0) {
     const DB_W = 160
     const DB_H = 48
     const DB_GAP = 16
     const DB_SECTION_LABEL_H = 28
+    const dbTableStyle = {
+      background: '#3b0a0a',
+      border: '1.5px solid #ef4444',
+      borderRadius: 8,
+      color: '#fca5a5',
+      fontSize: 11,
+      fontWeight: 700,
+      width: DB_W,
+      height: DB_H,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0 8px',
+      textAlign: 'center' as const,
+    }
 
-    let dbSectionX: number
-    let dbSectionY: number
-    let horizontal: boolean  // true = 가로 행, false = 세로 열
+    if (layoutPreset === 'domain' && dbSlotResult) {
+      // 중앙 칸에 DB를 정사각형에 가까운 격자로 배치 — 칸 안에서 중앙 정렬
+      const slot = dbSlotResult
+      const dbCols = Math.max(1, Math.ceil(Math.sqrt(dbTableNodes.length)))
+      const dbRows = Math.ceil(dbTableNodes.length / dbCols)
+      const gridW = dbCols * DB_W + (dbCols - 1) * DB_GAP
+      const gridH = dbRows * DB_H + (dbRows - 1) * DB_GAP
+      const startX = slot.x + (slot.w - gridW) / 2
+      const startY = slot.y + (slot.h - gridH) / 2
 
-    // 전체 그룹 경계 우측에 세로 열 배치 — 레이아웃 모드 공통
-    {
+      const padX = 20, padTop = DB_SECTION_LABEL_H + 8, padBot = 12
+      result.push({
+        id: 'layer-section-database',
+        type: 'sectionNode',
+        position: { x: startX - padX, y: startY - padTop },
+        data: { label: 'Database', color: '#ef4444', opaqueColor: 'rgba(40,5,5,0.98)', layer: 'database', origW: gridW + padX * 2, origH: gridH + padTop + padBot },
+        width: gridW + padX * 2,
+        height: gridH + padTop + padBot,
+        style: { width: gridW + padX * 2, height: gridH + padTop + padBot },
+        draggable: false,
+        selectable: false,
+        zIndex: -20,
+      } as Node)
+
+      dbTableNodes.forEach((dbNode, i) => {
+        const r = Math.floor(i / dbCols)
+        const c = i % dbCols
+        result.push({
+          id: dbNode.id,
+          position: { x: startX + c * (DB_W + DB_GAP), y: startY + r * (DB_H + DB_GAP) },
+          data: { label: dbNode.name },
+          width: DB_W,
+          height: DB_H,
+          style: dbTableStyle,
+        })
+      })
+    } else {
+      // 계층 뷰 — 전체 그룹 경계 우측에 세로 열 배치
       let allGroupsMaxX = 0, allMinY = Infinity, allMaxY = -Infinity
       groupPositions.forEach((pos, key) => {
         const l = effectiveGroupLayouts.get(key)
@@ -871,57 +981,35 @@ export function buildLayout(
         allMaxY = Math.max(allMaxY, pos.y + l.h)
       })
       const allCenterY = allMinY !== Infinity ? (allMinY + allMaxY) / 2 : 0
-      dbSectionX = allGroupsMaxX + 80
-      dbSectionY = allCenterY - (dbTableNodes.length * (DB_H + DB_GAP)) / 2
-      horizontal = false
-    }
+      const dbSectionX = allGroupsMaxX + 80
+      const dbSectionY = allCenterY - (dbTableNodes.length * (DB_H + DB_GAP)) / 2
 
-    // DB 섹션 배경 박스
-    const sectionW = horizontal
-      ? dbTableNodes.length * (DB_W + DB_GAP) - DB_GAP + 40
-      : DB_W + 40
-    const sectionH = horizontal
-      ? DB_H + DB_SECTION_LABEL_H + 24
-      : DB_SECTION_LABEL_H + dbTableNodes.length * (DB_H + DB_GAP) + DB_GAP
-    result.push({
-      id: 'layer-section-database',
-      type: 'sectionNode',
-      position: { x: dbSectionX - 20, y: dbSectionY - DB_SECTION_LABEL_H - 20 },
-      data: { label: 'Database', color: '#ef4444', opaqueColor: 'rgba(40,5,5,0.98)', layer: 'database', origW: sectionW, origH: sectionH + 20 },
-      width: sectionW,
-      height: sectionH + 20,
-      style: { width: sectionW, height: sectionH + 20 },
-      draggable: false,
-      selectable: false,
-      zIndex: -20,
-    } as Node)
-
-    dbTableNodes.forEach((dbNode, i) => {
-      const nx = horizontal ? dbSectionX + i * (DB_W + DB_GAP) : dbSectionX
-      const ny = horizontal ? dbSectionY : dbSectionY + i * (DB_H + DB_GAP)
+      const sectionW = DB_W + 40
+      const sectionH = DB_SECTION_LABEL_H + dbTableNodes.length * (DB_H + DB_GAP) + DB_GAP
       result.push({
-        id: dbNode.id,
-        position: { x: nx, y: ny },
-        data: { label: dbNode.name },
-        width: DB_W,
-        height: DB_H,
-        style: {
-          background: '#3b0a0a',
-          border: '1.5px solid #ef4444',
-          borderRadius: 8,
-          color: '#fca5a5',
-          fontSize: 11,
-          fontWeight: 700,
+        id: 'layer-section-database',
+        type: 'sectionNode',
+        position: { x: dbSectionX - 20, y: dbSectionY - DB_SECTION_LABEL_H - 20 },
+        data: { label: 'Database', color: '#ef4444', opaqueColor: 'rgba(40,5,5,0.98)', layer: 'database', origW: sectionW, origH: sectionH + 20 },
+        width: sectionW,
+        height: sectionH + 20,
+        style: { width: sectionW, height: sectionH + 20 },
+        draggable: false,
+        selectable: false,
+        zIndex: -20,
+      } as Node)
+
+      dbTableNodes.forEach((dbNode, i) => {
+        result.push({
+          id: dbNode.id,
+          position: { x: dbSectionX, y: dbSectionY + i * (DB_H + DB_GAP) },
+          data: { label: dbNode.name },
           width: DB_W,
           height: DB_H,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '0 8px',
-          textAlign: 'center',
-        },
+          style: dbTableStyle,
+        })
       })
-    })
+    }
   }
 
   // 엣지 — 파일 간 IMPORT 엣지, 끊긴 연결 빨간색
