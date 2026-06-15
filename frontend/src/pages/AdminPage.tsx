@@ -55,7 +55,19 @@ interface DigestData {
     paymentsAmount: number
     newFeedback: number
   }
+  openFeedback: number
   anomalies: string[]
+}
+
+interface FeedbackItem {
+  id: string
+  category: string
+  title: string
+  content: string
+  email: string | null
+  userId: string | null
+  createdAt: string
+  status: string
 }
 
 // 관리자 대시보드 페이지
@@ -76,6 +88,8 @@ export default function AdminPage() {
   const [digest, setDigest] = useState<DigestData | null>(null)
   const [digestMsg, setDigestMsg] = useState('')
   const [digestRunning, setDigestRunning] = useState(false)
+  const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([])
+  const [showResolvedFeedback, setShowResolvedFeedback] = useState(false)
 
   // 통계 및 사용자 목록 로드
   useEffect(() => {
@@ -146,6 +160,26 @@ export default function AdminPage() {
   }
 
   useEffect(() => { loadDigest() }, [])
+
+  // 관리자 문의 목록 로드 (최신순)
+  const loadFeedback = () => {
+    axios.get('/api/feedback/admin')
+      .then((res) => setFeedbacks(res.data))
+      .catch(() => {})
+  }
+
+  useEffect(() => { loadFeedback() }, [])
+
+  // 문의 처리 상태 변경 (처리 완료 ↔ 미처리)
+  const updateFeedbackStatus = async (item: FeedbackItem, status: string) => {
+    try {
+      await axios.patch(`/api/feedback/admin/${item.id}/status`, { status })
+      setFeedbacks((prev) => prev.map((f) => f.id === item.id ? { ...f, status } : f))
+      loadDigest()
+    } catch {
+      alert('상태 변경에 실패했습니다.')
+    }
+  }
 
   // 전일 기준 다이제스트 수동 생성·발송
   const runDigest = async () => {
@@ -494,6 +528,7 @@ export default function AdminPage() {
                 <DigestStat label="분석" value={`${digest.metrics.analysesTotal} (실패 ${digest.metrics.analysesFailed})`} />
                 <DigestStat label="결제" value={`${digest.metrics.paymentsCount}건 · ${digest.metrics.paymentsAmount.toLocaleString()}원`} />
                 <DigestStat label="신규 문의" value={digest.metrics.newFeedback} />
+                <DigestStat label="미처리 문의(현재)" value={digest.openFeedback} />
               </div>
               {digest.anomalies.length > 0 ? (
                 <div className="rounded bg-amber-900/30 border border-amber-700/50 px-3 py-2 text-amber-300">
@@ -511,6 +546,65 @@ export default function AdminPage() {
               {digestMsg || '아직 집계된 다이제스트가 없습니다.'} 버튼으로 전일 기준 다이제스트를 생성할 수 있습니다.
             </p>
           )}
+        </div>
+
+        {/* 사용자 문의 */}
+        <div className="bg-gray-900 rounded-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">
+              사용자 문의
+              <span className="ml-2 text-sm text-gray-400">미처리 {feedbacks.filter((f) => f.status === 'OPEN').length}건</span>
+            </h2>
+            <label className="text-xs text-gray-400 flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showResolvedFeedback}
+                onChange={(e) => setShowResolvedFeedback(e.target.checked)}
+              />
+              처리 완료 포함
+            </label>
+          </div>
+          {(() => {
+            const visible = feedbacks.filter((f) => showResolvedFeedback || f.status === 'OPEN')
+            if (visible.length === 0) {
+              return (
+                <p className="px-6 py-4 text-sm text-gray-500">
+                  {showResolvedFeedback ? '문의가 없습니다.' : '미처리 문의가 없습니다.'}
+                </p>
+              )
+            }
+            return (
+              <ul className="divide-y divide-gray-800">
+                {visible.map((f) => (
+                  <li key={f.id} className="px-6 py-4 text-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300">{f.category}</span>
+                          {f.status === 'RESOLVED' ? (
+                            <span className="text-xs px-2 py-0.5 rounded bg-green-900/40 text-green-300">처리 완료</span>
+                          ) : (
+                            <span className="text-xs px-2 py-0.5 rounded bg-amber-900/40 text-amber-300">미처리</span>
+                          )}
+                          <span className="font-semibold truncate">{f.title}</span>
+                        </div>
+                        <p className="text-gray-400 mt-1 whitespace-pre-wrap break-words">{f.content}</p>
+                        <div className="text-xs text-gray-600 mt-1">
+                          {f.email || '이메일 없음'} · {new Date(f.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => updateFeedbackStatus(f, f.status === 'OPEN' ? 'RESOLVED' : 'OPEN')}
+                        className={`shrink-0 text-xs px-3 py-1 rounded ${f.status === 'OPEN' ? 'bg-green-600 hover:bg-green-500' : 'bg-gray-700 hover:bg-gray-600'}`}
+                      >
+                        {f.status === 'OPEN' ? '처리 완료' : '미처리로'}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )
+          })()}
         </div>
       </div>
     </div>

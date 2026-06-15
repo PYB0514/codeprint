@@ -26,7 +26,7 @@ class AdminDigestServiceTest {
     @Test
     @DisplayName("분석 실패율 20% 초과(3/10) — 이상 신호로 감지")
     void failureRateHigh_flagged() {
-        Digest d = service.computeDigest(date, metrics(0, 10, 3), null);
+        Digest d = service.computeDigest(date, metrics(0, 10, 3), null, 0);
         assertThat(d.hasAnomaly()).isTrue();
         assertThat(d.anomalies()).anyMatch(a -> a.contains("분석 실패율"));
     }
@@ -34,42 +34,57 @@ class AdminDigestServiceTest {
     @Test
     @DisplayName("분석 실패율 임계 이하(1/10=10%) — 이상 없음")
     void failureRateLow_notFlagged() {
-        Digest d = service.computeDigest(date, metrics(0, 10, 1), null);
+        Digest d = service.computeDigest(date, metrics(0, 10, 1), null, 0);
         assertThat(d.anomalies()).noneMatch(a -> a.contains("분석 실패율"));
     }
 
     @Test
     @DisplayName("분석 수가 최소 표본(5) 미만이면 실패율 무시(4/4=100%여도) — 이상 없음")
     void failureRate_belowMinSample_ignored() {
-        Digest d = service.computeDigest(date, metrics(0, 4, 4), null);
+        Digest d = service.computeDigest(date, metrics(0, 4, 4), null, 0);
         assertThat(d.hasAnomaly()).isFalse();
     }
 
     @Test
     @DisplayName("활성 사용자 전일 대비 -60%(100→40) — 급감 이상 감지")
     void activeUsersDrop_flagged() {
-        Digest d = service.computeDigest(date, metrics(40, 0, 0), snapshot(100, 0));
+        Digest d = service.computeDigest(date, metrics(40, 0, 0), snapshot(100, 0), 0);
         assertThat(d.anomalies()).anyMatch(a -> a.contains("활성 사용자") && a.contains("급감"));
     }
 
     @Test
     @DisplayName("전일 기준값이 최소(10) 미만이면 급변 무시(5→0) — 이상 없음")
     void dod_belowMinBase_ignored() {
-        Digest d = service.computeDigest(date, metrics(0, 0, 0), snapshot(5, 0));
+        Digest d = service.computeDigest(date, metrics(0, 0, 0), snapshot(5, 0), 0);
         assertThat(d.hasAnomaly()).isFalse();
     }
 
     @Test
     @DisplayName("전일 스냅샷 없음(첫날) — 전일 대비 이상은 발생하지 않음")
     void noYesterday_noDoDAnomaly() {
-        Digest d = service.computeDigest(date, metrics(40, 0, 0), null);
+        Digest d = service.computeDigest(date, metrics(40, 0, 0), null, 0);
         assertThat(d.anomalies()).noneMatch(a -> a.contains("전일 대비"));
     }
 
     @Test
     @DisplayName("정상 지표 — 이상 신호 0개")
     void allHealthy_noAnomaly() {
-        Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22));
+        Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 0);
         assertThat(d.hasAnomaly()).isFalse();
+    }
+
+    @Test
+    @DisplayName("미처리 문의가 임계(10) 이상 누적되면 백로그 이상으로 감지")
+    void openFeedbackBacklog_flagged() {
+        Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 12);
+        assertThat(d.openFeedback()).isEqualTo(12);
+        assertThat(d.anomalies()).anyMatch(a -> a.contains("미처리 문의") && a.contains("12"));
+    }
+
+    @Test
+    @DisplayName("미처리 문의가 임계 미만(9)이면 백로그 이상 없음")
+    void openFeedbackBacklog_belowThreshold_notFlagged() {
+        Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 9);
+        assertThat(d.anomalies()).noneMatch(a -> a.contains("미처리 문의"));
     }
 }

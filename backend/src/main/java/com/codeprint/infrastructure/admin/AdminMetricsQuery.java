@@ -34,6 +34,12 @@ public class AdminMetricsQuery {
         );
     }
 
+    // 현재 미처리(OPEN) 문의 누적 수 — 시점 게이지(일별 플로우 아님, 스냅샷 미저장)
+    public int openFeedbackCount() {
+        Number n = (Number) em.createNativeQuery("SELECT count(*) FROM feedbacks WHERE status = 'OPEN'").getSingleResult();
+        return n.intValue();
+    }
+
     // ADMIN 역할 사용자 ID 목록 (다이제스트 수신자)
     public List<UUID> adminUserIds() {
         @SuppressWarnings("unchecked")
