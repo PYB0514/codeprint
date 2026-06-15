@@ -498,6 +498,8 @@ function GraphPageInner() {
   // 스케치 모드 (슈퍼 바이브 코딩 P0) — 기존 구조 위에 설계용 노드를 자유 배치. 현재 localStorage 임시 저장
   const [sketchMode, setSketchMode] = useState(false)
   const [sketchNodes, setSketchNodes] = useState<{ id: string; label: string; x: number; y: number }[]>([])
+  // 로드 직후 save 이펙트가 빈 배열로 덮어쓰는 경쟁 방지 — 로드 후 첫 save는 건너뜀
+  const sketchSaveReady = useRef(false)
   const [outdated, setOutdated] = useState<{ branch: string; lastAnalyzedAt: string } | null>(null)
   const [freshnessError, setFreshnessError] = useState<'rate_limit' | 'github_error' | null>(null)
   const [reanalyzing, setReanalyzing] = useState(false)
@@ -1360,18 +1362,20 @@ function GraphPageInner() {
     }
   }, [projectId, refreshVersions])
 
-  // 스케치 노드를 프로젝트별 localStorage에서 로드
+  // 스케치 노드를 프로젝트별 localStorage에서 로드 — 프로젝트 전환 시 save 준비 플래그 초기화
   useEffect(() => {
     if (!projectId) return
+    sketchSaveReady.current = false
     try {
       const raw = localStorage.getItem(`sketch:${projectId}`)
       setSketchNodes(raw ? JSON.parse(raw) : [])
     } catch { setSketchNodes([]) }
   }, [projectId])
 
-  // 스케치 노드 변경 시 localStorage에 저장
+  // 스케치 노드 변경 시 localStorage에 저장 — 로드 직후 첫 실행은 건너뛰어 빈 배열 덮어쓰기 방지
   useEffect(() => {
     if (!projectId) return
+    if (!sketchSaveReady.current) { sketchSaveReady.current = true; return }
     try { localStorage.setItem(`sketch:${projectId}`, JSON.stringify(sketchNodes)) } catch { /* 무시 */ }
   }, [projectId, sketchNodes])
 
@@ -1379,7 +1383,9 @@ function GraphPageInner() {
   const addSketchNode = useCallback(() => {
     setSketchNodes(prev => {
       const n = prev.length
-      return [...prev, { id: `sketch-${Date.now()}`, label: '새 설계 노드', x: 120 + (n % 5) * 60, y: 120 + (n % 5) * 60 }]
+      // 같은 밀리초에 연속 추가해도 충돌하지 않도록 랜덤 접미사 부여
+      const id = `sketch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      return [...prev, { id, label: '새 설계 노드', x: 120 + (n % 5) * 60, y: 120 + (n % 5) * 60 }]
     })
   }, [])
 
