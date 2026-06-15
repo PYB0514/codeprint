@@ -650,3 +650,16 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 3. **집계 위치** — 기존 `AdminMetricsQuery`(리포팅 read-model)에 `openFeedbackCount()` 추가로 일관. `countByStatus`는 도메인 리포 파생 쿼리.
 
 **결과.** 백엔드 컴파일+`AdminDigestServiceTest` 통과(기존 7종 시그니처 갱신 + 백로그 임계 회귀 2종). 프론트 tsc 통과. AdminPage에 문의 목록(미처리 기본·처리완료 토글·완료 버튼) + 다이제스트 "미처리 문의(현재)" 게이지. 라이브 검증(V42 적용·목록·상태변경·게이지)은 백엔드 재기동 후.
+
+## PR 리뷰 Tier 1 — webhook 자동화: 인증 유저 부재 문제와 포트 역해석 (2026-06-15)
+
+**문제.** Tier 0(#277/#280)은 로그인한 소유자가 버튼/API로 트리거 → `@AuthenticationPrincipal User`에서 토큰을 얻었다. Tier 1은 GitHub가 직접 webhook을 쏘므로 **인증 주체가 없다.** repo 식별자만 들어온다. (1) 누구의 토큰으로 코멘트를 달지, (2) 어느 프로젝트인지, (3) 위조 요청을 어떻게 막을지가 과제.
+
+**결정.**
+1. **HMAC-SHA256 서명 검증을 순수 도메인 함수로** — `domain/analysis/WebhookSignatureVerifier`(상수시간 비교 `MessageDigest.isEqual`, `sha256=` 접두사 강제). 시크릿 미설정(`github.webhook-secret` 빈 값)이면 **전부 거부** — 오설정 상태에서 열린 엔드포인트가 되지 않도록. TDD 5종. permitAll은 기존 `/api/payments/webhook` 선례와 동일(JWT 불가 → 서명으로 인증, 민감정보 미반환).
+2. **repo → 리뷰 대상 역해석은 포트+어댑터로** — `PrWebhookTargetPort`(domain/analysis/port) + `PrWebhookTargetAdapter`(infra/adapter). 어댑터가 project·user 컨텍스트를 브리지(기존 `WarningDetectionAdapter`가 graph 컨텍스트를 브리지하는 패턴과 동일). #277 도그푸딩이 적발한 CROSS_DOMAIN_CALL을 반복하지 않기 위해 application/analysis는 타 컨텍스트를 직접 주입하지 않음.
+3. **대상 선택 규칙** — 같은 repo URL을 등록한 프로젝트가 여럿일 수 있어, **GitHub 토큰을 가진 소유자**가 있는 가장 오래된 프로젝트를 선택(토큰 없으면 코멘트 게시 불가). 매칭 0건이면 무시(200 ignored). URL은 `.git` 접미사·대소문자 차이를 무시하고 매칭(`ProjectJpaRepository.findByRepoUrlNormalized`).
+4. **비동기 실행으로 GitHub 타임아웃 회피** — webhook은 ~10초 안에 응답해야 하나 clone+분석은 그보다 오래 걸림. 서명검증·파싱·역해석만 동기로 하고 즉시 202 반환, 실제 `review()`는 별도 빈 `PrReviewRunner.@Async reviewAsync`로 분리(같은 빈 @Async 자기호출 프록시 우회 + `ASYNC_SELF_CALL` 경고 회피).
+5. **suppress 경고 PR 코멘트 제외** — `WarningDetectionPort.suppressedFingerprints(projectId)` 추가, `PrReviewService.review`에서 fingerprint 필터. Tier 0/1 공통 적용(소유자가 숨긴 경고가 PR마다 재등장하지 않도록).
+
+**결과.** 정적검증(compileJava+test) 및 로컬 서명 요청 E2E는 백엔드 재기동 후. 실제 활성화(레포 webhook URL 등록 + `GITHUB_WEBHOOK_SECRET` env)는 사용자 동반 외부 작업 — 코드/테스트는 외부설정 0으로 완주.

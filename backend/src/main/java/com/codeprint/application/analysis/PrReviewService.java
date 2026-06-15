@@ -44,7 +44,7 @@ public class PrReviewService {
         String headBranch = gitHubApiClient.fetchPullRequestHeadBranch(repoUrl, prNumber, githubToken);
 
         UUID graphId = analyzeBranch(projectId, repoUrl, headBranch, githubToken);
-        List<Map<String, Object>> warnings = warningDetectionPort.detectWarnings(graphId);
+        List<Map<String, Object>> warnings = filterSuppressed(projectId, warningDetectionPort.detectWarnings(graphId));
 
         String body = formatComment(headBranch, warnings);
         String commentUrl = gitHubApiClient.postIssueComment(repoUrl, prNumber, body, githubToken);
@@ -57,6 +57,15 @@ public class PrReviewService {
         result.put("commentUrl", commentUrl != null ? commentUrl : "");
         result.put("graphId", graphId.toString());
         return result;
+    }
+
+    // 프로젝트에서 suppress(숨김)된 경고를 PR 코멘트 대상에서 제외
+    private List<Map<String, Object>> filterSuppressed(UUID projectId, List<Map<String, Object>> warnings) {
+        java.util.Set<String> suppressed = warningDetectionPort.suppressedFingerprints(projectId);
+        if (suppressed.isEmpty()) return warnings;
+        return warnings.stream()
+                .filter(w -> !suppressed.contains(String.valueOf(w.get("fingerprint"))))
+                .toList();
     }
 
     // PR head 브랜치를 동기 분석 — 분석 레코드 생성·그래프 빌드 후 graphId 반환

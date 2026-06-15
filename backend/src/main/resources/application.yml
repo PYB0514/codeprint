@@ -55,6 +55,10 @@ jwt:
   secret: ${JWT_SECRET:local-dev-secret-key-must-be-at-least-32-characters}
   expiration-ms: 3600000  # 1h — localStorage 저장이므로 탈취 시 노출 최소화
 
+github:
+  # GitHub webhook HMAC-SHA256 서명 검증 시크릿. 미설정 시 webhook 요청은 전부 거부됨.
+  webhook-secret: ${GITHUB_WEBHOOK_SECRET:}
+
 toss:
   client-key: ${TOSS_CLIENT_KEY:}
   secret-key: ${TOSS_SECRET_KEY:}
