@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.84.0',
+    date: '2026-06-15',
+    title: 'PR 리뷰 자동화 — PR을 열면 구조 경고가 알아서 달림',
+    type: 'feature',
+    items: [
+      { category: 'PR 연동', desc: 'GitHub 레포에 webhook을 한 번 연결해 두면 PR을 새로 열거나 커밋을 푸시할 때마다 해당 PR 브랜치를 자동 분석해 구조 경고를 PR 코멘트로 게시 — 그동안 버튼을 직접 눌러야 했던 PR 리뷰가 머지 전에 자동으로 작동. 서명(HMAC) 검증으로 정상 webhook만 처리' },
+      { category: 'PR 연동', desc: '숨긴(suppress) 경고는 PR 코멘트에서도 제외 — 그래프에서 한 번 숨긴 경고가 PR마다 다시 달리지 않음' },
+    ],
+  },
+  {
     version: 'v0.83.0',
     date: '2026-06-15',
     title: 'PR 리뷰 버튼 — 대시보드에서 바로 PR 분석 실행',

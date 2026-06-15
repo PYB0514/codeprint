@@ -22,6 +22,11 @@ public class ProjectQueryService {
         return projectRepository.findByUserId(userId);
     }
 
+    // GitHub 레포 URL로 프로젝트 목록 조회 — webhook이 repo로 프로젝트를 역해석할 때 사용
+    public List<Project> findByRepoUrl(String repoHttpsUrl) {
+        return projectRepository.findByRepoUrl(repoHttpsUrl);
+    }
+
     // 소유자 확인 후 단일 프로젝트 조회
     public Project getProject(UUID projectId, UUID requestingUserId) {
         Project project = projectRepository.findById(projectId)

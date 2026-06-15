@@ -34,6 +34,12 @@ public class ProjectRepositoryImpl implements ProjectRepository {
         return jpa.findByUserId(userId);
     }
 
+    // GitHub 레포 URL로 프로젝트 목록 조회 (.git·대소문자 무시)
+    @Override
+    public List<Project> findByRepoUrl(String repoHttpsUrl) {
+        return jpa.findByRepoUrlNormalized(repoHttpsUrl);
+    }
+
     // 사용자의 프로젝트 수 조회
     @Override
     public int countByUserId(UUID userId) {
