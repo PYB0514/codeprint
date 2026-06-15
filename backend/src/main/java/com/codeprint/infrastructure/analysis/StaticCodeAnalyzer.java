@@ -676,50 +676,50 @@ public class StaticCodeAnalyzer {
                 "String", "List", "Map", "Set", "var", "val", "let", "const").contains(name);
     }
 
+    // 리터럴이 SQL 동사로 시작해야 SQL로 인정 — 산문 중간의 키워드 오매칭 차단
+    private static final Pattern RAW_SQL_ANCHOR = Pattern.compile(
+        "^\\s*\\(?\\s*(SELECT|INSERT|UPDATE|DELETE)\\b", Pattern.CASE_INSENSITIVE);
+    // 산문에 거의 없는 강한 SQL 구조 마커 — 하나라도 있어야 SQL로 인정
+    private static final Pattern RAW_SQL_MARKER = Pattern.compile(
+        "[*=]|\\?|%[sd]|:\\w|\\$\\d|;\\s*$|\\b(WHERE|JOIN|VALUES|GROUP|ORDER|LIMIT|HAVING|RETURNING|UNION)\\b",
+        Pattern.CASE_INSENSITIVE);
+    private static final Pattern RAW_SQL_LITERAL = Pattern.compile("[\"'`]([^\"'`\\n]{5,500})[\"'`]");
+    private static final Pattern RAW_SQL_SELECT = Pattern.compile("\\bSELECT\\b.+?\\bFROM\\s+(\\w+)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern RAW_SQL_INSERT = Pattern.compile("\\bINSERT\\s+INTO\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern RAW_SQL_UPDATE = Pattern.compile("\\bUPDATE\\s+(\\w+)\\s+SET", Pattern.CASE_INSENSITIVE);
+    private static final Pattern RAW_SQL_DELETE = Pattern.compile("\\bDELETE\\s+FROM\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
+
     // SQL 문자열 리터럴에서 테이블 접근 정보(테이블명 + READ/WRITE) 추출 — 언어 무관
     private List<RawSqlAccess> extractRawSqlAccesses(String content) {
         List<RawSqlAccess> result = new ArrayList<>();
 
         // 문자열 리터럴 내부의 SQL 쿼리만 스캔 — 작은따옴표·큰따옴표·백틱 문자열 탐색
-        Pattern literalPattern = Pattern.compile("[\"'`]([^\"'`\\n]{5,500})[\"'`]");
-        Matcher lm = literalPattern.matcher(content);
+        Matcher lm = RAW_SQL_LITERAL.matcher(content);
         while (lm.find()) {
             String literal = lm.group(1).trim();
-            // SQL 키워드가 포함된 리터럴만 처리 (대소문자 무관)
-            String upper = literal.toUpperCase();
-            if (!upper.contains("SELECT ") && !upper.contains("INSERT ") &&
-                !upper.contains("UPDATE ") && !upper.contains("DELETE ")) continue;
+            // 앵커 미통과(SQL 동사로 시작 안 함) 또는 강한 마커 없음 → 산문으로 보고 건너뜀
+            Matcher am = RAW_SQL_ANCHOR.matcher(literal);
+            if (!am.find()) continue;
+            if (!RAW_SQL_MARKER.matcher(literal).find()) continue;
 
-            // SELECT ... FROM table_name
-            Matcher selectMatcher = Pattern.compile(
-                "\\bSELECT\\b.+?\\bFROM\\s+(\\w+)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL
-            ).matcher(literal);
-            while (selectMatcher.find()) {
-                result.add(new RawSqlAccess(selectMatcher.group(1).toLowerCase(), false));
-            }
-
-            // INSERT INTO table_name
-            Matcher insertMatcher = Pattern.compile(
-                "\\bINSERT\\s+INTO\\s+(\\w+)", Pattern.CASE_INSENSITIVE
-            ).matcher(literal);
-            while (insertMatcher.find()) {
-                result.add(new RawSqlAccess(insertMatcher.group(1).toLowerCase(), true));
-            }
-
-            // UPDATE table_name SET
-            Matcher updateMatcher = Pattern.compile(
-                "\\bUPDATE\\s+(\\w+)\\s+SET", Pattern.CASE_INSENSITIVE
-            ).matcher(literal);
-            while (updateMatcher.find()) {
-                result.add(new RawSqlAccess(updateMatcher.group(1).toLowerCase(), true));
-            }
-
-            // DELETE FROM table_name
-            Matcher deleteMatcher = Pattern.compile(
-                "\\bDELETE\\s+FROM\\s+(\\w+)", Pattern.CASE_INSENSITIVE
-            ).matcher(literal);
-            while (deleteMatcher.find()) {
-                result.add(new RawSqlAccess(deleteMatcher.group(1).toLowerCase(), true));
+            // 선두 동사 전용 추출 — 쿼리 안의 문자열 값에 든 다른 키워드 오매칭 방지
+            switch (am.group(1).toUpperCase()) {
+                case "SELECT" -> {
+                    Matcher m = RAW_SQL_SELECT.matcher(literal);
+                    while (m.find()) result.add(new RawSqlAccess(m.group(1).toLowerCase(), false));
+                }
+                case "INSERT" -> {
+                    Matcher m = RAW_SQL_INSERT.matcher(literal);
+                    while (m.find()) result.add(new RawSqlAccess(m.group(1).toLowerCase(), true));
+                }
+                case "UPDATE" -> {
+                    Matcher m = RAW_SQL_UPDATE.matcher(literal);
+                    while (m.find()) result.add(new RawSqlAccess(m.group(1).toLowerCase(), true));
+                }
+                case "DELETE" -> {
+                    Matcher m = RAW_SQL_DELETE.matcher(literal);
+                    while (m.find()) result.add(new RawSqlAccess(m.group(1).toLowerCase(), true));
+                }
             }
         }
 

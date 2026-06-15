@@ -1246,6 +1246,61 @@ class StaticCodeAnalyzerTest {
             .anyMatch(a -> a.tableName().equals("users") && !a.isWrite());
     }
 
+    // ── 회귀: raw SQL 산문 오검출 차단 (B-9 정밀화 — 앵커 + 강한 마커) ────────
+
+    @Test
+    @DisplayName("SQL 동사로 시작하지 않는 산문 문자열은 raw SQL로 오검출하지 않는다")
+    void raw_SQL_산문_미시작_오검출_차단() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class Messages {
+                    String a = "Please select your name from the list";
+                    String b = "Failed to delete from disk during cleanup";
+                    String c = "to use to select a connection from a given pool";
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.rawSqlAccesses()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("SQL 동사로 시작해도 강한 SQL 마커가 없는 산문은 오검출하지 않는다")
+    void raw_SQL_마커_없는_산문_오검출_차단() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class Labels {
+                    String a = "Select country from dropdown menu";
+                    String b = "insert into queue before flush";
+                    String c = "update them set aside for later";
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.rawSqlAccesses()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("WHERE 절의 문자열 값에 든 다른 SQL 동사를 추가 테이블로 오검출하지 않는다")
+    void raw_SQL_문자열값_내_동사_오검출_차단() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class AuditDao {
+                    public void find() {
+                        jdbc.query("SELECT * FROM audit_log WHERE action = 'delete from cache'", rowMapper);
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.rawSqlAccesses())
+            .anyMatch(a -> a.tableName().equals("audit_log") && !a.isWrite())
+            .noneMatch(a -> a.tableName().equals("cache"));
+    }
+
     // ── 회귀: 프레임워크 어노테이션 메서드 추출 (C-13 DEAD_CODE 오탐 수정) ────────
 
     @Test
