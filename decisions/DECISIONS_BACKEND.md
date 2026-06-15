@@ -573,3 +573,16 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 7. **스냅샷** — `daily_stats`(V41) 일별 1행 저장 → 전일 대비·추세 토대. 같은 날짜 재실행 시 갱신(delete+insert).
 
 **결과.** 백엔드 컴파일+전체 테스트 통과, 프론트 tsc 통과. 순수 로직(`computeDigest`) TDD 7종. 라이브 검증(V41 적용·POST run·알림)은 백엔드 재기동 후.
+
+---
+
+## 관리자 미처리 문의 추적 — 시점 게이지 비스냅샷 설계 (2026-06-15, 다이제스트 2단계)
+
+**문제.** 다이제스트가 "신규 문의 건수"(일별 플로우)만 보여줘, 답변 안 한 문의가 쌓여도 운영자가 모른다. 게다가 `GET /api/feedback/admin` 엔드포인트는 있으나 AdminPage에 문의 목록 UI가 없어 내용을 UI에서 볼 수 없었다(처리 수단 부재).
+
+**결정.**
+1. **상태 컬럼 도입** — `feedbacks.status`(V42, DEFAULT 'OPEN') + 도메인 메서드 `resolve()`/`reopen()`. 기존 행은 모두 OPEN(미처리)로 백필 — 의미 일치. 관리자 전용 `PATCH /api/feedback/admin/{id}/status`(OPEN↔RESOLVED), 잘못된 값 400.
+2. **미처리 = 시점 게이지, 스냅샷 미저장** — "현재 미처리 누적"은 일별 플로우가 아니라 시점 백로그라 `DailyMetrics`/`daily_stats`에 넣지 않는다(어제 백로그를 전일 대비 비교하는 건 무의미). 대신 `Digest`에 별도 `openFeedback` 필드 + 백로그 이상신호(≥10건)로만 둔다. `computeDigest`는 순수 함수라 게이지를 파라미터로 받음 — `runFor`·`latestStoredDigest` 둘 다 항상 **현재값**(`metricsQuery.openFeedbackCount()`)을 주입(과거 날짜 다이제스트를 재구성해도 미처리는 지금 시점 값).
+3. **집계 위치** — 기존 `AdminMetricsQuery`(리포팅 read-model)에 `openFeedbackCount()` 추가로 일관. `countByStatus`는 도메인 리포 파생 쿼리.
+
+**결과.** 백엔드 컴파일+`AdminDigestServiceTest` 통과(기존 7종 시그니처 갱신 + 백로그 임계 회귀 2종). 프론트 tsc 통과. AdminPage에 문의 목록(미처리 기본·처리완료 토글·완료 버튼) + 다이제스트 "미처리 문의(현재)" 게이지. 라이브 검증(V42 적용·목록·상태변경·게이지)은 백엔드 재기동 후.

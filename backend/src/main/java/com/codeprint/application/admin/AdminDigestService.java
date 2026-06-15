@@ -29,6 +29,8 @@ public class AdminDigestService {
     static final double DOD_CHANGE_THRESHOLD = 0.50;
     // 전일 대비 비교 최소 기준값 — 작은 수의 변동은 노이즈라 무시
     static final int DOD_MIN_BASE = 10;
+    // 미처리 문의 백로그 경고 임계 — 이 이상 쌓이면 응대 지연 신호
+    static final int OPEN_FEEDBACK_BACKLOG_THRESHOLD = 10;
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -36,8 +38,8 @@ public class AdminDigestService {
     private final AdminMetricsQuery metricsQuery;
     private final ApplicationEventPublisher eventPublisher;
 
-    // 순수 로직 — 오늘 지표 + 전일 스냅샷(null 가능)으로 이상 신호를 판정
-    public Digest computeDigest(LocalDate date, DailyMetrics today, DailyStats yesterday) {
+    // 순수 로직 — 오늘 지표 + 전일 스냅샷(null 가능) + 현재 미처리 문의 게이지로 이상 신호를 판정
+    public Digest computeDigest(LocalDate date, DailyMetrics today, DailyStats yesterday, int openFeedback) {
         List<String> anomalies = new ArrayList<>();
 
         if (today.analysesTotal() >= MIN_ANALYSES_FOR_RATE) {
@@ -53,7 +55,11 @@ public class AdminDigestService {
             addDoDAnomaly(anomalies, "분석 수", today.analysesTotal(), yesterday.getAnalysesTotal());
         }
 
-        return new Digest(date, today, anomalies);
+        if (openFeedback >= OPEN_FEEDBACK_BACKLOG_THRESHOLD) {
+            anomalies.add("미처리 문의 " + openFeedback + "건 누적");
+        }
+
+        return new Digest(date, today, openFeedback, anomalies);
     }
 
     // 전일 대비 변화율이 임계를 넘으면 이상 신호 추가
@@ -75,7 +81,8 @@ public class AdminDigestService {
         if (recent.isEmpty()) return Optional.empty();
         DailyStats latest = recent.get(0);
         DailyStats prev = recent.size() > 1 ? recent.get(1) : null;
-        return Optional.of(computeDigest(latest.getStatDate(), metricsOf(latest), prev));
+        // 미처리 문의는 시점 게이지라 스냅샷에 없음 — 항상 현재값으로 조회
+        return Optional.of(computeDigest(latest.getStatDate(), metricsOf(latest), prev, metricsQuery.openFeedbackCount()));
     }
 
     // 스냅샷 엔티티 → 지표 값 객체 변환
@@ -92,7 +99,7 @@ public class AdminDigestService {
         Instant end = date.plusDays(1).atStartOfDay(KST).toInstant();
         DailyMetrics today = metricsQuery.collect(start, end);
         DailyStats yesterday = dailyStatsRepository.findByStatDate(date.minusDays(1)).orElse(null);
-        Digest digest = computeDigest(date, today, yesterday);
+        Digest digest = computeDigest(date, today, yesterday, metricsQuery.openFeedbackCount());
 
         // 스냅샷 업서트 — 같은 날짜 행이 있으면 제자리 UPDATE, 없으면 INSERT
         // (delete+insert는 한 트랜잭션 내 Hibernate flush가 INSERT를 DELETE보다 먼저 실행해 유니크 위반)
@@ -122,7 +129,8 @@ public class AdminDigestService {
                 .append(" · 프로젝트 ").append(m.newProjects())
                 .append(" · 분석 ").append(m.analysesTotal()).append("(실패 ").append(m.analysesFailed()).append(")")
                 .append(" · 결제 ").append(m.paymentsCount()).append("건 ").append(m.paymentsAmount()).append("원")
-                .append(" · 문의 ").append(m.newFeedback());
+                .append(" · 문의 ").append(m.newFeedback())
+                .append(" · 미처리 ").append(d.openFeedback());
         if (d.hasAnomaly()) {
             sb.append("\n⚠ 이상: ").append(String.join(" / ", d.anomalies()));
         }

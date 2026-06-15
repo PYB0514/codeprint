@@ -37,6 +37,10 @@ public class Feedback {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    // 처리 상태 — OPEN(미처리) / RESOLVED(처리 완료)
+    @Column(nullable = false, length = 20)
+    private String status;
+
     // 피드백 생성
     public static Feedback create(UUID userId, String category, String title, String content, String email) {
         Feedback f = new Feedback();
@@ -47,6 +51,17 @@ public class Feedback {
         f.content = content;
         f.email = email;
         f.createdAt = Instant.now();
+        f.status = "OPEN";
         return f;
+    }
+
+    // 문의를 처리 완료로 표시
+    public void resolve() {
+        this.status = "RESOLVED";
+    }
+
+    // 문의를 미처리로 되돌림
+    public void reopen() {
+        this.status = "OPEN";
     }
 }

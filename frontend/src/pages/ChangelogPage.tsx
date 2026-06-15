@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.78.0',
+    date: '2026-06-15',
+    title: '관리자 문의 처리 추적 — 미처리 문의를 읽고 완료 표시',
+    type: 'feature',
+    items: [
+      { category: '관리자', desc: '관리자 대시보드에 사용자 문의 목록 추가 — 그동안 신규 건수만 보이고 내용은 UI에서 볼 수 없던 문의를 직접 읽고 "처리 완료/미처리"로 표시 가능. 기본은 미처리만 표시, 토글로 처리 완료 건까지 확인' },
+      { category: '관리자', desc: '일일 다이제스트에 "미처리 문의(현재)" 게이지 추가 — 미처리 문의가 10건 이상 쌓이면 이상 신호로 경고해 응대 지연을 조기에 인지' },
+    ],
+  },
+  {
     version: 'v0.77.1',
     date: '2026-06-15',
     title: 'raw SQL DB 감지 정밀화 — 산문 문자열 오검출 차단',
