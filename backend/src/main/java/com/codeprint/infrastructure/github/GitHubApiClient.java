@@ -83,6 +83,57 @@ public class GitHubApiClient {
         }
     }
 
+    // PR 번호로 head 브랜치명(소스 브랜치)을 조회 — PR 리뷰 분석 대상
+    public String fetchPullRequestHeadBranch(String githubRepoUrl, int prNumber, String githubAccessToken) {
+        String ownerRepo = extractOwnerRepo(githubRepoUrl);
+        String apiUrl = "https://api.github.com/repos/" + ownerRepo + "/pulls/" + prNumber;
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28");
+            if (githubAccessToken != null && !githubAccessToken.isBlank()) {
+                builder.header("Authorization", "Bearer " + githubAccessToken);
+            }
+            HttpResponse<String> response = httpClient.send(builder.GET().build(), HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new RuntimeException("GitHub API " + response.statusCode() + " — " + response.body());
+            }
+            JsonNode head = objectMapper.readTree(response.body()).get("head");
+            if (head == null || head.get("ref") == null) {
+                throw new RuntimeException("GitHub PR 응답에 head.ref 없음: " + response.body());
+            }
+            return head.get("ref").asText();
+        } catch (Exception e) {
+            throw new RuntimeException("GitHub PR 조회 실패: " + ownerRepo + " #" + prNumber, e);
+        }
+    }
+
+    // PR(이슈)에 코멘트를 작성하고 생성된 코멘트의 html_url을 반환
+    public String postIssueComment(String githubRepoUrl, int prNumber, String body, String githubAccessToken) {
+        String ownerRepo = extractOwnerRepo(githubRepoUrl);
+        String apiUrl = "https://api.github.com/repos/" + ownerRepo + "/issues/" + prNumber + "/comments";
+        try {
+            String payload = objectMapper.writeValueAsString(java.util.Map.of("body", body));
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28")
+                    .header("Authorization", "Bearer " + githubAccessToken)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(payload))
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 201) {
+                throw new RuntimeException("GitHub 코멘트 작성 실패 " + response.statusCode() + " — " + response.body());
+            }
+            JsonNode urlNode = objectMapper.readTree(response.body()).get("html_url");
+            return urlNode != null ? urlNode.asText() : null;
+        } catch (Exception e) {
+            throw new RuntimeException("GitHub PR 코멘트 작성 실패: " + ownerRepo + " #" + prNumber, e);
+        }
+    }
+
     // 인증된 사용자의 GitHub 레포 목록 조회 (최대 100개, 최근 업데이트 순)
     public List<GitHubRepoDto> fetchUserRepos(String githubAccessToken) {
         String apiUrl = "https://api.github.com/user/repos?per_page=100&sort=updated&type=all";

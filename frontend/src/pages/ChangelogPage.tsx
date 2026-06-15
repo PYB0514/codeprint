@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.81.0',
+    date: '2026-06-15',
+    title: 'GitHub PR 리뷰 — PR 브랜치 분석 결과를 코멘트로 게시',
+    type: 'feature',
+    items: [
+      { category: 'PR 연동', desc: 'PR 번호를 지정하면 해당 PR의 소스 브랜치를 분석해 구조 경고(순환 의존·끊긴 인터페이스·DDD 위반 등)를 severity별로 정리한 코멘트를 GitHub PR에 자동 게시 — 머지 전에 구조 문제를 PR에서 바로 확인. 프로젝트 소유자만 실행 가능' },
+    ],
+  },
+  {
     version: 'v0.80.0',
     date: '2026-06-15',
     title: 'NestJS 분석 지원 — 컨트롤러 데코레이터 API 인식',
