@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.77.1',
+    date: '2026-06-15',
+    title: 'raw SQL DB 감지 정밀화 — 산문 문자열 오검출 차단',
+    type: 'fix',
+    items: [
+      { category: '분석', desc: 'raw SQL로 DB 테이블을 추출할 때 "Please select your name from the list" 같은 일반 문자열을 테이블 접근으로 오검출하던 문제 수정 — SQL 동사로 시작하고(앵커) WHERE·VALUES·*·플레이스홀더(?·%s·:param) 등 실제 SQL 구조 마커가 있는 리터럴만 인정' },
+      { category: '분석', desc: '쿼리 안의 문자열 값에 든 다른 SQL 동사(예: WHERE action = \'delete from cache\')를 별도 테이블로 잡지 않도록 선두 동사 전용 추출로 변경 — 결과적으로 ORM 미사용 프로젝트 그래프에 가짜 DB_TABLE 노드가 줄어듦' },
+    ],
+  },
+  {
     version: 'v0.77.0',
     date: '2026-06-15',
     title: '관리자 일일 다이제스트 — 매일 운영 지표 자동 요약·알림',

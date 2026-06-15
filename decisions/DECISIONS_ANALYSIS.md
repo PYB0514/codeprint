@@ -384,3 +384,18 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 - 대안 2 (탈락): AST 파싱으로 SQL 값을 정확히 추출. 구현 복잡도가 높고 현재 엔진이 정규식 기반이라 방향 불일치.
 
 **결과.** `extractRawSqlAccesses` 메서드 추가. `RawSqlAccess(tableName, isWrite)` 레코드로 결과 전달. `ParsedFile`에 `rawSqlAccesses` 필드 추가. `GraphBuilder`에서 ORM 기생성 테이블 재사용(중복 방지) + raw SQL 전용 테이블 노드 생성(metadata.source="raw_sql") + DB_READ/DB_WRITE 엣지 생성. TDD 6케이스(Java/Go/Python/C# × SELECT/INSERT/UPDATE/DELETE).
+
+---
+
+### raw SQL 산문 오검출 정밀화 (2026-06-15, B-9 후속)
+
+**문제.** C-13 벤치마크에서 DB 없는 라이브러리(psf/requests)에 DB_TABLE이 잡혔다(당시 "4개" 기록). 근본 원인은 위 #245 단점("리터럴 내 SQL 아닌 텍스트 오인식")이 실현된 것 — 기존 게이트가 `리터럴이 SELECT/INSERT/UPDATE/DELETE 키워드를 "포함"`만 요구해, `"Please select your name from the list"`→테이블 `the`, `"Failed to delete from disk"`→`disk`, `"insert into queue before flush"`→`queue` 처럼 산문을 테이블 접근으로 추출했다.
+
+**진단(추측 금지, §11).** 현재 requests HEAD를 클론해 #245 정규식을 그대로 재현(Python)하니 0건 — 벤치마크 당시와 스냅샷이 다름. 단 산문 합성 케이스로 오검출이 재현됨을 확인(`delete from disk`→`disk` 등). 잠복 결함이 실재하므로 정밀화 진행.
+
+**결정: 앵커 + 강한 SQL 마커 + 선두 동사 전용 추출.**
+- (A 탈락) 테이블명 불용어 블록리스트 — 언어·도메인마다 테이블명이 달라 일반화 불가.
+- (B 탈락) AST 파싱 — #245와 동일 이유(정규식 엔진 방향 불일치).
+- (C 채택) 3중 게이트. ①**앵커**: 리터럴이 `^\s*\(?\s*(SELECT|INSERT|UPDATE|DELETE)\b`로 시작해야 함(산문 중간 키워드 차단). 현재 리터럴 패턴이 개행 포함 문자열을 이미 제외하므로 단일행 SQL은 거의 항상 동사로 시작 → 리콜 손실 미미. ②**강한 마커**: `*`·`=`·플레이스홀더(`?`·`%s`·`:param`·`$1`)·`;`·`WHERE/JOIN/VALUES/GROUP/ORDER/LIMIT/HAVING/RETURNING/UNION` 중 하나 필수(산문엔 거의 없음). ③**선두 동사 전용 추출**: 리터럴의 첫 동사에 해당하는 패턴만 실행 — `WHERE action = 'delete from cache'` 같은 문자열 값 속 다른 동사를 추가 테이블로 잡지 않음.
+
+**결과.** 정규식 6개를 static 상수로 호이스팅(리터럴마다 재컴파일 제거). 기존 TDD 6케이스 전부 통과(실제 SQL은 모두 `*`/WHERE/VALUES/`=`/플레이스홀더 보유). 산문 차단 회귀 3종 추가(동사 미시작·마커 없음·문자열값 내 동사). Python 재현으로 기존 8 SQL 정탐 + 산문 7건 0검출 사전 검증 후 Java 포팅. 리콜 트레이드오프: `"select id from users"`처럼 마커 없는 최소 쿼리는 누락 — 실코드에서 드물어 정밀도 우선.
