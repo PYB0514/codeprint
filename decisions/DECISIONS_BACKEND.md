@@ -14,6 +14,8 @@
 
 **알려진 부작용.** `posts.graph_id`는 `ON DELETE SET NULL` → 커뮤니티에 공유한 그래프 버전이 보존 정책으로 삭제되면 해당 게시글의 그래프 링크가 NULL이 됨(게시글 자체는 유지, graceful). 최근 10개·고정 범위 밖의 오래된 버전만 해당되므로 실사용 충돌 가능성은 낮으나, 필요 시 후속으로 "게시글 참조 버전도 보존" 추가 가능.
 
+**기동 시 스키마 검증 버그(B-12).** 첫 재기동에서 `Schema-validation: wrong column type [pinned_slot]: found int2(SMALLINT), expecting integer` → 컨텍스트 로드 실패. 원인: V44는 `SMALLINT`인데 엔티티 필드를 `Integer`(int4)로 매핑. 값이 1~5라 SMALLINT가 적절하므로 마이그레이션은 두고 **엔티티 필드를 `Short`로 변경**해 매핑 일치. ⚠️ `./gradlew test`는 이 오류를 못 잡음(테스트가 실 postgres validate를 안 거침) → 컬럼타입↔JPA래퍼타입 검증은 실제 기동으로만 가능.
+
 **결과.** 컴파일 + `GraphRetentionPolicyTest` 4종 + 전체 테스트 통과. pin/unpin REST(소유권+프로젝트 소속 검증), 버전 목록 응답에 `pinnedSlot`. 라이브 검증(V44 적용·11번째 분석 시 최오래 삭제·고정 보호·덮어쓰기)은 백엔드 재기동 후.
 
 ---

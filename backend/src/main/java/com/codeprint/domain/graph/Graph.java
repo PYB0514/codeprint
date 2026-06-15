@@ -37,8 +37,9 @@ public class Graph {
     @Column(name = "total_file_count")
     private Integer totalFileCount;
 
+    // SMALLINT(int2) 컬럼과 매핑 일치를 위해 Short — 슬롯 값은 1~5
     @Column(name = "pinned_slot")
-    private Integer pinnedSlot;
+    private Short pinnedSlot;
 
     // 프로젝트 ID와 분석 ID로 새 그래프 인스턴스 생성
     public static Graph create(UUID projectId, UUID analysisId) {
@@ -67,7 +68,7 @@ public class Graph {
         if (slot < 1 || slot > 5) {
             throw new IllegalArgumentException("고정 슬롯은 1~5만 허용됩니다: " + slot);
         }
-        this.pinnedSlot = slot;
+        this.pinnedSlot = (short) slot;
         this.updatedAt = Instant.now();
     }
 
