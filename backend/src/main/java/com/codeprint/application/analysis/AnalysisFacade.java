@@ -16,6 +16,11 @@ public class AnalysisFacade {
     private final AnalysisApplicationService analysisApplicationService;
     private final ProjectQueryService projectQueryService;
 
+    // 프로젝트 소유권 확인 후 레포 URL 반환 — PR 리뷰가 project 컨텍스트를 직접 의존하지 않도록 경유
+    public String resolveOwnedRepoUrl(UUID projectId, UUID userId) {
+        return projectQueryService.getProject(projectId, userId).getGithubRepoUrl();
+    }
+
     // 프로젝트 소유권 확인 후 분석 시작 — analysisId/status/progress 반환
     public Map<String, Object> startAnalysis(UUID projectId, String branch, UUID userId, String githubToken) {
         var project = projectQueryService.getProject(projectId, userId);
