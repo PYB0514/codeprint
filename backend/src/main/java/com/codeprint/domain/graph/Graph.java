@@ -37,6 +37,9 @@ public class Graph {
     @Column(name = "total_file_count")
     private Integer totalFileCount;
 
+    @Column(name = "pinned_slot")
+    private Integer pinnedSlot;
+
     // 프로젝트 ID와 분석 ID로 새 그래프 인스턴스 생성
     public static Graph create(UUID projectId, UUID analysisId) {
         Graph graph = new Graph();
@@ -57,6 +60,26 @@ public class Graph {
     public void recordFileCounts(int analyzed, int total) {
         this.analyzedFileCount = analyzed;
         this.totalFileCount = total;
+    }
+
+    // 버전을 고정 슬롯에 고정 — 보존 정책 삭제 대상에서 제외 (슬롯 1~5)
+    public void pin(int slot) {
+        if (slot < 1 || slot > 5) {
+            throw new IllegalArgumentException("고정 슬롯은 1~5만 허용됩니다: " + slot);
+        }
+        this.pinnedSlot = slot;
+        this.updatedAt = Instant.now();
+    }
+
+    // 고정 해제 — 다시 보존 정책 대상이 됨
+    public void unpin() {
+        this.pinnedSlot = null;
+        this.updatedAt = Instant.now();
+    }
+
+    // 고정 여부
+    public boolean isPinned() {
+        return pinnedSlot != null;
     }
 
     // UUID를 GraphId Value Object로 변환하여 반환

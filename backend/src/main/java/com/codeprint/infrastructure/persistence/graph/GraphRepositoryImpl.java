@@ -76,4 +76,10 @@ public class GraphRepositoryImpl implements GraphRepository {
     public Optional<Graph> findTopByProjectIdOrderByCreatedAtDesc(UUID projectId) {
         return graphJpa.findTopByProjectIdOrderByCreatedAtDesc(projectId);
     }
+
+    // 같은 프로젝트의 지정 고정 슬롯을 비움 (고정 덮어쓰기용)
+    @Override
+    public void clearPinnedSlot(UUID projectId, int slot) {
+        graphJpa.clearPinnedSlot(projectId, slot);
+    }
 }
