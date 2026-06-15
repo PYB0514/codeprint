@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.83.0',
+    date: '2026-06-15',
+    title: 'PR 리뷰 버튼 — 대시보드에서 바로 PR 분석 실행',
+    type: 'feature',
+    items: [
+      { category: 'PR 연동', desc: '프로젝트 카드에 "PR 리뷰" 버튼 추가 — PR 번호만 입력하면 해당 PR 브랜치를 분석해 구조 경고를 GitHub PR 코멘트로 게시하고, 게시된 코멘트로 바로 이동하는 링크를 보여줌. 그동안 API로만 가능하던 PR 리뷰를 화면에서 직접 실행' },
+    ],
+  },
+  {
     version: 'v0.82.0',
     date: '2026-06-15',
     title: '그래프 버전 보관 정책 — 최근 10개 자동 보관 + 원하는 버전 고정',

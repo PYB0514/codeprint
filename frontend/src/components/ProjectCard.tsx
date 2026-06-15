@@ -45,6 +45,13 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
   // primary branch 설정 피커
   const [showPrimaryPicker, setShowPrimaryPicker] = useState(false)
 
+  // PR 리뷰 상태 (PR 번호 입력 → 분석 → 코멘트 게시)
+  const [showPrReview, setShowPrReview] = useState(false)
+  const [prNumber, setPrNumber] = useState('')
+  const [prReviewing, setPrReviewing] = useState(false)
+  const [prResult, setPrResult] = useState<{ prNumber: number; warningCount: number; commentUrl: string } | null>(null)
+  const [prError, setPrError] = useState<string | null>(null)
+
   const pickerRef = useRef<HTMLDivElement>(null)
   const primaryPickerRef = useRef<HTMLDivElement>(null)
 
@@ -204,6 +211,30 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
       setPrimaryFreshness(null)
     } catch {
       setAnalysisError('주요 브랜치 설정에 실패했습니다.')
+    }
+  }
+
+  // PR 번호로 PR 리뷰 실행
+  const handlePrReview = async () => {
+    const n = parseInt(prNumber, 10)
+    if (!Number.isInteger(n) || n <= 0) {
+      setPrError('올바른 PR 번호를 입력해주세요.')
+      return
+    }
+    setPrReviewing(true)
+    setPrError(null)
+    setPrResult(null)
+    try {
+      const res = await axios.post(`/api/projects/${project.id}/pr-review`, { prNumber: n })
+      setPrResult({
+        prNumber: res.data.prNumber,
+        warningCount: res.data.warningCount,
+        commentUrl: res.data.commentUrl,
+      })
+    } catch {
+      setPrError('PR 리뷰에 실패했습니다. PR 번호와 GitHub 연결을 확인해주세요.')
+    } finally {
+      setPrReviewing(false)
     }
   }
 
@@ -368,6 +399,58 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
         </div>
       )}
 
+      {/* PR 리뷰 패널 */}
+      {showPrReview && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
+          <p className="text-xs text-gray-400">
+            PR 번호를 입력하면 해당 PR 브랜치를 분석해 구조 경고를 PR 코멘트로 게시합니다.
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min="1"
+              value={prNumber}
+              onChange={(e) => setPrNumber(e.target.value)}
+              placeholder="PR 번호 (예: 42)"
+              disabled={prReviewing}
+              className="flex-1 bg-gray-700 text-white text-xs rounded px-2 py-1.5 border border-gray-600 focus:outline-none disabled:opacity-50"
+            />
+            <button
+              onClick={handlePrReview}
+              disabled={prReviewing}
+              className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200 disabled:opacity-40"
+            >
+              {prReviewing ? '리뷰 중...' : '실행'}
+            </button>
+            <button
+              onClick={() => { setShowPrReview(false); setPrResult(null); setPrError(null) }}
+              className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
+            >
+              닫기
+            </button>
+          </div>
+          {prReviewing && (
+            <p className="text-xs text-gray-500">PR 브랜치를 클론·분석 중입니다. 시간이 걸릴 수 있습니다.</p>
+          )}
+          {prResult && (
+            <p className="text-xs text-green-400">
+              PR #{prResult.prNumber} 리뷰 완료 — 경고 {prResult.warningCount}개.{' '}
+              {prResult.commentUrl && (
+                <a
+                  href={prResult.commentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-400 hover:text-blue-300 underline"
+                >
+                  코멘트 보기
+                </a>
+              )}
+            </p>
+          )}
+          {prError && <p className="text-xs text-red-400">{prError}</p>}
+        </div>
+      )}
+
       {status === 'FAILED' && (
         <p className="text-xs text-red-400">분석 실패. 다시 시도해주세요.</p>
       )}
@@ -395,6 +478,13 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
               {copying ? '복사됨!' : '링크 복사'}
             </button>
           )}
+          <button
+            onClick={() => { setShowPrReview(true); setPrError(null) }}
+            disabled={isAnalyzing || prReviewing}
+            className="text-xs text-purple-400 hover:text-purple-300 disabled:opacity-40"
+          >
+            PR 리뷰
+          </button>
         </div>
 
         {hasGraph && !isAnalyzing ? (
