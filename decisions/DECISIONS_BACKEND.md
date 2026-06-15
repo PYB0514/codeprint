@@ -556,3 +556,20 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 4. `UserPlan.isPro()` 추가 — PRO + 모든 TEAM 유료 플랜에서 AI·무제한 프로젝트 등 PRO 기능 사용 가능.
 
 **결과.** 소유자는 석수 소모 없이 모든 팀 프로젝트에 접근 가능. FREE 팀에서 최대 5명 협업자 추가 가능.
+
+---
+
+## 관리자 일일 다이제스트 — 집계·이상감지·발송 설계 (2026-06-15)
+
+**문제.** 운영자가 매일 서비스 상태(성장·건강·수익·문의·이상)를 한눈에 받아야 함. 메일 인프라(SendGrid/SMTP) 미설정.
+
+**결정.**
+1. **배달은 자체 push** — 외부 메일 계정 대신 기존 Web Push(#179)+인앱 알림 센터(#183) 재사용. `@Scheduled(09:00 KST)`로 전일 집계. 메일 인프라 의존 0, 전 구간 자체 엔지니어링. (이메일/LLM routine은 2단계 옵션으로 보류.)
+2. **DAU 한계 → 프록시** — 사용자 활동/마지막로그인 추적 컬럼 부재. `refresh_tokens.created_at` 기준 고유 사용자(로그인 프록시)로 근사. 정밀 DAU(`last_active_at`)는 옵션.
+3. **사이드이펙트 분리** — `AdminDigestService`(application/admin)가 `NotificationService`(타 컨텍스트)를 직접 주입하면 CLAUDE.md 규칙1 위반 → `DailyDigestReadyEvent` 발행, `NotificationEventHandler`(notification 컨텍스트)가 수신해 알림+푸시. 기존 이벤트 패턴(#222) 동일.
+4. **집계 쿼리 위치** — 6개 테이블 가로지르는 리포팅 read-model이라 도메인 리포 6개를 오염시키지 않고 `infrastructure/admin/AdminMetricsQuery`(EntityManager 네이티브 count) 1개로. application→infra/admin(비persistence)이라 DB_LAYER_BYPASS 미해당.
+5. **이상 임계** — 분석 실패율 ≥20%(표본 ≥5), 활성·분석 전일 대비 ±50%(기준 ≥10).
+6. **MCP 인증** — `/mcp/`는 공개지만 `/mcp/admin/stats`는 수익·사용자 수 민감 → `@PreAuthorize("hasRole('ADMIN')")`.
+7. **스냅샷** — `daily_stats`(V41) 일별 1행 저장 → 전일 대비·추세 토대. 같은 날짜 재실행 시 갱신(delete+insert).
+
+**결과.** 백엔드 컴파일+전체 테스트 통과, 프론트 tsc 통과. 순수 로직(`computeDigest`) TDD 7종. 라이브 검증(V41 적용·POST run·알림)은 백엔드 재기동 후.

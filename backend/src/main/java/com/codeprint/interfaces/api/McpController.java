@@ -1,6 +1,8 @@
 // AI 에이전트가 그래프 구조를 MCP 컨텍스트로 조회하는 엔드포인트
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.admin.AdminDigestService;
+import com.codeprint.application.admin.Digest;
 import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.domain.graph.Edge;
@@ -9,6 +11,7 @@ import com.codeprint.domain.graph.NodeType;
 import com.codeprint.domain.project.Project;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -20,6 +23,17 @@ public class McpController {
 
     private final GraphFacade graphFacade;
     private final GraphQueryService graphQueryService;
+    private final AdminDigestService adminDigestService;
+
+    // 관리자 전용 — 최신 일일 다이제스트를 MCP 컨텍스트로 반환 (수익·사용자 수 민감, ADMIN 인증 필수)
+    @GetMapping("/admin/stats")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> getAdminStats() {
+        Optional<Digest> digest = adminDigestService.latestStoredDigest();
+        return digest.isPresent()
+                ? ResponseEntity.ok(digest.get())
+                : ResponseEntity.ok(Map.of("message", "아직 집계된 다이제스트가 없습니다"));
+    }
 
     // 공개 프로젝트의 그래프를 MCP 컨텍스트 형식으로 반환 (summary=true 이면 상위 50개 함수만 반환)
     @GetMapping("/graphs/{graphId}/context")

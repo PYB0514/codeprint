@@ -43,6 +43,21 @@ interface PlanGrant {
   createdAt: string
 }
 
+interface DigestData {
+  date: string
+  metrics: {
+    newUsers: number
+    activeUsers: number
+    newProjects: number
+    analysesTotal: number
+    analysesFailed: number
+    paymentsCount: number
+    paymentsAmount: number
+    newFeedback: number
+  }
+  anomalies: string[]
+}
+
 // 관리자 대시보드 페이지
 export default function AdminPage() {
   const [stats, setStats] = useState<Stats | null>(null)
@@ -58,6 +73,9 @@ export default function AdminPage() {
   const [error, setError] = useState('')
   const [jvmMetrics, setJvmMetrics] = useState<JvmMetrics | null>(null)
   const [planGrants, setPlanGrants] = useState<PlanGrant[]>([])
+  const [digest, setDigest] = useState<DigestData | null>(null)
+  const [digestMsg, setDigestMsg] = useState('')
+  const [digestRunning, setDigestRunning] = useState(false)
 
   // 통계 및 사용자 목록 로드
   useEffect(() => {
@@ -116,6 +134,32 @@ export default function AdminPage() {
   }
 
   useEffect(() => { loadPlanGrants() }, [])
+
+  // 최신 일일 다이제스트 로드
+  const loadDigest = () => {
+    axios.get('/api/admin/digest')
+      .then((res) => {
+        if (res.data && res.data.date) { setDigest(res.data); setDigestMsg('') }
+        else { setDigest(null); setDigestMsg(res.data?.message || '') }
+      })
+      .catch(() => {})
+  }
+
+  useEffect(() => { loadDigest() }, [])
+
+  // 전일 기준 다이제스트 수동 생성·발송
+  const runDigest = async () => {
+    setDigestRunning(true)
+    try {
+      const res = await axios.post('/api/admin/digest/run')
+      setDigest(res.data)
+      setDigestMsg('')
+    } catch {
+      alert('다이제스트 생성에 실패했습니다.')
+    } finally {
+      setDigestRunning(false)
+    }
+  }
 
   // 사용자 플랜 변경 (FREE↔PRO) — 사유 입력 필수, 감사 로그 기록
   const changePlan = async (user: UserItem) => {
@@ -427,7 +471,58 @@ export default function AdminPage() {
             </table>
           )}
         </div>
+
+        {/* 일일 다이제스트 */}
+        <div className="bg-gray-900 rounded-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">일일 다이제스트</h2>
+            <button
+              onClick={runDigest}
+              disabled={digestRunning}
+              className="text-xs px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-50"
+            >
+              {digestRunning ? '생성 중…' : '전일 기준 지금 생성'}
+            </button>
+          </div>
+          {digest ? (
+            <div className="px-6 py-4 space-y-3 text-sm">
+              <div className="text-gray-400">{digest.date} 기준 · 매일 09:00 KST 자동 발송</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <DigestStat label="신규 가입" value={digest.metrics.newUsers} />
+                <DigestStat label="활성 사용자(근사)" value={digest.metrics.activeUsers} />
+                <DigestStat label="신규 프로젝트" value={digest.metrics.newProjects} />
+                <DigestStat label="분석" value={`${digest.metrics.analysesTotal} (실패 ${digest.metrics.analysesFailed})`} />
+                <DigestStat label="결제" value={`${digest.metrics.paymentsCount}건 · ${digest.metrics.paymentsAmount.toLocaleString()}원`} />
+                <DigestStat label="신규 문의" value={digest.metrics.newFeedback} />
+              </div>
+              {digest.anomalies.length > 0 ? (
+                <div className="rounded bg-amber-900/30 border border-amber-700/50 px-3 py-2 text-amber-300">
+                  ⚠ 이상 신호
+                  <ul className="list-disc list-inside mt-1">
+                    {digest.anomalies.map((a, i) => <li key={i}>{a}</li>)}
+                  </ul>
+                </div>
+              ) : (
+                <div className="text-xs text-gray-500">이상 신호 없음</div>
+              )}
+            </div>
+          ) : (
+            <p className="px-6 py-4 text-sm text-gray-500">
+              {digestMsg || '아직 집계된 다이제스트가 없습니다.'} 버튼으로 전일 기준 다이제스트를 생성할 수 있습니다.
+            </p>
+          )}
+        </div>
       </div>
+    </div>
+  )
+}
+
+// 다이제스트 지표 셀 — 라벨 + 값(문자열/숫자)
+function DigestStat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="bg-gray-800/60 rounded px-3 py-2">
+      <div className="text-xs text-gray-400">{label}</div>
+      <div className="text-base font-semibold">{value}</div>
     </div>
   )
 }
