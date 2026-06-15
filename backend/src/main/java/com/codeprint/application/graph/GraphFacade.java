@@ -36,11 +36,6 @@ public class GraphFacade {
         return projectQueryService.getPublicProject(projectId);
     }
 
-    // 그래프 ID로 경고 감지 결과 반환 — 다른 컨텍스트(PR 리뷰)가 domain/graph 직접 의존 없이 경고를 얻는 진입점
-    public List<Map<String, Object>> detectWarnings(UUID graphId) {
-        return graphQueryService.getWarnings(graphId);
-    }
-
     // 그래프 버전 목록에 브랜치명을 포함하여 반환
     public List<Map<String, Object>> getGraphVersionsWithBranch(UUID projectId, UUID userId) {
         projectQueryService.getProject(projectId, userId);

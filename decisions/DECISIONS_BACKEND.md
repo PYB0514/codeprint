@@ -13,9 +13,14 @@
 **구현.** `POST /api/projects/{id}/pr-review {prNumber}`(소유자만, @Valid) → `PrReviewService.review`: ① `AnalysisFacade.resolveOwnedRepoUrl`(소유권+repoUrl) ② `GitHubApiClient.fetchPullRequestHeadBranch` ③ clone→walk→analyze→build(동기, 실 AnalysisResult 생성) ④ `GraphFacade.detectWarnings(graphId)` ⑤ severity별 마크다운 ⑥ `GitHubApiClient.postIssueComment`(코멘트 URL 반환).
 
 **DDD 결정.**
-- PrReviewService를 **analysis 컨텍스트**에 배치(분석 주도 기능). 프로젝트 접근은 같은 컨텍스트의 `AnalysisFacade` 경유, 경고는 `GraphFacade.detectWarnings` 경유 → `domain/graph`·`application/project` 직접 import 회피.
+- PrReviewService를 **analysis 컨텍스트**에 배치(분석 주도 기능). 프로젝트 접근은 같은 컨텍스트의 `AnalysisFacade` 경유.
 - **`graphBuilder.build(...).getId()` 체이닝**으로 `Graph`(domain/graph) 타입을 명시 import하지 않음 → CROSS_CONTEXT_IMPORT 0 유지(Codeprint 자체 경고 0 원칙).
 - clone 인증은 기존 분석과 동일하게 `RepoCloner.clone` 재사용 — 별도 처리 불필요. 동기 파이프라인은 AnalysisRunner의 async 핫패스를 건드리지 않으려 PrReviewService에 별도 작성(소규모 중복 수용, Surgical).
+
+**도그푸딩이 자기 코드 위반을 잡음 (CROSS_DOMAIN_CALL → 포트 패턴).**
+- 1차 설계: PrReviewService(analysis) → `GraphFacade.detectWarnings`(graph) 직접 호출. 라이브 검증(PR #277에 자기 자신 분석)에서 **Codeprint 탐지기가 `CROSS_DOMAIN_CALL: analysis/review → graph/detectWarnings`(MEDIUM)를 적발** — §10 "Codeprint 자체 경고 0" 위반. PR 리뷰 기능이 자기 코드를 검수해 버그를 찾은 사례.
+- 원인: 탐지기는 ① 같은 도메인 호출, ② 타깃이 getter 패턴(`getXxx`), ③ 동명 함수 2+ 도메인, ④ 타깃 경로 `/port/`·`/adapter/`일 때만 제외(`detectCrossDomainFunctionCall`). `detectWarnings`는 getter도 아니고 다른 도메인이라 적발됨. 기존 `GraphReadAdapter`가 0인 건 `getNodes`/`getEdges`가 getter 패턴이라 제외됐기 때문.
+- 수정: 정석 포트 패턴 — `domain/analysis/port/WarningDetectionPort`(PrReviewService가 **같은 도메인** 포트 호출 → 제외) + `infrastructure/adapter/WarningDetectionAdapter`(→ `GraphQueryService.getWarnings`, **getter 패턴** → 제외). `GraphFacade.detectWarnings`는 되돌림. analyzeLocal 재검증 CROSS_DOMAIN_CALL 1→0.
 
 **검증 의존성(중요).** 런타임 검증이 **열린 PR + 살아있는 head 브랜치 + 쓰기 권한 레포**를 요구 → 머지된 PR(브랜치 삭제됨)·타인 레포(쓰기 불가)로는 불가. 해결: 이 기능 브랜치를 푸시해 만든 PR에 **도그푸딩**(Codeprint가 자기 PR 분석). 이 기능은 본질상 "push 후 PR에서 검증"이라 규칙 4의 push-전-검증을 예외적으로 push-후로 둠.
 

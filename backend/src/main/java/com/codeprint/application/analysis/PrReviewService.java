@@ -1,9 +1,9 @@
 // PR 리뷰 — PR head 브랜치를 분석해 구조 경고를 PR 코멘트로 게시 (Tier 0 수동 트리거)
 package com.codeprint.application.analysis;
 
-import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
+import com.codeprint.domain.analysis.port.WarningDetectionPort;
 import com.codeprint.infrastructure.analysis.GraphBuilder;
 import com.codeprint.infrastructure.analysis.LanguageDetector;
 import com.codeprint.infrastructure.analysis.ParsedFile;
@@ -29,7 +29,7 @@ import java.util.UUID;
 public class PrReviewService {
 
     private final AnalysisFacade analysisFacade;
-    private final GraphFacade graphFacade;
+    private final WarningDetectionPort warningDetectionPort;
     private final GitHubApiClient gitHubApiClient;
     private final AnalysisRepository analysisRepository;
     private final RepoCloner repoCloner;
@@ -44,7 +44,7 @@ public class PrReviewService {
         String headBranch = gitHubApiClient.fetchPullRequestHeadBranch(repoUrl, prNumber, githubToken);
 
         UUID graphId = analyzeBranch(projectId, repoUrl, headBranch, githubToken);
-        List<Map<String, Object>> warnings = graphFacade.detectWarnings(graphId);
+        List<Map<String, Object>> warnings = warningDetectionPort.detectWarnings(graphId);
 
         String body = formatComment(headBranch, warnings);
         String commentUrl = gitHubApiClient.postIssueComment(repoUrl, prNumber, body, githubToken);
