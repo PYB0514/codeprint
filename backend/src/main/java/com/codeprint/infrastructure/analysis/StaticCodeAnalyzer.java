@@ -608,6 +608,25 @@ public class StaticCodeAnalyzer {
                 result.add(m.group(1).toUpperCase() + ":" + m.group(2));
             }
 
+            // NestJS: @Controller('prefix') 클래스 prefix + @Get('sub')/@Post() 메서드 데코레이터 합성.
+            // @Controller가 있는 파일에 한정해 Express·일반 데코레이터 오매칭 차단
+            if (content.contains("@Controller")) {
+                String nestPrefix = "";
+                Matcher cm = Pattern.compile("@Controller\\s*\\(\\s*['\"`]([^'\"`]*)['\"`]").matcher(content);
+                if (cm.find()) nestPrefix = cm.group(1);
+                Matcher nm = Pattern.compile(
+                    "@(Get|Post|Put|Delete|Patch)\\s*\\(\\s*(?:['\"`]([^'\"`]*)['\"`])?\\s*\\)"
+                ).matcher(content);
+                while (nm.find()) {
+                    String sub = nm.group(2);
+                    String full = (sub != null && !sub.isEmpty())
+                            ? (nestPrefix.isEmpty() ? sub : nestPrefix + "/" + sub)
+                            : nestPrefix;
+                    full = ("/" + full).replaceAll("/+", "/");
+                    result.add(nm.group(1).toUpperCase() + ":" + full);
+                }
+            }
+
         } else if (language.equals("Python")) {
             // FastAPI/Flask: @app.get('/path') / @router.post('/path')
             Matcher m = Pattern.compile(
