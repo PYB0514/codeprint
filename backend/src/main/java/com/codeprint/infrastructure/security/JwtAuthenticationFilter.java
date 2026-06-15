@@ -47,6 +47,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                 List.of(new SimpleGrantedAuthority(roleAuthority))
                         );
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                // DAU 집계용 활동 시각 기록 — 쓰로틀로 갱신이 필요할 때만 저장(핫패스 write 억제)
+                if (user.recordActivity(java.time.Instant.now())) {
+                    userRepository.save(user);
+                }
             });
         }
 

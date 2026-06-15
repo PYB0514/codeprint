@@ -3,7 +3,7 @@ package com.codeprint.application.admin;
 
 public record DailyMetrics(
         int newUsers,         // 신규 가입 수
-        int activeUsers,      // 활성 사용자 근사 (로그인 토큰 발급 기준 고유 사용자)
+        int activeUsers,      // 활성 사용자(DAU) — 구간 내 마지막 활동이 기록된 사용자 수
         int newProjects,      // 신규 프로젝트 수
         int analysesTotal,    // 분석 실행 수
         int analysesFailed,   // 실패한 분석 수

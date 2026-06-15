@@ -8,6 +8,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -16,6 +17,9 @@ import java.util.UUID;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
+
+    // 활동 기록 쓰로틀 — 마지막 기록이 이 간격 이내면 갱신 생략 (인증 핫패스 write 억제)
+    private static final Duration ACTIVITY_THROTTLE = Duration.ofMinutes(10);
 
     @Id
     @Column(columnDefinition = "uuid")
@@ -56,6 +60,9 @@ public class User {
 
     @Column(name = "graph_bg_url", length = 500)
     private String graphBgUrl;
+
+    @Column(name = "last_active_at")
+    private Instant lastActiveAt;
 
     // GitHub 사용자 정보로 새 User 인스턴스 생성
     public static User create(Long githubId, String email, String username) {
@@ -112,6 +119,15 @@ public class User {
     public void updateGraphBgUrl(String url) {
         this.graphBgUrl = url;
         this.updatedAt = Instant.now();
+    }
+
+    // 활동 시각 기록 — 마지막 기록이 쓰로틀보다 오래됐을 때만 갱신, 갱신 여부 반환
+    public boolean recordActivity(Instant now) {
+        if (lastActiveAt != null && lastActiveAt.isAfter(now.minus(ACTIVITY_THROTTLE))) {
+            return false;
+        }
+        this.lastActiveAt = now;
+        return true;
     }
 
     // UUID를 UserId Value Object로 변환하여 반환
