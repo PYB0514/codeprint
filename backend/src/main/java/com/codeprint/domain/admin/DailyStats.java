@@ -68,4 +68,17 @@ public class DailyStats {
         s.createdAt = Instant.now();
         return s;
     }
+
+    // 같은 날짜 재집계 시 값 갱신 (1일 1행 유지, delete+insert 대신 제자리 UPDATE)
+    public void update(int newUsers, int activeUsers, int newProjects, int analysesTotal,
+                       int analysesFailed, int paymentsCount, long paymentsAmount, int newFeedback) {
+        this.newUsers = newUsers;
+        this.activeUsers = activeUsers;
+        this.newProjects = newProjects;
+        this.analysesTotal = analysesTotal;
+        this.analysesFailed = analysesFailed;
+        this.paymentsCount = paymentsCount;
+        this.paymentsAmount = paymentsAmount;
+        this.newFeedback = newFeedback;
+    }
 }

@@ -22,15 +22,15 @@ public class AdminMetricsQuery {
         Timestamp s = Timestamp.from(start);
         Timestamp e = Timestamp.from(end);
         return new DailyMetrics(
-                count("SELECT count(*) FROM users WHERE created_at >= ?1 AND created_at < ?2", s, e),
+                count("SELECT count(*) FROM users WHERE created_at >= :start AND created_at < :end", s, e),
                 // 활성 사용자 근사 — 로그인 토큰 발급 기준 고유 사용자 (활동 추적 컬럼 부재로 인한 프록시)
-                count("SELECT count(DISTINCT user_id) FROM refresh_tokens WHERE created_at >= ?1 AND created_at < ?2", s, e),
-                count("SELECT count(*) FROM projects WHERE created_at >= ?1 AND created_at < ?2", s, e),
-                count("SELECT count(*) FROM analyses WHERE created_at >= ?1 AND created_at < ?2", s, e),
-                count("SELECT count(*) FROM analyses WHERE status = 'FAILED' AND created_at >= ?1 AND created_at < ?2", s, e),
-                count("SELECT count(*) FROM toss_payment_orders WHERE status = 'CONFIRMED' AND confirmed_at >= ?1 AND confirmed_at < ?2", s, e),
-                sum("SELECT COALESCE(sum(amount), 0) FROM toss_payment_orders WHERE status = 'CONFIRMED' AND confirmed_at >= ?1 AND confirmed_at < ?2", s, e),
-                count("SELECT count(*) FROM feedbacks WHERE created_at >= ?1 AND created_at < ?2", s, e)
+                count("SELECT count(DISTINCT user_id) FROM refresh_tokens WHERE created_at >= :start AND created_at < :end", s, e),
+                count("SELECT count(*) FROM projects WHERE created_at >= :start AND created_at < :end", s, e),
+                count("SELECT count(*) FROM analyses WHERE created_at >= :start AND created_at < :end", s, e),
+                count("SELECT count(*) FROM analyses WHERE status = 'FAILED' AND created_at >= :start AND created_at < :end", s, e),
+                count("SELECT count(*) FROM toss_payment_orders WHERE status = 'CONFIRMED' AND confirmed_at >= :start AND confirmed_at < :end", s, e),
+                sum("SELECT COALESCE(sum(amount), 0) FROM toss_payment_orders WHERE status = 'CONFIRMED' AND confirmed_at >= :start AND confirmed_at < :end", s, e),
+                count("SELECT count(*) FROM feedbacks WHERE created_at >= :start AND created_at < :end", s, e)
         );
     }
 
@@ -44,12 +44,12 @@ public class AdminMetricsQuery {
     }
 
     private int count(String sql, Timestamp s, Timestamp e) {
-        Number n = (Number) em.createNativeQuery(sql).setParameter(1, s).setParameter(2, e).getSingleResult();
+        Number n = (Number) em.createNativeQuery(sql).setParameter("start", s).setParameter("end", e).getSingleResult();
         return n.intValue();
     }
 
     private long sum(String sql, Timestamp s, Timestamp e) {
-        Number n = (Number) em.createNativeQuery(sql).setParameter(1, s).setParameter(2, e).getSingleResult();
+        Number n = (Number) em.createNativeQuery(sql).setParameter("start", s).setParameter("end", e).getSingleResult();
         return n.longValue();
     }
 }

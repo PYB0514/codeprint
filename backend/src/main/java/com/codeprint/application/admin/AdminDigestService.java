@@ -94,11 +94,19 @@ public class AdminDigestService {
         DailyStats yesterday = dailyStatsRepository.findByStatDate(date.minusDays(1)).orElse(null);
         Digest digest = computeDigest(date, today, yesterday);
 
-        // 스냅샷 저장 (같은 날짜 재실행 시 갱신)
-        dailyStatsRepository.findByStatDate(date).ifPresent(dailyStatsRepository::delete);
-        dailyStatsRepository.save(DailyStats.create(date, today.newUsers(), today.activeUsers(),
-                today.newProjects(), today.analysesTotal(), today.analysesFailed(),
-                today.paymentsCount(), today.paymentsAmount(), today.newFeedback()));
+        // 스냅샷 업서트 — 같은 날짜 행이 있으면 제자리 UPDATE, 없으면 INSERT
+        // (delete+insert는 한 트랜잭션 내 Hibernate flush가 INSERT를 DELETE보다 먼저 실행해 유니크 위반)
+        DailyStats snapshot = dailyStatsRepository.findByStatDate(date).orElse(null);
+        if (snapshot != null) {
+            snapshot.update(today.newUsers(), today.activeUsers(), today.newProjects(),
+                    today.analysesTotal(), today.analysesFailed(), today.paymentsCount(),
+                    today.paymentsAmount(), today.newFeedback());
+            dailyStatsRepository.save(snapshot);
+        } else {
+            dailyStatsRepository.save(DailyStats.create(date, today.newUsers(), today.activeUsers(),
+                    today.newProjects(), today.analysesTotal(), today.analysesFailed(),
+                    today.paymentsCount(), today.paymentsAmount(), today.newFeedback()));
+        }
 
         // 관리자 발송은 사이드이펙트 — 이벤트로 분리(NotificationEventHandler가 인앱 알림 + 웹푸시 수행)
         eventPublisher.publishEvent(new DailyDigestReadyEvent(metricsQuery.adminUserIds(), formatKorean(digest)));
