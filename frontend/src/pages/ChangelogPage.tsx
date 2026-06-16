@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.86.7',
+    date: '2026-06-16',
+    title: 'PR 코멘트 개선 — 참고용(LOW) 경고는 자동 생략',
+    type: 'fix',
+    items: [
+      { category: 'PR 리뷰', desc: 'PR 코멘트에 LOW 등급(참고용) 경고가 포함되어 중요한 경고가 묻히던 문제를 개선 — 이제 HIGH·MEDIUM 경고만 코멘트에 게시되고, 생략된 LOW 경고 수는 코멘트 하단에 별도 안내됩니다. PR 리뷰 완료 패널에도 "(LOW N개 생략)" 카운트가 표시됩니다' },
+    ],
+  },
+  {
     version: 'v0.86.6',
     date: '2026-06-16',
     title: '대형 그래프 렌더링 성능 — 화면에 보이는 노드만 그리기',
