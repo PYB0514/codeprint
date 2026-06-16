@@ -384,6 +384,7 @@ function ShareGraphInner() {
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
             fitView
+            onlyRenderVisibleElements
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable={false}

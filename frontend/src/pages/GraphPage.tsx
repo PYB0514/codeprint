@@ -2821,6 +2821,7 @@ function GraphPageInner() {
         fitViewOptions={{ padding: 0.1 }}
         minZoom={0.05}
         maxZoom={2}
+        onlyRenderVisibleElements
       >
         <Background color="#1f2937" gap={20} />
         <Controls />
