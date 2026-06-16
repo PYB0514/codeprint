@@ -384,9 +384,11 @@ public class GraphWarningService {
 
     // 테스트 코드 여부 — 경로·파일명·함수명 패턴 (JUnit·pytest·jest/vitest·Go test)
     private boolean isTestArtifact(String fp, String name) {
-        if (fp.contains("/test/") || fp.contains("\\test\\")
-                || fp.contains("/tests/") || fp.contains("\\tests\\")
-                || fp.contains("/__tests__/") || fp.contains("\\__tests__\\")) return true;
+        // 분석기는 repoRoot 상대경로를 저장 — 루트 레벨 tests/ 는 "tests/..."(앞 슬래시 없음)이라
+        // 앞뒤로 슬래시를 둘러 세그먼트 단위로 매칭한다 (루트·중간 디렉터리 모두 포착).
+        String guarded = "/" + fp.replace("\\", "/") + "/";
+        if (guarded.contains("/test/") || guarded.contains("/tests/")
+                || guarded.contains("/__tests__/")) return true;
         if (fp.endsWith("Test.java") || fp.endsWith("Tests.java")
                 || fp.endsWith("Test.kt") || fp.endsWith("Tests.kt")
                 || fp.endsWith(".test.ts") || fp.endsWith(".test.tsx")
