@@ -4,6 +4,38 @@
 
 ---
 
+## 정확도 베이스라인 재측정 — Phase 0 (2026-06-16, C-13 후속)
+
+**목적.** #268(DEAD_CODE 패턴 제외)·#270(신뢰도 게이트)·#272(raw SQL 정밀화)·#281(B-10 주석 일부) 적용 **이후** 현재 엔진의 언어 무관 detector 오탐률을 재측정해 Phase 1 재캘리브레이션의 **고정 기준선**을 확보한다. C-13(2026-06-14)은 이 수정들 이전이라 낡음.
+
+**방법 (재현 가능).** `analyzeLocal` CLI(Spring/DB 없이 순수 추출)로 OSS 4개 레포를 분석. 클론 커밋 고정 → Phase 1이 동일 명령으로 재실행해 개선폭 측정.
+```
+git clone --depth 1 <repo>   # 커밋 아래 표기
+cd backend && ./gradlew analyzeLocal -PanalysisDir="<클론경로>" -q --console=plain
+```
+
+| 레포 | 언어 | 커밋 | 파일 | 노드 | 엣지 | DEAD_CODE | HIGH_FAN_OUT | CYCLIC_IMPORT |
+|---|---|---|---|---|---|---|---|---|
+| spring-petclinic | Java(앱) | a2c2ef9 | 47 | 149 | 222 | 게이트 1건(21% 20/96) | 2 | 0 |
+| psf/requests | Python(라이브러리) | d64b9ad | 37 | 752 | 1551 | 게이트 1건(18% 126/711) | 3 | 0 |
+| gin-gonic/gin | Go | d75fcd4 | 99 | 1367 | 4188 | 10(개별) | 25 | 10 |
+| expressjs/express | JS(라이브러리) | 18e5985 | 141 | 371 | 448 | 게이트 1건(62% 143/230) | 1 | 0 |
+
+**타입별 오탐 판정 (소스 대조, §11).**
+- **DEAD_CODE 신뢰도 게이트는 약-추출 레포에서 잘 작동.** petclinic/requests/express 셋 다 미호출 비율이 임계(15%)를 넘어 개별 경고 대신 단일 LOW 안내로 치환됨(투명 억제). C-13의 requests 595 개별 오탐 → 안내 1건. **이 세 레포에서 DEAD_CODE 개별 오탐 0.**
+- **gin DEAD_CODE 10건 = 전부 오탐 (Go 한정).** gin은 함수 수가 많아 미호출 비율이 15% 미만 → 게이트 미발동 → 개별 표시. 그러나 `decodeJSON`(json.go:37/41 호출됨)·`addRoute`(gin.go:377 `root.addRoute()` 호출됨) 등 전부 실호출. **근본원인=Go 리시버 메서드 호출(`x.method()`)을 호출 추출기가 FUNCTION_CALL로 연결 못 함.**
+- **gin CYCLIC_IMPORT 10건 = 100% 오탐 (Go 한정).** 플래그된 form/uri/query/xml/... 전부 `package binding` 동일 패키지 파일. **근본원인=Go 동일 패키지 파일 간 IMPORT를 추론해 거짓 순환 생성.** (다른 3개 레포는 0건 — Go 전용 결함.)
+- **HIGH_FAN_OUT 31건(4레포 합) = 다수가 테스트 함수 노이즈.** gin 25건 중 ~17건이 `Test*`(setup+assert로 자연히 다수 호출), petclinic `george`는 OwnerControllerTests private 픽스처 헬퍼. **근본원인=테스트 함수 미제외.** 비테스트(`resolve_redirects`·`handleHTTPRequest`·`Negotiate`·`handleHeaders` 등)는 실제 고-팬아웃이라 참 신호.
+
+**Phase 1 재캘리브레이션 우선순위 (베이스라인 근거).**
+1. **Go 호출 추출 보강** — 리시버 메서드 호출 `x.method()` 연결 → gin DEAD_CODE 10건 오탐 + (연쇄로) 일부 FUNCTION_CALL 누락 해소.
+2. **Go 동일 패키지 CYCLIC_IMPORT 제외** — 같은 디렉터리/패키지 파일 간 추론 IMPORT는 순환 판정에서 제외 → gin 10건 오탐 제거.
+3. **HIGH_FAN_OUT 테스트 함수 제외** — `Test*`/테스트 파일 경로 게이팅 → 노이즈 ~18건 제거.
+
+> DEAD_CODE·CYCLIC_IMPORT는 GraphWarningService(반복 FP 이력)라 수정 시 회귀 테스트 의무. 측정 산출물(`*.out`)은 git repo 외부 `C:\Dev\codeprint-bench\`에 보존.
+
+---
+
 ## NestJS 분석 커버리지 추가 — @Controller + 메서드 데코레이터 (2026-06-15)
 
 **문제.** TS/JS API 감지가 Express(`router.get`/`app.post`)만 커버. TS 백엔드 주류 프레임워크 NestJS(데코레이터 기반)가 누락.
