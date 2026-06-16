@@ -1247,6 +1247,44 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("Java @Async 어노테이션 메서드를 asyncMethods에 포함한다")
+    void Java_Async_어노테이션_감지() throws IOException {
+        Path file = writeJavaFile("""
+                public class Mailer {
+                    @Async
+                    public void sendEmail(String to) {}
+
+                    public void syncSend(String to) {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.asyncMethods()).contains("sendEmail");
+        assertThat(result.asyncMethods()).doesNotContain("syncSend");
+    }
+
+    @Test
+    @DisplayName("주석·문자열 속 @Async 텍스트는 asyncMethods로 오인하지 않는다 (B-15)")
+    void Java_주석_속_Async_텍스트_제외() throws IOException {
+        // B-15: 정규식이 줄 중간(주석 //·문자열 ")의 @Async 텍스트를 어노테이션으로 오인 → 다음 메서드 오탐
+        Path file = writeJavaFile("""
+                public class WarningService {
+                    // @Async 프록시 우회는 JVM 언어에만 해당
+                    private boolean isProxyAsyncLanguage(String lang) { return false; }
+
+                    private void report() {
+                        String msg = "@Async 자기 호출 감지";
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.asyncMethods()).doesNotContain("isProxyAsyncLanguage", "report");
+    }
+
+    @Test
     @DisplayName("TypeScript async function을 asyncMethods에 포함한다")
     void TypeScript_async_function_감지() throws IOException {
         Path file = writeTsFile("""

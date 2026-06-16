@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.86.3',
+    date: '2026-06-16',
+    title: '분석 정확도 개선 — 주석 속 @Async 텍스트 오인 제거',
+    type: 'fix',
+    items: [
+      { category: '분석', desc: '주석이나 문자열 안에 적힌 "@Async" 글자를 실제 어노테이션으로 오인해 엉뚱한 메서드를 비동기로 표시하던 문제를 수정 — 이제 줄 맨 앞에 붙은 진짜 @Async 어노테이션만 인식. 그 결과 발생하던 잘못된 "@Async 자기 호출" 경고도 함께 사라짐' },
+    ],
+  },
+  {
     version: 'v0.86.2',
     date: '2026-06-16',
     title: '경고 정확도 개선 — 프론트엔드 async 함수 오탐 제거',
