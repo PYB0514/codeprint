@@ -52,4 +52,26 @@ class PrReviewServiceTest {
 
         assertThat(md).contains("기타").contains("WEIRD");
     }
+
+    @Test
+    @DisplayName("LOW 생략 개수가 있으면 경고 본문 하단에 안내를 포함한다")
+    void formatComment_lowExcluded_showsNote() {
+        List<Map<String, Object>> warnings = List.of(
+                warning("CYCLIC_IMPORT", "순환 의존 A↔B", "HIGH")
+        );
+
+        String md = PrReviewService.formatComment("main", warnings, 3);
+
+        assertThat(md).contains("LOW 등급 경고 3개는 참고용으로 PR 코멘트에서 생략됩니다");
+        assertThat(md).contains("CYCLIC_IMPORT");
+    }
+
+    @Test
+    @DisplayName("경고가 없고 LOW만 생략됐으면 통과 메시지에 생략 안내가 붙는다")
+    void formatComment_noHighMedium_lowExcluded_passWithNote() {
+        String md = PrReviewService.formatComment("main", List.of(), 2);
+
+        assertThat(md).contains("감지된 구조 경고가 없습니다");
+        assertThat(md).contains("LOW 등급 2개는 생략");
+    }
 }
