@@ -531,3 +531,13 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 3. **detectDeadCode 다형성 디스패치 제외** → ①이 새로 추출하는 `Bind`/`Name`(동명 다중 구현, 인터페이스 디스패치)이 신규 DEAD_CODE 오탐이 되는 걸 방지. 동명 함수 ≥2 정의 + 그 이름으로 호출 존재 시 제외. 단일 정의 미호출은 여전히 감지(과잉 억제 방지).
 
 **결과.** analyzeLocal 재측정(gin d75fcd4): **CYCLIC 10→0, DEAD_CODE 10→1.** 남은 1건은 `defaultHandleRecovery` — `CustomRecoveryWithWriter(out, defaultHandleRecovery)`처럼 **값으로 전달되는 콜백 참조**(호출 `()` 아님)라 별개 오탐 카테고리(범위 외, value-reference 추적 필요). HIGH_FAN_OUT 25→26(타입전용 리시버가 새로 스캔돼 실제 고팬아웃 1건 노출 — Phase 1 #3 테스트 함수 제외 영역). TDD: StaticCodeAnalyzerTest 3종(타입전용 리시버 추출·이름있는 리시버 회귀·import 리터럴 제외) + GraphWarningServiceTest 1종(다형성 제외) + GraphBuilderTest 1종(실제 StaticCodeAnalyzer→GraphBuilder→GraphWarningService 프로덕션 경로 교차검증: decodeJSON 비-DEAD_CODE + 자기순환 없음). 전체 백엔드 테스트 + 프론트 tsc 통과.
+
+### HIGH_FAN_OUT 테스트 함수 제외 (2026-06-16, Phase 1 #3)
+
+**문제.** gin 베이스라인(#285)·Phase 1 #2 재측정에서 HIGH_FAN_OUT 26건 중 ~21건이 `Test*` 함수(`TestLoggerWithConfig`·`TestBasicAuth401` 등)·테스트 헬퍼(`testRoutesInterface`·`performRequestInGroup`). 테스트는 setup+assert로 자연히 다수 함수를 호출 → 단일 책임 위반 아님인데 오탐.
+
+**이유.** `detectHighFanOut`이 테스트 함수를 제외하지 않았다. `detectDeadCode`는 이미 `isTestArtifact`로 테스트를 제외하고 있었으나 같은 헬퍼를 HIGH_FAN_OUT엔 적용하지 않았다.
+
+**결정.** 기존 `isTestArtifact`(경로 `/test/`·`*_test.go`·`*Test.java`·`.spec.ts` 등 + `test_` 함수명) 헬퍼를 `detectHighFanOut` 발화 루프에 재사용 — 신규 패턴 없이 한 줄 가드. fan-out 카운팅은 그대로, 발화 시점에만 제외(타 검출과 일관).
+
+**결과.** analyzeLocal gin(d75fcd4) HIGH_FAN_OUT **26→5.** 남은 5건(`Negotiate`·`handleHTTPRequest`·`setByForm`·`setWithProperType`·`CustomRecoveryWithWriter`)은 전부 비테스트 프로덕션 함수 — #285가 예측한 참 신호. 회귀 테스트 GraphWarningServiceTest `highFanOut_testFunction_excluded`(테스트 8호출 미발화) + 기존 `highFanOut_normalEdges_stillDetected`(프로덕션 8호출 발화 유지). DEAD_CODE 1·CYCLIC 0 불변.

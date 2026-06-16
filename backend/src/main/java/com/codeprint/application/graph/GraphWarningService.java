@@ -645,10 +645,12 @@ public class GraphWarningService {
 
         Map<UUID, Integer> fanOutMap = new HashMap<>();
         Map<UUID, String> nameMap = new HashMap<>();
+        Map<UUID, String> filePathMap = new HashMap<>();
         for (Node n : nodes) {
             if (n.getType() == NodeType.FUNCTION) {
                 fanOutMap.put(n.getId(), 0);
                 nameMap.put(n.getId(), n.getName());
+                filePathMap.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
             }
         }
         for (Edge e : edges) {
@@ -662,6 +664,9 @@ public class GraphWarningService {
         List<Map<String, Object>> warnings = new ArrayList<>();
         for (Map.Entry<UUID, Integer> entry : fanOutMap.entrySet()) {
             if (entry.getValue() <= THRESHOLD) continue;
+            // 테스트 함수(Test*·_test.go·*Test.java 등)는 setup+assert로 자연히 호출이 많음 — 단일 책임 위반 아님
+            if (isTestArtifact(filePathMap.getOrDefault(entry.getKey(), ""),
+                    nameMap.getOrDefault(entry.getKey(), ""))) continue;
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "HIGH_FAN_OUT");
             w.put("severity", "LOW");

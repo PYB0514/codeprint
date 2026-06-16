@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.86.5',
+    date: '2026-06-16',
+    title: '경고 정확도 개선 — 테스트 함수의 과도한 의존 오탐 제거',
+    type: 'fix',
+    items: [
+      { category: '경고', desc: '테스트 함수(예: Go의 Test로 시작하는 함수, *_test.go·*Test.java 파일)에 "과도한 의존(High Fan-Out)" 경고가 잘못 뜨던 오탐을 제거 — 테스트는 준비(setup)와 검증(assert)을 위해 자연히 여러 함수를 호출하므로 단일 책임 위반이 아님. 실제 프로덕션 코드의 고팬아웃 함수만 경고로 남김' },
+    ],
+  },
+  {
     version: 'v0.86.4',
     date: '2026-06-16',
     title: 'Go 분석 정확도 개선 — 데드 코드·순환 의존 오탐 제거',

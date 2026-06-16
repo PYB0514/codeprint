@@ -564,6 +564,23 @@ class GraphWarningServiceTest {
         assertThat(highFanOut(warnings)).hasSize(1);
     }
 
+    @Test
+    @DisplayName("테스트 함수(_test.go)의 호출 8개는 HIGH_FAN_OUT 제외 — 테스트는 setup+assert로 자연히 다호출 (Phase 1 #3)")
+    void highFanOut_testFunction_excluded() {
+        // gin TestLoggerWithConfig 등 *_test.go의 Test 함수가 단일 책임 위반으로 오탐되던 노이즈 제거
+        Node testFn = funcNodeWithPath("TestLoggerWithConfig", "/gin/logger_test.go");
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        nodes.add(testFn);
+        java.util.List<Edge> edges = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            Node callee = funcNodeWithPath("helper" + i, "/gin/dep" + i + ".go");
+            nodes.add(callee);
+            edges.add(callEdge(testFn.getId(), callee.getId(), false));
+        }
+        List<Map<String, Object>> warnings = service.detect(nodes, edges);
+        assertThat(highFanOut(warnings)).isEmpty();
+    }
+
     // --- fingerprint (suppress 식별자) ---
 
     @Test
