@@ -1,15 +1,19 @@
 // GraphBuilder 회귀 테스트 — DECISIONS_ANALYSIS.md에 기록된 버그 재발 방지
 package com.codeprint.infrastructure.analysis;
 
+import com.codeprint.application.graph.GraphWarningService;
 import com.codeprint.domain.graph.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -408,6 +412,55 @@ class GraphBuilderTest {
                 .anyMatch(e -> e.getType() == EdgeType.API_CALL);
 
         assertThat(hasApiCall).isTrue();
+    }
+
+    // ── 프로덕션 경로 교차검증 (Phase 1 #2: Go 리시버 + 동일 패키지 CYCLIC) ──
+
+    @Test
+    @DisplayName("[프로덕션 교차검증] gin 스타일 Go — 실제 StaticCodeAnalyzer→GraphBuilder→GraphWarningService에서 decodeJSON DEAD_CODE 오탐·자기순환 CYCLIC 동시 해소")
+    void Go_리시버_프로덕션_경로_교차검증(@TempDir Path tempDir) throws Exception {
+        // 타입 전용 리시버 func (jsonBinding) Bind() 가 같은 파일 decodeJSON 호출 + "json" 리터럴이 import로 오인되던 케이스
+        StaticCodeAnalyzer analyzer = new StaticCodeAnalyzer();
+        Path jsonGo = tempDir.resolve("json.go");
+        Files.writeString(jsonGo, """
+                package binding
+
+                import (
+                    "io"
+                    "github.com/x/codec"
+                )
+
+                func (jsonBinding) Bind(req *http.Request, obj any) error {
+                    return decodeJSON(req.Body, obj)
+                }
+
+                func decodeJSON(r io.Reader, obj any) error {
+                    contentType := "json"
+                    return nil
+                }
+                """);
+        ParsedFile pf = analyzer.analyze(jsonGo, tempDir, "Go");
+
+        graphBuilder.build(projectId, analysisId, List.of(pf));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        List<Map<String, Object>> warnings = new GraphWarningService()
+                .detect(nodeCaptor.getAllValues(), edgeCaptor.getAllValues());
+
+        // decodeJSON: Bind 본문이 스캔돼 같은 파일 호출 엣지 연결 → DEAD_CODE 아님
+        boolean decodeJsonDead = warnings.stream()
+                .filter(w -> "DEAD_CODE".equals(w.get("type")))
+                .anyMatch(w -> ((String) w.getOrDefault("message", "")).contains("decodeJSON"));
+        assertThat(decodeJsonDead).isFalse();
+
+        // "json" 리터럴은 import로 추출되지 않음 → 자기 파일 IMPORT 엣지 없음 → 자기순환 CYCLIC 없음
+        assertThat(pf.imports()).containsExactlyInAnyOrder("io", "github.com/x/codec");
+        boolean anyCyclic = warnings.stream().anyMatch(w -> "CYCLIC_IMPORT".equals(w.get("type")));
+        assertThat(anyCyclic).isFalse();
     }
 
     // ── 헬퍼 ────────────────────────────────────────────────────────────────

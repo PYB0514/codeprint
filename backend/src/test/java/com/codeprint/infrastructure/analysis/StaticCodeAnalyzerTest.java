@@ -644,6 +644,82 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("Go 타입 전용 리시버 메서드 func (T) M() 도 함수로 추출한다 + 본문 호출 스캔")
+    void Go_타입전용_리시버_추출() throws IOException {
+        // 회귀: 리시버 변수명 없는 func (jsonBinding) Bind() 가 미추출되어 본문의 decodeJSON 호출이 누락 → DEAD_CODE 오탐
+        Path file = tempDir.resolve("json.go");
+        Files.writeString(file, """
+                package binding
+
+                func (jsonBinding) Bind(req *http.Request, obj any) error {
+                    return decodeJSON(req.Body, obj)
+                }
+
+                func (*xmlBinding) Name() string {
+                    return "xml"
+                }
+
+                func decodeJSON(r io.Reader, obj any) error {
+                    return nil
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.functions()).contains("Bind", "Name", "decodeJSON");
+        assertThat(result.functionCalls()).containsKey("Bind");
+        assertThat(result.functionCalls().get("Bind")).contains("decodeJSON");
+    }
+
+    @Test
+    @DisplayName("Go 이름 있는 리시버 메서드 func (s *Server) M() 추출은 유지된다 (회귀)")
+    void Go_이름있는_리시버_유지() throws IOException {
+        Path file = tempDir.resolve("server.go");
+        Files.writeString(file, """
+                package main
+
+                func (engine *Engine) addRoute(method string) {
+                    root.insert(method)
+                }
+
+                func (s Server) handle() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.functions()).contains("addRoute", "handle");
+    }
+
+    @Test
+    @DisplayName("Go import는 import 문/블록 내부만 추출 — 임의 문자열 리터럴은 제외")
+    void Go_import_문자열리터럴_제외() throws IOException {
+        // 회귀: import 정규식이 모든 따옴표 문자열을 import로 오인 → 같은 패키지 파일명과 매칭돼 거짓 CYCLIC_IMPORT
+        Path file = tempDir.resolve("uri.go");
+        Files.writeString(file, """
+                package binding
+
+                import (
+                    "io"
+                    "github.com/gin-gonic/gin/codec/json"
+                )
+
+                func (uriBinding) Name() string {
+                    return "uri"
+                }
+
+                func (uriBinding) BindUri(m map[string][]string, obj any) error {
+                    contentType := "application/json"
+                    return mapURI(obj, m, "query")
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.imports()).contains("io", "github.com/gin-gonic/gin/codec/json");
+        assertThat(result.imports()).doesNotContain("uri", "query", "application/json");
+    }
+
+    @Test
     @DisplayName("Rust 파일에서 fn 함수명을 추출한다")
     void Rust_함수_추출() throws IOException {
         Path file = tempDir.resolve("lib.rs");

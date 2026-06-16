@@ -428,6 +428,14 @@ public class GraphWarningService {
             }
         }
 
+        // 함수명별 정의 개수 — 동명 함수가 여러 파일에 정의되면 인터페이스/리시버 다형성 디스패치 신호
+        Map<String, Integer> defCountByName = new HashMap<>();
+        for (Node n : nodes) {
+            if (n.getType() == NodeType.FUNCTION && n.getName() != null) {
+                defCountByName.merge(n.getName(), 1, Integer::sum);
+            }
+        }
+
         List<Map<String, Object>> warnings = new ArrayList<>();
         for (Node n : nodes) {
             if (n.getType() != NodeType.FUNCTION) continue;
@@ -461,6 +469,10 @@ public class GraphWarningService {
             boolean isDomainInterfaceDecl = fp.contains("/domain/")
                     && (fp.endsWith("Repository.java") || fp.endsWith("Port.java") || fp.contains("/port/"));
             if (isDomainInterfaceDecl && calledFuncNames.contains(name)) continue;
+            // 동명 함수가 2개 이상 정의되고 그 이름으로 호출이 존재 — 인터페이스/리시버 다형성 디스패치로 간주.
+            // 정적 분석은 호출을 한 구현체로만 연결하므로 나머지 구현체가 거짓 데드코드로 보이는 것을 방지.
+            // (Go func (T) Bind()·Name() 등 다중 구현. 단일 정의 미호출은 여전히 감지 — 과잉 억제 방지.)
+            if (defCountByName.getOrDefault(name, 0) >= 2 && calledFuncNames.contains(name)) continue;
 
             Map<String, Object> meta = n.getMetadata();
             if (meta != null) {
