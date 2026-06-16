@@ -496,3 +496,20 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 - (탈락) `extractAsyncMethods`에서 TS/Python을 isAsync 마킹 자체에서 제외 — DEAD_CODE async 제외 등 다른 정당한 용도까지 깨질 위험. 경고별 게이트가 최소 침습.
 
 **결과.** `isProxyAsyncLanguage` 헬퍼 + detectAsyncSelfCalls 수집 루프에 언어 게이트. 회귀 테스트 `asyncSelfCall_typescript_excluded`(TS async 같은파일 호출 → ASYNC_SELF_CALL 0). 교훈(규칙 4): 단위 테스트 통과 ≠ 런타임 정상 — 라이브 자기 재분석이 TS 오탐 27건을 적발.
+
+**★ 라이브 재검증(그래프 `71a5bdca`, v0.86.2 코드).** ASYNC_SELF_CALL **27→1**(남은 1건 Java), DEAD_CODE hmacSha256Hex FP 해소 유지. TS 오탐 0 확정. **단 남은 Java 1건이 B-15(@Async 주석 오인)를 노출.**
+
+---
+
+### @Async 추출 정규식을 어노테이션 위치로 앵커 — 주석·문자열 오인 차단 (2026-06-16, B-15, B-14 후속)
+
+**문제.** B-14 fix 후 라이브 재검증에서 ASYNC_SELF_CALL 1건이 남았는데 `detectAsyncSelfCalls → isProxyAsyncLanguage`였다. `isProxyAsyncLanguage`는 @Async 메서드가 아닌 평범한 헬퍼. `extractAsyncMethods` Java 정규식 `@Async[\s\S]{0,200}?...(\w+)\s*\(`이 줄 위치를 안 따져 **주석 `// @Async ...` 텍스트**를 어노테이션으로 매칭했고, 마침 B-14에서 추가한 주석 바로 아래 `private boolean isProxyAsyncLanguage(`를 잡았다.
+
+**이유.** 정규식이 코드/주석/문자열을 구분하지 않는다(정규식 분석기의 본질적 한계). 실제 Java `@Async` 어노테이션은 항상 줄 시작(들여쓰기 후)에 오지만, 주석·문자열 속 `@Async` 텍스트는 줄 중간(`//`·`"` 뒤)에 온다.
+
+**결정: `^[ \t]*@Async\b` 앵커(MULTILINE).**
+- @Async 앞에 들여쓰기 공백/탭만 허용 → 어노테이션 위치로 한정. `// @Async`(`/` 선행)·`"@Async`(`"` 선행)·줄 중간 텍스트 전부 제외.
+- (탈락) 주석/문자열 스트리핑 전처리 — 정규식 엔진에 범용 토크나이저 도입은 과한 변경, 다른 추출 로직과의 일관성도 깨짐. 앵커 한 줄이 최소 침습.
+- 트레이드오프: `@Transactional @Async public ...`처럼 @Async가 같은 줄 두 번째 어노테이션이면 누락 — 실코드에서 드물고(대개 각 어노테이션 별도 줄) 오탐 제거 이득이 큼.
+
+**결과.** 정규식 앵커 변경 1줄. 회귀 테스트 StaticCodeAnalyzerTest 2종(`Java_Async_어노테이션_감지` 실제 감지 유지, `Java_주석_속_Async_텍스트_제외` 주석·문자열 미감지). self-dogfooding 라이브 재분석을 끝까지 추적한 덕에 B-13→B-14→B-15 연쇄 적발 — 정규식 분석기의 코드/주석 미구분 한계가 드러난 사례.

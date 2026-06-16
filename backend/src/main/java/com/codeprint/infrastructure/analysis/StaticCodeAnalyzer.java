@@ -793,9 +793,9 @@ public class StaticCodeAnalyzer {
         List<String> result = new ArrayList<>();
 
         if (language.equals("Java")) {
-            // @Async 바로 다음(0~3줄 이내)에 오는 메서드명 탐지
+            // @Async 어노테이션(줄 시작) 다음 메서드명 탐지 — 주석/문자열 속 "@Async" 텍스트는 줄 시작이 아니므로 제외
             Matcher m = Pattern.compile(
-                "@Async[\\s\\S]{0,200}?(?:public|protected|private)\\s+(?:\\w+\\s+)*(\\w+)\\s*\\(",
+                "^[ \\t]*@Async\\b[\\s\\S]{0,200}?(?:public|protected|private)\\s+(?:\\w+\\s+)*(\\w+)\\s*\\(",
                 Pattern.MULTILINE
             ).matcher(content);
             while (m.find()) {
