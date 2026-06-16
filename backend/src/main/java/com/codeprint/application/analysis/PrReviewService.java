@@ -37,23 +37,28 @@ public class PrReviewService {
     private final StaticCodeAnalyzer staticCodeAnalyzer;
     private final GraphBuilder graphBuilder;
 
-    // PR 리뷰 실행 — 소유권 검증 → PR head 분석 → 경고 감지 → PR 코멘트 게시
+    // PR 리뷰 실행 — 소유권 검증 → PR head 분석 → 경고 감지 → PR 코멘트 게시 (LOW 제외)
     @Transactional
     public Map<String, Object> review(UUID projectId, int prNumber, UUID userId, String githubToken) {
         String repoUrl = analysisFacade.resolveOwnedRepoUrl(projectId, userId);
         String headBranch = gitHubApiClient.fetchPullRequestHeadBranch(repoUrl, prNumber, githubToken);
 
         UUID graphId = analyzeBranch(projectId, repoUrl, headBranch, githubToken);
-        List<Map<String, Object>> warnings = filterSuppressed(projectId, warningDetectionPort.detectWarnings(graphId));
+        List<Map<String, Object>> allWarnings = filterSuppressed(projectId, warningDetectionPort.detectWarnings(graphId));
+        List<Map<String, Object>> warnings = allWarnings.stream()
+                .filter(w -> !"LOW".equals(w.get("severity")))
+                .toList();
+        int lowFilteredCount = allWarnings.size() - warnings.size();
 
-        String body = formatComment(headBranch, warnings);
+        String body = formatComment(headBranch, warnings, lowFilteredCount);
         String commentUrl = gitHubApiClient.postIssueComment(repoUrl, prNumber, body, githubToken);
-        log.info("PR 리뷰 코멘트 게시: repo={}, pr={}, 경고={}", repoUrl, prNumber, warnings.size());
+        log.info("PR 리뷰 코멘트 게시: repo={}, pr={}, 게시={}, LOW_생략={}", repoUrl, prNumber, warnings.size(), lowFilteredCount);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("prNumber", prNumber);
         result.put("headBranch", headBranch);
         result.put("warningCount", warnings.size());
+        result.put("lowFilteredCount", lowFilteredCount);
         result.put("commentUrl", commentUrl != null ? commentUrl : "");
         result.put("graphId", graphId.toString());
         return result;
@@ -111,12 +116,16 @@ public class PrReviewService {
         }
     }
 
-    // 경고 목록을 GitHub 마크다운 코멘트로 변환 — severity별 그룹, 없으면 통과 표시
-    static String formatComment(String branch, List<Map<String, Object>> warnings) {
+    // 경고 목록을 GitHub 마크다운 코멘트로 변환 — severity별 그룹, LOW 생략 시 안내 포함
+    static String formatComment(String branch, List<Map<String, Object>> warnings, int lowExcludedCount) {
         StringBuilder sb = new StringBuilder();
         sb.append("## 🔍 Codeprint 구조 분석 — `").append(branch).append("` 브랜치\n\n");
         if (warnings.isEmpty()) {
-            sb.append("✅ 감지된 구조 경고가 없습니다.\n\n");
+            sb.append("✅ 감지된 구조 경고가 없습니다.");
+            if (lowExcludedCount > 0) {
+                sb.append(" _(LOW 등급 ").append(lowExcludedCount).append("개는 생략)_");
+            }
+            sb.append("\n\n");
             sb.append("---\n_Codeprint 자동 분석 · 구조 경고는 참고용입니다._\n");
             return sb.toString();
         }
@@ -145,8 +154,16 @@ public class PrReviewService {
             }
             sb.append("\n");
         }
+        if (lowExcludedCount > 0) {
+            sb.append("> _LOW 등급 경고 ").append(lowExcludedCount).append("개는 참고용으로 PR 코멘트에서 생략됩니다._\n\n");
+        }
         sb.append("---\n_Codeprint 자동 분석 · 구조 경고는 참고용입니다._\n");
         return sb.toString();
+    }
+
+    // backward-compat — 테스트/직접 호출용
+    static String formatComment(String branch, List<Map<String, Object>> warnings) {
+        return formatComment(branch, warnings, 0);
     }
 
     // severity 코드 → 이모지 라벨

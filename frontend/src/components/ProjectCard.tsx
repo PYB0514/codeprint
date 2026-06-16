@@ -49,7 +49,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
   const [showPrReview, setShowPrReview] = useState(false)
   const [prNumber, setPrNumber] = useState('')
   const [prReviewing, setPrReviewing] = useState(false)
-  const [prResult, setPrResult] = useState<{ prNumber: number; warningCount: number; commentUrl: string } | null>(null)
+  const [prResult, setPrResult] = useState<{ prNumber: number; warningCount: number; lowFilteredCount: number; commentUrl: string } | null>(null)
   const [prError, setPrError] = useState<string | null>(null)
 
   const pickerRef = useRef<HTMLDivElement>(null)
@@ -229,6 +229,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
       setPrResult({
         prNumber: res.data.prNumber,
         warningCount: res.data.warningCount,
+        lowFilteredCount: res.data.lowFilteredCount ?? 0,
         commentUrl: res.data.commentUrl,
       })
     } catch {
@@ -434,7 +435,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
           )}
           {prResult && (
             <p className="text-xs text-green-400">
-              PR #{prResult.prNumber} 리뷰 완료 — 경고 {prResult.warningCount}개.{' '}
+              PR #{prResult.prNumber} 리뷰 완료 — 경고 {prResult.warningCount}개{prResult.lowFilteredCount > 0 ? ` (LOW ${prResult.lowFilteredCount}개 생략)` : ''}.{' '}
               {prResult.commentUrl && (
                 <a
                   href={prResult.commentUrl}
