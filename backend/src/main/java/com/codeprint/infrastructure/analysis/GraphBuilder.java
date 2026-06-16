@@ -130,6 +130,28 @@ public class GraphBuilder {
                         calleeFunc = calleeEntry;
                     }
 
+                    // 같은 파일 내 호출 — sameFile 마커 엣지 생성 (DEAD_CODE 카운트·ASYNC_SELF_CALL 감지용, HIGH_FAN_OUT은 제외)
+                    String callerClassName = extractFileNameWithoutExt(callerFile.filePath());
+                    if ((targetClass == null || targetClass.equals(callerClassName))
+                            && callerFile.functions().contains(calleeFunc)) {
+                        UUID sameFileCalleeId = funcNodeIds.get(callerFile.filePath() + "::" + calleeFunc);
+                        if (sameFileCalleeId != null && !sameFileCalleeId.equals(callerFuncId)) {
+                            String sameFileEdgeId = extractFileName(callerFile.filePath()) + "-" + callerFunc
+                                    + "-selfcalls-" + calleeFunc;
+                            if (!usedEdgeIds.contains(sameFileEdgeId)) {
+                                usedEdgeIds.add(sameFileEdgeId);
+                                Edge sameFileEdge = Edge.create(graphId, sameFileEdgeId, EdgeType.FUNCTION_CALL,
+                                        callerFuncId, sameFileCalleeId);
+                                Map<String, Object> sameMeta = new HashMap<>();
+                                sameMeta.put("callerFile", callerFile.filePath());
+                                sameMeta.put("calleeFile", callerFile.filePath());
+                                sameMeta.put("sameFile", true);
+                                sameFileEdge.updateMetadata(sameMeta);
+                                graphRepository.saveEdge(sameFileEdge);
+                            }
+                        }
+                    }
+
                     // 후보 callee 파일 중 구현체를 인터페이스보다 우선 선택
                     ParsedFile bestMatch = null;
                     boolean bestIsInterface = false;

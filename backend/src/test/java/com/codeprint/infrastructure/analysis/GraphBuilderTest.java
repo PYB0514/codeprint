@@ -87,12 +87,37 @@ class GraphBuilderTest {
     }
 
     @Test
-    @DisplayName("같은 파일 내 함수 호출은 FUNCTION_CALL 엣지를 생성하지 않는다")
-    void 같은_파일_내_호출은_엣지_미생성() {
-        // callerFile.filePath().equals(calleeFile.filePath()) 이면 skip
+    @DisplayName("같은 파일 내 함수 호출은 sameFile 마커 FUNCTION_CALL 엣지를 생성한다 (B-13: DEAD_CODE 오탐·ASYNC_SELF_CALL no-op 동시 해소)")
+    void 같은_파일_내_호출은_sameFile_엣지_생성() {
+        // B-13: 같은 파일 호출에 엣지가 없어 createUser만 호출하는 validate가 DEAD_CODE 오탐, @Async 자기호출 미감지
         ParsedFile file = parsedFileWithCalls("src/UserService.java", "Java",
                 List.of("createUser", "validate"),
                 Map.of("createUser", List.of("validate")));
+
+        graphBuilder.build(projectId, analysisId, List.of(file));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        List<Edge> sameFileEdges = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .filter(e -> e.getMetadata() != null && Boolean.TRUE.equals(e.getMetadata().get("sameFile")))
+                .collect(Collectors.toList());
+
+        // createUser → validate (같은 파일) sameFile 엣지 1개 생성
+        assertThat(sameFileEdges).hasSize(1);
+        Edge edge = sameFileEdges.get(0);
+        assertThat(edge.getMetadata().get("callerFile")).isEqualTo("src/UserService.java");
+        assertThat(edge.getMetadata().get("calleeFile")).isEqualTo("src/UserService.java");
+    }
+
+    @Test
+    @DisplayName("같은 파일 내 자기 자신 재귀 호출은 sameFile 엣지를 만들지 않는다 (재귀 전용 함수 DEAD_CODE 부활 방지)")
+    void 같은_파일_재귀_자기호출은_엣지_미생성() {
+        // recurse() → recurse() (자기 자신) — 외부 호출이 없으면 여전히 DEAD_CODE여야 하므로 자기 루프 엣지 제외
+        ParsedFile file = parsedFileWithCalls("src/TreeWalker.java", "Java",
+                List.of("recurse"),
+                Map.of("recurse", List.of("recurse")));
 
         graphBuilder.build(projectId, analysisId, List.of(file));
 

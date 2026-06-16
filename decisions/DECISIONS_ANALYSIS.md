@@ -464,3 +464,18 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 - (C 채택) 3중 게이트. ①**앵커**: 리터럴이 `^\s*\(?\s*(SELECT|INSERT|UPDATE|DELETE)\b`로 시작해야 함(산문 중간 키워드 차단). 현재 리터럴 패턴이 개행 포함 문자열을 이미 제외하므로 단일행 SQL은 거의 항상 동사로 시작 → 리콜 손실 미미. ②**강한 마커**: `*`·`=`·플레이스홀더(`?`·`%s`·`:param`·`$1`)·`;`·`WHERE/JOIN/VALUES/GROUP/ORDER/LIMIT/HAVING/RETURNING/UNION` 중 하나 필수(산문엔 거의 없음). ③**선두 동사 전용 추출**: 리터럴의 첫 동사에 해당하는 패턴만 실행 — `WHERE action = 'delete from cache'` 같은 문자열 값 속 다른 동사를 추가 테이블로 잡지 않음.
 
 **결과.** 정규식 6개를 static 상수로 호이스팅(리터럴마다 재컴파일 제거). 기존 TDD 6케이스 전부 통과(실제 SQL은 모두 `*`/WHERE/VALUES/`=`/플레이스홀더 보유). 산문 차단 회귀 3종 추가(동사 미시작·마커 없음·문자열값 내 동사). Python 재현으로 기존 8 SQL 정탐 + 산문 7건 0검출 사전 검증 후 Java 포팅. 리콜 트레이드오프: `"select id from users"`처럼 마커 없는 최소 쿼리는 누락 — 실코드에서 드물어 정밀도 우선.
+
+---
+
+### 같은 파일 FUNCTION_CALL 엣지 생성 — DEAD_CODE 오탐 + ASYNC_SELF_CALL no-op 동시 해소 (2026-06-16, Phase 1 #1, B-13)
+
+**문제.** `GraphBuilder.java:137` `if (calleeFile.filePath().equals(callerFile.filePath())) continue;` 가 같은 파일 내 FUNCTION_CALL 엣지를 3경로(파일간·인터페이스구현·JSX) 전부에서 생성하지 않았다. 결과 ① 같은 파일 안에서만 호출되는 함수(예: `hmacSha256Hex` — 같은 파일 `verify`가 호출)가 incoming 엣지 0이라 `detectDeadCode` 오탐, ② `detectAsyncSelfCalls`(ASYNC_SELF_CALL, v0.11.0)가 같은 파일 async 직접 호출 엣지를 못 받아 **프로덕션 영구 no-op**. webhook 라이브(PR #285 자기 리뷰)가 ①을 실증.
+
+**이유.** 같은 파일 엣지를 그냥 추가하면 `detectHighFanOut`(나가는 FUNCTION_CALL 수를 셈)이 부풀어 HIGH_FAN_OUT 경고가 증가하는 교차영향이 발생.
+
+**결정: `sameFile:true` 마커 엣지.**
+- (탈락) 같은 파일 엣지를 일반 엣지로 생성 → DEAD_CODE/ASYNC는 고쳐지나 HIGH_FAN_OUT 경고량이 의도치 않게 변동.
+- (채택) 같은 파일 엣지에 `sameFile:true` 메타 부여 → `detectDeadCode`는 incoming으로 카운트(오탐 해소), `detectAsyncSelfCalls`는 filePath 비교로 사용(부활), `detectHighFanOut`만 `isSameFileEdge` 가드로 제외(경고량 보존, 부작용 0). 자기 자신 재귀(`callerFuncId == calleeId`)는 엣지 미생성 — 외부 호출 없는 재귀 전용 함수가 DEAD_CODE에서 부활하는 것 방지. 같은 파일은 같은 도메인이라 CROSS_DOMAIN_CALL은 자연 제외(srcDomain==tgtDomain).
+- 추가는 기존 cross-file 매칭 루프와 독립(surgical) — 동명 함수가 같은 파일·타 파일 양쪽에 있으면 sameFile 엣지 + 기존 cross-file 엣지가 공존하나, DEAD_CODE/ASYNC엔 무해하고 HIGH_FAN_OUT은 cross-file만 카운트(기존 동작 불변).
+
+**결과.** GraphBuilder에 sameFile 엣지 생성 블록 추가, GraphWarningService에 `isSameFileEdge` 가드. 회귀 테스트: GraphBuilderTest 2종(sameFile 엣지 생성·재귀 자기호출 미생성 — 기존 "같은 파일 엣지 미생성" 테스트를 새 의도로 갱신), GraphWarningServiceTest 4종(DEAD_CODE 제외·ASYNC 발화·HIGH_FAN_OUT sameFile 제외·일반 엣지 발화 회귀). 전체 백엔드 테스트 통과. ⚠️ 라이브 재검증(백엔드 기동 후 codeprint 자기 재분석 → hmacSha256Hex no longer dead)은 서버 가동 필요로 별도 수행.
