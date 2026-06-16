@@ -1596,6 +1596,117 @@ class StaticCodeAnalyzerTest {
                 .doesNotContain("plain");
     }
 
+    // ── Ruby / PHP / Swift DB·API 감지 ────────────────────────────────────────
+
+    @Test
+    @DisplayName("Ruby ActiveRecord 상속 클래스에서 DB 테이블명을 추출한다")
+    void Ruby_ActiveRecord_DB테이블_추출() throws IOException {
+        Path file = tempDir.resolve("user.rb");
+        Files.writeString(file, """
+                class User < ApplicationRecord
+                end
+
+                class OrderItem < ActiveRecord::Base
+                end
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Ruby");
+
+        assertThat(result.dbTables()).extracting(DbTableInfo::tableName)
+                .containsExactlyInAnyOrder("users", "order_items");
+    }
+
+    @Test
+    @DisplayName("Ruby Rails routes.rb에서 API 엔드포인트를 추출한다")
+    void Ruby_Rails_라우팅_API_추출() throws IOException {
+        Path file = tempDir.resolve("routes.rb");
+        Files.writeString(file, """
+                Rails.application.routes.draw do
+                  get '/users', to: 'users#index'
+                  post '/users', to: 'users#create'
+                  delete '/users/:id', to: 'users#destroy'
+                end
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Ruby");
+
+        assertThat(result.controllerMappings())
+                .contains("GET:/users", "POST:/users", "DELETE:/users/:id");
+    }
+
+    @Test
+    @DisplayName("PHP Eloquent Model 상속 클래스에서 DB 테이블명을 추출한다")
+    void PHP_Eloquent_DB테이블_추출() throws IOException {
+        Path file = tempDir.resolve("User.php");
+        Files.writeString(file, """
+                <?php
+                class User extends Model
+                {
+                }
+
+                class Post extends Eloquent
+                {
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "PHP");
+
+        assertThat(result.dbTables()).extracting(DbTableInfo::tableName)
+                .containsExactlyInAnyOrder("users", "posts");
+    }
+
+    @Test
+    @DisplayName("PHP Laravel Route::get/post에서 API 엔드포인트를 추출한다")
+    void PHP_Laravel_라우팅_API_추출() throws IOException {
+        Path file = tempDir.resolve("routes.php");
+        Files.writeString(file, """
+                <?php
+                Route::get('/users', [UserController::class, 'index']);
+                Route::post('/users', [UserController::class, 'store']);
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "PHP");
+
+        assertThat(result.controllerMappings())
+                .contains("GET:/users", "POST:/users");
+    }
+
+    @Test
+    @DisplayName("Swift NSManagedObject 상속 클래스에서 DB 테이블명을 추출한다")
+    void Swift_CoreData_NSManagedObject_추출() throws IOException {
+        Path file = tempDir.resolve("User+CoreDataClass.swift");
+        Files.writeString(file, """
+                import CoreData
+
+                class User: NSManagedObject {
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Swift");
+
+        assertThat(result.dbTables()).extracting(DbTableInfo::tableName)
+                .contains("user");
+    }
+
+    @Test
+    @DisplayName("Swift Vapor router.get/post에서 API 엔드포인트를 추출한다")
+    void Swift_Vapor_라우팅_API_추출() throws IOException {
+        Path file = tempDir.resolve("routes.swift");
+        Files.writeString(file, """
+                import Vapor
+
+                func routes(_ app: Application) throws {
+                    app.get("users") { req in ... }
+                    app.post("users") { req in ... }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Swift");
+
+        assertThat(result.controllerMappings())
+                .contains("GET:users", "POST:users");
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {
