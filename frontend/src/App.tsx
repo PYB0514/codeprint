@@ -21,6 +21,7 @@ const PaymentCancelPage = lazy(() => import('./pages/PaymentCancelPage'))
 const ChangelogPage = lazy(() => import('./pages/ChangelogPage'))
 const HowItWorksPage = lazy(() => import('./pages/HowItWorksPage'))
 const EvolutionPage = lazy(() => import('./pages/EvolutionPage'))
+const DogfoodingPage = lazy(() => import('./pages/DogfoodingPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
 const ContactPage = lazy(() => import('./pages/ContactPage'))
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="/changelog" element={<ChangelogPage />} />
           <Route path="/how-it-works" element={<HowItWorksPage />} />
           <Route path="/evolution" element={<EvolutionPage />} />
+          <Route path="/dogfooding" element={<DogfoodingPage />} />
           <Route path="/projects/:projectId/diff" element={<DiffPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />

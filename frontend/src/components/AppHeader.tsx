@@ -28,6 +28,14 @@ interface UserSearchResult {
   avatarUrl: string
 }
 
+// "서비스" 드롭다운에 묶이는 정보성 페이지 링크
+const SERVICE_LINKS = [
+  { label: '작동 방식', path: '/how-it-works' },
+  { label: '패치노트', path: '/changelog' },
+  { label: '발전사', path: '/evolution' },
+  { label: '도그푸딩', path: '/dogfooding' },
+]
+
 // 공통 앱 헤더 — 어느 페이지에서든 <AppHeader /> 한 줄로 동작
 export default function AppHeader({ onLogin }: Props) {
   const navigate = useNavigate()
@@ -142,15 +150,26 @@ export default function AppHeader({ onLogin }: Props) {
         <button onClick={() => navigate('/community')} className="text-gray-400 hover:text-white transition-colors">
           커뮤니티
         </button>
-        <button onClick={() => navigate('/changelog')} className="text-gray-400 hover:text-white transition-colors">
-          패치노트
-        </button>
-        <button onClick={() => navigate('/evolution')} className="text-gray-400 hover:text-white transition-colors">
-          발전사
-        </button>
-        <button onClick={() => navigate('/how-it-works')} className="text-gray-400 hover:text-white transition-colors">
-          작동 방식
-        </button>
+        {/* 서비스 드롭다운 — 호버 시 아래로 펼침 */}
+        <div className="relative group">
+          <button className="text-gray-400 group-hover:text-white transition-colors flex items-center gap-1">
+            서비스
+            <span className="text-[9px] text-gray-600 group-hover:text-gray-400">▾</span>
+          </button>
+          <div className="absolute left-1/2 -translate-x-1/2 top-full pt-3 hidden group-hover:block z-50">
+            <div className="w-36 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl overflow-hidden py-1">
+              {SERVICE_LINKS.map((link) => (
+                <button
+                  key={link.path}
+                  onClick={() => navigate(link.path)}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                >
+                  {link.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
         <button onClick={() => navigate('/teams')} className="text-gray-400 hover:text-white transition-colors">
           팀
         </button>

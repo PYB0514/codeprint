@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.86.0',
+    date: '2026-06-16',
+    title: '도그푸딩 페이지 — Codeprint가 스스로 잡은 결함 공개',
+    type: 'feature',
+    items: [
+      { category: '페이지', desc: '"도그푸딩" 페이지 신설 — Codeprint 분석 엔진이 자기 코드의 실제 구조 결함을 스스로 적발한 사례를 공개. 컴파일·테스트·코드 리뷰를 통과한 코드에서 Codeprint만 잡은 결함만 기록(오탐 제외). 대표 사례는 PR 리뷰 기능이 자기 자신의 DDD 위반을 잡은 케이스' },
+      { category: '헤더', desc: '상단 헤더의 작동 방식·패치노트·발전사·도그푸딩 4개를 "서비스" 메뉴 하나로 묶음 — 마우스를 올리면 아래로 펼쳐지는 드롭다운. 헤더가 길어지던 것을 정리' },
+    ],
+  },
+  {
     version: 'v0.85.1',
     date: '2026-06-16',
     title: '도메인 뷰 레이아웃 개편 — DB 중앙 + 도메인 그리드 배치',
