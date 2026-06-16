@@ -513,3 +513,21 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 - 트레이드오프: `@Transactional @Async public ...`처럼 @Async가 같은 줄 두 번째 어노테이션이면 누락 — 실코드에서 드물고(대개 각 어노테이션 별도 줄) 오탐 제거 이득이 큼.
 
 **결과.** 정규식 앵커 변경 1줄. 회귀 테스트 StaticCodeAnalyzerTest 2종(`Java_Async_어노테이션_감지` 실제 감지 유지, `Java_주석_속_Async_텍스트_제외` 주석·문자열 미감지). self-dogfooding 라이브 재분석을 끝까지 추적한 덕에 B-13→B-14→B-15 연쇄 적발 — 정규식 분석기의 코드/주석 미구분 한계가 드러난 사례.
+
+### Go 리시버 메서드 + 동일 패키지 CYCLIC 오탐 해소 (2026-06-16, Phase 1 #2)
+
+**문제 (gin 베이스라인 #285, 둘 다 Go 한정 오탐).**
+- DEAD_CODE 10건: `decodeJSON`·`validate`·`mapHeader`·`decode*` 등이 미호출로 오탐. 소스 대조 결과 전부 실제 호출됨.
+- CYCLIC_IMPORT 10건: `package binding`의 form/uri/query/... 파일이 단일 노드 자기순환으로 오탐.
+
+**근본 원인 (소스 대조로 확정).**
+- **DEAD_CODE**: Go 함수 정규식 `^func\s+(?:\(\w+\s+\*?\w+\)\s+)?(\w+)\s*\(`이 리시버를 `(변수 타입)` 2토큰으로만 인정. 그러나 gin은 리시버 변수명을 생략한 **타입 전용 리시버** `func (jsonBinding) Bind(...)`를 다수 사용 → `Bind`/`Name`/`BindBody` 메서드가 함수로 추출되지 않음 → 그 본문이 스캔되지 않아 본문 안의 `decodeJSON(...)` 호출이 어느 caller에도 귀속되지 못함 → decodeJSON 미호출로 오탐. (받는 호출이 아니라 *호출하는 쪽* 함수가 누락된 게 핵심.)
+- **CYCLIC**: Go import 정규식이 `"([\w./]+)"` — **모든 따옴표 문자열 리터럴**을 import로 추출. `uri.go`의 `"uri"`, `query.go`의 `"query"` 등이 `isImportMatch`로 자기 파일명과 매칭돼 자기 자신 IMPORT 엣지 생성 → 단일 노드 자기순환. (실제 Go import는 디렉터리 패키지 경로라 로컬 `.go` 파일과 절대 매칭 안 됨 → 로컬 파일 간 Go IMPORT 엣지는 전부 이 노이즈였음.)
+
+**결정: detector에서 제외(원안)가 아니라 소스(추출기)에서 수정.**
+원래 #285 권고는 "동일 패키지 CYCLIC을 cycle detection에서 제외"였으나, 그러면 시각화에는 거짓 import 화살표가 그대로 남는다. 추출기를 고치면 가짜 엣지 자체가 사라져 경고·시각화 모두 정상화되고 두 파이프라인(GraphBuilder·LocalAnalyzer)이 공유하는 `StaticCodeAnalyzer` 한 곳만 바꾸면 된다.
+1. **Go 함수 정규식** → 리시버 그룹을 `\(\s*\*?\w+(?:\s+\*?\w+)?\s*\)`로 확장. `(변수 타입)`·`(타입)`·`(*타입)` 모두 인정.
+2. **Go import 추출** → `extractGoImports`: `import (...)` 블록과 `import "x"` 단일 문 내부의 경로만 추출(별칭·blank import 포함). 임의 리터럴 차단.
+3. **detectDeadCode 다형성 디스패치 제외** → ①이 새로 추출하는 `Bind`/`Name`(동명 다중 구현, 인터페이스 디스패치)이 신규 DEAD_CODE 오탐이 되는 걸 방지. 동명 함수 ≥2 정의 + 그 이름으로 호출 존재 시 제외. 단일 정의 미호출은 여전히 감지(과잉 억제 방지).
+
+**결과.** analyzeLocal 재측정(gin d75fcd4): **CYCLIC 10→0, DEAD_CODE 10→1.** 남은 1건은 `defaultHandleRecovery` — `CustomRecoveryWithWriter(out, defaultHandleRecovery)`처럼 **값으로 전달되는 콜백 참조**(호출 `()` 아님)라 별개 오탐 카테고리(범위 외, value-reference 추적 필요). HIGH_FAN_OUT 25→26(타입전용 리시버가 새로 스캔돼 실제 고팬아웃 1건 노출 — Phase 1 #3 테스트 함수 제외 영역). TDD: StaticCodeAnalyzerTest 3종(타입전용 리시버 추출·이름있는 리시버 회귀·import 리터럴 제외) + GraphWarningServiceTest 1종(다형성 제외) + GraphBuilderTest 1종(실제 StaticCodeAnalyzer→GraphBuilder→GraphWarningService 프로덕션 경로 교차검증: decodeJSON 비-DEAD_CODE + 자기순환 없음). 전체 백엔드 테스트 + 프론트 tsc 통과.

@@ -160,8 +160,9 @@ public class StaticCodeAnalyzer {
                         Pattern.MULTILINE);
             case "Python" ->
                 Pattern.compile("^\\s*(?:async\\s+)?def\\s+(\\w+)\\s*\\(", Pattern.MULTILINE);
+            // Go: 리시버는 (변수 타입)·(타입)·(*타입) 모두 허용 — 타입 전용 리시버 func (jsonBinding) Bind() 도 인식
             case "Go" ->
-                Pattern.compile("^func\\s+(?:\\(\\w+\\s+\\*?\\w+\\)\\s+)?(\\w+)\\s*\\(", Pattern.MULTILINE);
+                Pattern.compile("^func\\s+(?:\\(\\s*\\*?\\w+(?:\\s+\\*?\\w+)?\\s*\\)\\s+)?(\\w+)\\s*\\(", Pattern.MULTILINE);
             case "Rust" ->
                 Pattern.compile("^\\s*(?:pub\\s+)?(?:async\\s+)?fn\\s+(\\w+)\\s*\\(", Pattern.MULTILINE);
             case "Ruby" ->
@@ -186,6 +187,9 @@ public class StaticCodeAnalyzer {
 
     // 소스 코드에서 import 경로 목록을 추출
     private List<String> extractImports(String content, String language) {
+        // Go는 import 문/블록 내부의 패키지 경로만 추출 — 임의 문자열 리터럴("uri","query" 등) 오인 차단
+        if ("Go".equals(language)) return extractGoImports(content);
+
         Pattern pattern = switch (language) {
             case "Java" -> Pattern.compile("^import\\s+([\\w.]+);", Pattern.MULTILINE);
             case "Kotlin" -> Pattern.compile("^import\\s+([\\w.]+)", Pattern.MULTILINE);
@@ -193,7 +197,6 @@ public class StaticCodeAnalyzer {
                 Pattern.compile("from\\s+['\"]([^'\"]+)['\"]", Pattern.MULTILINE);
             case "Python" ->
                 Pattern.compile("^(?:from\\s+([\\w.]+)\\s+import|import\\s+([\\w.,\\s]+))", Pattern.MULTILINE);
-            case "Go" -> Pattern.compile("\"([\\w./]+)\"", Pattern.MULTILINE);
             case "Rust" -> Pattern.compile("^\\s*use\\s+([\\w:]+)", Pattern.MULTILINE);
             case "C#" -> Pattern.compile("^using\\s+([\\w.]+);", Pattern.MULTILINE);
             case "Ruby" -> Pattern.compile("^\\s*require(?:_relative)?\\s+['\"]([^'\"]+)['\"]", Pattern.MULTILINE);
@@ -213,6 +216,23 @@ public class StaticCodeAnalyzer {
                 }
             }
         }
+        return result;
+    }
+
+    private static final Pattern GO_IMPORT_BLOCK = Pattern.compile("(?s)^import\\s*\\((.*?)\\)", Pattern.MULTILINE);
+    private static final Pattern GO_IMPORT_SINGLE = Pattern.compile("^import\\s+(?:[\\w.]+\\s+|_\\s+)?\"([^\"]+)\"", Pattern.MULTILINE);
+    private static final Pattern GO_QUOTED_PATH = Pattern.compile("\"([^\"]+)\"");
+
+    // Go import 경로 추출 — import 블록·단일 import 문 안의 패키지 경로만 (별칭/blank import 포함)
+    private List<String> extractGoImports(String content) {
+        List<String> result = new ArrayList<>();
+        Matcher block = GO_IMPORT_BLOCK.matcher(content);
+        while (block.find()) {
+            Matcher path = GO_QUOTED_PATH.matcher(block.group(1));
+            while (path.find()) result.add(path.group(1).trim());
+        }
+        Matcher single = GO_IMPORT_SINGLE.matcher(content);
+        while (single.find()) result.add(single.group(1).trim());
         return result;
     }
 

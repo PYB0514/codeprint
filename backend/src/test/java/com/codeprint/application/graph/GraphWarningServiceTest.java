@@ -359,6 +359,21 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("동명 함수 다중 정의 + 호출 존재 — 리시버/인터페이스 다형성 디스패치로 보고 미연결 구현체도 DEAD_CODE 제외")
+    void deadCode_polymorphicDispatch_excluded() {
+        // 회귀: Go func (T) Bind() 다중 구현 중 정적 분석이 한 구현체로만 엣지 연결 → 나머지가 거짓 DEAD_CODE
+        Node caller = funcNodeWithPath("handle", "/gin/context.go");
+        Node bindJson = funcNodeWithPath("Bind", "/gin/binding/json.go");
+        Node bindXml = funcNodeWithPath("Bind", "/gin/binding/xml.go");
+        // 호출은 json 구현체로만 연결됨 — xml 구현체엔 인바운드 엣지 없음
+        Edge call = callEdge(caller.getId(), bindJson.getId(), false);
+
+        List<Map<String, Object>> warnings = service.detect(List.of(caller, bindJson, bindXml), List.of(call));
+        assertThat(isDeadCode(warnings, bindJson.getId())).isFalse();
+        assertThat(isDeadCode(warnings, bindXml.getId())).isFalse();
+    }
+
+    @Test
     @DisplayName("호출되지 않는 일반 함수(shared/) — DEAD_CODE 여전히 감지 (과잉 억제 방지)")
     void deadCode_genuinelyUnused_stillDetected() {
         Node unused = funcNodeWithPath("monthlyPrice", "/com/example/shared/plan/UserPlan.java");

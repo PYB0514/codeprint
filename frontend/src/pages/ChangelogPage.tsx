@@ -11,6 +11,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.86.4',
+    date: '2026-06-16',
+    title: 'Go 분석 정확도 개선 — 데드 코드·순환 의존 오탐 제거',
+    type: 'fix',
+    items: [
+      { category: '분석', desc: 'Go에서 리시버 변수명을 생략한 메서드(예: func (jsonBinding) Bind())를 함수로 인식하지 못해, 그 안에서만 호출되는 함수를 "데드 코드(아무도 호출 안 함)"로 잘못 표시하던 오탐을 제거 — 이제 타입만 적힌 리시버 메서드도 정상 분석' },
+      { category: '경고', desc: 'Go의 같은 패키지(같은 폴더) 파일에 거짓 "순환 의존" 경고가 뜨던 문제를 수정 — 코드 안의 평범한 문자열("uri", "query" 등)을 import 경로로 오인하던 것을 바로잡아, 실제 import 문만 의존 관계로 인식' },
+      { category: '경고', desc: '인터페이스·리시버 메서드처럼 같은 이름의 구현이 여러 개인 함수가 호출되고 있으면, 분석이 한 구현에만 연결하더라도 나머지를 데드 코드로 오인하지 않도록 보강' },
+    ],
+  },
+  {
     version: 'v0.86.3',
     date: '2026-06-16',
     title: '분석 정확도 개선 — 주석 속 @Async 텍스트 오인 제거',
