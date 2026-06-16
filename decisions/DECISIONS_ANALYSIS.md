@@ -478,4 +478,21 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 - (채택) 같은 파일 엣지에 `sameFile:true` 메타 부여 → `detectDeadCode`는 incoming으로 카운트(오탐 해소), `detectAsyncSelfCalls`는 filePath 비교로 사용(부활), `detectHighFanOut`만 `isSameFileEdge` 가드로 제외(경고량 보존, 부작용 0). 자기 자신 재귀(`callerFuncId == calleeId`)는 엣지 미생성 — 외부 호출 없는 재귀 전용 함수가 DEAD_CODE에서 부활하는 것 방지. 같은 파일은 같은 도메인이라 CROSS_DOMAIN_CALL은 자연 제외(srcDomain==tgtDomain).
 - 추가는 기존 cross-file 매칭 루프와 독립(surgical) — 동명 함수가 같은 파일·타 파일 양쪽에 있으면 sameFile 엣지 + 기존 cross-file 엣지가 공존하나, DEAD_CODE/ASYNC엔 무해하고 HIGH_FAN_OUT은 cross-file만 카운트(기존 동작 불변).
 
-**결과.** GraphBuilder에 sameFile 엣지 생성 블록 추가, GraphWarningService에 `isSameFileEdge` 가드. 회귀 테스트: GraphBuilderTest 2종(sameFile 엣지 생성·재귀 자기호출 미생성 — 기존 "같은 파일 엣지 미생성" 테스트를 새 의도로 갱신), GraphWarningServiceTest 4종(DEAD_CODE 제외·ASYNC 발화·HIGH_FAN_OUT sameFile 제외·일반 엣지 발화 회귀). 전체 백엔드 테스트 통과. ⚠️ 라이브 재검증(백엔드 기동 후 codeprint 자기 재분석 → hmacSha256Hex no longer dead)은 서버 가동 필요로 별도 수행.
+**결과.** GraphBuilder에 sameFile 엣지 생성 블록 추가, GraphWarningService에 `isSameFileEdge` 가드. 회귀 테스트: GraphBuilderTest 2종(sameFile 엣지 생성·재귀 자기호출 미생성 — 기존 "같은 파일 엣지 미생성" 테스트를 새 의도로 갱신), GraphWarningServiceTest 4종(DEAD_CODE 제외·ASYNC 발화·HIGH_FAN_OUT sameFile 제외·일반 엣지 발화 회귀). 전체 백엔드 테스트 통과.
+
+**★ 라이브 재검증(Context 57, codeprint 자기 재분석 그래프 `ce1c19a9`).** 프로덕션 GraphBuilder로 재빌드 → sameFile 엣지 **337개**(이전 0), `hmacSha256Hex` incoming sameFile 엣지 1개 → DEAD_CODE에서 빠짐 확정(`/api/share/{id}/graph` 경고 JSON에 hmacSha256Hex DEAD_CODE 0건, 남은 1건은 진짜 미사용 `monthlyPrice`). **그러나 동일 검증이 ASYNC_SELF_CALL 27건을 노출 — 전부 TS 오탐(B-14 아래 항목).** 라이브 검증이 단위 테스트가 못 잡은 결함을 적발한 사례.
+
+---
+
+### ASYNC_SELF_CALL을 JVM 프록시 언어로 게이팅 — TS/Python async 오탐 차단 (2026-06-16, B-14, B-13 후속)
+
+**문제.** B-13 fix가 ASYNC_SELF_CALL(프로덕션 no-op)을 부활시키자, codeprint 자기 재분석에서 27건이 발화했는데 **전부 TypeScript 프론트 함수**(`handleReanalyze→handleStartAnalysis` 등)였다. 라이브 검증으로만 드러남(단위 테스트는 Java 픽스처만 써서 잠복).
+
+**이유.** `detectAsyncSelfCalls`가 노드 언어와 무관하게 `isAsync` 메타만 봤다. `extractAsyncMethods`(StaticCodeAnalyzer:791)는 Java `@Async`뿐 아니라 Python `async def`·TS `async function`도 isAsync로 마킹(PR #214 다국어 async 확장). 그러나 ASYNC_SELF_CALL의 의미("Spring `@Async` 프록시를 같은 빈 내부 `this` 호출로 우회 → 비동기 무시")는 **Spring AOP 프록시 기반 JVM 언어에만** 성립한다. JS/TS/Python의 async는 프록시 래핑이 없어 같은 파일/모듈 내 async 함수 직접 호출이 완전히 정상이고 비동기가 무시되지 않는다.
+
+**결정: `isProxyAsyncLanguage` 게이트(Java/Kotlin, 대소문자 무시).**
+- async 타깃 노드 언어가 JVM 프록시 언어(Java/Kotlin)일 때만 ASYNC_SELF_CALL 후보로 수집. isAsync 메타 자체는 유지(detectDeadCode의 async 제외 등 타 용도에 영향 없게) — 경고 수집 단계에서만 언어 게이트.
+- ⚠️ 대소문자 무시 필수: 기존 테스트는 소문자 `"java"`로 노드 생성, 프로덕션은 `"Java"`. `equalsIgnoreCase`로 둘 다 커버.
+- (탈락) `extractAsyncMethods`에서 TS/Python을 isAsync 마킹 자체에서 제외 — DEAD_CODE async 제외 등 다른 정당한 용도까지 깨질 위험. 경고별 게이트가 최소 침습.
+
+**결과.** `isProxyAsyncLanguage` 헬퍼 + detectAsyncSelfCalls 수집 루프에 언어 게이트. 회귀 테스트 `asyncSelfCall_typescript_excluded`(TS async 같은파일 호출 → ASYNC_SELF_CALL 0). 교훈(규칙 4): 단위 테스트 통과 ≠ 런타임 정상 — 라이브 자기 재분석이 TS 오탐 27건을 적발.

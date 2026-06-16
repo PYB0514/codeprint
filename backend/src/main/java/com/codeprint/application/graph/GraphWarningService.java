@@ -182,6 +182,11 @@ public class GraphWarningService {
         return warnings;
     }
 
+    // @Async 프록시 우회가 실재하는 언어인지 — Spring AOP 프록시 기반 JVM 언어(Java/Kotlin)만 해당
+    private boolean isProxyAsyncLanguage(String language) {
+        return "java".equalsIgnoreCase(language) || "kotlin".equalsIgnoreCase(language);
+    }
+
     // 같은 파일 내 @Async 메서드로 향하는 직접 FUNCTION_CALL — 프록시 우회로 @Async 무시됨
     private List<Map<String, Object>> detectAsyncSelfCalls(List<Node> nodes, List<Edge> edges) {
         // isAsync=true인 FUNCTION 노드 수집 (nodeId → filePath)
@@ -194,7 +199,8 @@ public class GraphWarningService {
             funcFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
             nameMap.put(n.getId(), n.getName());
             Map<String, Object> meta = n.getMetadata();
-            if (meta != null && Boolean.TRUE.equals(meta.get("isAsync"))) {
+            // Spring @Async 프록시 우회는 JVM 프록시 기반 언어에만 해당 — JS/TS/Python의 async는 프록시가 없어 같은 파일 호출이 정상
+            if (meta != null && Boolean.TRUE.equals(meta.get("isAsync")) && isProxyAsyncLanguage(n.getLanguage())) {
                 asyncFuncFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
             }
         }

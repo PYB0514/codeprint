@@ -492,6 +492,20 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("TypeScript async 함수의 같은 파일 호출 — ASYNC_SELF_CALL 제외 (B-14: 프록시 없는 언어 오탐 방지)")
+    void asyncSelfCall_typescript_excluded() {
+        // TS/JS async는 Spring @Async 같은 프록시 우회가 없어 같은 파일 호출이 정상 — 오탐이면 안 됨
+        String file = "/frontend/src/pages/DashboardPage.tsx";
+        Node caller = Node.create(graphId, NodeType.FUNCTION, "handleReanalyze", file, "TypeScript");
+        Node asyncTarget = Node.create(graphId, NodeType.FUNCTION, "handleStartAnalysis", file, "TypeScript");
+        asyncTarget.updateMetadata(Map.of("isAsync", true));
+        Edge call = sameFileCallEdge(caller.getId(), asyncTarget.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(caller, asyncTarget), List.of(call));
+        assertThat(warnings.stream().filter(w -> "ASYNC_SELF_CALL".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
     @DisplayName("sameFile 마커 엣지로 @Async 자기 호출 — ASYNC_SELF_CALL 발화 (프로덕션 no-op 해소)")
     void asyncSelfCall_sameFileMarkerEdge_detected() {
         String file = "/com/example/infrastructure/pr/PrReviewRunner.java";
