@@ -466,6 +466,75 @@ class GraphWarningServiceTest {
         assertThat(dead).allSatisfy(w -> assertThat((List<?>) w.get("nodeIds")).isNotEmpty());
     }
 
+    // --- B-13: 같은 파일 호출 sameFile 엣지 (DEAD_CODE 오탐·ASYNC no-op·HIGH_FAN_OUT 보존) ---
+
+    // sameFile 마커가 붙은 같은 파일 내 FUNCTION_CALL 엣지
+    private Edge sameFileCallEdge(UUID src, UUID tgt) {
+        Edge e = Edge.create(graphId, src + "->sf->" + tgt, EdgeType.FUNCTION_CALL, src, tgt);
+        e.updateMetadata(Map.of("sameFile", true));
+        return e;
+    }
+
+    // HIGH_FAN_OUT 타입 경고만 필터
+    private List<Map<String, Object>> highFanOut(List<Map<String, Object>> warnings) {
+        return warnings.stream().filter(w -> "HIGH_FAN_OUT".equals(w.get("type"))).toList();
+    }
+
+    @Test
+    @DisplayName("같은 파일 내에서만 호출되는 함수 — sameFile 엣지가 있으면 DEAD_CODE 제외 (B-13 오탐 해소)")
+    void deadCode_sameFileCalled_excluded() {
+        Node caller = funcNodeWithPath("verifySignature", "/com/example/shared/webhook/SignatureVerifier.java");
+        Node helper = funcNodeWithPath("hmacSha256Hex", "/com/example/shared/webhook/SignatureVerifier.java");
+        Edge sameFile = sameFileCallEdge(caller.getId(), helper.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(caller, helper), List.of(sameFile));
+        assertThat(isDeadCode(warnings, helper.getId())).isFalse();
+    }
+
+    @Test
+    @DisplayName("sameFile 마커 엣지로 @Async 자기 호출 — ASYNC_SELF_CALL 발화 (프로덕션 no-op 해소)")
+    void asyncSelfCall_sameFileMarkerEdge_detected() {
+        String file = "/com/example/infrastructure/pr/PrReviewRunner.java";
+        Node caller = funcNodeWithPath("trigger", file);
+        Node asyncTarget = asyncFuncNode("runAsync", file);
+        Edge sameFile = sameFileCallEdge(caller.getId(), asyncTarget.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(caller, asyncTarget), List.of(sameFile));
+        assertThat(warnings.stream().filter(w -> "ASYNC_SELF_CALL".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("sameFile 엣지 8개는 HIGH_FAN_OUT 카운트에서 제외 — 경고 없음 (경고량 보존)")
+    void highFanOut_sameFileEdges_excluded() {
+        Node caller = funcNodeWithPath("orchestrate", "/com/example/shared/Big.java");
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        nodes.add(caller);
+        java.util.List<Edge> edges = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            Node callee = funcNodeWithPath("step" + i, "/com/example/shared/Big.java");
+            nodes.add(callee);
+            edges.add(sameFileCallEdge(caller.getId(), callee.getId()));
+        }
+        List<Map<String, Object>> warnings = service.detect(nodes, edges);
+        assertThat(highFanOut(warnings)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("일반(비sameFile) FUNCTION_CALL 8개는 HIGH_FAN_OUT 발화 — 회귀 방지")
+    void highFanOut_normalEdges_stillDetected() {
+        Node caller = funcNodeWithPath("orchestrate", "/com/example/shared/Big.java");
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        nodes.add(caller);
+        java.util.List<Edge> edges = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            Node callee = funcNodeWithPath("step" + i, "/com/example/shared/Dep" + i + ".java");
+            nodes.add(callee);
+            edges.add(callEdge(caller.getId(), callee.getId(), false));
+        }
+        List<Map<String, Object>> warnings = service.detect(nodes, edges);
+        assertThat(highFanOut(warnings)).hasSize(1);
+    }
+
     // --- fingerprint (suppress 식별자) ---
 
     @Test

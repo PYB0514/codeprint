@@ -615,6 +615,12 @@ public class GraphWarningService {
         return null;
     }
 
+    // 엣지가 같은 파일 내 호출(sameFile 마커)인지 여부
+    private boolean isSameFileEdge(Edge e) {
+        Map<String, Object> meta = e.getMetadata();
+        return meta != null && Boolean.TRUE.equals(meta.get("sameFile"));
+    }
+
     // FUNCTION 노드가 7개 초과 FUNCTION_CALL 아웃바운드를 가질 때 — 과도한 책임 (High Fan-Out)
     private List<Map<String, Object>> detectHighFanOut(List<Node> nodes, List<Edge> edges) {
         final int THRESHOLD = 7;
@@ -628,7 +634,9 @@ public class GraphWarningService {
             }
         }
         for (Edge e : edges) {
-            if (e.getType() == EdgeType.FUNCTION_CALL && fanOutMap.containsKey(e.getSourceNodeId())) {
+            // 같은 파일 내 호출(sameFile)은 fan-out 책임 과다와 무관 — 제외해 경고량 보존
+            if (e.getType() == EdgeType.FUNCTION_CALL && fanOutMap.containsKey(e.getSourceNodeId())
+                    && !isSameFileEdge(e)) {
                 fanOutMap.merge(e.getSourceNodeId(), 1, Integer::sum);
             }
         }
