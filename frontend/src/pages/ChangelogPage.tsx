@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.86.2',
+    date: '2026-06-16',
+    title: '경고 정확도 개선 — 프론트엔드 async 함수 오탐 제거',
+    type: 'fix',
+    items: [
+      { category: '경고', desc: '"@Async 자기 호출" 경고가 TypeScript/JavaScript·Python의 async 함수에까지 잘못 붙던 오탐을 제거 — 이 경고는 Spring의 @Async 프록시 우회(같은 클래스 안에서 직접 호출하면 비동기가 무시되는 자바 특유 현상)에만 해당하고, JS·파이썬의 async에는 그런 프록시가 없어 정상 동작이기 때문. 이제 Java/Kotlin 코드에서만 이 경고를 표시' },
+    ],
+  },
+  {
     version: 'v0.86.1',
     date: '2026-06-16',
     title: '경고 정확도 개선 — 같은 파일 안에서만 쓰이는 함수 오탐 제거',
