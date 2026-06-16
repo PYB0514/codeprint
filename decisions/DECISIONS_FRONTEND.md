@@ -374,3 +374,17 @@ const fetchGraph = useCallback(async () => {
 - 문제: 파일을 드래그하면 파일만 이동하고 함수는 제자리에 남아 빈 박스가 됐고, 되돌릴 수 없었다.
 - 이유: 도메인 뷰에서 함수 노드가 파일이 아니라 **도메인 섹션의 자식**으로 배치돼, 파일 드래그가 함수를 데려가지 못했다. 드래그 위치는 서버 저장되지만 레이아웃 재계산 시 무시되므로(`posX/posY` 미적용) 리로드로만 복구 가능했다.
 - 결과: 도메인 뷰에서도 함수를 **파일의 자식**(`parentId: file.id`, `extent: 'parent'`)으로 배치(계층형 뷰와 동일). 렌더 위치는 동일하되 파일 드래그 시 함수가 자식으로 함께 이동 → 분리 불가능.
+
+---
+
+## 대형 레포 렌더링 — 뷰포트 컬링 (Phase 2 #1, perf/viewport-culling)
+
+**문제:** 파일·함수 수백 개의 대형 그래프에서 렌더가 멈춘다(자기 그래프 319파일도 freeze — Context55/58 북극성). React Flow가 화면 밖 노드까지 전부 DOM에 그려, 노드 수에 비례해 DOM/레이아웃 비용이 폭발한다.
+
+**이유(측정-우선, Rule 11):** 병목의 1차 원인은 "전부 렌더". React Flow v12(@xyflow/react)는 `onlyRenderVisibleElements` prop으로 **뷰포트에 들어온 노드만 렌더**하는 내장 컬링을 제공한다. 노드에 이미 명시적 width/height(style)가 있어 v12가 측정 후 정확히 컬링한다(전제 충족).
+
+**대안 탈락:** 수동 가상화(react-window류)나 displayNodes에서 직접 뷰포트 필터링 — 부모/자식(섹션→파일→함수) sub-flow 좌표 계산과 fitView·미니맵·엣지 컬링을 직접 재구현해야 해 복잡도·회귀 위험이 크다. 내장 옵션이 한 줄로 동일 효과 + 검증된 경로.
+
+**결과:** GraphPage·ShareGraphPage·DiffPage·CommunityPostGraphPage 4개 그래프 렌더 페이지의 `<ReactFlow>`에 `onlyRenderVisibleElements` 한 줄씩 추가(같은 대형 그래프를 그리므로 일관 적용). `tsc -b` 통과.
+
+**측정 기반 다음 단계 보류:** Phase 2의 도메인 기본 접힘·노드 LOD는 컬링만으로 freeze가 해소되는지 **브라우저 검증 후** 필요성을 재평가한다(투기적 선구현 금지). 검증 포인트: 319파일 freeze 해소 + 부모/자식 sub-flow(그룹 박스·파일 안 함수 노드)가 스크롤·확대 시 정상 렌더되는지.

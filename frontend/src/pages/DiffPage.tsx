@@ -261,6 +261,7 @@ function DiffPageInner() {
           fitView
           minZoom={0.05}
           maxZoom={2}
+          onlyRenderVisibleElements
         >
           <Background color="#1f2937" gap={24} />
           <Controls />
