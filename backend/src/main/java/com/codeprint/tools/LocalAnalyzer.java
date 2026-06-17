@@ -3,11 +3,10 @@ package com.codeprint.tools;
 
 import com.codeprint.application.graph.GraphWarningService;
 import com.codeprint.domain.graph.Edge;
-import com.codeprint.domain.graph.EdgeType;
+import com.codeprint.domain.graph.Graph;
+import com.codeprint.domain.graph.GraphRepository;
 import com.codeprint.domain.graph.Node;
-import com.codeprint.domain.graph.NodeType;
-import com.codeprint.infrastructure.analysis.ColumnInfo;
-import com.codeprint.infrastructure.analysis.DbTableInfo;
+import com.codeprint.infrastructure.analysis.GraphBuilder;
 import com.codeprint.infrastructure.analysis.LanguageDetector;
 import com.codeprint.infrastructure.analysis.ParsedFile;
 import com.codeprint.infrastructure.analysis.SourceFileWalker;
@@ -16,10 +15,9 @@ import com.codeprint.infrastructure.analysis.StaticCodeAnalyzer;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
 
 public class LocalAnalyzer {
@@ -35,7 +33,6 @@ public class LocalAnalyzer {
         List<Path> files = walker.walk(rootDir).files();
         System.out.println("소스 파일 수: " + files.size());
 
-        UUID graphId = UUID.randomUUID();
         List<ParsedFile> parsedFiles = new ArrayList<>();
         for (Path file : files) {
             String lang = LanguageDetector.detect(file.getFileName().toString()).orElse("unknown");
@@ -47,9 +44,14 @@ public class LocalAnalyzer {
         }
         System.out.println("파싱 완료: " + parsedFiles.size() + " 파일");
 
-        List<Node> nodes = new ArrayList<>();
-        List<Edge> edges = new ArrayList<>();
-        buildGraph(graphId, parsedFiles, nodes, edges);
+        // 프로덕션과 동일한 GraphBuilder로 그래프 구성 — 인메모리 Repository로 DB 없이 실행.
+        // 과거 자체 재구현(buildGraph)은 인터페이스→구현체 우선 매칭·sameFile 마커·isFrameworkAnnotated 메타가 빠져
+        // 프로덕션보다 호출 해소가 약했고 미호출 비율이 부풀려져(예: petclinic 19% vs 프로덕션 1%) 임계값 교정에 쓸 수 없었다.
+        InMemoryGraphRepository repo = new InMemoryGraphRepository();
+        GraphBuilder builder = new GraphBuilder(repo);
+        Graph graph = builder.build(UUID.randomUUID(), UUID.randomUUID(), parsedFiles);
+        List<Node> nodes = repo.findNodesByGraphId(graph.getId());
+        List<Edge> edges = repo.findEdgesByGraphId(graph.getId());
         System.out.println("노드: " + nodes.size() + ", 엣지: " + edges.size());
 
         GraphWarningService warningService = new GraphWarningService();
@@ -70,164 +72,81 @@ public class LocalAnalyzer {
         }
     }
 
-    // ParsedFile 목록으로 인메모리 Node/Edge 그래프 생성
-    private static void buildGraph(UUID graphId, List<ParsedFile> parsedFiles,
-                                   List<Node> nodes, List<Edge> edges) {
-        Map<String, UUID> fileNodeIds = new HashMap<>();
-        Map<String, UUID> funcNodeIds = new HashMap<>();
-        Set<String> usedEdgeIds = new HashSet<>();
+    // DB 없이 GraphBuilder를 구동하기 위한 인메모리 Repository — 노드/엣지를 리스트에 수집한다.
+    private static class InMemoryGraphRepository implements GraphRepository {
+        private final List<Graph> graphs = new ArrayList<>();
+        private final List<Node> nodes = new ArrayList<>();
+        private final List<Edge> edges = new ArrayList<>();
 
-        // FILE 노드 + FUNCTION 노드 생성
-        for (ParsedFile pf : parsedFiles) {
-            Node fileNode = Node.create(graphId, NodeType.FILE, extractFileName(pf.filePath()), pf.filePath(), pf.language());
-            if (pf.fileComment() != null) {
-                fileNode.updateMetadata(Map.of("comment", pf.fileComment()));
-            }
-            nodes.add(fileNode);
-            fileNodeIds.put(pf.filePath(), fileNode.getId());
-
-            for (String funcName : pf.functions()) {
-                Node funcNode = Node.create(graphId, NodeType.FUNCTION, funcName, pf.filePath(), pf.language());
-                Map<String, Object> meta = new HashMap<>();
-                meta.put("parentFile", pf.filePath());
-                if (pf.functionComments() != null) {
-                    String comment = pf.functionComments().get(funcName);
-                    if (comment != null) meta.put("comment", comment);
-                }
-                if (pf.asyncMethods() != null && pf.asyncMethods().contains(funcName)) {
-                    meta.put("isAsync", true);
-                }
-                funcNode.updateMetadata(meta);
-                nodes.add(funcNode);
-                funcNodeIds.put(pf.filePath() + "::" + funcName, funcNode.getId());
-
-                String edgeId = extractFileName(pf.filePath()) + "-" + funcName;
-                if (usedEdgeIds.add(edgeId)) {
-                    edges.add(Edge.create(graphId, edgeId, EdgeType.CONTAINS, fileNode.getId(), funcNode.getId()));
-                }
-            }
+        // 그래프 저장
+        @Override
+        public Graph save(Graph graph) {
+            graphs.add(graph);
+            return graph;
         }
 
-        // DB_TABLE 노드
-        Map<String, UUID> entityClassToTableNodeId = new HashMap<>();
-        for (ParsedFile pf : parsedFiles) {
-            for (DbTableInfo table : pf.dbTables()) {
-                Node tableNode = Node.create(graphId, NodeType.DB_TABLE, table.tableName(), pf.filePath(), pf.language());
-                Map<String, Object> tableMeta = new HashMap<>();
-                tableMeta.put("entityClass", table.className());
-
-                // 컬럼 메타 + hasConverter 플래그
-                List<ColumnInfo> cols = pf.entityColumns();
-                if (cols != null && !cols.isEmpty()) {
-                    List<Map<String, String>> colData = new ArrayList<>();
-                    boolean anyConverter = false;
-                    for (ColumnInfo col : cols) {
-                        Map<String, String> c = new HashMap<>();
-                        c.put("fieldName", col.fieldName());
-                        c.put("columnName", col.columnName());
-                        c.put("javaType", col.javaType());
-                        if (col.hasConverter()) {
-                            c.put("hasConverter", "true");
-                            anyConverter = true;
-                        }
-                        colData.add(c);
-                    }
-                    tableMeta.put("columns", colData);
-                    if (anyConverter) tableMeta.put("hasConverter", true);
-                }
-                tableNode.updateMetadata(tableMeta);
-                nodes.add(tableNode);
-                entityClassToTableNodeId.put(table.className(), tableNode.getId());
-            }
+        // ID로 그래프 조회
+        @Override
+        public Optional<Graph> findById(UUID id) {
+            return graphs.stream().filter(g -> g.getId().equals(id)).findFirst();
         }
 
-        // IMPORT 엣지
-        for (ParsedFile pf : parsedFiles) {
-            UUID sourceFileId = fileNodeIds.get(pf.filePath());
-            if (sourceFileId == null) continue;
-            for (String importPath : pf.imports()) {
-                fileNodeIds.entrySet().stream()
-                        .filter(e -> isImportMatch(importPath, e.getKey()))
-                        .findFirst()
-                        .ifPresent(e -> {
-                            String edgeId = extractFileName(pf.filePath()) + "-imports-" + extractFileName(e.getKey());
-                            if (usedEdgeIds.add(edgeId)) {
-                                edges.add(Edge.create(graphId, edgeId, EdgeType.IMPORT, sourceFileId, e.getValue()));
-                            }
-                        });
-            }
+        // 프로젝트 ID로 그래프 목록 조회
+        @Override
+        public List<Graph> findByProjectId(UUID projectId) {
+            return graphs.stream().filter(g -> projectId.equals(g.getProjectId())).toList();
         }
 
-        // FUNCTION_CALL 엣지 (같은 파일 내 함수 호출 포함)
-        Map<String, List<ParsedFile>> interfaceToImplFiles = new HashMap<>();
-        for (ParsedFile pf : parsedFiles) {
-            for (String iface : pf.implementedInterfaces()) {
-                interfaceToImplFiles.computeIfAbsent(iface, k -> new ArrayList<>()).add(pf);
-            }
+        // 그래프 ID로 노드 목록 조회
+        @Override
+        public List<Node> findNodesByGraphId(UUID graphId) {
+            return nodes.stream().filter(n -> graphId.equals(n.getGraphId())).toList();
         }
 
-        for (ParsedFile pf : parsedFiles) {
-            for (Map.Entry<String, List<String>> entry : pf.functionCalls().entrySet()) {
-                String callerFunc = entry.getKey();
-                UUID callerNodeId = funcNodeIds.get(pf.filePath() + "::" + callerFunc);
-                if (callerNodeId == null) continue;
-
-                for (String callee : entry.getValue()) {
-                    UUID calleeNodeId = null;
-                    // 같은 파일 내 함수 우선
-                    calleeNodeId = funcNodeIds.get(pf.filePath() + "::" + callee);
-                    if (calleeNodeId == null) {
-                        // 다른 파일에서 검색
-                        for (Map.Entry<String, UUID> fn : funcNodeIds.entrySet()) {
-                            if (fn.getKey().endsWith("::" + callee)) {
-                                calleeNodeId = fn.getValue();
-                                break;
-                            }
-                        }
-                    }
-                    if (calleeNodeId == null || calleeNodeId.equals(callerNodeId)) continue;
-                    String edgeId = callerFunc + "-calls-" + callee + "-" + pf.filePath().hashCode();
-                    if (usedEdgeIds.add(edgeId)) {
-                        edges.add(Edge.create(graphId, edgeId, EdgeType.FUNCTION_CALL, callerNodeId, calleeNodeId));
-                    }
-                }
-            }
-        }
-    }
-
-    // 경로에서 파일명만 추출
-    private static String extractFileName(String filePath) {
-        int slash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
-        return slash >= 0 ? filePath.substring(slash + 1) : filePath;
-    }
-
-    // import 경로와 파일 경로 일치 여부 판별 — 상대경로(TS/JS/Python)와 패키지경로(Java/Kotlin) 모두 처리
-    private static boolean isImportMatch(String importPath, String filePath) {
-        String normalizedFile = filePath.replace("\\", "/");
-        String fileWithoutExt = normalizedFile.contains(".")
-                ? normalizedFile.substring(0, normalizedFile.lastIndexOf('.'))
-                : normalizedFile;
-
-        if (importPath.startsWith("./") || importPath.startsWith("../")) {
-            String rel = importPath.replaceAll("^(\\./)+", "").replace("\\", "/");
-            return fileWithoutExt.endsWith(rel)
-                    || normalizedFile.endsWith(rel + ".ts")
-                    || normalizedFile.endsWith(rel + ".tsx")
-                    || normalizedFile.endsWith(rel + ".js")
-                    || normalizedFile.endsWith(rel + ".jsx")
-                    || normalizedFile.endsWith(rel + ".py")
-                    || normalizedFile.endsWith(rel + "/index.ts")
-                    || normalizedFile.endsWith(rel + "/index.tsx")
-                    || normalizedFile.endsWith(rel + "/index.js");
+        // 그래프 ID로 엣지 목록 조회
+        @Override
+        public List<Edge> findEdgesByGraphId(UUID graphId) {
+            return edges.stream().filter(e -> graphId.equals(e.getGraphId())).toList();
         }
 
-        String normalizedImport = importPath.replace(".", "/");
-        return fileWithoutExt.endsWith(normalizedImport)
-                || normalizedFile.endsWith(normalizedImport + ".java")
-                || normalizedFile.endsWith(normalizedImport + ".kt")
-                || normalizedFile.endsWith(normalizedImport + ".py")
-                || normalizedFile.endsWith(normalizedImport + ".go")
-                || normalizedFile.endsWith(normalizedImport + ".rs")
-                || normalizedFile.endsWith(normalizedImport + ".cs");
+        // 노드 저장
+        @Override
+        public Node saveNode(Node node) {
+            nodes.add(node);
+            return node;
+        }
+
+        // 노드 ID로 노드 조회
+        @Override
+        public Optional<Node> findNodeById(UUID nodeId) {
+            return nodes.stream().filter(n -> n.getId().equals(nodeId)).findFirst();
+        }
+
+        // 엣지 저장
+        @Override
+        public Edge saveEdge(Edge edge) {
+            edges.add(edge);
+            return edge;
+        }
+
+        // 그래프 삭제 (노드/엣지 함께 제거)
+        @Override
+        public void deleteById(UUID id) {
+            graphs.removeIf(g -> g.getId().equals(id));
+            nodes.removeIf(n -> id.equals(n.getGraphId()));
+            edges.removeIf(e -> id.equals(e.getGraphId()));
+        }
+
+        // 프로젝트의 최신 그래프 조회
+        @Override
+        public Optional<Graph> findTopByProjectIdOrderByCreatedAtDesc(UUID projectId) {
+            return findByProjectId(projectId).stream()
+                    .max((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
+        }
+
+        // 고정 슬롯 비우기 — CLI에선 불필요
+        @Override
+        public void clearPinnedSlot(UUID projectId, int slot) {
+        }
     }
 }
