@@ -2,6 +2,20 @@
 
 ---
 
+## 분석 결과 카드 — 경고 패널 스크롤이 rAF/scrollIntoView로 안 되던 문제 (2026-06-17)
+
+**문제.** 분석 완료 결과 카드의 "경고 보기" CTA가 좌측 경고 패널(`#warning-section`, 중첩 `overflow-y-auto` aside 내부)로 스크롤·강조하도록 구현했으나, 라이브 검증에서 스크롤이 전혀 동작하지 않음(scrollTop 0 유지, 강조 ring도 미적용).
+
+**원인(브라우저 격리 테스트로 확정, 추측 아님).**
+1. `el.scrollIntoView({behavior:'smooth'})` — 중첩 overflow 컨테이너에서 무시됨(scrollTop 0). `behavior:'auto'`는 동기 호출 시 동작.
+2. `requestAnimationFrame` 안에서 `aside.scrollTop = el.offsetTop` 설정도 무시됨 — React Flow가 자체 rAF 렌더 루프를 돌려 같은 프레임에 scrollTop을 리셋하는 것으로 보임. **동기 호출·`setTimeout`은 정상 동작**(scrollTop 780, 보임).
+
+**결정.** `setTimeout(120)` + `aside.scrollTop = el.offsetTop`(offsetParent가 aside라 정합) + ring 강조 1.6s. 격리 테스트: rAF=실패 / setTimeout=성공으로 직접 확인.
+
+**교훈.** React Flow 페이지에서 프로그램 스크롤은 rAF를 피하고 setTimeout으로 프레임 이후 실행한다. 중첩 overflow에선 scrollIntoView보다 offsetTop 직접 설정이 안정적.
+
+---
+
 ## 발전사 페이지 `/evolution` — track 필드 전면 태깅 대신 큐레이션 3 arc 채택 (2026-06-14)
 
 **문제.** 패치노트(버전 축)와 별개로 "한 기능이 어떻게 자랐나"(기능 축) 서사를 보여주는 페이지가 필요. 원 스펙은 `Release` 인터페이스에 `track` 필드를 추가해 기존 ~75개 릴리스 전부를 7개 track으로 소급 태깅하는 방식이었다.
