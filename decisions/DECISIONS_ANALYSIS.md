@@ -4,6 +4,36 @@
 
 ---
 
+## B-10 Stage 1 — 주석 마스킹 (2026-06-17)
+
+**문제.** 모든 추출기가 raw `content`에 정규식을 직접 적용 → 주석 본문 속 식별자가 코드로 오인됨. 주석 처리된 함수 호출·import·`new X()`가 가짜 FUNCTION_CALL 엣지·가짜 노드로 누출. #281 도그푸딩이 적발한 자기 코드 `CROSS_DOMAIN_CALL` 오탐(주석 유래)이 대표 사례.
+
+**충돌 구조와 회피.** raw SQL 감지(`extractRawSqlAccesses`)는 **문자열 리터럴 내부를 일부러 읽으므로** 문자열을 스트리핑하면 깨진다. 그러나 검출기는 ①식별자를 코드로 읽는 것(functions/calls/instantiation/imports/async/interfaces/entityColumns/frameworkAnnotated)과 ②주석·문자열 페이로드를 읽는 것(rawSql/apiCalls/controllerMappings/dbTables/fileComment/functionComments)으로 깔끔히 갈린다. → ①만 마스킹 사본으로 라우팅, ②는 raw 유지. **raw SQL은 항상 raw content라 충돌 원천 소멸.**
+
+**설계.** `maskComments(content, language)` — string-aware 1패스 렉서로 주석 본문을 공백 치환(개행 보존, **길이 보존**). 길이 보존이 필수인 이유: `extractFunctionCalls`가 `funcDefPattern` 오프셋으로 `content.substring(bodyStart,bodyEnd)`를 자르므로 마스킹 사본과 원본 길이가 어긋나면 본문 경계가 틀어진다. 문자열 내부의 `//`·`#`·`/*`를 주석으로 오인하지 않도록 문자열을 추적해 건너뛴다(Stage 1은 문자열 본문 보존). 언어별 주석/문자열 문법 플래그(라인 `//`·`#`, 블록 `/* */`, 단일따옴표, 백틱 raw, 삼중따옴표). **Rust `'`은 lifetime이라 문자열로 보지 않음**(`'a` 미종료 오인 방지).
+
+**단계 합의.** 사용자와 "Stage 1(주석만)부터, 측정 후 Stage 2(문자열 본문) 필요성 판단"으로 합의. Stage 2는 11개 언어 문자열 경계(멀티라인·이스케이프·템플릿 리터럴) 리스크가 큼.
+
+**측정(production-parity analyzeLocal, 클린 A/B).**
+
+| 레포 | 언어 | 노드 | 엣지 | 경고 |
+|---|---|---|---|---|
+| codeprint | Java/DDD | 1222→1229 (+7) | 2698→2703 (+5) | 13→13 |
+| petclinic | Java | 149→149 | 259→259 | 1→1 |
+| requests | Python | 752→752 | 1623→1617 (−6) | 3→3 |
+| gin | Go | 1410→1405 (−5) | 4364→4230 (**−134**) | 1→1 |
+| express | JS | 371→363 (−8) | 579→540 (−39) | 1→1 |
+
+두 가지 올바른 효과 + **경고 회귀 0**.
+1. **가짜 주석 유래 호출/노드 제거** — gin 엣지 −134, express −39/−8, requests −6.
+2. **부수효과 — 가려진 실제 함수 회복(codeprint +7).** 함수 정규식 `\([^)]*\)`가 파라미터 목록 주석 속 `)`에서 끊겨 검출 실패하던 케이스. 실제 사례: `DailyMetrics`·`Digest` record 파라미터 주석 `// 활성 사용자(DAU)`·`// 합 (원)`. 마스킹 후 비로소 검출 → 그래프에 정상 표시. **추측이 아니라 소스 대조로 확인**(Rule 11).
+
+경고가 불변인 이유: DEAD_CODE는 게이트로 묶임, CROSS_DOMAIN_CALL은 DDD(codeprint)만 발화하는데 거기선 B-13~15가 이미 주석 오탐을 정리해둠. 그래도 그래프 정확도(가짜 엣지 −134 등)는 명확히 개선.
+
+**★ Stage 2 보류 결정.** Stage 1이 문서화된 주석 오탐 부류를 회귀 0으로 커버. 문자열 속 가짜 식별자는 드물고 Stage 2는 고리스크 → 측정 근거상 현 시점 불필요. UX/정확도 필요가 별도로 생기면 재검토.
+
+**TDD.** StaticCodeAnalyzerTest 7종 — 라인/블록/`#` 주석 호출 제외, 문자열 속 `//` 오인 방지, 주석 속 `new`·import 제외, 파라미터 주석 괄호 함수 회복. 전체 스위트 통과.
+
 ## 루트 레벨 test/·tests/ 디렉터리 제외 누락 (2026-06-16, 경고 재캘리브레이션 중 적발)
 
 **문제.** `GraphWarningService.isTestArtifact`가 테스트 경로를 `fp.contains("/tests/")`처럼 **앞 슬래시 포함** 패턴으로만 검사. 그런데 노드의 filePath는 `StaticCodeAnalyzer`(`repoRoot.relativize(file).toString().replace("\\","/")`)·`GraphBuilder` 모두 **repoRoot 상대경로**라, 최상단 `tests/test_requests.py`는 `tests/`로 시작(앞 슬래시 없음) → `/tests/` 매칭 실패. `test_` 접두 함수명만 제외되고, 픽스처·헬퍼(`response_handler`·`hook1`·`handleHeaders` 등)는 DEAD_CODE·HIGH_FAN_OUT 오탐으로 누출. **production 동일 적용**(GraphBuilder가 같은 상대경로 사용).

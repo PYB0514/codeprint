@@ -19,24 +19,99 @@ public class StaticCodeAnalyzer {
         String content = Files.readString(file, StandardCharsets.UTF_8);
         String relativePath = repoRoot.relativize(file).toString().replace("\\", "/");
 
-        List<String> functions = extractFunctions(content, language);
-        List<String> imports = extractImports(content, language);
+        // 식별자 검출기용 — 주석 본문을 공백으로 치환한 길이 보존 사본 (B-10 Stage 1).
+        // 주석/문자열 페이로드를 읽는 검출기(주석 라벨·API 경로·raw SQL 등)는 원본 content를 그대로 쓴다.
+        String masked = maskComments(content, language);
+
+        List<String> functions = extractFunctions(masked, language);
+        List<String> imports = extractImports(masked, language);
         String fileComment = extractFileComment(content, language);
         Map<String, String> functionComments = extractFunctionComments(content, language);
-        Map<String, List<String>> functionCalls = extractFunctionCalls(content, language, functions);
-        List<String> instantiatedClasses = extractInstantiatedClasses(content);
+        Map<String, List<String>> functionCalls = extractFunctionCalls(masked, language, functions);
+        List<String> instantiatedClasses = extractInstantiatedClasses(masked);
         List<DbTableInfo> dbTables = extractDbTables(content, language, relativePath);
-        String repositoryEntityClass = extractRepositoryEntityClass(content, language);
-        List<ColumnInfo> entityColumns = extractEntityColumns(content, language);
+        String repositoryEntityClass = extractRepositoryEntityClass(masked, language);
+        List<ColumnInfo> entityColumns = extractEntityColumns(masked, language);
         List<String> apiCalls = extractApiCalls(content, language);
         List<String> controllerMappings = extractControllerMappings(content, language);
-        List<String> implementedInterfaces = extractImplementedInterfaces(content, language);
-        List<String> asyncMethods = extractAsyncMethods(content, language);
-        List<String> jsxComponents = extractJsxComponents(content, relativePath);
+        List<String> implementedInterfaces = extractImplementedInterfaces(masked, language);
+        List<String> asyncMethods = extractAsyncMethods(masked, language);
+        List<String> jsxComponents = extractJsxComponents(masked, relativePath);
         List<RawSqlAccess> rawSqlAccesses = extractRawSqlAccesses(content);
-        List<String> frameworkAnnotatedMethods = extractFrameworkAnnotatedMethods(content, language);
+        List<String> frameworkAnnotatedMethods = extractFrameworkAnnotatedMethods(masked, language);
 
         return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods);
+    }
+
+    // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함
+    // 문자열 내부의 // · # · /* 는 주석으로 오인하면 안 되므로 문자열을 추적해 건너뛴다. 문자열 본문은 Stage 1에서 보존.
+    private String maskComments(String content, String language) {
+        boolean lineSlash = !language.equals("Python") && !language.equals("Ruby");
+        boolean lineHash = language.equals("Python") || language.equals("Ruby") || language.equals("PHP");
+        boolean blockSlashStar = !language.equals("Python") && !language.equals("Ruby");
+        boolean singleQuote = !language.equals("Rust"); // Rust 의 ' 은 lifetime 표기라 문자열로 보지 않음
+        boolean backtick = language.equals("TypeScript") || language.equals("JavaScript") || language.equals("Go");
+        boolean tripleQuote = language.equals("Python") || language.equals("Java")
+                || language.equals("Kotlin") || language.equals("Swift");
+
+        char[] in = content.toCharArray();
+        char[] out = in.clone();
+        int n = in.length;
+        int i = 0;
+        while (i < n) {
+            char c = in[i];
+
+            // 삼중 따옴표 문자열(Python docstring·Java/Kotlin/Swift 텍스트 블록) — 내부 #·// 를 주석으로 오인 방지
+            if (tripleQuote && (isTriple(in, i, '"') || (language.equals("Python") && isTriple(in, i, '\'')))) {
+                char q = in[i];
+                i += 3;
+                while (i < n && !isTriple(in, i, q)) i++;
+                i = Math.min(n, i + 3);
+                continue;
+            }
+
+            // 문자열/문자 리터럴 — 본문은 보존하되 닫힐 때까지 건너뛴다
+            if (c == '"' || (c == '\'' && singleQuote) || (c == '`' && backtick)) {
+                char quote = c;
+                i++;
+                while (i < n) {
+                    char d = in[i];
+                    if (d == '\\' && quote != '`') { i += 2; continue; } // 이스케이프 (백틱 raw 문자열 제외)
+                    if (d == quote) { i++; break; }
+                    if (d == '\n' && quote != '`') break; // 비-멀티라인 문자열 미종료 방어
+                    i++;
+                }
+                continue;
+            }
+
+            // 라인 주석 //
+            if (lineSlash && c == '/' && i + 1 < n && in[i + 1] == '/') {
+                while (i < n && in[i] != '\n') { out[i] = ' '; i++; }
+                continue;
+            }
+            // 라인 주석 #
+            if (lineHash && c == '#') {
+                while (i < n && in[i] != '\n') { out[i] = ' '; i++; }
+                continue;
+            }
+            // 블록 주석 /* ... */
+            if (blockSlashStar && c == '/' && i + 1 < n && in[i + 1] == '*') {
+                while (i < n && !(in[i] == '*' && i + 1 < n && in[i + 1] == '/')) {
+                    if (in[i] != '\n') out[i] = ' ';
+                    i++;
+                }
+                if (i + 1 < n) { out[i] = ' '; out[i + 1] = ' '; i += 2; }
+                else { while (i < n) { if (in[i] != '\n') out[i] = ' '; i++; } }
+                continue;
+            }
+            i++;
+        }
+        return new String(out);
+    }
+
+    // 위치 i 에서 세 글자가 모두 q 인지 (삼중 따옴표 경계)
+    private boolean isTriple(char[] a, int i, char q) {
+        return i + 2 < a.length && a[i] == q && a[i + 1] == q && a[i + 2] == q;
     }
 
     // 파일 상단 첫 번째 주석 추출
