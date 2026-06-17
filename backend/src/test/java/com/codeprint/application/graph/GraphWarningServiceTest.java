@@ -434,6 +434,17 @@ class GraphWarningServiceTest {
         assertThat(isDeadCode(warnings, jest.getId())).isFalse();
     }
 
+    @Test
+    @DisplayName("루트 레벨 tests/·test/ 디렉터리(상대경로, 앞 슬래시 없음) — DEAD_CODE 제외 (재캘리)")
+    void deadCode_rootLevelTestDir_excluded() {
+        // 분석기는 repoRoot 상대경로를 저장하므로 루트 tests/ 는 "tests/..."(앞 슬래시 없음) — "/tests/" 매칭 실패하던 버그
+        Node pyFixture = Node.create(graphId, NodeType.FUNCTION, "response_handler", "tests/test_requests.py", "Python");
+        Node goHelper = Node.create(graphId, NodeType.FUNCTION, "newTestServer", "test/server.go", "Go");
+        List<Map<String, Object>> warnings = service.detect(List.of(pyFixture, goHelper), List.of());
+        assertThat(isDeadCode(warnings, pyFixture.getId())).isFalse();
+        assertThat(isDeadCode(warnings, goHelper.getId())).isFalse();
+    }
+
     // DEAD_CODE 타입 경고만 필터
     private List<Map<String, Object>> deadCodeWarnings(List<Map<String, Object>> warnings) {
         return warnings.stream().filter(w -> "DEAD_CODE".equals(w.get("type"))).toList();
@@ -576,6 +587,23 @@ class GraphWarningServiceTest {
             Node callee = funcNodeWithPath("helper" + i, "/gin/dep" + i + ".go");
             nodes.add(callee);
             edges.add(callEdge(testFn.getId(), callee.getId(), false));
+        }
+        List<Map<String, Object>> warnings = service.detect(nodes, edges);
+        assertThat(highFanOut(warnings)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("루트 레벨 tests/ 디렉터리(상대경로)의 호출 8개는 HIGH_FAN_OUT 제외 — 테스트 헬퍼 노이즈 (재캘리)")
+    void highFanOut_rootLevelTestDir_excluded() {
+        // requests/conftest 류 픽스처 헬퍼가 루트 tests/ 에 있어 "/tests/" 매칭 실패하던 버그
+        Node testHelper = funcNodeWithPath("response_handler", "tests/testserver.py");
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        nodes.add(testHelper);
+        java.util.List<Edge> edges = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            Node callee = funcNodeWithPath("step" + i, "src/dep" + i + ".py");
+            nodes.add(callee);
+            edges.add(callEdge(testHelper.getId(), callee.getId(), false));
         }
         List<Map<String, Object>> warnings = service.detect(nodes, edges);
         assertThat(highFanOut(warnings)).isEmpty();

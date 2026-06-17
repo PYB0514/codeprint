@@ -4,6 +4,26 @@
 
 ---
 
+## 루트 레벨 test/·tests/ 디렉터리 제외 누락 (2026-06-16, 경고 재캘리브레이션 중 적발)
+
+**문제.** `GraphWarningService.isTestArtifact`가 테스트 경로를 `fp.contains("/tests/")`처럼 **앞 슬래시 포함** 패턴으로만 검사. 그런데 노드의 filePath는 `StaticCodeAnalyzer`(`repoRoot.relativize(file).toString().replace("\\","/")`)·`GraphBuilder` 모두 **repoRoot 상대경로**라, 최상단 `tests/test_requests.py`는 `tests/`로 시작(앞 슬래시 없음) → `/tests/` 매칭 실패. `test_` 접두 함수명만 제외되고, 픽스처·헬퍼(`response_handler`·`hook1`·`handleHeaders` 등)는 DEAD_CODE·HIGH_FAN_OUT 오탐으로 누출. **production 동일 적용**(GraphBuilder가 같은 상대경로 사용).
+
+**이유.** 기존 패턴이 `src/test/`(중간 디렉터리, 앞에 `src`)만 상정. 루트 레벨 테스트 디렉터리를 쓰는 레포(Python `requests`, JS `express`, 다수 Go/Py 프로젝트)에서 광범위 누락.
+
+**결정.** 경로를 앞뒤 슬래시로 감싸 세그먼트 단위로 매칭 — `("/" + fp.replace("\\","/") + "/").contains("/tests/")`. 루트·중간 디렉터리 모두 포착하며 `mytests/` 같은 부분일치는 배제(`/mytests/`에 `/tests/` 없음). 백슬래시 변형은 정규화로 흡수돼 제거. **순수 추가형 제외**(기존 매칭의 상위집합).
+
+**결과.** analyzeLocal 실측: requests DEAD_CODE 후보 89→56(테스트 폴더 오탐 33 제거), express HIGH_FAN_OUT 1→0(`handleHeaders`가 `express/test/res.sendFile.js`의 테스트 헬퍼였음 — Phase 0 베이스라인이 "비테스트 참 신호"로 **오분류**했던 것을 정정). petclinic·gin 불변. TDD 2종(`deadCode_rootLevelTestDir_excluded`·`highFanOut_rootLevelTestDir_excluded`) — **상대경로(`tests/...`, 앞 슬래시 없음)로 재현**. 기존 테스트가 `/requests/tests/...`처럼 앞 슬래시 붙은 경로를 써서 이 버그를 못 잡았던 점도 정정.
+
+## DEAD_CODE 게이트 재캘리브레이션 — analyzeLocal 측정 불가로 보류 (2026-06-16)
+
+**문제.** 경고 재캘리브레이션 과제로 DEAD_CODE 신뢰도 게이트(미호출 비율 ≥15%) 임계를 재측정하려 했으나, 측정 도구 `analyzeLocal`(LocalAnalyzer) 수치가 production GraphBuilder와 크게 발산해 게이트 교정에 쓸 수 없음을 확인.
+
+**이유.** `LocalAnalyzer.buildGraph`는 GraphBuilder의 **간이 재구현**으로, 인터페이스→구현체 `bestMatch` 우선 해소가 없고 cross-file callee를 단순 이름 일치(첫 매치)로 연결 → 호출 해소가 약함 → 미호출 함수가 과다 집계. 결과 Java 레포에서 비율이 ~19배 부풀려짐: **petclinic analyzeLocal 18/96=19% vs production 1.0%**(#270 실측), express analyzeLocal 21%. 게이트는 production 그래프에서 동작하므로 production 수치로만 교정해야 함. (Python `requests`는 인터페이스가 적어 양쪽이 가까움 — analyzeLocal 8%.)
+
+**결과.** 게이트 임계 변경은 production-fidelity 측정 확보 전까지 **보류**(현행 15% 유지). 후속 선택지: (A) `requests`를 production에서 분석해 #287(sameFile 엣지) 이후 실제 비율 확인, (B) `LocalAnalyzer`를 production `GraphBuilder`와 정렬해 오프라인 측정 신뢰성 확보(근본책). 이번 PR은 production·analyzeLocal 모두에서 옳은 test-path 제외 수정만 포함. ★측정-우선(Rule 11): 부풀려진 측정값으로 임계를 추정하지 않음.
+
+---
+
 ## 정확도 베이스라인 재측정 — Phase 0 (2026-06-16, C-13 후속)
 
 **목적.** #268(DEAD_CODE 패턴 제외)·#270(신뢰도 게이트)·#272(raw SQL 정밀화)·#281(B-10 주석 일부) 적용 **이후** 현재 엔진의 언어 무관 detector 오탐률을 재측정해 Phase 1 재캘리브레이션의 **고정 기준선**을 확보한다. C-13(2026-06-14)은 이 수정들 이전이라 낡음.

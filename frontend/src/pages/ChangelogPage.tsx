@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.86.8',
+    date: '2026-06-16',
+    title: '경고 정확도 — 루트 레벨 테스트 폴더의 오탐 제거',
+    type: 'fix',
+    items: [
+      { category: '경고', desc: '저장소 최상단에 있는 tests/·test/ 폴더의 테스트 헬퍼 함수가 "데드 코드"·"과도한 의존(High Fan-Out)"으로 잘못 표시되던 문제를 수정 — 테스트 코드 제외 규칙이 하위 폴더(src/test/)만 인식하고 최상단 tests/는 놓치던 버그였습니다. Python·Go·JS 등 최상단 테스트 폴더를 쓰는 저장소에서 거짓 경고가 줄어듭니다' },
+    ],
+  },
+  {
     version: 'v0.86.7',
     date: '2026-06-16',
     title: 'PR 코멘트 개선 — 참고용(LOW) 경고는 자동 생략',
