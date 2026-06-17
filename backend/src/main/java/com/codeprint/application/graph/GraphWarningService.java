@@ -402,10 +402,16 @@ public class GraphWarningService {
     }
 
     // DEAD_CODE 신뢰도 게이트 — 미호출 함수 비율이 이 값을 넘으면 호출 추출 자체가 불완전하다고 보고 개별 경고를 생략한다.
-    // 캘리브레이션(2026-06-15 실측): 정상 Java 레포 codeprint 0.1%·petclinic 1.0%, 호출 추출이 약한 Python requests 22.6%.
-    private static final double DEAD_CODE_UNTRUSTWORTHY_RATIO = 0.15;
+    // 재캘리브레이션(2026-06-17, production-parity 측정): LocalAnalyzer↔GraphBuilder 정렬 후 신뢰 가능한 수치로 재측정.
+    //   정상 앱/DDD: petclinic 0%·gin 0.1%·codeprint 0.1%. 약-추출 라이브러리: requests 5.3%(38건, 전부 Python
+    //   duck-typing·동적 디스패치 오탐)·express 21%. 기존 15%는 requests를 못 잡아 38건 오탐 노출 → 4%로 하향
+    //   (정상 클러스터 ≤0.1% 대비 40배 마진, requests 5.3% 대비 1.3%p 마진으로 두 약-추출 레포 모두 게이트).
+    private static final double DEAD_CODE_UNTRUSTWORTHY_RATIO = 0.04;
     // 함수 수가 적으면 비율이 통계적으로 불안정 — 소형 그래프는 게이트 미적용 (기존 미호출 함수 1~2개 케이스 보호)
     private static final int DEAD_CODE_MIN_FUNCTIONS = 30;
+    // 미호출 함수 절대 개수 하한 — 비율만으로는 "소형 레포의 소수 진짜 데드코드"와 "대형 레포의 다수 오탐"을 구분 못 함.
+    // 비율을 4%로 낮추면 진짜 데드 함수 몇 개뿐인 레포까지 게이트되므로, 개수 하한으로 약-추출 신호(다수 오탐)만 포착한다.
+    private static final int DEAD_CODE_MIN_GATE_COUNT = 10;
 
     // FUNCTION 노드 중 아무 FUNCTION_CALL 엣지도 받지 않는 함수 — 데드 코드 후보
     // 아래 5가지 패턴은 정적 분석으로 호출 추적이 불가능하여 false positive 발생:
@@ -501,6 +507,7 @@ public class GraphWarningService {
         // 신뢰도 게이트 — 미호출 비율이 임계를 넘으면 호출 추출이 약한 것이므로 개별 경고 대신 단일 안내로 치환
         long totalFunctions = nodes.stream().filter(n -> n.getType() == NodeType.FUNCTION).count();
         if (totalFunctions >= DEAD_CODE_MIN_FUNCTIONS
+                && warnings.size() >= DEAD_CODE_MIN_GATE_COUNT
                 && (double) warnings.size() / totalFunctions >= DEAD_CODE_UNTRUSTWORTHY_RATIO) {
             int pct = (int) Math.round((double) warnings.size() / totalFunctions * 100);
             Map<String, Object> gate = new LinkedHashMap<>();
