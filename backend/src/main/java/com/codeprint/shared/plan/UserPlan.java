@@ -43,3 +43,4 @@ public enum UserPlan {
         };
     }
 }
+// diff-scope 라이브 검증용 무해 주석 — 검증 후 되돌림 (PR 미머지)
