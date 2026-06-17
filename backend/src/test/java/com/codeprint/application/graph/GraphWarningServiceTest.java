@@ -451,7 +451,7 @@ class GraphWarningServiceTest {
     }
 
     @Test
-    @DisplayName("미호출 비율 15% 초과(40/40=100%) — 개별 경고 대신 단일 신뢰도 안내로 치환 (C-13 게이트)")
+    @DisplayName("미호출 비율 4% 초과(40/40=100%) — 개별 경고 대신 단일 신뢰도 안내로 치환 (C-13 게이트)")
     void deadCode_lowConfidenceGate_collapsesToSingleNotice() {
         java.util.List<Node> nodes = new java.util.ArrayList<>();
         for (int i = 0; i < 40; i++) {
@@ -464,19 +464,52 @@ class GraphWarningServiceTest {
     }
 
     @Test
-    @DisplayName("미호출 비율 15% 이하(3/43≈7%) — 게이트 미발동, 개별 DEAD_CODE 경고 유지")
+    @DisplayName("미호출 3건/43개(≈7%, 비율은 4% 임계 초과지만 개수<10) — 개수 하한이 소형 진짜 데드코드 보호 (재캘리)")
     void deadCode_belowGateThreshold_keepsIndividualWarnings() {
         java.util.List<Node> nodes = new java.util.ArrayList<>();
         // application/ 함수 40개 — dead 후보에서 제외되지만 전체 함수 수(분모)에는 포함
         for (int i = 0; i < 40; i++) {
             nodes.add(funcNodeWithPath("svc" + i, "/com/example/application/order/Svc" + i + ".java"));
         }
-        // 진짜 미호출 함수 3개 (shared/)
+        // 진짜 미호출 함수 3개 (shared/) — 비율 7%는 4% 임계를 넘지만 개수 3<10이라 게이트 미발동
         for (int i = 0; i < 3; i++) {
             nodes.add(funcNodeWithPath("dead" + i, "/com/example/shared/calc/Dead" + i + ".java"));
         }
         List<Map<String, Object>> dead = deadCodeWarnings(service.detect(nodes, List.of()));
         assertThat(dead).hasSize(3);
+        assertThat(dead).allSatisfy(w -> assertThat((List<?>) w.get("nodeIds")).isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("미호출 12건/200개(6%, 비율·개수 둘 다 충족) — 재캘리 4% 게이트 발동, 단일 안내로 치환")
+    void deadCode_recalibratedGate_firesAboveFourPercent() {
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        // application/ 함수 188개 — dead 후보 제외, 분모에만 포함
+        for (int i = 0; i < 188; i++) {
+            nodes.add(funcNodeWithPath("svc" + i, "/com/example/application/order/Svc" + i + ".java"));
+        }
+        // 진짜 미호출 12개 (shared/) — 12/200=6% ≥4% AND 12 ≥10 → 게이트 (requests 5.3% 약-추출 케이스 대응)
+        for (int i = 0; i < 12; i++) {
+            nodes.add(funcNodeWithPath("dead" + i, "/com/example/shared/calc/Dead" + i + ".java"));
+        }
+        List<Map<String, Object>> dead = deadCodeWarnings(service.detect(nodes, List.of()));
+        assertThat(dead).hasSize(1);
+        assertThat((String) dead.get(0).get("message")).contains("미호출 함수 비율");
+    }
+
+    @Test
+    @DisplayName("미호출 10건/350개(≈2.9%, 개수는 충족하나 비율<4%) — 게이트 미발동, 개별 유지 (정상 앱의 실제 데드코드 보존)")
+    void deadCode_belowRatioWithHighCount_keepsIndividual() {
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        for (int i = 0; i < 340; i++) {
+            nodes.add(funcNodeWithPath("svc" + i, "/com/example/application/order/Svc" + i + ".java"));
+        }
+        // 진짜 미호출 10개 — 10/350≈2.9% <4% → 비율 미달로 게이트 미발동 (개수 10은 충족)
+        for (int i = 0; i < 10; i++) {
+            nodes.add(funcNodeWithPath("dead" + i, "/com/example/shared/calc/Dead" + i + ".java"));
+        }
+        List<Map<String, Object>> dead = deadCodeWarnings(service.detect(nodes, List.of()));
+        assertThat(dead).hasSize(10);
         assertThat(dead).allSatisfy(w -> assertThat((List<?>) w.get("nodeIds")).isNotEmpty());
     }
 

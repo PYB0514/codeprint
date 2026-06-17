@@ -14,13 +14,17 @@
 
 **결과.** analyzeLocal 실측: requests DEAD_CODE 후보 89→56(테스트 폴더 오탐 33 제거), express HIGH_FAN_OUT 1→0(`handleHeaders`가 `express/test/res.sendFile.js`의 테스트 헬퍼였음 — Phase 0 베이스라인이 "비테스트 참 신호"로 **오분류**했던 것을 정정). petclinic·gin 불변. TDD 2종(`deadCode_rootLevelTestDir_excluded`·`highFanOut_rootLevelTestDir_excluded`) — **상대경로(`tests/...`, 앞 슬래시 없음)로 재현**. 기존 테스트가 `/requests/tests/...`처럼 앞 슬래시 붙은 경로를 써서 이 버그를 못 잡았던 점도 정정.
 
-## DEAD_CODE 게이트 재캘리브레이션 — analyzeLocal 측정 불가로 보류 (2026-06-16)
+## DEAD_CODE 게이트 재캘리브레이션 — LocalAnalyzer 정렬 후 15%→4% (2026-06-16 보류 → 2026-06-17 완료)
 
-**문제.** 경고 재캘리브레이션 과제로 DEAD_CODE 신뢰도 게이트(미호출 비율 ≥15%) 임계를 재측정하려 했으나, 측정 도구 `analyzeLocal`(LocalAnalyzer) 수치가 production GraphBuilder와 크게 발산해 게이트 교정에 쓸 수 없음을 확인.
+**문제.** 경고 재캘리브레이션 과제로 DEAD_CODE 신뢰도 게이트(미호출 비율 ≥15%) 임계를 재측정하려 했으나, 측정 도구 `analyzeLocal`(LocalAnalyzer) 수치가 production GraphBuilder와 크게 발산해 게이트 교정에 쓸 수 없었음.
 
-**이유.** `LocalAnalyzer.buildGraph`는 GraphBuilder의 **간이 재구현**으로, 인터페이스→구현체 `bestMatch` 우선 해소가 없고 cross-file callee를 단순 이름 일치(첫 매치)로 연결 → 호출 해소가 약함 → 미호출 함수가 과다 집계. 결과 Java 레포에서 비율이 ~19배 부풀려짐: **petclinic analyzeLocal 18/96=19% vs production 1.0%**(#270 실측), express analyzeLocal 21%. 게이트는 production 그래프에서 동작하므로 production 수치로만 교정해야 함. (Python `requests`는 인터페이스가 적어 양쪽이 가까움 — analyzeLocal 8%.)
+**발산 원인.** `LocalAnalyzer.buildGraph`는 GraphBuilder의 **간이 재구현**으로, 인터페이스→구현체 `bestMatch` 우선 해소가 없고 cross-file callee를 단순 이름 일치(첫 매치)로 연결, `isFrameworkAnnotated` 메타도 안 붙임 → 호출 해소가 약하고 @property 등 프레임워크 메서드가 미제외 → 미호출 함수 과다 집계. Java 레포에서 비율 ~19배 부풀려짐(**petclinic analyzeLocal 19% vs production 1.0%**, #270 실측). 게이트는 production 그래프에서 동작하므로 production 수치로만 교정해야 함.
 
-**결과.** 게이트 임계 변경은 production-fidelity 측정 확보 전까지 **보류**(현행 15% 유지). 후속 선택지: (A) `requests`를 production에서 분석해 #287(sameFile 엣지) 이후 실제 비율 확인, (B) `LocalAnalyzer`를 production `GraphBuilder`와 정렬해 오프라인 측정 신뢰성 확보(근본책). 이번 PR은 production·analyzeLocal 모두에서 옳은 test-path 제외 수정만 포함. ★측정-우선(Rule 11): 부풀려진 측정값으로 임계를 추정하지 않음.
+**해결 1 — 측정 도구 정렬(근본책).** `LocalAnalyzer`가 인메모리 `GraphRepository`로 **실제 production `GraphBuilder`를 그대로 구동**하도록 교체(GraphBuilder 미수정, 회귀 0). 정렬 후 analyzeLocal = production. 재측정(production-parity): petclinic **19%→0%**(@property 오탐 소거), gin 0.1%, requests **8%→5.3%(38건)**, express 21%(48건). 정상 앱/DDD는 ≤0.1%, 약-추출 라이브러리만 5.3%·21%로 명확히 분리.
+
+**해결 2 — 임계 재캘리(신뢰 가능 수치 기반).** requests 38건 소스 대조 = 전부 Python duck-typing·동적 디스패치·라이브러리 public API 오탐(weak call graph). 기존 15%는 requests(5.3%)를 못 잡아 38건 노출. → **비율 임계 15%→4%** + **미호출 절대 개수 하한 ≥10** 추가. 개수 하한은 "비율만으로 소형 레포의 소수 진짜 데드코드까지 게이트"되는 것을 막아, 약-추출 신호(다수 오탐)만 포착. 검증: requests 38→단일 안내(5%), express 21% 안내 유지, petclinic 0·gin 1개별·정상 앱 무영향. GraphWarningServiceTest 게이트 4종(발동 100%/개수하한 보호 3<10/재캘리 발동 12≥10·6%/비율미달 보존 10건<4%).
+
+**★ 측정-우선(Rule 11).** 부풀려진 analyzeLocal 수치로 임계를 추정하지 않고, 먼저 측정 도구를 production과 일치시킨 뒤 신뢰 가능한 수치로 교정 — "측정값이 의심되면 측정 도구부터 고친다".
 
 ---
 
