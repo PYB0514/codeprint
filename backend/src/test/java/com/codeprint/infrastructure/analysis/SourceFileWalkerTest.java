@@ -12,6 +12,8 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class SourceFileWalkerTest {
 
@@ -67,6 +69,41 @@ class SourceFileWalkerTest {
 
         assertThat(files).hasSize(1);
         assertThat(files.get(0).getFileName().toString()).isEqualTo("index.js");
+    }
+
+    @Test
+    @DisplayName("중첩·복수 스킵 디렉터리(.git/node_modules 깊은 경로)는 순회하지 않고 제외된다")
+    void 중첩_스킵_디렉토리_가지치기() throws IOException {
+        Files.createDirectories(tempDir.resolve("node_modules/a/b/c"));
+        Files.writeString(tempDir.resolve("node_modules/a/b/c/deep.js"), "const x = 1;");
+        Files.createDirectories(tempDir.resolve(".git/objects"));
+        Files.writeString(tempDir.resolve(".git/objects/pack.go"), "package p");
+        Files.writeString(tempDir.resolve("main.go"), "package main");
+
+        List<Path> files = walker.walk(tempDir).files();
+
+        assertThat(files).extracting(p -> p.getFileName().toString())
+                .containsExactly("main.go");
+    }
+
+    @Test
+    @DisplayName("읽을 수 없는 끊긴 심링크가 있어도 walk가 실패하지 않고 정상 파일은 수집된다")
+    void 끊긴_심링크_내성() throws IOException {
+        Files.writeString(tempDir.resolve("App.java"), "public class App {}");
+        // 끊긴 심링크 생성 — 권한 부족(Windows 등)으로 실패하면 이 테스트는 건너뛴다
+        boolean linkCreated;
+        try {
+            Files.createSymbolicLink(tempDir.resolve("Dangling.java"), tempDir.resolve("no_such_target.java"));
+            linkCreated = true;
+        } catch (IOException | UnsupportedOperationException e) {
+            linkCreated = false;
+        }
+        assumeTrue(linkCreated, "심링크 생성 불가 환경 — 건너뜀");
+
+        assertThatCode(() -> {
+            List<Path> files = walker.walk(tempDir).files();
+            assertThat(files).extracting(p -> p.getFileName().toString()).contains("App.java");
+        }).doesNotThrowAnyException();
     }
 
     @Test

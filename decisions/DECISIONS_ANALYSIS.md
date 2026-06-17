@@ -4,6 +4,19 @@
 
 ---
 
+## 파일 수집 로버스트니스 — 스킵 디렉터리 가지치기 + 엔트리 실패 내성 (2026-06-17)
+
+**문제(측정 중 직접 적발).** B-16 측정 중 `analyzeLocal`이 express(node_modules 보유)·requests에서 `SourceFileWalker.walk`의 `Files.walk(...).toList()`에서 간헐적으로 `UncheckedIOException`을 던져 **전체 분석이 크래시**(requests 0/5 성공). 원인 둘:
+1. `SKIP_DIRS`(node_modules·.git 등)를 `Files.walk` **이후 post-filter**로 제외 → walk는 여전히 그 안을 전부 순회. 대형 node_modules(수천 파일) 낭비 + 그 안의 일시 잠금/문제 엔트리(Windows Defender 등)에서 walk 전체가 throw.
+2. 읽을 수 없는 엔트리 하나로 레포 전체 수집이 실패 — 제품 핵심이 "임의 GitHub 레포 분석"이라 치명적(권한·끊긴 심링크 1개로 분석 전체 실패).
+
+**해결.** `Files.walkFileTree` + `SimpleFileVisitor`로 전환.
+- `preVisitDirectory`: 스킵 디렉터리는 `SKIP_SUBTREE`로 **순회 자체를 가지치기**(루트 제외) → node_modules/.git 미진입.
+- `visitFileFailed`: `CONTINUE`로 읽을 수 없는 엔트리를 건너뜀 → 부분 수집이 전체 실패보다 낫다.
+- `visitFile`: `attrs.isRegularFile()`(nofollow)로 판정 — 심링크 미추종이라 끊긴/순환 심링크 크래시 회피(부수효과: 심링크 소스는 미수집, 실레포에서 드물고 원본이 트리에 있어 무해).
+
+**검증.** 동일 입력 출력 불변(requests 752노드·1617엣지·경고 동일), 플레이키 해소(express·requests 각 2/2 성공, 이전 requests 0/5). SourceFileWalkerTest 7종(중첩 스킵 가지치기·끊긴 심링크 내성 신규 2 + 기존 5), 백엔드 전체 스위트 통과. **★ 측정-우선 부산물 — 정확도 측정 중 측정 도구가 적발한 프로덕션 로버스트니스 갭(Rule 11).**
+
 ## B-16 — 함수 값-참조(콜백) DEAD_CODE 오탐 제거 (2026-06-17)
 
 **문제.** DEAD_CODE 감지는 인바운드 FUNCTION_CALL 엣지가 없는 함수를 후보로 본다. 그런데 함수가 **호출(`name()`)이 아니라 값(콜백·고차함수 인자)으로 전달**되면 `name(` 패턴이 안 생겨 엣지가 없고, 곧 데드 코드로 오인된다. 대표: gin `recovery.go`의 `CustomRecoveryWithWriter(out, defaultHandleRecovery)` — `defaultHandleRecovery`가 값으로 전달돼 베이스라인에서 유일 DEAD_CODE 오탐. Context57(#290)에서 "콜백 값참조, 범위 외"로 미뤘던 케이스. 값 전달은 Go·JS·Python에서 매우 흔함(`register(handler)`, `arr.map(fn)`, `sorted(x, key=fn)`).
