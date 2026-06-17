@@ -28,6 +28,7 @@ public class StaticCodeAnalyzer {
         String fileComment = extractFileComment(content, language);
         Map<String, String> functionComments = extractFunctionComments(content, language);
         Map<String, List<String>> functionCalls = extractFunctionCalls(masked, language, functions);
+        List<String> valueReferencedFunctions = extractValueReferencedFunctions(masked, functions);
         List<String> instantiatedClasses = extractInstantiatedClasses(masked);
         List<DbTableInfo> dbTables = extractDbTables(content, language, relativePath);
         String repositoryEntityClass = extractRepositoryEntityClass(masked, language);
@@ -40,7 +41,7 @@ public class StaticCodeAnalyzer {
         List<RawSqlAccess> rawSqlAccesses = extractRawSqlAccesses(content);
         List<String> frameworkAnnotatedMethods = extractFrameworkAnnotatedMethods(masked, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함
@@ -367,6 +368,27 @@ public class StaticCodeAnalyzer {
             }
         }
         return result;
+    }
+
+    // 함수가 값으로 참조되는 함수명 추출
+    // 같은 파일에 정의된 함수가 호출(name())이 아니라 값(콜백·고차함수 인자)으로 참조되면 FUNCTION_CALL 엣지가
+    // 생기지 않아 DEAD_CODE 오탐이 된다. 예: Go register(handler), JS arr.map(fn), Python sorted(x, key=fn).
+    // 값 참조 = 식별자 앞에 '.' 없음(한정 접근 obj.fn 제외)·뒤에 '(' 없음(호출·정의 제외). 같은 파일 정의 함수로
+    // 한정해 변수명 충돌 오검출을 억제(보수적). 오검출 시 결과는 경고 1개 미표시(과소 경고)라 안전하다.
+    private List<String> extractValueReferencedFunctions(String content, List<String> definedFunctions) {
+        if (definedFunctions.isEmpty()) return List.of();
+        StringBuilder alt = new StringBuilder();
+        for (String name : new LinkedHashSet<>(definedFunctions)) {
+            if (name == null || name.isEmpty()) continue;
+            if (alt.length() > 0) alt.append('|');
+            alt.append(Pattern.quote(name));
+        }
+        if (alt.length() == 0) return List.of();
+        Pattern refPattern = Pattern.compile("(?<![.\\w])(" + alt + ")\\b(?!\\s*\\()");
+        Set<String> referenced = new LinkedHashSet<>();
+        Matcher m = refPattern.matcher(content);
+        while (m.find()) referenced.add(m.group(1));
+        return new ArrayList<>(referenced);
     }
 
     // 파일 전체에서 new ClassName() 패턴으로 인스턴스화되는 클래스명 목록 추출

@@ -4,6 +4,28 @@
 
 ---
 
+## B-16 — 함수 값-참조(콜백) DEAD_CODE 오탐 제거 (2026-06-17)
+
+**문제.** DEAD_CODE 감지는 인바운드 FUNCTION_CALL 엣지가 없는 함수를 후보로 본다. 그런데 함수가 **호출(`name()`)이 아니라 값(콜백·고차함수 인자)으로 전달**되면 `name(` 패턴이 안 생겨 엣지가 없고, 곧 데드 코드로 오인된다. 대표: gin `recovery.go`의 `CustomRecoveryWithWriter(out, defaultHandleRecovery)` — `defaultHandleRecovery`가 값으로 전달돼 베이스라인에서 유일 DEAD_CODE 오탐. Context57(#290)에서 "콜백 값참조, 범위 외"로 미뤘던 케이스. 값 전달은 Go·JS·Python에서 매우 흔함(`register(handler)`, `arr.map(fn)`, `sorted(x, key=fn)`).
+
+**설계 — 가짜 엣지 대신 메타 플래그.** 값 참조를 FUNCTION_CALL 엣지로 만들면 그래프·HIGH_FAN_OUT·흐름 재생을 오염시킨다(B-10이 청소한 바로 그것 + 값 참조는 의미상 "호출"이 아니라 흐름 재생에서 오도). 그래서 엣지 0개로, 정의 노드 메타에 `referencedAsValue:true` 플래그만 심어 DEAD_CODE에서 제외한다.
+- `StaticCodeAnalyzer.extractValueReferencedFunctions(masked, functions)` — 같은 파일 정의 함수가 `(?<![.\w])(name)\b(?!\s*\()`로 등장하면 값 참조. 앞에 `.` 없음(`obj.fn` 한정 접근 제외)·뒤에 `(` 없음(호출·정의는 둘 다 `(`가 따라오므로 자동 제외). 같은 파일 정의로 한정해 변수명 충돌 오검출 억제(보수적).
+- `ParsedFile.valueReferencedFunctions` 필드 → `GraphBuilder`가 해당 FUNCTION 노드 메타에 `referencedAsValue` → `GraphWarningService.detectDeadCode`가 스킵.
+
+**오검출 방향.** 같은 파일에 동명 변수가 함수와 겹쳐 잘못 매칭돼도 결과는 "데드 코드 경고 1개 미표시"(under-warning). 정상 앱은 DEAD_CODE를 거의 안 띄우는 게 목표이고 LOW 심각도라 안전한 방향. 문자열 본문 속 함수명도 매칭될 수 있으나(Stage 1은 문자열 미마스킹) 동일하게 benign.
+
+**측정(production-parity analyzeLocal, 클린·전체 테스트 통과).** B-16은 순수 억제라 경고를 추가할 수 없음 → "회귀 없음"은 구조적 보장.
+
+| 레포 | 효과 |
+|---|---|
+| **gin** | **DEAD_CODE 1 → 0** — defaultHandleRecovery 오탐 제거, 완전 무경고. (유일 경고가 콜백이라 깔끔한 귀속) |
+| express | 게이트 단일 안내 유지. 미호출 함수 다수 감소(JS 콜백), 개별 오탐 누출 0 |
+| requests | 게이트 단일 안내 유지(미호출 30/711). HIGH_FAN_OUT 2 정상 |
+| petclinic | 변화 없음(HIGH_FAN_OUT 1, DEAD_CODE 0) |
+| codeprint | DEAD_CODE 1(monthlyPrice=진짜 미사용) 유지 — **오억제 0** |
+
+**TDD 6종.** StaticCodeAnalyzerTest 4(Go 콜백 값참조 포함·일반 호출 제외·한정접근/정의 제외·Java 콜백) + GraphWarningServiceTest 1(referencedAsValue 메타 제외) + GraphBuilderTest 1(프로덕션 경로 e2e: 분석기→빌더 메타 전파→검출기 제외). 전체 스위트 통과.
+
 ## B-10 Stage 1 — 주석 마스킹 (2026-06-17)
 
 **문제.** 모든 추출기가 raw `content`에 정규식을 직접 적용 → 주석 본문 속 식별자가 코드로 오인됨. 주석 처리된 함수 호출·import·`new X()`가 가짜 FUNCTION_CALL 엣지·가짜 노드로 누출. #281 도그푸딩이 적발한 자기 코드 `CROSS_DOMAIN_CALL` 오탐(주석 유래)이 대표 사례.
