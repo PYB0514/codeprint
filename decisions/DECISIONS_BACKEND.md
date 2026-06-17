@@ -2,6 +2,27 @@
 
 ---
 
+## diff-scoped PR 리뷰 — PR이 변경한 파일의 경고만 게시 (2026-06-17)
+
+**문제.** PR 리뷰는 head 브랜치를 통째로 분석해 **전체 레포의 구조 경고**를 게시했다. PR이 건드리지 않은 파일의 기존 경고까지 쏟아져 정작 이 PR이 유발/노출한 문제가 묻힌다(PR 봇 노이즈의 핵심).
+
+**경로 정렬(핵심 위험 사전 검증).** 필터가 조용히 전부 드롭(no-op)되는 함정을 막기 위해 두 경로 포맷을 먼저 대조.
+- 분석기 노드 경로: `StaticCodeAnalyzer`가 `repoRoot.relativize(file).toString().replace("\\","/")` → **선두 슬래시 없는 레포 루트 상대경로**(forward slash).
+- GitHub PR Files API `filename`: 동일하게 레포 루트 상대경로(forward slash, 선두 슬래시 없음).
+- → 두 포맷이 정확히 일치 → 문자열 동치 비교로 안전. (v0.86.14에서 경고에 부여한 `file` 필드가 이 비교의 키.)
+
+**설계.**
+- `GitHubApiClient.fetchPullRequestChangedFiles` — `GET /pulls/{n}/files` 페이지네이션(per_page=100, 최대 20p) → `Set<filename>`.
+- `PrReviewService.scopeToChangedFiles(warnings, changedFiles)` — 순수 static. `file ∈ changedFiles`만 통과. `file` 없는 경고(위치 미상, 예: DEAD_CODE 신뢰도 게이트)는 PR 변경에 귀속 불가하므로 제외. **단위 테스트 가능한 순수 함수로 분리**(review()는 I/O라 직접 테스트 어려움 — formatComment 패턴 답습).
+- **폴백.** 변경 파일 조회 실패 시 `null` 반환 → `scopeToChangedFiles`가 전체 그대로 통과 + `diffScoped=false`. 리뷰 자체는 절대 깨뜨리지 않음.
+- 필터 순서: diff-scope → LOW 필터. `outOfScopeCount`(변경 외 제외 수)·`diffScoped`를 결과·코멘트에 투명 노출(#293 lowFilteredCount 패턴 일관).
+
+**적용 범위.** `review()`는 수동(Tier 0)·webhook(Tier 1) 공용이라 양쪽 모두 diff-scope 적용.
+
+**결과.** 변경 파일 경고만 게시, 코멘트 제목 "(이 PR이 변경한 파일 기준)" + 변경외 제외 안내, ProjectCard "변경 외 N개 제외" 표시. TDD 5종(scope: 필터/fileless 제외/null 폴백 + comment: 제목·제외안내/빈 상태). compile·test·tsc 통과.
+
+---
+
 ## PR 코멘트에 경고 발생 파일 경로 노출 (2026-06-17)
 
 **문제.** PR 리뷰 코멘트는 각 경고를 `- **TYPE** — message`로만 나열했다. 경고 맵은 `nodeIds`(UUID)만 보유하고 파일 경로가 없어, 그래프 화면이 없는 텍스트 코멘트에서 리뷰어가 "어느 파일의 문제인지" 파악·점프할 수 없었다. (HIGH/MEDIUM 메시지에 도메인·함수명은 있으나 정확한 파일 경로는 없음.)

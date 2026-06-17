@@ -49,7 +49,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
   const [showPrReview, setShowPrReview] = useState(false)
   const [prNumber, setPrNumber] = useState('')
   const [prReviewing, setPrReviewing] = useState(false)
-  const [prResult, setPrResult] = useState<{ prNumber: number; warningCount: number; lowFilteredCount: number; commentUrl: string } | null>(null)
+  const [prResult, setPrResult] = useState<{ prNumber: number; warningCount: number; lowFilteredCount: number; outOfScopeCount: number; commentUrl: string } | null>(null)
   const [prError, setPrError] = useState<string | null>(null)
 
   const pickerRef = useRef<HTMLDivElement>(null)
@@ -230,6 +230,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
         prNumber: res.data.prNumber,
         warningCount: res.data.warningCount,
         lowFilteredCount: res.data.lowFilteredCount ?? 0,
+        outOfScopeCount: res.data.outOfScopeCount ?? 0,
         commentUrl: res.data.commentUrl,
       })
     } catch {
@@ -435,7 +436,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
           )}
           {prResult && (
             <p className="text-xs text-green-400">
-              PR #{prResult.prNumber} 리뷰 완료 — 경고 {prResult.warningCount}개{prResult.lowFilteredCount > 0 ? ` (LOW ${prResult.lowFilteredCount}개 생략)` : ''}.{' '}
+              PR #{prResult.prNumber} 리뷰 완료 — 변경 파일 경고 {prResult.warningCount}개{prResult.lowFilteredCount > 0 ? ` (LOW ${prResult.lowFilteredCount}개 생략)` : ''}{prResult.outOfScopeCount > 0 ? ` · 변경 외 ${prResult.outOfScopeCount}개 제외` : ''}.{' '}
               {prResult.commentUrl && (
                 <a
                   href={prResult.commentUrl}

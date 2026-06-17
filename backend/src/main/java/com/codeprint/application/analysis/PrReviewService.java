@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -44,24 +45,53 @@ public class PrReviewService {
         String headBranch = gitHubApiClient.fetchPullRequestHeadBranch(repoUrl, prNumber, githubToken);
 
         UUID graphId = analyzeBranch(projectId, repoUrl, headBranch, githubToken);
-        List<Map<String, Object>> allWarnings = filterSuppressed(projectId, warningDetectionPort.detectWarnings(graphId));
-        List<Map<String, Object>> warnings = allWarnings.stream()
+        List<Map<String, Object>> suppressedFiltered = filterSuppressed(projectId, warningDetectionPort.detectWarnings(graphId));
+
+        // diff-scope — PR이 변경한 파일에 속한 경고만 게시 (조회 실패 시 null → 전체 폴백)
+        Set<String> changedFiles = fetchChangedFilesSafe(repoUrl, prNumber, githubToken);
+        boolean diffScoped = changedFiles != null;
+        List<Map<String, Object>> scoped = scopeToChangedFiles(suppressedFiltered, changedFiles);
+        int outOfScopeCount = suppressedFiltered.size() - scoped.size();
+
+        List<Map<String, Object>> warnings = scoped.stream()
                 .filter(w -> !"LOW".equals(w.get("severity")))
                 .toList();
-        int lowFilteredCount = allWarnings.size() - warnings.size();
+        int lowFilteredCount = scoped.size() - warnings.size();
 
-        String body = formatComment(headBranch, warnings, lowFilteredCount);
+        String body = formatComment(headBranch, warnings, lowFilteredCount, outOfScopeCount, diffScoped);
         String commentUrl = gitHubApiClient.postIssueComment(repoUrl, prNumber, body, githubToken);
-        log.info("PR 리뷰 코멘트 게시: repo={}, pr={}, 게시={}, LOW_생략={}", repoUrl, prNumber, warnings.size(), lowFilteredCount);
+        log.info("PR 리뷰 코멘트 게시: repo={}, pr={}, 게시={}, LOW_생략={}, 변경외_제외={}, diffScope={}",
+                repoUrl, prNumber, warnings.size(), lowFilteredCount, outOfScopeCount, diffScoped);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("prNumber", prNumber);
         result.put("headBranch", headBranch);
         result.put("warningCount", warnings.size());
         result.put("lowFilteredCount", lowFilteredCount);
+        result.put("outOfScopeCount", outOfScopeCount);
+        result.put("diffScoped", diffScoped);
         result.put("commentUrl", commentUrl != null ? commentUrl : "");
         result.put("graphId", graphId.toString());
         return result;
+    }
+
+    // PR 변경 파일 집합을 조회 — 실패 시 null 반환(리뷰를 깨뜨리지 않고 전체 게시로 폴백)
+    private Set<String> fetchChangedFilesSafe(String repoUrl, int prNumber, String githubToken) {
+        try {
+            return gitHubApiClient.fetchPullRequestChangedFiles(repoUrl, prNumber, githubToken);
+        } catch (Exception e) {
+            log.warn("PR 변경 파일 조회 실패 — diff-scope 없이 전체 경고 게시로 폴백: pr={}", prNumber, e);
+            return null;
+        }
+    }
+
+    // 경고를 PR 변경 파일에 속한 것만으로 좁힘 — changedFiles가 null(조회 실패)이면 그대로 반환(폴백).
+    // file 필드가 없는 경고(위치 미상)는 변경 파일에 귀속할 수 없으므로 diff-scope에서 제외.
+    static List<Map<String, Object>> scopeToChangedFiles(List<Map<String, Object>> warnings, Set<String> changedFiles) {
+        if (changedFiles == null) return warnings;
+        return warnings.stream()
+                .filter(w -> changedFiles.contains(String.valueOf(w.get("file"))))
+                .toList();
     }
 
     // 프로젝트에서 숨김 처리된 경고를 PR 코멘트 대상에서 제외
@@ -116,16 +146,25 @@ public class PrReviewService {
         }
     }
 
-    // 경고 목록을 GitHub 마크다운 코멘트로 변환 — severity별 그룹, LOW 생략 시 안내 포함
-    static String formatComment(String branch, List<Map<String, Object>> warnings, int lowExcludedCount) {
+    // 경고 목록을 GitHub 마크다운 코멘트로 변환 — severity별 그룹, LOW·변경외 생략 시 안내 포함
+    static String formatComment(String branch, List<Map<String, Object>> warnings, int lowExcludedCount,
+                                int outOfScopeCount, boolean diffScoped) {
         StringBuilder sb = new StringBuilder();
-        sb.append("## 🔍 Codeprint 구조 분석 — `").append(branch).append("` 브랜치\n\n");
+        sb.append("## 🔍 Codeprint 구조 분석 — `").append(branch).append("` 브랜치");
+        if (diffScoped) sb.append(" (이 PR이 변경한 파일 기준)");
+        sb.append("\n\n");
         if (warnings.isEmpty()) {
-            sb.append("✅ 감지된 구조 경고가 없습니다.");
+            sb.append(diffScoped
+                    ? "✅ 이 PR이 변경한 파일에서 감지된 구조 경고가 없습니다."
+                    : "✅ 감지된 구조 경고가 없습니다.");
             if (lowExcludedCount > 0) {
                 sb.append(" _(LOW 등급 ").append(lowExcludedCount).append("개는 생략)_");
             }
             sb.append("\n\n");
+            if (outOfScopeCount > 0) {
+                sb.append("> _변경 외 파일의 구조 경고 ").append(outOfScopeCount)
+                        .append("개는 이 PR과 무관하여 제외했습니다._\n\n");
+            }
             sb.append("---\n_Codeprint 자동 분석 · 구조 경고는 참고용입니다._\n");
             return sb.toString();
         }
@@ -157,13 +196,22 @@ public class PrReviewService {
         if (lowExcludedCount > 0) {
             sb.append("> _LOW 등급 경고 ").append(lowExcludedCount).append("개는 참고용으로 PR 코멘트에서 생략됩니다._\n\n");
         }
+        if (outOfScopeCount > 0) {
+            sb.append("> _변경 외 파일의 구조 경고 ").append(outOfScopeCount)
+                    .append("개는 이 PR과 무관하여 제외했습니다._\n\n");
+        }
         sb.append("---\n_Codeprint 자동 분석 · 구조 경고는 참고용입니다._\n");
         return sb.toString();
     }
 
+    // backward-compat — LOW 생략 카운트만 받는 오버로드 (diff-scope 미적용)
+    static String formatComment(String branch, List<Map<String, Object>> warnings, int lowExcludedCount) {
+        return formatComment(branch, warnings, lowExcludedCount, 0, false);
+    }
+
     // backward-compat — 테스트/직접 호출용
     static String formatComment(String branch, List<Map<String, Object>> warnings) {
-        return formatComment(branch, warnings, 0);
+        return formatComment(branch, warnings, 0, 0, false);
     }
 
     // 경고 한 줄 렌더 — 발생 파일 경로가 있으면 타입 뒤에 표시해 리뷰어가 위치를 바로 파악
