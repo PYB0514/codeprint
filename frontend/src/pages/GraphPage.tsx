@@ -503,8 +503,12 @@ function GraphPageInner() {
   const [outdated, setOutdated] = useState<{ branch: string; lastAnalyzedAt: string } | null>(null)
   const [freshnessError, setFreshnessError] = useState<'rate_limit' | 'github_error' | null>(null)
   const [reanalyzing, setReanalyzing] = useState(false)
-  // 분석 완료 직후 ?fresh=1로 진입했을 때 표시할 요약 토스트
-  const [analysisSummary, setAnalysisSummary] = useState<string | null>(null)
+  // 분석 완료 직후 ?fresh=1로 진입했을 때 표시할 결과 카드 — 구조 카운트 + 경고 가치
+  const [resultCard, setResultCard] = useState<{
+    files: number; funcs: number; db: number; api: number
+    high: number; medium: number; low: number; warnTotal: number
+    lowCoverage: boolean
+  } | null>(null)
   // 대형 레포 절단 안내 — 전체 대상 파일 수 > 분석된 파일 수일 때 배너 표시
   const [truncation, setTruncation] = useState<{ analyzed: number; total: number } | null>(null)
   const [showDomainBoxes, setShowDomainBoxes] = useState(true)
@@ -1059,16 +1063,16 @@ function GraphPageInner() {
       const dbCount = rn.filter((n) => n.type === 'DB_TABLE').length
       const apiCount = rn.filter((n) => n.type === 'API_ENDPOINT').length
       setCounts({ files: fileCount, funcs: funcCount, edges: re.length })
-      // 분석 완료 직후 진입 시 요약 토스트 표시
-      if (searchParams.get('fresh') === '1') {
-        const parts = [`파일 ${fileCount}개`, `함수 ${funcCount}개`]
-        if (dbCount > 0) parts.push(`DB 테이블 ${dbCount}개`)
-        if (apiCount > 0) parts.push(`API 엔드포인트 ${apiCount}개`)
-        // 파일 수가 적으면 분석 범위 확인 유도 메시지 추가
-        const lowCoverage = fileCount > 0 && fileCount < 5
-        const suffix = lowCoverage ? ' — 파일 수가 적습니다. 레포 루트 URL인지 확인해주세요.' : ''
-        setAnalysisSummary('분석 완료 — ' + parts.join(', ') + suffix)
-        setTimeout(() => setAnalysisSummary(null), lowCoverage ? 9000 : 5000)
+      // 분석 완료 직후 진입 시 결과 카드 표시 — 구조 카운트 + 경고 가치
+      if (searchParams.get('fresh') === '1' && fileCount > 0) {
+        const high = warningList.filter((w) => w.severity === 'HIGH').length
+        const medium = warningList.filter((w) => w.severity === 'MEDIUM').length
+        const low = warningList.filter((w) => w.severity === 'LOW').length
+        setResultCard({
+          files: fileCount, funcs: funcCount, db: dbCount, api: apiCount,
+          high, medium, low, warnTotal: warningList.length,
+          lowCoverage: fileCount < 5,
+        })
       }
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
       if (!isTourDone()) setTimeout(() => setTourRunning(true), 800)
@@ -2776,7 +2780,7 @@ function GraphPageInner() {
 
             {/* 런타임 경고 패널 */}
             {(warnings.length > 0 || suppressedWarnings.length > 0) && (
-              <LeftSection title={`경고 (${warnings.length})`} headerRight={
+              <LeftSection id="warning-section" title={`경고 (${warnings.length})`} headerRight={
                 <button
                   onClick={() => downloadWarningsMd(warnings)}
                   title="경고 목록 마크다운으로 내보내기"
@@ -2854,10 +2858,66 @@ function GraphPageInner() {
         </div>
       )}
 
-      {/* 분석 완료 요약 토스트 */}
-      {analysisSummary && (
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 bg-green-900 border border-green-600 text-green-200 text-sm px-4 py-2 rounded-lg shadow-lg pointer-events-none">
-          {analysisSummary}
+      {/* 분석 완료 결과 카드 — 구조 카운트 + 경고 가치 + 경고 보기 CTA */}
+      {resultCard && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 w-[340px] bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden pointer-events-auto">
+          <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-800">
+            <span className="text-sm font-semibold text-gray-100">분석 완료</span>
+            <button onClick={() => setResultCard(null)} className="text-gray-600 hover:text-gray-300 text-sm" title="닫기">✕</button>
+          </div>
+          <div className="px-4 py-3 flex flex-col gap-3">
+            {/* 구조 카운트 */}
+            <div className="text-xs text-gray-400">
+              파일 <strong className="text-gray-200">{resultCard.files}</strong> · 함수 <strong className="text-gray-200">{resultCard.funcs}</strong>
+              {resultCard.db > 0 && <> · DB <strong className="text-gray-200">{resultCard.db}</strong></>}
+              {resultCard.api > 0 && <> · API <strong className="text-gray-200">{resultCard.api}</strong></>}
+            </div>
+
+            {/* 경고 가치 — 핵심 */}
+            {resultCard.warnTotal === 0 ? (
+              <div className="text-sm text-green-300">✅ 구조 문제가 발견되지 않았습니다</div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <div className="text-sm text-yellow-300">⚠️ 잠재 문제 <strong>{resultCard.warnTotal}</strong>개 발견</div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {resultCard.high > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-900/60 text-red-300 border border-red-700/50">HIGH {resultCard.high}</span>
+                  )}
+                  {resultCard.medium > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-900/60 text-amber-300 border border-amber-700/50">MEDIUM {resultCard.medium}</span>
+                  )}
+                  {resultCard.low > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 border border-gray-700">LOW {resultCard.low}</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    setLeftOpen(true)
+                    setResultCard(null)
+                    // rAF는 React Flow 렌더 루프와 경쟁해 scrollTop이 리셋됨 → setTimeout으로 프레임 이후 실행.
+                    // 중첩 overflow 컨테이너라 scrollIntoView가 불안정해 offsetTop으로 직접 스크롤.
+                    setTimeout(() => {
+                      const el = document.getElementById('warning-section')
+                      const aside = el?.closest('aside')
+                      if (el && aside) {
+                        aside.scrollTop = el.offsetTop
+                        el.classList.add('ring-2', 'ring-yellow-500')
+                        setTimeout(() => el.classList.remove('ring-2', 'ring-yellow-500'), 1600)
+                      }
+                    }, 120)
+                  }}
+                  className="text-sm bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg self-start"
+                >경고 보기 →</button>
+              </div>
+            )}
+
+            {/* 저커버리지 안내 */}
+            {resultCard.lowCoverage && (
+              <div className="text-[11px] text-gray-500 border-t border-gray-800 pt-2">
+                파일 수가 적습니다. 레포 루트 URL인지 확인해주세요.
+              </div>
+            )}
+          </div>
         </div>
       )}
 
