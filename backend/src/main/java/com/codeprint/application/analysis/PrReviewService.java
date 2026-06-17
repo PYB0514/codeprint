@@ -138,7 +138,7 @@ public class PrReviewService {
             if (group.isEmpty()) continue;
             sb.append("### ").append(severityLabel(sev)).append(" (").append(group.size()).append(")\n");
             for (Map<String, Object> w : group) {
-                sb.append("- **").append(w.get("type")).append("** — ").append(w.get("message")).append("\n");
+                appendWarningLine(sb, w);
             }
             sb.append("\n");
             shown += group.size();
@@ -149,7 +149,7 @@ public class PrReviewService {
             for (Map<String, Object> w : warnings) {
                 String sev = String.valueOf(w.get("severity"));
                 if (!List.of("HIGH", "MEDIUM", "LOW").contains(sev)) {
-                    sb.append("- **").append(w.get("type")).append("** — ").append(w.get("message")).append("\n");
+                    appendWarningLine(sb, w);
                 }
             }
             sb.append("\n");
@@ -164,6 +164,16 @@ public class PrReviewService {
     // backward-compat — 테스트/직접 호출용
     static String formatComment(String branch, List<Map<String, Object>> warnings) {
         return formatComment(branch, warnings, 0);
+    }
+
+    // 경고 한 줄 렌더 — 발생 파일 경로가 있으면 타입 뒤에 표시해 리뷰어가 위치를 바로 파악
+    static void appendWarningLine(StringBuilder sb, Map<String, Object> w) {
+        sb.append("- **").append(w.get("type")).append("**");
+        Object file = w.get("file");
+        if (file != null && !String.valueOf(file).isBlank()) {
+            sb.append(" `").append(file).append("`");
+        }
+        sb.append(" — ").append(w.get("message")).append("\n");
     }
 
     // severity 코드 → 이모지 라벨

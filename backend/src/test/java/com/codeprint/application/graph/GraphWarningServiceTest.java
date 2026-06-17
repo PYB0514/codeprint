@@ -79,6 +79,20 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("경고에 발생 파일 경로(file)가 primary 노드 경로로 부여된다")
+    void warning_carriesPrimaryFilePath() {
+        // 호출되지 않는 단일 함수 → DEAD_CODE (함수 1개라 신뢰도 게이트 미적용)
+        Node orphan = funcNodeWithPath("orphan", "/com/x/Svc.java");
+
+        List<Map<String, Object>> warnings = service.detect(List.of(orphan), List.of());
+
+        assertThat(warnings).anySatisfy(w -> {
+            assertThat(w.get("type")).isEqualTo("DEAD_CODE");
+            assertThat(w.get("file")).isEqualTo("/com/x/Svc.java");
+        });
+    }
+
+    @Test
     @DisplayName("A→B→C→A 3노드 순환 의존 감지")
     void cyclicImport_threeNodes() {
         Node a = fileNode("A");
