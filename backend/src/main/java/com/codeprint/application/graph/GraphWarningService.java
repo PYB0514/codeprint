@@ -132,7 +132,8 @@ public class GraphWarningService {
             w.put("severity", "HIGH");
             w.put("nodeIds", cycle.stream().map(UUID::toString).toList());
             w.put("edgeIds", edgeIds);
-            w.put("message", "순환 의존: " + String.join(" → ", names));
+            w.put("message", "순환 의존: " + String.join(" → ", names)
+                    + ". 수정: 공유 로직을 shared/ 모듈로 분리하거나 한쪽 의존을 이벤트/포트-어댑터 패턴으로 역전하세요.");
             warnings.add(w);
         }
         return warnings;
@@ -194,7 +195,8 @@ public class GraphWarningService {
                 w.put("severity", "MEDIUM");
                 w.put("nodeIds", List.of(n.getId().toString()));
                 w.put("edgeIds", List.of());
-                w.put("message", "인터페이스 체인 끊김: " + n.getName() + " — 구현체 메서드로 가는 엣지 없음");
+                w.put("message", "인터페이스 체인 끊김: " + n.getName()
+                        + " — 구현체 메서드로 가는 엣지가 없습니다. 수정: 인터페이스를 구현하는 클래스가 해당 메서드를 @Override로 선언했는지 확인하세요.");
                 warnings.add(w);
             }
         }
@@ -243,7 +245,8 @@ public class GraphWarningService {
                 w.put("edgeIds", List.of(e.getId().toString()));
                 w.put("message", "@Async 자기 호출: " + nameMap.getOrDefault(source, source.toString())
                         + " → " + nameMap.getOrDefault(target, target.toString())
-                        + " (프록시 우회로 비동기 무시됨)");
+                        + " (프록시 우회로 비동기 무시됨). 수정: @Async 메서드를 별도 @Service 빈으로 분리하거나"
+                        + " ApplicationContext.getBean()으로 프록시를 경유해 호출하세요.");
                 warnings.add(w);
             }
         }
@@ -283,7 +286,8 @@ public class GraphWarningService {
                 w.put("edgeIds", List.of(e.getId().toString()));
                 w.put("message", "DB 레이어 우회: " + nameMap.getOrDefault(e.getSourceNodeId(), srcPath)
                         + " → " + nameMap.getOrDefault(e.getTargetNodeId(), tgtPath)
-                        + " (domain Repository를 거치지 않는 직접 persistence 호출)");
+                        + " (domain Repository를 거치지 않는 직접 persistence 호출). 수정: domain/port/ 에"
+                        + " Repository 인터페이스를 선언하고 infrastructure/persistence/ 에서 구현하세요.");
                 warnings.add(w);
             }
         }
@@ -315,7 +319,8 @@ public class GraphWarningService {
                 w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
                 w.put("edgeIds", List.of(e.getId().toString()));
                 w.put("message", "DDD 컨텍스트 경계 위반: application/" + srcContext + " → domain/" + tgtContext
-                        + " 직접 참조 (ID로만 참조해야 함)");
+                        + " 직접 참조. 수정: 타 컨텍스트의 ID(UUID)만 보유하고,"
+                        + " 필요 데이터는 domain/port/ 인터페이스로 조회하세요.");
                 warnings.add(w);
             }
         }
@@ -521,7 +526,8 @@ public class GraphWarningService {
             w.put("severity", "LOW");
             w.put("nodeIds", List.of(n.getId().toString()));
             w.put("edgeIds", List.of());
-            w.put("message", "데드 코드 후보: " + name + " — 이 함수를 호출하는 곳이 없습니다");
+            w.put("message", "데드 코드 후보: " + name
+                    + " — 이 함수를 호출하는 곳이 없습니다. DI·리플렉션·직렬화로 사용 중이면 suppress. 실제 미사용이면 삭제를 검토하세요.");
             warnings.add(w);
         }
 
@@ -703,7 +709,8 @@ public class GraphWarningService {
             w.put("nodeIds", List.of(entry.getKey().toString()));
             w.put("edgeIds", List.of());
             w.put("message", "과도한 의존: " + nameMap.getOrDefault(entry.getKey(), entry.getKey().toString())
-                    + " — " + entry.getValue() + "개 함수를 호출 (단일 책임 원칙 위반 가능성)");
+                    + " — " + entry.getValue() + "개 함수를 호출 (단일 책임 원칙 위반 가능성)."
+                    + " 수정: 관련 의존성을 묶어 Helper/Facade로 추출하거나 책임별로 메서드를 분리하세요.");
             warnings.add(w);
         }
         return warnings;
@@ -737,7 +744,8 @@ public class GraphWarningService {
             w.put("nodeIds", List.of(n.getId().toString()));
             w.put("edgeIds", List.of());
             w.put("message", "@Convert 컨버터 감지: " + n.getName()
-                    + " — 기존 평문 데이터에 대한 Flyway 마이그레이션이 필요합니다");
+                    + " — 기존 평문 데이터에 대한 Flyway 마이그레이션이 필요합니다."
+                    + " 수정: 기존 행을 새 형식으로 변환하는 V{N}__migrate_{table}.sql 을 작성하세요.");
             warnings.add(w);
         }
         return warnings;

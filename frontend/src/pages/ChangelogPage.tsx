@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.86.16',
+    date: '2026-06-17',
+    title: '경고 — 각 경고에 구체적인 수정 가이드 추가',
+    type: 'fix',
+    items: [
+      { category: '경고', desc: '순환 의존·DB 레이어 우회·DDD 컨텍스트 경계 위반 등 8가지 경고 타입에 "이렇게 고치세요" 안내가 추가됐습니다. 예를 들어 CYCLIC_IMPORT 경고는 이제 "공유 로직을 shared/ 모듈로 분리하거나 포트-어댑터 패턴으로 역전하세요"처럼 구체적인 리팩터링 방향을 함께 보여줍니다.' },
+    ],
+  },
+  {
     version: 'v0.86.15',
     date: '2026-06-17',
     title: 'PR 리뷰 — 이 PR이 변경한 파일의 경고만 게시(노이즈 감소)',
