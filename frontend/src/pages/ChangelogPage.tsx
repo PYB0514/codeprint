@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.87.0',
+    date: '2026-06-18',
+    title: 'MCP 서버 — AI 에이전트가 공개 그래프를 직접 조회',
+    type: 'feature',
+    items: [
+      { category: 'MCP', desc: 'Claude Desktop·Cursor 등 MCP 클라이언트에 Codeprint를 연결하면 AI가 공개 그래프의 구조·경고·이웃 노드를 자연어로 물어볼 수 있습니다. POST /mcp/rpc 엔드포인트로 JSON-RPC 2.0을 구현했으며, search_public_projects·get_graph_overview·get_warnings·find_nodes·get_node_neighbors 5가지 툴을 제공합니다. 경고에는 v0.86.16에서 추가한 수정 가이드도 포함됩니다.' },
+    ],
+  },
+  {
     version: 'v0.86.16',
     date: '2026-06-17',
     title: '경고 — 각 경고에 구체적인 수정 가이드 추가',
