@@ -2,6 +2,20 @@
 
 ---
 
+## MCP JSON-RPC 2.0 서버 — POST /mcp/rpc (2026-06-18)
+
+**문제.** 기존 `GET /mcp/graphs/{graphId}/context`는 REST 엔드포인트라 표준 MCP 클라이언트(`claude mcp add --transport http`)가 인식할 수 없었다. AI 에이전트가 실제로 그래프를 질의하려면 MCP 프로토콜이 필요.
+
+**프로토콜 선택.** Streamable HTTP(POST 1개·stateless) vs. SSE(GET + POST 2개·세션 상태). SSE는 Spring MVC에서 별도 스트림 관리가 필요하고 Codeprint는 스트리밍 응답 필요 없음(툴 응답이 단발성) → **stateless Streamable HTTP** 선택. spring-ai 의존성 없이 Jackson + 수동 JSON-RPC 디스패처로 구현.
+
+**데이터 소스 선택 — search_public_projects.** 프로젝트 중 공개(`isPublic=true`)인 것 전체를 쿼리할 "list all public projects" API가 없었음. 대신 `PostRepository.findByGraphIdNotNull(pageable)`(커뮤니티 갤러리에서 그래프를 첨부해 명시적으로 공유한 게시글)을 데이터 소스로 사용 → **의도적으로 공개한 그래프만** 노출(전체 공개 프로젝트 중 공유 의사가 없는 것은 제외). 각 포스트의 graphId → Graph.projectId → `getPublicProject()`로 비공개 프로젝트를 추가 필터링.
+
+**DDD 배치.** `McpRpcController`를 `interfaces/api/` 에 두고 `GraphFacade`·`GraphQueryService`·`PostRepository`를 직접 주입 — 기존 `McpController`가 동일하게 `GraphFacade`·`GraphQueryService`·`AdminDigestService`를 주입하는 선례를 따름. MCP는 본질적으로 cross-context 조회 레이어라 별도 Facade보다 컨트롤러 직접 주입이 코드 단순성 면에서 우위.
+
+**결과.** 5개 툴(search_public_projects·get_graph_overview·get_warnings·find_nodes·get_node_neighbors) 제공. 보안: graphId를 받는 모든 툴은 `getPublicProject()`로 공개 검증. TDD 6종. compile·test·tsc 통과.
+
+---
+
 ## diff-scoped PR 리뷰 — PR이 변경한 파일의 경고만 게시 (2026-06-17)
 
 **문제.** PR 리뷰는 head 브랜치를 통째로 분석해 **전체 레포의 구조 경고**를 게시했다. PR이 건드리지 않은 파일의 기존 경고까지 쏟아져 정작 이 PR이 유발/노출한 문제가 묻힌다(PR 봇 노이즈의 핵심).
