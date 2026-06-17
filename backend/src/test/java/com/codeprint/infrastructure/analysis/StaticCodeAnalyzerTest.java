@@ -1707,6 +1707,149 @@ class StaticCodeAnalyzerTest {
                 .contains("GET:users", "POST:users");
     }
 
+    // ── B-10 Stage 1: 주석 마스킹 (식별자 검출기가 주석 속 텍스트를 코드로 오인하지 않음) ──
+
+    @Test
+    @DisplayName("라인 주석 안의 함수 호출은 functionCalls에 포함되지 않는다 (B-10)")
+    void 라인주석_안_호출_제외() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class UserService {
+                    public void run() {
+                        // legacyValidate(name); 더 이상 사용 안 함
+                        validate();
+                    }
+                    private void validate() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionCalls().get("run")).contains("validate");
+        assertThat(result.functionCalls().getOrDefault("run", List.of())).doesNotContain("legacyValidate");
+    }
+
+    @Test
+    @DisplayName("블록 주석 안의 함수 호출은 functionCalls에 포함되지 않는다 (B-10)")
+    void 블록주석_안_호출_제외() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class UserService {
+                    public void run() {
+                        /* oldCall();
+                           anotherOld(); */
+                        validate();
+                    }
+                    private void validate() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionCalls().get("run")).contains("validate");
+        assertThat(result.functionCalls().getOrDefault("run", List.of()))
+                .doesNotContain("oldCall", "anotherOld");
+    }
+
+    @Test
+    @DisplayName("Python # 주석 안의 함수 호출은 functionCalls에 포함되지 않는다 (B-10)")
+    void Python_주석_안_호출_제외() throws IOException {
+        Path file = writePyFile("""
+                def run():
+                    # legacy_call()
+                    validate()
+
+                def legacy_call():
+                    pass
+
+                def validate():
+                    pass
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.functionCalls().get("run")).contains("validate");
+        assertThat(result.functionCalls().getOrDefault("run", List.of())).doesNotContain("legacy_call");
+    }
+
+    @Test
+    @DisplayName("문자열 안의 // 는 주석으로 오인되지 않아 같은 줄 뒤 코드가 보존된다 (B-10)")
+    void 문자열_안_슬래시_주석_오인_안함() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class UserService {
+                    public void run() {
+                        log("path // not a comment"); doWork();
+                    }
+                    private void log(String s) {}
+                    private void doWork() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionCalls().get("run")).contains("log", "doWork");
+    }
+
+    @Test
+    @DisplayName("주석 안의 new 인스턴스화는 instantiatedClasses에 포함되지 않는다 (B-10)")
+    void 주석_안_인스턴스화_제외() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class Factory {
+                    public Thing make() {
+                        // new LegacyThing();
+                        return new RealThing();
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.instantiatedClasses()).contains("RealThing");
+        assertThat(result.instantiatedClasses()).doesNotContain("LegacyThing");
+    }
+
+    @Test
+    @DisplayName("주석 처리된 import는 imports에 포함되지 않는다 (B-10)")
+    void 주석_안_import_제외() throws IOException {
+        Path file = writeTsFile("""
+                // import { Old } from './old';
+                import { New } from './new';
+
+                export const f = () => 1;
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.imports()).contains("./new");
+        assertThat(result.imports()).doesNotContain("./old");
+    }
+
+    @Test
+    @DisplayName("파라미터 목록 주석에 ) 가 있어도 함수가 검출된다 (B-10 부수효과: 가려진 함수 회복)")
+    void 파라미터_주석_괄호로_가려진_함수_회복() throws IOException {
+        // 회귀: 함수 정규식 \([^)]*\) 가 파라미터 주석 속 ')' 에서 끊겨 find 가 미검출되던 케이스.
+        // 주석 마스킹 후 비로소 검출 — codeprint DailyMetrics record(주석 "(DAU)")가 실제 사례.
+        Path file = writeJavaFile("""
+                package com.example;
+                public class UserService {
+                    public User find(
+                        Long id, // 기본 키 (PK)
+                        boolean flag) {
+                        validate();
+                        return null;
+                    }
+                    private void validate() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functions()).contains("find");
+        assertThat(result.functionCalls().get("find")).contains("validate");
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {
