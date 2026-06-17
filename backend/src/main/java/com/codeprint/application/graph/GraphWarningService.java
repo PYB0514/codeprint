@@ -30,11 +30,30 @@ public class GraphWarningService {
             warnings.addAll(detectDomainInfraImport(nodes, edges));
             warnings.addAll(detectCrossDomainFunctionCall(nodes, edges));
         }
-        // 각 경고에 안정적 fingerprint 부여 (type+message 기반) — 재분석으로 그래프가 바뀌어도 동일 경고면 동일 값 → suppress 식별용
+        // 노드 위치 조회용 인덱스 — 경고에 발생 파일 경로를 부여하기 위함
+        Map<UUID, String> idToFilePath = new HashMap<>();
+        for (Node n : nodes) {
+            idToFilePath.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+        }
         for (Map<String, Object> w : warnings) {
+            // 각 경고에 안정적 fingerprint 부여 (type+message 기반) — 재분석으로 그래프가 바뀌어도 동일 경고면 동일 값 → suppress 식별용
             w.put("fingerprint", fingerprint((String) w.get("type"), (String) w.get("message")));
+            // 경고 발생 위치 파일 — primary 노드(첫 nodeId)의 경로. 그래프 없는 PR 코멘트에서 위치 표시용
+            attachPrimaryFile(w, idToFilePath);
         }
         return warnings;
+    }
+
+    // 경고의 primary 노드(nodeIds[0]) 파일 경로를 file 필드로 부여 — nodeIds가 비었거나 노드 미발견이면 미부여
+    private void attachPrimaryFile(Map<String, Object> w, Map<UUID, String> idToFilePath) {
+        Object raw = w.get("nodeIds");
+        if (!(raw instanceof List<?> nodeIds) || nodeIds.isEmpty()) return;
+        try {
+            String fp = idToFilePath.get(UUID.fromString(String.valueOf(nodeIds.get(0))));
+            if (fp != null && !fp.isEmpty()) w.put("file", fp);
+        } catch (IllegalArgumentException ignored) {
+            // nodeIds[0]가 UUID 형식이 아니면 위치 미부여 (방어적)
+        }
     }
 
     // 경고의 안정적 식별자 — SHA-256(type + "|" + message) 16진 문자열. message는 파일명·도메인명 등 안정적 의미 내용에서 파생됨.

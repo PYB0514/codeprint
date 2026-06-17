@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.86.14',
+    date: '2026-06-17',
+    title: 'PR 리뷰 — 각 경고가 어느 파일에서 발생했는지 코멘트에 표시',
+    type: 'fix',
+    items: [
+      { category: 'PR 리뷰', desc: 'GitHub PR에 자동 게시되는 구조 분석 코멘트가 경고 종류와 설명만 보여주고 정작 "어느 파일"인지 알려주지 않던 점을 개선 — 이제 각 경고 옆에 발생 파일 경로가 함께 표시돼, 리뷰어가 코멘트만 보고 바로 해당 파일을 찾아갈 수 있습니다' },
+    ],
+  },
+  {
     version: 'v0.86.13',
     date: '2026-06-17',
     title: '분석 안정성 — 특수 파일·대형 의존 폴더가 있어도 분석이 멈추지 않음',

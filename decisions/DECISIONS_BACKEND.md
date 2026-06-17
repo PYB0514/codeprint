@@ -2,6 +2,20 @@
 
 ---
 
+## PR 코멘트에 경고 발생 파일 경로 노출 (2026-06-17)
+
+**문제.** PR 리뷰 코멘트는 각 경고를 `- **TYPE** — message`로만 나열했다. 경고 맵은 `nodeIds`(UUID)만 보유하고 파일 경로가 없어, 그래프 화면이 없는 텍스트 코멘트에서 리뷰어가 "어느 파일의 문제인지" 파악·점프할 수 없었다. (HIGH/MEDIUM 메시지에 도메인·함수명은 있으나 정확한 파일 경로는 없음.)
+
+**이유 → 결정 (대안 비교).**
+- *대안 A — `formatComment`에 노드 목록을 주입해 거기서 nodeId→파일 변환.* PrReviewService가 graphId만 들고 있어 노드 재조회 의존을 formatComment(static)까지 끌고 가야 함 → 책임 혼탁. 기각.
+- *대안 B — 각 detector에서 메시지에 파일 경로를 직접 박기.* 10개 detector 전부 수정 + 메시지/fingerprint 변경 위험(suppress 안정성). 기각.
+- **채택 — `detect()` 중앙 1곳 enrichment.** detect()는 이미 노드를 들고 있으므로, 감지 후 각 경고의 primary 노드(`nodeIds[0]`)의 filePath를 `file` 필드로 부여. PR 코멘트는 `file`이 있으면 `` `경로` ``로 표시.
+- **안전성.** `file`은 additive 필드 → 프론트 무시(무영향). fingerprint는 type+message 기반이라 불변 → suppress 식별 안정성 유지. `detect()`는 프론트 /graph·PR 코멘트·LocalAnalyzer 공통 단일 경유점(GraphQueryService.getWarnings)이라 한 곳 수정으로 전 경로 적용.
+
+**결과.** detect()가 모든 경고에 `file` 부여(nodeIds 비었으면 미부여 — DEAD_CODE 신뢰도 게이트 등). PrReviewService.appendWarningLine이 코멘트에 경로 렌더. TDD 신규 3종(GW 1: primary 파일 부여 / PR 2: file 표시·미표시). 향후 diff-scoped 리뷰(변경 파일 경고만 게시)의 선행 토대.
+
+---
+
 ## PR 코멘트 severity 필터 — LOW 기본 생략 (2026-06-16)
 
 **문제.** PR 코멘트에 LOW 등급 경고까지 전부 포함되면 노이즈가 많아 실제 위험 경고가 묻힌다. LOW는 참고용(dead code 게이트 등)으로 PR 리뷰 맥락에서는 가치가 낮다.

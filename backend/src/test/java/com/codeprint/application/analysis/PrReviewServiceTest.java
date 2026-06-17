@@ -42,6 +42,30 @@ class PrReviewServiceTest {
     }
 
     @Test
+    @DisplayName("경고에 file이 있으면 코멘트 라인에 발생 파일 경로를 표시한다")
+    void formatComment_showsFilePath() {
+        List<Map<String, Object>> warnings = List.of(
+                Map.of("type", "CYCLIC_IMPORT", "message", "순환 의존 A↔B", "severity", "HIGH", "file", "src/A.java")
+        );
+
+        String md = PrReviewService.formatComment("main", warnings);
+
+        assertThat(md).contains("CYCLIC_IMPORT").contains("`src/A.java`");
+    }
+
+    @Test
+    @DisplayName("file이 없는 경고는 파일 경로 백틱 없이 정상 렌더된다")
+    void formatComment_noFile_noBacktickPath() {
+        List<Map<String, Object>> warnings = List.of(
+                warning("CYCLIC_IMPORT", "순환 의존 A↔B", "HIGH")
+        );
+
+        String md = PrReviewService.formatComment("main", warnings);
+
+        assertThat(md).contains("CYCLIC_IMPORT").doesNotContain("` — ");
+    }
+
+    @Test
     @DisplayName("severity가 3종에 없는 경고도 '기타'로 누락 없이 표시한다")
     void formatComment_unknownSeverity_listedUnderEtc() {
         List<Map<String, Object>> warnings = List.of(
