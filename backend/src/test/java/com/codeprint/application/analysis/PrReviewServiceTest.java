@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -13,6 +14,10 @@ class PrReviewServiceTest {
 
     private Map<String, Object> warning(String type, String message, String severity) {
         return Map.of("type", type, "message", message, "severity", severity);
+    }
+
+    private Map<String, Object> warningInFile(String type, String severity, String file) {
+        return Map.of("type", type, "message", type + " msg", "severity", severity, "file", file);
     }
 
     @Test
@@ -97,5 +102,69 @@ class PrReviewServiceTest {
 
         assertThat(md).contains("감지된 구조 경고가 없습니다");
         assertThat(md).contains("LOW 등급 2개는 생략");
+    }
+
+    @Test
+    @DisplayName("diff-scope — PR이 변경한 파일에 속한 경고만 남기고 나머지는 제외한다")
+    void scopeToChangedFiles_keepsOnlyChangedFiles() {
+        List<Map<String, Object>> warnings = List.of(
+                warningInFile("CYCLIC_IMPORT", "HIGH", "src/A.java"),
+                warningInFile("DB_LAYER_BYPASS", "HIGH", "src/B.java"),
+                warningInFile("CROSS_DOMAIN_CALL", "MEDIUM", "src/C.java")
+        );
+
+        List<Map<String, Object>> scoped = PrReviewService.scopeToChangedFiles(
+                warnings, Set.of("src/A.java", "src/C.java"));
+
+        assertThat(scoped).hasSize(2);
+        assertThat(scoped).extracting(w -> w.get("file"))
+                .containsExactlyInAnyOrder("src/A.java", "src/C.java");
+    }
+
+    @Test
+    @DisplayName("diff-scope — file 필드가 없는 경고는 변경 파일에 귀속 불가하여 제외한다")
+    void scopeToChangedFiles_dropsFilelessWarnings() {
+        List<Map<String, Object>> warnings = List.of(
+                warning("DEAD_CODE", "위치 미상 안내", "LOW")
+        );
+
+        List<Map<String, Object>> scoped = PrReviewService.scopeToChangedFiles(
+                warnings, Set.of("src/A.java"));
+
+        assertThat(scoped).isEmpty();
+    }
+
+    @Test
+    @DisplayName("diff-scope — 변경 파일 조회 실패(null)면 전체를 그대로 반환(폴백)")
+    void scopeToChangedFiles_nullFallsBackToAll() {
+        List<Map<String, Object>> warnings = List.of(
+                warningInFile("CYCLIC_IMPORT", "HIGH", "src/A.java")
+        );
+
+        List<Map<String, Object>> scoped = PrReviewService.scopeToChangedFiles(warnings, null);
+
+        assertThat(scoped).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("diff-scope 코멘트 — 제목에 변경 파일 기준 표기 + 변경외 제외 안내")
+    void formatComment_diffScoped_titleAndOutOfScopeNote() {
+        List<Map<String, Object>> warnings = List.of(
+                warning("CYCLIC_IMPORT", "순환 의존 A↔B", "HIGH")
+        );
+
+        String md = PrReviewService.formatComment("main", warnings, 0, 4, true);
+
+        assertThat(md).contains("이 PR이 변경한 파일 기준");
+        assertThat(md).contains("변경 외 파일의 구조 경고 4개는 이 PR과 무관하여 제외");
+    }
+
+    @Test
+    @DisplayName("diff-scope 코멘트 — 변경 파일에 경고가 없으면 그에 맞는 통과 메시지")
+    void formatComment_diffScoped_empty_passMessage() {
+        String md = PrReviewService.formatComment("main", List.of(), 0, 2, true);
+
+        assertThat(md).contains("이 PR이 변경한 파일에서 감지된 구조 경고가 없습니다");
+        assertThat(md).contains("변경 외 파일의 구조 경고 2개");
     }
 }

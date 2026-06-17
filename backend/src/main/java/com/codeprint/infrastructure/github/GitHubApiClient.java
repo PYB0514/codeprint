@@ -109,6 +109,40 @@ public class GitHubApiClient {
         }
     }
 
+    // PR이 변경한 파일 경로 목록을 조회 — 페이지네이션(per_page=100)으로 전부 수집. filename은 레포 루트 상대경로(슬래시)
+    public java.util.Set<String> fetchPullRequestChangedFiles(String githubRepoUrl, int prNumber, String githubAccessToken) {
+        String ownerRepo = extractOwnerRepo(githubRepoUrl);
+        java.util.Set<String> files = new java.util.LinkedHashSet<>();
+        try {
+            // 최대 20페이지(2000파일) 안전 상한 — 그 이상이면 사실상 전체 리팩토링 PR이라 diff-scope 의미 희박
+            for (int page = 1; page <= 20; page++) {
+                String apiUrl = "https://api.github.com/repos/" + ownerRepo + "/pulls/" + prNumber
+                        + "/files?per_page=100&page=" + page;
+                HttpRequest.Builder builder = HttpRequest.newBuilder()
+                        .uri(URI.create(apiUrl))
+                        .header("Accept", "application/vnd.github+json")
+                        .header("X-GitHub-Api-Version", "2022-11-28");
+                if (githubAccessToken != null && !githubAccessToken.isBlank()) {
+                    builder.header("Authorization", "Bearer " + githubAccessToken);
+                }
+                HttpResponse<String> response = httpClient.send(builder.GET().build(), HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() != 200) {
+                    throw new RuntimeException("GitHub API " + response.statusCode() + " — " + response.body());
+                }
+                JsonNode arr = objectMapper.readTree(response.body());
+                if (!arr.isArray() || arr.isEmpty()) break;
+                for (JsonNode node : arr) {
+                    JsonNode fn = node.get("filename");
+                    if (fn != null) files.add(fn.asText());
+                }
+                if (arr.size() < 100) break;
+            }
+            return files;
+        } catch (Exception e) {
+            throw new RuntimeException("GitHub PR 변경 파일 조회 실패: " + ownerRepo + " #" + prNumber, e);
+        }
+    }
+
     // PR(이슈)에 코멘트를 작성하고 생성된 코멘트의 html_url을 반환
     public String postIssueComment(String githubRepoUrl, int prNumber, String body, String githubAccessToken) {
         String ownerRepo = extractOwnerRepo(githubRepoUrl);
