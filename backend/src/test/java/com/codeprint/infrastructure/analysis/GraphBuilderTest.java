@@ -176,7 +176,7 @@ class GraphBuilderTest {
                 "src/infra/NoticeRepositoryImpl.java", "Java",
                 List.of("save"), List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
-                List.of("NoticeRepository"), List.of(), List.of(), List.of(), List.of()
+                List.of("NoticeRepository"), List.of(), List.of(), List.of(), List.of(), List.of()
         );
 
         // CachedNoticeRepositoryImpl (두 번째 구현체)
@@ -184,7 +184,7 @@ class GraphBuilderTest {
                 "src/infra/CachedNoticeRepositoryImpl.java", "Java",
                 List.of("save"), List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
-                List.of("NoticeRepository"), List.of(), List.of(), List.of(), List.of()
+                List.of("NoticeRepository"), List.of(), List.of(), List.of(), List.of(), List.of()
         );
 
         graphBuilder.build(projectId, analysisId, List.of(ifaceFile, impl1, impl2));
@@ -216,7 +216,8 @@ class GraphBuilderTest {
                 List.of(), // asyncMethods
                 List.of(), // jsxComponents
                 List.of(), // rawSqlAccesses
-                List.of()  // frameworkAnnotatedMethods
+                List.of(), // frameworkAnnotatedMethods
+                List.of()  // valueReferencedFunctions
         );
 
         graphBuilder.build(projectId, analysisId, List.of(ifaceFile, implFile));
@@ -463,39 +464,80 @@ class GraphBuilderTest {
         assertThat(anyCyclic).isFalse();
     }
 
+    @Test
+    @DisplayName("[프로덕션 교차검증] gin recovery.go 콜백 — 값으로 전달된 함수가 referencedAsValue 메타로 DEAD_CODE 제외 (B-16)")
+    void Go_콜백_값참조_프로덕션_경로_교차검증(@TempDir Path tempDir) throws Exception {
+        // gin recovery.go: CustomRecoveryWithWriter(out, defaultHandleRecovery) — 값 전달이라 호출 엣지 없음 → DEAD_CODE 오탐
+        StaticCodeAnalyzer analyzer = new StaticCodeAnalyzer();
+        Path recoveryGo = tempDir.resolve("recovery.go");
+        Files.writeString(recoveryGo, """
+                package gin
+
+                func Recovery() HandlerFunc {
+                    return CustomRecoveryWithWriter(DefaultErrorWriter, defaultHandleRecovery)
+                }
+
+                func defaultHandleRecovery(c *Context, _ any) {
+                    c.AbortWithStatus(500)
+                }
+                """);
+        ParsedFile pf = analyzer.analyze(recoveryGo, tempDir, "Go");
+
+        graphBuilder.build(projectId, analysisId, List.of(pf));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        // 분석기가 값 참조를 잡고, 빌더가 노드 메타에 referencedAsValue 플래그를 심는다
+        assertThat(pf.valueReferencedFunctions()).contains("defaultHandleRecovery");
+        boolean flagged = nodeCaptor.getAllValues().stream()
+                .filter(n -> n.getType() == NodeType.FUNCTION && "defaultHandleRecovery".equals(n.getName()))
+                .anyMatch(n -> n.getMetadata() != null && Boolean.TRUE.equals(n.getMetadata().get("referencedAsValue")));
+        assertThat(flagged).isTrue();
+
+        List<Map<String, Object>> warnings = new GraphWarningService()
+                .detect(nodeCaptor.getAllValues(), edgeCaptor.getAllValues());
+        boolean recoveryDead = warnings.stream()
+                .filter(w -> "DEAD_CODE".equals(w.get("type")))
+                .anyMatch(w -> ((String) w.getOrDefault("message", "")).contains("defaultHandleRecovery"));
+        assertThat(recoveryDead).isFalse();
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private ParsedFile parsedFile(String path, String lang, List<String> functions, Map<String, String> comments) {
         return new ParsedFile(path, lang, functions, List.of(), null, comments,
-                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     private ParsedFile parsedFileWithCalls(String path, String lang, List<String> functions,
                                            Map<String, List<String>> calls) {
         return new ParsedFile(path, lang, functions, List.of(), null, Map.of(),
-                calls, List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                calls, List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     private ParsedFile parsedFileWithImports(String path, String lang, List<String> imports) {
         return new ParsedFile(path, lang, List.of(), imports, null, Map.of(),
-                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     // 구현체 파일 생성 헬퍼 — implementedInterfaces 포함
     private ParsedFile parsedFileWithImpl(String path, String lang, List<String> functions, String implementedInterface) {
         return new ParsedFile(path, lang, functions, List.of(), null, Map.of(),
-                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(implementedInterface), List.of(), List.of(), List.of(), List.of());
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(implementedInterface), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     // 프론트 API 호출 파일 생성 헬퍼 — apiCalls 포함
     private ParsedFile parsedFileWithApiCalls(String path, String lang, List<String> apiCalls) {
         return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
-                Map.of(), List.of(), List.of(), null, List.of(), apiCalls, List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                Map.of(), List.of(), List.of(), null, List.of(), apiCalls, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     // 백엔드 컨트롤러 매핑 파일 생성 헬퍼 — controllerMappings 포함
     private ParsedFile parsedFileWithMappings(String path, String lang, List<String> mappings) {
         return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
-                Map.of(), List.of(), List.of(), null, List.of(), List.of(), mappings, List.of(), List.of(), List.of(), List.of(), List.of());
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), mappings, List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 }

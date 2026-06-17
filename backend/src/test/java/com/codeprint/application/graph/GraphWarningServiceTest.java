@@ -415,6 +415,15 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("값(콜백)으로 참조되는 함수(referencedAsValue 메타) — 호출 엣지 없어도 DEAD_CODE 제외 (B-16)")
+    void deadCode_referencedAsValue_excluded() {
+        Node handler = funcNodeWithPath("defaultHandleRecovery", "/gin/recovery.go");
+        handler.updateMetadata(Map.of("referencedAsValue", true));
+        List<Map<String, Object>> warnings = service.detect(List.of(handler), List.of());
+        assertThat(isDeadCode(warnings, handler.getId())).isFalse();
+    }
+
+    @Test
     @DisplayName("테스트 디렉터리(/tests/)·pytest 함수(test_*) — DEAD_CODE 제외 (C-13)")
     void deadCode_testArtifacts_excluded() {
         Node testsDir = Node.create(graphId, NodeType.FUNCTION, "helper", "/requests/tests/utils.py", "Python");

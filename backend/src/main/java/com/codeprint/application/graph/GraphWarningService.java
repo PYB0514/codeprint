@@ -418,7 +418,7 @@ public class GraphWarningService {
     //   1. JSX 렌더 (<App />) — React.createElement 호출, FUNCTION_CALL 엣지로 연결 안 됨
     //   2. JPA Repository 메서드 — Spring AOP 프록시가 런타임에 호출
     //   3. DDD 팩토리 메서드(of/create) — import 후 다른 파일에서 사용, cross-file 추적 미완성
-    //   4. 콜백 참조(addEventListener(handler)) — 값으로 전달, "호출"이 아님
+    //   4. 콜백 참조(addEventListener(handler)) — 값으로 전달, "호출"이 아님 (referencedAsValue 메타로 제외, B-16)
     //   5. React 컴포넌트(대문자 시작 tsx 함수) — export 후 JSX로 사용
     private List<Map<String, Object>> detectDeadCode(List<Node> nodes, List<Edge> edges) {
         Map<UUID, String> idToName = new HashMap<>();
@@ -493,6 +493,8 @@ public class GraphWarningService {
                 if (Boolean.TRUE.equals(meta.get("isBean"))) continue;
                 // 프레임워크 어노테이션/데코레이터(@GetMapping·@Bean·@Override·@InitBinder·Python 데코레이터 등) — 런타임이 호출
                 if (Boolean.TRUE.equals(meta.get("isFrameworkAnnotated"))) continue;
+                // 값(콜백·고차함수 인자)으로 참조되는 함수 — 호출 엣지는 없지만 사용 중 (B-16)
+                if (Boolean.TRUE.equals(meta.get("referencedAsValue"))) continue;
             }
 
             Map<String, Object> w = new LinkedHashMap<>();

@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.86.12',
+    date: '2026-06-17',
+    title: '경고 정확도 — 콜백으로 넘긴 함수를 데드 코드로 오인하지 않음',
+    type: 'fix',
+    items: [
+      { category: '경고', desc: '함수를 호출(name())하지 않고 값으로 넘기는 콜백·고차함수 패턴(예: Go register(handler), JS arr.map(fn), Python sorted(x, key=fn))에서, 넘겨진 함수가 "데드 코드(아무도 호출 안 함)"로 잘못 표시되던 오탐을 제거 — 값으로 참조된 함수를 사용 중으로 인식합니다. 실측에서 Go(gin) 저장소의 마지막 남은 데드 코드 오탐이 사라져 무경고가 됐고, 그래프에 가짜 연결선은 추가하지 않습니다' },
+    ],
+  },
+  {
     version: 'v0.86.11',
     date: '2026-06-17',
     title: '분석 결과 첫인상 — 발견된 잠재 문제를 결과 카드로 바로 안내',

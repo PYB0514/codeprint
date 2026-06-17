@@ -1850,6 +1850,85 @@ class StaticCodeAnalyzerTest {
         assertThat(result.functionCalls().get("find")).contains("validate");
     }
 
+    // ── 회귀: 함수 값-참조(콜백) 추출 (B-16) ──────────────────────────────────
+
+    @Test
+    @DisplayName("Go에서 함수를 값(콜백)으로 전달 — valueReferencedFunctions에 포함")
+    void Go_콜백_값참조_추출() throws IOException {
+        // 회귀: gin recovery.go의 CustomRecoveryWithWriter(out, defaultHandleRecovery) —
+        // defaultHandleRecovery가 호출(())이 아닌 값으로 전달되어 FUNCTION_CALL 엣지 없음 → DEAD_CODE 오탐
+        Path file = writeGoFile("""
+                package gin
+                func Recovery() HandlerFunc {
+                    return CustomRecoveryWithWriter(DefaultWriter, defaultHandleRecovery)
+                }
+                func defaultHandleRecovery(c *Context, _ any) {
+                    c.AbortWithStatus(500)
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.valueReferencedFunctions()).contains("defaultHandleRecovery");
+    }
+
+    @Test
+    @DisplayName("일반 호출(())만 있는 함수 — valueReferencedFunctions에 미포함 (과잉 억제 방지)")
+    void 일반_호출은_값참조_아님() throws IOException {
+        Path file = writeGoFile("""
+                package gin
+                func Run() {
+                    doWork()
+                }
+                func doWork() {
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        // doWork는 호출(())로만 등장 → 값 참조 아님 (호출 엣지로 이미 사용 추적됨)
+        assertThat(result.valueReferencedFunctions()).doesNotContain("doWork");
+    }
+
+    @Test
+    @DisplayName("한정 접근(obj.fn)·자기 정의 — 값 참조로 오인하지 않음")
+    void 한정접근과_정의는_값참조_아님() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class Registry {
+                    public void register() {
+                        router.handle(this.process);
+                    }
+                    public void handle() {}
+                    public void process() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        // process는 'this.' 뒤 한정 접근 → 다른 객체 멤버일 수 있어 제외. handle은 정의·호출(())뿐 → 제외.
+        assertThat(result.valueReferencedFunctions()).doesNotContain("process", "handle", "register");
+    }
+
+    @Test
+    @DisplayName("Java 콜백 값 전달(stream/메서드 인자) — valueReferencedFunctions에 포함")
+    void Java_콜백_값참조_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class Worker {
+                    public void start() {
+                        scheduler.submit(cleanup);
+                    }
+                    public void cleanup() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        // cleanup이 submit(cleanup)에 값으로 전달 — '.'  앞 없음·'(' 뒤 없음
+        assertThat(result.valueReferencedFunctions()).contains("cleanup");
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {
@@ -1866,6 +1945,12 @@ class StaticCodeAnalyzerTest {
 
     private Path writePyFile(String content) throws IOException {
         Path file = tempDir.resolve("test_file.py");
+        Files.writeString(file, content);
+        return file;
+    }
+
+    private Path writeGoFile(String content) throws IOException {
+        Path file = tempDir.resolve("test_file.go");
         Files.writeString(file, content);
         return file;
     }
