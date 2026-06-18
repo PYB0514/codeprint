@@ -40,10 +40,10 @@ public class ProjectRepositoryImpl implements ProjectRepository {
         return jpa.findByRepoUrlNormalized(repoHttpsUrl);
     }
 
-    // 사용자의 프로젝트 수 조회
+    // 사용자의 비공개 프로젝트 수 조회 (공개 프로젝트는 제한 제외)
     @Override
-    public int countByUserId(UUID userId) {
-        return jpa.countByUserId(userId);
+    public int countPrivateByUserId(UUID userId) {
+        return jpa.countByUserIdAndIsPublicFalse(userId);
     }
 
     // UUID로 프로젝트 삭제
