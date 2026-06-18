@@ -4,6 +4,22 @@
 
 ---
 
+## AST 전환 PoC — tree-sitter Java 함수·호출 추출 A/B (2026-06-18, spike)
+
+**문제.** 현 분석은 11개 언어를 정규식으로 처리한다. OSS 4레포 경고 오탐은 0(Context66)이지만 그건 경고 게이팅 이후 수치라 노드/엣지 레벨 오탐을 가린다. AST(tree-sitter)로 바꿀 가치(정확도·B-10/멀티라인 근본 해소·신 언어=grammar 1개)와 배포 리스크(JVM에서 native `.so` 로드)를 PoC로 싸게 측정하기로 결정(사용자가 §13.3 "수요 후" 게이팅을 당김, 2026-06-18). 브랜치 `spike/treesitter-poc`. **Java 함수·호출 추출만** 재구현(11개 아님).
+
+**선택 — 바인딩.** Java 17 + Spring Boot 3.5.0이라 공식 `java-tree-sitter`(Java 22 FFM/Panama)는 불가. `io.github.bonede:tree-sitter:0.25.3` + `tree-sitter-java:0.23.4`(JNI 번들) 채택. ABI 호환(core LANGUAGE_VERSION 14, min 13). 트리 순회는 `TSQuery` 대신 수동 재귀(`getChildByFieldName`)로 — PoC에 단순·견고.
+
+**결과 ① 배포 리스크(최대 미지수) 1차 해소.** 두 Maven jar가 native를 동봉한다 — core/grammar 각각 `x86_64-linux-gnu-*.so`(Railway)·`x86_64-windows-*.dll`(로컬)·aarch64·macos. 추가 빌드 인프라 0. **로컬(Windows) 로드 성공**(첫 파싱 23ms, root=`program`), 257파일 파싱 1.25s(~4.9ms/파일). Railway는 nixpacks=Debian/glibc라 `linux-gnu` .so 호환 — 단 실런타임 추출/로드는 실배포로만 100% 확정(잔여 리스크).
+
+**결과 ② 정확도 — tree-sitter가 codeprint 자기 코드에서 엄격히 더 정확.** (`treesitterPoc` A/B, 257 Java 파일)
+- **함수** regex 962 / ts 934. regex-only 54건은 **거의 전부 `record` 타입명**(`EdgeId`·`GraphNodeDto`·`DailyMetrics`…)을 함수로 오탐한 것 — ts는 올바르게 제외. ts-only 26건은 regex가 놓친 **실제 메서드**(인터페이스 `findAll`/`searchByUsername`, `getPublicProject` 등).
+- **호출** regex 4082 / ts 3566(−13%). 차이 최대 파일이 `StaticCodeAnalyzer.java` 자신(Δ52, 정규식 문자열 최악 케이스). regex-only 호출은 전부 오탐 — (a) **한정 호출 맨 메서드명 중복 계상**(`Pattern.compile`을 `Pattern::compile` *그리고* bare `compile`로 이중 카운트), (b) **문자열 리터럴 내부 식별자**(`"\\b([a-z]...)"` 속 `b(`를 호출로 오탐 = 보류했던 B-10 Stage 2 문제). **실제 엣지 손실 0, 전부 노이즈 제거.**
+
+**결론/권고.** PoC는 기술 관문(native 로드·ABI·성능·정확도) 전부 통과. tree-sitter는 record-as-function·string-literal-as-call·qualified 이중카운트를 **소스 레벨에서 무료로** 제거하고 B-10 Stage 2/멀티라인 로버스트니스를 파서가 보장한다. 단 native 배포 deadweight(미채택 시 jar에 native만 적재) 때문에 **spike 브랜치를 main에 머지하지 않음** — 확대(언어/항목)·채택 여부는 사용자 결정 사항(Context66 게이트). 채택 시 점진 전환 + 정규식 폴백 유지(현 OSS 오탐 0 회귀 방지).
+
+---
+
 ## 파일 수집 로버스트니스 — 스킵 디렉터리 가지치기 + 엔트리 실패 내성 (2026-06-17)
 
 **문제(측정 중 직접 적발).** B-16 측정 중 `analyzeLocal`이 express(node_modules 보유)·requests에서 `SourceFileWalker.walk`의 `Files.walk(...).toList()`에서 간헐적으로 `UncheckedIOException`을 던져 **전체 분석이 크래시**(requests 0/5 성공). 원인 둘:
