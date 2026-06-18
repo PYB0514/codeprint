@@ -10,7 +10,7 @@
 
 **선택 — 바인딩.** Java 17 + Spring Boot 3.5.0이라 공식 `java-tree-sitter`(Java 22 FFM/Panama)는 불가. `io.github.bonede:tree-sitter:0.25.3` + `tree-sitter-java:0.23.4`(JNI 번들) 채택. ABI 호환(core LANGUAGE_VERSION 14, min 13). 트리 순회는 `TSQuery` 대신 수동 재귀(`getChildByFieldName`)로 — PoC에 단순·견고.
 
-**결과 ① 배포 리스크(최대 미지수) 1차 해소.** 두 Maven jar가 native를 동봉한다 — core/grammar 각각 `x86_64-linux-gnu-*.so`(Railway)·`x86_64-windows-*.dll`(로컬)·aarch64·macos. 추가 빌드 인프라 0. **로컬(Windows) 로드 성공**(첫 파싱 23ms, root=`program`), 257파일 파싱 1.25s(~4.9ms/파일). Railway는 nixpacks=Debian/glibc라 `linux-gnu` .so 호환 — 단 실런타임 추출/로드는 실배포로만 100% 확정(잔여 리스크).
+**결과 ① 배포 리스크(최대 미지수) 확정 해소.** 두 Maven jar가 native를 동봉한다 — core/grammar 각각 `x86_64-linux-gnu-*.so`(Railway)·`x86_64-windows-*.dll`(로컬)·aarch64·macos. 추가 빌드 인프라 0. **로컬(Windows) 로드 성공**(첫 파싱 23ms, root=`program`), 257파일 파싱 1.25s(~4.9ms/파일). **★ Railway 실배포 확정(2026-06-18)** — `TreeSitterStartupProbe`(TREESITTER_PROBE 게이트)가 spike 브랜치 배포에서 `플랫폼: Linux / amd64` + `✅ native 로드 성공 — 루트 노드: program, 10ms` 로그. 앱 기동·healthcheck 정상(초기화 크래시 0), 이미지 +~1MB. Docker 빌드는 멀티스테이지(builder=temurin 21-jdk, runtime=21-jre, glibc) — Railway Debian glibc와 `linux-gnu` .so 호환 입증. **잔여 native 리스크 없음.**
 
 **결과 ② 정확도 — tree-sitter가 codeprint 자기 코드에서 엄격히 더 정확.** (`treesitterPoc` A/B, 257 Java 파일)
 - **함수** regex 962 / ts 934. regex-only 54건은 **거의 전부 `record` 타입명**(`EdgeId`·`GraphNodeDto`·`DailyMetrics`…)을 함수로 오탐한 것 — ts는 올바르게 제외. ts-only 26건은 regex가 놓친 **실제 메서드**(인터페이스 `findAll`/`searchByUsername`, `getPublicProject` 등).
