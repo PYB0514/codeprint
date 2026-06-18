@@ -727,3 +727,15 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** 정적검증(compileJava+test 전체 green) 완료. 로컬 서명 E2E 라이브 검증 완료(2026-06-16): ① 서명없음/오서명 → 401 ② 올바른 서명+ping → 200 ignored ③ 올바른 서명+PR opened+미존재 repo → 200 ignored ④ **도그푸딩**: 올바른 서명+codeprint 실 PR #281 payload → 202 → 비동기 분석 → PR #281에 경고 코멘트 실제 게시(소유자 토큰). 실제 활성화(레포 webhook URL 등록 + `GITHUB_WEBHOOK_SECRET` env)는 사용자 동반 외부 작업 — 코드/테스트는 외부설정 0으로 완주.
 
 **도그푸딩 부수 발견 — CROSS_DOMAIN_CALL 오탐(B-10 발현).** #281 자기 분석이 `analysis/review → graph/suppress` CROSS_DOMAIN_CALL을 1건 보고. 근본 원인은 아키텍처 위반이 아니라 `PrReviewService`의 한국어 주석 `suppress(숨김)된`을 정규식 분석기가 주석 미제거 상태에서 `suppress()` 함수 호출로 오인(탐지기가 port/adapter/infra 경유는 제외하므로 review→graph/suppress 엣지는 주석 외 경로로 생성 불가). suppress는 `WarningDetectionPort`로 올바르게 우회돼 실제 위반 아님. **수정: 주석에서 `영문단어(` 패턴 제거**(`suppress(숨김)된`→`숨김 처리된`). 근본 해결은 B-10(주석/문자열 전처리)이나 광범위·설계합의 필요 — 별건. "PR 리뷰 기능이 자기 PR의 분석기 오탐까지 드러냄".
+
+## 프로젝트 수 제한 — 공개 프로젝트 제외 (2026-06-18, 코드 갭 ①)
+
+**문제.** Free 플랜의 프로젝트 수 제한(3개)이 `ProjectCommandService`에서 `projectRepository.countByUserId(userId)`(**공개+비공개 총개수**)로 적용됐다. 모든 프로젝트는 `Project.create`에서 `isPublic=false`로 생성되고 이후 `toggleVisibility`로 공개 전환되는데, 공개로 전환한 프로젝트도 총개수에 계속 잡혀 한도를 차지했다. PRODUCT_STRATEGY §13.1이 "총개수-3이 공개까지 막아 성장 레버를 손상"이라 규정한 버그.
+
+**이유/결정.**
+1. **공개는 제한 제외, 비공개만 카운트** — §13.2 "Free = 소비(보기·분석·경고·공개 공유·커뮤니티)"에서 공개 공유는 무료 성장 엔진이라 막을 이유가 없다. 제한 소스를 `countByUserId` → `countPrivateByUserId`(= `countByUserIdAndIsPublicFalse`)로 교체. 효과: 비공개 한도가 차도 기존 프로젝트를 **공개로 전환하면 새 슬롯이 생김** → 공개 공유 장려.
+2. **비공개 제한은 유지(완전 제거 안 함)** — "전체 무제한"도 후보였으나 §13이 명시한 문제는 정확히 "공개가 막히는 것"이고 비공개 한도 제거는 문서 근거 없는 과확장이라 채택 안 함(Rule 1·Rule 3 외과적). `UserPlan.maxProjects()`(FREE=3, PRO 이상 MAX) 그대로.
+3. **메서드 의미 교체(orphan 방지)** — `countByUserId` 프로덕션 호출처가 `ProjectCommandService` 한 곳뿐이라 새 메서드 추가 대신 인터페이스/JPA/구현체 3곳의 시그니처를 교체. `findPublicByUserId` 등 기존 공개 조회는 무관.
+4. **마이그레이션 불필요** — `is_public` 컬럼 기존재, 파생 쿼리만 추가. 에러 메시지도 `"Project limit reached"` → `"Private project limit reached"`로 의미 명확화.
+
+**결과.** 백엔드 컴파일+전체 테스트 통과(`ProjectCommandServiceTest` 스텁 교체 + "공개 제외" 케이스 1종 추가, 메시지 어서션 갱신). 프론트 tsc 통과. ChangelogPage v0.87.1(fix). 런타임 검증(다수 프로젝트 생성+공개 전환)은 OAuth 로그인 필요 → 사용자 테스트 동반.

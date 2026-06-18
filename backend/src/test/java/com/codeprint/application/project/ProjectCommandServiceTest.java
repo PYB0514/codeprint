@@ -38,7 +38,7 @@ class ProjectCommandServiceTest {
     @DisplayName("createProject — FREE(max=3): 현재 2개면 생성 허용 (경계 바로 아래)")
     void createProject_underLimit_allowed() {
         UUID userId = UUID.randomUUID();
-        when(projectRepository.countByUserId(userId)).thenReturn(2);
+        when(projectRepository.countPrivateByUserId(userId)).thenReturn(2);
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Project created = service.createProject(userId, VALID_URL, "codeprint", "desc", 3);
@@ -53,11 +53,11 @@ class ProjectCommandServiceTest {
     @DisplayName("createProject — FREE(max=3): 현재 3개면 제한 초과로 거부 (경계값)")
     void createProject_atLimit_rejected() {
         UUID userId = UUID.randomUUID();
-        when(projectRepository.countByUserId(userId)).thenReturn(3);
+        when(projectRepository.countPrivateByUserId(userId)).thenReturn(3);
 
         assertThatThrownBy(() -> service.createProject(userId, VALID_URL, "n", "d", 3))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Project limit reached");
+                .hasMessageContaining("Private project limit reached");
         verify(projectRepository, never()).save(any());
     }
 
@@ -65,7 +65,7 @@ class ProjectCommandServiceTest {
     @DisplayName("createProject — PRO(max=MAX_VALUE): 다수 보유해도 생성 허용")
     void createProject_proUnlimited_allowed() {
         UUID userId = UUID.randomUUID();
-        when(projectRepository.countByUserId(userId)).thenReturn(1000);
+        when(projectRepository.countPrivateByUserId(userId)).thenReturn(1000);
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Project created = service.createProject(userId, VALID_URL, "n", "d", Integer.MAX_VALUE);
@@ -82,8 +82,23 @@ class ProjectCommandServiceTest {
         assertThatThrownBy(() -> service.createProject(userId, "https://gitlab.com/a/b", "n", "d", 3))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid GitHub repository URL");
-        verify(projectRepository, never()).countByUserId(any());
+        verify(projectRepository, never()).countPrivateByUserId(any());
         verify(projectRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createProject — 제한은 비공개 수만 카운트 (공개 프로젝트는 무제한)")
+    void createProject_limitCountsPrivateOnly() {
+        UUID userId = UUID.randomUUID();
+        // 비공개 2개 — 공개 프로젝트는 countPrivateByUserId 쿼리에서 제외되므로 개수 무관
+        when(projectRepository.countPrivateByUserId(userId)).thenReturn(2);
+        when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Project created = service.createProject(userId, VALID_URL, "codeprint", "desc", 3);
+
+        assertThat(created).isNotNull();
+        verify(projectRepository).countPrivateByUserId(userId);
+        verify(projectRepository).save(any(Project.class));
     }
 
     @Test
