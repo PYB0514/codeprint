@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.89.2',
+    date: '2026-06-19',
+    title: 'Python 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: 'Python 함수·호출 추출을 정규식에서 tree-sitter AST로 교체했습니다. 중첩 함수·메서드 안의 호출을 가장 가까운 함수에 정확히 귀속하고(정규식은 def 위치로 본문을 갈라 오귀속), 주석·docstring·문자열 리터럴 속 식별자를 호출로 오인하지 않습니다. native 로드 실패 시 정규식으로 자동 폴백합니다.' },
+    ],
+  },
+  {
     version: 'v0.89.0',
     date: '2026-06-19',
     title: '아키텍처 의도 선언 — 규칙 위반 시 자동 경고',

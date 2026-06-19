@@ -55,6 +55,25 @@
 
 ---
 
+## AST 언어 확대 ① — Python 함수·호출 추출 regex→tree-sitter (2026-06-19)
+
+**문제.** Java AST 전환(#308) 후 사용자가 AST 언어 확대 결정(Context69). 멀티언어 확장의 첫 증명으로 **Python만** 전환(언어당 1 PR — 독립 롤백 §8). Python을 첫 타자로 택한 이유: ① OSS 벤치(`requests`) 보유 → 교차검증 가능(전략 "교차검증 필수"), Kotlin은 벤치 레포 없어 A/B 근거 약함 ② Python 문법 단순(`def`/`async def`/메서드 모두 `function_definition`) → 멀티언어 패턴 첫 증명에 리스크 최저. `tree-sitter-python:0.25.0` 추가(같은 bonede JNI 번들, native 동봉 = Java가 입증한 메커니즘 그대로).
+
+**선택 — 설계.** `TreeSitterPythonAnalyzer`를 Java 분석기와 같은 구조로 **독립 작성**(베이스 클래스 추출은 3번째 언어 TS에서 — rule of three. 지금 추출하면 검증된 Java 코드를 건드림 §3). `StaticCodeAnalyzer`가 Java·Python을 각각 라우팅하고 나머지 9개 언어는 정규식 유지. 폴백: native 로드 실패(`LinkageError`)면 환경 전체 정규식 영구 폴백, 단일 파일 파싱 예외는 그 파일만 폴백.
+- **호출 callee 규약(Java AST와 동일).** `call` 노드의 `function`이 `identifier`면 bare(소문자 시작만 — 대문자는 클래스 인스턴스화라 함수 노드 미매칭). `attribute`(`obj.method`)면 수신자가 대문자 단순 식별자(`Class.method`)일 때만 `Class::method`로, 그 외(`self.x`·`obj.x`·체인)는 bare 메서드명. **대문자 수신자에 bare 메서드명을 같이 기록하지 않음** — 동명 지역 함수에 가짜 엣지 방지(Java AST와 일치).
+
+**★ A/B(analyzeLocal, requests 37파일) — 경고 회귀 0, 노드는 동명 메서드 dedup으로 감소.**
+- regex 기준선(main, stash로 격리): 함수 711·노드 752·엣지 1617·DEAD_CODE 30(4%)·HIGH_FAN_OUT 2.
+- Python AST(이 브랜치): 함수 628·노드 669·엣지 1613·DEAD_CODE 31(5%)·HIGH_FAN_OUT 2.
+- **사용자 경고는 동일** — DEAD_CODE 양쪽 단일 LOW 안내로 치환(신뢰도 게이트), HIGH_FAN_OUT 2건 동일 함수(`resolve_redirects` 11·`handle_401` 8).
+- **함수 −83의 정체 = 한 파일 내 동명 메서드 collapse.** 소스 대조(grep): `def` 코드 라인 711 = regex 기준선과 정확히 일치 → **docstring/문자열 속 `def` 오탐 0**. `.setter`/`.getter` 0. −83은 전부 **한 파일에서 여러 클래스가 같은 이름 메서드를 정의**한 것(`models.py`의 `__init__`/`__repr__`/`iter_content`…를 Request/PreparedRequest/Response가 각각, `auth.py`의 `__init__`/`__call__`/`__eq__`…). 분석기의 `LinkedHashSet`(파일당 함수명 dedup)이 합침 — **Java AST 분석기와 동일 동작**(`TreeSitterJavaAnalyzer` 동일 패턴, #308에서 채택). 엣지는 1617→1613(−4)로 사실상 불변 = 합쳐진 중복 노드가 의미 있는 별개 엣지를 안 갖고 있었음.
+
+**판단 — dedup 유지.** 그래프 모델이 FILE→FUNCTION(파일 내 이름 기반, Python 클래스 스코프 노드 없음)이라 regex의 동명 별개 노드도 호출 귀속이 이름으로만 돼 이미 구분 불가였음. dedup은 ① Java AST와 일관 ② 경고 무회귀 ③ 노드 노이즈 감소라 유지. (클래스-한정 이름 `Class.method`로 별개 노드를 살리는 건 엣지 매칭·downstream·Java 일관성에 영향 → 이번 범위 밖, 향후 후보.)
+
+**검증.** 전체 백엔드 스위트 통과 + Python AST 테스트 4종 신규(중첩 함수 뒤 바깥 호출 귀속=정규식 def-경계 오귀속 해소 / async def·메서드 + self 호출 / 주석·docstring·문자열 식별자 호출 제외=B-10 근본 해소 / `Class.method`→`Class::method` 한정·bare 미기록). native 로컬 로드 OK(21ms), 파싱 18ms/파일. `treesitterPythonPoc` 태스크는 A/B 회귀 도구로 유지(주의: regex.analyze가 이미 AST 라우팅돼 함수/호출 totals 비교엔 부적합 — analyzeLocal stash A/B가 정확한 대조). 다음 확대: TypeScript(express + 자기 프론트 도그푸딩), 그 다음 Kotlin.
+
+---
+
 ## 파일 수집 로버스트니스 — 스킵 디렉터리 가지치기 + 엔트리 실패 내성 (2026-06-17)
 
 **문제(측정 중 직접 적발).** B-16 측정 중 `analyzeLocal`이 express(node_modules 보유)·requests에서 `SourceFileWalker.walk`의 `Files.walk(...).toList()`에서 간헐적으로 `UncheckedIOException`을 던져 **전체 분석이 크래시**(requests 0/5 성공). 원인 둘:
