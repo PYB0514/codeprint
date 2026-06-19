@@ -1,6 +1,7 @@
 // GraphWarningService 단위 테스트 — 순환 의존·인터페이스 체인·비동기 자기호출·DB 레이어 우회 감지 회귀 방지
 package com.codeprint.application.graph;
 
+import com.codeprint.domain.graph.ArchitectureIntent;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.EdgeType;
 import com.codeprint.domain.graph.Node;
@@ -689,5 +690,93 @@ class GraphWarningServiceTest {
         assertThat(warnings).isNotEmpty();
         assertThat(warnings.get(0).get("fingerprint")).isInstanceOf(String.class);
         assertThat((String) warnings.get(0).get("fingerprint")).hasSize(64);
+    }
+
+    // ── INTENT_DRIFT — 의도↔실제 conformance ────────────────────────────────
+
+    private Node nodeAt(String name, String filePath) {
+        return Node.create(graphId, NodeType.FILE, name, filePath, "java");
+    }
+
+    private ArchitectureIntent forbidIntent(String fromGlob, String fromName, String toGlob, String toName) {
+        return new ArchitectureIntent(
+                List.of(new ArchitectureIntent.Module(fromName, List.of(fromGlob)),
+                        new ArchitectureIntent.Module(toName, List.of(toGlob))),
+                List.of(new ArchitectureIntent.DependencyRule(fromName, toName)));
+    }
+
+    @Test
+    @DisplayName("INTENT_DRIFT — 금지 모듈 의존(import)을 어기면 경고")
+    void intentDrift_forbiddenImport_warns() {
+        Node domain = nodeAt("User", "/com/example/domain/user/User.java");
+        Node infra = nodeAt("UserJpa", "/com/example/infrastructure/user/UserJpa.java");
+        ArchitectureIntent intent = forbidIntent("**/domain/**", "domain", "**/infrastructure/**", "infrastructure");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(domain, infra),
+                List.of(importEdgeForPath(domain.getId(), infra.getId())), intent);
+
+        assertThat(warnings).anySatisfy(w -> {
+            assertThat(w.get("type")).isEqualTo("INTENT_DRIFT");
+            assertThat(w.get("severity")).isEqualTo("HIGH");
+            assertThat((String) w.get("message")).contains("domain", "infrastructure");
+        });
+    }
+
+    @Test
+    @DisplayName("INTENT_DRIFT — 허용 방향(역방향)은 경고하지 않음")
+    void intentDrift_allowedDirection_silent() {
+        Node domain = nodeAt("User", "/com/example/domain/user/User.java");
+        Node infra = nodeAt("UserJpa", "/com/example/infrastructure/user/UserJpa.java");
+        // domain→infrastructure만 금지 — infrastructure→domain은 허용
+        ArchitectureIntent intent = forbidIntent("**/domain/**", "domain", "**/infrastructure/**", "infrastructure");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(domain, infra),
+                List.of(importEdgeForPath(infra.getId(), domain.getId())), intent);
+
+        assertThat(warnings).noneMatch(w -> "INTENT_DRIFT".equals(w.get("type")));
+    }
+
+    @Test
+    @DisplayName("INTENT_DRIFT — 같은 모듈 내부 의존은 경고하지 않음")
+    void intentDrift_sameModule_silent() {
+        Node a = nodeAt("A", "/com/example/domain/user/A.java");
+        Node b = nodeAt("B", "/com/example/domain/user/B.java");
+        ArchitectureIntent intent = forbidIntent("**/domain/**", "domain", "**/infrastructure/**", "infrastructure");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(a, b),
+                List.of(importEdgeForPath(a.getId(), b.getId())), intent);
+
+        assertThat(warnings).noneMatch(w -> "INTENT_DRIFT".equals(w.get("type")));
+    }
+
+    @Test
+    @DisplayName("INTENT_DRIFT — FUNCTION_CALL(인터페이스→구현체 해소)은 트리거하지 않음 (IMPORT 전용)")
+    void intentDrift_functionCallNotImport_silent() {
+        // domain 포트 인터페이스 → infra 구현체로 해소된 FUNCTION_CALL 엣지는 정당한 의존성 역전(port/adapter)이라 오탐이면 안 됨
+        Node port = nodeAt("UserRepository", "/com/example/domain/user/UserRepository.java");
+        Node impl = nodeAt("UserRepositoryImpl", "/com/example/infrastructure/user/UserRepositoryImpl.java");
+        ArchitectureIntent intent = forbidIntent("**/domain/**", "domain", "**/infrastructure/**", "infrastructure");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(port, impl),
+                List.of(callEdge(port.getId(), impl.getId(), true)), intent);
+
+        assertThat(warnings).noneMatch(w -> "INTENT_DRIFT".equals(w.get("type")));
+    }
+
+    @Test
+    @DisplayName("INTENT_DRIFT — intent가 null이면 검사하지 않음(하위호환)")
+    void intentDrift_nullIntent_silent() {
+        Node domain = nodeAt("User", "/com/example/domain/user/User.java");
+        Node infra = nodeAt("UserJpa", "/com/example/infrastructure/user/UserJpa.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(domain, infra),
+                List.of(importEdgeForPath(domain.getId(), infra.getId())));
+
+        assertThat(warnings).noneMatch(w -> "INTENT_DRIFT".equals(w.get("type")));
     }
 }
