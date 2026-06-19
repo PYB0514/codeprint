@@ -20,6 +20,23 @@
 
 ---
 
+## Conformance 코어 1차 — 의도↔실제 INTENT_DRIFT 탐지 (2026-06-19)
+
+**문제.** 기존 아키텍처 위반 탐지(CROSS_DOMAIN_CALL·DOMAIN_IMPORTS_INFRA 등)는 하드코딩된 DDD 폴더 컨벤션(`/domain/`·`/application/`·`/infrastructure/`)에만 동작 → 비-DDD/임의 아키텍처엔 무용(로드맵 #11 과적합). PRODUCT_STRATEGY §13 시퀀스 step 3 = "의도 선언 → 엔진이 drift 검사"(reflexion model)의 코어. 사용자 결정(2026-06-19): 의도 모델 = **모듈 + 의존 규칙**.
+
+**선택 — 의도 모델.** `ArchitectureIntent`(domain VO, 순수): `modules`(이름 + 경로 글로브) + `rules`(`FORBID(from→to)`). 방향성(A→B만 허용)은 반대 방향 FORBID로 표현 — 단일 원시형이라 최소·명확(탈락: allow-list = "나머지 전부 금지"라 노이즈·과적합 위험 / 레이어 순서형 = 표현력 부족). 글로브→정규식 자체 변환(`**`=`.*`, `*`=`[^/]*`, `?`=`[^/]`)으로 FS·플랫폼 비의존(LocalAnalyzer가 Spring 없이 구동).
+
+**선택 — 통합·영속.** `GraphWarningService.detect(nodes,edges,intent)` 오버로드 추가(기존 2-arg는 intent=null 위임 → 하위호환). `detectIntentDrift`가 기존 파이프라인에 합류 → severity·fingerprint·suppress·PR 코멘트 전 경로 자동 적용. **의도-as-코드**: LocalAnalyzer가 분석 대상 `.codeprint/architecture.json`을 있으면 로드(Jackson은 tools 레이어에서만, domain VO는 Jackson 비의존). DB보다 PR/Desktop 거버넌스에 적합(코드와 함께 버전·리뷰). 웹 DB 영속·스케치 UI 저작·PR 물림 = 다음 슬라이스.
+
+**★ 측정이 드러낸 설계 결함 — IMPORT 전용으로 정정 (Rule 11).** 1차 구현은 IMPORT + FUNCTION_CALL 양쪽을 검사. codeprint 자기 분석(FORBID domain→infrastructure, 실제로 0이어야 함)에서 **INTENT_DRIFT 28건 오발화**. 전부 `XRepository→XRepositoryImpl`·`XPort→XAdapter` = **도메인 포트 인터페이스 → 인프라 구현체** 쌍. 이는 실제 domain→infra 의존이 아니라 **정당한 의존성 역전(port/adapter)**이며, GraphBuilder의 인터페이스→구현체 FUNCTION_CALL 해소가 만든 그래프 아티팩트. 기존 `detectDomainInfraImport`가 IMPORT 엣지만 보고 0인 이유가 이것. → **INTENT_DRIFT를 IMPORT 엣지 전용으로 한정.** 근거: 모듈 의존은 소스 레벨 import가 정답 신호(Java는 import 없이 타 모듈 호출 불가, 동일패키지 예외만), FUNCTION_CALL은 인터페이스 해소·bare-name 퍼지매칭으로 노이즈만 추가(기존 CROSS_DOMAIN_CALL이 가드 다수 보유한 이유).
+
+**검증 (analyzeLocal, codeprint 자기 1246노드/2752엣지).**
+- Run1 = 실제 규칙(domain→infra 금지, codeprint가 따름): **INTENT_DRIFT 0건** — 오탐 0, `detectDomainInfraImport`와 동치.
+- Run2 = 뒤집은 규칙(application→domain 금지, codeprint가 실제로 함): **64건** — 실제 IMPORT 엣지에서 정상 발화(AdminDigestService→DailyStats 등). 탐지기가 실코드에서 작동함을 양성 증명.
+- 단위 테스트 5종: 금지 import 발화 / 허용 방향 무발화 / 동일 모듈 무발화 / FUNCTION_CALL(인터페이스→구현체) 무발화(IMPORT 전용 락) / null intent 하위호환.
+
+---
+
 ## AST 프로덕션 전환 — Java 함수·호출 추출 regex→tree-sitter (2026-06-19)
 
 **문제.** PoC(위)가 전 관문 통과 → 사용자가 옵션1(Java 프로덕션 전환) 채택 결정(2026-06-18). `StaticCodeAnalyzer`의 **Java 분기만** tree-sitter로 교체하고 비-Java는 정규식 유지(점진 전환).

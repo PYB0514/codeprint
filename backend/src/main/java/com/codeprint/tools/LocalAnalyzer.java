@@ -2,6 +2,7 @@
 package com.codeprint.tools;
 
 import com.codeprint.application.graph.GraphWarningService;
+import com.codeprint.domain.graph.ArchitectureIntent;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.GraphRepository;
@@ -11,7 +12,10 @@ import com.codeprint.infrastructure.analysis.LanguageDetector;
 import com.codeprint.infrastructure.analysis.ParsedFile;
 import com.codeprint.infrastructure.analysis.SourceFileWalker;
 import com.codeprint.infrastructure.analysis.StaticCodeAnalyzer;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -54,8 +58,14 @@ public class LocalAnalyzer {
         List<Edge> edges = repo.findEdgesByGraphId(graph.getId());
         System.out.println("노드: " + nodes.size() + ", 엣지: " + edges.size());
 
+        // 의도 아키텍처 선언(.codeprint/architecture.json)이 있으면 INTENT_DRIFT까지 검사
+        ArchitectureIntent intent = loadIntent(rootDir);
+        if (intent != null) {
+            System.out.println("의도 선언 로드: 모듈 " + intent.modules().size() + "개, 규칙 " + intent.rules().size() + "개");
+        }
+
         GraphWarningService warningService = new GraphWarningService();
-        List<Map<String, Object>> warnings = warningService.detect(nodes, edges);
+        List<Map<String, Object>> warnings = warningService.detect(nodes, edges, intent);
 
         if (warnings.isEmpty()) {
             System.out.println("\n✅ 워닝 없음");
@@ -69,6 +79,29 @@ public class LocalAnalyzer {
             }
             System.out.println("\n--- 유형별 요약 ---");
             counts.forEach((type, count) -> System.out.println("  " + type + ": " + count + "개"));
+        }
+    }
+
+    // rootDir/.codeprint/architecture.json 을 읽어 의도 아키텍처를 구성 — 없거나 파싱 실패면 null
+    private static ArchitectureIntent loadIntent(Path rootDir) {
+        Path file = rootDir.resolve(".codeprint").resolve("architecture.json");
+        if (!Files.isRegularFile(file)) return null;
+        try {
+            JsonNode root = new ObjectMapper().readTree(Files.readString(file));
+            List<ArchitectureIntent.Module> modules = new ArrayList<>();
+            for (JsonNode m : root.path("modules")) {
+                List<String> globs = new ArrayList<>();
+                for (JsonNode g : m.path("globs")) globs.add(g.asText());
+                modules.add(new ArchitectureIntent.Module(m.path("name").asText(), globs));
+            }
+            List<ArchitectureIntent.DependencyRule> rules = new ArrayList<>();
+            for (JsonNode r : root.path("rules")) {
+                rules.add(new ArchitectureIntent.DependencyRule(r.path("from").asText(), r.path("to").asText()));
+            }
+            return new ArchitectureIntent(modules, rules);
+        } catch (Exception e) {
+            System.err.println("의도 선언 로드 실패 (무시): " + file + " — " + e.getMessage());
+            return null;
         }
     }
 

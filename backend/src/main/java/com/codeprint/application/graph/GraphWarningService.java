@@ -1,6 +1,7 @@
 // 그래프에서 런타임 오류 패턴을 정적 분석으로 감지하는 서비스
 package com.codeprint.application.graph;
 
+import com.codeprint.domain.graph.ArchitectureIntent;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.EdgeType;
 import com.codeprint.domain.graph.Node;
@@ -16,6 +17,11 @@ public class GraphWarningService {
 
     // 그래프 노드·엣지에서 경고 목록을 생성
     public List<Map<String, Object>> detect(List<Node> nodes, List<Edge> edges) {
+        return detect(nodes, edges, null);
+    }
+
+    // 의도 아키텍처(intent)를 함께 받아 INTENT_DRIFT까지 검사 — intent가 null/빈값이면 기존 경고만 생성(하위호환)
+    public List<Map<String, Object>> detect(List<Node> nodes, List<Edge> edges, ArchitectureIntent intent) {
         List<Map<String, Object>> warnings = new ArrayList<>();
         warnings.addAll(detectCyclicImports(nodes, edges));
         warnings.addAll(detectBrokenInterfaceChains(nodes, edges));
@@ -30,6 +36,8 @@ public class GraphWarningService {
             warnings.addAll(detectDomainInfraImport(nodes, edges));
             warnings.addAll(detectCrossDomainFunctionCall(nodes, edges));
         }
+        // 사용자가 선언한 의도 아키텍처와 실제 의존을 대조 (컨벤션 무관 — 비-DDD 프로젝트도 적용)
+        warnings.addAll(detectIntentDrift(nodes, edges, intent));
         // 노드 위치 조회용 인덱스 — 경고에 발생 파일 경로를 부여하기 위함
         Map<UUID, String> idToFilePath = new HashMap<>();
         for (Node n : nodes) {
@@ -646,6 +654,54 @@ public class GraphWarningService {
             warnings.add(w);
         }
         return warnings;
+    }
+
+    // 의도↔실제 conformance — 사용자가 선언한 모듈 금지 의존 규칙을 실제 IMPORT 엣지가 어기는지 검사
+    // 수정 방법: 의존을 제거(port/adapter 역전 등)하거나, 의도가 바뀌었으면 선언 규칙을 갱신
+    // IMPORT 엣지만 본다 — 모듈 의존은 소스 레벨 import가 정답 신호. FUNCTION_CALL은 인터페이스→구현체 해소
+    // (port→adapter는 정당한 의존성 역전)와 bare-name 퍼지매칭으로 오탐을 만들어 제외(measurement로 확정).
+    private List<Map<String, Object>> detectIntentDrift(List<Node> nodes, List<Edge> edges, ArchitectureIntent intent) {
+        if (intent == null || intent.isEmpty()) return List.of();
+
+        Map<UUID, String> nodeFilePaths = new HashMap<>();
+        for (Node n : nodes) {
+            nodeFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+        }
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        // 같은 (from모듈,to모듈,소스파일,타깃파일) 위반의 중복 엣지를 한 경고로 합침
+        Set<String> seen = new HashSet<>();
+        for (Edge e : edges) {
+            if (e.getType() != EdgeType.IMPORT) continue;
+            String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
+            String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
+            if (srcPath.isEmpty() || tgtPath.isEmpty()) continue;
+
+            String srcModule = intent.moduleOf(srcPath);
+            String tgtModule = intent.moduleOf(tgtPath);
+            if (srcModule == null || tgtModule == null || srcModule.equals(tgtModule)) continue;
+            if (!intent.isForbidden(srcModule, tgtModule)) continue;
+
+            String key = srcModule + ">" + tgtModule + ">" + srcPath + ">" + tgtPath;
+            if (!seen.add(key)) continue;
+
+            Map<String, Object> w = new LinkedHashMap<>();
+            w.put("type", "INTENT_DRIFT");
+            w.put("severity", "HIGH");
+            w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
+            w.put("edgeIds", List.of(e.getId().toString()));
+            w.put("message", "의도 위반: 모듈 '" + srcModule + "' → '" + tgtModule
+                    + "' 의존 금지 (" + fileName(srcPath) + " → " + fileName(tgtPath)
+                    + "). 수정: 의존을 제거하거나(port/adapter 역전 등) 선언한 아키텍처 규칙을 갱신하세요.");
+            warnings.add(w);
+        }
+        return warnings;
+    }
+
+    // 경로에서 파일명만 추출 (메시지 표시용)
+    private static String fileName(String path) {
+        int slash = path.lastIndexOf('/');
+        return slash >= 0 ? path.substring(slash + 1) : path;
     }
 
     // 테스트 소스 경로 여부 — src/test(JVM), __tests__, *.test.*, *.spec.*(JS/TS) 패턴.
