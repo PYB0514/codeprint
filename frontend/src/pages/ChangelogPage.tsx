@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.89.3',
+    date: '2026-06-19',
+    title: 'TypeScript 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: 'TypeScript 함수·호출 추출을 정규식에서 tree-sitter AST로 교체했습니다. 정규식이 전혀 못 잡던 클래스 메서드(`name(){}`)를 인식하고, 화살표 함수·중첩 함수 안의 호출을 정확한 함수에 귀속하며, 주석·문자열 속 식별자를 호출로 오인하지 않습니다. .tsx(JSX)는 전용 그래머로 파싱합니다. native 로드 실패 시 정규식으로 자동 폴백합니다.' },
+    ],
+  },
+  {
     version: 'v0.89.2',
     date: '2026-06-19',
     title: 'Python 분석 정확도 — AST(tree-sitter) 엔진으로 교체',

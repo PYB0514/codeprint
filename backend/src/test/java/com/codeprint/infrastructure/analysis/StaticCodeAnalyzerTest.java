@@ -2099,6 +2099,100 @@ class StaticCodeAnalyzerTest {
         assertThat(result.functionCalls().get("run")).doesNotContain("warning");
     }
 
+    // ── tree-sitter TypeScript 함수·호출 추출 (regex→AST 전환) ──────────────
+
+    @Test
+    @DisplayName("클래스 메서드를 함수로 추출한다 (tree-sitter, 정규식이 못 잡던 것)")
+    void TS_클래스_메서드_추출_treesitter() throws IOException {
+        // 정규식 TS 패턴은 `function` 키워드를 요구해 클래스 메서드(`name(){}`)를 전혀 못 잡는다. AST는 method_definition으로 인식.
+        Path file = writeTsFile("""
+                class UserService {
+                    constructor() {}
+                    findById(id: number) { return this.load(id); }
+                    private load(id: number) { return null; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functions()).contains("findById", "load");
+        assertThat(result.functionCalls().get("findById")).contains("load");
+    }
+
+    @Test
+    @DisplayName("화살표 함수와 중첩 함수 호출 귀속을 정확히 잡는다 (tree-sitter)")
+    void TS_화살표_중첩함수_호출귀속_treesitter() throws IOException {
+        Path file = writeTsFile("""
+                export const outer = () => {
+                    const inner = () => { deep(); };
+                    helper();
+                };
+                function helper() {}
+                function deep() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functions()).contains("outer", "inner", "helper", "deep");
+        assertThat(result.functionCalls().get("inner")).contains("deep");
+        assertThat(result.functionCalls().get("inner")).doesNotContain("helper");
+        assertThat(result.functionCalls().get("outer")).contains("helper");
+    }
+
+    @Test
+    @DisplayName("주석·문자열 속 식별자를 호출로 오인하지 않는다 (tree-sitter, B-10 근본 해소)")
+    void TS_주석_문자열_식별자_호출_제외() throws IOException {
+        Path file = writeTsFile("""
+                function run() {
+                    // fakeCall() 처럼 보이는 주석
+                    const s = "realLooking() in string";
+                    realCall();
+                }
+                function realCall() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functionCalls().get("run")).contains("realCall");
+        assertThat(result.functionCalls().get("run")).doesNotContain("fakeCall", "realLooking");
+    }
+
+    @Test
+    @DisplayName("Class.method() 한정 호출을 Class::method 형식으로 기록한다 (tree-sitter)")
+    void TS_한정호출_추출_treesitter() throws IOException {
+        Path file = writeTsFile("""
+                function run() {
+                    Logger.warn("x");
+                    helper();
+                }
+                function helper() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functionCalls().get("run")).contains("Logger::warn", "helper");
+        // 대문자 수신자의 메서드명을 bare 로도 기록하면 동명 지역 함수에 가짜 엣지가 생기므로 기록하지 않는다.
+        assertThat(result.functionCalls().get("run")).doesNotContain("warn");
+    }
+
+    @Test
+    @DisplayName(".tsx(JSX)를 tsx 그래머로 파싱해 클래스 메서드를 추출한다 (tree-sitter)")
+    void TSX_JSX_클래스_메서드_추출_treesitter() throws IOException {
+        // tsx 그래머가 아니면 JSX(<div>)에서 파싱 오류 → 정규식 폴백. 정규식은 클래스 메서드를 못 잡으므로
+        // render/label 추출 = tsx 그래머로 파싱 성공 + 메서드 인식 둘 다 증명한다.
+        Path file = writeTsxFile("""
+                class Widget {
+                    render() { return <div>{this.label()}</div>; }
+                    label() { return "x"; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functions()).contains("render", "label");
+        assertThat(result.functionCalls().get("render")).contains("label");
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {
@@ -2109,6 +2203,12 @@ class StaticCodeAnalyzerTest {
 
     private Path writeTsFile(String content) throws IOException {
         Path file = tempDir.resolve("testFile.ts");
+        Files.writeString(file, content);
+        return file;
+    }
+
+    private Path writeTsxFile(String content) throws IOException {
+        Path file = tempDir.resolve("testFile.tsx");
         Files.writeString(file, content);
         return file;
     }

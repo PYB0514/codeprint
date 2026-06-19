@@ -74,6 +74,26 @@
 
 ---
 
+## AST 언어 확대 ② — TypeScript 함수·호출 추출 regex→tree-sitter (2026-06-19)
+
+**문제.** Python(①) 후 TypeScript 전환(언어당 1 PR). TS는 ① 자기 프론트(C:\Dev\Codeprint\frontend\src=53 .ts/.tsx, JSX) 도그푸딩으로 교차검증 ② **정규식이 `function` 키워드 없는 클래스 메서드(`name(){}`)를 전혀 못 잡는** 가장 큰 정확도 갭 보유. `tree-sitter-typescript:0.23.2`(`TreeSitterTypescript`) + **별도 아티팩트** `tree-sitter-tsx:0.23.2`(`TreeSitterTsx`) — TSX는 typescript 아티팩트에 없어 따로 추가해야 함(컴파일 에러로 적발).
+
+**선택 — 설계.** `TreeSitterTypescriptAnalyzer` 독립 작성(ts/tsx **두 그래머 핸들 보유**, 확장자로 선택 — .tsx는 JSX 때문에 tsx 그래머 필수). `StaticCodeAnalyzer`가 `relativePath.endsWith(".tsx")`로 분기. JSX 컴포넌트는 기존 `extractJsxComponents`(정규식)가 계속 담당 — AST는 함수·호출만 교체.
+- **베이스 클래스 추출 보류(rule of three 재검토).** 당초 TS 시점을 베이스 추출 적기로 봤으나, **TS는 파일별 ts/tsx 두 그래머 선택**이 필요해 "단일 language 핸들" 베이스 모델에 안 맞음. 검증된 Java/Python을 건드리는 리스크 대비 이득 감소 → standalone 유지, 베이스 추출은 더 깔끔한 추상화가 보일 때로 연기(§3).
+- **함수정의 노드**: function_declaration·generator_function_declaration·method_definition(constructor·get/set 포함)·function_signature(오버로드/앰비언트)·method_signature·abstract_method_signature + 화살표/함수표현식은 **바인딩에서 이름**(variable_declarator·public_field_definition의 value가 arrow/function일 때 name 필드). 호출 callee 규약은 Java/Python AST와 동일(member 대문자 수신자 → `Class::method`만). TS는 `new`로 인스턴스화하므로 bare 호출은 대소문자 필터 없음(호출은 호출).
+
+**★ A/B(analyzeLocal, 자기 프론트 53파일) — 정규식이 숨기던 데드코드를 AST가 정직하게 노출.** (regex 강제는 라우팅에 `false &&` 임시 토글, 같은 컴파일 브랜치에서 대조 — stash의 deps 격리 문제 회피)
+- regex: FUNCTION 212·CONTAINS 212·FUNCTION_CALL 189·IMPORT 6(엣지 407)·**경고 0**.
+- TS AST: FUNCTION 215(+3 클래스 메서드)·CONTAINS 215·FUNCTION_CALL 113(−76)·IMPORT 6(엣지 334)·**DEAD_CODE 1 LOW 안내**(53%, 115/215).
+- **−76 FUNCTION_CALL 엣지의 정체 = 정규식의 본문 오스코핑.** 정규식 TS 함수경계는 `function name`·`const x=()=>`만 잡고 **클래스/객체 메서드를 못 잡아** 한 "함수 본문"이 여러 실제 함수를 삼킴 → bare-call 패턴이 큰 영역을 훑어 호출을 엉뚱한 함수에 과다 귀속·과다 연결. AST는 정확 스코핑이라 엣지가 적음.
+- **★ 데드 후보 표본(진단 덤프, 양쪽)이 결정적 — AST는 가짜 데드 안 만듦.** 데드로 잡힌 건 거의 전부 **React 컴포넌트**(App·AppHeader·Footer·ProjectCard·CollaborationPanel…)와 **이벤트 핸들러**(handleClick·handleSubmit·toggleTheme·accept·decline…) = `name()`로 호출 안 되고 JSX 렌더(`<App/>`)·prop 전달(`onClick={handleClick}`)되는 것들. **양쪽이 동일하게 데드로 인정.** 정규식은 오스코핑 과다연결로 데드 비율을 게이트 아래로 눌러 0 경고(false-clean)였고, AST는 진짜 높은 FUNCTION_CALL-데드 비율을 드러내 게이트가 **1 LOW 안내**(="신뢰도 낮음, 실제 미사용 아닐 수 있음")로 치환.
+
+**판단 — ship(정직한 true-positive, 게이트가 연성화).** AST의 1 LOW 안내는 ① 귀속이 정확하고(데드 함수는 실제로 FUNCTION_CALL 인바운드 0) ② 엔진이 **이미 Python(requests)·고데드 코드에 동일하게 주는** 보정된 저신뢰 안내 → TS를 Java/Python과 **일관**되게 만듦(정규식 TS가 데드 숨기던 outlier였음). "경고 회귀 0" 게이트의 정신(가짜 경고 0)은 충족 — 코드근거 표본분석으로 신규 안내가 true-positive임을 확증. **향후 별도 항목(범위 밖):** 프론트 데드 탐지 정밀화 — JSX 컴포넌트 사용(`<X/>`)·값참조를 "사용"으로 카운트해 React 데드 비율 보정.
+
+**검증.** 전체 백엔드 스위트 통과 + TS AST 테스트 5종 신규(클래스 메서드 추출=정규식 미검출 회복 / 화살표·중첩 호출 귀속 / 주석·문자열 식별자 제외 / `Class.method`→`Class::method` 한정·bare 미기록 / **.tsx JSX를 tsx 그래머로 파싱+메서드 추출**). native ts/tsx 양쪽 로컬 로드 OK. 다음 확대: ③ Kotlin(벤치 없음 → 자기/수동 검증).
+
+---
+
 ## 파일 수집 로버스트니스 — 스킵 디렉터리 가지치기 + 엔트리 실패 내성 (2026-06-17)
 
 **문제(측정 중 직접 적발).** B-16 측정 중 `analyzeLocal`이 express(node_modules 보유)·requests에서 `SourceFileWalker.walk`의 `Files.walk(...).toList()`에서 간헐적으로 `UncheckedIOException`을 던져 **전체 분석이 크래시**(requests 0/5 성공). 원인 둘:
