@@ -20,6 +20,7 @@ public class GraphQueryService {
 
     private final GraphRepository graphRepository;
     private final GraphWarningService graphWarningService;
+    private final ArchitectureIntentService architectureIntentService;
 
     // 프로젝트의 가장 최근 그래프를 조회
     public Optional<Graph> findLatestByProject(UUID projectId) {
@@ -52,11 +53,15 @@ public class GraphQueryService {
     }
 
     // 그래프 경고 감지 결과 캐싱 — detect()는 CPU 집약적이므로 graphId 기준으로 10분 캐시
+    // 의도 아키텍처가 있으면 INTENT_DRIFT까지 함께 검사
     @Cacheable(value = "graphWarnings", key = "#graphId")
     public List<Map<String, Object>> getWarnings(UUID graphId) {
         List<Node> nodes = getNodes(graphId);
         List<Edge> edges = getEdges(graphId);
-        return graphWarningService.detect(nodes, edges);
+        ArchitectureIntent intent = graphRepository.findById(graphId)
+                .flatMap(g -> architectureIntentService.findByProjectId(g.getProjectId()))
+                .orElse(null);
+        return graphWarningService.detect(nodes, edges, intent);
     }
 
 }

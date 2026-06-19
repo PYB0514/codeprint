@@ -30,6 +30,7 @@ import CursorOverlay from '../components/CursorOverlay'
 import WarningPanel from '../components/WarningPanel'
 import TeamChatPanel from '../components/TeamChatPanel'
 import AiAnalysisSection from '../components/AiAnalysisSection'
+import ArchitectureIntentPanel from '../components/ArchitectureIntentPanel'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode, sketch: SketchNode }
 
@@ -2453,6 +2454,17 @@ function GraphPageInner() {
                   </p>
                 </div>
               )}
+            </LeftSection>
+
+            {/* 아키텍처 의도 선언 (conformance) */}
+            <LeftSection title="🏛 아키텍처 의도">
+              <ArchitectureIntentPanel
+                projectId={projectId!}
+                onSaved={() => {
+                  // 경고 캐시 무효화 후 그래프 재로드
+                  fetchGraph()
+                }}
+              />
             </LeftSection>
 
             {/* 버전 기록 */}

@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.89.0',
+    date: '2026-06-19',
+    title: '아키텍처 의도 선언 — 규칙 위반 시 자동 경고',
+    type: 'feature',
+    items: [
+      { category: '경고 엔진', desc: '그래프 사이드바의 "아키텍처 의도" 패널에서 모듈(경로 글로브)과 의존 금지 규칙(FORBID)을 선언하면, 실제 IMPORT 엣지가 규칙에 어긋날 때 INTENT_DRIFT 경고가 즉시 발생합니다. PR 코멘트·그래프 경고 패널 모두에 반영됩니다.' },
+      { category: '아키텍처', desc: '선언된 의도는 서버에 저장되어 재분석 후에도 유지됩니다. 예: "domain 모듈이 infrastructure 모듈에 의존하면 안 된다"는 DDD 원칙을 코드로 박제하고, 위반이 생기면 PR 병합 전에 경고로 알아챌 수 있습니다.' },
+    ],
+  },
+  {
     version: 'v0.88.0',
     date: '2026-06-19',
     title: 'Java 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
