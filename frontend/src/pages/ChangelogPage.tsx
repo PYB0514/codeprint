@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.88.0',
+    date: '2026-06-19',
+    title: 'Java 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
+    type: 'feature',
+    items: [
+      { category: '분석 엔진', desc: 'Java 함수·호출 추출을 정규식에서 tree-sitter AST 파서로 교체했습니다. 접근 제어자가 없는 메서드, 인터페이스 추상 메서드, 그리고 @PathVariable("id")처럼 파라미터에 괄호가 포함돼 정규식이 놓치던 컨트롤러 핸들러까지 정확히 인식합니다. record 타입명을 함수로 오탐하거나, 주석·문자열 안의 식별자를 호출로 오인하던 문제도 파서 차원에서 사라졌습니다. 실측에서 Spring PetClinic 기준 함수 노드가 149→224개로 늘며 그래프가 더 완전해졌고, 경고 오탐은 늘지 않았습니다(비-Java 언어는 기존 분석 그대로 유지).' },
+    ],
+  },
+  {
     version: 'v0.87.1',
     date: '2026-06-18',
     title: '프로젝트 — 공개 프로젝트는 개수 제한 없이 생성',

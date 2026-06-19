@@ -14,6 +14,9 @@ import java.util.regex.Pattern;
 @Component
 public class StaticCodeAnalyzer {
 
+    // tree-sitter 기반 Java 분석기 — 정규식보다 정확. native 로드 실패 시 자동으로 정규식 폴백된다.
+    private final TreeSitterJavaAnalyzer treeSitterJava = new TreeSitterJavaAnalyzer();
+
     // 단일 소스 파일을 분석하여 함수명, import, 주석 등을 추출
     public ParsedFile analyze(Path file, Path repoRoot, String language) throws IOException {
         String content = Files.readString(file, StandardCharsets.UTF_8);
@@ -23,11 +26,23 @@ public class StaticCodeAnalyzer {
         // 주석/문자열 페이로드를 읽는 검출기(주석 라벨·API 경로·raw SQL 등)는 원본 content를 그대로 쓴다.
         String masked = maskComments(content, language);
 
-        List<String> functions = extractFunctions(masked, language);
+        // Java 함수·호출은 tree-sitter(AST)로 추출 — record 오탐 제거·인터페이스 메서드 회복·주석/문자열 식별자 오인 제거.
+        // tree-sitter는 raw content를 직접 파싱(AST가 주석·문자열을 구분하므로 masking 불필요). 실패 시 정규식 폴백.
+        List<String> functions;
+        Map<String, List<String>> functionCalls;
+        Optional<TreeSitterJavaAnalyzer.Result> tsResult =
+                language.equals("Java") ? treeSitterJava.parse(content) : Optional.empty();
+        if (tsResult.isPresent()) {
+            functions = tsResult.get().functions();
+            functionCalls = tsResult.get().functionCalls();
+        } else {
+            functions = extractFunctions(masked, language);
+            functionCalls = extractFunctionCalls(masked, language, functions);
+        }
+
         List<String> imports = extractImports(masked, language);
         String fileComment = extractFileComment(content, language);
         Map<String, String> functionComments = extractFunctionComments(content, language);
-        Map<String, List<String>> functionCalls = extractFunctionCalls(masked, language, functions);
         List<String> valueReferencedFunctions = extractValueReferencedFunctions(masked, functions);
         List<String> instantiatedClasses = extractInstantiatedClasses(masked);
         List<DbTableInfo> dbTables = extractDbTables(content, language, relativePath);

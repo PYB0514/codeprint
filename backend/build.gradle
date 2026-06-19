@@ -71,6 +71,10 @@ dependencies {
     // DevTools — 파일 변경 시 자동 재시작 (개발 환경 전용, 배포 시 자동 비활성화)
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
+    // tree-sitter AST 파싱 — Java 함수·호출 추출에 사용 (JNI 번들 바인딩, jar에 Linux .so + Windows .dll 동봉)
+    implementation 'io.github.bonede:tree-sitter:0.25.3'
+    implementation 'io.github.bonede:tree-sitter-java:0.23.4'
+
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
@@ -92,5 +96,14 @@ task analyzeLocal(type: JavaExec, dependsOn: classes) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.codeprint.tools.LocalAnalyzer'
     // 기본값: backend/src/main/java (직접 경로 지정 가능 — ./gradlew analyzeLocal --args="경로")
+    args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
+}
+
+// tree-sitter A/B 회귀 도구 — Java 함수·호출 추출을 정규식과 비교 (DB 불필요)
+task treesitterPoc(type: JavaExec, dependsOn: classes) {
+    group = 'codeprint'
+    description = 'tree-sitter로 Java 함수·호출 추출 후 정규식 결과와 비교 (A/B 회귀 검증용)'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.codeprint.tools.treesitter.TreeSitterJavaPoc'
     args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
 }

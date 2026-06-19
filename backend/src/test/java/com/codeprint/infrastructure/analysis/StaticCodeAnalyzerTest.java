@@ -1929,6 +1929,89 @@ class StaticCodeAnalyzerTest {
         assertThat(result.valueReferencedFunctions()).contains("cleanup");
     }
 
+    // ── tree-sitter Java 함수·호출 추출 (regex→AST 전환) ────────────────────
+
+    @Test
+    @DisplayName("record 타입명을 함수로 오탐하지 않는다 (tree-sitter)")
+    void Java_record_타입명_함수_제외() throws IOException {
+        // 정규식은 record 선언을 함수 정의로 오인(54건 오탐)했으나 tree-sitter는 record_declaration으로 정확히 구분한다.
+        Path file = writeJavaFile("""
+                package com.example;
+                public class Dtos {
+                    public record UserDto(Long id, String name) {}
+                    public record Pair(int a, int b) {
+                        int sum() { return a + b; }
+                    }
+                    public void process() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functions()).contains("process", "sum");
+        assertThat(result.functions()).doesNotContain("UserDto", "Pair");
+    }
+
+    @Test
+    @DisplayName("인터페이스 추상 메서드를 함수로 추출한다 (tree-sitter)")
+    void Java_인터페이스_추상메서드_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public interface UserRepository {
+                    User findById(Long id);
+                    List<User> searchByUsername(String name);
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functions()).containsExactlyInAnyOrder("findById", "searchByUsername");
+    }
+
+    @Test
+    @DisplayName("Java 함수 호출을 bare·한정(Class::method) 형식으로 추출한다 (tree-sitter)")
+    void Java_함수_호출_추출_treesitter() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class Svc {
+                    public void run() {
+                        helper();
+                        Pattern.compile("x");
+                        this.cleanup();
+                    }
+                    private void helper() {}
+                    private void cleanup() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionCalls().get("run"))
+                .contains("helper", "Pattern::compile", "cleanup");
+    }
+
+    @Test
+    @DisplayName("주석·문자열 리터럴 속 식별자를 호출로 오인하지 않는다 (tree-sitter, B-10 근본 해소)")
+    void Java_주석_문자열_식별자_호출_제외() throws IOException {
+        // 정규식은 주석/문자열 내부 식별자를 호출로 오인했고 B-10 마스킹으로 우회했으나, AST는 토큰 종류를 구분해 근본 해소한다.
+        Path file = writeJavaFile("""
+                package com.example;
+                public class Svc {
+                    public void run() {
+                        // fakeMethod() 호출처럼 보이는 주석
+                        String sql = "select doStuff() from x";
+                        realCall();
+                    }
+                    private void realCall() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionCalls().get("run")).contains("realCall");
+        assertThat(result.functionCalls().get("run")).doesNotContain("fakeMethod", "doStuff");
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {
