@@ -2,6 +2,23 @@
 
 ---
 
+## Conformance 2차 — 의도 아키텍처 DB 영속 + REST + 경고 연동 (2026-06-19)
+
+**문제.** `ArchitectureIntent`(모듈+FORBID 규칙)는 1차에서 LocalAnalyzer CLI용 `.codeprint/architecture.json`에만 로드됐고, 웹 경로(`/graph` 응답 경고, PR 코멘트)에서는 INTENT_DRIFT가 한 번도 발화하지 않았다.
+
+**저장 방식 선택 — `architecture_intents` 테이블 vs. `projects` 컬럼 추가.**
+- projects 컬럼: `ALTER TABLE projects ADD COLUMN intent_json TEXT`. 단순하지만 Project 도메인이 그래프 분석 도메인 관심사를 흡수 → DDD 경계 혼탁.
+- **채택 — 별도 테이블(V45).** `project_id UUID PK REFERENCES projects` + `intent_json TEXT` + `updated_at`. project가 삭제되면 CASCADE. Project 도메인과 Graph 도메인 경계 유지.
+
+**캐시 무효화 — intent 변경 시 graphWarnings Caffeine 캐시 처리.**
+- `getWarnings(graphId)`는 `@Cacheable(value="graphWarnings", key="#graphId")`로 10분 캐시.
+- intent는 `projectId`로 저장 → 어떤 `graphId`에 영향이 가는지 서비스 레이어에서 알기 어려움.
+- **채택 — `@CacheEvict(value="graphWarnings", allEntries=true)`.** intent PUT/DELETE 시 전체 그래프 경고 캐시를 비움. 캐시 항목 수가 소수(로그인 사용자 수 × 버전)라 전체 비우기 비용 미미.
+
+**결과.** `GraphQueryService.getWarnings()` 내부에서 graph → projectId → intent 로드 → `detect(nodes, edges, intent)` 3-arg 호출. PR 코멘트·LocalAnalyzer·`/graph` 전 경로 자동 적용(단일 경유점 패턴 그대로). `ArchitectureIntentController` GET/PUT/DELETE — 소유자만, `@Valid` 검증.
+
+---
+
 ## MCP JSON-RPC 2.0 서버 — POST /mcp/rpc (2026-06-18)
 
 **문제.** 기존 `GET /mcp/graphs/{graphId}/context`는 REST 엔드포인트라 표준 MCP 클라이언트(`claude mcp add --transport http`)가 인식할 수 없었다. AI 에이전트가 실제로 그래프를 질의하려면 MCP 프로토콜이 필요.
