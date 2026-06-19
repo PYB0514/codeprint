@@ -2012,6 +2012,93 @@ class StaticCodeAnalyzerTest {
         assertThat(result.functionCalls().get("run")).doesNotContain("fakeMethod", "doStuff");
     }
 
+    // ── tree-sitter Python 함수·호출 추출 (regex→AST 전환) ──────────────────
+
+    @Test
+    @DisplayName("중첩 함수 뒤 바깥 함수 호출을 바깥 함수에 귀속한다 (tree-sitter, 정규식 오귀속 해소)")
+    void Python_중첩함수_호출귀속_treesitter() throws IOException {
+        // 정규식은 def 위치 경계로 본문을 나눠 inner 뒤의 helper() 호출까지 inner에 잘못 귀속한다.
+        // AST는 가장 가까운 enclosing 함수에 정확히 귀속 — outer→helper, inner→deep.
+        Path file = writePyFile("""
+                def outer():
+                    def inner():
+                        deep()
+                    helper()
+
+                def helper():
+                    pass
+
+                def deep():
+                    pass
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.functions()).contains("outer", "inner", "helper", "deep");
+        assertThat(result.functionCalls().get("inner")).contains("deep");
+        assertThat(result.functionCalls().get("inner")).doesNotContain("helper");
+        assertThat(result.functionCalls().get("outer")).contains("helper");
+    }
+
+    @Test
+    @DisplayName("async def 와 메서드를 함수로 추출하고 self/메서드 호출을 잡는다 (tree-sitter)")
+    void Python_async_메서드_추출_treesitter() throws IOException {
+        Path file = writePyFile("""
+                class Service:
+                    async def fetch(self):
+                        await load()
+
+                    def run(self):
+                        self.fetch()
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.functions()).contains("fetch", "run");
+        assertThat(result.functionCalls().get("fetch")).contains("load");
+        assertThat(result.functionCalls().get("run")).contains("fetch");
+    }
+
+    @Test
+    @DisplayName("주석·docstring·문자열 속 식별자를 호출로 오인하지 않는다 (tree-sitter, B-10 근본 해소)")
+    void Python_주석_문자열_식별자_호출_제외() throws IOException {
+        Path file = writePyFile("""
+                def run():
+                    # fake_call() 처럼 보이는 주석
+                    \"\"\"docstring with also_fake() inside\"\"\"
+                    sql = "select real_looking() from x"
+                    real_call()
+
+                def real_call():
+                    pass
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.functionCalls().get("run")).contains("real_call");
+        assertThat(result.functionCalls().get("run"))
+                .doesNotContain("fake_call", "also_fake", "real_looking");
+    }
+
+    @Test
+    @DisplayName("Class.method() 한정 호출을 Class::method 형식으로 기록한다 (tree-sitter)")
+    void Python_한정호출_추출_treesitter() throws IOException {
+        Path file = writePyFile("""
+                def run():
+                    Logger.warning("x")
+                    helper()
+
+                def helper():
+                    pass
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.functionCalls().get("run")).contains("Logger::warning", "helper");
+        // 대문자 수신자의 메서드명을 bare 로도 기록하면 동명 지역 함수에 가짜 엣지가 생기므로 기록하지 않는다.
+        assertThat(result.functionCalls().get("run")).doesNotContain("warning");
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {
