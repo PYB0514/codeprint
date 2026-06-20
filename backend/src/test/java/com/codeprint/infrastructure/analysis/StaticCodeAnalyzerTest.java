@@ -2193,6 +2193,61 @@ class StaticCodeAnalyzerTest {
         assertThat(result.functionCalls().get("render")).contains("label");
     }
 
+    // ── tree-sitter JavaScript 함수·호출 추출 (TypeScript 분석기 재사용) ─────
+
+    @Test
+    @DisplayName("JavaScript 클래스 메서드를 함수로 추출한다 (tree-sitter, TS 분석기 재사용)")
+    void JS_클래스_메서드_추출_treesitter() throws IOException {
+        // .js는 typescript 그래머로 파싱. 정규식이 못 잡는 클래스 메서드를 AST가 인식.
+        Path file = writeJsFile("""
+                class UserService {
+                    findById(id) { return this.load(id); }
+                    load(id) { return null; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "JavaScript");
+
+        assertThat(result.functions()).contains("findById", "load");
+        assertThat(result.functionCalls().get("findById")).contains("load");
+    }
+
+    @Test
+    @DisplayName("CommonJS 멤버 대입 함수(exports.x=function, proto.y=function)를 추출한다 (tree-sitter)")
+    void JS_멤버대입_함수_추출_treesitter() throws IOException {
+        // 정규식·기존 AST 모두 놓치던 패턴. assignment_expression 좌변 속성명으로 함수 인식.
+        Path file = writeJsFile("""
+                exports.handle = function(req, res) { return parse(req); };
+                Router.prototype.use = function(fn) { register(fn); };
+                function parse(r) { return r; }
+                function register(f) {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "JavaScript");
+
+        assertThat(result.functions()).contains("handle", "use", "parse", "register");
+        assertThat(result.functionCalls().get("handle")).contains("parse");
+        assertThat(result.functionCalls().get("use")).contains("register");
+    }
+
+    @Test
+    @DisplayName(".jsx(JSX)를 tsx 그래머로 파싱해 함수를 추출한다 (tree-sitter)")
+    void JSX_함수_추출_treesitter() throws IOException {
+        // .jsx는 tsx 그래머로 파싱해야 JSX(<button>)에서 오류가 없다.
+        Path file = writeJsxFile("""
+                function App() {
+                    const onClick = () => { handle(); };
+                    return <button onClick={onClick}>Hi</button>;
+                }
+                function handle() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "JavaScript");
+
+        assertThat(result.functions()).contains("App", "onClick", "handle");
+        assertThat(result.functionCalls().get("onClick")).contains("handle");
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {
@@ -2209,6 +2264,18 @@ class StaticCodeAnalyzerTest {
 
     private Path writeTsxFile(String content) throws IOException {
         Path file = tempDir.resolve("testFile.tsx");
+        Files.writeString(file, content);
+        return file;
+    }
+
+    private Path writeJsFile(String content) throws IOException {
+        Path file = tempDir.resolve("testFile.js");
+        Files.writeString(file, content);
+        return file;
+    }
+
+    private Path writeJsxFile(String content) throws IOException {
+        Path file = tempDir.resolve("testFile.jsx");
         Files.writeString(file, content);
         return file;
     }

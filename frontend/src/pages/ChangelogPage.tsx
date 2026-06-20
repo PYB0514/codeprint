@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.89.4',
+    date: '2026-06-19',
+    title: 'JavaScript 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: 'JavaScript 함수·호출 추출을 정규식에서 tree-sitter AST로 교체했습니다(TypeScript 엔진 재사용). 정규식이 못 잡던 클래스 메서드와, CommonJS의 핵심 패턴인 멤버 대입 함수(exports.x = function(){}, Proto.prototype.y = function(){})를 인식합니다. .jsx(JSX)는 전용 그래머로 파싱하고, native 로드 실패 시 정규식으로 자동 폴백합니다.' },
+    ],
+  },
+  {
     version: 'v0.89.3',
     date: '2026-06-19',
     title: 'TypeScript 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
