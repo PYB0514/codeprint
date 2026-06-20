@@ -16,7 +16,7 @@ const WARNING_GUIDE: Record<string, { example: string; limitation: string }> = {
   },
   BROKEN_INTERFACE_CHAIN: {
     example: '인터페이스 메서드는 있는데 대응하는 구현체 호출 엣지가 없는 경우 — 런타임에 미구현으로 깨질 수 있음.',
-    limitation: '정규식이 구현체를 못 잇는 경우 오탐 가능. 구현이 분명하면 숨기세요.',
+    limitation: '분석이 구현체를 못 잇는 경우 오탐 가능. 구현이 분명하면 숨기세요.',
   },
   ASYNC_SELF_CALL: {
     example: '같은 클래스 안에서 @Async 메서드를 직접 호출 — 스프링 프록시를 우회해 비동기가 무시됨(동기 실행).',
@@ -24,7 +24,7 @@ const WARNING_GUIDE: Record<string, { example: string; limitation: string }> = {
   },
   DB_LAYER_BYPASS: {
     example: 'Controller/Service가 Repository를 거치지 않고 영속성 계층(JpaRepository 등)을 직접 호출 — 계층 경계 위반.',
-    limitation: 'IMPORT 기반으로만 판정(FUNCTION_CALL은 정규식 오추적이라 제외)해 오탐을 최소화.',
+    limitation: 'IMPORT 기반으로만 판정(FUNCTION_CALL은 동명 함수 매칭 한계로 제외)해 오탐을 최소화.',
   },
   CROSS_CONTEXT_IMPORT: {
     example: 'application/주문 이 domain/결제 를 직접 import — 다른 바운디드 컨텍스트는 ID로만 참조해야 함(DDD).',
@@ -36,7 +36,7 @@ const WARNING_GUIDE: Record<string, { example: string; limitation: string }> = {
   },
   CROSS_DOMAIN_CALL: {
     example: '함수 호출이 도메인 경계를 직접 넘음 — port/ 인터페이스를 경유해야 함.',
-    limitation: '정규식이 클래스 한정자 없는 호출을 추적하는 한계로, getter·JPA·JDK·동명 함수는 제외. 그래도 일부 오탐 가능.',
+    limitation: '한정자 없는 호출은 동명 함수로 매칭되는 한계가 있어 getter·JPA·JDK·동명 함수는 제외. 그래도 일부 오탐 가능.',
   },
   MISSING_CONVERTER_MIGRATION: {
     example: '@Convert(암호화 등) 컬럼이 있는데 기존 평문 데이터를 변환하는 Flyway 마이그레이션이 없을 가능성 — 조회 시 복호화 실패로 500.',
@@ -44,7 +44,7 @@ const WARNING_GUIDE: Record<string, { example: string; limitation: string }> = {
   },
   DEAD_CODE: {
     example: '어떤 FUNCTION_CALL 엣지도 받지 않는 함수 — 아무 곳에서도 호출되지 않는 후보.',
-    limitation: '정규식은 메서드 레퍼런스(::)·리플렉션(JPA 컨버터)·다형성 디스패치를 일부 못 잡아 오탐이 날 수 있음(상당수 제외 처리됨). 차후 기능용으로 남긴 함수면 숨기세요.',
+    limitation: '리플렉션(JPA 컨버터)·다형성 디스패치처럼 정적으로 안 보이는 호출은 못 잡아 오탐이 날 수 있음(상당수 제외 처리됨). 차후 기능용으로 남긴 함수면 숨기세요.',
   },
   HIGH_FAN_OUT: {
     example: '한 함수가 너무 많은 함수를 호출 — 단일 책임 원칙(SRP) 위반 가능성.',
@@ -81,7 +81,7 @@ export default function HowItWorksPage() {
         <section className="mb-12">
           <h2 className="text-xl font-semibold mb-3">1. 그래프는 어떻게 만들어지나</h2>
           <p className="text-gray-400 text-sm leading-relaxed mb-4">
-            GitHub 레포를 클론한 뒤, <span className="text-gray-200">언어별 정규식 기반 정적 분석</span>으로
+            GitHub 레포를 클론한 뒤, <span className="text-gray-200">tree-sitter AST(함수·호출)와 정규식(DB·API·import 등)을 결합한 정적 분석</span>으로
             각 소스 파일에서 함수·import·DB 엔티티·API 라우트·주석을 추출합니다. 13개 언어를 지원하며,
             컴파일이나 실행 없이 소스 텍스트만 읽습니다. 추출 결과를 노드와 엣지로 엮어 그래프를 만듭니다.
           </p>
@@ -94,8 +94,8 @@ export default function HowItWorksPage() {
             ))}
           </div>
           <div className="text-xs text-gray-500 bg-gray-900/60 border border-gray-800 rounded p-3 leading-relaxed">
-            <span className="text-gray-300 font-medium">한계.</span> 정규식 기반이라 동적 호출·리플렉션·
-            메서드 레퍼런스(::) 같은 일부 연결은 추적하지 못합니다. 그래서 아래 경고 중 일부는 오탐일 수 있고,
+            <span className="text-gray-300 font-medium">한계.</span> 정적 분석이라 동적 호출·리플렉션처럼
+            런타임에 결정되는 일부 연결은 추적하지 못합니다. 그래서 아래 경고 중 일부는 오탐일 수 있고,
             각 경고를 직접 <span className="text-gray-300">숨길 수 있게</span> 했습니다.
           </div>
         </section>
