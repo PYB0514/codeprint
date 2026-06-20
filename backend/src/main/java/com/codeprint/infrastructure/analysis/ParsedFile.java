@@ -23,5 +23,6 @@ public record ParsedFile(
         List<String> jsxComponents,              // .tsx/.jsx 에서 사용된 JSX 컴포넌트명 목록 (<ComponentName 패턴)
         List<RawSqlAccess> rawSqlAccesses,       // raw SQL 문자열에서 추출한 테이블 접근 목록
         List<String> frameworkAnnotatedMethods,  // 프레임워크 어노테이션/데코레이터가 붙은 메서드명 목록 (런타임이 호출 → DEAD_CODE 제외용)
-        List<String> valueReferencedFunctions    // 호출이 아닌 값(콜백·고차함수 인자)으로 참조되는 함수명 목록 (DEAD_CODE 제외용)
+        List<String> valueReferencedFunctions,   // 호출이 아닌 값(콜백·고차함수 인자)으로 참조되는 함수명 목록 (DEAD_CODE 제외용)
+        Map<String, Integer> functionDefCounts   // 함수명 → 파일 내 정의 횟수 (≥2면 동명 머지 노드 — HIGH_FAN_OUT 정밀 가드용)
 ) {}

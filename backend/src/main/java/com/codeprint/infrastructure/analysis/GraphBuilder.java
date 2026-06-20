@@ -73,6 +73,12 @@ public class GraphBuilder {
                 if (pf.valueReferencedFunctions() != null && pf.valueReferencedFunctions().contains(funcName)) {
                     meta.put("referencedAsValue", true);
                 }
+                // 파일 내 동명 정의가 2개 이상이면 이 노드는 여러 정의의 머지 — 호출이 union 되어 fan-out이 부풀려진다.
+                // HIGH_FAN_OUT 정밀 가드가 이 값으로 union-부풀린 fan-out을 제외한다.
+                if (pf.functionDefCounts() != null) {
+                    int defCount = pf.functionDefCounts().getOrDefault(funcName, 1);
+                    if (defCount >= 2) meta.put("mergedDefCount", defCount);
+                }
                 funcNode.updateMetadata(meta);
                 graphRepository.saveNode(funcNode);
                 funcNodeIds.put(pf.filePath() + "::" + funcName, funcNode.getId());

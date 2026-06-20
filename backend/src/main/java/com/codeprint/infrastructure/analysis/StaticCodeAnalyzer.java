@@ -95,6 +95,12 @@ public class StaticCodeAnalyzer {
             functionCalls = extractFunctionCalls(masked, language, functions);
         }
 
+        // 파일 내 동명 정의 횟수 집계 후 functions 디둡 (AST·regex 공통). ≥2면 동명 머지 노드 →
+        // GraphBuilder가 노드 메타에 표시하고 HIGH_FAN_OUT 정밀 가드가 union-부풀린 fan-out을 제외한다.
+        Map<String, Integer> functionDefCounts = new LinkedHashMap<>();
+        for (String f : functions) functionDefCounts.merge(f, 1, Integer::sum);
+        functions = new ArrayList<>(new LinkedHashSet<>(functions));
+
         List<String> imports = extractImports(masked, language);
         String fileComment = extractFileComment(content, language);
         Map<String, String> functionComments = extractFunctionComments(content, language);
@@ -111,7 +117,7 @@ public class StaticCodeAnalyzer {
         List<RawSqlAccess> rawSqlAccesses = extractRawSqlAccesses(content);
         List<String> frameworkAnnotatedMethods = extractFrameworkAnnotatedMethods(masked, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함

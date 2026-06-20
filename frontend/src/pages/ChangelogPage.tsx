@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.89.11',
+    date: '2026-06-20',
+    title: '과도한 의존(HIGH_FAN_OUT) 경고 정밀화 — 동명 머지 정확 감지',
+    type: 'fix',
+    items: [
+      { category: '경고 엔진', desc: '한 파일에 같은 이름의 메서드가 여러 개 있을 때(오버로드·다형성) 한 노드로 합쳐지며 호출이 합산돼 의존 수가 부풀려지던 문제를, 노드별 정의 횟수를 추적해 정확히 제외하도록 바꿨습니다. 이전에는 같은 이름이 여러 파일에 있다는 이유만으로 진짜 과도한 의존까지 함께 숨겨졌는데, 이제 각 정의를 독립적으로 판단해 가려졌던 실제 경고가 드러납니다.' },
+    ],
+  },
+  {
     version: 'v0.89.10',
     date: '2026-06-20',
     title: 'PHP 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
