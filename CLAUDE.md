@@ -243,7 +243,14 @@ For multi-step tasks, state a brief plan:
 3. [Step] → verify: [check]
 ```
 
-### 5. No Closing Colons (Korean Output)
+### 5. Korean Output
+
+**작업 진행 상황은 한국어로 보고한다.**
+사용자에게 보내는 모든 응답 — 계획, 진행 과정 설명, 검증 결과, 작업 요약, 다음 단계 안내 — 은 한국어로 작성한다. 세션 시작 시 이 규칙을 가장 먼저 적용한다.
+- 코드 식별자, 명령어, 로그·에러 원문, 라이브러리/도구명 등 원문이 정확성에 중요한 부분은 영어 그대로 둔다.
+- Plan·Checklist의 구조(체크박스 등)는 유지하되 설명 문장은 한국어로 쓴다.
+
+**Korean 문장은 마침표로 끝낸다 (콜론 금지).**
 End Korean sentences with a period, not a colon.
 - Don't end sentences with `:` even if the next line is a list or example.
 - The test: every Korean sentence terminator should be `.`, `?`, or `!` — not `:`.
