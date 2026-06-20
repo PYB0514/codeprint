@@ -835,6 +835,53 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("Ruby 싱글톤 메서드(def self.x)는 실제 메서드명을 추출한다 (정규식의 self 오캡처를 AST가 교정)")
+    void Ruby_싱글톤_메서드_추출() throws IOException {
+        Path file = tempDir.resolve("factory.rb");
+        Files.writeString(file, """
+                class Factory
+                  def self.build(name)
+                    create(name)
+                  end
+
+                  def create(name)
+                    name
+                  end
+                end
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Ruby");
+
+        // 정규식 `def\\s+(\\w+)`은 `def self.build`에서 `self`를 캡처했으나, AST는 singleton_method name 필드로 `build`를 정확히 추출한다.
+        assertThat(result.functions()).containsExactlyInAnyOrder("build", "create");
+        assertThat(result.functions()).doesNotContain("self");
+    }
+
+    @Test
+    @DisplayName("Ruby 호출을 bare·괄호없는 호출·Constant::method 형태로 귀속한다")
+    void Ruby_함수_호출_추출() throws IOException {
+        Path file = tempDir.resolve("worker.rb");
+        Files.writeString(file, """
+                class Worker
+                  def run
+                    process(1)
+                    save name
+                    Logger.info("hi")
+                  end
+
+                  def process(x)
+                  end
+                end
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Ruby");
+
+        assertThat(result.functionCalls()).containsKey("run");
+        // process(1)·save name(괄호 없는 명령형 호출) → bare, Logger.info(상수 수신자) → "Logger::info"
+        assertThat(result.functionCalls().get("run")).contains("process", "save", "Logger::info");
+    }
+
+    @Test
     @DisplayName("PHP 파일에서 function 메서드명을 추출한다")
     void PHP_함수_추출() throws IOException {
         Path file = tempDir.resolve("UserService.php");
