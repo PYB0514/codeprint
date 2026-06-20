@@ -2248,6 +2248,77 @@ class StaticCodeAnalyzerTest {
         assertThat(result.functionCalls().get("onClick")).contains("handle");
     }
 
+    // ── tree-sitter Go 함수·호출 추출 (regex→AST 전환) ──────────────────────
+
+    @Test
+    @DisplayName("일반 함수와 리시버 메서드를 추출하고 호출을 귀속한다 (tree-sitter)")
+    void Go_함수_리시버메서드_추출_treesitter() throws IOException {
+        Path file = writeGoFile("""
+                package main
+
+                func run() {
+                    helper()
+                }
+
+                func (s *Server) Handle() {
+                    s.process()
+                }
+
+                func helper() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.functions()).contains("run", "Handle", "helper");
+        assertThat(result.functionCalls().get("run")).contains("helper");
+        assertThat(result.functionCalls().get("Handle")).contains("process");
+    }
+
+    @Test
+    @DisplayName("Type.Method() 한정 호출을 Type::Method 형식으로 기록한다 (tree-sitter)")
+    void Go_한정호출_추출_treesitter() throws IOException {
+        Path file = writeGoFile("""
+                package main
+
+                func run() {
+                    Logger.Warn("x")
+                    compute()
+                }
+
+                func compute() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.functionCalls().get("run")).contains("Logger::Warn", "compute");
+        // 대문자 피연산자의 메서드명을 bare 로도 기록하면 동명 지역 함수에 가짜 엣지가 생기므로 기록하지 않는다.
+        assertThat(result.functionCalls().get("run")).doesNotContain("Warn");
+    }
+
+    @Test
+    @DisplayName("주석·문자열·import 경로 속 식별자를 호출로 오인하지 않는다 (tree-sitter)")
+    void Go_주석_문자열_식별자_호출_제외() throws IOException {
+        Path file = writeGoFile("""
+                package main
+
+                import "fmt"
+
+                func run() {
+                    // fakeCall() 처럼 보이는 주석
+                    s := "realLooking() in string"
+                    _ = s
+                    realCall()
+                }
+
+                func realCall() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.functionCalls().get("run")).contains("realCall");
+        assertThat(result.functionCalls().get("run")).doesNotContain("fakeCall", "realLooking");
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {

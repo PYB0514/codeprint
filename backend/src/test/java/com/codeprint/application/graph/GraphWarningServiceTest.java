@@ -643,6 +643,26 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("동명 다중 정의(폴리모픽)로 합쳐진 노드의 fan-out 8개는 HIGH_FAN_OUT 제외 — Go render 패키지 15개 Render 류 머지 오탐 해소")
+    void highFanOut_polymorphicMergedNode_excluded() {
+        // 한 파일에 동명 메서드(JSON.Render·HTML.Render 등)가 여럿이면 file::name 한 노드로 합쳐져 호출이 union 되어
+        // fan-out이 부풀려진다. 같은 이름이 다른 파일에도 정의(defCount≥2)되면 폴리모픽 디스패치 신호로 보고 제외한다.
+        Node renderA = funcNodeWithPath("Render", "/gin/render/json.go");
+        Node renderB = funcNodeWithPath("Render", "/gin/render/html.go"); // 두 번째 정의 → defCount ≥ 2
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        nodes.add(renderA);
+        nodes.add(renderB);
+        java.util.List<Edge> edges = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            Node callee = funcNodeWithPath("util" + i, "/gin/render/dep" + i + ".go");
+            nodes.add(callee);
+            edges.add(callEdge(renderA.getId(), callee.getId(), false));
+        }
+        List<Map<String, Object>> warnings = service.detect(nodes, edges);
+        assertThat(highFanOut(warnings)).isEmpty();
+    }
+
+    @Test
     @DisplayName("테스트 함수(_test.go)의 호출 8개는 HIGH_FAN_OUT 제외 — 테스트는 setup+assert로 자연히 다호출 (Phase 1 #3)")
     void highFanOut_testFunction_excluded() {
         // gin TestLoggerWithConfig 등 *_test.go의 Test 함수가 단일 책임 위반으로 오탐되던 노이즈 제거

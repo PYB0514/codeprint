@@ -748,3 +748,26 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **결정.** 기존 `isTestArtifact`(경로 `/test/`·`*_test.go`·`*Test.java`·`.spec.ts` 등 + `test_` 함수명) 헬퍼를 `detectHighFanOut` 발화 루프에 재사용 — 신규 패턴 없이 한 줄 가드. fan-out 카운팅은 그대로, 발화 시점에만 제외(타 검출과 일관).
 
 **결과.** analyzeLocal gin(d75fcd4) HIGH_FAN_OUT **26→5.** 남은 5건(`Negotiate`·`handleHTTPRequest`·`setByForm`·`setWithProperType`·`CustomRecoveryWithWriter`)은 전부 비테스트 프로덕션 함수 — #285가 예측한 참 신호. 회귀 테스트 GraphWarningServiceTest `highFanOut_testFunction_excluded`(테스트 8호출 미발화) + 기존 `highFanOut_normalEdges_stillDetected`(프로덕션 8호출 발화 유지). DEAD_CODE 1·CYCLIC 0 불변.
+
+---
+
+## AST 프로덕션 전환 — Go 함수·호출 추출 regex→tree-sitter (2026-06-20, v0.89.6)
+
+**문제.** AST 멀티언어 확대 ⑤(Java #308·Python #312·TS #313·JS #314에 이어). Go 함수·호출 추출만 tree-sitter로 교체. 정규식 폴백 유지, native 실패 시 자동 폴백. 게이트 = `gin` OSS 벤치(C:\Dev\codeprint-bench\gin, 99파일) 경고 회귀 0.
+
+**선택 — 구현.** `TreeSitterGoAnalyzer`(standalone, `org.treesitter.TreeSitterGo`, `tree-sitter-go:0.25.0` — jar에 linux-gnu .so + windows .dll 동봉). callee 규약 = Java/Python/TS와 동일: `function_declaration`·`method_declaration`(둘 다 name 필드)에서 함수명, `call_expression`의 function이 `identifier`면 bare(Go는 exported=PascalCase라 대소문자 양쪽 기록), `selector_expression`이면 field가 메서드명·operand가 대문자 단순 식별자면 `Type::method` 한정·아니면 bare(패키지명은 보통 소문자라 bare). 노드 타입 히스토그램으로 그래머 확인(`method_declaration` 425·`selector_expression` 10996 등).
+
+**★ POC 결함 재확인(적대적 검증) — analyzeLocal 토글이 정답.** `treesitterGoPoc`의 regex 베이스라인이 `StaticCodeAnalyzer.analyze(...,"Go")`를 호출하는데 그게 이미 Go→AST로 라우팅돼 **AST-vs-AST 비교**(Context70 Python/TS와 동일 함정) → 함수 1275=1275·호출 5755=5755 "완전 동일"은 production-AST와 POC-walk가 일치한다는 뜻일 뿐 regex 대조가 아님. **진짜 게이트 = analyzeLocal을 같은 브랜치 `false &&` 토글로 두 번**(AST on / regex 강제) 돌려 경고 비교.
+
+**★ 측정이 드러낸 잠재 오탐 — HIGH_FAN_OUT 폴리모픽 머지.** analyzeLocal A/B(gin 레포 루트):
+- AST: 노드 1374·엣지 4488·**HIGH_FAN_OUT 1건**(`Render`).
+- regex 강제: 노드 1405·엣지 4230·**경고 0**.
+- AST가 호출을 더 완전히 추출(+258 엣지)해 regex가 과소추출로 숨기던 fan-out을 노출. 그러나 이는 **진짜 단일 함수 고팬아웃이 아니라 이름-머지 아티팩트**: GraphBuilder가 FUNCTION 노드를 `file::name`으로 키잉하고 분석기가 파일 내 동명 함수를 dedup → `render/json.go`의 6개 `Render` 메서드(JSON·IndentedJSON·SecureJSON·JsonpJSON·AsciiJSON·PureJSON)가 한 노드로 합쳐지고 호출이 union 됨(defCount=15). regex는 우연히 임계 아래라 안 보였을 뿐.
+
+**선택 — defCountByName ≥ 2 제외(detectDeadCode #290 다형성 가드와 동일 원리).** `detectHighFanOut`에 "동명 함수 ≥2 정의면 제외" 추가. 임시 진단(`[HFO-DBG]` 노드별 file·fanout·defCount stderr)으로 코드근거 확인 후 결정:
+- gin `Render` defCount=15 → 제외 → **gin 0건 = regex 베이스라인 일치(경고 회귀 0).**
+- codeprint 자기분석: defCount=1 정당 경고 10건(`build` 16·`refresh` 13·`run` 13·`analyzeBranch` 12·`getGraph`/`getPublicGraph` 12·`onAuthenticationSuccess` 10·`getGraphContext`/`changePlan`/`toolGetGraphOverview` 8) **전부 보존.**
+
+**★ 트레이드오프(측정으로 적발).** defCountByName은 *전 파일* 노드 수라 머지가 아닌 우연한 이름 공유도 잡는다 — codeprint `main`(defCount=5: LocalAnalyzer·3 POC tools, 각 별개 파일의 진짜 단일 함수)이 함께 억제됨(14→10). `main`은 CLI 진입점이라 자연 고팬아웃 = 억제가 실질 무해하나, 기전은 부정확(정확한 판별 = 파일 내 동명 메서드 multiplicity인데 분석기 dedup으로 소실됨 → 정밀화는 ParsedFile~GraphBuilder~노드 메타 관통 필요, 별도 PR 후보). HIGH_FAN_OUT은 LOW severity·머지 노드 fan-out 자체가 이미 비신뢰 → #290 선례와 일관된 보수적 제외로 수용.
+
+**검증.** compileJava·tsc -b·전체 백엔드 테스트 통과. StaticCodeAnalyzerTest Go 3종(일반/리시버 메서드 추출·`Type::Method` 한정·주석/문자열/import 경로 식별자 제외) + GraphWarningServiceTest `highFanOut_polymorphicMergedNode_excluded` 신규. TreeSitterGoPoc + treesitterGoPoc gradle task.
