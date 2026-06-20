@@ -904,6 +904,54 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("PHP 최상위 function과 클래스 method를 함께 추출한다")
+    void PHP_최상위_함수_추출() throws IOException {
+        Path file = tempDir.resolve("helpers.php");
+        Files.writeString(file, """
+                <?php
+                function array_get($arr, $key) {
+                    return $arr[$key];
+                }
+                class Box {
+                    public function open() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "PHP");
+
+        assertThat(result.functions()).containsExactlyInAnyOrder("array_get", "open");
+    }
+
+    @Test
+    @DisplayName("PHP 호출을 bare·->·?->·Class::method 로 귀속하고 키워드는 호출로 세지 않는다")
+    void PHP_함수_호출_추출() throws IOException {
+        Path file = tempDir.resolve("Worker.php");
+        Files.writeString(file, """
+                <?php
+                class Worker {
+                    public function run($items) {
+                        helper($items);
+                        $this->save($items);
+                        $repo?->find($items);
+                        Logger::info("hi");
+                        foreach ($items as $i) {
+                            process($i);
+                        }
+                    }
+                    private function save($items) {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "PHP");
+
+        assertThat(result.functionCalls()).containsKey("run");
+        // helper()·process() bare, $this->save() bare, $repo?->find() nullsafe bare, Logger::info() 정적 → "Logger::info"
+        assertThat(result.functionCalls().get("run")).contains("helper", "save", "find", "Logger::info", "process");
+        // 정규식이 호출로 오인하던 PHP 키워드(foreach 등)는 AST가 호출로 세지 않는다
+        assertThat(result.functionCalls().get("run")).doesNotContain("foreach");
+    }
+
+    @Test
     @DisplayName("Swift 파일에서 func 함수명을 추출한다")
     void Swift_함수_추출() throws IOException {
         Path file = tempDir.resolve("UserService.swift");

@@ -28,6 +28,8 @@ public class StaticCodeAnalyzer {
     private final TreeSitterCSharpAnalyzer treeSitterCSharp = new TreeSitterCSharpAnalyzer();
     // tree-sitter 기반 Ruby 분석기 — 싱글톤 메서드·블록 내 호출·정확한 호출 귀속. native 로드 실패 시 정규식 폴백.
     private final TreeSitterRubyAnalyzer treeSitterRuby = new TreeSitterRubyAnalyzer();
+    // tree-sitter 기반 PHP 분석기 — ->/:: 호출·최상위 함수·정확한 호출 귀속. native 로드 실패 시 정규식 폴백.
+    private final TreeSitterPhpAnalyzer treeSitterPhp = new TreeSitterPhpAnalyzer();
 
     // 단일 소스 파일을 분석하여 함수명, import, 주석 등을 추출
     public ParsedFile analyze(Path file, Path repoRoot, String language) throws IOException {
@@ -41,7 +43,7 @@ public class StaticCodeAnalyzer {
         // 주석/문자열 페이로드를 읽는 검출기(주석 라벨·API 경로·raw SQL 등)는 원본 content를 그대로 쓴다.
         String masked = maskComments(content, language);
 
-        // Java·Python·TypeScript/JavaScript·Go·Rust·C#·Ruby 함수·호출은 tree-sitter(AST)로 추출 — 오탐 제거·정확한 호출 귀속(중첩/메서드).
+        // Java·Python·TypeScript/JavaScript·Go·Rust·C#·Ruby·PHP 함수·호출은 tree-sitter(AST)로 추출 — 오탐 제거·정확한 호출 귀속(중첩/메서드).
         // tree-sitter는 raw content를 직접 파싱(AST가 주석·문자열을 구분하므로 masking 불필요). 실패 시 정규식 폴백.
         List<String> functions;
         Map<String, List<String>> functionCalls;
@@ -62,6 +64,8 @@ public class StaticCodeAnalyzer {
                 language.equals("C#") ? treeSitterCSharp.parse(content) : Optional.empty();
         Optional<TreeSitterRubyAnalyzer.Result> rubyTs =
                 language.equals("Ruby") ? treeSitterRuby.parse(content) : Optional.empty();
+        Optional<TreeSitterPhpAnalyzer.Result> phpTs =
+                language.equals("PHP") ? treeSitterPhp.parse(content) : Optional.empty();
         if (javaTs.isPresent()) {
             functions = javaTs.get().functions();
             functionCalls = javaTs.get().functionCalls();
@@ -83,6 +87,9 @@ public class StaticCodeAnalyzer {
         } else if (rubyTs.isPresent()) {
             functions = rubyTs.get().functions();
             functionCalls = rubyTs.get().functionCalls();
+        } else if (phpTs.isPresent()) {
+            functions = phpTs.get().functions();
+            functionCalls = phpTs.get().functionCalls();
         } else {
             functions = extractFunctions(masked, language);
             functionCalls = extractFunctionCalls(masked, language, functions);

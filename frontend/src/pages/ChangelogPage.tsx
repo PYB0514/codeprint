@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.89.10',
+    date: '2026-06-20',
+    title: 'PHP 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: 'PHP 함수·호출 추출을 정규식에서 tree-sitter AST로 교체했습니다. 정규식이 못 잡던 `->`(인스턴스)·`?->`(널세이프)·`::`(정적) 메서드 호출을 정확히 인식하고, 정규식이 호출로 오인하던 PHP 키워드(`foreach`·`function`·`match`·`static` 등)를 호출에서 제외해 거짓 데드코드·과도한 의존 경고를 줄였습니다. native 로드 실패 시 정규식으로 자동 폴백합니다.' },
+    ],
+  },
+  {
     version: 'v0.89.9',
     date: '2026-06-20',
     title: 'Ruby 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
