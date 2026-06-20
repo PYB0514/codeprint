@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.89.7',
+    date: '2026-06-20',
+    title: 'Rust 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: 'Rust 함수·호출 추출을 정규식에서 tree-sitter AST로 교체했습니다. 정규식이 못 잡던 pub(crate) fn·const fn·unsafe fn 같은 변형 함수와 impl 메서드·trait 시그니처를 정확히 인식하고, 어트리뷰트(#[derive(...)] 등)와 매크로 호출을 함수 호출로 오인하지 않습니다. native 로드 실패 시 정규식으로 자동 폴백합니다.' },
+    ],
+  },
+  {
     version: 'v0.89.6',
     date: '2026-06-20',
     title: 'Go 분석 정확도 — AST(tree-sitter) 엔진으로 교체',

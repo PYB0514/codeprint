@@ -78,6 +78,7 @@ dependencies {
     implementation 'io.github.bonede:tree-sitter-typescript:0.23.2'
     implementation 'io.github.bonede:tree-sitter-tsx:0.23.2'
     implementation 'io.github.bonede:tree-sitter-go:0.25.0'
+    implementation 'io.github.bonede:tree-sitter-rust:0.24.0'
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
@@ -127,5 +128,14 @@ task treesitterGoPoc(type: JavaExec, dependsOn: classes) {
     description = 'tree-sitter로 Go 함수·호출 추출 후 정규식 결과와 비교 (A/B 회귀 검증용)'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.codeprint.tools.treesitter.TreeSitterGoPoc'
+    args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
+}
+
+// tree-sitter A/B 회귀 도구 — Rust 함수·호출 추출을 정규식과 비교 (DB 불필요)
+task treesitterRustPoc(type: JavaExec, dependsOn: classes) {
+    group = 'codeprint'
+    description = 'tree-sitter로 Rust 함수·호출 추출 후 정규식 결과와 비교 (A/B 회귀 검증용)'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.codeprint.tools.treesitter.TreeSitterRustPoc'
     args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
 }
