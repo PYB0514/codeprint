@@ -176,7 +176,7 @@ class GraphBuilderTest {
                 "src/infra/NoticeRepositoryImpl.java", "Java",
                 List.of("save"), List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
-                List.of("NoticeRepository"), List.of(), List.of(), List.of(), List.of(), List.of()
+                List.of("NoticeRepository"), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of()
         );
 
         // CachedNoticeRepositoryImpl (두 번째 구현체)
@@ -184,7 +184,7 @@ class GraphBuilderTest {
                 "src/infra/CachedNoticeRepositoryImpl.java", "Java",
                 List.of("save"), List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
-                List.of("NoticeRepository"), List.of(), List.of(), List.of(), List.of(), List.of()
+                List.of("NoticeRepository"), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of()
         );
 
         graphBuilder.build(projectId, analysisId, List.of(ifaceFile, impl1, impl2));
@@ -217,7 +217,8 @@ class GraphBuilderTest {
                 List.of(), // jsxComponents
                 List.of(), // rawSqlAccesses
                 List.of(), // frameworkAnnotatedMethods
-                List.of()  // valueReferencedFunctions
+                List.of(), // valueReferencedFunctions
+                Map.of()   // functionDefCounts
         );
 
         graphBuilder.build(projectId, analysisId, List.of(ifaceFile, implFile));
@@ -509,35 +510,35 @@ class GraphBuilderTest {
 
     private ParsedFile parsedFile(String path, String lang, List<String> functions, Map<String, String> comments) {
         return new ParsedFile(path, lang, functions, List.of(), null, comments,
-                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
     }
 
     private ParsedFile parsedFileWithCalls(String path, String lang, List<String> functions,
                                            Map<String, List<String>> calls) {
         return new ParsedFile(path, lang, functions, List.of(), null, Map.of(),
-                calls, List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                calls, List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
     }
 
     private ParsedFile parsedFileWithImports(String path, String lang, List<String> imports) {
         return new ParsedFile(path, lang, List.of(), imports, null, Map.of(),
-                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
     }
 
     // 구현체 파일 생성 헬퍼 — implementedInterfaces 포함
     private ParsedFile parsedFileWithImpl(String path, String lang, List<String> functions, String implementedInterface) {
         return new ParsedFile(path, lang, functions, List.of(), null, Map.of(),
-                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(implementedInterface), List.of(), List.of(), List.of(), List.of(), List.of());
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(implementedInterface), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
     }
 
     // 프론트 API 호출 파일 생성 헬퍼 — apiCalls 포함
     private ParsedFile parsedFileWithApiCalls(String path, String lang, List<String> apiCalls) {
         return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
-                Map.of(), List.of(), List.of(), null, List.of(), apiCalls, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                Map.of(), List.of(), List.of(), null, List.of(), apiCalls, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
     }
 
     // 백엔드 컨트롤러 매핑 파일 생성 헬퍼 — controllerMappings 포함
     private ParsedFile parsedFileWithMappings(String path, String lang, List<String> mappings) {
         return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
-                Map.of(), List.of(), List.of(), null, List.of(), List.of(), mappings, List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), mappings, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
     }
 }

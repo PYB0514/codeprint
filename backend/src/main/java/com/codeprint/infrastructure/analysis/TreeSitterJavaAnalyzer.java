@@ -43,10 +43,9 @@ class TreeSitterJavaAnalyzer {
 
             byte[] src = content.getBytes(StandardCharsets.UTF_8);
             List<String> functions = new ArrayList<>();
-            Set<String> functionSet = new LinkedHashSet<>();
             Map<String, Set<String>> calls = new LinkedHashMap<>();
-            walk(tree.getRootNode(), src, null, functionSet, calls);
-            functions.addAll(functionSet);
+            // functions 는 raw(중복 포함) 리스트 — 파일 내 동명 정의 수(머지 다중도)를 StaticCodeAnalyzer가 중앙에서 집계/디둡한다.
+            walk(tree.getRootNode(), src, null, functions, calls);
 
             Map<String, List<String>> functionCalls = new LinkedHashMap<>();
             calls.forEach((caller, callees) -> functionCalls.put(caller, new ArrayList<>(callees)));
@@ -77,7 +76,7 @@ class TreeSitterJavaAnalyzer {
 
     // 트리를 재귀 순회하며 method/constructor 정의를 수집하고, 호출을 가장 가까운 정의에 귀속
     private void walk(TSNode node, byte[] src, String enclosing,
-                      Set<String> functions, Map<String, Set<String>> calls) {
+                      List<String> functions, Map<String, Set<String>> calls) {
         String type = node.getType();
         String current = enclosing;
 

@@ -757,23 +757,15 @@ public class GraphWarningService {
             }
         }
 
-        // 동명 함수가 여러 곳에 정의되고 그 이름으로 호출이 존재하면 — 한 파일 내 동명 메서드(예: Go render 패키지의
-        // 15개 Render)가 한 노드로 합쳐지며 호출이 union 되어 fan-out이 부풀려진 다형성 디스패치로 본다.
-        // detectDeadCode와 동일 가드(defCountByName ≥ 2 + 그 이름으로 호출 존재) — 호출이 없는 동명(예: 각 도구의
-        // main)은 디스패치가 아니라 별개 진입점이므로 제외 대상이 아님(과잉 억제 방지).
-        Map<String, Integer> defCountByName = new HashMap<>();
-        Map<UUID, String> idToName = new HashMap<>();
+        // 한 파일 내 동명 메서드(예: Go render 패키지의 여러 Render)가 한 노드로 합쳐지면 호출이 union 되어 fan-out이
+        // 부풀려진다. 이런 머지 노드(mergedDefCount≥2)는 단일 책임 신호가 아니라 다형성 디스패치 아티팩트이므로 제외한다.
+        // 정밀 가드 — 서로 다른 파일의 동명 함수는 각자 별도 노드(mergedDefCount 없음)라 영향받지 않는다(전역 이름
+        // 휴리스틱이 일으키던 과잉 억제 해소). 한 파일 내 머지가 전역 유일이어도 정확히 잡는다(전역 휴리스틱의 누락 해소).
+        Map<UUID, Integer> mergedDefCountMap = new HashMap<>();
         for (Node n : nodes) {
-            if (n.getType() == NodeType.FUNCTION && n.getName() != null) {
-                defCountByName.merge(n.getName(), 1, Integer::sum);
-            }
-            idToName.put(n.getId(), n.getName());
-        }
-        Set<String> calledFuncNames = new HashSet<>();
-        for (Edge e : edges) {
-            if (e.getType() == EdgeType.FUNCTION_CALL) {
-                String tn = idToName.get(e.getTargetNodeId());
-                if (tn != null) calledFuncNames.add(tn);
+            if (n.getType() == NodeType.FUNCTION && n.getMetadata() != null
+                    && n.getMetadata().get("mergedDefCount") instanceof Number num) {
+                mergedDefCountMap.put(n.getId(), num.intValue());
             }
         }
 
@@ -783,8 +775,8 @@ public class GraphWarningService {
             String fnName = nameMap.get(entry.getKey());
             // 테스트 함수(Test*·_test.go·*Test.java 등)는 setup+assert로 자연히 호출이 많음 — 단일 책임 위반 아님
             if (isTestArtifact(filePathMap.getOrDefault(entry.getKey(), ""), fnName)) continue;
-            // 동명 다중 정의 + 그 이름으로 호출 존재 — 폴리모픽 머지로 union된 fan-out이라 단일 책임 신호 아님
-            if (defCountByName.getOrDefault(fnName, 0) >= 2 && calledFuncNames.contains(fnName)) continue;
+            // 파일 내 동명 머지 노드 — union된 fan-out이라 단일 책임 신호 아님(정밀 가드: 노드별 머지 다중도)
+            if (mergedDefCountMap.getOrDefault(entry.getKey(), 1) >= 2) continue;
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "HIGH_FAN_OUT");
             w.put("severity", "LOW");

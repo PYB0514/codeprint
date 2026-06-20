@@ -853,3 +853,21 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **결론.** AST가 함수는 더 완전(누락 0)·호출은 더 정밀(키워드 오탐 −, ->/?->/:: 회복 +), DEAD_CODE·HIGH_FAN_OUT 정확도 개선(거짓 경고 감소), CYCLIC control 불변, 신규 오탐 0. warning-engine 추가 변경 불필요.
 
 **검증.** compileJava·tsc -b·전체 백엔드 테스트(BUILD SUCCESSFUL) 통과. StaticCodeAnalyzerTest PHP 2종 신규(`PHP_최상위_함수_추출`=function_definition+method, `PHP_함수_호출_추출`=bare/->/?->(nullsafe)/Class::method + 키워드 foreach 미포함). TreeSitterPhpPoc + treesitterPhpPoc gradle task. 벤치 laravel(laravel/framework, --depth 1) 신규 클론.
+
+---
+
+## HIGH_FAN_OUT 정밀 머지 감지 — 전역 이름 휴리스틱 → 노드별 mergedDefCount (2026-06-20, v0.89.11)
+
+**문제.** Go #316 이후 HIGH_FAN_OUT의 폴리모픽 머지 가드가 `detectHighFanOut`에서 전역 `defCountByName(이름이 그래프 전체에 2+ 노드) && 그 이름으로 호출 존재` 휴리스틱이었다. 근본 원인은 GraphBuilder가 FUNCTION 노드를 `file::name`으로 키잉 + 분석기가 파일 내 동명 정의를 dedup → 한 파일의 동명 메서드 N개가 1노드로 합쳐지며 호출이 union 되어 fan-out 부풀림. 전역 휴리스틱의 두 결함: (a) 과잉 억제 — 서로 다른 파일의 동명 함수(각자 진짜 고-fan-out)가 그 이름으로 호출만 있으면 함께 억제됨. (b) 누락 — 한 파일 내 머지가 전역 유일한 이름이면(전역 count=1) 가드를 빠져나가 오탐 잔존.
+
+**선택 — 노드별 머지 다중도 추적(Option X: 분석기 raw 반환 + 중앙 디둡/집계).** 정밀 신호 = "이 노드가 파일 내 N개 정의의 머지인가". multiplicity는 분석기 Set dedup에서 소실되므로 거기부터 추적. 8개 AST 분석기(Java/Python/TS/Go/Rust/C#/Ruby/PHP)가 `functions`를 Set-dedup 대신 raw(중복 포함) 리스트로 반환(walk 시그니처 Set→List), StaticCodeAnalyzer가 `functionDefCounts`(name→파일 내 정의 수)를 중앙 집계하고 functions를 중앙 디둡(LinkedHashSet — first-occurrence 순서 = 기존 Set 순서 동일). ParsedFile에 `functionDefCounts` 필드, GraphBuilder가 ≥2면 노드 메타 `mergedDefCount` 부여, detectHighFanOut가 전역 휴리스틱을 버리고 per-node `mergedDefCount≥2` 제외로 교체. (탈락안 Option Y=Result에 필드 추가: 분석기당 walk param+populate+Result 4곳 변경으로 코드 더 많음. Option X는 분석기당 2곳 + 중앙 1곳, Result 불변.)
+
+**★ AST 출력 바이트 불변 검증(회귀 0).** Option X가 AST 언어 출력을 바꾸지 않음을 laravel analyzeLocal로 확인 — nodes 3840·edges 8854·DEAD_CODE 23%(783/3340)가 PHP PR(#321) AST 수치와 완전 동일. raw→중앙디둡이 walk 순서상 first-occurrence라 기존 in-analyzer Set 순서와 동일 → functions 내용·순서 불변. 정규식 경로는 functions가 이제 중앙 디둡됨(이전엔 중복 잔존 가능 — 미세 개선, 비-BOM 회귀 0).
+
+**★ end-to-end 정탐 검증(gin, 코드근거).** 원래 동기 케이스: gin `render/json.go`에 Render 메서드 6개(`grep ") Render(" json.go`=6, 타 파일은 1개씩) → 1노드 머지 → mergedDefCount=6 → analyzeLocal에서 HIGH_FAN_OUT 미발화(gin 경고 0). 전역 휴리스틱이 잡던 케이스를 per-node 정밀 메커니즘이 동일하게(더 정확히) 제외. 
+
+**★ 과잉 억제 해소 검증(laravel).** HIGH_FAN_OUT 26(옛 전역 가드)→35(정밀). +9는 2+ 파일 동명 + 그 이름 호출 존재라는 이유로 옛 가드가 억제하던 진짜 단일정의 고-fan-out(displayForCli·add·many·exists·mode·models·run·median 등). 각 노드 mergedDefCount 없음(머지 아님)이라 정밀 가드가 정상 발화. 머지 노드는 여전히 제외(신규 오탐 0). 단위 테스트 양방향 커버: `highFanOut_polymorphicMergedNode_excluded`(mergedDefCount=6 노드 fan-out 8 제외) / `highFanOut_distinctSameNameDifferentFiles_stillDetected`(다른 파일 동명+호출이어도 발화).
+
+**결론.** 전역 이름 휴리스틱을 노드별 머지 다중도로 교체해 (a)과잉 억제·(b)누락 동시 해소. detectDeadCode 가드는 미변경(요청 범위=HIGH_FAN_OUT, §3 surgical). AST 출력 불변, gin 정탐 보존, laravel 과잉억제 해소, 신규 오탐 0.
+
+**검증.** compileJava·compileTestJava·tsc -b·전체 백엔드 테스트(BUILD SUCCESSFUL) 통과. GraphWarningServiceTest 머지 테스트 2종 신메커니즘으로 재작성. GraphBuilderTest ParsedFile 생성부 functionDefCounts 인자 추가. 벤치 gin(gin-gonic/gin)·laravel(laravel/framework) 신규/기존 클론. dogfood(codeprint src): CROSS_DOMAIN/DOMAIN_IMPORTS 0 유지.

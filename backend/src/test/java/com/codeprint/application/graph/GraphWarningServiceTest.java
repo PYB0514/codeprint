@@ -643,48 +643,45 @@ class GraphWarningServiceTest {
     }
 
     @Test
-    @DisplayName("동명 다중 정의 + 그 이름으로 호출 존재(폴리모픽 디스패치)면 fan-out 8개는 HIGH_FAN_OUT 제외 — Go render 패키지 Render 류 머지 오탐 해소")
+    @DisplayName("파일 내 동명 머지 노드(mergedDefCount≥2)의 fan-out 8개는 HIGH_FAN_OUT 제외 — union으로 부풀린 폴리모픽 머지 오탐 해소")
     void highFanOut_polymorphicMergedNode_excluded() {
         // 한 파일에 동명 메서드(JSON.Render·HTML.Render 등)가 여럿이면 file::name 한 노드로 합쳐져 호출이 union 되어
-        // fan-out이 부풀려진다. 같은 이름이 다른 파일에도 정의(defCount≥2)되고 그 이름으로 호출이 존재하면(인터페이스
-        // 디스패치) 단일 책임 신호로 신뢰 불가 → 제외. (호출 없는 동명=별개 진입점은 detectDeadCode와 동일하게 미제외.)
-        Node renderA = funcNodeWithPath("Render", "/gin/render/json.go");
-        Node renderB = funcNodeWithPath("Render", "/gin/render/html.go"); // 두 번째 정의 → defCount ≥ 2
-        Node dispatcher = funcNodeWithPath("handleRequest", "/gin/context.go");
+        // fan-out이 부풀려진다. GraphBuilder가 이 노드에 mergedDefCount≥2를 표시하면 단일 책임 신호로 신뢰 불가 → 제외.
+        Node render = funcNodeWithPath("Render", "/gin/render/render.go");
+        render.updateMetadata(Map.of("mergedDefCount", 6)); // 한 파일에 6개 Render 정의가 한 노드로 머지됨
         java.util.List<Node> nodes = new java.util.ArrayList<>();
-        nodes.add(renderA);
-        nodes.add(renderB);
-        nodes.add(dispatcher);
+        nodes.add(render);
         java.util.List<Edge> edges = new java.util.ArrayList<>();
-        // 디스패처가 Render를 호출 → calledFuncNames에 "Render" 포함(인터페이스 디스패치 신호)
-        edges.add(callEdge(dispatcher.getId(), renderB.getId(), false));
         for (int i = 0; i < 8; i++) {
             Node callee = funcNodeWithPath("util" + i, "/gin/render/dep" + i + ".go");
             nodes.add(callee);
-            edges.add(callEdge(renderA.getId(), callee.getId(), false));
+            edges.add(callEdge(render.getId(), callee.getId(), false));
         }
         List<Map<String, Object>> warnings = service.detect(nodes, edges);
         assertThat(highFanOut(warnings)).isEmpty();
     }
 
     @Test
-    @DisplayName("동명 다중 정의라도 그 이름으로 호출이 없으면(각 도구의 main 류 별개 진입점) HIGH_FAN_OUT 유지 — 과잉 억제 방지")
-    void highFanOut_multiDefButUncalled_stillDetected() {
-        // main()은 여러 도구 파일에 정의돼 defCount≥2지만 누구도 호출하지 않는 진입점 → 폴리모픽 디스패치가 아니라
-        // 별개 함수. 호출 존재 조건이 없으면 이런 진입점이 거짓 억제된다. fan-out 8은 실제 신호이므로 발화해야 한다.
-        Node mainA = funcNodeWithPath("main", "/tools/ToolA.java");
-        Node mainB = funcNodeWithPath("main", "/tools/ToolB.java"); // defCount ≥ 2 이지만 호출 없음
+    @DisplayName("서로 다른 파일의 동명 함수(각자 단일 정의)는 머지가 아니므로 그 이름으로 호출이 있어도 fan-out 발화 — 전역 이름 휴리스틱의 과잉 억제 해소")
+    void highFanOut_distinctSameNameDifferentFiles_stillDetected() {
+        // 옛 전역 가드는 "이름이 2+ 파일에 정의 + 호출 존재"면 무조건 억제해, 서로 다른 두 validate()가 각자 진짜
+        // 고-fan-out이어도 거짓 억제했다. 정밀 가드는 노드별 mergedDefCount만 보므로 머지 아닌 별개 정의는 정상 발화한다.
+        Node validateA = funcNodeWithPath("validate", "/com/a/A.java"); // 단일 정의 (mergedDefCount 없음)
+        Node validateB = funcNodeWithPath("validate", "/com/b/B.java"); // 다른 파일의 별개 정의
+        Node dispatcher = funcNodeWithPath("run", "/com/c/C.java");
         java.util.List<Node> nodes = new java.util.ArrayList<>();
-        nodes.add(mainA);
-        nodes.add(mainB);
+        nodes.add(validateA);
+        nodes.add(validateB);
+        nodes.add(dispatcher);
         java.util.List<Edge> edges = new java.util.ArrayList<>();
+        edges.add(callEdge(dispatcher.getId(), validateB.getId(), false)); // "validate" 이름으로 호출 존재
         for (int i = 0; i < 8; i++) {
-            Node callee = funcNodeWithPath("step" + i, "/tools/dep" + i + ".java");
+            Node callee = funcNodeWithPath("step" + i, "/com/a/dep" + i + ".java");
             nodes.add(callee);
-            edges.add(callEdge(mainA.getId(), callee.getId(), false));
+            edges.add(callEdge(validateA.getId(), callee.getId(), false));
         }
         List<Map<String, Object>> warnings = service.detect(nodes, edges);
-        assertThat(highFanOut(warnings)).hasSize(1);
+        assertThat(highFanOut(warnings)).hasSize(1); // validateA의 fan-out 8은 머지 아니므로 발화
     }
 
     @Test
