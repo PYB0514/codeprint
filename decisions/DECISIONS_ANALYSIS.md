@@ -830,3 +830,26 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **결론.** AST가 함수·호출 모두 정확(진짜 누락 0, regex-only 11은 전부 정규식 결함 교정), HIGH_FAN_OUT 3건 정탐, 신규 오탐 0, DEAD_CODE 정확도 개선. warning-engine 추가 변경 불필요.
 
 **검증.** compileJava·tsc -b·전체 백엔드 테스트(BUILD SUCCESSFUL) 통과. StaticCodeAnalyzerTest Ruby 2종 신규(`Ruby_싱글톤_메서드_추출`=def self.x → 실제명·self 미포함, `Ruby_함수_호출_추출`=bare/명령형/Constant::method). TreeSitterRubyPoc + treesitterRubyPoc gradle task. 벤치 jekyll(jekyll/jekyll, --depth 1) 신규 클론.
+
+---
+
+## AST 프로덕션 전환 — PHP 함수·호출 추출 regex→tree-sitter (2026-06-20, v0.89.10)
+
+**문제.** AST 멀티언어 확대 ⑨(Java/Python/TS/JS/Go/Rust/C#/Ruby에 이어). PHP 함수·호출 추출만 tree-sitter로 교체. 정규식 폴백 유지. 게이트 = laravel OSS 벤치(laravel/framework, src 1640 .php) analyzeLocal `false &&` 토글 A/B(regex 강제).
+
+**선택 — 구현.** `TreeSitterPhpAnalyzer`(standalone, `org.treesitter.TreeSitterPhp`, `tree-sitter-php:0.24.2`). 노드 타입은 일회용 probe(`PhpNodeProbe`, 확정 후 삭제)로 확정: `function_definition`(최상위 함수)·`method_declaration`(클래스 메서드) name 필드 → 함수. 호출은 `function_call_expression`(function 필드가 단순 name일 때 bare)·`member_call_expression`+`nullsafe_member_call_expression`($obj->m()·$obj?->m(), name 필드 bare)·`scoped_call_expression`(Class::m(), scope 대문자면 `Class::method` 한정·self/static/parent는 bare). `new X()`는 `object_creation_expression`이라 호출에서 자동 제외.
+
+**★ probe 후 nullsafe 누락 적발·수정.** POC 노드 히스토그램에서 `nullsafe_member_call_expression` 24건 확인 → 초기 구현이 `member_call_expression`만 처리해 `$obj?->method()` 호출을 놓침. 양쪽 모두 처리하도록 추가(edges 8835→8854).
+
+**★ A/B 결과 — AST가 함수는 더 완전, 호출은 더 정밀(POC `treesitterPhpPoc`, laravel).**
+- 함수: ts-only 6 / **regex-only 0** — AST 진짜 누락 0, 정규식이 놓친 메서드 6 회복.
+- 호출: regex 8992 / **ts 8854 엣지(−138)**. 감소분은 전부 정규식 오탐 — regex-only callee가 `foreach`·`function`·`static`·`use`·`match`·`fn`·`elseif`·`from` 등 **PHP 키워드**(정규식 `\b([a-z]\w*)\s*\(`이 `keyword(` 를 호출로 오인). AST는 키워드를 호출로 안 셈. 동시에 `->`·`?->`·`::` 호출은 정규식이 `.`만 보던 한정 패턴이라 과소추출하던 것을 AST가 정확 귀속.
+- DEAD_CODE: regex 29%(968/3334) → **AST 23%(783/3340)**. 호출 귀속이 정확해져 거짓 데드 감소(둘 다 단일 LOW 게이트).
+- HIGH_FAN_OUT: regex 29 → **AST 26**. 감소 3건은 키워드 오탐으로 부풀던 fan-out 제거.
+- CYCLIC_IMPORT: regex 5 = AST 5 (import는 이번 변경 대상 아님 → control, 동일 확인).
+
+**★ AST HIGH_FAN_OUT 26건 정탐.** 다수가 `handle`(Laravel Artisan 커맨드·Job·미들웨어의 진입 메서드 = 작업을 실제 오케스트레이션, 파일마다 단일 정의라 동명 머지 아님)·`promptForMissingArguments`·`mergeAttributes` 등 실질 오케스트레이션 메서드. Go #316 가드(동명 다중정의+호출 제외) 적용 후에도 유지 = 정탐. 신규 false positive 0.
+
+**결론.** AST가 함수는 더 완전(누락 0)·호출은 더 정밀(키워드 오탐 −, ->/?->/:: 회복 +), DEAD_CODE·HIGH_FAN_OUT 정확도 개선(거짓 경고 감소), CYCLIC control 불변, 신규 오탐 0. warning-engine 추가 변경 불필요.
+
+**검증.** compileJava·tsc -b·전체 백엔드 테스트(BUILD SUCCESSFUL) 통과. StaticCodeAnalyzerTest PHP 2종 신규(`PHP_최상위_함수_추출`=function_definition+method, `PHP_함수_호출_추출`=bare/->/?->(nullsafe)/Class::method + 키워드 foreach 미포함). TreeSitterPhpPoc + treesitterPhpPoc gradle task. 벤치 laravel(laravel/framework, --depth 1) 신규 클론.
