@@ -871,3 +871,19 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **결론.** 전역 이름 휴리스틱을 노드별 머지 다중도로 교체해 (a)과잉 억제·(b)누락 동시 해소. detectDeadCode 가드는 미변경(요청 범위=HIGH_FAN_OUT, §3 surgical). AST 출력 불변, gin 정탐 보존, laravel 과잉억제 해소, 신규 오탐 0.
 
 **검증.** compileJava·compileTestJava·tsc -b·전체 백엔드 테스트(BUILD SUCCESSFUL) 통과. GraphWarningServiceTest 머지 테스트 2종 신메커니즘으로 재작성. GraphBuilderTest ParsedFile 생성부 functionDefCounts 인자 추가. 벤치 gin(gin-gonic/gin)·laravel(laravel/framework) 신규/기존 클론. dogfood(codeprint src): CROSS_DOMAIN/DOMAIN_IMPORTS 0 유지.
+
+---
+
+## C 언어 분석 지원 추가 — tree-sitter AST (2026-06-20, v0.90.0)
+
+**문제.** LanguageDetector의 EXT_TO_LANG에 `cpp→C++`·`c→C`가 있었으나 SUPPORTED 집합엔 빠져 있어, SourceFileWalker가 `isSupported`로 필터링하며 C 파일을 분석에서 제외 — 확장자는 인식하나 빈 그래프가 나오는 반쪽 상태. getFunctionPattern에도 C 케이스 없음(정규식 분석 전무). Kotlin AST는 bonede에 그래머가 없어(tree-sitter-ng 디렉터리·maven 부재 확인) 차단 → 차단되지 않은 최고가치 작업으로 C 선택. C++는 메서드/네임스페이스/템플릿 복잡도라 별도 후속.
+
+**선택 — 구현.** `TreeSitterCAnalyzer`(standalone, `org.treesitter.TreeSitterC`, `tree-sitter-c:0.24.1`) + SUPPORTED에 "C" 추가. 노드 타입은 일회용 probe(`CNodeProbe`, 확정 후 삭제)로 확정: `function_definition`만 함수로(함수 포인터 *선언* `void (*cb)(int)`은 `declaration`이라 자동 제외). **C 함수명은 선언자 체인에 중첩** — `function_definition.declarator`(function_declarator) → `.declarator`(identifier), 포인터 반환 `char *foo()`은 pointer_declarator가 한 겹 더 감쌈. `declarator` 필드를 identifier 만날 때까지 반복적으로 풀어 추출(pointer/function/parenthesized_declarator 공통 `declarator` 필드). 호출은 `call_expression.function`=identifier일 때 bare(C는 클래스 없어 qualified 불필요, 함수 포인터·복합 표현 호출 제외).
+
+**정규식 폴백 없음(의도).** C 정규식은 매크로·선언자 복잡도로 오탐 위험이 크고, native 실패 시 빈 결과는 변경 전(C 미분석)과 동일이라 회귀 아님. AST를 유일 경로로 문서화(분석기 헤더 주석).
+
+**검증(추출 동작 — curl/lib 192 .c).** A/B 불가(정규식 베이스라인 없음) → 추출량·노드 히스토그램·샘플로 검증. **함수 3664개·호출 15880개·191/192 파일에서 함수 추출.** 샘플 함수명 전부 진짜 C 함수(altsvc_create·chunk_is_empty·cf_dns_ctx_create·Curl_socket_addr_from_ai 등). node histogram function_definition 3799 vs 추출 3664 차이(135, 3.5%)는 `#if/#else` 조건부 컴파일로 같은 함수가 두 번 정의된 케이스의 중앙 디둡(v0.89.11 functionDefCounts) — 동일 논리함수라 정상. end-to-end analyzeLocal: nodes 3856·edges 12051·HIGH_FAN_OUT 83·DEAD_CODE 119(3.2%<4% 게이트라 개별 표시 — 기존 캘리브레이션이 C 라이브러리에 적용된 결과, 함수 포인터는 valueReferencedFunctions로 일부 제외), 크래시 0.
+
+**버전.** 신규 언어 지원 = 사용자가 이전에 못 하던 것(C 프로젝트 분석) → MINOR(v0.89.11 → v0.90.0). 프론트 "11개 언어"→"12개 언어" 3곳(LandingPage·HowItWorksPage) 갱신.
+
+**검증.** compileJava·tsc -b·전체 백엔드 테스트(BUILD SUCCESSFUL) 통과. StaticCodeAnalyzerTest C 2종 신규(`C_함수_추출`=포인터반환/static/함수포인터선언 제외, `C_함수_호출_추출`=bare 귀속). TreeSitterCPoc + treesitterCPoc gradle task. 벤치 curl(curl/curl)·sds 신규 클론.

@@ -27,7 +27,7 @@ public class LanguageDetector {
 
     private static final java.util.Set<String> SUPPORTED = java.util.Set.of(
             "Java", "Kotlin", "TypeScript", "JavaScript", "Python", "Go", "Rust",
-            "C#", "Ruby", "PHP", "Swift", "Prisma"
+            "C#", "C", "Ruby", "PHP", "Swift", "Prisma"
     );
 
     // 파일 확장자로 프로그래밍 언어를 감지하여 반환

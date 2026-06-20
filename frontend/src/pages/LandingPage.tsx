@@ -78,7 +78,7 @@ const FEATURES = [
 // 사용 방법 3단계 데이터
 const STEPS = [
   { step: '01', title: 'GitHub 레포 URL 붙여넣기', desc: '공개 또는 연동된 프라이빗 레포 URL을 입력한다.' },
-  { step: '02', title: '자동 분석 — 약 10~60초', desc: '정규식 기반 정적 분석 엔진이 Java·TypeScript·Python·Go 등 11개 언어를 지원해 파일·함수·DB 관계를 추출한다.' },
+  { step: '02', title: '자동 분석 — 약 10~60초', desc: '정규식 기반 정적 분석 엔진이 Java·TypeScript·Python·Go 등 12개 언어를 지원해 파일·함수·DB 관계를 추출한다.' },
   { step: '03', title: '인터랙티브 다이어그램 완성', desc: '노드를 클릭해 흐름을 추적하고, 경고를 확인하고, 팀원과 공유한다.' },
 ]
 
@@ -144,7 +144,7 @@ export default function LandingPage() {
           <section className="w-full max-w-2xl flex flex-col items-center gap-6 text-center">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-gray-800 border border-gray-700 rounded-full text-xs text-gray-400">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              11개 언어 지원 · 정규식 정적 분석
+              12개 언어 지원 · 정규식 정적 분석
             </div>
 
             <h1 className="text-4xl sm:text-5xl font-bold tracking-tight leading-tight">

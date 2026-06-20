@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.90.0',
+    date: '2026-06-20',
+    title: 'C 언어 분석 지원 추가 — 총 12개 언어',
+    type: 'feature',
+    items: [
+      { category: '분석 엔진', desc: 'C(.c) 소스 분석을 추가했습니다. 그동안 확장자는 인식하면서도 실제 분석에서는 제외돼 빈 그래프가 나오던 반쪽 상태를 해소하고, tree-sitter AST로 함수 정의(선언자 체인에서 함수명 추출, 포인터 반환·static 포함)와 함수 호출을 정확히 추출합니다. curl(192개 .c 파일) 기준 함수 3,664개·호출 15,880개 추출 확인.' },
+    ],
+  },
+  {
     version: 'v0.89.11',
     date: '2026-06-20',
     title: '과도한 의존(HIGH_FAN_OUT) 경고 정밀화 — 동명 머지 정확 감지',
