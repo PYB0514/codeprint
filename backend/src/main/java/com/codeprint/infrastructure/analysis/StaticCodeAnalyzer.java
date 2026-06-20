@@ -32,6 +32,8 @@ public class StaticCodeAnalyzer {
     private final TreeSitterPhpAnalyzer treeSitterPhp = new TreeSitterPhpAnalyzer();
     // tree-sitter 기반 C 분석기 — 선언자 체인에서 함수명 추출·호출 귀속. C는 정규식 미지원이라 AST가 유일 경로.
     private final TreeSitterCAnalyzer treeSitterC = new TreeSitterCAnalyzer();
+    // tree-sitter 기반 C++ 분석기 — 클래스 메서드·qualified 정의·연산자·소멸자·템플릿. C++도 정규식 미지원이라 AST가 유일 경로.
+    private final TreeSitterCppAnalyzer treeSitterCpp = new TreeSitterCppAnalyzer();
 
     // 단일 소스 파일을 분석하여 함수명, import, 주석 등을 추출
     public ParsedFile analyze(Path file, Path repoRoot, String language) throws IOException {
@@ -70,6 +72,8 @@ public class StaticCodeAnalyzer {
                 language.equals("PHP") ? treeSitterPhp.parse(content) : Optional.empty();
         Optional<TreeSitterCAnalyzer.Result> cTs =
                 language.equals("C") ? treeSitterC.parse(content) : Optional.empty();
+        Optional<TreeSitterCppAnalyzer.Result> cppTs =
+                language.equals("C++") ? treeSitterCpp.parse(content) : Optional.empty();
         if (javaTs.isPresent()) {
             functions = javaTs.get().functions();
             functionCalls = javaTs.get().functionCalls();
@@ -97,6 +101,9 @@ public class StaticCodeAnalyzer {
         } else if (cTs.isPresent()) {
             functions = cTs.get().functions();
             functionCalls = cTs.get().functionCalls();
+        } else if (cppTs.isPresent()) {
+            functions = cppTs.get().functions();
+            functionCalls = cppTs.get().functionCalls();
         } else {
             functions = extractFunctions(masked, language);
             functionCalls = extractFunctionCalls(masked, language, functions);

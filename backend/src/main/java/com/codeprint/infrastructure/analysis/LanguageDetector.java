@@ -18,6 +18,10 @@ public class LanguageDetector {
             Map.entry("rs", "Rust"),
             Map.entry("cs", "C#"),
             Map.entry("cpp", "C++"),
+            Map.entry("cc", "C++"),
+            Map.entry("cxx", "C++"),
+            Map.entry("hpp", "C++"),
+            Map.entry("hh", "C++"),
             Map.entry("c", "C"),
             Map.entry("rb", "Ruby"),
             Map.entry("php", "PHP"),
@@ -27,7 +31,7 @@ public class LanguageDetector {
 
     private static final java.util.Set<String> SUPPORTED = java.util.Set.of(
             "Java", "Kotlin", "TypeScript", "JavaScript", "Python", "Go", "Rust",
-            "C#", "C", "Ruby", "PHP", "Swift", "Prisma"
+            "C#", "C", "C++", "Ruby", "PHP", "Swift", "Prisma"
     );
 
     // 파일 확장자로 프로그래밍 언어를 감지하여 반환

@@ -887,3 +887,25 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **버전.** 신규 언어 지원 = 사용자가 이전에 못 하던 것(C 프로젝트 분석) → MINOR(v0.89.11 → v0.90.0). 프론트 "11개 언어"→"12개 언어" 3곳(LandingPage·HowItWorksPage) 갱신.
 
 **검증.** compileJava·tsc -b·전체 백엔드 테스트(BUILD SUCCESSFUL) 통과. StaticCodeAnalyzerTest C 2종 신규(`C_함수_추출`=포인터반환/static/함수포인터선언 제외, `C_함수_호출_추출`=bare 귀속). TreeSitterCPoc + treesitterCPoc gradle task. 벤치 curl(curl/curl)·sds 신규 클론.
+
+---
+
+## C++ 언어 분석 지원 추가 — tree-sitter AST (2026-06-20, v0.91.0)
+
+**문제.** C와 동일한 반쪽 상태 — `cpp→C++` 매핑은 있으나 SUPPORTED에 "C++" 누락이라 .cpp 파일이 분석에서 제외됐다. C++는 C 분석기 기반이지만 클래스 메서드·아웃오브라인 정의(`Foo::bar`)·연산자 오버로드·소멸자·템플릿·네임스페이스 중첩이 추가돼 선언자 체인이 더 복잡하다.
+
+**선택 — 구현.** `TreeSitterCppAnalyzer`(standalone, `org.treesitter.TreeSitterCpp`, `tree-sitter-cpp:0.23.4`) + SUPPORTED에 "C++", 확장자 `.cc/.cxx/.hpp/.hh` 추가(`.cpp`는 기존). 노드 타입은 일회용 probe로 s-expr 덤프해 확정. **함수 정의** = `function_definition`만(순수 가상 `virtual f()=0;`은 `field_declaration`이라 본문 없어 제외 — C와 동일 원칙, 같은 이름의 아웃오브라인 정의가 채움). 선언자 체인을 풀어 함수명 추출: 리프가 `identifier`(자유함수·생성자)·`field_identifier`(클래스 메서드)·`operator_name`(operator+)·`destructor_name`(~Foo), `qualified_identifier`(Foo::bar)면 name 필드로 더 내려가 **메서드명만** 취함. **호출 귀속은 C#/Java AST 규약 그대로**: bare 식별자, `field_expression`(obj.method/ptr->method)는 메서드명 bare(대문자 수신자만 `Type::method`), `qualified_identifier`(Logger::info)는 scope 대문자면 `Scope::method` 아니면 bare(`ns::freeFunc`→freeFunc). GraphBuilder가 `::`를 split해 메서드명으로 매칭(parts[0]로 파일 우선 선택)하므로 엣지 호환·Flyway 불필요.
+
+**버그 ① reference_declarator 필드 부재 → operator+ 누락.** 1차 단위 테스트에서 클래스 내 `Widget& operator+(...)` 미추출. probe(필드명 출력)로 확정: `pointer_declarator`는 내부 선언자를 `declarator` 필드로 태그하나, **C++ 전용 `reference_declarator`(`& f`)는 `&` 토큰 뒤 평범한 자식이라 필드 태그가 없다** → `getChildByFieldName("declarator")`가 null 반환. 수정 = 래퍼 선언자에서 필드가 null이면 자식 스캔(`firstDeclaratorChild`, `&`·타입·parameter_list 등 비-선언자 건너뜀)으로 폴백. 부수효과로 참조 반환 연산자(`operator=` 등)도 회복.
+
+**버그 ② 매크로 에러 복구 → 키워드 "namespace" 함수 오추출.** nlohmann/json A/B에서 다수 파일이 `namespace`를 함수명으로 추출. 근본 원인을 probe로 확정(s-expr): 불투명 매크로 `NLOHMANN_JSON_NAMESPACE_BEGIN`(세미콜론 없음) 뒤의 `namespace detail {`를 tree-sitter가 `function_definition`으로 에러 복구 — return type=매크로, **declarator=identifier "namespace"**, "detail"=ERROR 노드, body=compound_statement. 안의 진짜 함수는 중첩돼 재귀로 정상 추출됨. 수정 = `CPP_KEYWORDS` 가드(함수명·callee가 C++ 키워드면 거부). 직접-ERROR-자식 스킵보다 과소추출 위험 낮은 외과적 선택(정상 함수명은 절대 키워드일 수 없음).
+
+**.h 미매핑(의도).** `.h`는 C/C++ 양쪽이라 모호 — 기존(C PR)도 .h 미매핑이라 이를 유지. C++ 헤더는 `.hpp/.hh`만 매핑. fmt(본체가 .h) 커버리지는 얇으나 header-only인 nlohmann/json(.hpp)로 본 커버리지 검증.
+
+**정규식 폴백 없음(의도).** C와 동일 — C++ 정규식은 복잡도·오탐 위험 크고, native 실패 시 빈 결과는 변경 전(C++ 미분석)과 동일이라 회귀 아님.
+
+**검증(추출 동작 — 정규식 베이스라인 없음 → 추출량·노드·샘플).** nlohmann/json include(47 .hpp): 함수 399·호출 1687·31/47 파일(나머지는 메서드 본문 없는 순수 타입/trait 헤더, 정상), json 전체 repo(473파일, 25k줄 single_include amalgamation 포함): 함수 2016·호출 7103, **크래시 0**. fmt(.cc 46): 함수 824·호출 3445. 함수명 전부 진짜(from_json·operator++·operator->·operator[]·~binary_reader·qualified 아웃오브라인은 bare). 키워드 누출 0(수정 후 전 샘플 audit clean).
+
+**버전.** 신규 언어 = MINOR(v0.90.0 → v0.91.0). 프론트 "12개 언어"→"13개 언어" 3곳(LandingPage×2·HowItWorksPage) + ChangelogPage 항목.
+
+**검증.** compileJava·tsc -b·전체 백엔드 테스트(BUILD SUCCESSFUL) 통과. StaticCodeAnalyzerTest C++ 3종 신규(`Cpp_함수_추출`=메서드/생성자/소멸자/연산자/아웃오브라인/템플릿, `Cpp_함수_호출_추출`=bare/멤버/qualified 규약, `Cpp_키워드_누출_차단`=매크로 에러복구 가드). TreeSitterCppPoc + treesitterCppPoc gradle task. 벤치 nlohmann/json·fmtlib/fmt 신규 클론.

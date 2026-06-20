@@ -994,6 +994,83 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("C++ 클래스 메서드·생성자·소멸자·연산자·아웃오브라인 정의를 추출한다")
+    void Cpp_함수_추출() throws IOException {
+        Path file = tempDir.resolve("Widget.cpp");
+        Files.writeString(file, """
+                namespace ui {
+                class Widget {
+                public:
+                    Widget() {}
+                    ~Widget() {}
+                    int area() const { return w * h; }
+                    Widget& operator+(const Widget& o) { return *this; }
+                    static Widget make() { return Widget(); }
+                    virtual void render() = 0;
+                private:
+                    int w, h;
+                };
+                void Widget::render() {}
+                template<typename T>
+                T identity(T v) { return v; }
+                int* allocate(int n) { return new int[n]; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C++");
+
+        // 생성자(Widget)·소멸자(~Widget)·인라인 메서드(area)·연산자(operator+)·static(make)·아웃오브라인(render: Widget::render → bare render)
+        // ·템플릿(identity)·포인터 반환(allocate). 순수 가상 선언(render() = 0;)은 field_declaration이라 정의 본문이 없어 제외되나
+        // 같은 이름의 아웃오브라인 정의가 render를 채운다. 함수 포인터 반환은 pointer_declarator 한 겹.
+        assertThat(result.functions())
+                .contains("Widget", "~Widget", "area", "operator+", "make", "render", "identity", "allocate");
+    }
+
+    @Test
+    @DisplayName("C++ 호출을 bare·멤버·qualified 규약으로 함수에 귀속한다")
+    void Cpp_함수_호출_추출() throws IOException {
+        Path file = tempDir.resolve("service.cpp");
+        Files.writeString(file, """
+                int helper(int x) { return x; }
+                void run() {
+                    helper(1);
+                    obj.method();
+                    ptr->doWork();
+                    Logger::info("x");
+                    ns::freeFunc();
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C++");
+
+        assertThat(result.functionCalls()).containsKey("run");
+        // helper bare, obj.method()→bare method(소문자 수신자), ptr->doWork()→bare doWork, Logger::info()→"Logger::info"(대문자 scope),
+        // ns::freeFunc()→bare freeFunc(소문자 namespace scope)
+        assertThat(result.functionCalls().get("run"))
+                .contains("helper", "method", "doWork", "Logger::info", "freeFunc");
+    }
+
+    @Test
+    @DisplayName("C++ 매크로 에러 복구 시 키워드(namespace)가 함수명으로 누출되지 않는다")
+    void Cpp_키워드_누출_차단() throws IOException {
+        // 불투명 매크로 뒤 `namespace X {`는 tree-sitter가 function_definition으로 오파싱(declarator=identifier "namespace").
+        // 키워드 가드가 이를 차단하고, 안에 중첩된 진짜 함수는 정상 추출돼야 한다(nlohmann/json 류 패턴).
+        Path file = tempDir.resolve("detail.cpp");
+        Files.writeString(file, """
+                #define NS_BEGIN namespace lib {
+                NS_BEGIN
+                namespace detail {
+                void real_func() { helper(); }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C++");
+
+        assertThat(result.functions()).contains("real_func");
+        assertThat(result.functions()).doesNotContain("namespace", "detail");
+    }
+
+    @Test
     @DisplayName("Swift 파일에서 func 함수명을 추출한다")
     void Swift_함수_추출() throws IOException {
         Path file = tempDir.resolve("UserService.swift");

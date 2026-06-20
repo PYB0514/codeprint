@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.91.0',
+    date: '2026-06-20',
+    title: 'C++ 언어 분석 지원 추가 — 총 13개 언어',
+    type: 'feature',
+    items: [
+      { category: '분석 엔진', desc: 'C++(.cpp/.cc/.cxx/.hpp/.hh) 소스 분석을 추가했습니다. 그동안 확장자는 인식하면서도 실제 분석에서는 제외되던 반쪽 상태를 해소하고, tree-sitter AST로 클래스 메서드·생성자·소멸자·연산자 오버로드(operator+ 등)·아웃오브라인 정의(Foo::bar)·템플릿 함수를 정확히 추출합니다. 호출은 bare·멤버(obj.method / ptr->method)·정적(Class::method) 형태를 모두 인식합니다. nlohmann/json·fmt 기준 크래시 없이 추출 확인.' },
+    ],
+  },
+  {
     version: 'v0.90.0',
     date: '2026-06-20',
     title: 'C 언어 분석 지원 추가 — 총 12개 언어',

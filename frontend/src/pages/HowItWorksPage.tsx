@@ -82,7 +82,7 @@ export default function HowItWorksPage() {
           <h2 className="text-xl font-semibold mb-3">1. 그래프는 어떻게 만들어지나</h2>
           <p className="text-gray-400 text-sm leading-relaxed mb-4">
             GitHub 레포를 클론한 뒤, <span className="text-gray-200">언어별 정규식 기반 정적 분석</span>으로
-            각 소스 파일에서 함수·import·DB 엔티티·API 라우트·주석을 추출합니다. 12개 언어를 지원하며,
+            각 소스 파일에서 함수·import·DB 엔티티·API 라우트·주석을 추출합니다. 13개 언어를 지원하며,
             컴파일이나 실행 없이 소스 텍스트만 읽습니다. 추출 결과를 노드와 엣지로 엮어 그래프를 만듭니다.
           </p>
           <div className="flex flex-col gap-2 mb-4">

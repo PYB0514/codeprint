@@ -83,6 +83,7 @@ dependencies {
     implementation 'io.github.bonede:tree-sitter-ruby:0.23.1'
     implementation 'io.github.bonede:tree-sitter-php:0.24.2'
     implementation 'io.github.bonede:tree-sitter-c:0.24.1'
+    implementation 'io.github.bonede:tree-sitter-cpp:0.23.4'
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
@@ -177,5 +178,14 @@ task treesitterCPoc(type: JavaExec, dependsOn: classes) {
     description = 'tree-sitter로 C 함수·호출 추출량과 노드 타입을 출력 (검증용)'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.codeprint.tools.treesitter.TreeSitterCPoc'
+    args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
+}
+
+// tree-sitter C++ 함수·호출 추출 진단 도구 (C++는 정규식 미지원 → 추출량·노드 히스토그램, DB 불필요)
+task treesitterCppPoc(type: JavaExec, dependsOn: classes) {
+    group = 'codeprint'
+    description = 'tree-sitter로 C++ 함수·호출 추출량과 노드 타입을 출력 (검증용)'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.codeprint.tools.treesitter.TreeSitterCppPoc'
     args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
 }
