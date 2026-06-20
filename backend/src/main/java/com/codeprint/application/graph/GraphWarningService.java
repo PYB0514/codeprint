@@ -483,31 +483,35 @@ public class GraphWarningService {
 
             String fp = n.getFilePath() != null ? n.getFilePath() : "";
             String name = n.getName() != null ? n.getName() : "";
+            // 디렉터리 세그먼트 매칭용 — 분석 루트가 해당 디렉터리 자체면 경로가 "components/x"처럼 앞 슬래시가 없어
+            // fp.contains("/components/")가 빗나간다. 앞에 "/"를 붙여 루트 레벨 디렉터리도 세그먼트로 매칭한다
+            // (isTestArtifact의 슬래시 래핑과 동일 원리). 데스크탑/서브디렉터리 분석에서 React·레이어 제외가 깨지던 버그.
+            String fpSeg = "/" + fp;
 
             // Python 던더 메서드(__init__·__iter__ 등) — 런타임이 호출, 이름으로 불리지 않음
             if (name.length() > 4 && name.startsWith("__") && name.endsWith("__")) continue;
             // 테스트 코드 제외 (경로·파일명·함수명 패턴)
             if (isTestArtifact(fp, name)) continue;
             // interfaces/ 레이어 — 컨트롤러, WebSocket 핸들러 등 외부 진입점
-            if (fp.contains("/interfaces/")) continue;
+            if (fpSeg.contains("/interfaces/")) continue;
             // React 컴포넌트 — .tsx 파일에서 대문자 시작 함수 (JSX로 렌더링되므로 FUNCTION_CALL 엣지 없음)
             if ((fp.endsWith(".tsx") || fp.endsWith(".jsx")) && !name.isEmpty()
                     && Character.isUpperCase(name.charAt(0))) continue;
             // pages/ · components/ · hooks/ · utils/ · lib/ 레이어 — React 모듈 전체가 export 기반
-            if (fp.contains("/pages/") || fp.contains("/components/") || fp.contains("/hooks/")
-                    || fp.contains("/utils/") || fp.contains("/lib/")) continue;
+            if (fpSeg.contains("/pages/") || fpSeg.contains("/components/") || fpSeg.contains("/hooks/")
+                    || fpSeg.contains("/utils/") || fpSeg.contains("/lib/")) continue;
             // JPA Repository 구현체 · domain 팩토리 메서드 등 프레임워크 호출 패턴
             if (FRAMEWORK_CALL_NAMES.contains(name)) continue;
             // getter/setter/onXxx/handleXxx 네이밍 패턴 — 프레임워크·Lombok 자동 생성
             if (isFrameworkCallPattern(name)) continue;
             // application/ 레이어 — Spring @Service 메서드는 DI를 통해 호출, FUNCTION_CALL 엣지 없음
-            if (fp.contains("/application/")) continue;
+            if (fpSeg.contains("/application/")) continue;
             // infrastructure/ 레이어 — Spring @Bean, @EventListener, Filter 등 프레임워크 진입점 다수
-            if (fp.contains("/infrastructure/")) continue;
+            if (fpSeg.contains("/infrastructure/")) continue;
             // domain/ Repository·Port 인터페이스 선언 메서드 — 구현체가 인터페이스를 통해 호출(다형성 디스패치).
             // 같은 이름의 FUNCTION_CALL이 존재하면 사용 중으로 간주 (미호출이면 여전히 데드 코드로 감지).
-            boolean isDomainInterfaceDecl = fp.contains("/domain/")
-                    && (fp.endsWith("Repository.java") || fp.endsWith("Port.java") || fp.contains("/port/"));
+            boolean isDomainInterfaceDecl = fpSeg.contains("/domain/")
+                    && (fp.endsWith("Repository.java") || fp.endsWith("Port.java") || fpSeg.contains("/port/"));
             if (isDomainInterfaceDecl && calledFuncNames.contains(name)) continue;
             // 동명 함수가 2개 이상 정의되고 그 이름으로 호출이 존재 — 인터페이스/리시버 다형성 디스패치로 간주.
             // 정적 분석은 호출을 한 구현체로만 연결하므로 나머지 구현체가 거짓 데드코드로 보이는 것을 방지.

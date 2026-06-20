@@ -110,6 +110,18 @@
 
 ---
 
+## DEAD_CODE 디렉터리 제외의 루트 레벨 경로 버그 (2026-06-19)
+
+**문제(측정 중 적발).** "프론트 데드탐지 정밀화" 착수해 자기 프론트(`frontend/src`)를 analyzeLocal하니 **DEAD_CODE 53%(115/215) 1 LOW 안내**. 처음엔 React 컴포넌트가 JSX 렌더라 미호출로 잡히는 줄로 가설 → **코드 확인이 가설을 반증**: `detectDeadCode`는 이미 `.tsx` 대문자 함수(494행)와 `/components/`·`/pages/`·`/hooks/`·`/utils/`·`/lib/`(497~498행)를 제외하고 있었다. 그런데도 53%가 나온 진짜 원인 = **경로 접두 버그**. 분석 루트가 `frontend/src`면 상대경로가 `components/Graph.tsx`(앞 슬래시 없음)라 `fp.contains("/components/")`가 **빗나감** → 제외 무력화. `frontend`(상위)에서 돌리면 경로가 `src/components/...`라 매칭돼 **DEAD_CODE 0** — 가설을 결정적으로 반증(같은 코드, 루트만 다름).
+
+**적대적 검증 — renderedAsJsx 시도 폐기.** 1차로 JSX 렌더 컴포넌트에 `renderedAsJsx` 메타 플래그(GraphBuilder)+제외(GraphWarningService)를 넣었으나 **효과 0**(데드 수 불변). 진단 덤프로 확인: 플래그된 22노드는 전부 `.tsx` 대문자라 **이미 494행에서 제외**되던 것 → renderedAsJsx는 **완전 잉여**. 폐기(GraphBuilder 원복). 교훈: 제안 전 기존 제외 로직을 먼저 읽었어야 함.
+
+**수정.** `detectDeadCode`에서 디렉터리 세그먼트 매칭을 **앞 슬래시 정규화**(`fpSeg = "/" + fp`)로 변경 — `interfaces/application/infrastructure/domain/pages/components/hooks/utils/lib` 제외 전부에 적용. `isTestArtifact`(루트 레벨 `tests/` 대응)와 동일 원리. 패턴이 양끝 슬래시(`/components/`)라 `mycomponents/`류 가짜 매칭도 없음. **안전성**: 중첩 경로(프로덕션=레포 루트 클론, 예 `src/main/java/com/.../application/`)는 이미 매칭됐고 정규화 후에도 동일 → **루트 레벨 디렉터리에만 매칭 추가**(원하는 방향). 영향처 = **데스크탑 로컬 폴더 분석·서브디렉터리 분석**(루트가 프로젝트 내부일 때).
+
+**검증.** `frontend/src` analyzeLocal: DEAD_CODE 53%→**0**(`frontend` 상위 결과와 일치). codeprint 백엔드 자기분석 **불변**(중첩 경로, HIGH_FAN_OUT 13·DEAD_CODE 1 유지). GraphWarningServiceTest 신규 1종(루트 레벨 `components/Graph.tsx` 비-프레임워크 camelCase 함수가 데드로 안 잡힘 — 수정 전 실패·후 통과) + 기존 과잉억제 방지 테스트(shared/ 진짜 미사용은 여전히 감지) 유지. 전체 스위트 통과.
+
+---
+
 ## 파일 수집 로버스트니스 — 스킵 디렉터리 가지치기 + 엔트리 실패 내성 (2026-06-17)
 
 **문제(측정 중 직접 적발).** B-16 측정 중 `analyzeLocal`이 express(node_modules 보유)·requests에서 `SourceFileWalker.walk`의 `Files.walk(...).toList()`에서 간헐적으로 `UncheckedIOException`을 던져 **전체 분석이 크래시**(requests 0/5 성공). 원인 둘:
