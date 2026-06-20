@@ -94,6 +94,22 @@
 
 ---
 
+## AST 언어 확대 ③ — JavaScript 함수·호출 추출 regex→tree-sitter (2026-06-19)
+
+**문제/선택.** 사용자가 Kotlin 대신 **JavaScript**를 다음 타자로 선택(Kotlin은 OSS 벤치 없고 codeprint에 Kotlin 코드 0 → 교차검증 약함 / JS는 `express` 벤치 보유 + TS 분석기 재사용 + 사용 빈도 높음). **TS 분석기(`TreeSitterTypescriptAnalyzer`) 그대로 재사용** — typescript 그래머가 JS 파싱, `.jsx`는 tsx 그래머(확장자 판정). `StaticCodeAnalyzer`가 `language.equals("TypeScript")||language.equals("JavaScript")` + `endsWith(".tsx"||".jsx")` 분기. **신규 의존성 0.**
+
+**★ A/B(analyzeLocal, express 141 .js, 같은 브랜치 regex 강제 대조) — 측정이 AST의 실제 누락 버그를 적발→수정.**
+- 1차 측정: regex 함수 222·노드 363·엣지 540 vs **AST 함수 88(−134)**·노드 229·엣지 220. 경고는 양쪽 DEAD_CODE 1 LOW 동일(회귀 0)이나 **노드 −134는 명백한 AST 과소추출**.
+- **원인(노드 히스토그램 진단, application.js): express(CommonJS)는 함수를 `function_declaration`(2개)이 아니라 `exports.x=function(){}`·`Proto.prototype.y=function(){}` = `assignment_expression`+`function_expression`(23개·assignment 44개)로 정의.** 기존 분석기는 `variable_declarator`·`public_field_definition`만 처리 → **멤버 대입 함수 전량 누락**. 소스 grep: 멤버대입 함수 104건(`exports.X=function` 27).
+- **수정: `assignment_expression` 케이스 추가** — 우변이 함수/화살표면 좌변에서 이름 추출(member_expression이면 끝 속성명 `exports.handle`→`handle`·`Router.prototype.use`→`use`, 단순 식별자면 그 이름). **정규식·기존 AST 양쪽이 놓치던 것**이라 AST가 엄격히 더 정확해짐.
+- 2차 측정(수정 후): **AST 함수 88→175**·노드 316·엣지 460. 잔여 갭(175 vs regex 222)은 **이름붙은 인라인 콜백**(`app.use(function mw(){})`) — 정규식은 alt1 `function\s+name`으로 줍지만 AST는 의도적으로 노드화 안 함(인라인이라 이름으로 참조 불가) + 정규식 오스코핑 노이즈. **경고는 양쪽 DEAD_CODE 1 LOW 동일(회귀 0).**
+
+**공유 분석기 변경의 TS 영향 재검증.** assignment_expression 추가는 TS에도 적용되므로 머지된 TS 동작 회귀 확인 필수. **자기 프론트 53파일 재측정: 노드 269·엣지 334·DEAD 53%·1 LOW — 수정 전과 바이트 동일**(프론트는 const-arrow·클래스 메서드 위주라 `obj.x=function` 패턴 없음). TS 무회귀 확정.
+
+**검증.** 전체 백엔드 스위트 통과 + JS 테스트 3종 신규(클래스 메서드 / **멤버 대입 함수 `exports.x=function`·`proto.y=function`** / `.jsx` tsx 그래머 파싱). 측정-우선(Rule 11)이 과소추출 버그를 적발·수정한 사례. 진단용 TsNodeDump는 측정 후 제거. 다음 확대 후보: ④ Kotlin(벤치 없음 → 자기/수동 검증) 또는 향후 프론트 데드 탐지 정밀화.
+
+---
+
 ## 파일 수집 로버스트니스 — 스킵 디렉터리 가지치기 + 엔트리 실패 내성 (2026-06-17)
 
 **문제(측정 중 직접 적발).** B-16 측정 중 `analyzeLocal`이 express(node_modules 보유)·requests에서 `SourceFileWalker.walk`의 `Files.walk(...).toList()`에서 간헐적으로 `UncheckedIOException`을 던져 **전체 분석이 크래시**(requests 0/5 성공). 원인 둘:

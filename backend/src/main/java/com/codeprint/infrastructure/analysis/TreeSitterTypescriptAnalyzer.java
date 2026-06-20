@@ -1,4 +1,4 @@
-// tree-sitter AST로 TypeScript 함수 정의와 호출을 추출하는 분석기 (정규식보다 정확, 실패 시 폴백)
+// tree-sitter AST로 TypeScript/JavaScript 함수 정의와 호출을 추출하는 분석기 (정규식보다 정확, 실패 시 폴백)
 package com.codeprint.infrastructure.analysis;
 
 import org.slf4j.Logger;
@@ -116,6 +116,16 @@ class TreeSitterTypescriptAnalyzer {
                     }
                 }
             }
+            // 멤버/식별자에 함수표현식 대입 — CommonJS의 핵심 패턴(exports.foo=function(){}, Proto.prototype.bar=function(){})
+            case "assignment_expression" -> {
+                if (isFunctionValue(node.getChildByFieldName("right"))) {
+                    String name = assignmentTargetName(node.getChildByFieldName("left"), src);
+                    if (!name.isEmpty()) {
+                        functions.add(name);
+                        current = name;
+                    }
+                }
+            }
             case "call_expression" -> {
                 if (current != null) recordCall(node, src, current, calls);
             }
@@ -133,6 +143,18 @@ class TreeSitterTypescriptAnalyzer {
         if (value == null || value.isNull()) return false;
         String t = value.getType();
         return t.equals("arrow_function") || t.equals("function_expression") || t.equals("function");
+    }
+
+    // 대입 좌변에서 함수 이름 추출 — 멤버 대입(obj.foo / A.prototype.bar)은 끝 속성명, 단순 식별자는 그 이름
+    private String assignmentTargetName(TSNode left, byte[] src) {
+        if (left == null || left.isNull()) return "";
+        String t = left.getType();
+        if (t.equals("identifier")) return text(left, src);
+        if (t.equals("member_expression")) {
+            TSNode prop = left.getChildByFieldName("property");
+            if (prop != null && !prop.isNull()) return text(prop, src);
+        }
+        return ""; // 그 외(subscript 등)는 안정적 이름이 없어 제외
     }
 
     // 노드의 name 필드 텍스트 — 식별자(identifier/property_identifier)일 때만 (구조분해 패턴 등 제외)

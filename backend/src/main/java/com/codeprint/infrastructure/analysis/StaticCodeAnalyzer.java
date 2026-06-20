@@ -18,7 +18,7 @@ public class StaticCodeAnalyzer {
     private final TreeSitterJavaAnalyzer treeSitterJava = new TreeSitterJavaAnalyzer();
     // tree-sitter 기반 Python 분석기 — 중첩 함수·메서드 호출 귀속 정확. native 로드 실패 시 정규식 폴백.
     private final TreeSitterPythonAnalyzer treeSitterPython = new TreeSitterPythonAnalyzer();
-    // tree-sitter 기반 TypeScript 분석기 — 정규식이 못 잡는 클래스 메서드 회복. native 로드 실패 시 정규식 폴백.
+    // tree-sitter 기반 TypeScript/JavaScript 분석기 — 정규식이 못 잡는 클래스 메서드 회복. native 로드 실패 시 정규식 폴백.
     private final TreeSitterTypescriptAnalyzer treeSitterTypescript = new TreeSitterTypescriptAnalyzer();
 
     // 단일 소스 파일을 분석하여 함수명, import, 주석 등을 추출
@@ -38,11 +38,11 @@ public class StaticCodeAnalyzer {
                 language.equals("Java") ? treeSitterJava.parse(content) : Optional.empty();
         Optional<TreeSitterPythonAnalyzer.Result> pyTs =
                 language.equals("Python") ? treeSitterPython.parse(content) : Optional.empty();
-        // .tsx(JSX)는 tsx 그래머로 파싱해야 오류가 없다 — 확장자로 판정
+        // JavaScript도 동일 분석기로 처리 — typescript 그래머가 JS를 파싱하고, JSX(.jsx/.tsx)는 tsx 그래머 필요(확장자 판정).
+        boolean isTsOrJs = language.equals("TypeScript") || language.equals("JavaScript");
+        boolean useJsxGrammar = relativePath.endsWith(".tsx") || relativePath.endsWith(".jsx");
         Optional<TreeSitterTypescriptAnalyzer.Result> tsTs =
-                language.equals("TypeScript")
-                        ? treeSitterTypescript.parse(content, relativePath.endsWith(".tsx"))
-                        : Optional.empty();
+                isTsOrJs ? treeSitterTypescript.parse(content, useJsxGrammar) : Optional.empty();
         if (javaTs.isPresent()) {
             functions = javaTs.get().functions();
             functionCalls = javaTs.get().functionCalls();
