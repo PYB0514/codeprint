@@ -952,6 +952,48 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("C 함수 정의를 선언자 체인에서 추출한다 (포인터 반환·static 포함, 함수 포인터 선언은 제외)")
+    void C_함수_추출() throws IOException {
+        Path file = tempDir.resolve("util.c");
+        Files.writeString(file, """
+                #include <stdio.h>
+
+                static int helper(int x) { return x + 1; }
+
+                char *make_buffer(size_t n) { return malloc(n); }
+
+                void (*g_callback)(int);
+
+                int main(void) { return 0; }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C");
+
+        // helper(static)·make_buffer(포인터 반환 → pointer_declarator 한 겹)·main 추출, g_callback(함수 포인터 선언)은 제외
+        assertThat(result.functions()).containsExactlyInAnyOrder("helper", "make_buffer", "main");
+    }
+
+    @Test
+    @DisplayName("C 호출을 bare 식별자로 함수에 귀속한다")
+    void C_함수_호출_추출() throws IOException {
+        Path file = tempDir.resolve("worker.c");
+        Files.writeString(file, """
+                int helper(int x) { return x; }
+
+                int run(int n) {
+                    int r = helper(n);
+                    log_result(r);
+                    return r;
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C");
+
+        assertThat(result.functionCalls()).containsKey("run");
+        assertThat(result.functionCalls().get("run")).contains("helper", "log_result");
+    }
+
+    @Test
     @DisplayName("Swift 파일에서 func 함수명을 추출한다")
     void Swift_함수_추출() throws IOException {
         Path file = tempDir.resolve("UserService.swift");
