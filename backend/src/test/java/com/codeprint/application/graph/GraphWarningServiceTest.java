@@ -389,6 +389,16 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("루트 레벨 components/ 함수(앞 슬래시 없는 경로) — 세그먼트 매칭으로 React 제외 적용, DEAD_CODE 아님")
+    void deadCode_rootLevelComponentsDir_excluded() {
+        // 회귀: 분석 루트가 frontend/src 면 경로가 "components/Graph.tsx"(앞 슬래시 없음)라 fp.contains("/components/")가
+        // 빗나가 React 모듈이 거짓 DEAD_CODE로 잡혔다(데스크탑/서브디렉터리 분석). 앞 슬래시 정규화로 세그먼트 매칭.
+        Node comp = funcNodeWithPath("computeLayout", "components/Graph.tsx");
+        List<Map<String, Object>> warnings = service.detect(List.of(comp), List.of());
+        assertThat(isDeadCode(warnings, comp.getId())).isFalse();
+    }
+
+    @Test
     @DisplayName("호출되지 않는 일반 함수(shared/) — DEAD_CODE 여전히 감지 (과잉 억제 방지)")
     void deadCode_genuinelyUnused_stillDetected() {
         Node unused = funcNodeWithPath("monthlyPrice", "/com/example/shared/plan/UserPlan.java");

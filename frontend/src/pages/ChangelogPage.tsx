@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.89.5',
+    date: '2026-06-19',
+    title: '데드코드 경고 오탐 수정 — 프로젝트 하위 폴더 분석',
+    type: 'fix',
+    items: [
+      { category: '경고 엔진', desc: '프로젝트의 하위 폴더(예: frontend/src)를 직접 분석할 때 components/·pages/ 등 디렉터리 제외 규칙이 경로 앞 슬래시 누락으로 빗나가, React 모듈이 대거 미사용(DEAD_CODE)으로 잘못 잡히던 문제를 수정했습니다. 디렉터리 매칭을 세그먼트 단위로 정규화해 분석 루트와 무관하게 동작합니다.' },
+    ],
+  },
+  {
     version: 'v0.89.4',
     date: '2026-06-19',
     title: 'JavaScript 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
