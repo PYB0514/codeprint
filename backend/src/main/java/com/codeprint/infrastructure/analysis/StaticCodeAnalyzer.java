@@ -22,6 +22,8 @@ public class StaticCodeAnalyzer {
     private final TreeSitterTypescriptAnalyzer treeSitterTypescript = new TreeSitterTypescriptAnalyzer();
     // tree-sitter 기반 Go 분석기 — 리시버 메서드·정확한 호출 귀속. native 로드 실패 시 정규식 폴백.
     private final TreeSitterGoAnalyzer treeSitterGo = new TreeSitterGoAnalyzer();
+    // tree-sitter 기반 Rust 분석기 — impl 메서드·trait 시그니처·정확한 호출 귀속. native 로드 실패 시 정규식 폴백.
+    private final TreeSitterRustAnalyzer treeSitterRust = new TreeSitterRustAnalyzer();
 
     // 단일 소스 파일을 분석하여 함수명, import, 주석 등을 추출
     public ParsedFile analyze(Path file, Path repoRoot, String language) throws IOException {
@@ -47,6 +49,8 @@ public class StaticCodeAnalyzer {
                 isTsOrJs ? treeSitterTypescript.parse(content, useJsxGrammar) : Optional.empty();
         Optional<TreeSitterGoAnalyzer.Result> goTs =
                 language.equals("Go") ? treeSitterGo.parse(content) : Optional.empty();
+        Optional<TreeSitterRustAnalyzer.Result> rustTs =
+                language.equals("Rust") ? treeSitterRust.parse(content) : Optional.empty();
         if (javaTs.isPresent()) {
             functions = javaTs.get().functions();
             functionCalls = javaTs.get().functionCalls();
@@ -59,6 +63,9 @@ public class StaticCodeAnalyzer {
         } else if (goTs.isPresent()) {
             functions = goTs.get().functions();
             functionCalls = goTs.get().functionCalls();
+        } else if (rustTs.isPresent()) {
+            functions = rustTs.get().functions();
+            functionCalls = rustTs.get().functionCalls();
         } else {
             functions = extractFunctions(masked, language);
             functionCalls = extractFunctionCalls(masked, language, functions);

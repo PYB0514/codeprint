@@ -771,3 +771,22 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **★ "호출 존재" 조건이 트레이드오프를 제거 — 측정으로 적발·수정.** 1차 안은 `defCountByName ≥ 2`만(전 파일 노드 수)이라 머지가 아닌 우연한 이름 공유도 잡았다: codeprint `main`(defCount=5: LocalAnalyzer·3 POC tools, 각 별개 파일의 진짜 단일 진입점)이 14→10으로 거짓 억제. 그러나 `main`은 누구도 **호출하지 않는** 진입점이고 `Render`는 인터페이스로 **호출되는** 디스패치 → `&& calledFuncNames.contains(name)` 추가로 둘을 정확히 가른다(detectDeadCode #290과 동일 조건). 결과: `Render` 억제·`main` 보존 → 트레이드오프 0. (분석기가 파일 내 동명 메서드를 dedup해 multiplicity가 소실되므로 "호출 존재"가 머지 판별의 실용 프록시.)
 
 **검증.** compileJava·tsc -b·전체 백엔드 테스트 통과. StaticCodeAnalyzerTest Go 3종(일반/리시버 메서드 추출·`Type::Method` 한정·주석/문자열/import 경로 식별자 제외) + GraphWarningServiceTest 2종(`highFanOut_polymorphicMergedNode_excluded`=동명+호출 존재 제외 / `highFanOut_multiDefButUncalled_stillDetected`=동명이라도 미호출 진입점 유지). TreeSitterGoPoc + treesitterGoPoc gradle task. ★ 1차 테스트가 호출 엣지 없이 작성돼 CI에서 적발(로컬은 1차 `defCount만` 조건으로 통과했으나 커밋된 `&& 호출` 조건과 불일치) → 테스트에 디스패처 호출 엣지 추가로 정정.
+
+---
+
+## AST 프로덕션 전환 — Rust 함수·호출 추출 regex→tree-sitter (2026-06-20, v0.89.7)
+
+**문제.** AST 멀티언어 확대 ⑥(Java/Python/TS/JS/Go에 이어). Rust 함수·호출 추출만 tree-sitter로 교체. 정규식 폴백 유지. 게이트 = `ripgrep` OSS 벤치(C:\Dev\codeprint-bench\ripgrep, 100 .rs 파일) A/B.
+
+**선택 — 구현.** `TreeSitterRustAnalyzer`(standalone, `org.treesitter.TreeSitterRust`, `tree-sitter-rust:0.24.0` — linux .so + windows .dll 동봉). 노드 타입은 일회용 probe(`RustNodeProbe`, 측정 후 삭제)로 확정: `function_item`(일반·impl 메서드)·`function_signature_item`(trait 시그니처) name 필드 → 함수. `call_expression` function이 `identifier`(소문자만 bare — 대문자는 튜플구조체/enum variant 생성자)·`scoped_identifier`{path,name}(대문자 path=Type → `Type::method` 한정, 소문자 path=module → bare)·`field_expression`{field}(receiver.method → bare). 매크로(`macro_invocation`)는 call_expression이 아니라 호출에서 자동 제외.
+
+**★ A/B 결과 — AST가 정규식보다 엄격히 더 정확(POC `treesitterRustPoc`, ripgrep).**
+- **함수**: regex 1338 / ts 1722. **ts-only 385 / regex-only 1.** 정규식이 놓친 385건은 전부 실제 함수 — Rust 정규식 `^\s*(?:pub\s+)?(?:async\s+)?fn`이 `pub(crate) fn`·`pub(super) fn`·`const fn`·`unsafe fn`·`extern "C" fn` 변형을 못 잡음. AST가 회복.
+- **호출**: regex-only 전부 오탐 — `derive`·`cfg`·`allow`·`inline`(어트리뷰트 `#[derive(...)]`의 `derive(`를 호출로 오탐)·매크로명. `SHERLOCK::as_bytes`(테스트 상수.메서드)는 형식 차이(AST=bare `as_bytes`, 매칭 무영향). AST는 어트리뷰트·매크로를 호출로 안 셈.
+- **경고(analyzeLocal A/B)**: HIGH_FAN_OUT regex 81 / **ts 66**. 감소분은 전부 정규식 오탐 제거(어트리뷰트·매크로 호출로 부풀린 가짜 fan-out).
+
+**★ AST-only HIGH_FAN_OUT은 정탐 — 정규식이 함수를 놓쳐 숨기던 진짜 신호(스폿체크).** `from_low_args`(AST만 발화)는 `hiargs.rs`에 4개 정의(`pub(crate) fn` 메인 + 테스트 3). 정규식은 `pub(crate) fn` 메인을 놓쳐 호출 귀속 실패 → fan-out 과소 → 미발화. AST는 메인 포함 정확 추출. **메인 함수 단독으로 ~33개 호출**(거대 인자-파싱 함수) = 머지와 무관하게 진짜 고-fan-out → 정탐. (파일 내 동명 머지·defCount=1 케이스가 여기서 노출됐으나 메인이 단독으로도 임계 초과라 결과적으로 정탐. 정밀 머지 감지=파일 내 multiplicity는 여전히 별도 PR 후보 — Go DECISIONS와 동일.)
+
+**결론.** Go `Render`처럼 신규 false positive를 만들지 않음(동명 머지 가드는 #316에 기존재, from_low_args는 정탐). HIGH_FAN_OUT 변화는 전부 정당(오탐 제거 + 진짜 신호 노출) → 경고 회귀 0(나빠지지 않음, 오히려 개선). 추가 warning-engine 변경 불필요.
+
+**검증.** compileJava·tsc -b·전체 백엔드 테스트 통과. StaticCodeAnalyzerTest Rust 3종(일반/impl 메서드 추출·`Type::method` 한정+모듈 bare·trait 시그니처+주석/문자열/매크로 식별자 제외). TreeSitterRustPoc + treesitterRustPoc gradle task. 벤치 `ripgrep`(BurntSushi/ripgrep, --depth 1) 신규 클론.

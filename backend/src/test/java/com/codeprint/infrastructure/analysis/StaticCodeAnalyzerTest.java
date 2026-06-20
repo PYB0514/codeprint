@@ -2319,6 +2319,79 @@ class StaticCodeAnalyzerTest {
         assertThat(result.functionCalls().get("run")).doesNotContain("fakeCall", "realLooking");
     }
 
+    // ── tree-sitter Rust 함수·호출 추출 (regex→AST 전환) ────────────────────
+
+    @Test
+    @DisplayName("일반 함수와 impl 메서드를 추출하고 호출을 귀속한다 (tree-sitter)")
+    void Rust_함수_impl메서드_추출_treesitter() throws IOException {
+        Path file = writeRustFile("""
+                fn run() {
+                    helper();
+                }
+
+                impl Server {
+                    fn handle(&self) {
+                        self.process();
+                    }
+                }
+
+                fn helper() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Rust");
+
+        assertThat(result.functions()).contains("run", "handle", "helper");
+        assertThat(result.functionCalls().get("run")).contains("helper");
+        assertThat(result.functionCalls().get("handle")).contains("process");
+    }
+
+    @Test
+    @DisplayName("Type::method() 한정 호출은 Type::method, 모듈 경로는 bare로 기록한다 (tree-sitter)")
+    void Rust_한정호출_추출_treesitter() throws IOException {
+        Path file = writeRustFile("""
+                fn run() {
+                    let v = Vec::new();
+                    mem::swap(a, b);
+                    compute();
+                }
+
+                fn compute() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Rust");
+
+        // 대문자 path(Type) → 한정, 소문자 path(module) → bare
+        assertThat(result.functionCalls().get("run")).contains("Vec::new", "swap", "compute");
+        // 대문자 path의 메서드명을 bare 로도 기록하면 동명 지역 함수에 가짜 엣지가 생기므로 기록하지 않는다.
+        assertThat(result.functionCalls().get("run")).doesNotContain("new");
+    }
+
+    @Test
+    @DisplayName("trait 시그니처는 함수로 추출하고, 주석·문자열·매크로 속 식별자는 호출로 오인하지 않는다 (tree-sitter)")
+    void Rust_trait시그니처_주석_매크로_제외_treesitter() throws IOException {
+        Path file = writeRustFile("""
+                trait Handler {
+                    fn on_event(&self);
+                }
+
+                fn run() {
+                    // fake_call() 처럼 보이는 주석
+                    let s = "real_looking() in string";
+                    println!("also_fake()");
+                    real_call();
+                }
+
+                fn real_call() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Rust");
+
+        assertThat(result.functions()).contains("on_event", "run", "real_call");
+        assertThat(result.functionCalls().get("run")).contains("real_call");
+        assertThat(result.functionCalls().get("run"))
+                .doesNotContain("fake_call", "real_looking", "also_fake", "println");
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeJavaFile(String content) throws IOException {
@@ -2359,6 +2432,12 @@ class StaticCodeAnalyzerTest {
 
     private Path writeGoFile(String content) throws IOException {
         Path file = tempDir.resolve("test_file.go");
+        Files.writeString(file, content);
+        return file;
+    }
+
+    private Path writeRustFile(String content) throws IOException {
+        Path file = tempDir.resolve("test_file.rs");
         Files.writeString(file, content);
         return file;
     }
