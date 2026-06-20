@@ -23,7 +23,7 @@ const ARCS: Arc[] = [
     id: 'analysis',
     title: '다국어 분석 엔진',
     color: '#22d3ee',
-    lede: '처음엔 Java 한 언어의 함수와 import만 읽었다. 거기서 11개 언어로, 그리고 함수 호출·DB 테이블·API 라우트로 추출 대상을 넓혔다. 언어마다 호출 표기가 다르고(C# PascalCase, Go 대문자), DB 접근 방식이 다르고(JPA·TypeORM·Prisma·raw SQL), 프론트의 fetch까지 — 각 언어·프레임워크의 실제 코드를 그래프에 담기 위한 누적된 확장이다. 정규식 기반이라는 한계 안에서 커버리지를 한 칸씩 늘려온 기록.',
+    lede: '처음엔 Java 한 언어의 함수와 import만 읽었다. 거기서 11개 언어로, 그리고 함수 호출·DB 테이블·API 라우트로 추출 대상을 넓혔다. 언어마다 호출 표기가 다르고(C# PascalCase, Go 대문자), DB 접근 방식이 다르고(JPA·TypeORM·Prisma·raw SQL), 프론트의 fetch까지 — 각 언어·프레임워크의 실제 코드를 그래프에 담기 위한 누적된 확장이다. 커버리지를 한 칸씩 늘려온 뒤, 함수·호출 추출은 정규식에서 tree-sitter AST로 옮겨 정확도를 끌어올렸다.',
     versions: ['v0.1.0', 'v0.3.0', 'v0.58.0', 'v0.71.1', 'v0.71.4', 'v0.71.6', 'v0.71.7'],
   },
   {

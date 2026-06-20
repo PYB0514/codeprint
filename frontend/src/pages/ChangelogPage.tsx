@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.91.1',
+    date: '2026-06-20',
+    title: '분석 엔진 표기 정정 — "정규식 기반" → tree-sitter AST(하이브리드)',
+    type: 'fix',
+    items: [
+      { category: '프론트', desc: '11개 언어의 함수·호출 추출이 정규식에서 tree-sitter AST로 전환됐는데도 랜딩·작동방식 페이지가 여전히 엔진을 "정규식 기반"으로 표기하던 것을 정정했습니다. 함수·호출은 tree-sitter AST, DB·API·import·주석은 정규식인 하이브리드라는 실제 구조를 반영하고, 경고 한계 설명도 이제 AST가 처리하는 메서드 레퍼런스(::) 등을 "정규식 한계"로 잘못 귀속하던 문구를 바로잡았습니다(LandingPage·HowItWorksPage·EvolutionPage).' },
+    ],
+  },
+  {
     version: 'v0.91.0',
     date: '2026-06-20',
     title: 'C++ 언어 분석 지원 추가 — 총 13개 언어',
