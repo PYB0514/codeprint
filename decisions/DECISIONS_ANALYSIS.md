@@ -812,3 +812,21 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **결론.** AST가 정규식보다 함수·호출 모두 정확(502 회복·1 손실), HIGH_FAN_OUT 5건 정탐, 신규 오탐 0. BOM 수정은 전 언어 정확도 개선 + 비-BOM 회귀 0. warning-engine 추가 변경 불필요.
 
 **검증.** compileJava·tsc -b·전체 백엔드 테스트(BUILD SUCCESSFUL) 통과. StaticCodeAnalyzerTest C# 3종 신규(`CSharp_AST_확장형_함수_추출`=생성자/internal/override/표현식바디/로컬함수, `CSharp_함수_호출_추출`=bare/Type::method/this, `CSharp_BOM_파일_식별자_정확추출`=BOM 오프셋 회귀). TreeSitterCSharpPoc + treesitterCSharpPoc gradle task. 벤치 Polly(App-vNext/Polly, --depth 1) 신규 클론.
+---
+
+## AST 프로덕션 전환 — Ruby 함수·호출 추출 regex→tree-sitter (2026-06-20, v0.89.9)
+
+**문제.** AST 멀티언어 확대 8번째(Java/Python/TS/JS/Go/Rust/C#에 이어). Ruby 함수·호출 추출만 tree-sitter로 교체. 정규식 폴백 유지. 게이트 = jekyll OSS 벤치(jekyll/jekyll, lib 89 .rb) analyzeLocal `false &&` 토글 A/B(regex 강제).
+
+**선택 — 구현.** `TreeSitterRubyAnalyzer`(standalone, `org.treesitter.TreeSitterRuby`, `tree-sitter-ruby:0.23.1`). 노드 타입은 일회용 probe(`RubyNodeProbe`, 확정 후 삭제)로 확정: `method`·`singleton_method`(둘 다 name 필드) → 함수. `call` 노드의 `method` 필드 → callee, `receiver`가 `constant`(Ruby 상수는 항상 대문자)면 `Constant::method` 한정(Java/Go/C# AST와 동일), 그 외(self·인스턴스변수·없음)는 bare. Ruby 특수성: 인자·수신자 없는 bare 호출(`foo`)은 지역변수와 구분 불가라 tree-sitter가 `identifier`로 파싱 → 호출로 세지 않음(정규식도 괄호 필요라 동일하게 못 잡아 parity 유지). 괄호 없는 인자 호출(`save name`)은 `call`로 파싱돼 정상 추출.
+
+**A/B 결과 — AST가 정규식보다 정확, regex-only는 전부 정규식 결함(POC `treesitterRubyPoc`, jekyll).**
+- 함수: ts-only 31 / regex-only 11 — 진짜 AST 누락 0. regex-only 정체: `self` ×8 = 정규식 `^\s*def\s+(\w+[?!]?)`이 `def self.build`에서 메서드명 대신 `self`를 오캡처(싱글톤 메서드 버그), AST는 singleton_method name 필드로 실제명(`build`) 정확 추출. 세터 `log_level=`·`config=`에서 정규식이 `=`를 떼어내 `log_level`·`config`로, AST는 `=` 포함 정확명. 둘 다 AST가 더 정확.
+- 호출: regex 1626 / ts 2418 엣지(+792). 정규식이 괄호 없는 명령형 호출·수신자 메서드 호출을 못 잡아 과소추출하던 것을 AST가 회복.
+- DEAD_CODE: regex 24%(226/945) → AST 13%(120/936). 호출이 정확히 링크돼 거짓 데드 비율 감소(둘 다 단일 LOW 게이트).
+
+**AST HIGH_FAN_OUT 3건 전부 정탐(스폿체크).** `render_document`(renderer.rb 단일 정의, 본문이 render_with_liquid?·Jekyll::logger·render_liquid 등 다수 호출 = jekyll 핵심 렌더 메서드)·`initialize` ×2(서로 다른 파일의 생성자, 협력 객체 다수 초기화). 동명 머지 아님(Go #316 가드 통과). 신규 false positive 0. regex가 0건이었던 건 호출 과소추출로 fan-out을 숨긴 탓.
+
+**결론.** AST가 함수·호출 모두 정확(진짜 누락 0, regex-only 11은 전부 정규식 결함 교정), HIGH_FAN_OUT 3건 정탐, 신규 오탐 0, DEAD_CODE 정확도 개선. warning-engine 추가 변경 불필요.
+
+**검증.** compileJava·tsc -b·전체 백엔드 테스트(BUILD SUCCESSFUL) 통과. StaticCodeAnalyzerTest Ruby 2종 신규(`Ruby_싱글톤_메서드_추출`=def self.x → 실제명·self 미포함, `Ruby_함수_호출_추출`=bare/명령형/Constant::method). TreeSitterRubyPoc + treesitterRubyPoc gradle task. 벤치 jekyll(jekyll/jekyll, --depth 1) 신규 클론.

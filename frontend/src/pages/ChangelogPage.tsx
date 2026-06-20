@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.89.9',
+    date: '2026-06-20',
+    title: 'Ruby 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: 'Ruby 함수·호출 추출을 정규식에서 tree-sitter AST로 교체했습니다. 정규식이 `def self.build`에서 메서드명 대신 `self`를 잘못 잡던 싱글톤 메서드 버그와 세터(`config=`)의 `=` 누락을 바로잡고, 괄호 없는 명령형 호출(`save name`)·수신자 메서드 호출·블록 안의 호출까지 정확히 인식합니다. native 로드 실패 시 정규식으로 자동 폴백합니다.' },
+    ],
+  },
+  {
     version: 'v0.89.8',
     date: '2026-06-20',
     title: 'C# 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
