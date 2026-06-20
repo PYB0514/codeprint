@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.89.8',
+    date: '2026-06-20',
+    title: 'C# 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: 'C# 함수·호출 추출을 정규식에서 tree-sitter AST로 교체했습니다. 정규식이 접근 제어자 제약으로 놓치던 internal·override 메서드와 표현식 바디(=> 1)·로컬 함수·생성자까지 정확히 인식하고, 주석·문자열 속 식별자를 호출로 오인하지 않습니다. native 로드 실패 시 정규식으로 자동 폴백합니다.' },
+      { category: '분석 엔진', desc: 'UTF-8 BOM으로 저장된 소스 파일(.NET 프로젝트에서 흔함)에서 함수·호출 이름이 어긋나 추출되던 문제를 수정했습니다. BOM이 있는 모든 언어 파일에 적용됩니다.' },
+    ],
+  },
+  {
     version: 'v0.89.7',
     date: '2026-06-20',
     title: 'Rust 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
