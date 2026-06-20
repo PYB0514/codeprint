@@ -20,6 +20,8 @@ public class StaticCodeAnalyzer {
     private final TreeSitterPythonAnalyzer treeSitterPython = new TreeSitterPythonAnalyzer();
     // tree-sitter 기반 TypeScript/JavaScript 분석기 — 정규식이 못 잡는 클래스 메서드 회복. native 로드 실패 시 정규식 폴백.
     private final TreeSitterTypescriptAnalyzer treeSitterTypescript = new TreeSitterTypescriptAnalyzer();
+    // tree-sitter 기반 Go 분석기 — 리시버 메서드·정확한 호출 귀속. native 로드 실패 시 정규식 폴백.
+    private final TreeSitterGoAnalyzer treeSitterGo = new TreeSitterGoAnalyzer();
 
     // 단일 소스 파일을 분석하여 함수명, import, 주석 등을 추출
     public ParsedFile analyze(Path file, Path repoRoot, String language) throws IOException {
@@ -30,7 +32,7 @@ public class StaticCodeAnalyzer {
         // 주석/문자열 페이로드를 읽는 검출기(주석 라벨·API 경로·raw SQL 등)는 원본 content를 그대로 쓴다.
         String masked = maskComments(content, language);
 
-        // Java·Python 함수·호출은 tree-sitter(AST)로 추출 — 오탐 제거·정확한 호출 귀속(중첩/메서드).
+        // Java·Python·TypeScript/JavaScript·Go 함수·호출은 tree-sitter(AST)로 추출 — 오탐 제거·정확한 호출 귀속(중첩/메서드).
         // tree-sitter는 raw content를 직접 파싱(AST가 주석·문자열을 구분하므로 masking 불필요). 실패 시 정규식 폴백.
         List<String> functions;
         Map<String, List<String>> functionCalls;
@@ -43,6 +45,8 @@ public class StaticCodeAnalyzer {
         boolean useJsxGrammar = relativePath.endsWith(".tsx") || relativePath.endsWith(".jsx");
         Optional<TreeSitterTypescriptAnalyzer.Result> tsTs =
                 isTsOrJs ? treeSitterTypescript.parse(content, useJsxGrammar) : Optional.empty();
+        Optional<TreeSitterGoAnalyzer.Result> goTs =
+                language.equals("Go") ? treeSitterGo.parse(content) : Optional.empty();
         if (javaTs.isPresent()) {
             functions = javaTs.get().functions();
             functionCalls = javaTs.get().functionCalls();
@@ -52,6 +56,9 @@ public class StaticCodeAnalyzer {
         } else if (tsTs.isPresent()) {
             functions = tsTs.get().functions();
             functionCalls = tsTs.get().functionCalls();
+        } else if (goTs.isPresent()) {
+            functions = goTs.get().functions();
+            functionCalls = goTs.get().functionCalls();
         } else {
             functions = extractFunctions(masked, language);
             functionCalls = extractFunctionCalls(masked, language, functions);

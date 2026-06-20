@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.89.6',
+    date: '2026-06-20',
+    title: 'Go 분석 정확도 — AST(tree-sitter) 엔진으로 교체',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: 'Go 함수·호출 추출을 정규식에서 tree-sitter AST로 교체했습니다. 리시버 메서드(func (s *Server) Handle())를 정확히 인식하고, 중첩 클로저 안의 호출을 가장 가까운 함수에 귀속하며, 주석·문자열·import 경로 속 식별자를 호출로 오인하지 않습니다. native 로드 실패 시 정규식으로 자동 폴백합니다.' },
+    ],
+  },
+  {
     version: 'v0.89.5',
     date: '2026-06-19',
     title: '데드코드 경고 오탐 수정 — 프로젝트 하위 폴더 분석',
