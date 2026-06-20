@@ -764,10 +764,10 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 - regex 강제: 노드 1405·엣지 4230·**경고 0**.
 - AST가 호출을 더 완전히 추출(+258 엣지)해 regex가 과소추출로 숨기던 fan-out을 노출. 그러나 이는 **진짜 단일 함수 고팬아웃이 아니라 이름-머지 아티팩트**: GraphBuilder가 FUNCTION 노드를 `file::name`으로 키잉하고 분석기가 파일 내 동명 함수를 dedup → `render/json.go`의 6개 `Render` 메서드(JSON·IndentedJSON·SecureJSON·JsonpJSON·AsciiJSON·PureJSON)가 한 노드로 합쳐지고 호출이 union 됨(defCount=15). regex는 우연히 임계 아래라 안 보였을 뿐.
 
-**선택 — defCountByName ≥ 2 제외(detectDeadCode #290 다형성 가드와 동일 원리).** `detectHighFanOut`에 "동명 함수 ≥2 정의면 제외" 추가. 임시 진단(`[HFO-DBG]` 노드별 file·fanout·defCount stderr)으로 코드근거 확인 후 결정:
-- gin `Render` defCount=15 → 제외 → **gin 0건 = regex 베이스라인 일치(경고 회귀 0).**
-- codeprint 자기분석: defCount=1 정당 경고 10건(`build` 16·`refresh` 13·`run` 13·`analyzeBranch` 12·`getGraph`/`getPublicGraph` 12·`onAuthenticationSuccess` 10·`getGraphContext`/`changePlan`/`toolGetGraphOverview` 8) **전부 보존.**
+**선택 — `defCountByName ≥ 2 AND 그 이름으로 호출 존재` 제외(detectDeadCode #290 다형성 가드와 정확히 동일 조건).** `detectHighFanOut`에 추가. 임시 진단(`[HFO-DBG]` 노드별 file·fanout·defCount stderr)으로 코드근거 확인 후 결정:
+- gin `Render` defCount=15 + 호출 존재(인터페이스 디스패치) → 제외 → **gin 0건 = regex 베이스라인 일치(경고 회귀 0).**
+- codeprint 자기분석: HIGH_FAN_OUT **14건 전부 보존**(`build` 16·`refresh` 13·`run` 13·`analyzeBranch` 12·`getGraph`/`getPublicGraph` 12·`onAuthenticationSuccess` 10·`getGraphContext`/`changePlan`/`toolGetGraphOverview` 8 = defCount=1 + `main` ×4).
 
-**★ 트레이드오프(측정으로 적발).** defCountByName은 *전 파일* 노드 수라 머지가 아닌 우연한 이름 공유도 잡는다 — codeprint `main`(defCount=5: LocalAnalyzer·3 POC tools, 각 별개 파일의 진짜 단일 함수)이 함께 억제됨(14→10). `main`은 CLI 진입점이라 자연 고팬아웃 = 억제가 실질 무해하나, 기전은 부정확(정확한 판별 = 파일 내 동명 메서드 multiplicity인데 분석기 dedup으로 소실됨 → 정밀화는 ParsedFile~GraphBuilder~노드 메타 관통 필요, 별도 PR 후보). HIGH_FAN_OUT은 LOW severity·머지 노드 fan-out 자체가 이미 비신뢰 → #290 선례와 일관된 보수적 제외로 수용.
+**★ "호출 존재" 조건이 트레이드오프를 제거 — 측정으로 적발·수정.** 1차 안은 `defCountByName ≥ 2`만(전 파일 노드 수)이라 머지가 아닌 우연한 이름 공유도 잡았다: codeprint `main`(defCount=5: LocalAnalyzer·3 POC tools, 각 별개 파일의 진짜 단일 진입점)이 14→10으로 거짓 억제. 그러나 `main`은 누구도 **호출하지 않는** 진입점이고 `Render`는 인터페이스로 **호출되는** 디스패치 → `&& calledFuncNames.contains(name)` 추가로 둘을 정확히 가른다(detectDeadCode #290과 동일 조건). 결과: `Render` 억제·`main` 보존 → 트레이드오프 0. (분석기가 파일 내 동명 메서드를 dedup해 multiplicity가 소실되므로 "호출 존재"가 머지 판별의 실용 프록시.)
 
-**검증.** compileJava·tsc -b·전체 백엔드 테스트 통과. StaticCodeAnalyzerTest Go 3종(일반/리시버 메서드 추출·`Type::Method` 한정·주석/문자열/import 경로 식별자 제외) + GraphWarningServiceTest `highFanOut_polymorphicMergedNode_excluded` 신규. TreeSitterGoPoc + treesitterGoPoc gradle task.
+**검증.** compileJava·tsc -b·전체 백엔드 테스트 통과. StaticCodeAnalyzerTest Go 3종(일반/리시버 메서드 추출·`Type::Method` 한정·주석/문자열/import 경로 식별자 제외) + GraphWarningServiceTest 2종(`highFanOut_polymorphicMergedNode_excluded`=동명+호출 존재 제외 / `highFanOut_multiDefButUncalled_stillDetected`=동명이라도 미호출 진입점 유지). TreeSitterGoPoc + treesitterGoPoc gradle task. ★ 1차 테스트가 호출 엣지 없이 작성돼 CI에서 적발(로컬은 1차 `defCount만` 조건으로 통과했으나 커밋된 `&& 호출` 조건과 불일치) → 테스트에 디스패처 호출 엣지 추가로 정정.
