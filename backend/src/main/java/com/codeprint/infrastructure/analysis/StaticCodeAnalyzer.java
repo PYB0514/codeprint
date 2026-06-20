@@ -24,17 +24,22 @@ public class StaticCodeAnalyzer {
     private final TreeSitterGoAnalyzer treeSitterGo = new TreeSitterGoAnalyzer();
     // tree-sitter 기반 Rust 분석기 — impl 메서드·trait 시그니처·정확한 호출 귀속. native 로드 실패 시 정규식 폴백.
     private final TreeSitterRustAnalyzer treeSitterRust = new TreeSitterRustAnalyzer();
+    // tree-sitter 기반 C# 분석기 — 로컬 함수·인터페이스 메서드·정확한 호출 귀속. native 로드 실패 시 정규식 폴백.
+    private final TreeSitterCSharpAnalyzer treeSitterCSharp = new TreeSitterCSharpAnalyzer();
 
     // 단일 소스 파일을 분석하여 함수명, import, 주석 등을 추출
     public ParsedFile analyze(Path file, Path repoRoot, String language) throws IOException {
         String content = Files.readString(file, StandardCharsets.UTF_8);
+        // UTF-8 BOM 제거 — tree-sitter 바이트 오프셋은 BOM을 제외하는데 content.getBytes()는 BOM(3바이트)을 포함해
+        // 오프셋이 어긋나면 모든 식별자 추출이 밀린다(.NET 소스는 BOM 저장이 흔함). 정규식 경로에도 무해(보이지 않는 선두 문자 제거).
+        if (!content.isEmpty() && content.charAt(0) == '\uFEFF') content = content.substring(1);
         String relativePath = repoRoot.relativize(file).toString().replace("\\", "/");
 
         // 식별자 검출기용 — 주석 본문을 공백으로 치환한 길이 보존 사본 (B-10 Stage 1).
         // 주석/문자열 페이로드를 읽는 검출기(주석 라벨·API 경로·raw SQL 등)는 원본 content를 그대로 쓴다.
         String masked = maskComments(content, language);
 
-        // Java·Python·TypeScript/JavaScript·Go 함수·호출은 tree-sitter(AST)로 추출 — 오탐 제거·정확한 호출 귀속(중첩/메서드).
+        // Java·Python·TypeScript/JavaScript·Go·Rust·C# 함수·호출은 tree-sitter(AST)로 추출 — 오탐 제거·정확한 호출 귀속(중첩/메서드).
         // tree-sitter는 raw content를 직접 파싱(AST가 주석·문자열을 구분하므로 masking 불필요). 실패 시 정규식 폴백.
         List<String> functions;
         Map<String, List<String>> functionCalls;
@@ -51,6 +56,8 @@ public class StaticCodeAnalyzer {
                 language.equals("Go") ? treeSitterGo.parse(content) : Optional.empty();
         Optional<TreeSitterRustAnalyzer.Result> rustTs =
                 language.equals("Rust") ? treeSitterRust.parse(content) : Optional.empty();
+        Optional<TreeSitterCSharpAnalyzer.Result> csTs =
+                language.equals("C#") ? treeSitterCSharp.parse(content) : Optional.empty();
         if (javaTs.isPresent()) {
             functions = javaTs.get().functions();
             functionCalls = javaTs.get().functionCalls();
@@ -66,6 +73,9 @@ public class StaticCodeAnalyzer {
         } else if (rustTs.isPresent()) {
             functions = rustTs.get().functions();
             functionCalls = rustTs.get().functionCalls();
+        } else if (csTs.isPresent()) {
+            functions = csTs.get().functions();
+            functionCalls = csTs.get().functionCalls();
         } else {
             functions = extractFunctions(masked, language);
             functionCalls = extractFunctionCalls(masked, language, functions);

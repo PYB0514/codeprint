@@ -790,3 +790,25 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **결론.** Go `Render`처럼 신규 false positive를 만들지 않음(동명 머지 가드는 #316에 기존재, from_low_args는 정탐). HIGH_FAN_OUT 변화는 전부 정당(오탐 제거 + 진짜 신호 노출) → 경고 회귀 0(나빠지지 않음, 오히려 개선). 추가 warning-engine 변경 불필요.
 
 **검증.** compileJava·tsc -b·전체 백엔드 테스트 통과. StaticCodeAnalyzerTest Rust 3종(일반/impl 메서드 추출·`Type::method` 한정+모듈 bare·trait 시그니처+주석/문자열/매크로 식별자 제외). TreeSitterRustPoc + treesitterRustPoc gradle task. 벤치 `ripgrep`(BurntSushi/ripgrep, --depth 1) 신규 클론.
+
+---
+
+## AST 프로덕션 전환 — C# 함수·호출 추출 regex→tree-sitter (2026-06-20, v0.89.8)
+
+**문제.** AST 멀티언어 확대 ⑦(Java/Python/TS/JS/Go/Rust에 이어). C# 함수·호출 추출만 tree-sitter로 교체. 정규식 폴백 유지. 게이트 = Polly OSS 벤치(App-vNext/Polly, src 416 .cs 파일) analyzeLocal `false &&` 토글 A/B(regex 강제).
+
+**선택 — 구현.** `TreeSitterCSharpAnalyzer`(standalone, `org.treesitter.TreeSitterCSharp`, `tree-sitter-c-sharp:0.23.1`). 노드 타입은 일회용 probe(`CSharpNodeProbe`, 확정 후 삭제)로 확정: `method_declaration`(인터페이스 추상 메서드 포함)·`constructor_declaration`·`local_function_statement` name 필드 → 함수(Java 분석기가 constructor를 포함하는 것과 동일 — C# 정규식도 생성자 캡처). `invocation_expression` function이 `identifier`(C#은 PascalCase 관례라 대문자도 bare — Go와 동일, `new`는 object_creation_expression이라 자동 제외)·`member_access_expression`{expression,name}(대문자 수신자=Type → `Type::method` 한정, 소문자 인스턴스·`this` → bare)로 귀속(Java/Go AST와 동일 규약).
+
+**★ BOM 오프셋 버그 발견·중앙 수정 — 모든 AST 분석기의 잠재 결함.** Polly 1차 A/B에서 ts-only 함수명이 전부 깨져 추출됨(`cy WithPolicy`·`>> ExecuteAndCaptureAs`·`Disp`처럼 선두 3바이트 당겨지고 말미 잘림). 원인 = UTF-8 BOM(`ef bb bf`, 3바이트 — .NET 소스는 BOM 저장이 흔함, `head -c3`로 코드근거 확인). tree-sitter 바이트 오프셋은 BOM을 제외하는데 `content.getBytes(UTF_8)`는 BOM을 재포함 → src 배열 전체가 +3 어긋나 `text(node)`가 3바이트 일찍 읽음. Java/Python/TS/Go/Rust 분석기도 동일 패턴이라 같은 잠재 버그 보유 — 기존 벤치(gin·requests·petclinic·express·ripgrep)에 BOM 파일이 없어 휴면 상태였을 뿐. 수정 = `StaticCodeAnalyzer.analyze()` 진입부에서 선두 문자가 U+FEFF면 1글자 제거(파서·getBytes 양쪽이 BOM-free 사본을 봐 오프셋 정렬). 정규식 경로엔 무해(보이지 않는 선두 문자 제거) = 비-BOM 파일엔 완전 no-op이라 기존 바이트동일 벤치 불변. ★ 교훈: `Set-Content -Encoding utf8`(PowerShell 5.1)이 Java 소스에 BOM을 붙여 컴파일을 깨뜨림 → no-BOM 인코더(`UTF8Encoding $false`)로 재저장. 내가 고치던 바로 그 버그를 도구가 재현.
+
+**★ A/B 결과 — AST가 정규식보다 압도적으로 정확(BOM 수정 후, POC `treesitterCSharpPoc`).**
+- 함수: regex 449 / ts 992. ts-only 502 / regex-only 1. 정규식이 놓친 502건은 실제 메서드/생성자 — C# 정규식 `(?:(?:public|private|protected|static|...)\s+)+`이 `internal`·`override`·`virtual`·표현식 바디(`=> x`)·로컬 함수·어트리뷰트 클래스 생성자를 못 잡음. regex-only 1건은 25파일 샘플 밖(1/992, Rust 선례처럼 정규식 노이즈로 판단).
+- 경고(analyzeLocal A/B): regex 노드 999·엣지 1248·경고 0 → AST 노드 1366·엣지 2278·HIGH_FAN_OUT 5. 엣지 급증(1248→2278)은 정확한 이름으로 호출이 제대로 링크된 결과.
+
+**★ AST HIGH_FAN_OUT 5건 전부 정탐 — 정규식이 호출을 과소추출해 숨기던 진짜 신호(스폿체크).** `Usage`(x2, 서로 다른 파일)·`AntiPattern_RetryForFallback`·`OutcomeUsage`·`SafeExecute_V8` 모두 Polly `Snippets/Docs/`의 문서용 스니펫 메서드(여러 API를 의도적으로 체이닝). `AntiPattern_RetryForFallback`는 단일 정의(동명 머지 아님)에 본문이 AddRetry·HandleResult·CallSecondary·Build·ExecuteOutcomeAsync 등 10+개 호출 = 진짜 고-fan-out. Go #316의 동명 머지 가드(`defCount≥2 && 호출`)를 통과(파일당 단일 정의). 신규 false positive 0.
+
+**★ 사전 수정 DEAD_CODE 66%는 BOM 아티팩트였음.** BOM 수정 전 AST가 DEAD_CODE 650/992(66%) 단일 LOW 발화 → 이름이 깨져 호출-정의 링크가 끊긴 탓. 수정 후 정상 링크되어 게이트 미달 = DEAD_CODE 미발화(정상). 코드근거가 자가보고(66% 데드)를 반증.
+
+**결론.** AST가 정규식보다 함수·호출 모두 정확(502 회복·1 손실), HIGH_FAN_OUT 5건 정탐, 신규 오탐 0. BOM 수정은 전 언어 정확도 개선 + 비-BOM 회귀 0. warning-engine 추가 변경 불필요.
+
+**검증.** compileJava·tsc -b·전체 백엔드 테스트(BUILD SUCCESSFUL) 통과. StaticCodeAnalyzerTest C# 3종 신규(`CSharp_AST_확장형_함수_추출`=생성자/internal/override/표현식바디/로컬함수, `CSharp_함수_호출_추출`=bare/Type::method/this, `CSharp_BOM_파일_식별자_정확추출`=BOM 오프셋 회귀). TreeSitterCSharpPoc + treesitterCSharpPoc gradle task. 벤치 Polly(App-vNext/Polly, --depth 1) 신규 클론.

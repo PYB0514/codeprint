@@ -743,6 +743,71 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("C# 메서드·생성자·로컬함수·표현식바디를 모두 추출한다 (정규식이 놓치던 형태)")
+    void CSharp_AST_확장형_함수_추출() throws IOException {
+        Path file = tempDir.resolve("Service.cs");
+        Files.writeString(file, """
+                public class Service {
+                    public Service() {}
+                    internal void Configure() {}
+                    public override string ToText() => "x";
+                    public void Run() {
+                        int Local() => 1;
+                        Local();
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        // 생성자(Service)·internal·override·표현식바디(=>)·로컬함수(Local)까지 — 정규식은 modifier/형태 제약으로 일부를 놓쳤다.
+        assertThat(result.functions())
+                .containsExactlyInAnyOrder("Service", "Configure", "ToText", "Run", "Local");
+    }
+
+    @Test
+    @DisplayName("C# 호출을 bare·Type::method·this 형태로 귀속한다")
+    void CSharp_함수_호출_추출() throws IOException {
+        Path file = tempDir.resolve("Worker.cs");
+        Files.writeString(file, """
+                public class Worker {
+                    public void Run() {
+                        Process();
+                        this.Process();
+                        Console.WriteLine("hi");
+                    }
+                    private void Process() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.functionCalls()).containsKey("Run");
+        // bare Process()·this.Process() → "Process", 대문자 수신자 Console.WriteLine → "Console::WriteLine"
+        assertThat(result.functionCalls().get("Run")).contains("Process", "Console::WriteLine");
+    }
+
+    @Test
+    @DisplayName("UTF-8 BOM이 붙은 C# 파일도 식별자를 정확히 추출한다 (BOM 오프셋 회귀)")
+    void CSharp_BOM_파일_식별자_정확추출() throws IOException {
+        Path file = tempDir.resolve("Bom.cs");
+        // .NET 소스는 UTF-8 BOM 저장이 흔하다. BOM(3바이트)이 tree-sitter 오프셋과 어긋나면 모든 이름이 밀려 깨진다.
+        Files.writeString(file, "\uFEFF" + """
+                public class Bom {
+                    public void Compute() {
+                        Helper();
+                    }
+                    private void Helper() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.functions()).containsExactlyInAnyOrder("Compute", "Helper");
+        assertThat(result.functionCalls().get("Compute")).contains("Helper");
+    }
+
+    @Test
     @DisplayName("Ruby 파일에서 def 메서드명을 추출한다")
     void Ruby_함수_추출() throws IOException {
         Path file = tempDir.resolve("user_service.rb");
