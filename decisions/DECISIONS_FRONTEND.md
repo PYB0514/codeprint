@@ -2,6 +2,23 @@
 
 ---
 
+## common 도메인 정리 — 죽은 POC 삭제 + 동사형 명사화 규칙 (2026-06-21)
+
+**배경.** 자기 그래프 도메인 분포 측정 결과 `common`(미분류 버킷)이 284노드(13.9%)로 3위. 무엇을 끄집어낼 수 있는지 분석.
+
+**조치 1 — 죽은 POC 삭제.** `tools/treesitter/TreeSitter*Poc.java` 9개(42함수)가 common 최대 덩어리. main() standalone·프로덕션 참조 0의 AST 개발용 일회용 probe → 삭제. (저장된 그래프에는 재분석 전까지 51노드로 잔존 — 소스 삭제는 재분석 후 반영.)
+
+**조치 2 — donate→donation (채택).** `resolveDomain`에 영어 명사화(-ion/-ment) 추가: `donate→donation`·`pay→payment`·`create→creation`. 길이≥3 가드 + 알려진 도메인 매칭 시에만. 라이브 검증: donate 3파일이 donation으로, common 284→275. **범용 규칙**이라 모든 분석 프로젝트에 적용(특정 프로젝트 하드코딩 아님).
+
+**탈락시킨 것 (이유 포함).**
+- **node→graph·auth→security 별칭 하드코딩.** node/graph, auth/security는 일반 영어로 무관 → Codeprint 전용 별칭을 넣으면 `extractDomain`이 의도한 **범용성을 깨고 남의 프로젝트 분석을 오염**(예: auth·security 도메인을 둘 다 가진 프로젝트 오매칭). 기각.
+- **conformance 바운디드 컨텍스트 추출(graph에서 GraphWarningService 등 분리).** `GraphWarningService.detect(List<Node>, List<Edge>, intent)`가 `domain.graph.Node/Edge/EdgeType/NodeType`를 직접 순회 → 별도 컨텍스트로 빼면 §10(도메인 간 도메인 import 금지) 정면 위반. 회피하려면 Node/Edge DTO 중복 또는 shared kernel → 복잡성↑·사용자 가치 0·회귀 위험(소비자 6곳). 경고 감지는 본질적으로 graph 애그리거트 분석이라 graph의 정당한 능력으로 판단. 기각.
+- **mcp/auth/conformance 신규 도메인 신설.** 순수 의미 평가: mcp=인터페이스/프로토콜 어댑터(graph 데이터 노출), auth=기존 security의 일부, conformance=기존 graph의 일부 → 진짜 신규 도메인 아님. 신설 무의미. 기각.
+
+**측정 방법.** 라이브 그래프(`/graph` no-store)에 `extractDomain` 충실 포팅 적용해 도메인별 노드 수 집계. graph(373)는 outlier 아님 — analysis(409)가 더 큼. 핵심 도메인(analysis+graph)이 최상위인 건 코드분석·시각화 제품의 건강한 형태로 판단.
+
+---
+
 ## 분석 결과 카드 — 경고 패널 스크롤이 rAF/scrollIntoView로 안 되던 문제 (2026-06-17)
 
 **문제.** 분석 완료 결과 카드의 "경고 보기" CTA가 좌측 경고 패널(`#warning-section`, 중첩 `overflow-y-auto` aside 내부)로 스크롤·강조하도록 구현했으나, 라이브 검증에서 스크롤이 전혀 동작하지 않음(scrollTop 0 유지, 강조 ring도 미적용).
