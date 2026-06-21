@@ -2786,17 +2786,6 @@ function GraphPageInner() {
                   <div className="border-t border-gray-800 my-2" />
                 </>
               )}
-              <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">노드</p>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#1e3a5f', border: '1.5px solid #3b82f6' }} />
-                  <span className="text-gray-400 text-xs">FILE</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#064e3b', border: '1px solid #10b981' }} />
-                  <span className="text-gray-400 text-xs">FUNCTION</span>
-                </div>
-              </div>
             </LeftSection>
 
           </div>
@@ -2873,8 +2862,8 @@ function GraphPageInner() {
               </div>
             </div>
           ) : (
-            <button onClick={() => setArchPanelOpen(true)} className="flex items-center gap-1.5 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-300 text-xs px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm">
-              🏛 아키텍처 의도 <span className="text-gray-500">▴</span>
+            <button onClick={() => setArchPanelOpen(true)} className="flex items-center gap-2 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-200 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-sm">
+              <span className="text-base">🏛</span> 아키텍처 의도 <span className="text-gray-500 text-xs">▴</span>
             </button>
           )}
         </div>
@@ -2909,10 +2898,10 @@ function GraphPageInner() {
             </div>
           </div>
         ) : (
-          <button onClick={() => setAnalysisPanelOpen(true)} className="flex items-center gap-1.5 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-300 text-xs px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm">
-            🔎 분석 · 경고
-            {warnings.length > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-900/60 text-yellow-300 border border-yellow-700/50">{warnings.length}</span>}
-            <span className="text-gray-500">▴</span>
+          <button onClick={() => setAnalysisPanelOpen(true)} className="flex items-center gap-2 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-200 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-sm">
+            <span className="text-base">🔎</span> 분석 · 경고
+            {warnings.length > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/60 text-yellow-300 border border-yellow-700/50">{warnings.length}</span>}
+            <span className="text-gray-500 text-xs">▴</span>
           </button>
         )}
       </div>
