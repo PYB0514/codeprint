@@ -2,6 +2,16 @@
 
 ---
 
+## 숨긴 경고(suppress) 복원 — 영속화했으나 새로고침 후 복원 불가 갭 (2026-06-21)
+
+**문제(런타임 검증에서 의도와 다른 동작 발견).** PR #259에서 경고 suppress를 fingerprint 기반으로 서버에 영속화했으나 "런타임 검증 보류"로 남아 있었다. 실제 동작을 추적하니 `GraphController.filterSuppressed()`가 suppress된 경고를 응답에서 **완전히 제거**만 하고, 프론트 `suppressedWarnings` 상태는 "이번 세션에 숨긴 것"만 담는 순수 세션 상태였다. 결과적으로 **새로고침 한 번이면 "숨긴 경고" 목록이 비어 복원 버튼이 사라지고, 한 번 숨긴 경고는 영구히 복원 불가** → 영속화가 사실상 no-op.
+
+**수정.** `filterSuppressed`를 `partitionSuppressed`(Collectors.partitioningBy로 active/suppressed 분리)로 일반화하고, **소유자 전용** `/api/projects/{id}/graph` 응답에 `suppressedWarnings` 필드 추가. 프론트 `fetchGraph`가 이를 로드해 `setSuppressedWarnings` 초기화. 공개 `/api/share/{id}/graph`는 비소유자에게 숨긴 경고를 노출할 이유가 없고 복원도 소유권이 필요하므로 `filterSuppressed`(active만) 유지 — 동작 불변.
+
+**결과.** suppress가 세션·새로고침·재방문을 가로질러 일관되게 유지·복원 가능. 응답 필드 추가는 하위호환(기존 클라이언트 무영향). 알려진 한계: `/graph`는 5분 private 브라우저 캐시라 suppress 직후 강제 새로고침 시 ≤5분간 stale 가능(기존 동작, 로컬 state 갱신으로 즉시 UX는 정상).
+
+---
+
 ## Conformance 2차 — 의도 아키텍처 DB 영속 + REST + 경고 연동 (2026-06-19)
 
 **문제.** `ArchitectureIntent`(모듈+FORBID 규칙)는 1차에서 LocalAnalyzer CLI용 `.codeprint/architecture.json`에만 로드됐고, 웹 경로(`/graph` 응답 경고, PR 코멘트)에서는 INTENT_DRIFT가 한 번도 발화하지 않았다.

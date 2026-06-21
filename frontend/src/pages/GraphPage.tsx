@@ -603,7 +603,7 @@ function GraphPageInner() {
 
   // 런타임 경고 상태
   const [warnings, setWarnings] = useState<{ type: string; severity?: 'HIGH' | 'MEDIUM' | 'LOW'; nodeIds: string[]; edgeIds?: string[]; message: string; fingerprint?: string }[]>([])
-  // 이번 세션에 숨긴 경고 — 복원(unsuppress)용
+  // 숨긴 경고 목록 — 서버에서 영속 로드, 복원(unsuppress)용
   const [suppressedWarnings, setSuppressedWarnings] = useState<{ type: string; severity?: 'HIGH' | 'MEDIUM' | 'LOW'; nodeIds: string[]; edgeIds?: string[]; message: string; fingerprint?: string }[]>([])
   // publishCursorRef를 항상 최신 publishCursor로 유지
   publishCursorRef.current = publishCursor
@@ -1027,7 +1027,8 @@ function GraphPageInner() {
   const fetchGraph = useCallback(async () => {
     try {
       const res = await axios.get(`/api/projects/${projectId}/graph`)
-      const { graphId: gid, nodes: rn, edges: re, warnings: w, analyzedFileCount, totalFileCount } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; severity?: 'HIGH' | 'MEDIUM' | 'LOW'; nodeIds: string[]; edgeIds?: string[]; message: string; fingerprint?: string }[]; analyzedFileCount?: number; totalFileCount?: number }
+      type WarningItem = { type: string; severity?: 'HIGH' | 'MEDIUM' | 'LOW'; nodeIds: string[]; edgeIds?: string[]; message: string; fingerprint?: string }
+      const { graphId: gid, nodes: rn, edges: re, warnings: w, suppressedWarnings: sw, analyzedFileCount, totalFileCount } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: WarningItem[]; suppressedWarnings?: WarningItem[]; analyzedFileCount?: number; totalFileCount?: number }
       setGraphId(gid)
       // 500개 초과 절단 시에만 안내 배너 (기존 그래프는 카운트 없음)
       setTruncation(
@@ -1037,6 +1038,7 @@ function GraphPageInner() {
       )
       const warningList = w ?? []
       setWarnings(warningList)
+      setSuppressedWarnings(sw ?? [])
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebarRef.current)
       setRawNodes(rn)
       setRawEdgesCache(re)
