@@ -148,11 +148,17 @@ const CLASS_SUFFIXES = [
   'Header', 'Footer',
 ]
 
-// 토큰이 알려진 도메인인지 — 단/복수형 차이를 흡수 (예: teams→team, messages→message)
+// 토큰이 알려진 도메인인지 — 단/복수형 + 동사→명사 파생을 흡수 (teams→team, donate→donation, pay→payment)
 function resolveDomain(token: string, knownDomains: Set<string>): string | null {
   if (knownDomains.has(token)) return token
   if (token.endsWith('s') && knownDomains.has(token.slice(0, -1))) return token.slice(0, -1)
   if (token.endsWith('es') && knownDomains.has(token.slice(0, -2))) return token.slice(0, -2)
+  // 동사형 파일명 토큰 → 명사형 도메인 (영어 -ion/-ment 명사화): donate→donation, create→creation, pay→payment
+  if (token.length >= 3) {
+    const noun = token.endsWith('e') ? token.slice(0, -1) + 'ion' : token + 'ion'
+    if (knownDomains.has(noun)) return noun
+    if (knownDomains.has(token + 'ment')) return token + 'ment'
+  }
   return null
 }
 
