@@ -469,6 +469,9 @@ function GraphPageInner() {
   const [error, setError] = useState<string | null>(null)
   const [sidebar, setSidebar] = useState<SidebarContent | null>(null)
   const [rightCollapsed, setRightCollapsed] = useState(true)
+  // 코너 플로팅 분석 패널 — 기본 접힘(칩만 표시, 캔버스 안 가림)
+  const [archPanelOpen, setArchPanelOpen] = useState(false)
+  const [analysisPanelOpen, setAnalysisPanelOpen] = useState(false)
   const [leftOpen, setLeftOpen] = useState(true)
   const [leftWidth, setLeftWidth] = useState(220)
   const [rightWidth, setRightWidth] = useState(320)
@@ -632,6 +635,8 @@ function GraphPageInner() {
     }
   }, [projectId])
 
+  // 상단 툴바 팝업 — 'preset' | 'export' | null (한 번에 하나만 열림)
+  const [openToolbarMenu, setOpenToolbarMenu] = useState<'preset' | 'export' | null>(null)
   // 뷰 프리셋 상태
   const [presets, setPresets] = useState<{ slot: number; name: string; config: Record<string, unknown>; isDefault: boolean }[]>([])
   const [showSavePresetModal, setShowSavePresetModal] = useState(false)
@@ -2273,6 +2278,93 @@ function GraphPageInner() {
         <span className="text-gray-500 text-sm">
           파일 {counts.files} · 함수 {counts.funcs} · 엣지 {counts.edges}
         </span>
+
+        {/* 전역 뷰 컨트롤 — 레이아웃·라벨 토글 + 프리셋·내보내기 팝업 */}
+        <span className="w-px h-5 bg-gray-700" />
+        <button
+          id="tour-layout"
+          onClick={toggleLayoutPreset}
+          title="레이아웃 전환"
+          className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2.5 py-1.5 rounded-lg border border-gray-700"
+        >
+          <span className={layoutPreset === 'layer' ? 'text-white' : 'text-gray-500'}>계층형</span>
+          <span className="text-gray-600">/</span>
+          <span className={layoutPreset === 'domain' ? 'text-white' : 'text-gray-500'}>도메인</span>
+        </button>
+        <button
+          onClick={toggleLabelMode}
+          title="라벨 표시 모드"
+          className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2.5 py-1.5 rounded-lg border border-gray-700"
+        >
+          <span className={labelMode === 'name' ? 'text-white' : 'text-gray-500'}>이름</span>
+          <span className="text-gray-600">/</span>
+          <span className={labelMode === 'comment' ? 'text-white' : 'text-gray-500'}>주석</span>
+        </button>
+        <div className="relative">
+          <button
+            onClick={() => setOpenToolbarMenu(m => m === 'preset' ? null : 'preset')}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${openToolbarMenu === 'preset' ? 'bg-gray-700 text-white border-gray-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}
+          >
+            🔖 프리셋 <span className="text-gray-500">▾</span>
+          </button>
+          {openToolbarMenu === 'preset' && (
+            <div className="absolute left-0 top-9 z-50 w-60 bg-gray-900 border border-gray-700 rounded-lg p-2 shadow-xl flex flex-col gap-1">
+              <p className="text-[10px] text-gray-500 px-1 pb-0.5">저장된 뷰 (클릭 = 적용, 💾 = 현재 뷰 저장)</p>
+              {presets.map((p) => (
+                <div key={p.slot} className="flex items-center gap-1">
+                  <button
+                    onClick={() => { applyPresetConfig(p.config); setOpenToolbarMenu(null) }}
+                    title={`슬롯 ${p.slot} 불러오기`}
+                    className="flex-1 text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 truncate"
+                  >
+                    <span className="text-gray-500 mr-1">{p.slot}.</span>
+                    {p.name}
+                    {p.isDefault && <span className="ml-1 text-gray-600 text-[10px]">기본</span>}
+                  </button>
+                  <button
+                    onClick={() => { setPendingSaveSlot(p.slot); setPresetSaveName(p.name); setShowSavePresetModal(true); setOpenToolbarMenu(null) }}
+                    title={`슬롯 ${p.slot}에 현재 뷰 저장`}
+                    className="text-gray-600 hover:text-gray-300 text-xs px-1.5 py-1 rounded hover:bg-gray-800 flex-shrink-0"
+                  >
+                    💾
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="relative">
+          <button
+            id="tour-export"
+            onClick={() => setOpenToolbarMenu(m => m === 'export' ? null : 'export')}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${openToolbarMenu === 'export' ? 'bg-gray-700 text-white border-gray-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}
+          >
+            ↓ 내보내기 <span className="text-gray-500">▾</span>
+          </button>
+          {openToolbarMenu === 'export' && (
+            <div className="absolute left-0 top-9 z-50 w-48 bg-gray-900 border border-gray-700 rounded-lg p-2 shadow-xl flex flex-col gap-1">
+              <button
+                onClick={() => { downloadTreeText(rawNodes); setOpenToolbarMenu(null) }}
+                disabled={rawNodes.length === 0}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ↓ AI 컨텍스트 (.md)
+              </button>
+              <button
+                onClick={() => { handleExportImage(); setOpenToolbarMenu(null) }}
+                disabled={exporting || rawNodes.length === 0}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {exporting ? '저장 중...' : '↓ 이미지 (.png)'}
+              </button>
+            </div>
+          )}
+        </div>
+        {openToolbarMenu && (
+          <div className="fixed inset-0 z-40" onClick={() => setOpenToolbarMenu(null)} />
+        )}
+        <span className="w-px h-5 bg-gray-700" />
+
         {graphId && (
           <button
             onClick={() => setShowShareModal(true)}
@@ -2386,8 +2478,6 @@ function GraphPageInner() {
               })()}
             </LeftSection>
 
-            {/* AI 누락 감지 */}
-            <AiAnalysisSection graphId={graphId} />
 
             {/* 보기 옵션 */}
             {(layoutPreset === 'domain' || bgUrl) && (
@@ -2420,18 +2510,6 @@ function GraphPageInner() {
               </LeftSection>
             )}
 
-            {/* 내보내기 — 최상단 */}
-            <LeftSection title="내보내기">
-              <button onClick={() => downloadTreeText(rawNodes)} disabled={rawNodes.length === 0}
-                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed">
-                ↓ AI 컨텍스트
-              </button>
-              <button id="tour-export" onClick={handleExportImage} disabled={exporting || rawNodes.length === 0}
-                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed mt-1">
-                {exporting ? '저장 중...' : '↓ 이미지'}
-              </button>
-            </LeftSection>
-
             {/* 스케치 (슈퍼 바이브 코딩 P0, 베타) */}
             <LeftSection title="✏️ 스케치 (베타)">
               <button
@@ -2456,17 +2534,6 @@ function GraphPageInner() {
                   </p>
                 </div>
               )}
-            </LeftSection>
-
-            {/* 아키텍처 의도 선언 (conformance) */}
-            <LeftSection title="🏛 아키텍처 의도">
-              <ArchitectureIntentPanel
-                projectId={projectId!}
-                onSaved={() => {
-                  // 경고 캐시 무효화 후 그래프 재로드
-                  fetchGraph()
-                }}
-              />
             </LeftSection>
 
             {/* 버전 기록 */}
@@ -2591,66 +2658,6 @@ function GraphPageInner() {
               >
                 🔀 버전 diff 보기
               </button>
-            </LeftSection>
-
-            {/* 뷰 프리셋 */}
-            <LeftSection title="뷰 프리셋">
-              <div className="flex flex-col gap-1">
-                {presets.map((p) => (
-                  <div key={p.slot} className="flex items-center gap-1">
-                    <button
-                      onClick={() => applyPresetConfig(p.config)}
-                      title={`슬롯 ${p.slot} 불러오기`}
-                      className="flex-1 text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 truncate"
-                    >
-                      <span className="text-gray-500 mr-1">{p.slot}.</span>
-                      {p.name}
-                      {p.isDefault && <span className="ml-1 text-gray-600 text-[10px]">기본</span>}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setPendingSaveSlot(p.slot)
-                        setPresetSaveName(p.name)
-                        setShowSavePresetModal(true)
-                      }}
-                      title={`슬롯 ${p.slot}에 현재 뷰 저장`}
-                      className="text-gray-600 hover:text-gray-300 text-xs px-1.5 py-1 rounded hover:bg-gray-800 flex-shrink-0"
-                    >
-                      💾
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </LeftSection>
-
-            {/* 레이아웃 */}
-            <LeftSection title="레이아웃" id="tour-layout">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400 text-xs">뷰</span>
-                <button
-                  onClick={toggleLayoutPreset}
-                  className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2 py-1 rounded border border-gray-700"
-                >
-                  <span className={layoutPreset === 'layer' ? 'text-white' : 'text-gray-500'}>계층형</span>
-                  <span className="text-gray-600">/</span>
-                  <span className={layoutPreset === 'domain' ? 'text-white' : 'text-gray-500'}>도메인</span>
-                </button>
-              </div>
-            </LeftSection>
-
-            {/* 라벨 */}
-            <LeftSection title="라벨">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400 text-xs">표시 모드</span>
-                <button
-                  onClick={toggleLabelMode}
-                  className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2 py-1 rounded border border-gray-700"
-                >
-                  <span className={labelMode === 'name' ? 'text-white' : 'text-gray-500'}>이름</span>
-                  <span className="text-gray-600">/</span>
-                  <span className={labelMode === 'comment' ? 'text-white' : 'text-gray-500'}>주석</span>
-                </button>
-              </div>
             </LeftSection>
 
             {/* 노드 타입 가시성 필터 — memoized */}
@@ -2779,39 +2786,8 @@ function GraphPageInner() {
                   <div className="border-t border-gray-800 my-2" />
                 </>
               )}
-              <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">노드</p>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#1e3a5f', border: '1.5px solid #3b82f6' }} />
-                  <span className="text-gray-400 text-xs">FILE</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded flex-shrink-0" style={{ background: '#064e3b', border: '1px solid #10b981' }} />
-                  <span className="text-gray-400 text-xs">FUNCTION</span>
-                </div>
-              </div>
             </LeftSection>
 
-            {/* 런타임 경고 패널 */}
-            {(warnings.length > 0 || suppressedWarnings.length > 0) && (
-              <LeftSection id="warning-section" title={`경고 (${warnings.length})`} headerRight={
-                <button
-                  onClick={() => downloadWarningsMd(warnings)}
-                  title="경고 목록 마크다운으로 내보내기"
-                  className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800 transition-colors"
-                >
-                  ↓ MD
-                </button>
-              }>
-                <WarningPanel
-                  warnings={warnings}
-                  onNodeNavigate={handleSearchNodeClick}
-                  onSuppress={handleSuppressWarning}
-                  suppressed={suppressedWarnings}
-                  onRestore={handleRestoreWarning}
-                />
-              </LeftSection>
-            )}
           </div>
 
           {/* 왼쪽 사이드바 리사이즈 핸들 */}
@@ -2872,6 +2848,64 @@ function GraphPageInner() {
         </div>
       )}
 
+      {/* 코너 플로팅 — 아키텍처 의도 (좌측 하단, 기본 접힘) */}
+      {projectId && (
+        <div className="absolute z-30 bottom-4" style={{ left: leftOpen ? `${leftWidth + 16}px` : '20px' }}>
+          {archPanelOpen ? (
+            <div className="w-72 max-h-[55vh] flex flex-col bg-gray-950/95 border border-gray-800 rounded-xl shadow-2xl backdrop-blur-sm overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 flex-shrink-0">
+                <span className="text-xs font-semibold text-gray-300">🏛 아키텍처 의도</span>
+                <button onClick={() => setArchPanelOpen(false)} title="접기" className="text-gray-500 hover:text-gray-200 text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-gray-800">▾</button>
+              </div>
+              <div className="p-2 overflow-y-auto">
+                <ArchitectureIntentPanel projectId={projectId} onSaved={() => fetchGraph()} />
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setArchPanelOpen(true)} className="flex items-center gap-2 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-200 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-sm">
+              <span className="text-base">🏛</span> 아키텍처 의도 <span className="text-gray-500 text-xs">▴</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 코너 플로팅 — 분석·경고 (우측 하단, 기본 접힘) */}
+      <div className="absolute z-30 bottom-4" style={{ right: rightCollapsed ? '16px' : `${rightWidth + 16}px` }}>
+        {analysisPanelOpen ? (
+          <div className="w-80 max-h-[60vh] flex flex-col bg-gray-950/95 border border-gray-800 rounded-xl shadow-2xl backdrop-blur-sm overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 flex-shrink-0">
+              <span className="text-xs font-semibold text-gray-300">🔎 분석 · 경고{warnings.length > 0 && <span className="ml-1 text-yellow-400">({warnings.length})</span>}</span>
+              <div className="flex items-center gap-1">
+                {warnings.length > 0 && (
+                  <button onClick={() => downloadWarningsMd(warnings)} title="경고 마크다운 내보내기" className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
+                )}
+                <button onClick={() => setAnalysisPanelOpen(false)} title="접기" className="text-gray-500 hover:text-gray-200 text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-gray-800">▾</button>
+              </div>
+            </div>
+            <div className="p-2 overflow-y-auto flex flex-col gap-2">
+              <AiAnalysisSection graphId={graphId} />
+              {(warnings.length > 0 || suppressedWarnings.length > 0) ? (
+                <WarningPanel
+                  warnings={warnings}
+                  onNodeNavigate={handleSearchNodeClick}
+                  onSuppress={handleSuppressWarning}
+                  suppressed={suppressedWarnings}
+                  onRestore={handleRestoreWarning}
+                />
+              ) : (
+                <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setAnalysisPanelOpen(true)} className="flex items-center gap-2 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-200 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-sm">
+            <span className="text-base">🔎</span> 분석 · 경고
+            {warnings.length > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/60 text-yellow-300 border border-yellow-700/50">{warnings.length}</span>}
+            <span className="text-gray-500 text-xs">▴</span>
+          </button>
+        )}
+      </div>
+
       {/* 분석 완료 결과 카드 — 구조 카운트 + 경고 가치 + 경고 보기 CTA */}
       {resultCard && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 w-[340px] bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden pointer-events-auto">
@@ -2906,19 +2940,9 @@ function GraphPageInner() {
                 </div>
                 <button
                   onClick={() => {
-                    setLeftOpen(true)
+                    // 경고는 우측 하단 코너 플로팅 패널에 있음 — 펼치고 토스트 닫기
+                    setAnalysisPanelOpen(true)
                     setResultCard(null)
-                    // rAF는 React Flow 렌더 루프와 경쟁해 scrollTop이 리셋됨 → setTimeout으로 프레임 이후 실행.
-                    // 중첩 overflow 컨테이너라 scrollIntoView가 불안정해 offsetTop으로 직접 스크롤.
-                    setTimeout(() => {
-                      const el = document.getElementById('warning-section')
-                      const aside = el?.closest('aside')
-                      if (el && aside) {
-                        aside.scrollTop = el.offsetTop
-                        el.classList.add('ring-2', 'ring-yellow-500')
-                        setTimeout(() => el.classList.remove('ring-2', 'ring-yellow-500'), 1600)
-                      }
-                    }, 120)
                   }}
                   className="text-sm bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg self-start"
                 >경고 보기 →</button>
