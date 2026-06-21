@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.92.2',
+    date: '2026-06-21',
+    title: '도메인 자동 분류 정확도 개선 — 동사형 파일명 → 명사형 도메인',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: '도메인 뷰에서 동사형 이름의 파일이 도메인으로 묶이지 않고 "공통"으로 흩어지던 문제를 개선했습니다. 영어 명사화 규칙(동사→명사 -ion/-ment: donate→donation, pay→payment, create→creation)을 적용해, 예를 들어 후원 페이지(DonatePage 등)가 이제 donation 도메인으로 올바르게 분류됩니다. 모든 분석 대상 프로젝트에 적용됩니다.' },
+    ],
+  },
+  {
     version: 'v0.92.1',
     date: '2026-06-21',
     title: '그래프 좌측 사이드바 경량화 — 툴바 통합 + 분석 패널 코너 이동',
