@@ -14,7 +14,7 @@ const STEPS: Step[] = [
   },
   {
     target: '#tour-layout',
-    placement: 'right',
+    placement: 'bottom',
     title: '레이아웃 전환',
     content: '계층 모드는 DDD 레이어(interfaces → application → domain → infrastructure)를 기준으로 정렬합니다. 허브 모드는 핵심 노드 중심으로 방사형 배치합니다.',
     skipBeacon: true,
@@ -35,9 +35,9 @@ const STEPS: Step[] = [
   },
   {
     target: '#tour-export',
-    placement: 'right',
-    title: '이미지로 저장',
-    content: '현재 그래프를 PNG 이미지로 내보낼 수 있습니다. 문서나 팀 공유용으로 활용해보세요.',
+    placement: 'bottom',
+    title: '내보내기',
+    content: '상단 툴바의 내보내기 버튼에서 현재 그래프를 PNG 이미지 또는 AI 컨텍스트(.md)로 내보낼 수 있습니다. 문서나 팀 공유용으로 활용해보세요.',
     skipBeacon: true,
   },
 ]

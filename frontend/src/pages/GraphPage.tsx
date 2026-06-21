@@ -632,6 +632,8 @@ function GraphPageInner() {
     }
   }, [projectId])
 
+  // 상단 툴바 팝업 — 'preset' | 'export' | null (한 번에 하나만 열림)
+  const [openToolbarMenu, setOpenToolbarMenu] = useState<'preset' | 'export' | null>(null)
   // 뷰 프리셋 상태
   const [presets, setPresets] = useState<{ slot: number; name: string; config: Record<string, unknown>; isDefault: boolean }[]>([])
   const [showSavePresetModal, setShowSavePresetModal] = useState(false)
@@ -2273,6 +2275,93 @@ function GraphPageInner() {
         <span className="text-gray-500 text-sm">
           파일 {counts.files} · 함수 {counts.funcs} · 엣지 {counts.edges}
         </span>
+
+        {/* 전역 뷰 컨트롤 — 레이아웃·라벨 토글 + 프리셋·내보내기 팝업 */}
+        <span className="w-px h-5 bg-gray-700" />
+        <button
+          id="tour-layout"
+          onClick={toggleLayoutPreset}
+          title="레이아웃 전환"
+          className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2.5 py-1.5 rounded-lg border border-gray-700"
+        >
+          <span className={layoutPreset === 'layer' ? 'text-white' : 'text-gray-500'}>계층형</span>
+          <span className="text-gray-600">/</span>
+          <span className={layoutPreset === 'domain' ? 'text-white' : 'text-gray-500'}>도메인</span>
+        </button>
+        <button
+          onClick={toggleLabelMode}
+          title="라벨 표시 모드"
+          className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2.5 py-1.5 rounded-lg border border-gray-700"
+        >
+          <span className={labelMode === 'name' ? 'text-white' : 'text-gray-500'}>이름</span>
+          <span className="text-gray-600">/</span>
+          <span className={labelMode === 'comment' ? 'text-white' : 'text-gray-500'}>주석</span>
+        </button>
+        <div className="relative">
+          <button
+            onClick={() => setOpenToolbarMenu(m => m === 'preset' ? null : 'preset')}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${openToolbarMenu === 'preset' ? 'bg-gray-700 text-white border-gray-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}
+          >
+            🔖 프리셋 <span className="text-gray-500">▾</span>
+          </button>
+          {openToolbarMenu === 'preset' && (
+            <div className="absolute left-0 top-9 z-50 w-60 bg-gray-900 border border-gray-700 rounded-lg p-2 shadow-xl flex flex-col gap-1">
+              <p className="text-[10px] text-gray-500 px-1 pb-0.5">저장된 뷰 (클릭 = 적용, 💾 = 현재 뷰 저장)</p>
+              {presets.map((p) => (
+                <div key={p.slot} className="flex items-center gap-1">
+                  <button
+                    onClick={() => { applyPresetConfig(p.config); setOpenToolbarMenu(null) }}
+                    title={`슬롯 ${p.slot} 불러오기`}
+                    className="flex-1 text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 truncate"
+                  >
+                    <span className="text-gray-500 mr-1">{p.slot}.</span>
+                    {p.name}
+                    {p.isDefault && <span className="ml-1 text-gray-600 text-[10px]">기본</span>}
+                  </button>
+                  <button
+                    onClick={() => { setPendingSaveSlot(p.slot); setPresetSaveName(p.name); setShowSavePresetModal(true); setOpenToolbarMenu(null) }}
+                    title={`슬롯 ${p.slot}에 현재 뷰 저장`}
+                    className="text-gray-600 hover:text-gray-300 text-xs px-1.5 py-1 rounded hover:bg-gray-800 flex-shrink-0"
+                  >
+                    💾
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="relative">
+          <button
+            id="tour-export"
+            onClick={() => setOpenToolbarMenu(m => m === 'export' ? null : 'export')}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${openToolbarMenu === 'export' ? 'bg-gray-700 text-white border-gray-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}
+          >
+            ↓ 내보내기 <span className="text-gray-500">▾</span>
+          </button>
+          {openToolbarMenu === 'export' && (
+            <div className="absolute left-0 top-9 z-50 w-48 bg-gray-900 border border-gray-700 rounded-lg p-2 shadow-xl flex flex-col gap-1">
+              <button
+                onClick={() => { downloadTreeText(rawNodes); setOpenToolbarMenu(null) }}
+                disabled={rawNodes.length === 0}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ↓ AI 컨텍스트 (.md)
+              </button>
+              <button
+                onClick={() => { handleExportImage(); setOpenToolbarMenu(null) }}
+                disabled={exporting || rawNodes.length === 0}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {exporting ? '저장 중...' : '↓ 이미지 (.png)'}
+              </button>
+            </div>
+          )}
+        </div>
+        {openToolbarMenu && (
+          <div className="fixed inset-0 z-40" onClick={() => setOpenToolbarMenu(null)} />
+        )}
+        <span className="w-px h-5 bg-gray-700" />
+
         {graphId && (
           <button
             onClick={() => setShowShareModal(true)}
@@ -2419,18 +2508,6 @@ function GraphPageInner() {
                 )}
               </LeftSection>
             )}
-
-            {/* 내보내기 — 최상단 */}
-            <LeftSection title="내보내기">
-              <button onClick={() => downloadTreeText(rawNodes)} disabled={rawNodes.length === 0}
-                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed">
-                ↓ AI 컨텍스트
-              </button>
-              <button id="tour-export" onClick={handleExportImage} disabled={exporting || rawNodes.length === 0}
-                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed mt-1">
-                {exporting ? '저장 중...' : '↓ 이미지'}
-              </button>
-            </LeftSection>
 
             {/* 스케치 (슈퍼 바이브 코딩 P0, 베타) */}
             <LeftSection title="✏️ 스케치 (베타)">
@@ -2591,66 +2668,6 @@ function GraphPageInner() {
               >
                 🔀 버전 diff 보기
               </button>
-            </LeftSection>
-
-            {/* 뷰 프리셋 */}
-            <LeftSection title="뷰 프리셋">
-              <div className="flex flex-col gap-1">
-                {presets.map((p) => (
-                  <div key={p.slot} className="flex items-center gap-1">
-                    <button
-                      onClick={() => applyPresetConfig(p.config)}
-                      title={`슬롯 ${p.slot} 불러오기`}
-                      className="flex-1 text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 truncate"
-                    >
-                      <span className="text-gray-500 mr-1">{p.slot}.</span>
-                      {p.name}
-                      {p.isDefault && <span className="ml-1 text-gray-600 text-[10px]">기본</span>}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setPendingSaveSlot(p.slot)
-                        setPresetSaveName(p.name)
-                        setShowSavePresetModal(true)
-                      }}
-                      title={`슬롯 ${p.slot}에 현재 뷰 저장`}
-                      className="text-gray-600 hover:text-gray-300 text-xs px-1.5 py-1 rounded hover:bg-gray-800 flex-shrink-0"
-                    >
-                      💾
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </LeftSection>
-
-            {/* 레이아웃 */}
-            <LeftSection title="레이아웃" id="tour-layout">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400 text-xs">뷰</span>
-                <button
-                  onClick={toggleLayoutPreset}
-                  className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2 py-1 rounded border border-gray-700"
-                >
-                  <span className={layoutPreset === 'layer' ? 'text-white' : 'text-gray-500'}>계층형</span>
-                  <span className="text-gray-600">/</span>
-                  <span className={layoutPreset === 'domain' ? 'text-white' : 'text-gray-500'}>도메인</span>
-                </button>
-              </div>
-            </LeftSection>
-
-            {/* 라벨 */}
-            <LeftSection title="라벨">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400 text-xs">표시 모드</span>
-                <button
-                  onClick={toggleLabelMode}
-                  className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2 py-1 rounded border border-gray-700"
-                >
-                  <span className={labelMode === 'name' ? 'text-white' : 'text-gray-500'}>이름</span>
-                  <span className="text-gray-600">/</span>
-                  <span className={labelMode === 'comment' ? 'text-white' : 'text-gray-500'}>주석</span>
-                </button>
-              </div>
             </LeftSection>
 
             {/* 노드 타입 가시성 필터 — memoized */}
