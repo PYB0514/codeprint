@@ -469,6 +469,9 @@ function GraphPageInner() {
   const [error, setError] = useState<string | null>(null)
   const [sidebar, setSidebar] = useState<SidebarContent | null>(null)
   const [rightCollapsed, setRightCollapsed] = useState(true)
+  // 코너 플로팅 분석 패널 — 기본 접힘(칩만 표시, 캔버스 안 가림)
+  const [archPanelOpen, setArchPanelOpen] = useState(false)
+  const [analysisPanelOpen, setAnalysisPanelOpen] = useState(false)
   const [leftOpen, setLeftOpen] = useState(true)
   const [leftWidth, setLeftWidth] = useState(220)
   const [rightWidth, setRightWidth] = useState(320)
@@ -2475,8 +2478,6 @@ function GraphPageInner() {
               })()}
             </LeftSection>
 
-            {/* AI 누락 감지 */}
-            <AiAnalysisSection graphId={graphId} />
 
             {/* 보기 옵션 */}
             {(layoutPreset === 'domain' || bgUrl) && (
@@ -2533,17 +2534,6 @@ function GraphPageInner() {
                   </p>
                 </div>
               )}
-            </LeftSection>
-
-            {/* 아키텍처 의도 선언 (conformance) */}
-            <LeftSection title="🏛 아키텍처 의도">
-              <ArchitectureIntentPanel
-                projectId={projectId!}
-                onSaved={() => {
-                  // 경고 캐시 무효화 후 그래프 재로드
-                  fetchGraph()
-                }}
-              />
             </LeftSection>
 
             {/* 버전 기록 */}
@@ -2809,26 +2799,6 @@ function GraphPageInner() {
               </div>
             </LeftSection>
 
-            {/* 런타임 경고 패널 */}
-            {(warnings.length > 0 || suppressedWarnings.length > 0) && (
-              <LeftSection id="warning-section" title={`경고 (${warnings.length})`} headerRight={
-                <button
-                  onClick={() => downloadWarningsMd(warnings)}
-                  title="경고 목록 마크다운으로 내보내기"
-                  className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800 transition-colors"
-                >
-                  ↓ MD
-                </button>
-              }>
-                <WarningPanel
-                  warnings={warnings}
-                  onNodeNavigate={handleSearchNodeClick}
-                  onSuppress={handleSuppressWarning}
-                  suppressed={suppressedWarnings}
-                  onRestore={handleRestoreWarning}
-                />
-              </LeftSection>
-            )}
           </div>
 
           {/* 왼쪽 사이드바 리사이즈 핸들 */}
@@ -2889,6 +2859,64 @@ function GraphPageInner() {
         </div>
       )}
 
+      {/* 코너 플로팅 — 아키텍처 의도 (좌측 하단, 기본 접힘) */}
+      {projectId && (
+        <div className="absolute z-30 bottom-4" style={{ left: leftOpen ? `${leftWidth + 16}px` : '20px' }}>
+          {archPanelOpen ? (
+            <div className="w-72 max-h-[55vh] flex flex-col bg-gray-950/95 border border-gray-800 rounded-xl shadow-2xl backdrop-blur-sm overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 flex-shrink-0">
+                <span className="text-xs font-semibold text-gray-300">🏛 아키텍처 의도</span>
+                <button onClick={() => setArchPanelOpen(false)} title="접기" className="text-gray-500 hover:text-gray-200 text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-gray-800">▾</button>
+              </div>
+              <div className="p-2 overflow-y-auto">
+                <ArchitectureIntentPanel projectId={projectId} onSaved={() => fetchGraph()} />
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setArchPanelOpen(true)} className="flex items-center gap-1.5 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-300 text-xs px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm">
+              🏛 아키텍처 의도 <span className="text-gray-500">▴</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 코너 플로팅 — 분석·경고 (우측 하단, 기본 접힘) */}
+      <div className="absolute z-30 bottom-4" style={{ right: rightCollapsed ? '16px' : `${rightWidth + 16}px` }}>
+        {analysisPanelOpen ? (
+          <div className="w-80 max-h-[60vh] flex flex-col bg-gray-950/95 border border-gray-800 rounded-xl shadow-2xl backdrop-blur-sm overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 flex-shrink-0">
+              <span className="text-xs font-semibold text-gray-300">🔎 분석 · 경고{warnings.length > 0 && <span className="ml-1 text-yellow-400">({warnings.length})</span>}</span>
+              <div className="flex items-center gap-1">
+                {warnings.length > 0 && (
+                  <button onClick={() => downloadWarningsMd(warnings)} title="경고 마크다운 내보내기" className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
+                )}
+                <button onClick={() => setAnalysisPanelOpen(false)} title="접기" className="text-gray-500 hover:text-gray-200 text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-gray-800">▾</button>
+              </div>
+            </div>
+            <div className="p-2 overflow-y-auto flex flex-col gap-2">
+              <AiAnalysisSection graphId={graphId} />
+              {(warnings.length > 0 || suppressedWarnings.length > 0) ? (
+                <WarningPanel
+                  warnings={warnings}
+                  onNodeNavigate={handleSearchNodeClick}
+                  onSuppress={handleSuppressWarning}
+                  suppressed={suppressedWarnings}
+                  onRestore={handleRestoreWarning}
+                />
+              ) : (
+                <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setAnalysisPanelOpen(true)} className="flex items-center gap-1.5 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-300 text-xs px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm">
+            🔎 분석 · 경고
+            {warnings.length > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-900/60 text-yellow-300 border border-yellow-700/50">{warnings.length}</span>}
+            <span className="text-gray-500">▴</span>
+          </button>
+        )}
+      </div>
+
       {/* 분석 완료 결과 카드 — 구조 카운트 + 경고 가치 + 경고 보기 CTA */}
       {resultCard && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 w-[340px] bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden pointer-events-auto">
@@ -2923,19 +2951,9 @@ function GraphPageInner() {
                 </div>
                 <button
                   onClick={() => {
-                    setLeftOpen(true)
+                    // 경고는 우측 하단 코너 플로팅 패널에 있음 — 펼치고 토스트 닫기
+                    setAnalysisPanelOpen(true)
                     setResultCard(null)
-                    // rAF는 React Flow 렌더 루프와 경쟁해 scrollTop이 리셋됨 → setTimeout으로 프레임 이후 실행.
-                    // 중첩 overflow 컨테이너라 scrollIntoView가 불안정해 offsetTop으로 직접 스크롤.
-                    setTimeout(() => {
-                      const el = document.getElementById('warning-section')
-                      const aside = el?.closest('aside')
-                      if (el && aside) {
-                        aside.scrollTop = el.offsetTop
-                        el.classList.add('ring-2', 'ring-yellow-500')
-                        setTimeout(() => el.classList.remove('ring-2', 'ring-yellow-500'), 1600)
-                      }
-                    }, 120)
                   }}
                   className="text-sm bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg self-start"
                 >경고 보기 →</button>
