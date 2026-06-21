@@ -146,7 +146,7 @@ public class GraphController {
                     Map<Boolean, List<Map<String, Object>>> partitioned =
                             partitionSuppressed(graph.getProjectId(), graphQueryService.getWarnings(graph.getId()));
 
-                    // 그래프는 재분석 전까지 변경되지 않으므로 5분 브라우저 캐시 허용
+                    // 경고 suppress/복원이 즉시 반영돼야 하므로 브라우저 캐시 미사용 (무거운 detect()는 서버 Caffeine 캐시가 담당)
                     Map<String, Object> body = new java.util.LinkedHashMap<>();
                     body.put("graphId", graph.getId().toString());
                     body.put("nodes", nodeData);
@@ -159,7 +159,7 @@ public class GraphController {
                         body.put("totalFileCount", graph.getTotalFileCount());
                     }
                     return ResponseEntity.ok()
-                            .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePrivate())
+                            .cacheControl(CacheControl.noStore())
                             .body(body);
                 })
                 .orElse(ResponseEntity.notFound().build());

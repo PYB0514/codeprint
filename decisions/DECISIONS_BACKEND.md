@@ -8,7 +8,9 @@
 
 **수정.** `filterSuppressed`를 `partitionSuppressed`(Collectors.partitioningBy로 active/suppressed 분리)로 일반화하고, **소유자 전용** `/api/projects/{id}/graph` 응답에 `suppressedWarnings` 필드 추가. 프론트 `fetchGraph`가 이를 로드해 `setSuppressedWarnings` 초기화. 공개 `/api/share/{id}/graph`는 비소유자에게 숨긴 경고를 노출할 이유가 없고 복원도 소유권이 필요하므로 `filterSuppressed`(active만) 유지 — 동작 불변.
 
-**결과.** suppress가 세션·새로고침·재방문을 가로질러 일관되게 유지·복원 가능. 응답 필드 추가는 하위호환(기존 클라이언트 무영향). 알려진 한계: `/graph`는 5분 private 브라우저 캐시라 suppress 직후 강제 새로고침 시 ≤5분간 stale 가능(기존 동작, 로컬 state 갱신으로 즉시 UX는 정상).
+**결과.** suppress가 세션·새로고침·재방문을 가로질러 일관되게 유지·복원 가능. 응답 필드 추가는 하위호환(기존 클라이언트 무영향).
+
+**★ 라이브 검증에서 적발한 캐시 staleness (ERROR_TRACKER FE-21).** 처음엔 `/graph`의 5분 private 브라우저 캐시를 "한계"로 남겼으나, 실제로 브라우저에서 suppress→새로고침을 해보니 앱의 `axios.get('/graph')`(기본 캐시 모드)가 suppress-이전 응답을 stale하게 반환 → 활성에 경고 재출현·`suppressedWarnings` 빈 배열 → "새로고침 후에도 유지"라는 기능 약속 자체가 깨짐(서버 `cache:'no-store'` fetch는 정상이라 코드 자체는 옳았음). **한계로 두지 않고 수정** — 소유자 `/api/projects/{id}/graph`를 `CacheControl.noStore()`로 전환. 무거운 `detect()`는 서버 Caffeine 캐시(`graphWarnings` 10분)가 이미 담당하므로 소유자 단일 사용자의 round-trip 1회 비용은 미미. 공개 `/share`는 비소유자가 suppress를 바꿀 수 없어 캐시 유지(`cachePublic`). 교훈: 정적·서버단 검증≠UX 정상, 앱과 동일한 캐시 모드로 브라우저 검증 필수.
 
 ---
 
