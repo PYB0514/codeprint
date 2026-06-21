@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.92.0',
+    date: '2026-06-21',
+    title: '숨긴 경고 복원 — 새로고침·재방문 후에도 유지',
+    type: 'feature',
+    items: [
+      { category: '경고', desc: '경고를 숨겨도 페이지를 새로고침하면 "숨긴 경고" 목록이 비어 더 이상 복원할 수 없던 문제를 해결했습니다. 이제 숨긴 경고가 서버에 영속 저장돼 다시 접속해도 목록과 복원 버튼이 그대로 유지되며, 언제든 복원할 수 있습니다. (프로젝트 소유자 전용)' },
+    ],
+  },
+  {
     version: 'v0.91.1',
     date: '2026-06-20',
     title: '분석 엔진 표기 정정 — "정규식 기반" → tree-sitter AST(하이브리드)',
