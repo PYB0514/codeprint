@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.7',
+    date: '2026-06-23',
+    title: '함수 호출 연결 정확도 개선 — 실제 import 기반 추적',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: '클래스명 없이 호출되는 함수(save·findById 등)를 그래프에 연결할 때, 같은 이름의 아무 파일이 아니라 호출하는 파일이 실제로 import한 파일로 연결하도록 고쳤습니다. 기존에는 이름만 같으면 무관한 파일로 잘못 연결되는 경우가 있었고(예: 어떤 서비스의 save() 호출이 전혀 관계없는 다른 서비스로 이어짐), 이 때문에 호출 흐름 추적이 부정확했습니다. Codeprint로 Codeprint 자체를 분석한 결과 자기 코드에서만 199건의 잘못된 연결을 찾아 교정했습니다. import 정보를 못 읽는 경우엔 기존 방식으로 안전하게 동작합니다.' },
+    ],
+  },
+  {
     version: 'v0.93.6',
     date: '2026-06-22',
     title: 'AI 키 관리 API 500 오류 수정 — AI 기능 정상화',
