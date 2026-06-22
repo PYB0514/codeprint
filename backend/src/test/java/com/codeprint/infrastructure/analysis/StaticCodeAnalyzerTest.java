@@ -277,6 +277,86 @@ class StaticCodeAnalyzerTest {
         assertThat(result.functionCalls().get("build")).contains("createNodes", "createEdges");
     }
 
+    // ── 타입 인지 호출 해소 (Phase 2) ────────────────────────────────────────
+
+    @Test
+    @DisplayName("주입 필드 수신자 호출을 선언 타입으로 한정한다(repo.save → AnalysisRepository::save)")
+    void 필드_수신자_타입_해소() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class AnalysisService {
+                    private final AnalysisRepository repo;
+                    public AnalysisService(AnalysisRepository repo) { this.repo = repo; }
+                    public void run() {
+                        repo.save(null);
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionCalls().get("run")).contains("AnalysisRepository::save");
+        assertThat(result.functionCalls().get("run")).doesNotContain("save");
+    }
+
+    @Test
+    @DisplayName("this.field 수신자 호출도 필드 선언 타입으로 한정한다")
+    void this_필드_수신자_타입_해소() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class AnalysisService {
+                    private final AnalysisRepository repo;
+                    public void run() {
+                        this.repo.save(null);
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionCalls().get("run")).contains("AnalysisRepository::save");
+    }
+
+    @Test
+    @DisplayName("파라미터·지역변수 수신자 호출도 선언 타입으로 한정한다")
+    void 파라미터_지역변수_수신자_타입_해소() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class GraphService {
+                    public void handle(GraphRepository graphRepo) {
+                        graphRepo.findById(null);
+                        Project project = load();
+                        project.getName();
+                    }
+                    private Project load() { return null; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionCalls().get("handle"))
+                .contains("GraphRepository::findById", "Project::getName");
+    }
+
+    @Test
+    @DisplayName("선언 타입을 모르는 수신자는 bare name으로 유지한다(폴백 recall 보존)")
+    void 미해소_수신자는_bare_유지() throws IOException {
+        // helper()는 수신자 없는 자기 메서드 호출, unknownVar는 선언이 없어 타입 미상
+        Path file = writeJavaFile("""
+                package com.example;
+                public class FooService {
+                    public void run() {
+                        helper();
+                    }
+                    private void helper() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionCalls().get("run")).contains("helper");
+    }
+
     // ── C#/Go PascalCase 함수 호출 추출 ──────────────────────────────────────
 
     @Test

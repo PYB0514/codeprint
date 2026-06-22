@@ -939,3 +939,17 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **측정 결과(A2, analyzeLocal A/B 5종).** self 엣지 3063→2877(-186)·**HIGH_FAN_OUT 9→6**(제거된 3건=changePlan·toolGetGraphOverview·getGraphContext, 전부 get/add/put 다수 호출이 phantom으로 fan-out 부풀린 false positive. 남은 6건은 Context76의 "약한 정탐" 그대로 보존). requests -29·express -8 엣지(경고 무변). gin·petclinic 엣지 0 변화. **경고 회귀 전 타깃 0.**
 
 **결과.** 가짜 HIGH_FAN_OUT 3건 제거 + 그래프 노이즈 감소(self -186 phantom 엣지), recall 회귀 0(same-package 보존). Phase 1(#350)이 그래프만 고치고 경고는 못 움직인 것과 달리, 경고를 올바른 방향으로 움직인 첫 단계. GraphBuilderTest 4종 신규(cross-dir 차단·import 예외·same-dir 보존·일반명 폴백 유지). 후속(B): import 매칭 갭으로 폴백된 정당 호출(`clone()→RepoCloner` 등) 회복은 별도.
+
+---
+
+## Phase 2 — 타입 인지 호출 해소 (Java, receiver 선언 타입 기반) (2026-06-23)
+
+**문제.** Phase 1·A(#350·#351) 이후에도 남은 phantom은 수신자가 필드/파라미터/지역변수인 bare 호출(`repo.save()`, `order.confirm()`)이다. 이름만으론 어느 클래스의 메서드인지 알 수 없어 전역 폴백이 44개 후보 중 임의(또는 import-스코프 단일)로 연결 → 오답. Context77 B 조사 결론: "수신자 타입을 알아야 풀린다."
+
+**선택 — analyzer에서 타입 해소, GraphBuilder 무변경.** `TreeSitterJavaAnalyzer.walk`가 변수명→선언 타입 스코프를 추적한다 — 클래스 필드(walk 전 pre-pass로 전역 수집, 선언 순서 무관 가시), 메서드 파라미터, 지역변수(본문 순회 중 등록). `recv.method()`에서 `recv`의 타입을 알면 `Type::method`로, `this.field.method()`는 `field_access`의 field명으로 필드 타입 조회. 타입을 모르면 **bare 유지**(폴백 recall 보존, 신규 phantom 0). 타입은 `type_identifier`(대문자 시작)만 — 제네릭/배열/primitive는 무시. 핵심: `Type::method` 문자열은 기존 `resolveQualifiedCall`(Class→파일명 매칭)이 그대로 소화하므로 **GraphBuilder·ParsedFile·StaticCodeAnalyzer 변경 0**. 정적 호출(`ClassName.method()`, 대문자 수신자)의 기존 동작은 그대로 보존.
+
+**★ 측정이 가설을 뒤집음 — "phantom 제거 → HIGH_FAN_OUT 감소"가 아니라 "정탐 복원 → 증가".** self A/B(analyzeLocal, 레포 루트): 엣지 5930→5892(-38 phantom), 그러나 **HIGH_FAN_OUT 7→9**로 *증가*. probe로 두 신규 경고를 코드 대조 검증(자가보고 불신):
+- **`StaticCodeAnalyzer.analyze`**: A=fan-out 1(`parse`→ArchitectureIntentService, **phantom 오답**) → B=fan-out 10(`parse`→TreeSitter{Java,Python,TS,Go,Rust,CSharp,Ruby,PHP,C,Cpp}Analyzer 10개, 전부 정답). bare `parse` 10개가 dedup으로 1개로 뭉치며 phantom 단일 타깃으로 새던 것이, 타입 인지로 10개 distinct 분리.
+- **`PaymentApplicationService.confirm`**: B=fan-out 8(`orderRepository`(TossPaymentOrderRepository)→isConfirmed/findById/save, `order`(TossPaymentOrder)→getUserId/getAmount/confirm, `paymentGateway`/`userUpgradePort`→confirmPayment/upgradeToPro). 본문과 1:1 정확 일치 — 8개 협력자는 진짜.
+
+**결과.** HIGH_FAN_OUT 7→9는 **회귀가 아니라 bare-name dedup이 가리던 정탐 복원 + phantom 제거**의 동시 효과. 즉 Phase 1/A가 "그래프 정확도↑·경고 무변/감소"였다면, Phase 2는 정탐을 *드러내는* 방향. 두 신규 경고 모두 코드 검증 통과(오탐 0), §10 경계위반 여전히 0. 단위 4종(필드/this/파라미터·지역변수 해소, 미해소 시 bare 유지). 미처리(의도적, 범위 외): 체인 호출 수신자(`a.b().c()`)·메서드 반환 타입 추론 — `body @ ...Test`류 잔존 phantom은 이 케이스(receiver=method_invocation)라 별도. 다른 언어로의 확장은 후속.
