@@ -162,27 +162,15 @@ public class GraphBuilder {
                         }
                     }
 
-                    // 후보 callee 파일 중 구현체를 인터페이스보다 우선 선택
-                    ParsedFile bestMatch = null;
-                    boolean bestIsInterface = false;
-                    for (ParsedFile calleeFile : parsedFiles) {
-                        if (calleeFile.filePath().equals(callerFile.filePath())) continue;
-                        if (!calleeFile.functions().contains(calleeFunc)) continue;
-                        String calleeClassName = extractFileNameWithoutExt(calleeFile.filePath());
-                        // 클래스명이 명시된 경우: 정확히 일치하는 파일 우선 선택
-                        if (targetClass != null && calleeClassName.equals(targetClass)) {
-                            bestMatch = calleeFile;
-                            break;
-                        }
-                        if (targetClass != null) continue; // 클래스명 불일치 → 건너뜀
-                        boolean calleeIsInterface = interfaceToImplFiles.containsKey(calleeClassName);
+                    // callee 파일 해소: 클래스명 명시 호출은 클래스명으로 정확 매칭,
+                    // bare-name 호출은 caller가 실제 import한 파일로 한정(정확도) 후 없으면 전역 폴백(recall 보존)
+                    ParsedFile bestMatch;
+                    if (targetClass != null) {
+                        bestMatch = resolveQualifiedCall(callerFile, calleeFunc, targetClass, parsedFiles);
+                    } else {
+                        bestMatch = resolveBareCall(callerFile, calleeFunc, parsedFiles, interfaceToImplFiles, true);
                         if (bestMatch == null) {
-                            bestMatch = calleeFile;
-                            bestIsInterface = calleeIsInterface;
-                        } else if (bestIsInterface && !calleeIsInterface) {
-                            // 구현체로 업그레이드
-                            bestMatch = calleeFile;
-                            bestIsInterface = false;
+                            bestMatch = resolveBareCall(callerFile, calleeFunc, parsedFiles, interfaceToImplFiles, false);
                         }
                     }
                     if (bestMatch == null) continue;
@@ -537,6 +525,51 @@ public class GraphBuilder {
         String name = extractFileName(filePath);
         int dot = name.lastIndexOf('.');
         return dot > 0 ? name.substring(0, dot) : name;
+    }
+
+    // "Class::method" 형식 호출 — 클래스명이 파일명과 일치하는 파일로 해소 (없으면 null)
+    private ParsedFile resolveQualifiedCall(ParsedFile callerFile, String calleeFunc,
+                                            String targetClass, List<ParsedFile> parsedFiles) {
+        for (ParsedFile calleeFile : parsedFiles) {
+            if (calleeFile.filePath().equals(callerFile.filePath())) continue;
+            if (!calleeFile.functions().contains(calleeFunc)) continue;
+            if (extractFileNameWithoutExt(calleeFile.filePath()).equals(targetClass)) return calleeFile;
+        }
+        return null;
+    }
+
+    // bare-name 호출의 callee 파일 선택 — 구현체를 인터페이스보다 우선.
+    // onlyImported=true면 caller가 import한 파일로 후보를 한정(정확도), false면 전역 후보(폴백)
+    private ParsedFile resolveBareCall(ParsedFile callerFile, String calleeFunc,
+                                       List<ParsedFile> parsedFiles,
+                                       Map<String, List<ParsedFile>> interfaceToImplFiles,
+                                       boolean onlyImported) {
+        ParsedFile bestMatch = null;
+        boolean bestIsInterface = false;
+        for (ParsedFile calleeFile : parsedFiles) {
+            if (calleeFile.filePath().equals(callerFile.filePath())) continue;
+            if (!calleeFile.functions().contains(calleeFunc)) continue;
+            if (onlyImported && !callerImports(callerFile, calleeFile)) continue;
+            String calleeClassName = extractFileNameWithoutExt(calleeFile.filePath());
+            boolean calleeIsInterface = interfaceToImplFiles.containsKey(calleeClassName);
+            if (bestMatch == null) {
+                bestMatch = calleeFile;
+                bestIsInterface = calleeIsInterface;
+            } else if (bestIsInterface && !calleeIsInterface) {
+                // 구현체로 업그레이드
+                bestMatch = calleeFile;
+                bestIsInterface = false;
+            }
+        }
+        return bestMatch;
+    }
+
+    // caller가 calleeFile을 실제로 import하는지 — 기존 isImportMatch 재사용
+    private boolean callerImports(ParsedFile callerFile, ParsedFile calleeFile) {
+        for (String imp : callerFile.imports()) {
+            if (isImportMatch(imp, calleeFile.filePath())) return true;
+        }
+        return false;
     }
 
     // import 경로가 실제 파일 경로와 일치하는지 확인 — 상대경로(TS/JS/Python)와 패키지경로(Java/Kotlin) 모두 처리

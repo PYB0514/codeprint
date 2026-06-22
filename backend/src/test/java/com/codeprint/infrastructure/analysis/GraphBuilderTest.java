@@ -313,6 +313,84 @@ class GraphBuilderTest {
         assertThat(hasCallEdge).isTrue();
     }
 
+    // ── import 스코프 bare-name 호출 해소 (정확도: phantom cross-file 엣지 제거) ──
+
+    @Test
+    @DisplayName("bare-name 호출은 caller가 import한 파일로 해소된다 — import 안 한 동명 함수(decoy)로는 연결되지 않는다")
+    void bare_name_호출_import한_파일로_해소() {
+        // caller가 RealService를 import. DecoyService도 같은 이름 save를 갖지만 import 안 됨.
+        // 입력 순서상 decoy가 먼저라 기존 전역-첫매칭은 decoy를 골랐음 → import 스코프로 real을 선택해야 함
+        ParsedFile caller = parsedFileWithCallsAndImports("src/com/app/AppController.java", "Java",
+                List.of("handle"), Map.of("handle", List.of("save")),
+                List.of("com.app.RealService"));
+        ParsedFile decoy = parsedFile("src/com/app/DecoyService.java", "Java", List.of("save"), Map.of());
+        ParsedFile real = parsedFile("src/com/app/RealService.java", "Java", List.of("save"), Map.of());
+
+        // decoy를 먼저 넣어 전역-첫매칭이 decoy를 고르도록 유도
+        graphBuilder.build(projectId, analysisId, List.of(caller, decoy, real));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        List<Edge> callEdges = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .filter(e -> e.getEdgeIdentifier().contains("handle") && e.getEdgeIdentifier().contains("save"))
+                .collect(Collectors.toList());
+
+        assertThat(callEdges).isNotEmpty();
+        // 해소 대상은 import한 RealService 여야 하고, import 안 한 DecoyService는 아니어야 한다
+        assertThat(callEdges).allMatch(e ->
+                e.getMetadata().get("calleeFile").toString().contains("RealService"));
+        assertThat(callEdges).noneMatch(e ->
+                e.getMetadata().get("calleeFile").toString().contains("DecoyService"));
+    }
+
+    @Test
+    @DisplayName("import된 후보가 하나도 없으면 전역 매칭으로 폴백한다 — import 추출이 약한 언어 recall 보존")
+    void import된_후보_없으면_전역_폴백() {
+        // caller가 아무것도 import 안 함(또는 무관한 import) — 그래도 동명 함수가 있으면 엣지 생성돼야 함
+        ParsedFile caller = parsedFileWithCallsAndImports("src/Caller.java", "Java",
+                List.of("handle"), Map.of("handle", List.of("compute")),
+                List.of("java.util.List")); // 후보와 무관한 import
+        ParsedFile callee = parsedFile("src/Helper.java", "Java", List.of("compute"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, callee));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasCallEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("handle") && e.getEdgeIdentifier().contains("compute"));
+
+        assertThat(hasCallEdge).isTrue();
+    }
+
+    @Test
+    @DisplayName("import된 후보 집합 안에서도 인터페이스보다 구현체를 우선 선택한다")
+    void import된_집합에서_구현체_우선() {
+        // caller가 인터페이스(Repo)와 구현체(RepoImpl)를 모두 import — 구현체로 해소돼야 함
+        ParsedFile service = parsedFileWithCallsAndImports("src/app/AppService.java", "Java",
+                List.of("doWork"), Map.of("doWork", List.of("save")),
+                List.of("domain.Repo", "infra.RepoImpl"));
+        ParsedFile repo = parsedFile("src/domain/Repo.java", "Java", List.of("save"), Map.of()); // 인터페이스
+        ParsedFile repoImpl = parsedFileWithImpl("src/infra/RepoImpl.java", "Java",
+                List.of("save"), "Repo"); // 구현체
+
+        // 인터페이스가 먼저 오도록 입력
+        graphBuilder.build(projectId, analysisId, List.of(service, repo, repoImpl));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean resolvesToImpl = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .filter(e -> e.getEdgeIdentifier().contains("doWork") && e.getEdgeIdentifier().contains("save"))
+                .anyMatch(e -> e.getMetadata().get("calleeFile").toString().contains("RepoImpl"));
+
+        assertThat(resolvesToImpl).isTrue();
+    }
+
     // ── 파일 수 카운트 기록 (대형 레포 절단 안내) ───────────────────────────
 
     @Test
@@ -516,6 +594,13 @@ class GraphBuilderTest {
     private ParsedFile parsedFileWithCalls(String path, String lang, List<String> functions,
                                            Map<String, List<String>> calls) {
         return new ParsedFile(path, lang, functions, List.of(), null, Map.of(),
+                calls, List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
+    }
+
+    // 호출 + import 를 함께 지정하는 헬퍼 — import 스코프 해소 테스트용
+    private ParsedFile parsedFileWithCallsAndImports(String path, String lang, List<String> functions,
+                                                     Map<String, List<String>> calls, List<String> imports) {
+        return new ParsedFile(path, lang, functions, imports, null, Map.of(),
                 calls, List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
     }
 

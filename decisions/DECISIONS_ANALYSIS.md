@@ -909,3 +909,19 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **버전.** 신규 언어 = MINOR(v0.90.0 → v0.91.0). 프론트 "12개 언어"→"13개 언어" 3곳(LandingPage×2·HowItWorksPage) + ChangelogPage 항목.
 
 **검증.** compileJava·tsc -b·전체 백엔드 테스트(BUILD SUCCESSFUL) 통과. StaticCodeAnalyzerTest C++ 3종 신규(`Cpp_함수_추출`=메서드/생성자/소멸자/연산자/아웃오브라인/템플릿, `Cpp_함수_호출_추출`=bare/멤버/qualified 규약, `Cpp_키워드_누출_차단`=매크로 에러복구 가드). TreeSitterCppPoc + treesitterCppPoc gradle task. 벤치 nlohmann/json·fmtlib/fmt 신규 클론.
+
+---
+
+## import 스코프 bare-name 호출 해소 — phantom cross-file 엣지 교정 (2026-06-23)
+
+**문제.** GraphBuilder의 FUNCTION_CALL 해소에서 클래스명 없는 bare 호출(`save()`·`findById()` 등)이 전체 파일을 훑어 *이름만 맞는 첫 파일*로 연결됐다. caller가 그 파일을 import하지 않아도 연결돼 phantom cross-file 엣지가 생긴다. AST 분석기는 수신자 타입이 있으면 `Class::method`로 추출해 이미 정확 매칭되지만, bare 호출은 그 경로를 못 타 첫매칭에 의존.
+
+**선택 — 구현.** bare 호출의 후보를 caller가 실제 import한 파일로 한정(`callerImports`, 기존 `isImportMatch` 재사용)하고, import된 후보가 0개면 전역 첫매칭으로 폴백(import 추출이 약한 언어 recall 보존). `resolveBareCall(onlyImported)` 2-pass + qualified 호출은 `resolveQualifiedCall`로 분리. 인터페이스→구현체 우선은 import된 집합 안에서 유지. **순수 가산적** — import 데이터가 후보와 매칭될 때만 좁히고, 아니면 기존 동작 그대로라 기존 테스트 전부 green(전부 imports 빈 채로 엣지 기대 → 폴백 경로).
+
+**측정(임시 probe로 divergence 직접 계수, 측정 후 제거).** import-스코프 선택이 전역-첫매칭과 *다른 파일*을 고른 횟수:
+- self(codeprint) 199 · gin 188 · requests 160 건 재연결 · petclinic 0(스코프 활성 33건이나 전부 첫매칭과 동일) · express 0(JS 상대 import가 isImportMatch에 안 잡혀 전량 폴백 = 기존 동작, 안전).
+- self 표본 20건 전수 검사: `AnalysisApplicationService.save()` OLD→ArchitectureIntentService(가짜)/NEW→AnalysisRepository(실제 import), `findById()` OLD→PostCommandService(가짜)/NEW→AnalysisRepository, `GitHubWebhookService.resolve()` OLD→Feedback(가짜)/NEW→PrWebhookTargetPort. **전부 개선 또는 →domain 인터페이스(아키텍처적으로 더 정확), 개악 0건.**
+
+**★ 가정 반증 — 경고 수는 불변.** 원래 가설은 "phantom 엣지 제거 → CROSS_DOMAIN_CALL·DEAD_CODE·HIGH_FAN_OUT 오탐 감소"였으나, A/B에서 5개 타깃 전부 경고 수 **완전 동일**. 원인: ①교정된 phantom들은 `application/` 내 cross-context라 CROSS_DOMAIN_CALL의 "동명 2개+면 제외" 가드(`save`가 다수 도메인 존재)가 *이미 증상을 억제* 중이었음. ②DEAD_CODE(인바운드 존재 여부)·HIGH_FAN_OUT(아웃바운드 *개수*)은 엣지 타깃 재연결에 불변. 즉 **변경의 가치는 오늘의 경고 정확도가 아니라 그래프 자체의 정확도**(시각화·콜체인 + 억제 가드를 나중에 풀어 recall 회복하는 Phase 2 토대)다.
+
+**결과.** 셀프 199개 phantom 엣지 교정, 경고 회귀 0, 표본상 정확도 회귀 0, import 미해소 언어는 안전 no-op 폴백. GraphBuilderTest 3종 신규(import 해소·전역 폴백·import 집합 내 구현체 우선). 전체 백엔드 테스트 green.
