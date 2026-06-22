@@ -36,6 +36,7 @@ const TeamsPage = lazy(() => import('./pages/TeamsPage'))
 
 import CookieBanner from './components/CookieBanner'
 import NoticeBanner from './components/NoticeBanner'
+import ErrorToast from './components/ErrorToast'
 
 // 앱 최상위 라우터 컴포넌트
 export default function App() {
@@ -78,6 +79,7 @@ export default function App() {
       </Suspense>
       <NoticeBanner />
       <CookieBanner />
+      <ErrorToast />
     </BrowserRouter>
   )
 }
