@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.1',
+    date: '2026-06-22',
+    title: 'PR 자동 리뷰 코멘트 중복 누적 방지 — 갱신(upsert) 방식 전환',
+    type: 'fix',
+    items: [
+      { category: 'PR 연동', desc: 'GitHub PR에 커밋을 push할 때마다 Codeprint 구조 분석 봇 코멘트가 새로 추가돼 스레드가 길어지던 문제를 고쳤습니다. 이제 기존 분석 코멘트가 있으면 같은 코멘트를 갱신하고(없으면 새로 작성), PR마다 항상 최신 분석 결과 하나만 유지됩니다. 코멘트 조회에 실패하면 기존처럼 새로 작성해 리뷰가 누락되지 않습니다.' },
+    ],
+  },
+  {
     version: 'v0.93.0',
     date: '2026-06-22',
     title: '비DDD 프로젝트 레이어 위반 경고 — Controller/Service/Repository 자동 감지',
