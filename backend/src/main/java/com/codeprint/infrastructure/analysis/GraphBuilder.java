@@ -19,6 +19,17 @@ public class GraphBuilder {
 
     private final GraphRepository graphRepository;
 
+    // JDK/컬렉션 내장 메서드명 — 실제 타깃은 JDK 타입(그래프에 노드 없음)이라, import 매칭 없이 전역 폴백으로
+    // 임의 도메인 파일에 연결되면 거의 확실히 phantom 엣지. 폴백 단계에서만 엣지 생성을 제외하는 용도.
+    // (GraphWarningService의 JDK_COLLECTION_CALL_NAMES와 내용은 겹치나 책임이 다르다 — 저쪽은 경고 억제, 이쪽은 엣지 차단.)
+    private static final Set<String> JDK_BUILTIN_CALL_NAMES = Set.of(
+        "get", "set", "add", "addAll", "put", "putAll", "remove", "removeAll",
+        "contains", "containsKey", "clear", "size", "isEmpty", "keySet", "values",
+        "entrySet", "stream", "forEach", "orElse", "orElseGet", "orElseThrow",
+        "ifPresent", "getOrDefault", "computeIfAbsent", "anyMatch", "allMatch",
+        "noneMatch", "findFirst", "toList"
+    );
+
     // 분석된 파일 목록으로 그래프와 노드/엣지를 생성하여 저장
     public Graph build(UUID projectId, UUID analysisId, List<ParsedFile> parsedFiles) {
         return build(projectId, analysisId, parsedFiles, parsedFiles.size());
@@ -170,7 +181,15 @@ public class GraphBuilder {
                     } else {
                         bestMatch = resolveBareCall(callerFile, calleeFunc, parsedFiles, interfaceToImplFiles, true);
                         if (bestMatch == null) {
-                            bestMatch = resolveBareCall(callerFile, calleeFunc, parsedFiles, interfaceToImplFiles, false);
+                            ParsedFile fallback = resolveBareCall(callerFile, calleeFunc, parsedFiles, interfaceToImplFiles, false);
+                            // JDK/컬렉션 내장 메서드명이 다른 디렉터리 파일로 폴백되면 phantom(실제 타깃은 JDK 타입, 노드 없음)
+                            // → 엣지 미생성. 같은 디렉터리 폴백은 같은 패키지 내 실제 호출일 수 있어 보존(Go 등 import 없는
+                            // same-package 호출 recall 보호 — gin get() DEAD_CODE 오탐 회피).
+                            if (fallback != null && JDK_BUILTIN_CALL_NAMES.contains(calleeFunc)
+                                    && !sameDir(callerFile.filePath(), fallback.filePath())) {
+                                fallback = null;
+                            }
+                            bestMatch = fallback;
                         }
                     }
                     if (bestMatch == null) continue;
@@ -562,6 +581,13 @@ public class GraphBuilder {
             }
         }
         return bestMatch;
+    }
+
+    // 두 파일 경로가 같은 디렉터리(패키지)에 있는지
+    private boolean sameDir(String a, String b) {
+        String na = a.replace("\\", "/");
+        String nb = b.replace("\\", "/");
+        return na.substring(0, na.lastIndexOf('/') + 1).equals(nb.substring(0, nb.lastIndexOf('/') + 1));
     }
 
     // caller가 calleeFile을 실제로 import하는지 — 기존 isImportMatch 재사용

@@ -391,6 +391,94 @@ class GraphBuilderTest {
         assertThat(resolvesToImpl).isTrue();
     }
 
+    // ── JDK/컬렉션 내장 메서드명 폴백 phantom 엣지 차단 ──────────────────────
+
+    @Test
+    @DisplayName("JDK 내장 메서드명(add) bare 호출은 import 매칭 없으면 전역 폴백을 막아 엣지를 만들지 않는다")
+    void JDK_내장_메서드명_폴백_엣지_미생성() {
+        // list.add(x) 같은 호출 — 실제 타깃은 JDK List(노드 없음). import 안 한 도메인 파일에 add()가 있어도
+        // 거기로 연결하면 phantom. 폴백 차단으로 엣지를 만들지 않아야 한다
+        ParsedFile caller = parsedFileWithCallsAndImports("src/app/Service.java", "Java",
+                List.of("handle"), Map.of("handle", List.of("add")),
+                List.of()); // import 없음
+        ParsedFile decoy = parsedFile("src/other/TeamMember.java", "Java", List.of("add"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, decoy));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasPhantomAddEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("handle") && e.getEdgeIdentifier().contains("add"));
+
+        assertThat(hasPhantomAddEdge).isFalse();
+    }
+
+    @Test
+    @DisplayName("JDK 내장 메서드명이라도 caller가 해당 파일을 import하면 엣지를 만든다 (import 스코프는 신뢰)")
+    void JDK_내장_메서드명도_import하면_엣지_생성() {
+        // 도메인 객체에 add()가 있고 caller가 명시적으로 import하면 의도된 호출 — 차단은 폴백에만 적용
+        ParsedFile caller = parsedFileWithCallsAndImports("src/app/Service.java", "Java",
+                List.of("handle"), Map.of("handle", List.of("add")),
+                List.of("domain.Basket"));
+        ParsedFile basket = parsedFile("src/domain/Basket.java", "Java", List.of("add"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, basket));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasImportedAddEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("handle") && e.getEdgeIdentifier().contains("add")
+                        && e.getMetadata().get("calleeFile").toString().contains("Basket"));
+
+        assertThat(hasImportedAddEdge).isTrue();
+    }
+
+    @Test
+    @DisplayName("JDK 내장 메서드명이라도 같은 디렉터리(패키지) 폴백은 보존한다 — Go same-package 호출 recall (gin get 오탐 회피)")
+    void JDK_내장_메서드명_같은_디렉터리_폴백_보존() {
+        // Go처럼 import 없이 같은 패키지 함수를 bare 호출 — 같은 디렉터리면 실제 호출일 수 있어 보존
+        ParsedFile caller = parsedFileWithCallsAndImports("src/gin/context.go", "Go",
+                List.of("handle"), Map.of("handle", List.of("get")),
+                List.of());
+        ParsedFile callee = parsedFile("src/gin/tree.go", "Go", List.of("get"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, callee));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasSameDirEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("handle") && e.getEdgeIdentifier().contains("get"));
+
+        assertThat(hasSameDirEdge).isTrue();
+    }
+
+    @Test
+    @DisplayName("JDK 내장이 아닌 일반 함수명은 import 없어도 전역 폴백으로 엣지를 만든다 (recall 보존)")
+    void 일반_함수명은_폴백_유지() {
+        // computeDigest 같은 도메인 고유명은 차단 대상 아님 — 기존 폴백 동작 유지
+        ParsedFile caller = parsedFileWithCallsAndImports("src/app/Service.java", "Java",
+                List.of("handle"), Map.of("handle", List.of("computeDigest")),
+                List.of());
+        ParsedFile callee = parsedFile("src/other/Digest.java", "Java", List.of("computeDigest"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, callee));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("handle") && e.getEdgeIdentifier().contains("computeDigest"));
+
+        assertThat(hasEdge).isTrue();
+    }
+
     // ── 파일 수 카운트 기록 (대형 레포 절단 안내) ───────────────────────────
 
     @Test

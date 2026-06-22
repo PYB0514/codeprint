@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.8',
+    date: '2026-06-23',
+    title: '과도한 의존(HIGH_FAN_OUT) 오탐 감소 — 가짜 호출 연결 제거',
+    type: 'fix',
+    items: [
+      { category: '경고', desc: 'get·add·put·isEmpty 같은 표준 라이브러리 내장 메서드 호출이 무관한 파일로 잘못 연결되던 가짜 엣지를 제거했습니다. 이 가짜 연결이 함수의 호출 수를 부풀려 "과도한 의존(HIGH_FAN_OUT)" 경고를 잘못 띄우던 문제를 고쳤습니다(Codeprint 자체 분석에서 오탐 3건 제거 확인). 같은 패키지 내 실제 호출(import 없이 호출하는 Go 등)은 보존해 누락이 생기지 않도록 했습니다.' },
+    ],
+  },
+  {
     version: 'v0.93.7',
     date: '2026-06-23',
     title: '함수 호출 연결 정확도 개선 — 실제 import 기반 추적',
