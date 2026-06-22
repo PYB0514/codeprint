@@ -2,6 +2,21 @@
 
 ---
 
+## 레이어드 위반 감지 — Model 레이어 추가(C-11 확장) (2026-06-22)
+
+**문제.** C-11(PR #341)은 Controller/Service/Repository 3레이어만 분류해, 도메인 모델/엔티티가 상위 레이어를 역참조하는 위반(예: Entity가 Controller를 import)을 못 잡았다.
+
+**MODEL 분류 — 접미사·디렉터리 선택과 DTO 제외.**
+- 4번째 레이어 MODEL(ordinal 최하위) 추가. 접미사 `*Entity`·`*Model`·`*VO`, 디렉터리 `model/`·`entity/`·`domain/`.
+- **DTO 제외**: DTO는 Controller↔Service 간 전송 객체로 레이어 전반을 합법적으로 오간다 → 분류하면 정상 흐름이 역전으로 오탐. 제외.
+- `domain/` 단일 디렉터리는 비DDD 레이어드의 모델 폴더로 취급 — DDD 멀티레이어(domain+application+infra)는 `isDddProject`가 먼저 가로채므로 충돌 없음.
+
+**측정(LocalAnalyzer).** MODEL 추가 후 spring-petclinic(model/ 디렉터리·*Entity 다수)·express·requests·gin 전부 LAYERED 0건 유지 = 신규 오탐 0. petclinic은 Controller+Repository+MODEL 3종 분류로 게이트 통과하나 모델이 상위를 import하지 않아 정탐 0. 정탐(model→상위 역전)은 합성 단위 테스트 3종으로 검증.
+
+**결과.** `LAYERED_REVERSE_DEPENDENCY`가 최하위 모델 레이어 역참조까지 커버(새 경고 타입 아님 — 기존 타입 커버리지 확대). v0.93.2.
+
+---
+
 ## PR 자동 리뷰 코멘트 — 중복 누적 방지(upsert) (2026-06-22)
 
 **문제.** `PrReviewService.review()`가 매번 `postIssueComment`로 **새 코멘트를 추가**했다. webhook은 `synchronize`(커밋 push)마다 리뷰를 트리거하므로, PR에 커밋을 N번 push하면 봇 코멘트가 N개 누적 → PR 스레드 오염. 표준 봇(GitHub Actions 등)은 기존 코멘트를 갱신한다.

@@ -828,8 +828,9 @@ public class GraphWarningService {
         return warnings;
     }
 
-    // 비DDD 레이어드 아키텍처의 레이어 — 의존은 상위(낮은 ordinal)→하위(높은 ordinal) 방향만 정상
-    private enum Layer { CONTROLLER, SERVICE, REPOSITORY }
+    // 비DDD 레이어드 아키텍처의 레이어 — 의존은 상위(낮은 ordinal)→하위(높은 ordinal) 방향만 정상.
+    // MODEL은 최하위 — 도메인 모델/엔티티는 어떤 상위 레이어도 알면 안 됨(순수 데이터·규칙).
+    private enum Layer { CONTROLLER, SERVICE, REPOSITORY, MODEL }
 
     // 클래스명 접미사로 분류 못 할 때 사용하는 레이어 디렉터리 세그먼트 (언어 무관 컨벤션, 소문자)
     // "resources"는 정적 리소스 디렉터리와 충돌하므로 제외 — controller는 클래스명 접미사로 주로 잡힌다.
@@ -839,6 +840,9 @@ public class GraphWarningService {
             Set.of("service", "services", "usecase", "usecases", "business", "biz");
     private static final Set<String> REPOSITORY_DIRS =
             Set.of("repository", "repositories", "dao", "mapper", "mappers", "persistence");
+    // 도메인 모델/엔티티 — 단일 "domain" 디렉터리는 비DDD 레이어드의 모델 폴더(DDD 멀티레이어는 isDddProject가 먼저 가로챔)
+    private static final Set<String> MODEL_DIRS =
+            Set.of("model", "models", "entity", "entities", "domain");
 
     // 파일 경로를 레이어로 분류 — 클래스명 접미사(Java/C#/TS) 우선, 없으면 디렉터리 세그먼트. 미분류면 null
     private Layer classifyLayer(String filePath) {
@@ -847,16 +851,19 @@ public class GraphWarningService {
         String base = path.substring(path.lastIndexOf('/') + 1);
         int dot = base.lastIndexOf('.');
         String className = dot > 0 ? base.substring(0, dot) : base;
-        // 1) 클래스명 접미사 — PascalCase 컨벤션(OwnerController·OwnerRepository·OwnerService)
+        // 1) 클래스명 접미사 — PascalCase 컨벤션(OwnerController·OwnerRepository·OwnerService·OwnerEntity)
         if (className.endsWith("Controller")) return Layer.CONTROLLER;
         if (className.endsWith("Repository") || className.endsWith("Dao")
                 || className.endsWith("DAO") || className.endsWith("Mapper")) return Layer.REPOSITORY;
         if (className.endsWith("Service")) return Layer.SERVICE;
+        // Entity/Model/VO 접미사 — DTO는 레이어 전반을 오가므로(컨트롤러↔서비스 전송) 제외
+        if (className.endsWith("Entity") || className.endsWith("Model") || className.endsWith("VO")) return Layer.MODEL;
         // 2) 디렉터리 세그먼트 — 앞뒤 슬래시로 세그먼트 단위 매칭(루트 레벨 디렉터리 포함)
         String guarded = "/" + path.toLowerCase() + "/";
         if (containsSegment(guarded, CONTROLLER_DIRS)) return Layer.CONTROLLER;
         if (containsSegment(guarded, REPOSITORY_DIRS)) return Layer.REPOSITORY;
         if (containsSegment(guarded, SERVICE_DIRS)) return Layer.SERVICE;
+        if (containsSegment(guarded, MODEL_DIRS)) return Layer.MODEL;
         return null;
     }
 
@@ -874,6 +881,7 @@ public class GraphWarningService {
             case CONTROLLER -> "Controller";
             case SERVICE -> "Service";
             case REPOSITORY -> "Repository";
+            case MODEL -> "Model";
         };
     }
 

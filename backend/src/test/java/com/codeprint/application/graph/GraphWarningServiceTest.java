@@ -945,4 +945,48 @@ class GraphWarningServiceTest {
 
         assertThat(warnings).noneMatch(w -> String.valueOf(w.get("type")).startsWith("LAYERED_"));
     }
+
+    @Test
+    @DisplayName("LAYERED_REVERSE_DEPENDENCY — 도메인 모델(Entity)이 Controller를 import (최하위→최상위 역전)")
+    void layeredReverse_modelImportsController() {
+        Node model = nodeAt("OwnerEntity", "/app/model/OwnerEntity.java");
+        Node controller = nodeAt("OwnerController", "/app/web/OwnerController.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(model, controller),
+                List.of(importEdgeForPath(model.getId(), controller.getId())));
+
+        assertThat(warnings).anySatisfy(w -> {
+            assertThat(w.get("type")).isEqualTo("LAYERED_REVERSE_DEPENDENCY");
+            assertThat(String.valueOf(w.get("message"))).contains("Model").contains("Controller");
+        });
+    }
+
+    @Test
+    @DisplayName("Model 분류 — domain/ 디렉터리 파일이 Service를 import해도 정방향(Service→Model 아님)이면 역전만 검사")
+    void layered_modelLayer_reverseFromDomainDir() {
+        // domain/ 단일 디렉터리는 비DDD 레이어드의 모델 폴더로 분류(접미사 없는 Owner도 포착)
+        Node model = nodeAt("Owner", "/app/domain/Owner.java");
+        Node svc = nodeAt("OwnerService", "/app/service/OwnerService.java");
+
+        // model → service 역전(3 > 1)
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(model, svc),
+                List.of(importEdgeForPath(model.getId(), svc.getId())));
+
+        assertThat(warnings).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("LAYERED_REVERSE_DEPENDENCY"));
+    }
+
+    @Test
+    @DisplayName("Model 정방향 — Service가 Model을 import하는 것은 정상(경고 없음)")
+    void layered_serviceImportsModel_noWarning() {
+        Node svc = nodeAt("OwnerService", "/app/service/OwnerService.java");
+        Node model = nodeAt("OwnerEntity", "/app/model/OwnerEntity.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(svc, model),
+                List.of(importEdgeForPath(svc.getId(), model.getId())));
+
+        assertThat(warnings).noneMatch(w -> String.valueOf(w.get("type")).startsWith("LAYERED_"));
+    }
 }
