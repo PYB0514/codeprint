@@ -2,6 +2,18 @@
 
 ---
 
+## GraphResponseAssembler 추출 — 가정 반증(HIGH_FAN_OUT 불변), 중복 제거로 가치 (2026-06-22)
+
+**의도.** 적대 자기검증의 부수 발견("getGraph류 Controller가 DTO 변환 인라인으로 비대")을 근거로, node/edge → 응답 Map 변환을 `GraphResponseAssembler`로 추출해 HIGH_FAN_OUT "약한 정탐"을 완화하려 했다.
+
+**측정 반증(런타임 검증에서 의도와 다른 결과).** 리팩토링 후 LocalAnalyzer self 분석 결과 **HIGH_FAN_OUT 9건 그대로, getGraph는 여전히 12**. 가정("DTO 인라인이 fan-out을 부풀림")이 틀렸다. getGraph의 fan-out 12는 DTO 변환이 아니라 **서비스 조율 호출**(findById·getNodes·getEdges·getStyles·getWarnings·partitionSuppressed·ResponseEntity·cacheControl 등)에서 온다. DTO 변환을 빼도 이 호출들이 그대로라 fan-out 불변이고, 오히려 toNodeDto/toEdgeDto 호출이 추가됐다. HIGH_FAN_OUT을 실제로 줄이려면 서비스들을 Facade로 묶어야 하나 과한 작업이라 보류.
+
+**그럼에도 유지한 이유 — 중복 제거(DRY).** getGraph(소유자)와 getPublicGraph(공개)에 **동일한 node DTO 변환이 30줄 복붙**(차이는 소유자에만 bgColor)돼 있었다. Assembler 1곳으로 통합 → 단일 출처. edge DTO는 `Map.of`→`LinkedHashMap`(키 접근이라 순서 무영향). 동작 불변(compileJava + 전체 테스트 통과, 회귀 0). 새 경고 타입·기능 아님이라 refactor(버전 태그 없음).
+
+**교훈.** "비대해 보인다"는 인상을 측정 없이 원인으로 단정하면 안 된다. 적대 검증이 자기 가정을 반증한 사례 — DTO가 아니라 서비스 조율이 fan-out 원인이었다.
+
+---
+
 ## HIGH_FAN_OUT — main 진입점 과탐 제외 (도그푸딩 발견, 2026-06-22)
 
 **문제(적대적 자기분석에서 발견).** Codeprint로 Codeprint 백엔드(`src/main/java`)를 LocalAnalyzer로 분석하니 HIGH_FAN_OUT 10건 발생. CLAUDE.md §10은 "Codeprint 자체엔 0개여야 한다"고 명시. 적대적으로 각 경고를 코드와 대조하니, 경계 위반(CROSS_DOMAIN_CALL·DOMAIN_IMPORTS_INFRA·CYCLIC·LAYERED)은 0건(아키텍처 건강)이나, HIGH_FAN_OUT 중 `main`(`LocalAnalyzer.main` 등 진입점)이 포함됨.

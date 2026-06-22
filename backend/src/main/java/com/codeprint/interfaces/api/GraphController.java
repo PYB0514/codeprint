@@ -11,7 +11,6 @@ import com.codeprint.application.graph.WarningSuppressionService;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.Node;
-import com.codeprint.domain.graph.NodeType;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
 import com.codeprint.infrastructure.storage.S3Service;
@@ -47,6 +46,7 @@ public class GraphController {
     private final NodeStyleService nodeStyleService;
     private final UserRepository userRepository;
     private final S3Service s3Service;
+    private final GraphResponseAssembler graphResponseAssembler;
 
     // 프로젝트의 그래프 버전 목록을 최신순으로 조회
     @GetMapping("/api/projects/{projectId}/graphs")
@@ -106,40 +106,12 @@ public class GraphController {
 
                     List<Map<String, Object>> nodeData = nodes.stream()
                             .filter(n -> !n.isHidden())
-                            .map(n -> {
-                                Map<String, Object> node = new java.util.LinkedHashMap<>();
-                                node.put("id", n.getId().toString());
-                                node.put("type", n.getType().name());
-                                node.put("name", n.getName());
-                                node.put("filePath", n.getFilePath() != null ? n.getFilePath() : "");
-                                node.put("language", n.getLanguage() != null ? n.getLanguage() : "");
-                                node.put("posX", n.getPosX());
-                                node.put("posY", n.getPosY());
-                                String bg = styleMap.get(n.getId().toString());
-                                if (bg != null && !bg.isBlank()) node.put("bgColor", bg);
-                                if (n.getMetadata() != null) {
-                                    if (n.getMetadata().containsKey("comment")) {
-                                        node.put("comment", n.getMetadata().get("comment"));
-                                    }
-                                    if (n.getType() == NodeType.DB_TABLE && n.getMetadata().containsKey("columns")) {
-                                        node.put("columns", n.getMetadata().get("columns"));
-                                    }
-                                }
-                                if (n.getUserLabel() != null) node.put("userLabel", n.getUserLabel());
-                                if (n.getUserNote() != null) node.put("userNote", n.getUserNote());
-                                return node;
-                            })
+                            .map(n -> graphResponseAssembler.toNodeDto(n, styleMap))
                             .toList();
 
                     List<Map<String, Object>> edgeData = edges.stream()
                             .filter(e -> !e.isHidden())
-                            .map(e -> Map.<String, Object>of(
-                                    "id", e.getId().toString(),
-                                    "type", e.getType().name(),
-                                    "source", e.getSourceNodeId().toString(),
-                                    "target", e.getTargetNodeId().toString(),
-                                    "edgeIdentifier", e.getEdgeIdentifier()
-                            ))
+                            .map(graphResponseAssembler::toEdgeDto)
                             .toList();
 
                     // 소유자에게는 활성 경고와 숨긴 경고를 분리해 전달 — 새로고침 후에도 복원 가능하도록
@@ -179,38 +151,12 @@ public class GraphController {
 
                     List<Map<String, Object>> nodeData = nodes.stream()
                             .filter(n -> !n.isHidden())
-                            .map(n -> {
-                                Map<String, Object> node = new java.util.LinkedHashMap<>();
-                                node.put("id", n.getId().toString());
-                                node.put("type", n.getType().name());
-                                node.put("name", n.getName());
-                                node.put("filePath", n.getFilePath() != null ? n.getFilePath() : "");
-                                node.put("language", n.getLanguage() != null ? n.getLanguage() : "");
-                                node.put("posX", n.getPosX());
-                                node.put("posY", n.getPosY());
-                                if (n.getMetadata() != null) {
-                                    if (n.getMetadata().containsKey("comment")) {
-                                        node.put("comment", n.getMetadata().get("comment"));
-                                    }
-                                    if (n.getType() == NodeType.DB_TABLE && n.getMetadata().containsKey("columns")) {
-                                        node.put("columns", n.getMetadata().get("columns"));
-                                    }
-                                }
-                                if (n.getUserLabel() != null) node.put("userLabel", n.getUserLabel());
-                                if (n.getUserNote() != null) node.put("userNote", n.getUserNote());
-                                return node;
-                            })
+                            .map(n -> graphResponseAssembler.toNodeDto(n, null))
                             .toList();
 
                     List<Map<String, Object>> edgeData = edges.stream()
                             .filter(e -> !e.isHidden())
-                            .map(e -> Map.<String, Object>of(
-                                    "id", e.getId().toString(),
-                                    "type", e.getType().name(),
-                                    "source", e.getSourceNodeId().toString(),
-                                    "target", e.getTargetNodeId().toString(),
-                                    "edgeIdentifier", e.getEdgeIdentifier()
-                            ))
+                            .map(graphResponseAssembler::toEdgeDto)
                             .toList();
 
                     List<Map<String, Object>> warnings =
