@@ -2,6 +2,18 @@
 
 ---
 
+## AiController /api/ai/keys 500 — 잘못된 User 타입 import (2026-06-22, 도그푸딩)
+
+**문제.** `/api/ai/keys`(및 AiController 6개 메서드 전부)가 500. AI 키 미등록(`user_ai_keys` 0 rows)이라 프론트가 조용히 무시 → 묻혀 있다가, 같은 세션에 추가한 5xx traceId 토스트(#347)가 라이브 검증 중 적발.
+
+**원인 — 컴파일 에러가 진짜 원인을 드러냄.** 처음엔 `UUID.fromString(user.getUsername())`을 "username을 userId로 오용"으로 추정하고 `user.getId()`로 바꿨으나 컴파일 실패(`cannot find symbol: getId()`). 이게 핵심 단서였다 — `AiController`는 `org.springframework.security.core.userdetails.User`(Spring Security, `getId()` 없음)를 import했고, 다른 컨트롤러는 전부 `com.codeprint.domain.user.User`를 쓴다. `@AuthenticationPrincipal`이 주입하는 실제 principal은 도메인 User라, 잘못된 타입으로 받아 **null 주입 → `user.getUsername()` NPE → 500**.
+
+**수정.** import를 `com.codeprint.domain.user.User`로 교체 + 6곳 `user.getId()` 사용. 라이브 검증: `/api/ai/keys` 200, 에러 토스트 해소, 그래프 정상.
+
+**교훈.** ①`@AuthenticationPrincipal`의 타입은 반드시 주입되는 도메인 타입과 일치해야 한다(IDE 자동완성이 동명의 Spring Security User를 잘못 넣기 쉬움). ②추측보다 컴파일 에러가 정확한 원인을 짚었다(§11). ③도그푸딩: 방금 만든 traceId 토스트가 즉시 실제 잠재 500을 잡았다. ERROR_TRACKER BE-12.
+
+---
+
 ## GraphResponseAssembler 추출 — 가정 반증(HIGH_FAN_OUT 불변), 중복 제거로 가치 (2026-06-22)
 
 **의도.** 적대 자기검증의 부수 발견("getGraph류 Controller가 DTO 변환 인라인으로 비대")을 근거로, node/edge → 응답 Map 변환을 `GraphResponseAssembler`로 추출해 HIGH_FAN_OUT "약한 정탐"을 완화하려 했다.

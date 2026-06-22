@@ -12,7 +12,7 @@ import com.codeprint.infrastructure.ai.AiService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.User;
+import com.codeprint.domain.user.User;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
@@ -45,7 +45,7 @@ public class AiController {
     // 등록된 AI 제공자 목록 조회 (키 값은 반환하지 않음)
     @GetMapping("/keys")
     public ResponseEntity<List<ProviderInfo>> getKeys(@AuthenticationPrincipal User user) {
-        UUID userId = UUID.fromString(user.getUsername());
+        UUID userId = user.getId();
         List<UserAiKey> keys = aiKeyRepository.findByUserId(userId);
         List<String> registered = keys.stream().map(k -> k.getProvider().name()).toList();
         List<ProviderInfo> result = List.of(AiProvider.values()).stream()
@@ -60,7 +60,7 @@ public class AiController {
             @PathVariable String provider,
             @Valid @RequestBody SaveKeyRequest req,
             @AuthenticationPrincipal User user) {
-        UUID userId = UUID.fromString(user.getUsername());
+        UUID userId = user.getId();
         AiProvider aiProvider = AiProvider.valueOf(provider.toUpperCase());
         aiKeyRepository.findByUserIdAndProvider(userId, aiProvider)
                 .ifPresentOrElse(
@@ -75,7 +75,7 @@ public class AiController {
     public ResponseEntity<Void> deleteKey(
             @PathVariable String provider,
             @AuthenticationPrincipal User user) {
-        UUID userId = UUID.fromString(user.getUsername());
+        UUID userId = user.getId();
         AiProvider aiProvider = AiProvider.valueOf(provider.toUpperCase());
         aiKeyRepository.deleteByUserIdAndProvider(userId, aiProvider);
         return ResponseEntity.noContent().build();
@@ -86,7 +86,7 @@ public class AiController {
     public ResponseEntity<ExplainResponse> explain(
             @Valid @RequestBody ExplainRequest req,
             @AuthenticationPrincipal User user) {
-        UUID userId = UUID.fromString(user.getUsername());
+        UUID userId = user.getId();
         AiProvider aiProvider = AiProvider.valueOf(req.provider().toUpperCase());
         UserAiKey key = aiKeyRepository.findByUserIdAndProvider(userId, aiProvider)
                 .orElseThrow(() -> new IllegalArgumentException(req.provider() + " API 키가 등록되지 않았습니다."));
@@ -106,7 +106,7 @@ public class AiController {
     public ResponseEntity<GenerateCodeResponse> generateCode(
             @Valid @RequestBody GenerateCodeRequest req,
             @AuthenticationPrincipal User user) {
-        UUID userId = UUID.fromString(user.getUsername());
+        UUID userId = user.getId();
         AiProvider aiProvider = AiProvider.valueOf(req.provider().toUpperCase());
         UserAiKey key = aiKeyRepository.findByUserIdAndProvider(userId, aiProvider)
                 .orElseThrow(() -> new IllegalArgumentException(req.provider() + " API 키가 등록되지 않았습니다."));
@@ -127,7 +127,7 @@ public class AiController {
     public ResponseEntity<List<AiGraphAnalysisService.DetectedIssue>> analyzeGraph(
             @PathVariable UUID graphId,
             @AuthenticationPrincipal User user) {
-        UUID userId = UUID.fromString(user.getUsername());
+        UUID userId = user.getId();
         var rawNodes = graphRepository.findNodesByGraphId(graphId);
         var rawEdges = graphRepository.findEdgesByGraphId(graphId);
         var nodes = rawNodes.stream()
