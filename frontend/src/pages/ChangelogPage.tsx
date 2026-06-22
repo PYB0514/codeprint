@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.9',
+    date: '2026-06-23',
+    title: '함수 호출 연결 정확도 개선 — 변수 선언 타입 기반 추적(Java)',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: 'repo.save()·order.confirm()처럼 변수를 통해 호출하는 함수를, 그 변수의 선언 타입(필드·매개변수·지역변수)을 읽어 정확한 클래스로 연결하도록 개선했습니다. 기존에는 메서드 이름만 보고 같은 이름을 가진 무관한 파일로 잘못 이어지곤 했습니다. Codeprint 자체 분석에서, 분석기가 10개 언어 파서의 parse()를 호출하는 부분이 엉뚱한 한 곳으로만 연결되던 것이 실제 10개 파서로 정확히 분리되는 등 호출 흐름이 바로잡혔습니다. 타입을 알 수 없는 경우엔 기존 방식으로 안전하게 동작합니다.' },
+    ],
+  },
+  {
     version: 'v0.93.8',
     date: '2026-06-23',
     title: '과도한 의존(HIGH_FAN_OUT) 오탐 감소 — 가짜 호출 연결 제거',
