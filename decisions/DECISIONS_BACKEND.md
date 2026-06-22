@@ -2,6 +2,21 @@
 
 ---
 
+## 서버 오류 추적 ID(traceId) — 응답·로그·Sentry 연결 (2026-06-22)
+
+**문제.** `GlobalExceptionHandler`가 500 시 사용자에게 `"Internal server error"`만 반환 → 추적 ID가 없어 운영자가 그 특정 요청을 Sentry/로그에서 찾을 수 없었다.
+
+**범위 선택 — 5xx만 vs. 전체 / 필터-MDC vs. 핸들러 생성.**
+- **5xx에만 부여**: 추적이 필요한 건 "우리 버그"인 서버 오류. 4xx는 사용자 입력 오류라 traceId 무의미 → 미부여(응답 노이즈 최소화).
+- **핸들러에서 생성(필터+MDC 미도입)**: 모든 요청에 MDC traceId를 심고 logback 패턴을 바꾸는 정석은 범위가 크다. 500 추적엔 "에러 로그 한 줄 + traceId"면 충분하므로 `@ExceptionHandler`에서 `UUID` 앞 8자를 생성해 로그 메시지·응답에 함께 출력하는 최소 구현 채택.
+- **Sentry 별도 의존성 없이 연결**: 로그 메시지에 `[500][traceId]`를 포함하면 Sentry 로그 appender가 그대로 캡처 → `Sentry.setTag` 등 추가 코드 없이 Sentry에서 traceId 검색 가능.
+
+**보류.** 프론트 에러 표시는 컴포넌트별로 분산(공통 axios interceptor는 401 refresh 전용)이라 이 변경에 포함하면 surgical하지 않음 → 사용자에게 traceId를 화면 노출하는 작업은 후속으로 분리. 현재도 운영자 추적(로그·Sentry)·개발자도구 Network 응답으로 가치 달성.
+
+**결과.** 5xx 응답에 `traceId` 필드 추가(하위호환 — 기존 status·message·timestamp 유지). 단위 테스트 5종. v0.93.3.
+
+---
+
 ## 레이어드 위반 감지 — Model 레이어 추가(C-11 확장) (2026-06-22)
 
 **문제.** C-11(PR #341)은 Controller/Service/Repository 3레이어만 분류해, 도메인 모델/엔티티가 상위 레이어를 역참조하는 위반(예: Entity가 Controller를 import)을 못 잡았다.

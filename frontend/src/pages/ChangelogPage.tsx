@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.3',
+    date: '2026-06-22',
+    title: '서버 오류에 추적 ID(traceId) 부여 — 운영 추적성 개선',
+    type: 'fix',
+    items: [
+      { category: '안정성', desc: '서버 오류(5xx)가 발생하면 응답과 서버 로그에 동일한 추적 ID(traceId)를 부여합니다. 같은 ID가 Sentry 이벤트에도 남아, 오류 신고 시 그 ID 하나로 정확한 요청을 추적할 수 있습니다. 사용자 입력 오류(4xx)는 추적이 불필요해 부여하지 않으며, 기존 응답 형식(status·message·timestamp)은 그대로 유지됩니다.' },
+    ],
+  },
+  {
     version: 'v0.93.2',
     date: '2026-06-22',
     title: '레이어 위반 감지에 Model(도메인 모델) 레이어 추가',

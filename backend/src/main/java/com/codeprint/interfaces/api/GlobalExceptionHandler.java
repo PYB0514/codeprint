@@ -13,18 +13,22 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // ResponseStatusException을 JSON 오류 응답으로 변환
+    // ResponseStatusException을 JSON 오류 응답으로 변환 — 5xx면 추적 ID 부여
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> handleResponseStatus(ResponseStatusException ex) {
         if (ex.getStatusCode().value() >= 500) {
-            log.error("ResponseStatusException: {}", ex.getMessage(), ex);
+            String traceId = newTraceId();
+            log.error("[{}][{}] ResponseStatusException: {}", ex.getStatusCode().value(), traceId, ex.getMessage(), ex);
+            return errorResponse(ex.getStatusCode().value(), ex.getReason(), traceId);
         }
         return errorResponse(ex.getStatusCode().value(), ex.getReason());
     }
@@ -63,19 +67,31 @@ public class GlobalExceptionHandler {
         return errorResponse(HttpStatus.FORBIDDEN.value(), "Access denied");
     }
 
-    // 처리되지 않은 예외를 500 오류 응답으로 변환 — 항상 스택트레이스 로깅
+    // 처리되지 않은 예외를 500 오류 응답으로 변환 — 추적 ID 부여 + 항상 스택트레이스 로깅
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex) {
-        log.error("[500] {} — {}", ex.getClass().getSimpleName(), ex.getMessage(), ex);
-        return errorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Internal server error");
+        String traceId = newTraceId();
+        log.error("[500][{}] {} — {}", traceId, ex.getClass().getSimpleName(), ex.getMessage(), ex);
+        return errorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Internal server error", traceId);
     }
 
-    // 상태 코드와 메시지로 표준 오류 응답 생성
+    // 서버 에러 추적용 짧은 ID — 응답·로그·Sentry(로그 캡처)에서 동일 요청을 찾는 키
+    private static String newTraceId() {
+        return UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    // 상태 코드와 메시지로 표준 오류 응답 생성 (4xx — 추적 ID 없음)
     private ResponseEntity<Map<String, Object>> errorResponse(int status, String message) {
-        return ResponseEntity.status(status).body(Map.of(
-                "status", status,
-                "message", message != null ? message : "Unknown error",
-                "timestamp", Instant.now().toString()
-        ));
+        return errorResponse(status, message, null);
+    }
+
+    // 표준 오류 응답 생성 — traceId가 있으면(5xx) 응답에 포함해 사용자가 운영자에게 전달 가능
+    private ResponseEntity<Map<String, Object>> errorResponse(int status, String message, String traceId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("status", status);
+        body.put("message", message != null ? message : "Unknown error");
+        body.put("timestamp", Instant.now().toString());
+        if (traceId != null) body.put("traceId", traceId);
+        return ResponseEntity.status(status).body(body);
     }
 }
