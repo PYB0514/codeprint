@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.2',
+    date: '2026-06-22',
+    title: '레이어 위반 감지에 Model(도메인 모델) 레이어 추가',
+    type: 'fix',
+    items: [
+      { category: '경고', desc: '비DDD 레이어드 프로젝트의 레이어 역전 감지에 Model(도메인 모델·엔티티) 레이어를 추가했습니다. 클래스명 접미사(*Entity·*Model·*VO)와 디렉터리(model/·entity/·domain/)로 분류해, 도메인 모델이 Controller·Service·Repository 같은 상위 레이어를 import하는 역전 의존을 잡습니다. 모델은 순수 데이터·규칙이어야 하며 상위 레이어를 알면 안 됩니다. DTO는 레이어 전반을 오가므로 분류에서 제외해 오탐을 막았습니다.' },
+    ],
+  },
+  {
     version: 'v0.93.1',
     date: '2026-06-22',
     title: 'PR 자동 리뷰 코멘트 중복 누적 방지 — 갱신(upsert) 방식 전환',
