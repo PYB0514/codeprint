@@ -2,6 +2,23 @@
 
 ---
 
+## PR 자동 리뷰 코멘트 — 중복 누적 방지(upsert) (2026-06-22)
+
+**문제.** `PrReviewService.review()`가 매번 `postIssueComment`로 **새 코멘트를 추가**했다. webhook은 `synchronize`(커밋 push)마다 리뷰를 트리거하므로, PR에 커밋을 N번 push하면 봇 코멘트가 N개 누적 → PR 스레드 오염. 표준 봇(GitHub Actions 등)은 기존 코멘트를 갱신한다.
+
+**식별 방식 선택 — HTML 주석 마커 vs. comment 메타데이터.**
+- GitHub 코멘트엔 봇 식별용 커스텀 필드가 없다. 후보: ①본문에 보이지 않는 HTML 주석 마커 삽입, ②작성자(user.login)로 필터.
+- 작성자 필터는 토큰 주인이 사람 계정(PAT)이면 사람 코멘트와 섞여 오인. **채택 — HTML 주석 마커**(`<!-- codeprint-pr-review -->`). GitHub 마크다운에서 렌더되지 않고, 코멘트 작성자와 무관하게 안정적으로 식별. `formatComment` 본문 최상단에 삽입.
+
+**갱신 방식 — PATCH update vs. delete+recreate.**
+- delete+recreate는 코멘트 URL·반응(reaction)이 사라지고 알림이 중복 발생. **채택 — PATCH `/issues/comments/{id}`**로 본문만 교체(URL 보존).
+
+**폴백.** `findCommentIdByMarker`는 조회 실패(네트워크·권한·rate limit) 시 예외를 삼키고 null 반환 → `upsertIssueComment`가 새 코멘트 작성으로 폴백. 리뷰 자체는 절대 깨뜨리지 않음(diff-scope·suppress 폴백과 동일 철학).
+
+**검증.** 마커 매칭 순수 함수 `matchMarkerCommentId(JsonNode, marker)`를 분리해 단위 테스트 5종(발견·미발견·빈 배열·다중 매칭 첫번째·비배열 방어). `formatComment` 마커 포함 테스트 1종. 실 GitHub upsert(post→update 전환)는 사용자 PR 연동 검증 시점에 확인 예정.
+
+---
+
 ## 경고 엔진 일반화 Phase C-11 — 비DDD 레이어드 아키텍처 위반 감지 (2026-06-22)
 
 **문제.** 아키텍처 경고 4종(DB_LAYER_BYPASS·CROSS_CONTEXT_IMPORT·DOMAIN_IMPORTS_INFRA·CROSS_DOMAIN_CALL)이 `isDddProject()`(domain/application/infrastructure 경로 2종↑) 게이팅 뒤에 있어, 비DDD 레포에서는 아키텍처 경고가 0건 → 무용. 일반적 레이어드 구조(Controller/Service/Repository) 사용자가 다수인데 이들에게 줄 경고가 없었다.

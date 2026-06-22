@@ -38,6 +38,9 @@ public class PrReviewService {
     private final StaticCodeAnalyzer staticCodeAnalyzer;
     private final GraphBuilder graphBuilder;
 
+    // 봇 코멘트 식별 마커 — upsert 시 기존 Codeprint 코멘트를 찾는 키. GitHub에서 HTML 주석은 렌더되지 않음
+    static final String REVIEW_MARKER = "<!-- codeprint-pr-review -->";
+
     // PR 리뷰 실행 — 소유권 검증 → PR head 분석 → 경고 감지 → PR 코멘트 게시 (LOW 제외)
     @Transactional
     public Map<String, Object> review(UUID projectId, int prNumber, UUID userId, String githubToken) {
@@ -59,7 +62,8 @@ public class PrReviewService {
         int lowFilteredCount = scoped.size() - warnings.size();
 
         String body = formatComment(headBranch, warnings, lowFilteredCount, outOfScopeCount, diffScoped);
-        String commentUrl = gitHubApiClient.postIssueComment(repoUrl, prNumber, body, githubToken);
+        // 기존 Codeprint 코멘트가 있으면 갱신, 없으면 새로 작성 — 커밋 push마다 봇 코멘트 누적 방지
+        String commentUrl = gitHubApiClient.upsertIssueComment(repoUrl, prNumber, body, REVIEW_MARKER, githubToken);
         log.info("PR 리뷰 코멘트 게시: repo={}, pr={}, 게시={}, LOW_생략={}, 변경외_제외={}, diffScope={}",
                 repoUrl, prNumber, warnings.size(), lowFilteredCount, outOfScopeCount, diffScoped);
 
@@ -150,6 +154,8 @@ public class PrReviewService {
     static String formatComment(String branch, List<Map<String, Object>> warnings, int lowExcludedCount,
                                 int outOfScopeCount, boolean diffScoped) {
         StringBuilder sb = new StringBuilder();
+        // 봇 코멘트 식별 마커 — upsert가 기존 코멘트를 찾는 키(GitHub에서 렌더되지 않음)
+        sb.append(REVIEW_MARKER).append("\n");
         sb.append("## 🔍 Codeprint 구조 분석 — `").append(branch).append("` 브랜치");
         if (diffScoped) sb.append(" (이 PR이 변경한 파일 기준)");
         sb.append("\n\n");

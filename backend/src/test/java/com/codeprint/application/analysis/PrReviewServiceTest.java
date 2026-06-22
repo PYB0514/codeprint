@@ -167,4 +167,15 @@ class PrReviewServiceTest {
         assertThat(md).contains("이 PR이 변경한 파일에서 감지된 구조 경고가 없습니다");
         assertThat(md).contains("변경 외 파일의 구조 경고 2개");
     }
+
+    @Test
+    @DisplayName("upsert 식별 마커 — 모든 코멘트 본문(경고 있음/없음)에 마커를 포함한다")
+    void formatComment_includesUpsertMarker() {
+        String withWarnings = PrReviewService.formatComment("main",
+                List.of(warning("CYCLIC_IMPORT", "순환 의존 A↔B", "HIGH")));
+        String empty = PrReviewService.formatComment("main", List.of());
+
+        assertThat(withWarnings).contains(PrReviewService.REVIEW_MARKER);
+        assertThat(empty).contains(PrReviewService.REVIEW_MARKER);
+    }
 }
