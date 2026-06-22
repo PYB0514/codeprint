@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.5',
+    date: '2026-06-22',
+    title: '서버 오류 발생 시 추적 ID를 화면에 표시',
+    type: 'fix',
+    items: [
+      { category: '안정성', desc: '서버 오류(5xx)가 발생하면 우측 하단에 추적 ID(traceId)를 담은 알림을 표시합니다. 문의 시 이 ID를 알려주시면 운영자가 해당 오류를 로그·Sentry에서 정확히 찾을 수 있습니다(Cloudflare Ray ID와 같은 개념). 사용자 입력 오류(4xx)에는 표시하지 않습니다.' },
+    ],
+  },
+  {
     version: 'v0.93.4',
     date: '2026-06-22',
     title: '과도한 의존(HIGH_FAN_OUT) 경고에서 main 진입점 제외 — 오탐 감소',

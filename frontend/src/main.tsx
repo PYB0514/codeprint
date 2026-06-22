@@ -26,9 +26,21 @@ axios.interceptors.response.use(
   res => res,
   async error => {
     const original = error.config
+    const status = error.response?.status
+
+    // 5xx 서버 오류 — 추적 ID(traceId)가 있으면 전역 토스트로 노출(사용자 신고 시 운영자가 로그·Sentry 추적)
+    if (status >= 500 && error.response?.data?.traceId) {
+      window.dispatchEvent(new CustomEvent('app-error', {
+        detail: {
+          message: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+          traceId: error.response.data.traceId,
+        },
+      }))
+    }
+
     // /auth 엔드포인트 자체나 재시도 요청에서 401이면 루프 방지
     if (
-      error.response?.status !== 401 ||
+      status !== 401 ||
       original._retry ||
       original.url?.includes('/api/auth/')
     ) {
