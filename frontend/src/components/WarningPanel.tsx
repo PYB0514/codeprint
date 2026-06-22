@@ -37,6 +37,8 @@ export const WARNING_META: Record<string, { label: string; desc: string; color: 
   MISSING_CONVERTER_MIGRATION: { label: '@Convert 마이그레이션 필요', desc: '기존 평문 데이터에 Flyway 마이그레이션 미작성 가능성',       color: '#ec4899', severity: 'MEDIUM' },
   DEAD_CODE:                   { label: '데드 코드 후보',           desc: '아무 곳에서도 호출되지 않는 함수',                             color: '#6b7280', severity: 'LOW'    },
   HIGH_FAN_OUT:                { label: '과도한 의존 (SRP 위반)',   desc: '7개 초과 함수 호출 — 단일 책임 원칙 위반 가능성',               color: '#f59e0b', severity: 'LOW'    },
+  LAYERED_REVERSE_DEPENDENCY:  { label: '레이어 역전 의존',        desc: '하위 레이어가 상위 레이어를 직접 import (Repository→Controller 등)', color: '#dc2626', severity: 'HIGH'   },
+  LAYERED_BYPASS:              { label: 'Service 레이어 우회',      desc: 'Controller가 Repository를 직접 접근 — Service 레이어 미경유',  color: '#14b8a6', severity: 'MEDIUM' },
 }
 
 // 경고 목록을 타입별로 그룹핑하여 severity 순(HIGH→MEDIUM→LOW)으로 표시

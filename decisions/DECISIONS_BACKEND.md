@@ -2,6 +2,25 @@
 
 ---
 
+## 경고 엔진 일반화 Phase C-11 — 비DDD 레이어드 아키텍처 위반 감지 (2026-06-22)
+
+**문제.** 아키텍처 경고 4종(DB_LAYER_BYPASS·CROSS_CONTEXT_IMPORT·DOMAIN_IMPORTS_INFRA·CROSS_DOMAIN_CALL)이 `isDddProject()`(domain/application/infrastructure 경로 2종↑) 게이팅 뒤에 있어, 비DDD 레포에서는 아키텍처 경고가 0건 → 무용. 일반적 레이어드 구조(Controller/Service/Repository) 사용자가 다수인데 이들에게 줄 경고가 없었다.
+
+**레이어 감지 방식 선택 — 디렉터리만 vs. 클래스명 접미사 병행.**
+- 디렉터리 전용: `/controller/`·`/service/`·`/repository/` 세그먼트로만 분류. 그러나 적대적 검증으로 `spring-petclinic`이 **package-by-feature**(owner/·vet/ 안에 OwnerController·OwnerRepository 공존)임을 확인 → 디렉터리만으로는 가장 흔한 Spring 레이아웃을 못 잡음.
+- **채택 — 클래스명 접미사 우선 + 디렉터리 폴백.** `*Controller`/`*Repository`/`*Dao`/`*Mapper`/`*Service`(PascalCase, Java/C#/TS) 먼저, 미스 시 디렉터리 세그먼트(controllers/·services/·repositories/ 등, 언어 무관). `resources` 디렉터리는 정적 리소스와 충돌해 controller 후보에서 제외.
+
+**오탐 방지 게이팅 2중.**
+- ①분류된 레이어가 2종 미만이면 "레이어드 프로젝트"로 보지 않고 즉시 0건(평면 구조·단순 앱 보호).
+- ②`LAYERED_BYPASS`(Controller→Repository 직접 접근)는 **Service 레이어가 프로젝트에 존재할 때만** 발화. petclinic처럼 의도적으로 Service를 생략한 단순 CRUD 앱(Controller가 Repository 직접 사용이 정상)을 오탐하지 않기 위함. `LAYERED_REVERSE_DEPENDENCY`(하위→상위 import)는 Service 유무 무관 항상 위반.
+- IMPORT 엣지만 검사 — FUNCTION_CALL은 정규식 분석기가 bare-name을 오추적(기존 DB_LAYER_BYPASS와 동일 철학).
+
+**측정(LocalAnalyzer A/B).** spring-petclinic(노드 224·엣지 450): Controller+Repository 분류되어 게이트 통과하나 Service 부재 → bypass 제외 + 역전 없음 = **LAYERED 0건(정탐)**. express·requests·gin: 레이어 컨벤션 약해 분류 게이트로 0건. 신규 오탐 0. 정탐 경로는 합성 단위 테스트 9종으로 검증(벤치에 Service 포함 레이어드 OSS 부재 — 잘 짜인 OSS는 위반이 없어 0건이 정상).
+
+**결과.** 비DDD 레이어드 프로젝트에 LAYERED_REVERSE_DEPENDENCY(HIGH)·LAYERED_BYPASS(MEDIUM) 2종 추가. DDD 프로젝트는 기존 경로 불변(`isDddProject` true면 layered 미적용 — 상호 배타). v0.93.0.
+
+---
+
 ## 숨긴 경고(suppress) 복원 — 영속화했으나 새로고침 후 복원 불가 갭 (2026-06-21)
 
 **문제(런타임 검증에서 의도와 다른 동작 발견).** PR #259에서 경고 suppress를 fingerprint 기반으로 서버에 영속화했으나 "런타임 검증 보류"로 남아 있었다. 실제 동작을 추적하니 `GraphController.filterSuppressed()`가 suppress된 경고를 응답에서 **완전히 제거**만 하고, 프론트 `suppressedWarnings` 상태는 "이번 세션에 숨긴 것"만 담는 순수 세션 상태였다. 결과적으로 **새로고침 한 번이면 "숨긴 경고" 목록이 비어 복원 버튼이 사라지고, 한 번 숨긴 경고는 영구히 복원 불가** → 영속화가 사실상 no-op.

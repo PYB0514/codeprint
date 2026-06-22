@@ -35,6 +35,9 @@ public class GraphWarningService {
             warnings.addAll(detectCrossContextDomainImport(nodes, edges));
             warnings.addAll(detectDomainInfraImport(nodes, edges));
             warnings.addAll(detectCrossDomainFunctionCall(nodes, edges));
+        } else {
+            // 비DDD 프로젝트 — Controller/Service/Repository 레이어 컨벤션을 자동 감지해 위반 검사
+            warnings.addAll(detectLayeredViolations(nodes, edges));
         }
         // 사용자가 선언한 의도 아키텍처와 실제 의존을 대조 (컨벤션 무관 — 비-DDD 프로젝트도 적용)
         warnings.addAll(detectIntentDrift(nodes, edges, intent));
@@ -821,6 +824,114 @@ public class GraphWarningService {
                     + " — 기존 평문 데이터에 대한 Flyway 마이그레이션이 필요합니다."
                     + " 수정: 기존 행을 새 형식으로 변환하는 V{N}__migrate_{table}.sql 을 작성하세요.");
             warnings.add(w);
+        }
+        return warnings;
+    }
+
+    // 비DDD 레이어드 아키텍처의 레이어 — 의존은 상위(낮은 ordinal)→하위(높은 ordinal) 방향만 정상
+    private enum Layer { CONTROLLER, SERVICE, REPOSITORY }
+
+    // 클래스명 접미사로 분류 못 할 때 사용하는 레이어 디렉터리 세그먼트 (언어 무관 컨벤션, 소문자)
+    // "resources"는 정적 리소스 디렉터리와 충돌하므로 제외 — controller는 클래스명 접미사로 주로 잡힌다.
+    private static final Set<String> CONTROLLER_DIRS =
+            Set.of("controller", "controllers", "web", "rest", "api", "endpoint", "endpoints", "route", "routes");
+    private static final Set<String> SERVICE_DIRS =
+            Set.of("service", "services", "usecase", "usecases", "business", "biz");
+    private static final Set<String> REPOSITORY_DIRS =
+            Set.of("repository", "repositories", "dao", "mapper", "mappers", "persistence");
+
+    // 파일 경로를 레이어로 분류 — 클래스명 접미사(Java/C#/TS) 우선, 없으면 디렉터리 세그먼트. 미분류면 null
+    private Layer classifyLayer(String filePath) {
+        if (filePath == null || filePath.isEmpty()) return null;
+        String path = filePath.replace("\\", "/");
+        String base = path.substring(path.lastIndexOf('/') + 1);
+        int dot = base.lastIndexOf('.');
+        String className = dot > 0 ? base.substring(0, dot) : base;
+        // 1) 클래스명 접미사 — PascalCase 컨벤션(OwnerController·OwnerRepository·OwnerService)
+        if (className.endsWith("Controller")) return Layer.CONTROLLER;
+        if (className.endsWith("Repository") || className.endsWith("Dao")
+                || className.endsWith("DAO") || className.endsWith("Mapper")) return Layer.REPOSITORY;
+        if (className.endsWith("Service")) return Layer.SERVICE;
+        // 2) 디렉터리 세그먼트 — 앞뒤 슬래시로 세그먼트 단위 매칭(루트 레벨 디렉터리 포함)
+        String guarded = "/" + path.toLowerCase() + "/";
+        if (containsSegment(guarded, CONTROLLER_DIRS)) return Layer.CONTROLLER;
+        if (containsSegment(guarded, REPOSITORY_DIRS)) return Layer.REPOSITORY;
+        if (containsSegment(guarded, SERVICE_DIRS)) return Layer.SERVICE;
+        return null;
+    }
+
+    // guarded 경로("/a/b/c/")에 디렉터리 세그먼트 중 하나가 포함되는지
+    private boolean containsSegment(String guardedLowerPath, Set<String> dirs) {
+        for (String d : dirs) {
+            if (guardedLowerPath.contains("/" + d + "/")) return true;
+        }
+        return false;
+    }
+
+    // 레이어명 한글 표시용 — 메시지 출력
+    private String layerLabel(Layer l) {
+        return switch (l) {
+            case CONTROLLER -> "Controller";
+            case SERVICE -> "Service";
+            case REPOSITORY -> "Repository";
+        };
+    }
+
+    // 비DDD 레이어드 프로젝트의 레이어 위반 감지 — IMPORT 엣지 기반(정규식 호출 오추적 회피)
+    //   1. LAYERED_REVERSE_DEPENDENCY: 하위 레이어가 상위를 import (레이어 순서 역전) — 항상 위반
+    //   2. LAYERED_BYPASS: Controller가 Repository를 직접 import — Service 레이어가 존재할 때만(우회로 판단)
+    // 게이팅: 분류된 레이어가 2종 이상이어야 "레이어드 프로젝트"로 인정(단순 앱·평면 구조 오탐 방지)
+    private List<Map<String, Object>> detectLayeredViolations(List<Node> nodes, List<Edge> edges) {
+        Map<UUID, Layer> nodeLayer = new HashMap<>();
+        Map<UUID, String> nameMap = new HashMap<>();
+        EnumSet<Layer> present = EnumSet.noneOf(Layer.class);
+        for (Node n : nodes) {
+            if (n.getType() != NodeType.FILE) continue;
+            String fp = n.getFilePath() != null ? n.getFilePath() : "";
+            // 테스트 코드는 아키텍처 위반 대상이 아님
+            if (isTestPath(fp) || isTestArtifact(fp, n.getName() != null ? n.getName() : "")) continue;
+            Layer layer = classifyLayer(fp);
+            if (layer == null) continue;
+            nodeLayer.put(n.getId(), layer);
+            nameMap.put(n.getId(), n.getName());
+            present.add(layer);
+        }
+        // 레이어가 2종 미만이면 레이어드 아키텍처로 보지 않음 — 게이트
+        if (present.size() < 2) return List.of();
+        boolean hasService = present.contains(Layer.SERVICE);
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Edge e : edges) {
+            if (e.getType() != EdgeType.IMPORT) continue;
+            Layer src = nodeLayer.get(e.getSourceNodeId());
+            Layer tgt = nodeLayer.get(e.getTargetNodeId());
+            if (src == null || tgt == null || src == tgt) continue;
+
+            String srcName = nameMap.getOrDefault(e.getSourceNodeId(), "?");
+            String tgtName = nameMap.getOrDefault(e.getTargetNodeId(), "?");
+
+            if (src.ordinal() > tgt.ordinal()) {
+                // 하위 레이어 → 상위 레이어 import (역전)
+                Map<String, Object> w = new LinkedHashMap<>();
+                w.put("type", "LAYERED_REVERSE_DEPENDENCY");
+                w.put("severity", "HIGH");
+                w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
+                w.put("edgeIds", List.of(e.getId().toString()));
+                w.put("message", "레이어 역전 의존: " + layerLabel(src) + " '" + srcName + "' → "
+                        + layerLabel(tgt) + " '" + tgtName + "' 직접 import. "
+                        + "하위 레이어는 상위 레이어를 알면 안 됩니다. 의존을 인터페이스로 역전하거나 호출 위치를 옮기세요.");
+                warnings.add(w);
+            } else if (hasService && src == Layer.CONTROLLER && tgt == Layer.REPOSITORY) {
+                // Service 레이어가 존재하는데 Controller가 Repository를 직접 접근 (우회)
+                Map<String, Object> w = new LinkedHashMap<>();
+                w.put("type", "LAYERED_BYPASS");
+                w.put("severity", "MEDIUM");
+                w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
+                w.put("edgeIds", List.of(e.getId().toString()));
+                w.put("message", "Service 레이어 우회: Controller '" + srcName + "' → Repository '" + tgtName
+                        + "' 직접 접근. 데이터 접근을 Service 레이어로 위임해 비즈니스 로직을 한곳에 모으세요.");
+                warnings.add(w);
+            }
         }
         return warnings;
     }
