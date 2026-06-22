@@ -2,6 +2,20 @@
 
 ---
 
+## HIGH_FAN_OUT — main 진입점 과탐 제외 (도그푸딩 발견, 2026-06-22)
+
+**문제(적대적 자기분석에서 발견).** Codeprint로 Codeprint 백엔드(`src/main/java`)를 LocalAnalyzer로 분석하니 HIGH_FAN_OUT 10건 발생. CLAUDE.md §10은 "Codeprint 자체엔 0개여야 한다"고 명시. 적대적으로 각 경고를 코드와 대조하니, 경계 위반(CROSS_DOMAIN_CALL·DOMAIN_IMPORTS_INFRA·CYCLIC·LAYERED)은 0건(아키텍처 건강)이나, HIGH_FAN_OUT 중 `main`(`LocalAnalyzer.main` 등 진입점)이 포함됨.
+
+**판정.** `main`은 부트스트랩이라 여러 협력자를 호출하는 게 정상 — 단일 책임 위반이 아니다. 카운트(7개 초과)는 정확하나 "진입점을 SRP 위반으로 해석하는 오탐". 테스트 함수를 이미 제외하는 것과 동일한 종류.
+
+**수정.** `detectHighFanOut`에 `"main".equals(fnName)` 가드 추가(테스트 제외 가드 옆). 언어 무관(Spring main·CLI main·Go func main 모두 진입점).
+
+**측정.** self HIGH_FAN_OUT 10→9(진입점 main 1건 제외 — 다른 main은 fan-out이 낮아 원래 경고가 아니었음). spring-petclinic 1→1(회귀 없음). 남은 9건(Controller DTO 조립·@Async 러너·OAuth 콜백)은 카운트 정탐이며 분리 여지가 있는 "약한 정탐"이라 LOW 참고용으로 유지.
+
+**부수 발견(미수정).** ① `getGraph`류 Controller가 DTO 변환을 인라인으로 떠안아 비대 — Assembler 분리 여지(별도 작업). ② `UserPlan.monthlyPrice()` DEAD_CODE 정탐이나 수익화(Team 결제) 시 사용 예정이라 보류 — 백엔드 가격 단일출처가 죽어 프론트 하드코딩과 불일치 위험.
+
+---
+
 ## 서버 오류 추적 ID(traceId) — 응답·로그·Sentry 연결 (2026-06-22)
 
 **문제.** `GlobalExceptionHandler`가 500 시 사용자에게 `"Internal server error"`만 반환 → 추적 ID가 없어 운영자가 그 특정 요청을 Sentry/로그에서 찾을 수 없었다.

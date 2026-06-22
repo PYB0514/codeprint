@@ -778,6 +778,9 @@ public class GraphWarningService {
             String fnName = nameMap.get(entry.getKey());
             // 테스트 함수(Test*·_test.go·*Test.java 등)는 setup+assert로 자연히 호출이 많음 — 단일 책임 위반 아님
             if (isTestArtifact(filePathMap.getOrDefault(entry.getKey(), ""), fnName)) continue;
+            // 진입점 main — 부트스트랩(Spring main·CLI main·func main 등)은 본질적으로 여러 협력자를 호출하므로
+            // 단일 책임 위반이 아니다. "조율자를 SRP 위반으로 부르는" 과탐을 막는다(테스트 함수 제외와 동일 원리).
+            if ("main".equals(fnName)) continue;
             // 파일 내 동명 머지 노드 — union된 fan-out이라 단일 책임 신호 아님(정밀 가드: 노드별 머지 다중도)
             if (mergedDefCountMap.getOrDefault(entry.getKey(), 1) >= 2) continue;
             Map<String, Object> w = new LinkedHashMap<>();
