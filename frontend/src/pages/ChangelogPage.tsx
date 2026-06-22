@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.6',
+    date: '2026-06-22',
+    title: 'AI 키 관리 API 500 오류 수정 — AI 기능 정상화',
+    type: 'fix',
+    items: [
+      { category: 'AI', desc: 'AI 제공자 키 조회·등록 등 AI 관련 API(/api/ai/*)가 내부 오류로 동작하지 않던 문제를 수정했습니다. 이제 Claude/OpenAI/Gemini API 키를 정상적으로 등록하고 함수 설명·코드 생성 등 AI 기능을 사용할 수 있습니다. (서버 오류 추적 ID 알림 기능이 이 잠재 오류를 찾아내 수정으로 이어졌습니다.)' },
+    ],
+  },
+  {
     version: 'v0.93.5',
     date: '2026-06-22',
     title: '서버 오류 발생 시 추적 ID를 화면에 표시',
