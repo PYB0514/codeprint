@@ -831,4 +831,118 @@ class GraphWarningServiceTest {
 
         assertThat(warnings).noneMatch(w -> "INTENT_DRIFT".equals(w.get("type")));
     }
+
+    // ===== LAYERED ARCHITECTURE (비DDD 프로젝트 레이어 컨벤션 위반) =====
+
+    @Test
+    @DisplayName("LAYERED_BYPASS — service 레이어 존재 시 Controller가 Repository를 직접 import")
+    void layeredBypass_detected() {
+        Node controller = nodeAt("OwnerController", "/app/web/OwnerController.java");
+        Node svc = nodeAt("OwnerService", "/app/service/OwnerService.java");
+        Node repo = nodeAt("OwnerRepository", "/app/repo/OwnerRepository.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(controller, svc, repo),
+                List.of(importEdgeForPath(controller.getId(), repo.getId())));
+
+        assertThat(warnings).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("LAYERED_BYPASS"));
+    }
+
+    @Test
+    @DisplayName("LAYERED_BYPASS 미발생 — service 레이어 없으면 Controller→Repository는 정상(petclinic 패턴)")
+    void layeredBypass_notDetected_whenNoServiceLayer() {
+        Node controller = nodeAt("OwnerController", "/app/owner/OwnerController.java");
+        Node repo = nodeAt("OwnerRepository", "/app/owner/OwnerRepository.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(controller, repo),
+                List.of(importEdgeForPath(controller.getId(), repo.getId())));
+
+        assertThat(warnings).noneMatch(w -> "LAYERED_BYPASS".equals(w.get("type")));
+    }
+
+    @Test
+    @DisplayName("LAYERED_REVERSE_DEPENDENCY — Repository가 Controller를 import (레이어 역전)")
+    void layeredReverse_detected() {
+        Node controller = nodeAt("OwnerController", "/app/web/OwnerController.java");
+        Node repo = nodeAt("OwnerRepository", "/app/repo/OwnerRepository.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(controller, repo),
+                List.of(importEdgeForPath(repo.getId(), controller.getId())));
+
+        assertThat(warnings).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("LAYERED_REVERSE_DEPENDENCY"));
+    }
+
+    @Test
+    @DisplayName("Layered 정방향 import(Controller→Service→Repository)는 경고 없음")
+    void layeredNormalDirection_noWarning() {
+        Node controller = nodeAt("OwnerController", "/app/web/OwnerController.java");
+        Node svc = nodeAt("OwnerService", "/app/service/OwnerService.java");
+        Node repo = nodeAt("OwnerRepository", "/app/repo/OwnerRepository.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(controller, svc, repo),
+                List.of(importEdgeForPath(controller.getId(), svc.getId()),
+                        importEdgeForPath(svc.getId(), repo.getId())));
+
+        assertThat(warnings).noneMatch(w -> String.valueOf(w.get("type")).startsWith("LAYERED_"));
+    }
+
+    @Test
+    @DisplayName("Layered 디렉터리 컨벤션 — 클래스명 접미사 없이 controllers/·services/·repositories/ 로 레이어 인식")
+    void layered_directoryConvention() {
+        Node controller = nodeAt("handler", "/src/controllers/handler.js");
+        Node svc = nodeAt("logic", "/src/services/logic.js");
+        Node repo = nodeAt("queries", "/src/repositories/queries.js");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(controller, svc, repo),
+                List.of(importEdgeForPath(repo.getId(), controller.getId())));
+
+        assertThat(warnings).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("LAYERED_REVERSE_DEPENDENCY"));
+    }
+
+    @Test
+    @DisplayName("Layered 미적용 — 단일 레이어(Controller만 분류)면 경고 없음")
+    void layered_notApplied_singleLayer() {
+        Node c1 = nodeAt("FooController", "/app/FooController.java");
+        Node c2 = nodeAt("BarController", "/app/BarController.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(c1, c2),
+                List.of(importEdgeForPath(c1.getId(), c2.getId())));
+
+        assertThat(warnings).noneMatch(w -> String.valueOf(w.get("type")).startsWith("LAYERED_"));
+    }
+
+    @Test
+    @DisplayName("Layered 미적용 — DDD 프로젝트(domain/application/infrastructure)는 LAYERED 경고를 내지 않음")
+    void layered_notApplied_whenDddProject() {
+        Node controller = nodeAt("OwnerController", "/app/interfaces/OwnerController.java");
+        Node appSvc = nodeAt("OwnerService", "/app/application/owner/OwnerService.java");
+        Node model = nodeAt("Owner", "/app/domain/owner/Owner.java");
+        Node repo = nodeAt("OwnerRepository", "/app/infrastructure/persistence/OwnerRepository.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(controller, appSvc, model, repo),
+                List.of(importEdgeForPath(controller.getId(), repo.getId())));
+
+        assertThat(warnings).noneMatch(w -> String.valueOf(w.get("type")).startsWith("LAYERED_"));
+    }
+
+    @Test
+    @DisplayName("Layered 테스트 코드 제외 — 테스트 경로 노드는 레이어 분류 대상 아님")
+    void layered_excludesTestArtifacts() {
+        Node controller = nodeAt("OwnerController", "/app/web/OwnerController.java");
+        Node svc = nodeAt("OwnerService", "/app/service/OwnerService.java");
+        Node testRepo = nodeAt("OwnerRepository", "/src/test/java/app/OwnerRepository.java");
+
+        // 테스트 파일(OwnerRepository)에서 Controller로의 역전 import는 분류 제외라 무시되어야 함
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(controller, svc, testRepo),
+                List.of(importEdgeForPath(testRepo.getId(), controller.getId())));
+
+        assertThat(warnings).noneMatch(w -> String.valueOf(w.get("type")).startsWith("LAYERED_"));
+    }
 }

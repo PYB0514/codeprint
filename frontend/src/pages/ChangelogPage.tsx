@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.0',
+    date: '2026-06-22',
+    title: '비DDD 프로젝트 레이어 위반 경고 — Controller/Service/Repository 자동 감지',
+    type: 'feature',
+    items: [
+      { category: '경고', desc: '지금까지 아키텍처 경고(컨텍스트 경계·의존 방향 등)는 domain/application/infrastructure 폴더를 쓰는 DDD 프로젝트에만 적용돼, 일반적인 레이어드 구조(Controller/Service/Repository) 프로젝트에서는 경고가 거의 나오지 않았습니다. 이제 클래스명 접미사(OwnerController·OwnerRepository)와 디렉터리 컨벤션(controllers/·services/·repositories/)으로 레이어를 자동 감지해 두 가지 위반을 잡습니다. ①레이어 역전 의존(LAYERED_REVERSE_DEPENDENCY): Repository가 Controller를 import하는 등 하위 레이어가 상위를 참조하는 경우. ②Service 레이어 우회(LAYERED_BYPASS): Service 레이어가 있는데도 Controller가 Repository를 직접 접근하는 경우. Service 레이어가 아예 없는 단순 앱은 정상으로 보고 경고하지 않습니다.' },
+    ],
+  },
+  {
     version: 'v0.92.2',
     date: '2026-06-21',
     title: '도메인 자동 분류 정확도 개선 — 동사형 파일명 → 명사형 도메인',
