@@ -9,6 +9,7 @@ import com.codeprint.domain.graph.NodeType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -988,5 +989,41 @@ class GraphWarningServiceTest {
                 List.of(importEdgeForPath(svc.getId(), model.getId())));
 
         assertThat(warnings).noneMatch(w -> String.valueOf(w.get("type")).startsWith("LAYERED_"));
+    }
+
+    @Test
+    @DisplayName("HIGH_FAN_OUT — main 진입점은 호출이 많아도 제외(부트스트랩은 SRP 위반 아님)")
+    void highFanOut_excludesMainEntryPoint() {
+        List<Node> nodes = new ArrayList<>();
+        List<Edge> edges = new ArrayList<>();
+        Node main = funcNodeWithPath("main", "/app/Application.java");
+        nodes.add(main);
+        for (int i = 0; i < 9; i++) {
+            Node callee = funcNodeWithPath("dep" + i, "/app/Dep" + i + ".java");
+            nodes.add(callee);
+            edges.add(callEdge(main.getId(), callee.getId(), false));
+        }
+
+        List<Map<String, Object>> warnings = service.detect(nodes, edges);
+
+        assertThat(warnings).noneMatch(w -> "HIGH_FAN_OUT".equals(w.get("type")));
+    }
+
+    @Test
+    @DisplayName("HIGH_FAN_OUT — main이 아닌 일반 함수는 7개 초과 호출 시 감지(대조)")
+    void highFanOut_detectsNonMainFunction() {
+        List<Node> nodes = new ArrayList<>();
+        List<Edge> edges = new ArrayList<>();
+        Node orchestrator = funcNodeWithPath("doEverything", "/app/Big.java");
+        nodes.add(orchestrator);
+        for (int i = 0; i < 9; i++) {
+            Node callee = funcNodeWithPath("dep" + i, "/app/Dep" + i + ".java");
+            nodes.add(callee);
+            edges.add(callEdge(orchestrator.getId(), callee.getId(), false));
+        }
+
+        List<Map<String, Object>> warnings = service.detect(nodes, edges);
+
+        assertThat(warnings).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("HIGH_FAN_OUT"));
     }
 }

@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.4',
+    date: '2026-06-22',
+    title: '과도한 의존(HIGH_FAN_OUT) 경고에서 main 진입점 제외 — 오탐 감소',
+    type: 'fix',
+    items: [
+      { category: '경고', desc: '"한 함수가 7개 넘게 호출"을 잡는 과도한 의존(HIGH_FAN_OUT) 경고에서 main 진입점을 제외했습니다. main(Spring 부트스트랩·CLI·func main 등)은 본질적으로 여러 협력자를 호출하는 게 정상이라 단일 책임 위반이 아닌데, 기존에는 이를 경고로 잡는 오탐이 있었습니다. 테스트 함수를 제외하는 것과 같은 원리입니다. Codeprint로 Codeprint 자체를 분석하는 도그푸딩 과정에서 발견·수정했습니다.' },
+    ],
+  },
+  {
     version: 'v0.93.3',
     date: '2026-06-22',
     title: '서버 오류에 추적 ID(traceId) 부여 — 운영 추적성 개선',
