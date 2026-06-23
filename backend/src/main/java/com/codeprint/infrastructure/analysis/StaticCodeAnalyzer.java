@@ -51,6 +51,8 @@ public class StaticCodeAnalyzer {
         // tree-sitter는 raw content를 직접 파싱(AST가 주석·문자열을 구분하므로 masking 불필요). 실패 시 정규식 폴백.
         List<String> functions;
         Map<String, List<String>> functionCalls;
+        // 파일이 선언한 클래스/인터페이스명 — 파일명≠클래스명 언어(TS 등)의 Type::method 해소용. 기본 빈 목록.
+        List<String> declaredTypes = List.of();
         Optional<TreeSitterJavaAnalyzer.Result> javaTs =
                 language.equals("Java") ? treeSitterJava.parse(content) : Optional.empty();
         Optional<TreeSitterPythonAnalyzer.Result> pyTs =
@@ -83,6 +85,7 @@ public class StaticCodeAnalyzer {
         } else if (tsTs.isPresent()) {
             functions = tsTs.get().functions();
             functionCalls = tsTs.get().functionCalls();
+            declaredTypes = tsTs.get().declaredTypes();
         } else if (goTs.isPresent()) {
             functions = goTs.get().functions();
             functionCalls = goTs.get().functionCalls();
@@ -131,7 +134,7 @@ public class StaticCodeAnalyzer {
         List<RawSqlAccess> rawSqlAccesses = extractRawSqlAccesses(content);
         List<String> frameworkAnnotatedMethods = extractFrameworkAnnotatedMethods(masked, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함

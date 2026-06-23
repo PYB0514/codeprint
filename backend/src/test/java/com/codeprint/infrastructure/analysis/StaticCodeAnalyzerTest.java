@@ -525,6 +525,87 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("TS 생성자 파라미터 프로퍼티 this.field 호출을 선언 타입으로 한정한다(NestJS DI)")
+    void TS_생성자_파라미터_프로퍼티_타입_해소() throws IOException {
+        Path file = tempDir.resolve("UserService.ts");
+        Files.writeString(file, """
+                class UserService {
+                  constructor(
+                    private readonly userRepository: Repository<User>,
+                    private userService: UserService
+                  ) {}
+                  async update(id: number) {
+                    await this.userRepository.findOne(id);
+                    this.userService.findById(id);
+                  }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functionCalls().get("update"))
+                .contains("Repository::findOne", "UserService::findById");
+        assertThat(result.functionCalls().get("update")).doesNotContain("findOne", "findById");
+    }
+
+    @Test
+    @DisplayName("TS 파라미터·지역변수(어노테이션·new) 수신자 호출을 타입으로 한정한다")
+    void TS_파라미터_지역변수_타입_해소() throws IOException {
+        Path file = tempDir.resolve("Handler.ts");
+        Files.writeString(file, """
+                class Handler {
+                  run(article: Article) {
+                    article.publish();
+                    const c: Comment = build();
+                    c.flag();
+                    const d = new Draft();
+                    d.save();
+                  }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functionCalls().get("run"))
+                .contains("Article::publish", "Comment::flag", "Draft::save");
+    }
+
+    @Test
+    @DisplayName("TS 클래스/인터페이스 선언명을 declaredTypes로 추출한다(파일명≠클래스명 해소용)")
+    void TS_declaredTypes_추출() throws IOException {
+        Path file = tempDir.resolve("article.service.ts");
+        Files.writeString(file, """
+                export interface IArticle {}
+                export class ArticleService {
+                  findAll() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.declaredTypes()).contains("ArticleService", "IArticle");
+    }
+
+    @Test
+    @DisplayName("TS 타입을 모르는 수신자(어노테이션·new 없음)는 bare 유지")
+    void TS_미해소_수신자_bare_유지() throws IOException {
+        Path file = tempDir.resolve("Svc.ts");
+        Files.writeString(file, """
+                class Svc {
+                  run() {
+                    const x = build();
+                    x.doThing();
+                  }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functionCalls().get("run")).contains("doThing");
+        assertThat(result.functionCalls().get("run")).noneMatch(c -> c.endsWith("::doThing"));
+    }
+
+    @Test
     @DisplayName("Java 소문자 호출 규칙은 영향받지 않는다 (회귀)")
     void Java_소문자_호출_규칙_유지() throws IOException {
         // C#/Go 분기 추가가 Java 호출 추출(대문자 생성자 제외)을 깨지 않는지 확인
