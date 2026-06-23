@@ -53,6 +53,8 @@ public class StaticCodeAnalyzer {
         Map<String, List<String>> functionCalls;
         // 파일이 선언한 클래스/인터페이스명 — 파일명≠클래스명 언어(TS 등)의 Type::method 해소용. 기본 빈 목록.
         List<String> declaredTypes = List.of();
+        // 테스트 함수명 — 파일명으로 못 거르는 인라인 테스트(Rust #[test]) HIGH_FAN_OUT 제외용. 기본 빈 목록.
+        List<String> testMethods = List.of();
         Optional<TreeSitterJavaAnalyzer.Result> javaTs =
                 language.equals("Java") ? treeSitterJava.parse(content) : Optional.empty();
         Optional<TreeSitterPythonAnalyzer.Result> pyTs =
@@ -94,6 +96,8 @@ public class StaticCodeAnalyzer {
         } else if (rustTs.isPresent()) {
             functions = rustTs.get().functions();
             functionCalls = rustTs.get().functionCalls();
+            declaredTypes = rustTs.get().declaredTypes();
+            testMethods = rustTs.get().testFunctions();
         } else if (csTs.isPresent()) {
             functions = csTs.get().functions();
             functionCalls = csTs.get().functionCalls();
@@ -136,7 +140,7 @@ public class StaticCodeAnalyzer {
         List<RawSqlAccess> rawSqlAccesses = extractRawSqlAccesses(content);
         List<String> frameworkAnnotatedMethods = extractFrameworkAnnotatedMethods(masked, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함

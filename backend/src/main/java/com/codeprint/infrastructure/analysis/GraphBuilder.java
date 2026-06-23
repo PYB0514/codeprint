@@ -84,6 +84,10 @@ public class GraphBuilder {
                 if (pf.valueReferencedFunctions() != null && pf.valueReferencedFunctions().contains(funcName)) {
                     meta.put("referencedAsValue", true);
                 }
+                // 테스트 함수(Rust #[test]/#[cfg(test)] mod 등 파일명으로 못 거르는 인라인 테스트) — HIGH_FAN_OUT 제외용
+                if (pf.testMethods() != null && pf.testMethods().contains(funcName)) {
+                    meta.put("isTest", true);
+                }
                 // 파일 내 동명 정의가 2개 이상이면 이 노드는 여러 정의의 머지 — 호출이 union 되어 fan-out이 부풀려진다.
                 // HIGH_FAN_OUT 정밀 가드가 이 값으로 union-부풀린 fan-out을 제외한다.
                 if (pf.functionDefCounts() != null) {

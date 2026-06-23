@@ -25,9 +25,10 @@ public record ParsedFile(
         List<String> frameworkAnnotatedMethods,  // 프레임워크 어노테이션/데코레이터가 붙은 메서드명 목록 (런타임이 호출 → DEAD_CODE 제외용)
         List<String> valueReferencedFunctions,   // 호출이 아닌 값(콜백·고차함수 인자)으로 참조되는 함수명 목록 (DEAD_CODE 제외용)
         Map<String, Integer> functionDefCounts,  // 함수명 → 파일 내 정의 횟수 (≥2면 동명 머지 노드 — HIGH_FAN_OUT 정밀 가드용)
-        List<String> declaredTypes               // 파일이 선언한 클래스/인터페이스명 목록 (파일명≠클래스명 언어의 Type::method 해소용 — Java/C#은 빈 목록)
+        List<String> declaredTypes,              // 파일이 선언한 클래스/인터페이스명 목록 (파일명≠클래스명 언어의 Type::method 해소용 — Java/C#은 빈 목록)
+        List<String> testMethods                 // 테스트 함수명 목록 (Rust #[test]/#[cfg(test)] mod 등 — HIGH_FAN_OUT 제외용. 파일명으로 못 거르는 인라인 테스트 대응)
 ) {
-    // 기존 호출부 호환용 — declaredTypes 미지정 시 빈 목록 (파일명 매칭만 쓰는 Java/C# 등)
+    // 기존 호출부 호환용 — declaredTypes·testMethods 미지정 시 빈 목록 (파일명 매칭만 쓰는 Java/C# 등)
     public ParsedFile(
             String filePath, String language, List<String> functions, List<String> imports,
             String fileComment, Map<String, String> functionComments, Map<String, List<String>> functionCalls,
@@ -39,6 +40,22 @@ public record ParsedFile(
         this(filePath, language, functions, imports, fileComment, functionComments, functionCalls,
                 instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings,
                 implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods,
-                valueReferencedFunctions, functionDefCounts, List.of());
+                valueReferencedFunctions, functionDefCounts, List.of(), List.of());
+    }
+
+    // declaredTypes 지정·testMethods 미지정 호환용 (Go/TS/Python 등 declaredTypes만 쓰는 경우)
+    public ParsedFile(
+            String filePath, String language, List<String> functions, List<String> imports,
+            String fileComment, Map<String, String> functionComments, Map<String, List<String>> functionCalls,
+            List<String> instantiatedClasses, List<DbTableInfo> dbTables, String repositoryEntityClass,
+            List<ColumnInfo> entityColumns, List<String> apiCalls, List<String> controllerMappings,
+            List<String> implementedInterfaces, List<String> asyncMethods, List<String> jsxComponents,
+            List<RawSqlAccess> rawSqlAccesses, List<String> frameworkAnnotatedMethods,
+            List<String> valueReferencedFunctions, Map<String, Integer> functionDefCounts,
+            List<String> declaredTypes) {
+        this(filePath, language, functions, imports, fileComment, functionComments, functionCalls,
+                instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings,
+                implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods,
+                valueReferencedFunctions, functionDefCounts, declaredTypes, List.of());
     }
 }
