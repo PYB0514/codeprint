@@ -7,6 +7,7 @@ import com.codeprint.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,5 +22,13 @@ public class UserQueryPortImpl implements UserQueryPort {
     public Optional<UserSummaryDto> findById(UUID userId) {
         return userRepository.findById(userId)
                 .map(u -> new UserSummaryDto(u.getId(), u.getUsername(), u.getAvatarUrl()));
+    }
+
+    // 여러 유저 요약 일괄 조회 — findByIdIn 배치
+    @Override
+    public List<UserSummaryDto> findByIds(List<UUID> userIds) {
+        return userRepository.findByIdIn(userIds).stream()
+                .map(u -> new UserSummaryDto(u.getId(), u.getUsername(), u.getAvatarUrl()))
+                .toList();
     }
 }

@@ -17,7 +17,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -57,9 +60,7 @@ public class MessageController {
     @GetMapping("/inbox")
     public List<MessageResponse> inbox(@RequestParam(defaultValue = "0") int page, Principal principal) {
         UUID myId = currentUserId(principal);
-        return messageService.getInbox(myId, page).stream()
-            .map(dm -> toResponse(dm, messageService))
-            .toList();
+        return toResponses(messageService.getInbox(myId, page));
     }
 
     // 특정 유저와의 대화 스레드
@@ -68,9 +69,7 @@ public class MessageController {
                                         @RequestParam(defaultValue = "0") int page,
                                         Principal principal) {
         UUID myId = currentUserId(principal);
-        return messageService.getThread(myId, userId, page).stream()
-            .map(dm -> toResponse(dm, messageService))
-            .toList();
+        return toResponses(messageService.getThread(myId, userId, page));
     }
 
     // 쪽지 전송
@@ -93,7 +92,28 @@ public class MessageController {
         messageService.markRead(messageId, currentUserId(principal));
     }
 
-    // DirectMessage -> MessageResponse 변환
+    // DirectMessage 목록 -> MessageResponse 목록 — 작성자/수신자 유저를 한 번에 배치 조회해 N+1 제거
+    private List<MessageResponse> toResponses(List<DirectMessage> messages) {
+        if (messages.isEmpty()) return List.of();
+        Set<UUID> userIds = new HashSet<>();
+        for (DirectMessage dm : messages) {
+            userIds.add(dm.getSenderId());
+            userIds.add(dm.getReceiverId());
+        }
+        Map<UUID, UserSummaryDto> users = messageService.getUsers(userIds);
+        return messages.stream().map(dm -> {
+            UserSummaryDto sender = users.get(dm.getSenderId());
+            UserSummaryDto receiver = users.get(dm.getReceiverId());
+            return new MessageResponse(
+                dm.getId(),
+                dm.getSenderId(), sender != null ? sender.username() : "unknown", sender != null ? sender.avatarUrl() : null,
+                dm.getReceiverId(), receiver != null ? receiver.username() : "unknown", receiver != null ? receiver.avatarUrl() : null,
+                dm.getContent(), dm.getReadAt(), dm.getCreatedAt()
+            );
+        }).toList();
+    }
+
+    // DirectMessage -> MessageResponse 변환 (단건 — 쪽지 전송 응답)
     private MessageResponse toResponse(DirectMessage dm, MessageApplicationService svc) {
         UserSummaryDto sender = svc.getUser(dm.getSenderId());
         UserSummaryDto receiver = svc.getUser(dm.getReceiverId());

@@ -10,7 +10,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -67,5 +70,14 @@ public class MessageApplicationService {
     public UserSummaryDto getUser(UUID userId) {
         return userQueryPort.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    }
+
+    // 여러 유저 요약을 한 번에 조회해 userId→요약 맵 반환 (쪽지 목록 N+1 제거)
+    @Transactional(readOnly = true)
+    public Map<UUID, UserSummaryDto> getUsers(Collection<UUID> userIds) {
+        if (userIds.isEmpty()) return Map.of();
+        Map<UUID, UserSummaryDto> map = new HashMap<>();
+        for (UserSummaryDto u : userQueryPort.findByIds(List.copyOf(userIds))) map.put(u.id(), u);
+        return map;
     }
 }

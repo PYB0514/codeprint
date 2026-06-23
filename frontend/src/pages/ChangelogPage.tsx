@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.21',
+    date: '2026-06-24',
+    title: '쪽지함 로딩 속도 개선 — 대화 상대 정보 일괄 조회',
+    type: 'fix',
+    items: [
+      { category: '성능', desc: '받은 쪽지함과 대화 스레드를 불러올 때 쪽지마다 보낸이·받는이 정보를 따로 조회하던 것을, 한 번에 묶어 조회하도록 바꿨습니다. 쪽지가 많을 때의 응답 속도를 개선했습니다. 표시 내용은 동일합니다.' },
+    ],
+  },
+  {
     version: 'v0.93.20',
     date: '2026-06-24',
     title: '팔로워/팔로잉 목록 로딩 속도 개선 — 유저 정보 일괄 조회',
