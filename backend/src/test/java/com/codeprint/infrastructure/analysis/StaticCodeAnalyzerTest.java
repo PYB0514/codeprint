@@ -405,6 +405,84 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("Go 리시버 변수 수신자 호출을 선언 타입으로 한정한다(c *Context → c.reset()=Context::reset)")
+    void Go_리시버_수신자_타입_해소() throws IOException {
+        Path file = tempDir.resolve("context.go");
+        Files.writeString(file, """
+                package gin
+
+                type Context struct {}
+
+                func (c *Context) Next() {
+                    c.reset()
+                }
+
+                func (c *Context) reset() {}
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.functionCalls().get("Next")).contains("Context::reset");
+        assertThat(result.functionCalls().get("Next")).doesNotContain("reset");
+        // 파일이 선언한 타입명이 declaredTypes로 방출돼야 Type::method 해소가 가능
+        assertThat(result.declaredTypes()).contains("Context");
+    }
+
+    @Test
+    @DisplayName("Go 파라미터 타입 수신자도 선언 타입으로 한정한다(s *Server → s.Handle())")
+    void Go_파라미터_수신자_타입_해소() throws IOException {
+        Path file = tempDir.resolve("router.go");
+        Files.writeString(file, """
+                package gin
+
+                func dispatch(s *Server) {
+                    s.Handle()
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.functionCalls().get("dispatch")).contains("Server::Handle");
+    }
+
+    @Test
+    @DisplayName("Go 패키지 함수 호출은 bare로 유지된다(fmt.Println → Println, 스코프에 없는 수신자)")
+    void Go_패키지_호출_bare_유지() throws IOException {
+        Path file = tempDir.resolve("log.go");
+        Files.writeString(file, """
+                package gin
+
+                func report() {
+                    fmt.Println("x")
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        // fmt는 스코프에 없는 패키지명 → bare 유지 (로컬 함수명 매칭 보존)
+        assertThat(result.functionCalls().get("report")).contains("Println");
+        assertThat(result.functionCalls().get("report")).doesNotContain("fmt::Println");
+    }
+
+    @Test
+    @DisplayName("Go 지역변수 복합 리터럴 타입 수신자를 한정한다(e := Engine{} → e.Run())")
+    void Go_지역변수_복합리터럴_타입_해소() throws IOException {
+        Path file = tempDir.resolve("main.go");
+        Files.writeString(file, """
+                package main
+
+                func boot() {
+                    e := Engine{}
+                    e.Run()
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.functionCalls().get("boot")).contains("Engine::Run");
+    }
+
+    @Test
     @DisplayName("C# new 인스턴스화는 functionCalls에 호출로 포함되지 않는다")
     void CSharp_new_인스턴스화_제외() throws IOException {
         Path file = tempDir.resolve("Factory.cs");
@@ -2888,7 +2966,9 @@ class StaticCodeAnalyzerTest {
 
         assertThat(result.functions()).contains("run", "Handle", "helper");
         assertThat(result.functionCalls().get("run")).contains("helper");
-        assertThat(result.functionCalls().get("Handle")).contains("process");
+        // 리시버 s *Server의 메서드 호출 s.process()는 선언 타입으로 한정 → Server::process (타입 인지 해소)
+        assertThat(result.functionCalls().get("Handle")).contains("Server::process");
+        assertThat(result.functionCalls().get("Handle")).doesNotContain("process");
     }
 
     @Test

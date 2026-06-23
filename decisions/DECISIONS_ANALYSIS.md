@@ -1014,3 +1014,19 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **★ 검증 함정 — self-analysis는 무효, 외부 벤치라야 유효.** 1차로 self(`src/main/java`) A/B하니 노드 1386→1378·엣지 3031→2960(-71)로 *달라* 보여 회귀로 오인할 뻔. 원인: Codeprint가 **자기 소스를 분석**하는데 리팩토링이 analyzer 소스에서 메서드(add/text/language ×10)를 제거하고 parse 구조를 바꿔 *분석 대상 코드 자체가 변함* — analyzer 동작 버그가 아니라 당연한 결과. 올바른 검증 = 소스 고정 외부 벤치. 7개 벤치 A/B(노드/엣지) **전부 바이트 동일**: gin(Go) 1374/4488, spring-petclinic(Java) 224/392, py-realworld(Python) 294/486, nest-realworld(TS) 113/155, csharp-clean(C#) 929/843, ripgrep(Rust) 1824/6980, fmt(C++) 965/2387 — before=after. compileJava·StaticCodeAnalyzerTest·GraphBuilderTest green.
 
 **결과.** 10개 analyzer 총 2037줄 → 1692줄(+베이스 ~95줄, 순 -345줄). native 폴백 로직 단일 출처화(유지보수성). 레이어 B(타입 인지 해소의 Go/Rust/C++ 확장)는 이 토대 위 언어별 증분으로 분리 진행 가능. **메타 교훈: 후보를 grep 시그니처 수준으로 평가해 단정하지 말 것 — 전수 코드 검증이 결론을 뒤집었다.**
+
+---
+
+## Phase 2 — 타입 인지 호출 해소 (Go, declaredTypes 토대 위) (2026-06-23)
+
+**문제.** Go 리시버 메서드 호출(`c.Next()`·`c.JSON()` — gin 도처)이 bare `Next`/`JSON`으로 기록 → 동명 함수 다수에 phantom 매칭. Java/C#/TS/Python #352~355와 동일 갭.
+
+**선행 발견 — Go는 declaredTypes 미방출이라 `Type::method`가 해소조차 안 됨.** 조사 결과 GraphBuilder `resolveQualifiedCall`은 파일명==Type OR declaredTypes.contains(Type)로 매칭하는데, Go는 ①파일명 snake_case≠타입명(`user_repository.go`≠`UserRepository`), ②`StaticCodeAnalyzer`가 Go의 declaredTypes를 채우지 않음(Python/TS만). → 변수 수신자를 `Type::method`로 바꿔도 해소 실패로 엣지 소멸 위험(=#354 TS naive 이식의 recall 파괴와 동형). **선행 = Go `type_declaration`→`type_spec`/`type_alias` 선언명을 declaredTypes로 방출**. 단독 측정: gin 엣지 4488=4488 불변(uppercase-operand `Type.Method` 호출이 gin엔 거의 없음 — 선행은 무영향·무위험 토대).
+
+**선택 — Go 변수 타입 스코프(Java 동형, Go 특유 적응).** 메서드 리시버(`func (c *Context)` → receiver 필드 parameter_list, `c`→Context)·함수 파라미터(`s *Server`)·지역변수(`e := Engine{}`·`var e Engine`)에서 변수명→타입 추적. `simpleTypeName`이 `pointer_type`(*Context) 언래핑·`type_identifier`만(대소문자 무관 — Go 비공개 타입도 메서드 보유). 수신자 해소: selector_expression operand가 스코프에 있으면 `scope.get::method`, 없고 대문자면 기존 `Type.Method` 동작 보존, 그 외(fmt 등 패키지)는 bare 유지. 복합 리터럴만 지역변수 타입 추론(함수 반환 타입 `x := f()`는 미추론 — 범위 외).
+
+**★GraphBuilder sameFile 보강(교차 언어 영향 측정).** Go `c.Method()`는 대부분 *같은 파일* 내 호출(Context 메서드가 같은 Context 메서드 호출)인데, `Context::Method`로 바꾸면 sameFile 분기(targetClass==callerClassName, Go는 파일명≠타입명이라 불일치)를 건너뛰고 resolveQualifiedCall이 같은 파일을 제외 → sameFile 마커(DEAD_CODE 카운트용) 소멸 위험. 해결 = sameFile 조건에 `|| callerFile.declaredTypes().contains(targetClass)` 추가. **교차 언어 무회귀 측정**: Java/C#(declaredTypes 빈값) 무영향, TS/Python도 벤치 A/B 불변(spring-petclinic 224/392·nest 113/155·py 294/486·csharp 929/843 = before=after).
+
+**검증 — gin A/B(99 .go).** 엣지 4488→**4400(-88)**, 노드 1374 불변, DEAD_CODE 0=0(✅워닝 없음 양쪽). -88의 정체: `c.Method()`(같은 파일)가 BEFORE엔 sameFile 마커 + bare `Method`의 cross-file 폴백 엣지(onlyImported 실패→동명 다른 파일=phantom)를 둘 다 생성, AFTER엔 마커 유지+resolveQualifiedCall이 같은 파일 제외 → **phantom cross-file 엣지만 제거**. 노드·DEAD_CODE 불변 = 고립 함수 0(recall 보존, TS/C#처럼 phantom↓ 방향). 단위: StaticCodeAnalyzerTest 4종(리시버·파라미터·지역변수 복합리터럴·패키지 bare 유지) + 기존 Go 리시버 테스트 1종을 새 동작(`s.process()`→`Server::process`)으로 갱신.
+
+**결과.** 타입 인지 해소 = **Java·C#·TypeScript·Python·Go 5개 언어**. declaredTypes 토대 재사용 + GraphBuilder sameFile 보강(declaredTypes-aware). 범위 외(후속): Go struct 필드 2-hop(`s.repo.Save()`)·함수 반환 타입 추론·Rust/C++.

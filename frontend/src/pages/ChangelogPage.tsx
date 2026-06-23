@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.13',
+    date: '2026-06-23',
+    title: '함수 호출 연결 정확도 개선 — 변수 선언 타입 기반 추적(Go)',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: 'Go에서도 변수를 통해 호출하는 함수를 그 변수의 선언 타입으로 정확히 연결하도록 개선했습니다. 메서드 리시버(func (c *Context) ...에서의 c), 함수 매개변수, 지역변수(e := Engine{})의 타입을 추적해 c.Next() 같은 호출을 타입을 선언한 파일로 정확히 잇습니다. Go는 파일명과 타입명이 다르므로(예: user_repository.go의 UserRepository), 파일이 선언한 타입 이름으로 대상을 찾는 방식을 함께 적용했습니다. 외부 Gin 오픈소스 분석에서 변수 메서드 호출이 엉뚱한 동명 함수로 잘못 이어지던 가짜 연결 88개가 제거되고(노드·미참조 함수 수는 그대로), 같은 파일 내 호출 표시는 보존됨을 확인했습니다. 이로써 Java·C#·TypeScript·Python·Go 다섯 언어가 변수 타입 기반 호출 추적을 지원합니다.' },
+    ],
+  },
+  {
     version: 'v0.93.12',
     date: '2026-06-23',
     title: '함수 호출 연결 정확도 개선 — 변수 선언 타입 기반 추적(Python)',
