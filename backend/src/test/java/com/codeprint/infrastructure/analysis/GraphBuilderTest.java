@@ -672,6 +672,34 @@ class GraphBuilderTest {
         assertThat(recoveryDead).isFalse();
     }
 
+    // ── declaredTypes 기반 Type::method 해소 (파일명≠클래스명 언어) ──────────
+
+    @Test
+    @DisplayName("파일명≠클래스명일 때 declaredTypes로 Type::method를 해소한다(TS: ArticleService→article.service.ts)")
+    void declaredTypes로_파일명_불일치_해소() {
+        // caller: article.controller.ts 의 getAll() 이 ArticleService::findAll() 호출
+        ParsedFile caller = parsedFileWithCalls("src/article/article.controller.ts", "TypeScript",
+                List.of("getAll"), Map.of("getAll", List.of("ArticleService::findAll")));
+        // callee: 파일명은 article.service 지만 클래스명은 ArticleService — declaredTypes로만 매칭 가능
+        ParsedFile callee = new ParsedFile(
+                "src/article/article.service.ts", "TypeScript",
+                List.of("findAll"), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                List.of("ArticleService") // declaredTypes
+        );
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, callee));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+        boolean resolved = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getMetadata() != null
+                        && "src/article/article.service.ts".equals(e.getMetadata().get("calleeFile")));
+        assertThat(resolved).isTrue();
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private ParsedFile parsedFile(String path, String lang, List<String> functions, Map<String, String> comments) {

@@ -546,13 +546,15 @@ public class GraphBuilder {
         return dot > 0 ? name.substring(0, dot) : name;
     }
 
-    // "Class::method" 형식 호출 — 클래스명이 파일명과 일치하는 파일로 해소 (없으면 null)
+    // "Class::method" 형식 호출 — 클래스명이 파일명 또는 파일이 선언한 클래스명과 일치하는 파일로 해소 (없으면 null).
+    // 파일명 매칭은 Java/C#(파일명=클래스명)용, declaredTypes 매칭은 TS·Python 등(파일명≠클래스명)용.
     private ParsedFile resolveQualifiedCall(ParsedFile callerFile, String calleeFunc,
                                             String targetClass, List<ParsedFile> parsedFiles) {
         for (ParsedFile calleeFile : parsedFiles) {
             if (calleeFile.filePath().equals(callerFile.filePath())) continue;
             if (!calleeFile.functions().contains(calleeFunc)) continue;
             if (extractFileNameWithoutExt(calleeFile.filePath()).equals(targetClass)) return calleeFile;
+            if (calleeFile.declaredTypes().contains(targetClass)) return calleeFile;
         }
         return null;
     }

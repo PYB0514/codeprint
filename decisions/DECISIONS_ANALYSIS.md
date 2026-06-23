@@ -972,3 +972,17 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 - **phantom 제거**: DI 수신자 대부분이 NuGet 인터페이스(IRepository·IMediator·ILogger)라 `IRepository::GetByIdAsync` 등으로 정확화→프로젝트 파일 없어 엣지 미생성(bare가 동명 프로젝트 메서드로 새던 phantom 소멸). Java가 dedup 정탐 복원으로 fan-out↑였던 것과 달리, C# 벤치는 DI=라이브러리라 순 phantom 제거 우세.
 
 **결과.** Java와 동일 메커니즘을 C#에 이식, 외부 클래스 기반 C# 코드에서 phantom 제거+정확 해소 동시 입증, 경고 회귀 0. 단위 5종(필드·제네릭 베이스·primary ctor·nullable 언래핑·var bare 유지). 한계(범위 외): `var` 추론 지역변수 수신자(이 벤치의 도메인 호출 다수가 var)·체인 호출·qualified_name. 다음=TS 시점에 Java/C#/TS 변이로 공유 스코프-해소 엔진 추출(refactor PR).
+
+---
+
+## Phase 2 — 타입 인지 호출 해소 (TS) + ★declaredTypes 공유 해소 인프라 (2026-06-23)
+
+**★ 측정이 드러낸 근본 가정 오류 — "해소 절반은 언어 무관 공통"은 Java/C# 우연이었다.** TS를 Java/C#과 동형으로 1차 구현(필드·생성자 파라미터 프로퍼티·this.field·제네릭·어노테이션·new)한 뒤 NestJS 벤치(ardalis 아님, lujakob/nestjs-realworld-example-app)로 A/B하니 엣지 171→133(-38). probe로 보니 **정탐 파괴**였다: A의 `getFeed→findFeed@article.service.ts`·`createComment→addComment@article.service.ts`가 B에서 소멸. 원인 = `resolveQualifiedCall`이 **파일명**으로 매칭하는데 TS는 클래스 `ArticleService`가 파일 `article.service.ts`에 있어(파일명≠클래스명) `ArticleService::addComment`를 못 찾음. **Java·C#만 특수**(컴파일러/관례가 파일명=클래스명 강제). TS·Python·Go·Rust·C++·Kotlin·Ruby·PHP 전부 파일명≠클래스명 → resolveQualifiedCall의 파일명 매칭은 사실상 Java/C# 전용이었다.
+
+**선택 — declaredTypes 공유 인덱스(진짜 "공통 조각").** 비-Java/C# 언어 전체가 필요로 하는 공통 해소 조각 = 파일이 *선언한* 클래스/인터페이스명 인덱스. `ParsedFile`에 `declaredTypes` 추가(기존 20-arg 생성자는 편의 생성자로 보존 → 호출부 churn 0, Java/C# 등은 빈 목록), `resolveQualifiedCall`이 파일명 OR `declaredTypes.contains(targetClass)`로 매칭. **Java/C#은 declaredTypes 비어 동작 불변(증명적 무회귀)** — C# 벤치 843=843, 전체 단위 통과로 확인. TS analyzer가 class/interface/enum 선언명(type_identifier — nameOf가 거부해 declNameOf 별도)을 수집해 Result로 전달. 1개 언어에서 추상화 뽑기 보류(rule of three)를 이어가되, *해소 인프라*는 TS가 강제한 시점에 구축(사용자 "공통 부분 한 번에" 지시와 정합).
+
+**구현 — TS 타입 스코프(C# 특유 적응).** 이름이 `pattern` 필드(Java/C#은 name)·타입은 `type_annotation` 래퍼·제네릭은 `generic_type.name`·생성자 파라미터 프로퍼티(`accessibility_modifier` 보유 required_parameter)를 필드처럼 수집(NestJS DI 지배 패턴)·지역변수는 어노테이션 또는 `new X()` 추론. 미해소(어노테이션·new 없는 `const x=build()` 등)는 bare 유지.
+
+**검증.** NestJS A/B: 엣지 171→**155**(declaredTypes 적용). naive 133 대비 +22 = 파괴됐던 정탐 복원(probe로 getFeed→findFeed·createComment→addComment 보존 확인), A 대비 -16 = 순 phantom 제거(this.xRepository.method()→Repository::method, TypeORM라 프로젝트 파일 없음). DEAD_CODE 1=1 무회귀. self 프론트 425=425(React 함수형이라 해소 대상 0, 도그푸딩 가치 없음·회귀도 없음 — ★측정으로 사전 확인). Java/C# 무회귀(위). 단위 신규: StaticCodeAnalyzerTest 4종(생성자 프로퍼티·파라미터/지역변수·declaredTypes 추출·미해소 bare) + GraphBuilderTest 1종(파일명≠클래스명 declaredTypes 해소).
+
+**메타 교훈(기록).** TS를 추출 전에 한 사용자 판단이 옳았다 — TS가 "해소 절반 공통" 가정을 반증하고 declaredTypes라는 진짜 공통 조각을 드러냈다. 이제 Python 등 후속 언어는 declaredTypes 위에 타입 스코프 추출만 얹으면 된다(파일명≠클래스명 문제 해결됨). 범위 외: 체인 호출·메서드 반환 타입 추론·Python 미착수.

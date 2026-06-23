@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.11',
+    date: '2026-06-23',
+    title: '함수 호출 연결 정확도 개선 — 변수 선언 타입 기반 추적(TypeScript)',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: 'TypeScript에서도 변수를 통해 호출하는 함수를 그 변수의 선언 타입(클래스 필드·생성자 매개변수 주입·함수 매개변수·지역변수)으로 정확히 연결하도록 개선했습니다. TS·Python처럼 파일명과 클래스명이 다른 언어를 위해, 파일이 선언한 클래스/인터페이스 이름으로 호출 대상을 찾는 공통 해소 방식을 도입했습니다. 외부 NestJS 오픈소스 분석에서 this.articleService.findFeed() 같은 의존성 주입 호출이 정확한 서비스 파일로 연결되고, 라이브러리(TypeORM) 호출이 무관한 파일로 잘못 이어지던 가짜 연결이 제거됨을 확인했습니다. 타입을 알 수 없는 경우엔 기존 방식으로 안전하게 동작합니다.' },
+    ],
+  },
+  {
     version: 'v0.93.10',
     date: '2026-06-23',
     title: '함수 호출 연결 정확도 개선 — 변수 선언 타입 기반 추적(C#)',
