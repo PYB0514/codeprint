@@ -1048,3 +1048,13 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **검증.** ripgrep A/B: 엣지 6980→7398(+418 recall), HIGH_FAN_OUT 77→**42**(테스트 제외가 새 FP 41 + main에 이미 있던 Rust 테스트 FP까지 제거 → net -35), 남은 34 고유함수 중 #[test] **0개**(전부 정탐). DEAD_CODE 1=1. 타 언어 5벤치 before=after 동일(gin 4400·petclinic 224/392·nest 113/155·py 294/486·csharp 929/843 — isTest 메타는 testMethods 비어있는 비-Rust엔 미발동). 단위: 기존 Rust 리시버 1종 갱신(self.process()→Server::process) + 신규 3종(파라미터 수신자·declaredTypes 추출·#[test]/cfg(test) mod 표시). 전체 테스트 green.
 
 **결과.** 타입 인지 해소 = **Java·C#·TypeScript·Python·Go·Rust 6개 언어**. 부수 개선: Rust 인라인 테스트 HIGH_FAN_OUT 제외(기존 사각지대 해소 — 다른 Rust 프로젝트에도 적용). 범위 외(후속): struct 필드 2-hop·함수 반환 타입(`let x = Foo::new()`)·C++.
+
+---
+
+## C++ 타입 인지 해소 — 가용 벤치 저가치로 no-go (2026-06-23)
+
+**문제 → 측정.** Rust 다음 정적 타입 후보로 C++ 타입 인지를 검토. Context78이 "어려움, 가치 측정 먼저"로 표시 → 구현 전 가용 벤치(fmt 71파일·json 490파일)에서 타깃 패턴 빈도 측정. `this->method()`: fmt 32개(전체)·json 38개(include). `var.method()`: fmt src 16개. gin(`c.Method()` 도처)·ripgrep(`self.method()` +418)과 대조적으로 극소.
+
+**이유.** fmt/json은 템플릿 헤더 라이브러리라 free 함수·템플릿 메타프로그래밍·연산자 오버로드가 지배적이고, 타입 인지 해소가 노리는 변수/this 수신자 메서드 호출 패턴은 ~30~40개뿐. 반면 C++는 구현 난도 최고(`this` 두 출처=in-class class_specifier + 아웃오브라인 `Foo::bar` 한정자, 템플릿, 네임스페이스, 정규식 폴백 없음). **ROI 최악**(최고 복잡도 × 최저 가치).
+
+**결과 = 구현하지 않음.** 타입 인지 해소는 패턴이 지배적인 6개 언어(Java·C#·TS·Python·Go·Rust)로 자연 완성. C++는 app-style C++ 벤치(this-> 빈번)가 확보되면 재검토(현 벤치로는 측정 불가). 재시도 시 가치 측정부터. 대신 미테스트 application 서비스 단위 테스트(GraphQuery·AnalysisApplication·AiGraphAnalysis)로 전환 — 안정성·포트폴리오 가치 명확, 방향 모호성 없음.
