@@ -4,6 +4,18 @@
 
 ---
 
+## 정적 분석 파싱 병렬화 — parallelStream (2026-06-24, 성능)
+
+**문제.** `AnalysisRunner`가 소스 파일을 `sourceFiles.stream().map(analyze)`로 **순차** 파싱. tree-sitter 파싱은 파일별 독립·CPU 바운드라 파일 많은 대형 레포에서 파싱 단계가 길어짐(그래프 저장 #362 최적화 후 다음 병목).
+
+**선택한 해법 — `.parallelStream()`.** 한 줄 변경. 안전성 근거를 먼저 코드로 검증: ①`AbstractTreeSitterAnalyzer.parseTree`가 호출마다 `new TSParser()` — 파서 공유 없음. ②공유 상태는 `cachedLanguage`/`nativeUnavailable`뿐이며 `volatile`+`synchronized` 가드, TSLanguage는 읽기전용 문법 핸들이라 공유 안전. ③10개 analyzer·StaticCodeAnalyzer 모두 파스 중 가변 인스턴스/정적 필드 없음(결과는 지역변수 누적). ④tree-sitter 네이티브는 별도 파서 인스턴스 간 동시 파싱 안전. `toList()`가 인코딩 순서 보존 → parsedFiles 순서 불변 → GraphBuilder 결과 동일.
+
+**검증.** 블라인드 출하 위험(동시성 버그는 부하에서만 발현)을 없애기 위해 `StaticCodeAnalyzerConcurrencyTest` 추가: 40개 파일을 순차 vs 병렬 분석 후 ParsedFile(record, 필드 equals) 파일별 동일성 단언 + 함수/호출 추출 정확성. 전체 테스트 green. 실DB 분석 타이밍 측정은 OAuth 로그인 필요로 미수행.
+
+**트레이드오프(허용).** 공용 ForkJoinPool 사용 — `@Async` 분석 스레드(max-pool 16) 안에서 중첩 병렬. 다수 분석 동시 실행 시 공용 풀 경합으로 병렬 이득이 줄 수 있으나(파싱 작업 간 의존 없어 데드락·정확성 문제는 없음), MVP 동시 분석 규모에선 무해. 전용 풀 격리는 §2(단순성)상 보류.
+
+---
+
 ## AST 전환 PoC — tree-sitter Java 함수·호출 추출 A/B (2026-06-18, spike)
 
 **문제.** 현 분석은 11개 언어를 정규식으로 처리한다. OSS 4레포 경고 오탐은 0(Context66)이지만 그건 경고 게이팅 이후 수치라 노드/엣지 레벨 오탐을 가린다. AST(tree-sitter)로 바꿀 가치(정확도·B-10/멀티라인 근본 해소·신 언어=grammar 1개)와 배포 리스크(JVM에서 native `.so` 로드)를 PoC로 싸게 측정하기로 결정(사용자가 §13.3 "수요 후" 게이팅을 당김, 2026-06-18). 브랜치 `spike/treesitter-poc`. **Java 함수·호출 추출만** 재구현(11개 아님).
