@@ -422,6 +422,109 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("C# 주입 필드 수신자 호출을 선언 타입으로 한정한다(_repo.Save → AnalysisRepository::Save)")
+    void CSharp_필드_수신자_타입_해소() throws IOException {
+        Path file = tempDir.resolve("OrderService.cs");
+        Files.writeString(file, """
+                public class OrderService {
+                    private readonly AnalysisRepository _repo;
+                    public OrderService(AnalysisRepository repo) { _repo = repo; }
+                    public void Run() {
+                        _repo.Save(null);
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.functionCalls().get("Run")).contains("AnalysisRepository::Save");
+        assertThat(result.functionCalls().get("Run")).doesNotContain("Save");
+    }
+
+    @Test
+    @DisplayName("C# 제네릭 필드 타입은 베이스명으로 한정한다(_repo:IRepository<Order> → IRepository::GetById)")
+    void CSharp_제네릭_필드_베이스명_해소() throws IOException {
+        Path file = tempDir.resolve("Handler.cs");
+        Files.writeString(file, """
+                public class Handler {
+                    private readonly IRepository<Order> _repo;
+                    public void Handle(IMediator mediator) {
+                        _repo.GetById(1);
+                        mediator.Send(null);
+                        Order order = Load();
+                        order.Confirm();
+                    }
+                    private Order Load() { return null; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.functionCalls().get("Handle"))
+                .contains("IRepository::GetById", "IMediator::Send", "Order::Confirm");
+    }
+
+    @Test
+    @DisplayName("C# 12 primary constructor 파라미터 수신자도 선언 타입으로 한정한다")
+    void CSharp_primary_constructor_수신자_타입_해소() throws IOException {
+        // 현대 C#(clean-architecture) DI 핵심 패턴 — 필드가 아니라 클래스 헤더 파라미터로 주입
+        Path file = tempDir.resolve("DeleteService.cs");
+        Files.writeString(file, """
+                public class DeleteService(IRepository<Contributor> _repository, IMediator _mediator) : IDeleteService {
+                    public async Task Delete(Guid id) {
+                        await _repository.GetByIdAsync(id);
+                        await _mediator.Publish(null);
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.functionCalls().get("Delete"))
+                .contains("IRepository::GetByIdAsync", "IMediator::Publish");
+        assertThat(result.functionCalls().get("Delete")).doesNotContain("GetByIdAsync", "Publish");
+    }
+
+    @Test
+    @DisplayName("C# nullable 필드 타입(Foo?)은 언래핑해 한정한다")
+    void CSharp_nullable_필드_타입_해소() throws IOException {
+        Path file = tempDir.resolve("Holder.cs");
+        Files.writeString(file, """
+                public class Holder {
+                    private Contributor? _c;
+                    public void Run() {
+                        _c.UpdateName(null);
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.functionCalls().get("Run")).contains("Contributor::UpdateName");
+        assertThat(result.functionCalls().get("Run")).doesNotContain("UpdateName");
+    }
+
+    @Test
+    @DisplayName("C# var(추론) 수신자는 타입을 모르므로 bare 유지")
+    void CSharp_var_수신자_bare_유지() throws IOException {
+        Path file = tempDir.resolve("VarService.cs");
+        Files.writeString(file, """
+                public class VarService {
+                    public void Run() {
+                        var x = Build();
+                        x.DoThing();
+                    }
+                    private object Build() { return null; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.functionCalls().get("Run")).contains("DoThing");
+        assertThat(result.functionCalls().get("Run")).noneMatch(c -> c.endsWith("::DoThing"));
+    }
+
+    @Test
     @DisplayName("Java 소문자 호출 규칙은 영향받지 않는다 (회귀)")
     void Java_소문자_호출_규칙_유지() throws IOException {
         // C#/Go 분기 추가가 Java 호출 추출(대문자 생성자 제외)을 깨지 않는지 확인
