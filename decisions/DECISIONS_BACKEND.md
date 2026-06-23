@@ -2,6 +2,22 @@
 
 ---
 
+## CI 게이트 완성 — PR commit status (리뷰어→게이트) (2026-06-24, 기능)
+
+**문제(점검으로 발견).** 사용자가 "CI 게이트가 완성 안 된 거 아니냐"고 지목 → 점검 결과 PR 리뷰는 **경고 코멘트만** 게시(`upsertIssueComment`)하고 GitHub commit status/check run을 만들지 않음. 즉 브랜치 보호가 요구할 수 있는 pass/fail 체크가 없어 **머지를 막지 못하는 "리뷰어"**였음(진짜 "게이트" 아님). webhook→`reviewAsync`→`review()` 자동 트리거 배선은 이미 완전.
+
+**해법.** `GitHubApiClient.createCommitStatus(repo, sha, state, desc, targetUrl, token)` 추가(POST `/statuses/{sha}`, context `codeprint/structure`, 기존 `postIssueComment`와 동형 HTTP 패턴). `PrReviewService.review()`가 코멘트 게시 후 PR head SHA에 상태 게시 — 수동·webhook 양쪽이 review()를 공유하므로 둘 다 적용. 판정은 순수 함수 `gateState(warnings)`로 분리(테스트).
+
+**설계 결정.**
+- **임계치 = diff-scope된 HIGH만 failure**, MEDIUM/LOW는 success(코멘트로만 안내). §10 enforcement에서 HIGH가 실제 구조 위반(CROSS_CONTEXT·DOMAIN_IMPORTS_INFRA·LAYERED_REVERSE_DEPENDENCY)이라 머지 차단 기준으로 적절. 이미 diff-scope 적용된 목록을 보므로 변경 파일의 HIGH에만 실패(기존 무관 위반으로 PR 막지 않음).
+- **commit status 채택(check run 대신).** status API가 단순(단일 POST)하고 OAuth `repo` 스코프로 충분. check run은 GitHub App 권장이라 과함.
+- **graceful 실패.** 상태 게시 실패는 try/catch로 로깅만(코멘트는 이미 게시됨) — GitHub status API 일시 오류가 리뷰 전체를 깨지 않도록.
+- **fork PR 한계.** head SHA를 head 브랜치 최신 커밋으로 조회 → 동일 레포 PR(팀 게이팅의 주 시나리오)에서 동작. 포크 PR은 미보장(후속).
+
+**검증.** `gateState` 단위 테스트(HIGH→failure / MEDIUM·빈→success) + 컴파일/회귀 green. createCommitStatus HTTP는 working `postIssueComment`와 동형이라 패턴 일치로 신뢰. **실 PR 상태 표시·머지 차단은 연결 레포+열린 PR 필요로 연동 시점 검증(기존 PR 코멘트 기능과 동일 deferral).**
+
+---
+
 ## 커뮤니티 피드 N+1 제거 — 목록 메타데이터 배치 조회 (2026-06-24, 성능)
 
 **문제.** `CommunityController.toPostResponse`가 글마다 작성자명(`userRepository.findById`)·북마크수(`countByPostId`)·좋아요수(`countByPostId`)·댓글수(`countCommentsByPostId`) + 로그인 시 내북마크/내좋아요 `existsBy...`를 호출 → **글당 6쿼리**. 목록(`getPosts` 피드, `getMyBookmarks`)이 20개면 100건 이상 DB 왕복. 커뮤니티 피드는 가장 자주 열리는 페이지라 체감 지연.

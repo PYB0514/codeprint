@@ -170,6 +170,36 @@ public class GitHubApiClient {
         }
     }
 
+    // PR head 커밋에 구조 검사 상태(commit status)를 생성 — 브랜치 보호의 required check로 등록 시 머지 게이트가 됨.
+    // state: success | failure | error | pending. context는 GitHub 체크 목록에 표시되는 식별자.
+    public void createCommitStatus(String githubRepoUrl, String sha, String state, String description,
+                                   String targetUrl, String githubAccessToken) {
+        String ownerRepo = extractOwnerRepo(githubRepoUrl);
+        String apiUrl = "https://api.github.com/repos/" + ownerRepo + "/statuses/" + sha;
+        try {
+            java.util.Map<String, String> payloadMap = new java.util.LinkedHashMap<>();
+            payloadMap.put("state", state);
+            payloadMap.put("context", "codeprint/structure");
+            if (description != null) payloadMap.put("description", description);
+            if (targetUrl != null && !targetUrl.isBlank()) payloadMap.put("target_url", targetUrl);
+            String payload = objectMapper.writeValueAsString(payloadMap);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28")
+                    .header("Authorization", "Bearer " + githubAccessToken)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(payload))
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 201) {
+                throw new RuntimeException("GitHub commit status 생성 실패 " + response.statusCode() + " — " + response.body());
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("GitHub commit status 생성 실패: " + ownerRepo + "@" + sha, e);
+        }
+    }
+
     // 마커가 포함된 기존 봇 코멘트가 있으면 갱신, 없으면 새로 작성 — 커밋 push마다 봇 코멘트가 누적되는 것 방지
     public String upsertIssueComment(String githubRepoUrl, int prNumber, String body, String marker, String githubAccessToken) {
         Long existingId = findCommentIdByMarker(githubRepoUrl, prNumber, marker, githubAccessToken);

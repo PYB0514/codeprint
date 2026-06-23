@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.94.0',
+    date: '2026-06-24',
+    title: 'PR 구조 검사 게이트 — 머지를 막을 수 있는 상태 체크 추가',
+    type: 'feature',
+    items: [
+      { category: 'CI 게이트', desc: 'PR 리뷰가 이제 경고 코멘트뿐 아니라 PR 커밋에 통과/실패 상태 체크(codeprint/structure)를 게시합니다. 변경된 파일에 HIGH 수준 구조 위반(컨텍스트 경계 위반, 레이어 역의존 등)이 있으면 실패, 없으면 통과로 표시됩니다. GitHub 브랜치 보호 규칙에서 이 체크를 필수로 등록하면, 구조 위반이 있는 PR의 머지를 실제로 막는 CI 게이트로 동작합니다. 기존에는 코멘트만 달려 권고에 그쳤던 것을 강제 가능한 게이트로 완성했습니다. (상태 게시 실패는 리뷰 코멘트 게시를 막지 않습니다.)' },
+    ],
+  },
+  {
     version: 'v0.93.21',
     date: '2026-06-24',
     title: '쪽지함 로딩 속도 개선 — 대화 상대 정보 일괄 조회',

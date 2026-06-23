@@ -67,6 +67,9 @@ public class PrReviewService {
         log.info("PR 리뷰 코멘트 게시: repo={}, pr={}, 게시={}, LOW_생략={}, 변경외_제외={}, diffScope={}",
                 repoUrl, prNumber, warnings.size(), lowFilteredCount, outOfScopeCount, diffScoped);
 
+        // CI 게이트 — PR head 커밋에 구조 검사 상태 게시. 브랜치 보호의 required check로 등록하면 머지를 막을 수 있음.
+        String gateState = postCommitStatus(repoUrl, headBranch, warnings, commentUrl, githubToken);
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("prNumber", prNumber);
         result.put("headBranch", headBranch);
@@ -75,8 +78,33 @@ public class PrReviewService {
         result.put("outOfScopeCount", outOfScopeCount);
         result.put("diffScoped", diffScoped);
         result.put("commentUrl", commentUrl != null ? commentUrl : "");
+        result.put("gateState", gateState);
         result.put("graphId", graphId.toString());
         return result;
+    }
+
+    // PR head 커밋에 구조 검사 commit status 게시 — HIGH 경고가 있으면 failure(머지 차단 가능), 없으면 success.
+    // 상태 게시 실패는 리뷰를 깨뜨리지 않도록 graceful 처리(코멘트는 이미 게시됨). 게시한 state를 반환.
+    private String postCommitStatus(String repoUrl, String headBranch, List<Map<String, Object>> warnings,
+                                    String targetUrl, String githubToken) {
+        String state = gateState(warnings);
+        try {
+            String headSha = gitHubApiClient.fetchLatestCommitSha(repoUrl, headBranch, githubToken);
+            long highCount = warnings.stream().filter(w -> "HIGH".equals(w.get("severity"))).count();
+            String description = highCount > 0
+                    ? highCount + "건의 구조 위반(HIGH)이 변경 파일에 있습니다"
+                    : "구조 위반(HIGH) 없음";
+            gitHubApiClient.createCommitStatus(repoUrl, headSha, state, description, targetUrl, githubToken);
+        } catch (Exception e) {
+            log.warn("CI 게이트 상태 게시 실패(리뷰 코멘트는 유지): repo={}, branch={}", repoUrl, headBranch, e);
+        }
+        return state;
+    }
+
+    // 게이트 판정 — diff-scope된 경고 중 HIGH가 하나라도 있으면 failure, 없으면 success (순수 함수)
+    static String gateState(List<Map<String, Object>> warnings) {
+        boolean hasHigh = warnings.stream().anyMatch(w -> "HIGH".equals(w.get("severity")));
+        return hasHigh ? "failure" : "success";
     }
 
     // PR 변경 파일 집합을 조회 — 실패 시 null 반환(리뷰를 깨뜨리지 않고 전체 게시로 폴백)

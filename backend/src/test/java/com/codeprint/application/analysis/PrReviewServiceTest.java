@@ -178,4 +178,22 @@ class PrReviewServiceTest {
         assertThat(withWarnings).contains(PrReviewService.REVIEW_MARKER);
         assertThat(empty).contains(PrReviewService.REVIEW_MARKER);
     }
+
+    @Test
+    @DisplayName("게이트 판정 — HIGH 경고가 있으면 failure")
+    void gateState_failsOnHigh() {
+        List<Map<String, Object>> warnings = List.of(
+                warning("HIGH_FAN_OUT", "호출 8개", "MEDIUM"),
+                warning("CROSS_CONTEXT_IMPORT", "경계 위반", "HIGH")
+        );
+        assertThat(PrReviewService.gateState(warnings)).isEqualTo("failure");
+    }
+
+    @Test
+    @DisplayName("게이트 판정 — HIGH가 없으면(MEDIUM만/빈 목록) success")
+    void gateState_successWithoutHigh() {
+        assertThat(PrReviewService.gateState(List.of(
+                warning("HIGH_FAN_OUT", "호출 8개", "MEDIUM")))).isEqualTo("success");
+        assertThat(PrReviewService.gateState(List.of())).isEqualTo("success");
+    }
 }
