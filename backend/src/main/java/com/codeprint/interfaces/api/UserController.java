@@ -2,6 +2,7 @@
 package com.codeprint.interfaces.api;
 
 import com.codeprint.domain.community.Post;
+import com.codeprint.domain.community.PostBookmark;
 import com.codeprint.domain.community.PostBookmarkRepository;
 import com.codeprint.domain.community.PostRepository;
 import com.codeprint.domain.project.Project;
@@ -14,8 +15,12 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/users")
@@ -50,11 +55,10 @@ public class UserController {
     public ResponseEntity<List<PostSummaryResponse>> getUserPosts(
             @PathVariable UUID userId,
             @AuthenticationPrincipal User currentUser) {
-        List<PostSummaryResponse> posts = postRepository.findByUserId(userId).stream()
+        List<Post> posts = postRepository.findByUserId(userId).stream()
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                .map(p -> toPostSummary(p, currentUser))
                 .toList();
-        return ResponseEntity.ok(posts);
+        return ResponseEntity.ok(toPostSummaries(posts, currentUser));
     }
 
     // 유저의 공개 프로젝트 목록 조회
@@ -72,14 +76,32 @@ public class UserController {
         return new UserProfileResponse(u.getId(), u.getUsername(), avatarUrl, u.getCreatedAt());
     }
 
-    // Post → PostSummaryResponse 변환
-    private PostSummaryResponse toPostSummary(Post p, User currentUser) {
-        long bookmarkCount = bookmarkRepository.countByPostId(p.getId());
-        boolean bookmarkedByMe = currentUser != null &&
-                bookmarkRepository.existsByUserIdAndPostId(currentUser.getId(), p.getId());
-        return new PostSummaryResponse(
+    // 게시글 목록을 요약 DTO 목록으로 일괄 변환 — 북마크 수/내 여부를 페이지 단위 배치 조회해 N+1 제거
+    private List<PostSummaryResponse> toPostSummaries(List<Post> posts, User currentUser) {
+        if (posts.isEmpty()) return List.of();
+        List<UUID> postIds = posts.stream().map(Post::getId).toList();
+
+        Map<UUID, Long> bookmarkCounts = new HashMap<>();
+        for (Object[] row : bookmarkRepository.countByPostIdIn(postIds)) {
+            bookmarkCounts.put((UUID) row[0], ((Number) row[1]).longValue());
+        }
+        Set<UUID> myBookmarks = currentUser == null ? Set.of()
+                : bookmarkRepository.findByUserIdAndPostIdIn(currentUser.getId(), postIds).stream()
+                        .map(PostBookmark::getPostId).collect(Collectors.toSet());
+
+        return assembleSummaries(posts, bookmarkCounts, myBookmarks);
+    }
+
+    // 배치 조회한 북마크 메타로 요약 DTO 목록 조립 (순수 함수 — 카운트 없는 글은 0)
+    static List<PostSummaryResponse> assembleSummaries(List<Post> posts,
+                                                       Map<UUID, Long> bookmarkCounts,
+                                                       Set<UUID> myBookmarks) {
+        return posts.stream().map(p -> new PostSummaryResponse(
                 p.getId(), p.getTitle(), p.getFeedbackType(),
-                p.getGraphId(), p.getCreatedAt(), bookmarkCount, bookmarkedByMe);
+                p.getGraphId(), p.getCreatedAt(),
+                bookmarkCounts.getOrDefault(p.getId(), 0L),
+                myBookmarks.contains(p.getId())
+        )).toList();
     }
 
     // 공개 유저 프로필 응답 DTO
