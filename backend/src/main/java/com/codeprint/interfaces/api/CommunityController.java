@@ -80,9 +80,7 @@ public class CommunityController {
                 .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
         post.incrementViewCount();
         postRepository.save(post);
-        List<CommentResponse> comments = postCommandService.getComments(postId).stream()
-                .map(this::toCommentResponse)
-                .toList();
+        List<CommentResponse> comments = toCommentResponses(postCommandService.getComments(postId));
         List<AttachmentResponse> attachments = postCommandService.getAttachmentsWithUrls(postId).stream()
                 .map(a -> new AttachmentResponse(a.id(), a.originalFilename(), a.contentType(), a.url()))
                 .toList();
@@ -354,7 +352,22 @@ public class CommunityController {
         );
     }
 
-    // Comment 엔티티를 응답 DTO로 변환
+    // 댓글 목록을 응답 DTO 목록으로 일괄 변환 — 작성자명을 한 번에 배치 조회해 N+1 제거
+    private List<CommentResponse> toCommentResponses(List<Comment> comments) {
+        if (comments.isEmpty()) return List.of();
+        List<UUID> userIds = comments.stream().map(Comment::getUserId).distinct().toList();
+        Map<UUID, String> usernames = new HashMap<>();
+        for (User u : userRepository.findByIdIn(userIds)) usernames.put(u.getId(), u.getUsername());
+        return comments.stream().map(c -> new CommentResponse(
+                c.getId(),
+                c.getContent(),
+                c.getUserId(),
+                usernames.getOrDefault(c.getUserId(), "unknown"),
+                c.getCreatedAt()
+        )).toList();
+    }
+
+    // Comment 엔티티를 응답 DTO로 변환 (단건 — 댓글 작성 응답)
     private CommentResponse toCommentResponse(Comment comment) {
         String username = userRepository.findById(comment.getUserId())
                 .map(User::getUsername)

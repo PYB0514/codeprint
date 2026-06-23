@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.19',
+    date: '2026-06-24',
+    title: '게시글 댓글 로딩 속도 개선 — 작성자명 일괄 조회',
+    type: 'fix',
+    items: [
+      { category: '성능', desc: '게시글 상세의 댓글 목록을 불러올 때 댓글마다 작성자명을 따로 조회하던 것을, 한 번에 묶어 조회하도록 바꿨습니다. 댓글이 많은 게시글을 열 때의 응답 속도를 개선했습니다. 표시 내용은 동일합니다.' },
+    ],
+  },
+  {
     version: 'v0.93.18',
     date: '2026-06-24',
     title: '유저 프로필 글목록 로딩 속도 개선 — 조회 쿼리 일괄 처리',
