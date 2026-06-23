@@ -998,3 +998,19 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **검증 — 벤치 fastapi-realworld(72 .py, A/B).** 엣지 214→**218(+4)**, DEAD_CODE 7=7 불변. ★TS/C#(phantom 제거로 엣지↓)과 달리 Python은 엣지↑ = bare가 놓치던 `self.repo.method()` DI 호출을 타입 인지로 **정확 연결(recall 개선)**. probe 코드 대조: `create_article`→`create_tags_that_dont_exist@db/repositories/tags.py`(`self._tags_repo=TagsRepository(conn)`→TagsRepository::…→tags.py가 TagsRepository 선언, 파일명≠클래스명), `get_profile_by_username`→`get_user_by_username@users.py`(`self._users_repo=UsersRepository(conn)`). 전부 declaredTypes 매칭으로 정확 해소. Java/C#은 declaredTypes 비어 무회귀.
 
 **결과.** declaredTypes 토대가 예고대로 작동 — Python은 타입 스코프 추출(selfFields 생성자 대입 추론 중심)만 추가로 정확 해소. 단위 4종(self 생성자 대입·어노테이션/파라미터/지역변수·declaredTypes 추출·미해소 bare). 타입 인지 해소 = **Java·C#·TypeScript·Python 4개 언어** 완료. 범위 외(후속): subscript 제네릭 내부 타입(`Optional[Profile]`→Profile)·체인 호출·정적 타입 언어(C++/Kotlin/Rust) / 4변이 모였으니 공유 스코프-추출 엔진 추출 검토 가능.
+
+---
+
+## TreeSitter 분석기 공통 보일러플레이트 추출 — AbstractTreeSitterAnalyzer (2026-06-23)
+
+**★ 측정이 내 결론을 반증 — "진짜 공통 조각은 이미 추출됐다"는 오판.** 세션 시작 시 Context78 후보 1(공유 스코프-추출 엔진 추출)을 평가하며 "declaredTypes·resolveQualifiedCall로 진짜 공통 조각은 이미 추출됐고, 남은 스코프-추출 절반은 그래머에 묶여 환원 불가 → 저ROI"라 결론지었다. 사용자가 "공통조각이 정말 추출되었다고 생각해? 겨우 4개언어로 확정지을거야? 검증안해?"로 반박. 10개 analyzer를 전수 코드 검증하니 **틀렸다**: `text()` 바이트 동일 10/10, `nativeUnavailable`+LinkageError 폴백 10/10, `language()` lazy init 9/10, `add()` 9/10. 내 평가는 *그래머 결합 walk(레이어 B)*만 보고 *그래머 무관 보일러플레이트(레이어 A, ~440줄 중복)*를 통째로 빠뜨렸다. "이미 추출"이라 한 건 GraphBuilder의 *해소* 절반만 본 것.
+
+**문제 → 두 개의 분리된 중복 레이어.** (A) parse() native 폴백 스켈레톤·language() lazy init·add()·text()·필드·import — 그래머 결합 0, 출력 보존, 저위험. (B) walk/recordCall/receiverType 타입 스코프 — 형태는 동일하나 노드 타입 문자열에 결합, 고위험(Context78 caveat는 B에만 해당). 추출 대상은 A.
+
+**선택 — 풀 템플릿(사용자 확정).** `AbstractTreeSitterAnalyzer`(package-private 추상)에 보일러플레이트 집약. 핵심 설계 제약 2가지: ①LinkageError는 `new TreeSitterX()`(native 로드) 시점에 나므로 언어 핸들을 **`Supplier<TSLanguage>`로 받아 try 안에서 평가**해야 폴백이 동작 — `parseTree(content, supplier, extractor)` 템플릿. 단일 언어용 `parseTree(content, extractor)`는 베이스 `language()`(추상 `createLanguage()`) 사용. ②TS는 언어 핸들 2개(ts/tsx)·`parse(content, tsx)` — ts는 베이스 language()로, tsx만 별도 lazy 필드 유지, `parseTree(content, tsx ? this::tsxLanguage : this::language, extractor)`. Result 스타일 차이(TS/Python은 declaredTypes 보유)·pre-pass collector 차이는 extractor 람다가 흡수.
+
+**언어별 미세 보존.** ①C++ `add()`는 `!CPP_KEYWORDS.contains(callee)` 추가 가드 보유(보일러플레이트 아님) → 베이스 정적 add()와 시그니처 충돌(static/instance) 회피 겸 동작 보존 위해 `addCall()`로 rename해 키워드 필터 후 베이스 add() 위임. ②Java recordInvocation은 inline computeIfAbsent(add() 헬퍼 없음)였음 → 베이스 add()로 교체(원본은 `!callee.equals(current)`만, 베이스는 `!callee.isEmpty()` 추가 — Java는 호출 전 name 비어있으면 return이라 callee 항상 비어있지 않음 → no-op, 무회귀). ③C/C++ 로그 메시지는 원래 "폴백"(정규식 폴백 아님)이었으나 베이스가 "폴백"으로 통일(C/C++는 정규식 폴백 없음과 정합).
+
+**★ 검증 함정 — self-analysis는 무효, 외부 벤치라야 유효.** 1차로 self(`src/main/java`) A/B하니 노드 1386→1378·엣지 3031→2960(-71)로 *달라* 보여 회귀로 오인할 뻔. 원인: Codeprint가 **자기 소스를 분석**하는데 리팩토링이 analyzer 소스에서 메서드(add/text/language ×10)를 제거하고 parse 구조를 바꿔 *분석 대상 코드 자체가 변함* — analyzer 동작 버그가 아니라 당연한 결과. 올바른 검증 = 소스 고정 외부 벤치. 7개 벤치 A/B(노드/엣지) **전부 바이트 동일**: gin(Go) 1374/4488, spring-petclinic(Java) 224/392, py-realworld(Python) 294/486, nest-realworld(TS) 113/155, csharp-clean(C#) 929/843, ripgrep(Rust) 1824/6980, fmt(C++) 965/2387 — before=after. compileJava·StaticCodeAnalyzerTest·GraphBuilderTest green.
+
+**결과.** 10개 analyzer 총 2037줄 → 1692줄(+베이스 ~95줄, 순 -345줄). native 폴백 로직 단일 출처화(유지보수성). 레이어 B(타입 인지 해소의 Go/Rust/C++ 확장)는 이 토대 위 언어별 증분으로 분리 진행 가능. **메타 교훈: 후보를 grep 시그니처 수준으로 평가해 단정하지 말 것 — 전수 코드 검증이 결론을 뒤집었다.**
