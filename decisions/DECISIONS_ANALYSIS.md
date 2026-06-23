@@ -986,3 +986,15 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **검증.** NestJS A/B: 엣지 171→**155**(declaredTypes 적용). naive 133 대비 +22 = 파괴됐던 정탐 복원(probe로 getFeed→findFeed·createComment→addComment 보존 확인), A 대비 -16 = 순 phantom 제거(this.xRepository.method()→Repository::method, TypeORM라 프로젝트 파일 없음). DEAD_CODE 1=1 무회귀. self 프론트 425=425(React 함수형이라 해소 대상 0, 도그푸딩 가치 없음·회귀도 없음 — ★측정으로 사전 확인). Java/C# 무회귀(위). 단위 신규: StaticCodeAnalyzerTest 4종(생성자 프로퍼티·파라미터/지역변수·declaredTypes 추출·미해소 bare) + GraphBuilderTest 1종(파일명≠클래스명 declaredTypes 해소).
 
 **메타 교훈(기록).** TS를 추출 전에 한 사용자 판단이 옳았다 — TS가 "해소 절반 공통" 가정을 반증하고 declaredTypes라는 진짜 공통 조각을 드러냈다. 이제 Python 등 후속 언어는 declaredTypes 위에 타입 스코프 추출만 얹으면 된다(파일명≠클래스명 문제 해결됨). 범위 외: 체인 호출·메서드 반환 타입 추론·Python 미착수.
+
+---
+
+## Phase 2 — 타입 인지 호출 해소 (Python, declaredTypes 토대 위) (2026-06-23)
+
+**방향.** TS에서 구축한 declaredTypes 공유 인덱스 위에 Python 타입 스코프 추출만 얹는다(예고대로 — 파일명≠클래스명은 이미 해결됨). Python은 동적 타입이라 타입 출처가 제한적이나, 핵심 DI 패턴이 **명시 어노테이션 없이도 결정 가능**하다.
+
+**선택 — Python 타입 출처.** 측정으로 벤치(nsidnev/fastapi-realworld-example-app) 지배 패턴 확인 → `self._profiles_repo = ProfilesRepository(conn)`(생성자 호출 대입). 이게 핵심: `self.attr = ClassName(...)`의 RHS가 `call(function=identifier 대문자)`면 attr 타입=ClassName(어노테이션 불필요). 추가로 `self.attr: Type`(어노테이션 대입)·typed_parameter(`def m(self, x: Type)`)·지역변수(`v = ClassName()` 또는 `v: Type`). selfFields(self.attr→타입, 클래스 전역 pre-pass)와 scope(bare 지역변수/파라미터→타입, 메서드별)를 분리 관리. 수신자: `self.attr.method()`는 attribute(object=self)에서 attr명→selfFields, 지역변수는 identifier→scope. 타입 미상이면 bare 유지. subscript(`Optional[X]`·`List[X]`)·체인은 미해소(직계 identifier 타입만).
+
+**검증 — 벤치 fastapi-realworld(72 .py, A/B).** 엣지 214→**218(+4)**, DEAD_CODE 7=7 불변. ★TS/C#(phantom 제거로 엣지↓)과 달리 Python은 엣지↑ = bare가 놓치던 `self.repo.method()` DI 호출을 타입 인지로 **정확 연결(recall 개선)**. probe 코드 대조: `create_article`→`create_tags_that_dont_exist@db/repositories/tags.py`(`self._tags_repo=TagsRepository(conn)`→TagsRepository::…→tags.py가 TagsRepository 선언, 파일명≠클래스명), `get_profile_by_username`→`get_user_by_username@users.py`(`self._users_repo=UsersRepository(conn)`). 전부 declaredTypes 매칭으로 정확 해소. Java/C#은 declaredTypes 비어 무회귀.
+
+**결과.** declaredTypes 토대가 예고대로 작동 — Python은 타입 스코프 추출(selfFields 생성자 대입 추론 중심)만 추가로 정확 해소. 단위 4종(self 생성자 대입·어노테이션/파라미터/지역변수·declaredTypes 추출·미해소 bare). 타입 인지 해소 = **Java·C#·TypeScript·Python 4개 언어** 완료. 범위 외(후속): subscript 제네릭 내부 타입(`Optional[Profile]`→Profile)·체인 호출·정적 타입 언어(C++/Kotlin/Rust) / 4변이 모였으니 공유 스코프-추출 엔진 추출 검토 가능.
