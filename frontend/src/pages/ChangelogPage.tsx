@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.14',
+    date: '2026-06-23',
+    title: '함수 호출 연결 정확도 개선 — 변수 선언 타입 기반 추적(Rust) + Rust 테스트 함수 과도호출 경고 제외',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: 'Rust에서도 변수를 통해 호출하는 함수를 그 변수의 선언 타입으로 정확히 연결하도록 개선했습니다. 메서드의 self(impl 대상 타입), 함수 매개변수(repo: &UserRepo), 지역변수(let x: Foo / let x = Foo {})의 타입을 추적해 self.step()·repo.save() 같은 호출을 타입을 선언한 파일로 잇습니다. Rust도 파일명과 타입명이 다르므로(snake_case 파일), 파일이 선언한 struct/enum/trait 이름으로 대상을 찾는 방식을 함께 적용했습니다. 외부 ripgrep 오픈소스 분석에서 메서드 호출 연결이 418개 늘어 누락이 줄었음을 확인했습니다. 이로써 Java·C#·TypeScript·Python·Go·Rust 여섯 언어가 변수 타입 기반 호출 추적을 지원합니다.' },
+      { category: '경고', desc: 'Rust 테스트 함수(#[test], #[cfg(test)] mod tests 내부)를 과도한 호출(HIGH_FAN_OUT) 경고에서 제외했습니다. 테스트는 setup·검증으로 자연히 여러 함수를 호출하므로 단일 책임 위반이 아닌데, Rust 테스트는 별도 파일이 아니라 소스 내부에 인라인으로 작성돼 기존 파일명 기반 제외가 동작하지 않았습니다. ripgrep 분석에서 과도호출 경고가 테스트 오탐을 제거해 77→42개로 정밀해졌습니다.' },
+    ],
+  },
+  {
     version: 'v0.93.13',
     date: '2026-06-23',
     title: '함수 호출 연결 정확도 개선 — 변수 선언 타입 기반 추적(Go)',

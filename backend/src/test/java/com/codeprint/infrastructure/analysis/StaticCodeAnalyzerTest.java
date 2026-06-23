@@ -3039,7 +3039,67 @@ class StaticCodeAnalyzerTest {
 
         assertThat(result.functions()).contains("run", "handle", "helper");
         assertThat(result.functionCalls().get("run")).contains("helper");
-        assertThat(result.functionCalls().get("handle")).contains("process");
+        // self.process()는 impl 대상 타입으로 한정 → Server::process (타입 인지 해소)
+        assertThat(result.functionCalls().get("handle")).contains("Server::process");
+        assertThat(result.functionCalls().get("handle")).doesNotContain("process");
+    }
+
+    @Test
+    @DisplayName("Rust 파라미터 타입 수신자를 선언 타입으로 한정한다(repo: &UserRepo → repo.save())")
+    void Rust_파라미터_수신자_타입_해소() throws IOException {
+        Path file = writeRustFile("""
+                fn dispatch(repo: &UserRepo) {
+                    repo.save();
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Rust");
+
+        assertThat(result.functionCalls().get("dispatch")).contains("UserRepo::save");
+        assertThat(result.functionCalls().get("dispatch")).doesNotContain("save");
+    }
+
+    @Test
+    @DisplayName("Rust struct/trait 선언명을 declaredTypes로 방출한다")
+    void Rust_declaredTypes_추출() throws IOException {
+        Path file = writeRustFile("""
+                pub(crate) struct Core {}
+                trait Sink {}
+
+                impl Core {
+                    fn run(&self) { self.step(); }
+                    fn step(&self) {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Rust");
+
+        assertThat(result.declaredTypes()).contains("Core", "Sink");
+        assertThat(result.functionCalls().get("run")).contains("Core::step");
+    }
+
+    @Test
+    @DisplayName("Rust #[test]·#[cfg(test)] mod 함수를 testMethods로 표시한다(HIGH_FAN_OUT 제외용)")
+    void Rust_테스트함수_표시() throws IOException {
+        Path file = writeRustFile("""
+                fn prod() {}
+
+                #[test]
+                fn direct_test() {}
+
+                #[cfg(test)]
+                mod tests {
+                    #[test]
+                    fn inside_mod_test() {}
+
+                    fn helper_in_test_mod() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Rust");
+
+        assertThat(result.testMethods()).contains("direct_test", "inside_mod_test", "helper_in_test_mod");
+        assertThat(result.testMethods()).doesNotContain("prod");
     }
 
     @Test

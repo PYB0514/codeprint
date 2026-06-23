@@ -765,10 +765,16 @@ public class GraphWarningService {
         // 정밀 가드 — 서로 다른 파일의 동명 함수는 각자 별도 노드(mergedDefCount 없음)라 영향받지 않는다(전역 이름
         // 휴리스틱이 일으키던 과잉 억제 해소). 한 파일 내 머지가 전역 유일이어도 정확히 잡는다(전역 휴리스틱의 누락 해소).
         Map<UUID, Integer> mergedDefCountMap = new HashMap<>();
+        Set<UUID> testNodeIds = new HashSet<>();
         for (Node n : nodes) {
-            if (n.getType() == NodeType.FUNCTION && n.getMetadata() != null
-                    && n.getMetadata().get("mergedDefCount") instanceof Number num) {
-                mergedDefCountMap.put(n.getId(), num.intValue());
+            if (n.getType() == NodeType.FUNCTION && n.getMetadata() != null) {
+                if (n.getMetadata().get("mergedDefCount") instanceof Number num) {
+                    mergedDefCountMap.put(n.getId(), num.intValue());
+                }
+                // 인라인 테스트 함수(Rust #[test] 등 파일명으로 못 거르는 것) — 테스트는 setup으로 호출이 많아 단일 책임 위반 아님
+                if (Boolean.TRUE.equals(n.getMetadata().get("isTest"))) {
+                    testNodeIds.add(n.getId());
+                }
             }
         }
 
@@ -778,6 +784,8 @@ public class GraphWarningService {
             String fnName = nameMap.get(entry.getKey());
             // 테스트 함수(Test*·_test.go·*Test.java 등)는 setup+assert로 자연히 호출이 많음 — 단일 책임 위반 아님
             if (isTestArtifact(filePathMap.getOrDefault(entry.getKey(), ""), fnName)) continue;
+            // 인라인 테스트(Rust #[test] 등) — 파일명/이름 패턴으로 못 걸러 노드 메타(isTest)로 제외
+            if (testNodeIds.contains(entry.getKey())) continue;
             // 진입점 main — 부트스트랩(Spring main·CLI main·func main 등)은 본질적으로 여러 협력자를 호출하므로
             // 단일 책임 위반이 아니다. "조율자를 SRP 위반으로 부르는" 과탐을 막는다(테스트 함수 제외와 동일 원리).
             if ("main".equals(fnName)) continue;

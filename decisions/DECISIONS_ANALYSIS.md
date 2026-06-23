@@ -1030,3 +1030,21 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **검증 — gin A/B(99 .go).** 엣지 4488→**4400(-88)**, 노드 1374 불변, DEAD_CODE 0=0(✅워닝 없음 양쪽). -88의 정체: `c.Method()`(같은 파일)가 BEFORE엔 sameFile 마커 + bare `Method`의 cross-file 폴백 엣지(onlyImported 실패→동명 다른 파일=phantom)를 둘 다 생성, AFTER엔 마커 유지+resolveQualifiedCall이 같은 파일 제외 → **phantom cross-file 엣지만 제거**. 노드·DEAD_CODE 불변 = 고립 함수 0(recall 보존, TS/C#처럼 phantom↓ 방향). 단위: StaticCodeAnalyzerTest 4종(리시버·파라미터·지역변수 복합리터럴·패키지 bare 유지) + 기존 Go 리시버 테스트 1종을 새 동작(`s.process()`→`Server::process`)으로 갱신.
 
 **결과.** 타입 인지 해소 = **Java·C#·TypeScript·Python·Go 5개 언어**. declaredTypes 토대 재사용 + GraphBuilder sameFile 보강(declaredTypes-aware). 범위 외(후속): Go struct 필드 2-hop(`s.repo.Save()`)·함수 반환 타입 추론·Rust/C++.
+
+---
+
+## Phase 2 — 타입 인지 호출 해소 (Rust) + Rust 인라인 테스트 HIGH_FAN_OUT 제외 (2026-06-23)
+
+**문제.** Rust `field_expression`(`self.method()`·`receiver.method()` — Rust는 메서드 호출 지배적)이 bare로 기록 → phantom 매칭. Go와 동형 갭. Rust 특유: `self` 타입이 파라미터가 아니라 enclosing `impl Foo` 블록에서 옴.
+
+**선행.** Go와 동일 — Rust도 파일명 snake_case≠타입명, declaredTypes 미방출 → `Type::method` 해소 불가. `struct_item`/`enum_item`/`trait_item`/`union_item`/`type_item` 선언명을 declaredTypes로 방출(StaticCodeAnalyzer 배선). GraphBuilder sameFile declaredTypes-aware는 Go PR(#357)에서 이미 적용됨 — Rust도 즉시 혜택(이번 PR GraphBuilder sameFile 무변경).
+
+**선택 — 변수 타입 스코프(Rust 특유 적응).** `impl_item` 진입 시 `type` 필드로 impl 대상 타입 추출 → `self`를 그 타입으로 바인딩(메서드 본문 스코프 복사). 함수 파라미터(`repo: &UserRepo`)·지역변수(`let x: Foo` 어노테이션·`let x = Foo{}` 구조체 표현식). `simpleTypeName`이 `reference_type`(&T·&mut T) 언래핑·`generic_type` 베이스명·`type_identifier`만. `Foo::new()` 반환 타입은 미추론(범위 외). field_expression 수신자(`value` 필드)가 self 또는 스코프 변수면 `Type::method`, 아니면 bare 유지.
+
+**★측정이 드러낸 2차 이슈 — Rust 인라인 테스트가 HIGH_FAN_OUT 도배.** ripgrep A/B: 엣지 6980→7398(+418 recall, Python처럼 증가 방향 — self.method() DI 호출 정확 연결). 그러나 HIGH_FAN_OUT 77→126(+49). probe로 새 47개 중 **41개가 `#[test]` 함수**(count_path·path_with_match_found 등 printer/searcher 테스트). 원인: 테스트는 setup으로 호출 많아 HIGH_FAN_OUT에서 제외돼야 하나(기존 Go `_test.go`·Java `*Test` 제외), Rust 테스트는 `#[test]`+인라인 `#[cfg(test)] mod tests`라 파일명/이름 기반 `isTestArtifact`가 못 거름. 내 변경이 테스트 내 호출 해소를 늘려 이 기존 사각지대를 노출.
+
+**선택 — Rust 테스트 함수 감지·노드 메타 기반 제외(사용자 확정 스코프 확장).** 분석기 walk가 직전 형제 `attribute_item`이 "test" 포함(`#[test]`·`#[cfg(test)]`·`#[tokio::test]`)이면 다음 함수/모듈을 테스트 컨텍스트로 표시(inTestCtx 전파 — cfg(test) mod 내부 전체 포함). Result.testFunctions→ParsedFile.testMethods(편의 생성자로 호출부 churn 0)→GraphBuilder 노드 메타 `isTest`→detectHighFanOut testNodeIds 제외. 파일명 못 거르는 인라인 테스트 대응(asyncMethods/mergedDefCount와 동형 메타 흐름).
+
+**검증.** ripgrep A/B: 엣지 6980→7398(+418 recall), HIGH_FAN_OUT 77→**42**(테스트 제외가 새 FP 41 + main에 이미 있던 Rust 테스트 FP까지 제거 → net -35), 남은 34 고유함수 중 #[test] **0개**(전부 정탐). DEAD_CODE 1=1. 타 언어 5벤치 before=after 동일(gin 4400·petclinic 224/392·nest 113/155·py 294/486·csharp 929/843 — isTest 메타는 testMethods 비어있는 비-Rust엔 미발동). 단위: 기존 Rust 리시버 1종 갱신(self.process()→Server::process) + 신규 3종(파라미터 수신자·declaredTypes 추출·#[test]/cfg(test) mod 표시). 전체 테스트 green.
+
+**결과.** 타입 인지 해소 = **Java·C#·TypeScript·Python·Go·Rust 6개 언어**. 부수 개선: Rust 인라인 테스트 HIGH_FAN_OUT 제외(기존 사각지대 해소 — 다른 Rust 프로젝트에도 적용). 범위 외(후속): struct 필드 2-hop·함수 반환 타입(`let x = Foo::new()`)·C++.
