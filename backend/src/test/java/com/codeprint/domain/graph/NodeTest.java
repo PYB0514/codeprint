@@ -70,4 +70,20 @@ class NodeTest {
         assertThat(n.getUserLabel()).isNull();
         assertThat(n.getUserNote()).isNull();
     }
+
+    @Test
+    @DisplayName("isNew — 신규 생성 시 true (Spring Data가 persist 선택 → merge SELECT 회피)")
+    void isNew_trueOnCreate() {
+        assertThat(newNode().isNew()).isTrue();
+    }
+
+    @Test
+    @DisplayName("isNew — 영속화/로드 후 false (이후 save는 merge=update)")
+    void isNew_falseAfterPersistOrLoad() {
+        Node n = newNode();
+
+        n.markNotNew();
+
+        assertThat(n.isNew()).isFalse();
+    }
 }

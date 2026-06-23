@@ -2,6 +2,18 @@
 
 ---
 
+## 그래프 저장 경로 성능 — merge→persist(Persistable) + 배치, order_inserts는 탈락 (2026-06-24)
+
+**문제.** 분석 그래프 저장이 대형 레포(self ~3000엣지, gin ~4400엣지)에서 느린 후보. `Node`/`Edge`는 `@Id`를 `UUID.randomUUID()`로 앱이 직접 할당 + `@GeneratedValue`·`@Version` 없음 + `Persistable` 미구현 → Spring Data `isNew()`가 `id != null`이라 false → `save()`가 `persist`가 아닌 **`merge`** → INSERT마다 존재 확인 SELECT 선행. `GraphRepositoryImpl.saveNode/saveEdge`가 건건 호출, `hibernate.jdbc.batch_size` 미설정 → 인서트도 건건. 즉 노드/엣지당 SELECT+INSERT 왕복.
+
+**선택한 해법.** ①`Node`/`Edge`가 `Persistable<UUID>` 구현 — `@Transient boolean isNew=true` + `@PostPersist/@PostLoad`로 해제. → `save()`가 `persist`를 타 INSERT 전 SELECT 제거(지배적 이득, 순서 무관). 영속/로드 후 false라 update 경로(GraphCommandService.updateNodePosition 등 findById 로드)는 merge=update로 정상. ②`application.yml`에 `hibernate.jdbc.batch_size: 100` — 연속 동일타입 인서트(FUNCTION_CALL·IMPORT 등 엣지 대량 패스) 배치. GraphBuilder는 `saveNode/saveEdge` 반환값을 안 쓰고(in-memory `getId()`만 사용) 단일 `@Transactional` 안에서 도므로 루프 구조 변경 불필요(§3 최소 diff).
+
+**탈락 — `order_inserts: true`.** 배치 효율을 더 높이지만 위험. 스키마상 `edges.source_node_id/target_node_id`가 `nodes(id)` **FK**인데 `Edge` 엔티티는 이를 JPA 매핑 연관(@ManyToOne)이 아닌 **raw UUID 컬럼**으로 보유 → Hibernate가 의존성을 모름. `order_inserts`의 `InsertActionSorter`는 매핑된 연관만 위상정렬하고 미상이면 엔티티명순 정렬("Edge" < "Node") → edge를 node보다 먼저 INSERT → **FK 위반으로 모든 분석 실패** 가능. 실DB 테스트 인프라가 없어(프로젝트는 repository 테스트도 Mockito) 재정렬 동작을 검증할 수 없으므로 §11(추측 금지)에 따라 미적용.
+
+**검증 한계.** Persistable의 persist 분기는 `isNew()` 계약 단위 테스트(Node/Edge: create→true, markNotNew 후→false)로 증명. 전체 테스트 green(회귀 0). 단 실DB before/after 타이밍은 서버 가동이 필요해(CLAUDE.md 서버 시작 금지) 미측정 — 사용자가 실분석 후 200ms 슬로우쿼리 로거 또는 `generate_statistics` 임시 활성화로 확인 가능.
+
+---
+
 ## AiController /api/ai/keys 500 — 잘못된 User 타입 import (2026-06-22, 도그푸딩)
 
 **문제.** `/api/ai/keys`(및 AiController 6개 메서드 전부)가 500. AI 키 미등록(`user_ai_keys` 0 rows)이라 프론트가 조용히 무시 → 묻혀 있다가, 같은 세션에 추가한 5xx traceId 토스트(#347)가 라이브 검증 중 적발.
