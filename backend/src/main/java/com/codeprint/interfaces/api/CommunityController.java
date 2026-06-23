@@ -23,9 +23,12 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/community")
@@ -65,10 +68,7 @@ public class CommunityController {
         } else {
             raw = postCommandService.getPosts(page, size);
         }
-        List<PostResponse> posts = raw.stream()
-                .map(p -> toPostResponse(p, null, user))
-                .toList();
-        return ResponseEntity.ok(posts);
+        return ResponseEntity.ok(toPostResponses(raw, user));
     }
 
     // 게시글 단건 + 댓글 + 첨부파일 목록 조회
@@ -256,15 +256,71 @@ public class CommunityController {
     // 내 북마크 목록 조회 (최신순, 최대 50개)
     @GetMapping("/bookmarks")
     public ResponseEntity<List<PostResponse>> getMyBookmarks(@AuthenticationPrincipal User user) {
-        List<PostResponse> posts = bookmarkRepository
+        List<Post> posts = bookmarkRepository
                 .findByUserIdOrderByCreatedAtDesc(user.getId(), 50).stream()
                 .flatMap(bm -> postRepository.findById(bm.getPostId()).stream())
-                .map(p -> toPostResponse(p, null, user))
                 .toList();
-        return ResponseEntity.ok(posts);
+        return ResponseEntity.ok(toPostResponses(posts, user));
     }
 
-    // Post 엔티티를 응답 DTO로 변환 (북마크/좋아요 수 및 내 여부 포함)
+    // 게시글 목록을 응답 DTO 목록으로 일괄 변환 — 작성자명/카운트/내 여부를 페이지 단위 배치 조회해 N+1 제거
+    private List<PostResponse> toPostResponses(List<Post> posts, User currentUser) {
+        if (posts.isEmpty()) return List.of();
+        List<UUID> postIds = posts.stream().map(Post::getId).toList();
+        List<UUID> userIds = posts.stream().map(Post::getUserId).distinct().toList();
+
+        Map<UUID, String> usernames = new HashMap<>();
+        for (User u : userRepository.findByIdIn(userIds)) usernames.put(u.getId(), u.getUsername());
+
+        Map<UUID, Long> bookmarkCounts = toCountMap(bookmarkRepository.countByPostIdIn(postIds));
+        Map<UUID, Long> likeCounts = toCountMap(likeRepository.countByPostIdIn(postIds));
+        Map<UUID, Long> commentCounts = toCountMap(postRepository.countCommentsByPostIdIn(postIds));
+
+        Set<UUID> myBookmarks = currentUser == null ? Set.of()
+                : bookmarkRepository.findByUserIdAndPostIdIn(currentUser.getId(), postIds).stream()
+                        .map(PostBookmark::getPostId).collect(Collectors.toSet());
+        Set<UUID> myLikes = currentUser == null ? Set.of()
+                : likeRepository.findByUserIdAndPostIdIn(currentUser.getId(), postIds).stream()
+                        .map(PostLike::getPostId).collect(Collectors.toSet());
+
+        return assemble(posts, usernames, bookmarkCounts, likeCounts, commentCounts, myBookmarks, myLikes);
+    }
+
+    // [postId, count] 행 목록을 postId→count Map으로 변환 (없는 글은 호출측에서 0 기본값)
+    static Map<UUID, Long> toCountMap(List<Object[]> rows) {
+        Map<UUID, Long> map = new HashMap<>();
+        for (Object[] row : rows) map.put((UUID) row[0], ((Number) row[1]).longValue());
+        return map;
+    }
+
+    // 배치 조회한 메타데이터로 PostResponse 목록 조립 (순수 함수 — 카운트 없는 글은 0, 내 여부는 set 포함 여부)
+    static List<PostResponse> assemble(List<Post> posts,
+                                       Map<UUID, String> usernames,
+                                       Map<UUID, Long> bookmarkCounts,
+                                       Map<UUID, Long> likeCounts,
+                                       Map<UUID, Long> commentCounts,
+                                       Set<UUID> myBookmarks,
+                                       Set<UUID> myLikes) {
+        return posts.stream().map(p -> new PostResponse(
+                p.getId(),
+                p.getTitle(),
+                p.getContent(),
+                p.getFeedbackType(),
+                p.getGraphId(),
+                p.getUserId(),
+                usernames.getOrDefault(p.getUserId(), "unknown"),
+                p.getCreatedAt(),
+                bookmarkCounts.getOrDefault(p.getId(), 0L),
+                myBookmarks.contains(p.getId()),
+                likeCounts.getOrDefault(p.getId(), 0L),
+                myLikes.contains(p.getId()),
+                p.getViewCount(),
+                commentCounts.getOrDefault(p.getId(), 0L),
+                p.getRepoUrl()
+        )).toList();
+    }
+
+    // Post 엔티티를 응답 DTO로 변환 (북마크/좋아요 수 및 내 여부 포함) — 단건(게시글 상세)용
     private PostResponse toPostResponse(Post post, String authorUsername, User currentUser) {
         String username = authorUsername;
         if (username == null) {
