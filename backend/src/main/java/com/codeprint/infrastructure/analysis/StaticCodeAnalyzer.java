@@ -82,6 +82,7 @@ public class StaticCodeAnalyzer {
         } else if (pyTs.isPresent()) {
             functions = pyTs.get().functions();
             functionCalls = pyTs.get().functionCalls();
+            declaredTypes = pyTs.get().declaredTypes();
         } else if (tsTs.isPresent()) {
             functions = tsTs.get().functions();
             functionCalls = tsTs.get().functionCalls();

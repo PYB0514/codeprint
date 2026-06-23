@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.12',
+    date: '2026-06-23',
+    title: '함수 호출 연결 정확도 개선 — 변수 선언 타입 기반 추적(Python)',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: 'Python에서도 변수를 통해 호출하는 함수를 그 변수의 타입으로 정확히 연결하도록 개선했습니다. self.repo = ProfilesRepository(conn)처럼 생성자 대입으로 타입이 정해지는 경우(타입 힌트 없이도), 타입 어노테이션(self.x: Type, def m(self, x: Type)), 지역변수(v = Repo())를 모두 인식합니다. 외부 FastAPI 오픈소스 분석에서 self._tags_repo.create_tags_that_dont_exist() 같은 호출이 실제 정의 파일(tags.py)로 정확히 연결됨을 확인했습니다. 이로써 Java·C#·TypeScript·Python 네 언어가 변수 타입 기반 호출 추적을 지원합니다. 타입을 알 수 없는 경우엔 기존 방식으로 안전하게 동작합니다.' },
+    ],
+  },
+  {
     version: 'v0.93.11',
     date: '2026-06-23',
     title: '함수 호출 연결 정확도 개선 — 변수 선언 타입 기반 추적(TypeScript)',

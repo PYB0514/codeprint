@@ -1617,6 +1617,80 @@ class StaticCodeAnalyzerTest {
         assertThat(result.dbTables().get(0).tableName()).isEqualTo("users");
     }
 
+    // ── 타입 인지 호출 해소 (Phase 2, Python) ────────────────────────────────
+
+    @Test
+    @DisplayName("Python self.attr=ClassName() 생성자 대입 수신자를 타입으로 한정한다(FastAPI repo 패턴)")
+    void Python_self_생성자_대입_타입_해소() throws IOException {
+        Path file = writePyFile("""
+                class ArticlesRepository:
+                    def __init__(self, conn):
+                        self._profiles_repo = ProfilesRepository(conn)
+
+                    async def get(self, slug):
+                        return await self._profiles_repo.get_profile_by_username(slug)
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.functionCalls().get("get")).contains("ProfilesRepository::get_profile_by_username");
+        assertThat(result.functionCalls().get("get")).doesNotContain("get_profile_by_username");
+    }
+
+    @Test
+    @DisplayName("Python self.attr:Type 어노테이션·타입힌트 파라미터·지역변수 생성자 수신자를 타입으로 한정한다")
+    void Python_어노테이션_파라미터_지역변수_타입_해소() throws IOException {
+        Path file = writePyFile("""
+                class Service:
+                    def __init__(self):
+                        self._repo: UserRepository = build()
+
+                    def run(self, profile: Profile):
+                        self._repo.find_one()
+                        profile.follow()
+                        tags = TagsRepository(self.conn)
+                        tags.create_tag()
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.functionCalls().get("run"))
+                .contains("UserRepository::find_one", "Profile::follow", "TagsRepository::create_tag");
+    }
+
+    @Test
+    @DisplayName("Python 클래스 선언명을 declaredTypes로 추출한다(파일명≠클래스명 해소용)")
+    void Python_declaredTypes_추출() throws IOException {
+        Path file = tempDir.resolve("profiles.py");
+        Files.writeString(file, """
+                class ProfilesRepository:
+                    def get_profile_by_username(self, name):
+                        pass
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.declaredTypes()).contains("ProfilesRepository");
+    }
+
+    @Test
+    @DisplayName("Python 타입을 모르는 self.attr(어노테이션·생성자 대입 없음) 수신자는 bare 유지")
+    void Python_미해소_수신자_bare_유지() throws IOException {
+        Path file = writePyFile("""
+                class Svc:
+                    def __init__(self, dep):
+                        self._dep = dep
+
+                    def run(self):
+                        self._dep.do_thing()
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.functionCalls().get("run")).contains("do_thing");
+        assertThat(result.functionCalls().get("run")).noneMatch(c -> c.endsWith("::do_thing"));
+    }
+
     @Test
     @DisplayName("SQLAlchemy Base 상속 클래스에서 DB 테이블명을 추출한다")
     void SQLAlchemy_Model_추출() throws IOException {
