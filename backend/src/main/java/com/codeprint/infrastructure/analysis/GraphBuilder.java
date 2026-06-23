@@ -152,8 +152,11 @@ public class GraphBuilder {
                     }
 
                     // 같은 파일 내 호출 — sameFile 마커 엣지 생성 (DEAD_CODE 카운트·ASYNC_SELF_CALL 감지용, HIGH_FAN_OUT은 제외)
+                    // targetClass가 caller 파일이 선언한 타입이면 같은 파일 호출(Go 리시버 c.Method()=Type::method,
+                    // 파일명≠타입명이라 클래스명 매칭만으론 못 잡음 — declaredTypes로 보강해 마커 손실 방지).
                     String callerClassName = extractFileNameWithoutExt(callerFile.filePath());
-                    if ((targetClass == null || targetClass.equals(callerClassName))
+                    if ((targetClass == null || targetClass.equals(callerClassName)
+                            || callerFile.declaredTypes().contains(targetClass))
                             && callerFile.functions().contains(calleeFunc)) {
                         UUID sameFileCalleeId = funcNodeIds.get(callerFile.filePath() + "::" + calleeFunc);
                         if (sameFileCalleeId != null && !sameFileCalleeId.equals(callerFuncId)) {

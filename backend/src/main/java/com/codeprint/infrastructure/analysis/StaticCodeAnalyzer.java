@@ -90,6 +90,7 @@ public class StaticCodeAnalyzer {
         } else if (goTs.isPresent()) {
             functions = goTs.get().functions();
             functionCalls = goTs.get().functionCalls();
+            declaredTypes = goTs.get().declaredTypes();
         } else if (rustTs.isPresent()) {
             functions = rustTs.get().functions();
             functionCalls = rustTs.get().functionCalls();
