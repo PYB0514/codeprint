@@ -13,8 +13,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @RestController
@@ -81,11 +83,17 @@ public class UserFollowController {
         return ResponseEntity.ok(toUserList(userFollowRepository.findByFollowerId(userId), false));
     }
 
-    // UserFollow 목록 → 유저 정보 목록 변환
+    // UserFollow 목록 → 유저 정보 목록 변환 — 유저를 findByIdIn으로 일괄 조회해 N+1 제거(팔로우 순서 보존)
     private List<Map<String, Object>> toUserList(List<UserFollow> follows, boolean useFollower) {
-        return follows.stream()
+        if (follows.isEmpty()) return List.of();
+        List<UUID> uids = follows.stream()
                 .map(f -> useFollower ? f.getFollowerId() : f.getFollowingId())
-                .flatMap(uid -> userRepository.findById(uid).stream())
+                .toList();
+        Map<UUID, User> users = new HashMap<>();
+        for (User u : userRepository.findByIdIn(uids)) users.put(u.getId(), u);
+        return uids.stream()
+                .map(users::get)
+                .filter(Objects::nonNull)
                 .map(u -> Map.<String, Object>of(
                         "id", u.getId(),
                         "username", u.getUsername(),
