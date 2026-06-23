@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.93.10',
+    date: '2026-06-23',
+    title: '함수 호출 연결 정확도 개선 — 변수 선언 타입 기반 추적(C#)',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: 'Java에 이어 C#에서도, 변수를 통해 호출하는 함수를 그 변수의 선언 타입(필드·매개변수·지역변수·C# 12 primary constructor 매개변수)으로 정확히 연결하도록 개선했습니다. 제네릭 타입(IRepository<T>)은 베이스 이름으로, nullable 타입(Foo?)은 실제 타입으로 풀어 처리합니다. 외부 C# 오픈소스(clean-architecture) 분석 결과 무관한 파일로 잘못 이어지던 가짜 연결 24건이 제거되고 도메인 클래스로의 호출이 정확히 연결됨을 확인했습니다. 타입을 알 수 없는 경우(var 등)엔 기존 방식으로 안전하게 동작합니다.' },
+    ],
+  },
+  {
     version: 'v0.93.9',
     date: '2026-06-23',
     title: '함수 호출 연결 정확도 개선 — 변수 선언 타입 기반 추적(Java)',

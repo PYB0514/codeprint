@@ -953,3 +953,22 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 - **`PaymentApplicationService.confirm`**: B=fan-out 8(`orderRepository`(TossPaymentOrderRepository)→isConfirmed/findById/save, `order`(TossPaymentOrder)→getUserId/getAmount/confirm, `paymentGateway`/`userUpgradePort`→confirmPayment/upgradeToPro). 본문과 1:1 정확 일치 — 8개 협력자는 진짜.
 
 **결과.** HIGH_FAN_OUT 7→9는 **회귀가 아니라 bare-name dedup이 가리던 정탐 복원 + phantom 제거**의 동시 효과. 즉 Phase 1/A가 "그래프 정확도↑·경고 무변/감소"였다면, Phase 2는 정탐을 *드러내는* 방향. 두 신규 경고 모두 코드 검증 통과(오탐 0), §10 경계위반 여전히 0. 단위 4종(필드/this/파라미터·지역변수 해소, 미해소 시 bare 유지). 미처리(의도적, 범위 외): 체인 호출 수신자(`a.b().c()`)·메서드 반환 타입 추론 — `body @ ...Test`류 잔존 phantom은 이 케이스(receiver=method_invocation)라 별도. 다른 언어로의 확장은 후속.
+
+---
+
+## Phase 2 — 타입 인지 호출 해소 (C#, receiver 선언 타입 기반) (2026-06-23)
+
+**문제·방향.** Java(#352) 후속으로 사용자가 "모든 언어 다, 공통 부분은 한 번에"를 지시. 분석: 해소 절반(`Type::method`→resolveQualifiedCall)은 이미 언어 무관 공통(GraphBuilder 무변경). 추출 절반(변수→타입 스코프)만 그래머별. **공유 엔진 추출은 Java 1개에서 뽑으면 C-family에 과적합되므로 보류**(rule of three, 프로젝트 기존 "더 깔끔한 추상화 보일 때 refactor" 방침). 시퀀스: C#(Java와 구조 동일=저위험) 먼저 standalone → TS(outlier) 시점에 공유 엔진 추출. ★측정 반증: TS는 Codeprint 자체 프론트(React 함수형)에 해소 대상 수신자 0(클래스 0·new는 내장·어노테이션은 데이터 인터페이스)이라 도그푸딩 가치 없음 → C#이 외부 가치 면에서 TS를 압도(단순·동일 검증).
+
+**선택 — 구현.** `TreeSitterCSharpAnalyzer`를 Java와 동형으로 스코프 추적. C# 특유 적응:
+- **field_declaration이 variable_declaration을 한 겹 더 감쌈** (Java는 직접) → firstChildOfType로 풀기.
+- **C# 12 primary constructor**(`class Svc(IRepository<T> _repo, IMediator _mediator)`) — 필드가 아니라 클래스 헤더의 *필드명 없는* `parameter_list`. clean-architecture DI의 지배적 패턴 → class/record/struct_declaration에서 수집(필드처럼 전역 가시).
+- **제네릭 베이스명 추출**(`IRepository<Order>`→`IRepository`) — Java는 generic 무시했으나 C# DI는 거의 제네릭 인터페이스. NuGet 타입이면 프로젝트 파일 없어 매칭 0(phantom 회피), 프로젝트 타입이면 정확 연결.
+- **nullable 언래핑**(`Contributor?`→`Contributor`) — 현대 C# nullable 참조 타입 만연.
+- `this._field.Method()`는 내부 member_access의 name으로 필드 조회. `var`(implicit_type)·predefined_type·qualified_name·배열은 미해소→bare 유지.
+
+**검증 — 벤치 ardalis/CleanArchitecture(C# OSS, 365파일, dogfood 불가라 OSS A/B).** analyzeLocal A/B: 엣지 867→843(**-24 phantom**), HIGH_FAN_OUT 1(Main 진입점)=1 **불변**(신규 오탐 0). probe 코드 대조:
+- **정확 해소 확인**: `ContributorUpdateName.UpdatesName`(필드 `Contributor? _testContributor`)→`UpdateName @ Core/ContributorAggregate/Contributor.cs` = nullable 언래핑→Contributor::UpdateName→실제 도메인 클래스 정확 연결.
+- **phantom 제거**: DI 수신자 대부분이 NuGet 인터페이스(IRepository·IMediator·ILogger)라 `IRepository::GetByIdAsync` 등으로 정확화→프로젝트 파일 없어 엣지 미생성(bare가 동명 프로젝트 메서드로 새던 phantom 소멸). Java가 dedup 정탐 복원으로 fan-out↑였던 것과 달리, C# 벤치는 DI=라이브러리라 순 phantom 제거 우세.
+
+**결과.** Java와 동일 메커니즘을 C#에 이식, 외부 클래스 기반 C# 코드에서 phantom 제거+정확 해소 동시 입증, 경고 회귀 0. 단위 5종(필드·제네릭 베이스·primary ctor·nullable 언래핑·var bare 유지). 한계(범위 외): `var` 추론 지역변수 수신자(이 벤치의 도메인 호출 다수가 var)·체인 호출·qualified_name. 다음=TS 시점에 Java/C#/TS 변이로 공유 스코프-해소 엔진 추출(refactor PR).
