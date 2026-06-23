@@ -113,6 +113,12 @@ public class PostRepositoryImpl implements PostRepository {
         return commentJpa.countByPostId(postId);
     }
 
+    // 여러 게시글의 댓글 수 일괄 조회 (N+1 제거)
+    @Override
+    public List<Object[]> countCommentsByPostIdIn(List<UUID> postIds) {
+        return commentJpa.countByPostIdIn(postIds);
+    }
+
     // 좋아요 수 내림차순 게시글 목록 조회
     @Override
     public List<Post> findAllOrderByLikeCountDesc(Pageable pageable) {

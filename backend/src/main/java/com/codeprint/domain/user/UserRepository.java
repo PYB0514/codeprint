@@ -10,6 +10,9 @@ public interface UserRepository {
 
     Optional<User> findById(UUID id);
 
+    // 여러 ID로 사용자 일괄 조회 (목록 화면 작성자명 N+1 제거용)
+    java.util.List<User> findByIdIn(java.util.List<UUID> ids);
+
     Optional<User> findByGithubId(Long githubId);
 
     Optional<User> findByEmail(String email);

@@ -53,6 +53,9 @@ public interface PostRepository {
     // 게시글 댓글 수 조회
     long countCommentsByPostId(UUID postId);
 
+    // 여러 게시글의 댓글 수 일괄 조회 — 결과는 [postId(UUID), count(Long)] 행 목록 (N+1 제거용)
+    List<Object[]> countCommentsByPostIdIn(List<UUID> postIds);
+
     // 좋아요 수 내림차순 게시글 목록 조회
     List<Post> findAllOrderByLikeCountDesc(org.springframework.data.domain.Pageable pageable);
 

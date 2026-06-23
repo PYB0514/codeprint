@@ -2,6 +2,18 @@
 
 ---
 
+## 커뮤니티 피드 N+1 제거 — 목록 메타데이터 배치 조회 (2026-06-24, 성능)
+
+**문제.** `CommunityController.toPostResponse`가 글마다 작성자명(`userRepository.findById`)·북마크수(`countByPostId`)·좋아요수(`countByPostId`)·댓글수(`countCommentsByPostId`) + 로그인 시 내북마크/내좋아요 `existsBy...`를 호출 → **글당 6쿼리**. 목록(`getPosts` 피드, `getMyBookmarks`)이 20개면 100건 이상 DB 왕복. 커뮤니티 피드는 가장 자주 열리는 페이지라 체감 지연.
+
+**해법 — 페이지 단위 배치.** 목록용 `toPostResponses(List<Post>, currentUser)` 추가: postId/userId 모아 ①`userRepository.findByIdIn` ②북마크/좋아요/댓글 `countByPostIdIn`(GROUP BY, `[postId,count]` 행) ③`findByUserIdAndPostIdIn`(내 북마크/좋아요 집합)으로 **총 ~6쿼리**. 글당 6×N → 상수. 순수 조립 로직(`toCountMap`·`assemble`)은 static으로 분리해 단위 테스트(0건 글 0 기본값·내 여부·작성자명 fallback).
+
+**스코프 결정.** 가장 핫한 커뮤니티 피드(`getPosts`·`getMyBookmarks`)만 이번 PR로 처리. `UserController` 프로필 글목록(`toPostSummary`)도 동일 N+1이나 트래픽이 낮아 후속으로 분리(동일 배치 메서드 재사용 가능). `getPost`(단건 상세)는 N+1 아니라 기존 `toPostResponse` 유지. `getMyBookmarks`의 북마크→`findById` 루프(최대 50, 순서 보존)는 잔존하나 지배적 비용(6×N)은 해소.
+
+**검증.** 순수 조립 로직은 단위 테스트로 증명. @Query(JPQL GROUP BY)·파생쿼리 정확성은 컴파일이 아닌 부팅/실행 시점 검증이라, 서버 기동 후 공개 피드 응답이 정상(카운트 일치)인지 확인 필요(로그인 불필요). 쿼리 수 감소는 코드 리뷰로 확인(상수 쿼리).
+
+---
+
 ## 그래프 저장 경로 성능 — merge→persist(Persistable) + 배치, order_inserts는 탈락 (2026-06-24)
 
 **문제.** 분석 그래프 저장이 대형 레포(self ~3000엣지, gin ~4400엣지)에서 느린 후보. `Node`/`Edge`는 `@Id`를 `UUID.randomUUID()`로 앱이 직접 할당 + `@GeneratedValue`·`@Version` 없음 + `Persistable` 미구현 → Spring Data `isNew()`가 `id != null`이라 false → `save()`가 `persist`가 아닌 **`merge`** → INSERT마다 존재 확인 SELECT 선행. `GraphRepositoryImpl.saveNode/saveEdge`가 건건 호출, `hibernate.jdbc.batch_size` 미설정 → 인서트도 건건. 즉 노드/엣지당 SELECT+INSERT 왕복.

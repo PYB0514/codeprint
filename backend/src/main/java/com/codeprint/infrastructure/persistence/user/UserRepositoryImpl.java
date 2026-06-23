@@ -30,6 +30,12 @@ public class UserRepositoryImpl implements UserRepository {
         return jpa.findById(id);
     }
 
+    // 여러 ID로 사용자 일괄 조회
+    @Override
+    public List<User> findByIdIn(List<UUID> ids) {
+        return jpa.findAllById(ids);
+    }
+
     // GitHub ID로 사용자 조회
     @Override
     public Optional<User> findByGithubId(Long githubId) {
