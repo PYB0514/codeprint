@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.springframework.data.domain.Persistable;
 
 import java.util.Map;
 import java.util.UUID;
@@ -15,7 +16,7 @@ import java.util.UUID;
 @Table(name = "nodes")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Node {
+public class Node implements Persistable<UUID> {
 
     @Id
     @Column(columnDefinition = "uuid")
@@ -55,6 +56,25 @@ public class Node {
 
     @Column(name = "user_note", columnDefinition = "text")
     private String userNote;
+
+    // 할당된 UUID @Id 때문에 Spring Data가 save()를 merge(INSERT 전 SELECT 선행)로 보내는 것을 막아
+    // persist(배치 INSERT 지연)로 보내기 위한 신규 여부 플래그 — 영속/로드 후 해제
+    @Transient
+    @Getter(AccessLevel.NONE)
+    private boolean isNew = true;
+
+    // 영속화 전까지 신규로 간주 (Persistable 계약)
+    @Override
+    public boolean isNew() {
+        return isNew;
+    }
+
+    // 영속화 또는 로드 후 신규 상태 해제 — 이후 save()는 merge(update)로 처리
+    @PostPersist
+    @PostLoad
+    void markNotNew() {
+        this.isNew = false;
+    }
 
     // 그래프에 속하는 새 노드 인스턴스 생성
     public static Node create(UUID graphId, NodeType type, String name, String filePath, String language) {

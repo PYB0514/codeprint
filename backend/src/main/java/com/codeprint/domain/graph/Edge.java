@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.springframework.data.domain.Persistable;
 
 import java.util.Map;
 import java.util.UUID;
@@ -15,7 +16,7 @@ import java.util.UUID;
 @Table(name = "edges")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Edge {
+public class Edge implements Persistable<UUID> {
 
     @Id
     @Column(columnDefinition = "uuid")
@@ -43,6 +44,25 @@ public class Edge {
 
     @Column(name = "is_hidden", nullable = false)
     private boolean isHidden;
+
+    // 할당된 UUID @Id 때문에 Spring Data가 save()를 merge(INSERT 전 SELECT 선행)로 보내는 것을 막아
+    // persist(배치 INSERT 지연)로 보내기 위한 신규 여부 플래그 — 영속/로드 후 해제
+    @Transient
+    @Getter(AccessLevel.NONE)
+    private boolean isNew = true;
+
+    // 영속화 전까지 신규로 간주 (Persistable 계약)
+    @Override
+    public boolean isNew() {
+        return isNew;
+    }
+
+    // 영속화 또는 로드 후 신규 상태 해제 — 이후 save()는 merge(update)로 처리
+    @PostPersist
+    @PostLoad
+    void markNotNew() {
+        this.isNew = false;
+    }
 
     // 두 노드를 잇는 새 엣지 인스턴스 생성
     public static Edge create(UUID graphId, String edgeIdentifier, EdgeType type,
