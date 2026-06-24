@@ -266,6 +266,31 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("도메인 레이어 별칭(core/) → infrastructure import — DOMAIN_IMPORTS_INFRA 발화 (recall: domain 외 명명 인식)")
+    void domainImportsInfra_coreAlias_detected() {
+        // realworld 류: 도메인 레이어가 core/ 로 명명됨. 리터럴 /domain/ 만 보면 core→infra 위반을 놓침(recall 0).
+        Node core = funcNodeWithPath("BadService", "/io/spring/core/BadService.java");
+        Node infra = funcNodeWithPath("ArticleMapper", "/io/spring/infrastructure/mybatis/ArticleMapper.java");
+        Edge imp = importEdgeForPath(core.getId(), infra.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(core, infra), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "DOMAIN_IMPORTS_INFRA".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("인프라 레이어 별칭(persistence/) 도 인식 — domain → persistence DOMAIN_IMPORTS_INFRA 발화")
+    void domainImportsInfra_persistenceAlias_detected() {
+        Node domain = funcNodeWithPath("Order", "/app/domain/Order.java");
+        Node persistence = funcNodeWithPath("OrderDao", "/app/persistence/OrderDao.java");
+        Edge imp = importEdgeForPath(domain.getId(), persistence.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(domain, persistence), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "DOMAIN_IMPORTS_INFRA".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
     @DisplayName("DB_TABLE 노드에 hasConverter=true 메타데이터 — MISSING_CONVERTER_MIGRATION 경고")
     void missingConverterMigration_detected() {
         Node tableNode = Node.create(graphId, NodeType.DB_TABLE, "users", "/com/example/domain/user/User.java", "java");
