@@ -4,6 +4,22 @@
 
 ---
 
+## HIGH 경고 precision 감사 → CROSS_CONTEXT_IMPORT 헥사고날 오탐 제거 (2026-06-24, fix v0.94.3)
+
+**배경(전략).** 제품을 Java/Python/JS-React 생태계의 "무설정 아키텍처 conformance CI 게이트"로 좁히기로 함. HIGH 경고는 머지를 막는 등급이라 precision이 채택의 핵심 변수 → 실제 오픈소스 레포로 HIGH 경고 precision **실측 감사** 착수.
+
+**감사 방법·발견.** 구조가 모범적인 레포에서 HIGH가 뜨면 거의 오탐이라는 전제로 Java 3종 A/B. **buckpal**(Tom Hombergs "Get Your Hands Dirty on Clean Architecture"의 공식 헥사고날 레퍼런스)에서 `CROSS_CONTEXT_IMPORT` **20건 — 전부 오탐**(코드 대조: `SendMoneyService`가 import하는 `application.domain.model.Account`·`application.port.*`는 단일 `account` 컨텍스트 내 헥사고날 레이어 간 정상 의존). ddd-library 0건(다른 레이아웃이라 검출 자체 없음=recall도 빈약), petclinic 0건(정상).
+
+**근본 원인.** `detectCrossContextDomainImport`가 `/application/`·`/domain/` **바로 다음 세그먼트를 바운디드 컨텍스트명으로 가정** — Codeprint 고유 컨벤션(`application/{context}/`, `domain/{context}/`)에만 맞음. 헥사고날(`application/domain/`, `application/port/`)에선 **레이어명을 컨텍스트로 오인** → 레이어 간 정상 import가 cross-context HIGH 오탐. 가장 흔한 대안 아키텍처에서 precision 0% = 채택 킬러.
+
+**해법(A+B+C1, 무설정 유지).** ①(A) `/domain/`이 `/application/` 하위 중첩이면(헥사고날 `application/domain/`) 컨텍스트로 안 봄. ②(B) `/application/`·`/domain/` 다음 세그먼트가 레이어 용어(domain·port·adapter·service·model·in·out·usecase…)면 컨텍스트로 안 봄. ③(C1) 레포 전체 distinct 컨텍스트 < 2면 검출 스킵(단일 컨텍스트면 cross-context 위반 자체가 불가). 셋 다 **검출을 줄이는 방향(monotonic)** 이라 어느 레포에도 신규 FP 불가, recall만 트레이드. C2(.codeprint/architecture.json 필수화)는 zero-config 차별점을 해쳐 보류.
+
+**검증.** buckpal **20→0**, ddd-library·petclinic 0 유지, **Codeprint self 경계위반 0 유지**(컨텍스트 다수라 C1 통과해 검출 실행되되 실위반 0=무회귀). 단위: 의도 컨벤션 발화 보존(`crossContextImport_detected`)+헥사고날 미발화+C1 가드 신규 2종. `extractContextFromDomainPath`는 DOMAIN_IMPORTS_INFRA에선 메시지 라벨용일 뿐(검출 조건은 `contains("/domain/")`)이라 무영향. 전체 테스트 green.
+
+**한계(기록).** 검출기는 여전히 `layer/context` 순서 컨벤션에 묶임 — `{context}/application/`(context-first, ddd-library 류)는 검출 못 함(recall 0). 후속: layout-agnostic 컨텍스트 추론 또는 C1 강화. Python/JS-React precision 감사는 별도 진행 예정.
+
+---
+
 ## Swift AST 분석기 추가 + 테스트 아티팩트 누출 교정 (2026-06-24, feat v0.94.1)
 
 **문제.** Swift는 `LanguageDetector` SUPPORTED에 있으나 전용 AST 없이 정규식 폴백(`func name(`)만 사용 — 생성자(`init`) 누락, 메서드 호출(`obj.method()`) 귀속 부정확. AST 11종(Java~C++) 중 Swift만 반쪽 상태.

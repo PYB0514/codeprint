@@ -237,6 +237,35 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("헥사고날 레이어(application/domain·application/port) 간 import — CROSS_CONTEXT_IMPORT 미발화 (buckpal류 교과서 FP 방지)")
+    void crossContextImport_hexagonalLayers_noWarning() {
+        // buckpal: 단일 account 컨텍스트의 헥사고날 레이어. application/domain·application/port 를 컨텍스트로 오인하면
+        // 레이어 간 정상 의존이 cross-context HIGH 오탐이 된다(precision 감사로 발견한 교과서 FP). 레이어 denylist+중첩 가드+C1로 방지.
+        Node port = funcNodeWithPath("SendMoneyUseCase", "/buckpal/application/port/in/SendMoneyUseCase.java");
+        Node model = funcNodeWithPath("Account", "/buckpal/application/domain/model/Account.java");
+        Node domainService = funcNodeWithPath("SendMoneyService", "/buckpal/application/domain/service/SendMoneyService.java");
+        Edge imp1 = importEdgeForPath(port.getId(), model.getId());
+        Edge imp2 = importEdgeForPath(domainService.getId(), model.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(port, model, domainService), List.of(imp1, imp2));
+
+        assertThat(warnings.stream().filter(w -> "CROSS_CONTEXT_IMPORT".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("단일 컨텍스트만 존재하면 cross-context 위반 성립 불가 — 미발화 (C1 가드)")
+    void crossContextImport_singleContext_noWarning() {
+        // 컨텍스트가 1개뿐이면 application/X→domain/Y 형태라도 cross-context 위반이 불가능 — C1이 발화를 막는다.
+        Node app = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");
+        Node dom = funcNodeWithPath("Project", "/com/example/domain/project/Project.java");
+        Edge imp = importEdgeForPath(app.getId(), dom.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(app, dom), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "CROSS_CONTEXT_IMPORT".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
     @DisplayName("DB_TABLE 노드에 hasConverter=true 메타데이터 — MISSING_CONVERTER_MIGRATION 경고")
     void missingConverterMigration_detected() {
         Node tableNode = Node.create(graphId, NodeType.DB_TABLE, "users", "/com/example/domain/user/User.java", "java");

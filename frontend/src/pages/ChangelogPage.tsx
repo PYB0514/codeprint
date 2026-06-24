@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.94.3',
+    date: '2026-06-24',
+    title: '헥사고날 아키텍처 거짓 경고 제거 — 구조 검사 정확도 개선',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: '헥사고날·클린 아키텍처(application 아래 domain·port·adapter 레이어를 두는 방식)를 쓰는 프로젝트에서 정상적인 레이어 간 의존을 "컨텍스트 경계 위반(HIGH)"으로 잘못 잡던 문제를 바로잡았습니다. 레이어명을 바운디드 컨텍스트로 오인하지 않도록 했고, 컨텍스트가 하나뿐인 모듈에서는 경계 위반 검사를 건너뜁니다. 실제 클린 아키텍처 레퍼런스 프로젝트 기준 거짓 경고 20건→0건. 이 검사는 머지를 막는 등급이라 거짓 경고 제거가 특히 중요합니다.' },
+    ],
+  },
+  {
     version: 'v0.94.2',
     date: '2026-06-24',
     title: 'PR 구조 검사 게이트 — fork PR 지원',
