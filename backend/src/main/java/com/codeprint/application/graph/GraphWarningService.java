@@ -314,6 +314,17 @@ public class GraphWarningService {
             nameMap.put(n.getId(), n.getName());
         }
 
+        // C1: 진짜 복수 바운디드 컨텍스트가 있을 때만 발화 — 단일 컨텍스트(헥사고날 단일 모듈 등)면 cross-context
+        // 위반 자체가 성립 불가. 추출 가능한 distinct 컨텍스트가 2개 미만이면 검출하지 않는다(교과서 FP 방지).
+        Set<String> distinctContexts = new HashSet<>();
+        for (String p : nodeFilePaths.values()) {
+            String ac = extractContextFromApplicationPath(p);
+            if (ac != null) distinctContexts.add(ac);
+            String dc = extractContextFromDomainPath(p);
+            if (dc != null) distinctContexts.add(dc);
+        }
+        if (distinctContexts.size() < 2) return List.of();
+
         List<Map<String, Object>> warnings = new ArrayList<>();
         for (Edge e : edges) {
             if (e.getType() != EdgeType.IMPORT) continue;
@@ -338,22 +349,41 @@ public class GraphWarningService {
         return warnings;
     }
 
-    // "/application/{context}/" 경로에서 컨텍스트명 추출 — 없으면 null
+    // 아키텍처 레이어/하위패키지 용어 — 헥사고날·클린아키텍처에서 application/domain/, application/port/ 처럼
+    // 레이어명이 컨텍스트 자리에 오는 것을 바운디드 컨텍스트로 오인하지 않도록 제외(buckpal 류 교과서 FP 방지).
+    private static final Set<String> LAYER_TERMS = Set.of(
+        "domain", "application", "infrastructure", "interfaces", "presentation",
+        "adapter", "adapters", "port", "ports", "service", "services",
+        "model", "models", "entity", "entities", "repository", "repositories",
+        "controller", "controllers", "usecase", "usecases", "use_case",
+        "in", "out", "web", "persistence", "api", "rest", "config",
+        "common", "shared", "dto", "dtos", "mapper", "mappers", "util", "utils"
+    );
+
+    // "/application/{context}/" 경로에서 컨텍스트명 추출 — 레이어 용어면(헥사고날 application/domain/ 등) null
     private String extractContextFromApplicationPath(String path) {
         int idx = path.indexOf("/application/");
         if (idx < 0) return null;
         String after = path.substring(idx + "/application/".length());
         int slash = after.indexOf('/');
-        return slash > 0 ? after.substring(0, slash) : null;
+        if (slash <= 0) return null;
+        String seg = after.substring(0, slash);
+        return LAYER_TERMS.contains(seg) ? null : seg;
     }
 
-    // "/domain/{context}/" 경로에서 컨텍스트명 추출 — 없으면 null
+    // "/domain/{context}/" 경로에서 컨텍스트명 추출 — 없으면 null.
+    // /domain/ 이 /application/ 하위에 중첩(application/domain/model)이면 헥사고날 레이어이지 top-level 도메인 레이어가
+    // 아니므로 컨텍스트로 보지 않는다. 추출 세그먼트가 레이어 용어인 경우도 제외.
     private String extractContextFromDomainPath(String path) {
         int idx = path.indexOf("/domain/");
         if (idx < 0) return null;
+        int appIdx = path.indexOf("/application/");
+        if (appIdx >= 0 && appIdx < idx) return null;
         String after = path.substring(idx + "/domain/".length());
         int slash = after.indexOf('/');
-        return slash > 0 ? after.substring(0, slash) : null;
+        if (slash <= 0) return null;
+        String seg = after.substring(0, slash);
+        return LAYER_TERMS.contains(seg) ? null : seg;
     }
 
     // DDD 팩토리·JPA·React·콜백 패턴은 정적 FUNCTION_CALL 엣지로 추적 불가 → 제외
