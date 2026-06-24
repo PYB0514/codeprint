@@ -1114,3 +1114,17 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **이유.** fmt/json은 템플릿 헤더 라이브러리라 free 함수·템플릿 메타프로그래밍·연산자 오버로드가 지배적이고, 타입 인지 해소가 노리는 변수/this 수신자 메서드 호출 패턴은 ~30~40개뿐. 반면 C++는 구현 난도 최고(`this` 두 출처=in-class class_specifier + 아웃오브라인 `Foo::bar` 한정자, 템플릿, 네임스페이스, 정규식 폴백 없음). **ROI 최악**(최고 복잡도 × 최저 가치).
 
 **결과 = 구현하지 않음.** 타입 인지 해소는 패턴이 지배적인 6개 언어(Java·C#·TS·Python·Go·Rust)로 자연 완성. C++는 app-style C++ 벤치(this-> 빈번)가 확보되면 재검토(현 벤치로는 측정 불가). 재시도 시 가치 측정부터. 대신 미테스트 application 서비스 단위 테스트(GraphQuery·AnalysisApplication·AiGraphAnalysis)로 전환 — 안정성·포트폴리오 가치 명확, 방향 모호성 없음.
+
+## CROSS_CONTEXT·DB_LAYER_BYPASS 검출기 레이어 별칭화 (recall 2단계) (2026-06-24)
+
+**문제.** #373이 DOMAIN_IMPORTS_INFRA와 isDddProject 게이트를 디렉터리 별칭으로 열었으나, CROSS_CONTEXT_IMPORT·DB_LAYER_BYPASS 두 검출기는 여전히 리터럴 경로(`/domain/`·`/infrastructure/persistence/`)만 추출. 실측: java-realworld(도메인=`core/`, 영속화=`infrastructure/mybatis`·`repository`)에서 두 검출기 0건 — 위반이 있는데 폴더 이름이 달라 못 잡는 recall 0.
+
+**조사(코드근거).** realworld에서 실제 위반 확인: ①`application/*QueryService` → `infrastructure/mybatis/readservice/*` (CQRS read가 도메인 Repository 우회, 17 import) ②`application/{ctx}` → `core/{다른ctx}` (article→user/favorite, comment→article/user 등, 15 import). 전부 실제 import로 검증(헛것 0).
+
+**구현.** ①extractContextFromApplicationPath/extractContextFromDomainPath를 별칭 집합(DOMAIN_LAYER_DIRS={domain,domains,core}, APPLICATION_LAYER_DIRS) 기반 공통 extractContextAfterLayer로 일반화(중첩-도메인 가드 보존). ②DB_LAYER_BYPASS의 영속화 타깃을 **INFRA_LAYER_DIRS ∩ PERSISTENCE_LAYER_DIRS 교집합**으로 한정 — persistence·db·repository·mybatis·jpa·dao·mapper 등을 인식하되 INFRA 레이어 안일 것을 동시 요구. 이 교집합이 precision 핵심: `infrastructure/service`(비영속화)는 PERSISTENCE 세그먼트 없어 제외, `domain/.../repository`(도메인 인터페이스)는 INFRA 레이어 밖이라 제외.
+
+**측정.** 클린 레포 3종(buckpal 헥사고날·ddd-library context-DDD·petclinic) HIGH 0 유지 = precision 보존. realworld 0→32 HIGH(cross-context 15+db-bypass 17, 전부 실제 import=recall). 단위 4종(별칭 recall 2 + precision 가드 2: infra/service 미발화·domain/repository 미발화). 전체 백엔드 테스트 green.
+
+**★ 전략 결정(대화로 도출) — conformance는 opt-out 모델.** Context81 전략선("선언 위반=architecture.json 설정, C2 보류")을 수정. opt-in(위반을 선언해야 잡음)은 "무설정 가치" 제품 정체성과 모순 → opt-out(기본 발화 + 의도된 것만 숨김)이 맞다. 전제: 검출기가 정확해야(헛것 0) opt-out 안전 → 그래서 32건 전수 코드검증. 현 suppress는 per-fingerprint(개별), 타입 그룹화는 화면 표시용일 뿐 숨김 단위 아님 → **다음 작업 = 패턴 단위 예외 규칙(글로브 IGNORE, ArchitectureIntent 엔진 재활용) + UI 동반 설계.** architecture.json은 검출 스위치가 아니라 폴더로 못 보는 추가 FORBID(INTENT_DRIFT)용.
+
+**남은 recall 후보(Java DONE 전):** context-first 레이아웃(ddd-library `{ctx}/application/`·`{ctx}/model/`) 미검출, CYCLIC 패키지 레벨 cycle 미검출.

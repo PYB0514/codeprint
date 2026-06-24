@@ -208,6 +208,50 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("별칭: application 이 infrastructure/mybatis 를 직접 IMPORT — DB_LAYER_BYPASS 경고 (realworld CQRS read)")
+    void dbLayerBypass_persistenceAlias_mybatis() {
+        Node appNode = funcNodeWithPath("articleQuery", "/io/spring/application/ArticleQueryService.java");
+        Node readNode = funcNodeWithPath("findById", "/io/spring/infrastructure/mybatis/readservice/ArticleReadService.java");
+        Edge imp = importEdgeForPath(appNode.getId(), readNode.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(appNode, readNode), List.of(imp));
+        assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("precision: infrastructure/service(비영속화) IMPORT — DB_LAYER_BYPASS 미발화")
+    void dbLayerBypass_infraNonPersistence_noWarning() {
+        Node appNode = funcNodeWithPath("articleQuery", "/io/spring/application/ArticleQueryService.java");
+        Node svcNode = funcNodeWithPath("send", "/io/spring/infrastructure/service/MailService.java");
+        Edge imp = importEdgeForPath(appNode.getId(), svcNode.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(appNode, svcNode), List.of(imp));
+        assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("precision: 도메인 Repository 인터페이스(domain/.../repository, INFRA 밖) IMPORT — DB_LAYER_BYPASS 미발화")
+    void dbLayerBypass_domainRepositoryInterface_noWarning() {
+        Node appNode = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");
+        Node portNode = funcNodeWithPath("save", "/com/example/domain/project/repository/ProjectRepository.java");
+        Edge imp = importEdgeForPath(appNode.getId(), portNode.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(appNode, portNode), List.of(imp));
+        assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("별칭: application/article 이 core/user(도메인 별칭)를 직접 IMPORT — CROSS_CONTEXT_IMPORT 경고")
+    void crossContextImport_coreDomainAlias() {
+        Node appNode = funcNodeWithPath("createArticle", "/io/spring/application/article/ArticleCommandService.java");
+        Node coreNode = funcNodeWithPath("User", "/io/spring/core/user/User.java");
+        Edge imp = importEdgeForPath(appNode.getId(), coreNode.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(appNode, coreNode), List.of(imp));
+        assertThat(warnings.stream().filter(w -> "CROSS_CONTEXT_IMPORT".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
     @DisplayName("application/project 가 domain/user 를 직접 IMPORT — CROSS_CONTEXT_IMPORT 경고")
     void crossContextImport_detected() {
         Node appNode = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");

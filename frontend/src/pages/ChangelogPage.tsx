@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.94.5',
+    date: '2026-06-24',
+    title: '아키텍처 검사 — 컨텍스트 경계·DB 우회 검사도 다양한 폴더 이름 인식 (recall 확대 2단계)',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: '컨텍스트 경계 위반(CROSS_CONTEXT)과 DB 레이어 우회(DB_LAYER_BYPASS) 검사가 그동안 폴더 이름이 정확히 domain/·infrastructure/persistence/ 일 때만 동작했는데, 실제 프로젝트가 흔히 쓰는 다른 이름도 인식하도록 했습니다. 도메인 레이어를 core/ 로 둔 프로젝트, 영속화를 mybatis·repository·jpa·dao 등으로 둔 프로젝트의 위반도 잡습니다. 영속화 검사는 인프라 레이어 안의 DB 디렉터리만 한정해(infrastructure/service 같은 비-DB 코드나 도메인 Repository 인터페이스는 제외) 거짓 경고를 막았고, 모범 구조 레포 3종 기준 여전히 HIGH 거짓 경고 0건을 유지합니다.' },
+    ],
+  },
+  {
     version: 'v0.94.4',
     date: '2026-06-24',
     title: '아키텍처 검사 — 다양한 폴더 이름 인식 (recall 확대 1단계)',
