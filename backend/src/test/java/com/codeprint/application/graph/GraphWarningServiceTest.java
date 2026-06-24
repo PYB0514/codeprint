@@ -252,6 +252,45 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("ignore 패턴(type+from+to 글로브)에 매치되는 경고는 그룹 억제")
+    void ignorePattern_suppressesMatchingWarning() {
+        Node appNode = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");
+        Node repoNode = funcNodeWithPath("save", "/com/example/infrastructure/persistence/JpaProjectRepo.java");
+        Edge imp = importEdgeForPath(appNode.getId(), repoNode.getId());
+        ArchitectureIntent intent = new ArchitectureIntent(List.of(), List.of(),
+                List.of(new ArchitectureIntent.IgnoreRule("DB_LAYER_BYPASS", "**/application/**", "**/persistence/**")));
+
+        List<Map<String, Object>> warnings = service.detect(List.of(appNode, repoNode), List.of(imp), intent);
+        assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("ignore 패턴이 from-only 글로브여도 매치 — type·to는 와일드카드")
+    void ignorePattern_fromGlobOnly() {
+        Node appNode = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");
+        Node repoNode = funcNodeWithPath("save", "/com/example/infrastructure/persistence/JpaProjectRepo.java");
+        Edge imp = importEdgeForPath(appNode.getId(), repoNode.getId());
+        ArchitectureIntent intent = new ArchitectureIntent(List.of(), List.of(),
+                List.of(new ArchitectureIntent.IgnoreRule(null, "**/application/**", null)));
+
+        List<Map<String, Object>> warnings = service.detect(List.of(appNode, repoNode), List.of(imp), intent);
+        assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("ignore 패턴이 다른 경로/타입이면 경고 보존 (노매치)")
+    void ignorePattern_noMatch_keepsWarning() {
+        Node appNode = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");
+        Node repoNode = funcNodeWithPath("save", "/com/example/infrastructure/persistence/JpaProjectRepo.java");
+        Edge imp = importEdgeForPath(appNode.getId(), repoNode.getId());
+        ArchitectureIntent intent = new ArchitectureIntent(List.of(), List.of(),
+                List.of(new ArchitectureIntent.IgnoreRule("DB_LAYER_BYPASS", "**/interfaces/**", null)));
+
+        List<Map<String, Object>> warnings = service.detect(List.of(appNode, repoNode), List.of(imp), intent);
+        assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
     @DisplayName("application/project 가 domain/user 를 직접 IMPORT — CROSS_CONTEXT_IMPORT 경고")
     void crossContextImport_detected() {
         Node appNode = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");

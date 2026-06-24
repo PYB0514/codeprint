@@ -98,7 +98,12 @@ public class LocalAnalyzer {
             for (JsonNode r : root.path("rules")) {
                 rules.add(new ArchitectureIntent.DependencyRule(r.path("from").asText(), r.path("to").asText()));
             }
-            return new ArchitectureIntent(modules, rules);
+            List<ArchitectureIntent.IgnoreRule> ignores = new ArrayList<>();
+            for (JsonNode g : root.path("ignore")) {
+                ignores.add(new ArchitectureIntent.IgnoreRule(
+                        g.path("type").asText(null), g.path("from").asText(null), g.path("to").asText(null)));
+            }
+            return new ArchitectureIntent(modules, rules, ignores);
         } catch (Exception e) {
             System.err.println("의도 선언 로드 실패 (무시): " + file + " — " + e.getMessage());
             return null;

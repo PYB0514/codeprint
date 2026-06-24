@@ -1127,4 +1127,16 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 
 **★ 전략 결정(대화로 도출) — conformance는 opt-out 모델.** Context81 전략선("선언 위반=architecture.json 설정, C2 보류")을 수정. opt-in(위반을 선언해야 잡음)은 "무설정 가치" 제품 정체성과 모순 → opt-out(기본 발화 + 의도된 것만 숨김)이 맞다. 전제: 검출기가 정확해야(헛것 0) opt-out 안전 → 그래서 32건 전수 코드검증. 현 suppress는 per-fingerprint(개별), 타입 그룹화는 화면 표시용일 뿐 숨김 단위 아님 → **다음 작업 = 패턴 단위 예외 규칙(글로브 IGNORE, ArchitectureIntent 엔진 재활용) + UI 동반 설계.** architecture.json은 검출 스위치가 아니라 폴더로 못 보는 추가 FORBID(INTENT_DRIFT)용.
 
-**남은 recall 후보(Java DONE 전):** context-first 레이아웃(ddd-library `{ctx}/application/`·`{ctx}/model/`) 미검출, CYCLIC 패키지 레벨 cycle 미검출.
+**남은 recall 후보(Java DONE 전):** context-first 레이아웃(ddd-library `{ctx}/application/`·`{ctx}/model/`) 미검출, CYCLIC 패키지 레벨 cycle 미검출. ★context-first는 로컬 휴리스틱 불가(`patron/application/checkout`의 checkout과 `application/article`의 article이 동일 구조 → 컨텍스트 오추출 FP 위험) → 전역 레이아웃 추론 필요한 별도 설계로 분리.
+
+## 패턴 단위 예외 규칙(글로브 IGNORE) — opt-out 실용화 (백엔드 1차) (2026-06-24)
+
+**문제.** opt-out 모델 확정 후, 의도된 위반(realworld의 CQRS read-bypass 17건 등)을 끄려면 현재는 per-fingerprint suppress로 개별 클릭(17번)해야 함. 타입 그룹화는 화면 표시용일 뿐 숨김 단위가 아니고, 타입은 너무 거친 단위(의도된 패턴과 진짜 실수가 같은 타입에 섞임).
+
+**설계(코드 확인 후 결정).** 새 엔티티 대신 **기존 `ArchitectureIntent` 메커니즘 재활용** — 이미 프로젝트별 DB JSON 저장 + 글로브 엔진(globMatches) + 프로덕션 detect 경로(GraphQueryService) + 전용 컨트롤러를 갖춤. `IgnoreRule(type, fromGlob, toGlob)` 추가: 경고의 타입·출발파일·도착파일이 매치하면 억제(빈 필드=와일드카드). GraphWarningService.detect()가 경고 빌드 후 `intent.isIgnored()` 후처리 필터로 제거. **isEmpty()와 독립 적용** — ignores만 선언한 의도도 유효(모듈/규칙 0이어도 ignore 동작).
+
+**구현 범위(1차=백엔드).** ArchitectureIntent record에 ignores 추가(하위호환 생성자로 churn 0)·parse/toJson 직렬화·LocalAnalyzer 파싱(CLI/CI 일관)·Controller DTO에 ignore 필드(선택, null→빈목록). 캐시는 기존 save 시 graphWarnings evict 재활용.
+
+**측정(realworld, .codeprint/architecture.json).** `{type:DB_LAYER_BYPASS, to:**/infrastructure/**}` 한 줄 → db-bypass 17→0(그룹 억제). `{type:CROSS_CONTEXT_IMPORT, from:**/application/article/**}` → cross-context 15→9(article 출발 6건만 정확 억제, 나머지 보존). DEAD_CODE 무영향. 단위 3종(타입+from+to 매치·from-only·노매치). 전체 백엔드 테스트 green.
+
+**다음(UI PR).** 그래프 경고 패널에서 "이 패턴 무시" 액션 → 경고의 from/to 파일에서 글로브 prefill → 규칙 관리 UI. 이때 Changelog·태그(사용자 가시 기능 완성).
