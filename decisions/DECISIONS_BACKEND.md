@@ -2,6 +2,16 @@
 
 ---
 
+## CI 게이트 fork PR 지원 — head SHA를 PR head.sha로 조회 (2026-06-24, fix)
+
+**문제.** CI 게이트(commit status)가 `postCommitStatus`에서 `fetchLatestCommitSha(repoUrl, headBranch)`로 head SHA를 조회 — base repo에서 **브랜치명**으로 최신 커밋을 찾는다. fork PR은 head 브랜치가 **fork 레포**에 있어 base repo엔 없으므로 404 → graceful skip → fork PR엔 게이트 미적용(Context80에서 후속으로 미뤄둠).
+
+**해법.** `GitHubApiClient.fetchPullRequestHeadSha`(PR API의 `head.sha`) 추가, `postCommitStatus`가 브랜치명 대신 이걸 사용. fork PR의 head 커밋도 base repo의 `refs/pull/{N}/head`로 도달 가능해 `POST /repos/{base}/statuses/{head_sha}`가 동작한다(GitHub이 PR head를 base repo refs로 복제 + status는 base repo 소유자 토큰 write로 게시). 동일repo PR도 `head.sha`가 정확(브랜치 head와 동일 커밋)이라 동작 불변.
+
+**검증.** 동일repo 회귀 안전을 정적 대조 — 실 PR #370 `head.sha`=`f76135d`가 브랜치 head 커밋과 일치(구코드 결과와 동일). 컴파일·전체 테스트 green. fork PR 라이브 게시는 OAuth+실 fork 필요라 로컬 백엔드 트리거로 별도 확인. 추가 API GET 1회(PR 메타)는 레포 클론 대비 무시 가능 — sibling `fetchPullRequestHeadBranch`와 동형 메서드로 surgical 유지(§2/§3).
+
+---
+
 ## CI 게이트 완성 — PR commit status (리뷰어→게이트) (2026-06-24, 기능)
 
 **문제(점검으로 발견).** 사용자가 "CI 게이트가 완성 안 된 거 아니냐"고 지목 → 점검 결과 PR 리뷰는 **경고 코멘트만** 게시(`upsertIssueComment`)하고 GitHub commit status/check run을 만들지 않음. 즉 브랜치 보호가 요구할 수 있는 pass/fail 체크가 없어 **머지를 막지 못하는 "리뷰어"**였음(진짜 "게이트" 아님). webhook→`reviewAsync`→`review()` 자동 트리거 배선은 이미 완전.
