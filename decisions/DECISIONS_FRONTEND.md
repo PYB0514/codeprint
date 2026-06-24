@@ -433,3 +433,13 @@ const fetchGraph = useCallback(async () => {
 **결과:** GraphPage·ShareGraphPage·DiffPage·CommunityPostGraphPage 4개 그래프 렌더 페이지의 `<ReactFlow>`에 `onlyRenderVisibleElements` 한 줄씩 추가(같은 대형 그래프를 그리므로 일관 적용). `tsc -b` 통과.
 
 **측정 기반 다음 단계 보류:** Phase 2의 도메인 기본 접힘·노드 LOD는 컬링만으로 freeze가 해소되는지 **브라우저 검증 후** 필요성을 재평가한다(투기적 선구현 금지). 검증 포인트: 319파일 freeze 해소 + 부모/자식 sub-flow(그룹 박스·파일 안 함수 노드)가 스크롤·확대 시 정상 렌더되는지.
+
+## 경고 패턴 예외 UI — "무시" 액션 + 규칙 패널 (2026-06-25)
+
+**문제:** 백엔드 패턴 예외(글로브 IGNORE, #375)를 사용자가 쓰려면 UI 필요. opt-out 모델 실용화의 마지막 조각.
+
+**UX 결정(사용자 확정):** ①글로브 기본값=넓게(레이어 단위, `**/application/**`) — 출발/도착 파일에서 알려진 레이어 세그먼트를 찾아 추론, 의도된 패턴은 보통 레이어 단위라 부합. ②미리보기 카운트=클라이언트 계산(서버 왕복 0) — 프론트가 이미 가진 경고 목록에 글로브 매칭(`globToRegExp`는 백엔드 globToPattern과 동일 규칙). ③규칙 관리 위치=경고 패널 안(별도 설정 페이지 아님) — 경고 보는 곳에서 바로.
+
+**★ 데이터 손실 방지:** ArchitectureIntent는 modules·rules·ignore를 한 JSON에 저장하는데, 기존 `ArchitectureIntentPanel.save()`가 modules+rules만 PUT → 백엔드가 ignore를 빈목록으로 덮어씀. 경고 패널에서 추가한 예외 규칙이 의도 패널 저장 시 사라지는 버그. **해결:** ArchitectureIntentPanel이 ignore를 로드해 저장 시 그대로 라운드트립(편집 안 해도 보존). clear()도 ignore 있으면 DELETE 대신 PUT(modules/rules만 비움). saveIgnoreRules도 역으로 modules/rules를 라운드트립.
+
+**구현:** `utils/ignoreRules.ts`(글로브 추론·매칭·API 라운드트립), WarningPanel에 IgnoreRuleForm(인라인, 실시간 카운트)·IgnoreRulesSection(규칙 목록·제거), GraphPage 연동(fileOfNodeId·add/remove→저장→fetchGraph 재조회). nodeIds≥2 관계형 경고만 "무시" 표시. ShareGraphPage(비소유자)는 ignoreOps 미전달로 미표시. `tsc -b` 통과. **브라우저 검증은 사용자 서버 기동 후.**

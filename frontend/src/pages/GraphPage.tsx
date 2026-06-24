@@ -31,6 +31,7 @@ import WarningPanel from '../components/WarningPanel'
 import TeamChatPanel from '../components/TeamChatPanel'
 import AiAnalysisSection from '../components/AiAnalysisSection'
 import ArchitectureIntentPanel from '../components/ArchitectureIntentPanel'
+import { type IgnoreRule, loadIgnoreRules, saveIgnoreRules } from '../utils/ignoreRules'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode, sketch: SketchNode }
 
@@ -635,6 +636,47 @@ function GraphPageInner() {
     }
   }, [projectId])
 
+  // 패턴 예외(IGNORE) 규칙 — architecture-intent에 저장, 그룹 단위로 경고 억제
+  const [ignoreRules, setIgnoreRules] = useState<IgnoreRule[]>([])
+  // fetchGraph는 아래에서 정의되므로 ref로 안정 참조 (예외 규칙 변경 후 경고 재조회용)
+  const fetchGraphRef = useRef<(() => Promise<void>) | null>(null)
+  // 프로젝트의 예외 규칙 로드
+  useEffect(() => {
+    if (projectId) loadIgnoreRules(projectId).then(setIgnoreRules).catch(() => {})
+  }, [projectId])
+
+  // nodeId → 파일 경로 (글로브 추론·미리보기용) — 함수/파일 노드는 자신, 그 외는 빈 문자열
+  const fileOfNodeId = useCallback((nodeId: string) => {
+    const n = rawNodes.find(x => x.id === nodeId)
+    return n?.filePath ?? ''
+  }, [rawNodes])
+
+  // 예외 규칙 추가 — 저장 후 경고 재조회로 억제 반영
+  const handleAddIgnore = useCallback(async (rule: IgnoreRule) => {
+    if (!projectId) return
+    const next = [...ignoreRules, rule]
+    setIgnoreRules(next)
+    try {
+      await saveIgnoreRules(projectId, next)
+      await fetchGraphRef.current?.()
+    } catch {
+      alert('예외 규칙 저장에 실패했습니다.')
+    }
+  }, [projectId, ignoreRules])
+
+  // 예외 규칙 제거 — 저장 후 경고 재조회로 복원 반영
+  const handleRemoveIgnore = useCallback(async (index: number) => {
+    if (!projectId) return
+    const next = ignoreRules.filter((_, i) => i !== index)
+    setIgnoreRules(next)
+    try {
+      await saveIgnoreRules(projectId, next)
+      await fetchGraphRef.current?.()
+    } catch {
+      alert('예외 규칙 삭제에 실패했습니다.')
+    }
+  }, [projectId, ignoreRules])
+
   // 상단 툴바 팝업 — 'preset' | 'export' | null (한 번에 하나만 열림)
   const [openToolbarMenu, setOpenToolbarMenu] = useState<'preset' | 'export' | null>(null)
   // 뷰 프리셋 상태
@@ -1090,6 +1132,8 @@ function GraphPageInner() {
       setLoading(false)
     }
   }, [projectId, setNodes, setEdges, applyEdgeVisibility, fitView])
+  // 예외 규칙 변경 후 경고를 재조회하기 위해 최신 fetchGraph를 ref에 보관
+  fetchGraphRef.current = fetchGraph
 
   useEffect(() => {
     axios.get<{ id: string; graphBgUrl?: string | null }>('/api/auth/me')
@@ -2891,6 +2935,13 @@ function GraphPageInner() {
                   onSuppress={handleSuppressWarning}
                   suppressed={suppressedWarnings}
                   onRestore={handleRestoreWarning}
+                  ignoreOps={{
+                    fileOf: fileOfNodeId,
+                    rules: ignoreRules,
+                    allWarnings: warnings,
+                    onAdd: handleAddIgnore,
+                    onRemove: handleRemoveIgnore,
+                  }}
                 />
               ) : (
                 <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>

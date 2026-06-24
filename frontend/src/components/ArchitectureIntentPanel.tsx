@@ -17,6 +17,8 @@ function moduleNames(modules: IntentModule[]) {
 export default function ArchitectureIntentPanel({ projectId, onSaved }: Props) {
   const [modules, setModules] = useState<IntentModule[]>([])
   const [rules, setRules] = useState<IntentRule[]>([])
+  // 경고 패널에서 관리하는 예외 규칙 — 이 패널은 편집하지 않지만 저장 시 보존(라운드트립)해 덮어쓰기를 막는다
+  const [ignore, setIgnore] = useState<{ type?: string; from?: string; to?: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
@@ -35,9 +37,11 @@ export default function ArchitectureIntentPanel({ projectId, onSaved }: Props) {
           glob: (m.globs ?? []).join(', ')
         })))
         setRules(data.rules ?? [])
+        setIgnore(data.ignore ?? [])
       } else if (res.status === 404) {
         setModules([])
         setRules([])
+        setIgnore([])
       }
     } catch {
       setStatusMsg('불러오기 실패')
@@ -58,7 +62,9 @@ export default function ArchitectureIntentPanel({ projectId, onSaved }: Props) {
         modules: modules
           .filter(m => m.name.trim())
           .map(m => ({ name: m.name.trim(), globs: m.glob.split(',').map(g => g.trim()).filter(Boolean) })),
-        rules: rules.filter(r => r.from.trim() && r.to.trim())
+        rules: rules.filter(r => r.from.trim() && r.to.trim()),
+        // 예외 규칙은 경고 패널에서 관리 — 여기선 그대로 보존해 덮어쓰기 방지
+        ignore
       }
       const res = await fetch(`/api/projects/${projectId}/architecture-intent`, {
         method: 'PUT',
@@ -79,19 +85,28 @@ export default function ArchitectureIntentPanel({ projectId, onSaved }: Props) {
     }
   }, [projectId, modules, rules, onSaved])
 
-  // 삭제
+  // 모듈·규칙 초기화 — 예외 규칙(경고 패널 관리)이 있으면 보존(PUT), 없으면 전체 삭제(DELETE)
   const clear = useCallback(async () => {
-    if (!window.confirm('선언된 의도 아키텍처를 모두 삭제할까요?')) return
+    if (!window.confirm('선언된 모듈·금지 규칙을 모두 비울까요? (경고 예외 규칙은 유지됩니다)')) return
     try {
-      await fetch(`/api/projects/${projectId}/architecture-intent`, { method: 'DELETE', credentials: 'include' })
+      if (ignore.length > 0) {
+        await fetch(`/api/projects/${projectId}/architecture-intent`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ modules: [], rules: [], ignore }),
+          credentials: 'include'
+        })
+      } else {
+        await fetch(`/api/projects/${projectId}/architecture-intent`, { method: 'DELETE', credentials: 'include' })
+      }
       setModules([])
       setRules([])
-      setStatusMsg('삭제됨')
+      setStatusMsg('초기화됨')
       onSaved?.()
     } catch {
-      setStatusMsg('삭제 실패')
+      setStatusMsg('초기화 실패')
     }
-  }, [projectId, onSaved])
+  }, [projectId, ignore, onSaved])
 
   const addModule = () => setModules(prev => [...prev, { name: '', glob: '' }])
   const removeModule = (i: number) => setModules(prev => prev.filter((_, idx) => idx !== i))
