@@ -4,6 +4,22 @@
 
 ---
 
+## Swift AST 분석기 추가 + 테스트 아티팩트 누출 교정 (2026-06-24, feat v0.94.1)
+
+**문제.** Swift는 `LanguageDetector` SUPPORTED에 있으나 전용 AST 없이 정규식 폴백(`func name(`)만 사용 — 생성자(`init`) 누락, 메서드 호출(`obj.method()`) 귀속 부정확. AST 11종(Java~C++) 중 Swift만 반쪽 상태.
+
+**선결 게이트.** `io.github.bonede:tree-sitter-swift:0.5.0` Maven Central 존재 확인 → 의존성 추가 → 임시 진단 테스트로 native 로드(ABI 호환, core 0.25.3) + Swift 그래머 노드 타입 덤프. **추측 금지(§11)**: alex-pinkus 그래머는 구조가 특이(struct/extension 모두 `class_declaration`, 멤버 호출은 `navigation_expression`+`navigation_suffix`)라 실제 덤프로 확인 후 작성.
+
+**선택한 해법.** `TreeSitterSwiftAnalyzer`(Ruby 모델 — 스코프 타입추적 없는 단순판). 추출: `function_declaration`·`protocol_function_declaration`(첫 `simple_identifier`=이름)·`init_declaration`(이름=init). 호출: `call_expression`의 callee가 `simple_identifier`면 bare, `navigation_expression`이면 `navigation_suffix`의 메서드명 — 수신자가 대문자 단순식별자(Type/enum)면 `Type::method` 한정, 소문자 변수·self·체인이면 bare(Ruby 상수 휴리스틱 동형). var→type 스코프 추적은 §2(단순성)상 v1 제외(후속 Phase 2 여지).
+
+**★측정이 2차 이슈 노출.** 벤치 Alamofire(A/B, regex vs AST): 노드 1981→2043(+62, init 등), **엣지 5113→5809(+696, navigation 호출 회복)**, DEAD_CODE 51%→49%. 그러나 HIGH_FAN_OUT 9→13(+4)인데 신규 전부 XCTest 메서드(`testThat...`). 원인 추적 → `isTestArtifact`가 경로 `/tests/`(소문자)만 검사해 Alamofire `Tests/`(대문자)를 놓치고, **per-language 접미사 목록에 Swift 항목이 아예 없었음**(Java `*Test.java`는 있으나 Swift 없음 — Swift는 유일하게 테스트 제외 규칙 0).
+
+**결과.** `isTestArtifact`에 `*Test.swift`·`*Tests.swift` 추가(기존 `*Test.java`와 동형, .swift만 매칭이라 타 언어 무영향). 재측정: **DEAD_CODE 49%→7%**(956→131; `Tests/` 파일이 dead-code 분모에 잘못 포함되던 실제 버그 교정), **HIGH_FAN_OUT 13→6**. 남은 6개 적대 검증: `_response`×2(DataRequest/DownloadRequest의 제네릭 오케스트레이터)·`query`·`performSetupOperations`는 **실제 Swift 고팬아웃 정탐**(`_response`는 regex가 호출 귀속 못해 놓치던 것 = AST 신규 정탐), `$e`·`I`는 `docs/js/` minified JS(jquery.min) 기인으로 Swift·내 변경과 무관(pre-existing). **AST 변경 false positive 0.**
+
+**검증.** StaticCodeAnalyzerTest 3종(init/프로토콜/navigation·대문자수신자한정·주석/문자열보간제외) + GraphWarningServiceTest 1종(*Tests.swift HIGH_FAN_OUT 제외) + 전체 테스트 green. 실DB·OAuth 불필요(오프라인 파싱·인메모리 그래프).
+
+**부수 관찰(미수정, §3).** SourceFileWalker가 `docs/js/*.min.js`(vendored minified) 같은 번들 파일도 분석 대상에 포함 → `$e`·`I` 노이즈. Swift 무관이라 이번 범위 밖.
+
 ## 정적 분석 파싱 병렬화 — parallelStream (2026-06-24, 성능)
 
 **문제.** `AnalysisRunner`가 소스 파일을 `sourceFiles.stream().map(analyze)`로 **순차** 파싱. tree-sitter 파싱은 파일별 독립·CPU 바운드라 파일 많은 대형 레포에서 파싱 단계가 길어짐(그래프 저장 #362 최적화 후 다음 병목).

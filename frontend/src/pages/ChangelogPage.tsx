@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.94.1',
+    date: '2026-06-24',
+    title: 'Swift 분석 정확도 개선 — AST 기반 함수·호출 추출',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: 'Swift 프로젝트의 함수·호출 관계를 정규식 대신 tree-sitter AST로 추출하도록 바꿨습니다. 정규식이 놓치던 생성자(init)와 메서드 호출(obj.method())을 정확히 잡아 그래프 연결이 풍부해졌습니다(벤치 Alamofire 기준 호출 엣지 +13%). 또한 XCTest 테스트 파일(*Tests.swift)을 미사용 코드·과도한 호출 경고 집계에서 제외해, 테스트 메서드가 거짓 경고로 잡히던 문제를 바로잡았습니다(미사용 코드 경고 49%→7%).' },
+    ],
+  },
+  {
     version: 'v0.94.0',
     date: '2026-06-24',
     title: 'PR 구조 검사 게이트 — 머지를 막을 수 있는 상태 체크 추가',

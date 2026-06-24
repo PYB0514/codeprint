@@ -34,6 +34,8 @@ public class StaticCodeAnalyzer {
     private final TreeSitterCAnalyzer treeSitterC = new TreeSitterCAnalyzer();
     // tree-sitter 기반 C++ 분석기 — 클래스 메서드·qualified 정의·연산자·소멸자·템플릿. C++도 정규식 미지원이라 AST가 유일 경로.
     private final TreeSitterCppAnalyzer treeSitterCpp = new TreeSitterCppAnalyzer();
+    // tree-sitter 기반 Swift 분석기 — 생성자(init)·프로토콜 메서드·navigation 호출 정확 귀속. native 로드 실패 시 정규식 폴백.
+    private final TreeSitterSwiftAnalyzer treeSitterSwift = new TreeSitterSwiftAnalyzer();
 
     // 단일 소스 파일을 분석하여 함수명, import, 주석 등을 추출
     public ParsedFile analyze(Path file, Path repoRoot, String language) throws IOException {
@@ -78,6 +80,8 @@ public class StaticCodeAnalyzer {
                 language.equals("C") ? treeSitterC.parse(content) : Optional.empty();
         Optional<TreeSitterCppAnalyzer.Result> cppTs =
                 language.equals("C++") ? treeSitterCpp.parse(content) : Optional.empty();
+        Optional<TreeSitterSwiftAnalyzer.Result> swiftTs =
+                language.equals("Swift") ? treeSitterSwift.parse(content) : Optional.empty();
         if (javaTs.isPresent()) {
             functions = javaTs.get().functions();
             functionCalls = javaTs.get().functionCalls();
@@ -113,6 +117,9 @@ public class StaticCodeAnalyzer {
         } else if (cppTs.isPresent()) {
             functions = cppTs.get().functions();
             functionCalls = cppTs.get().functionCalls();
+        } else if (swiftTs.isPresent()) {
+            functions = swiftTs.get().functions();
+            functionCalls = swiftTs.get().functionCalls();
         } else {
             functions = extractFunctions(masked, language);
             functionCalls = extractFunctionCalls(masked, language, functions);

@@ -430,6 +430,7 @@ public class GraphWarningService {
                 || fp.endsWith(".test.js") || fp.endsWith(".test.jsx")
                 || fp.endsWith(".spec.ts") || fp.endsWith(".spec.tsx")
                 || fp.endsWith(".spec.js") || fp.endsWith(".spec.jsx")
+                || fp.endsWith("Test.swift") || fp.endsWith("Tests.swift")
                 || fp.endsWith("_test.go") || fp.endsWith("_test.py")) return true;
         // pytest 관례 — test_ 로 시작하는 함수
         if (name.startsWith("test_")) return true;
