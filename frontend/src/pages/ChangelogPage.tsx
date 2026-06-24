@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.94.2',
+    date: '2026-06-24',
+    title: 'PR 구조 검사 게이트 — fork PR 지원',
+    type: 'fix',
+    items: [
+      { category: 'CI 게이트', desc: '외부 기여자가 포크(fork)에서 올린 PR에도 구조 검사 상태(codeprint/structure)가 게시되도록 했습니다. 기존에는 PR head 브랜치를 원본 저장소에서 찾다가 포크 PR에서는 찾지 못해 게이트가 적용되지 않았는데, PR의 head 커밋 SHA를 직접 사용하도록 바꿔 포크·동일 저장소 PR 모두에서 동작합니다. 동일 저장소 PR의 동작은 그대로입니다.' },
+    ],
+  },
+  {
     version: 'v0.94.1',
     date: '2026-06-24',
     title: 'Swift 분석 정확도 개선 — AST 기반 함수·호출 추출',
