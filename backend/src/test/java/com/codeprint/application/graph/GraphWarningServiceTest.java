@@ -252,6 +252,42 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("context-first 레이아웃({context}/application·{context}/model) 간 IMPORT — CROSS_CONTEXT_IMPORT 경고 (전역 추론)")
+    void crossContextImport_contextFirstLayout() {
+        // ddd-library 류: 컨텍스트가 레이어보다 앞(book/application·book/model·book/infrastructure).
+        // book·patron 각자 application·model·infrastructure 3개 레이어를 선행 → context-first 컨텍스트로 추론.
+        Node bookApp = funcNodeWithPath("placeOnHold", "/lending/book/application/BookService.java");
+        Node bookModel = funcNodeWithPath("Book", "/lending/book/model/Book.java");
+        Node bookInfra = funcNodeWithPath("save", "/lending/book/infrastructure/BookRepo.java");
+        Node patronApp = funcNodeWithPath("hold", "/lending/patron/application/PatronService.java");
+        Node patronModel = funcNodeWithPath("Patron", "/lending/patron/model/Patron.java");
+        Node patronInfra = funcNodeWithPath("save", "/lending/patron/infrastructure/PatronRepo.java");
+        // book의 application이 patron의 model을 직접 참조 — 컨텍스트 경계 위반
+        Edge imp = importEdgeForPath(bookApp.getId(), patronModel.getId());
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(bookApp, bookModel, bookInfra, patronApp, patronModel, patronInfra), List.of(imp));
+        assertThat(warnings.stream().filter(w -> "CROSS_CONTEXT_IMPORT".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("layer-first 레포의 패키지 루트는 컨텍스트로 오인하지 않음 — context-first 미적용, 기존 추출 유지")
+    void crossContextImport_layerFirstRoot_notTreatedAsContext() {
+        // io/spring 루트는 application·core 둘 다 선행하지만 그런 세그먼트가 유일(후보 1개<2) → context-first 아님.
+        // article·user 는 layer-first(application/{ctx}·core/{ctx})로 정상 추출되어 cross-context 1건만 발화.
+        Node app = funcNodeWithPath("createArticle", "/io/spring/application/article/ArticleService.java");
+        Node core = funcNodeWithPath("User", "/io/spring/core/user/User.java");
+        Edge imp = importEdgeForPath(app.getId(), core.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(app, core), List.of(imp));
+        List<Map<String, Object>> cc = warnings.stream()
+                .filter(w -> "CROSS_CONTEXT_IMPORT".equals(w.get("type"))).toList();
+        assertThat(cc).hasSize(1);
+        // 메시지에 루트("spring")가 아니라 실제 컨텍스트(article·user)가 담겨야 한다
+        assertThat((String) cc.get(0).get("message")).contains("article").contains("user");
+    }
+
+    @Test
     @DisplayName("ignore 패턴(type+from+to 글로브)에 매치되는 경고는 그룹 억제")
     void ignorePattern_suppressesMatchingWarning() {
         Node appNode = funcNodeWithPath("createProject", "/com/example/application/project/ProjectService.java");

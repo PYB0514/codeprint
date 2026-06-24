@@ -1140,3 +1140,15 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **측정(realworld, .codeprint/architecture.json).** `{type:DB_LAYER_BYPASS, to:**/infrastructure/**}` 한 줄 → db-bypass 17→0(그룹 억제). `{type:CROSS_CONTEXT_IMPORT, from:**/application/article/**}` → cross-context 15→9(article 출발 6건만 정확 억제, 나머지 보존). DEAD_CODE 무영향. 단위 3종(타입+from+to 매치·from-only·노매치). 전체 백엔드 테스트 green.
 
 **다음(UI PR).** 그래프 경고 패널에서 "이 패턴 무시" 액션 → 경고의 from/to 파일에서 글로브 prefill → 규칙 관리 UI. 이때 Changelog·태그(사용자 가시 기능 완성).
+
+## context-first 레이아웃 cross-context 검출 — 전역 추론 (recall 3단계) (2026-06-25)
+
+**문제.** CROSS_CONTEXT_IMPORT가 layer-first(`application/{ctx}/`·`core/{ctx}/`)만 추출 → context-first(`{ctx}/application/`·`{ctx}/model/`, ddd-library 류)는 컨텍스트 추출 실패로 0건. 별칭화(#374)로도 못 잡던 마지막 큰 갭.
+
+**왜 로컬 휴리스틱 불가.** `patron/application/checkout/`의 checkout과 realworld `application/article/`의 article이 **로컬에서 동일 구조** → 컨텍스트를 앞/뒤 어느 세그먼트로 볼지 한 경로만 봐선 모호. 잘못 뽑으면 cross-context FP(레버 훼손).
+
+**해결 = 전역 레이아웃 추론.** `detectContextFirstContexts`: 한 세그먼트가 서로 다른 CONTEXT_BOUNDARY_LAYERS(application·model·domain·infrastructure 등)를 **2개 이상 선행**하고, **그런 세그먼트가 2개 이상**일 때만 context-first로 판정하고 그 세그먼트들을 컨텍스트로 본다. ★핵심 판별: layer-first 레포의 패키지 루트(realworld `spring`)는 모든 레이어를 선행하지만 **유일**(후보 1개<2)이라 배제 → 무회귀. context-first 레포(ddd-library book·patron·dailysheet)는 각자 여러 레이어를 거느려 **다수 후보** → 컨텍스트. cfContexts 비면 기존 layer-first 추출만(완전 무회귀). model은 전역 DOMAIN_LAYER_DIRS에 안 넣고 CONTEXT_FIRST_DOMAIN_DIRS로 격리(model은 흔한 일반 디렉터리라 확인된 cfContext 직하위일 때만 도메인 인정 — precision).
+
+**측정.** ddd-library cross-context **0→9**(book↔patron↔dailysheet 상호 model 참조, 전부 실제 import=recall). realworld 15+17+10·buckpal·petclinic **전부 무변화**(precision 보존). librarybranch는 model 디렉터리만 있어(레이어 1개<2) 보수적으로 컨텍스트 미인정 — 과탐보다 정확 우선. 단위 2종(context-first 발화·layer-first 루트 오인 방지). 전체 테스트 green.
+
+**★ Java recall DONE 판정.** 지배적 layout(layer-first)+core/persistence/mybatis 별칭(#374)+패턴 예외(#375·#376)+context-first(이번) 커버. 클린 레퍼런스 3종 precision 0 FP 유지, 실제 위반 레포(realworld 32·ddd-library 9) recall 입증. **남은 minor 갭=CYCLIC 패키지 레벨 cycle**(파일 레벨만 검출) — 패키지 cycle은 수용 가능한 경우가 많아 노이즈 위험, 의도적 비목표로 보류(필요 신호 시 별 PR).

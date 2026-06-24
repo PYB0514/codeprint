@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.95.1',
+    date: '2026-06-25',
+    title: '아키텍처 검사 — 컨텍스트 우선(context-first) 폴더 구조 인식 (recall 확대 3단계)',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: '컨텍스트 경계 검사가 그동안 application/주문/ 처럼 레이어가 앞에 오는 구조만 인식했는데, 주문/application/·주문/model/ 처럼 컨텍스트가 앞에 오는(context-first) DDD 구조도 인식하도록 했습니다. 폴더 전체를 훑어 "여러 레이어를 거느린 세그먼트"를 컨텍스트로 추론하므로 패키지 루트(예: com.example)를 컨텍스트로 오인하지 않습니다. 모범 구조 레포 3종은 거짓 경고 0건을 유지하고, 컨텍스트 우선 레이아웃 레포에서 컨텍스트 간 직접 참조 위반을 새로 잡습니다.' },
+    ],
+  },
+  {
     version: 'v0.95.0',
     date: '2026-06-25',
     title: '경고 패턴 예외 — 의도된 위반을 규칙 한 줄로 그룹 억제',
