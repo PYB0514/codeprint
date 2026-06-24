@@ -111,6 +111,33 @@ public class GitHubApiClient {
         }
     }
 
+    // PR 번호로 head 커밋 SHA를 조회 — fork PR도 head.sha는 base repo의 refs/pull/{N}/head로 도달 가능해
+    // base repo + 이 SHA로 commit status를 게시할 수 있다(브랜치명 조회는 fork 브랜치가 base에 없어 실패).
+    public String fetchPullRequestHeadSha(String githubRepoUrl, int prNumber, String githubAccessToken) {
+        String ownerRepo = extractOwnerRepo(githubRepoUrl);
+        String apiUrl = "https://api.github.com/repos/" + ownerRepo + "/pulls/" + prNumber;
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28");
+            if (githubAccessToken != null && !githubAccessToken.isBlank()) {
+                builder.header("Authorization", "Bearer " + githubAccessToken);
+            }
+            HttpResponse<String> response = httpClient.send(builder.GET().build(), HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new RuntimeException("GitHub API " + response.statusCode() + " — " + response.body());
+            }
+            JsonNode head = objectMapper.readTree(response.body()).get("head");
+            if (head == null || head.get("sha") == null) {
+                throw new RuntimeException("GitHub PR 응답에 head.sha 없음: " + response.body());
+            }
+            return head.get("sha").asText();
+        } catch (Exception e) {
+            throw new RuntimeException("GitHub PR head SHA 조회 실패: " + ownerRepo + " #" + prNumber, e);
+        }
+    }
+
     // PR이 변경한 파일 경로 목록을 조회 — 페이지네이션(per_page=100)으로 전부 수집. filename은 레포 루트 상대경로(슬래시)
     public java.util.Set<String> fetchPullRequestChangedFiles(String githubRepoUrl, int prNumber, String githubAccessToken) {
         String ownerRepo = extractOwnerRepo(githubRepoUrl);
