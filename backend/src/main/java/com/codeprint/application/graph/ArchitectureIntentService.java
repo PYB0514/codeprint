@@ -60,7 +60,12 @@ public class ArchitectureIntentService {
             for (JsonNode r : root.path("rules")) {
                 rules.add(new ArchitectureIntent.DependencyRule(r.path("from").asText(), r.path("to").asText()));
             }
-            return new ArchitectureIntent(modules, rules);
+            List<ArchitectureIntent.IgnoreRule> ignores = new ArrayList<>();
+            for (JsonNode g : root.path("ignore")) {
+                ignores.add(new ArchitectureIntent.IgnoreRule(
+                        g.path("type").asText(null), g.path("from").asText(null), g.path("to").asText(null)));
+            }
+            return new ArchitectureIntent(modules, rules, ignores);
         } catch (Exception e) {
             log.warn("의도 아키텍처 JSON 파싱 실패 (빈 의도 반환): {}", e.getMessage());
             return new ArchitectureIntent(List.of(), List.of());
@@ -83,6 +88,13 @@ public class ArchitectureIntentService {
                 ObjectNode rn = rules.addObject();
                 rn.put("from", r.from());
                 rn.put("to", r.to());
+            }
+            ArrayNode ignores = root.putArray("ignore");
+            for (ArchitectureIntent.IgnoreRule g : intent.ignores()) {
+                ObjectNode gn = ignores.addObject();
+                gn.put("type", g.type());
+                gn.put("from", g.fromGlob());
+                gn.put("to", g.toGlob());
             }
             return objectMapper.writeValueAsString(root);
         } catch (Exception e) {

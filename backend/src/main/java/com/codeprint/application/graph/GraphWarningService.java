@@ -46,6 +46,17 @@ public class GraphWarningService {
         for (Node n : nodes) {
             idToFilePath.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
         }
+        // 사용자가 선언한 ignore 패턴(글로브)에 매치되는 경고를 그룹 억제 — opt-out 모델.
+        // isEmpty()(모듈/규칙 유무)와 독립적으로 적용한다 — ignores만 선언한 의도도 유효하다.
+        if (intent != null) {
+            warnings.removeIf(w -> {
+                Object raw = w.get("nodeIds");
+                List<?> ids = raw instanceof List<?> l ? l : List.of();
+                String src = ids.isEmpty() ? "" : fileOfNodeId(ids.get(0), idToFilePath);
+                String tgt = ids.size() < 2 ? "" : fileOfNodeId(ids.get(1), idToFilePath);
+                return intent.isIgnored((String) w.get("type"), src, tgt);
+            });
+        }
         for (Map<String, Object> w : warnings) {
             // 각 경고에 안정적 fingerprint 부여 (type+message 기반) — 재분석으로 그래프가 바뀌어도 동일 경고면 동일 값 → suppress 식별용
             w.put("fingerprint", fingerprint((String) w.get("type"), (String) w.get("message")));
@@ -53,6 +64,16 @@ public class GraphWarningService {
             attachPrimaryFile(w, idToFilePath);
         }
         return warnings;
+    }
+
+    // 경고의 nodeId(문자열)를 파일 경로로 해소 — UUID 형식 아니거나 미발견이면 빈 문자열
+    private String fileOfNodeId(Object rawId, Map<UUID, String> idToFilePath) {
+        if (rawId == null) return "";
+        try {
+            return idToFilePath.getOrDefault(UUID.fromString(String.valueOf(rawId)), "");
+        } catch (IllegalArgumentException e) {
+            return "";
+        }
     }
 
     // 경고의 primary 노드(nodeIds[0]) 파일 경로를 file 필드로 부여 — nodeIds가 비었거나 노드 미발견이면 미부여

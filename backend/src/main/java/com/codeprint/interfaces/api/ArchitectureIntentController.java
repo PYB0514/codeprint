@@ -48,6 +48,10 @@ public class ArchitectureIntentController {
                         .toList(),
                 request.rules().stream()
                         .map(r -> new ArchitectureIntent.DependencyRule(r.from(), r.to()))
+                        .toList(),
+                // ignore 미지정(구버전 클라이언트)이면 빈 목록 — 기존 동작 보존
+                (request.ignore() == null ? List.<IgnoreDto>of() : request.ignore()).stream()
+                        .map(g -> new ArchitectureIntent.IgnoreRule(g.type(), g.from(), g.to()))
                         .toList()
         );
         intentService.save(projectId, intent);
@@ -72,14 +76,21 @@ public class ArchitectureIntentController {
                         .toList(),
                 "rules", intent.rules().stream()
                         .map(r -> Map.of("from", r.from(), "to", r.to()))
+                        .toList(),
+                "ignore", intent.ignores().stream()
+                        .map(g -> Map.of(
+                                "type", g.type() == null ? "" : g.type(),
+                                "from", g.fromGlob() == null ? "" : g.fromGlob(),
+                                "to", g.toGlob() == null ? "" : g.toGlob()))
                         .toList()
         );
     }
 
-    // 요청 DTOs
+    // 요청 DTOs — ignore는 선택(미지정 시 기존 동작 유지)
     public record IntentRequest(
             @NotNull List<@Valid ModuleDto> modules,
-            @NotNull List<@Valid RuleDto> rules) {}
+            @NotNull List<@Valid RuleDto> rules,
+            List<@Valid IgnoreDto> ignore) {}
 
     public record ModuleDto(
             @NotBlank String name,
@@ -88,4 +99,7 @@ public class ArchitectureIntentController {
     public record RuleDto(
             @NotBlank String from,
             @NotBlank String to) {}
+
+    // 경고 예외 규칙 DTO — 세 필드 모두 선택(빈 값=와일드카드). 단 전부 비면 모든 경고를 억제하므로 최소 하나는 의미값 권장.
+    public record IgnoreDto(String type, String from, String to) {}
 }
