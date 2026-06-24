@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.94.4',
+    date: '2026-06-24',
+    title: '아키텍처 검사 — 다양한 폴더 이름 인식 (recall 확대 1단계)',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: '도메인→인프라 의존 위반 검사가 그동안 폴더 이름이 정확히 domain/·infrastructure/ 일 때만 동작했는데, 실제 프로젝트가 흔히 쓰는 다른 이름(core·persistence·adapter·dao·infra 등)도 인식하도록 했습니다. 예를 들어 도메인 레이어를 core/ 로 둔 프로젝트에서도 도메인이 인프라를 직접 import하는 위반을 잡습니다. 모범 구조 레포에서는 여전히 거짓 경고 0건을 유지합니다. (다른 검사 유형의 폴더 이름 인식은 순차 확대 예정)' },
+    ],
+  },
+  {
     version: 'v0.94.3',
     date: '2026-06-24',
     title: '헥사고날 아키텍처 거짓 경고 제거 — 구조 검사 정확도 개선',

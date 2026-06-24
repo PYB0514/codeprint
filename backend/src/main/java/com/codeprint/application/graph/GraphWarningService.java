@@ -86,9 +86,11 @@ public class GraphWarningService {
         Set<String> foundLayers = new HashSet<>();
         for (Node n : nodes) {
             String fp = n.getFilePath() != null ? n.getFilePath() : "";
-            if (fp.contains("/domain/")) foundLayers.add("domain");
-            if (fp.contains("/application/")) foundLayers.add("application");
-            if (fp.contains("/infrastructure/")) foundLayers.add("infrastructure");
+            // 레이어 KIND를 디렉터리 별칭으로 인식 — 리터럴 domain/application/infrastructure 외에 core·persistence·adapter 등
+            // 실제 명명을 포착해 게이트가 Codeprint 자기 컨벤션에만 묶이지 않게 한다(recall).
+            if (containsLayerSegment(fp, DOMAIN_LAYER_DIRS)) foundLayers.add("domain");
+            if (containsLayerSegment(fp, APPLICATION_LAYER_DIRS)) foundLayers.add("application");
+            if (containsLayerSegment(fp, INFRA_LAYER_DIRS)) foundLayers.add("infrastructure");
             if (foundLayers.size() >= 2) return true;
         }
         return false;
@@ -360,6 +362,27 @@ public class GraphWarningService {
         "common", "shared", "dto", "dtos", "mapper", "mappers", "util", "utils"
     );
 
+    // 도메인 레이어 디렉터리 별칭 — 실제 Java 레포는 domain 외에 core·domains 로도 도메인 레이어를 명명한다.
+    // (recall 확장: 리터럴 /domain/ 만 보면 core/ 류 레이아웃에서 도메인→인프라 위반을 못 잡음.)
+    private static final Set<String> DOMAIN_LAYER_DIRS = Set.of("domain", "domains", "core");
+    // 인프라 레이어 디렉터리 별칭 — infrastructure 외에 infra·persistence·adapter·dao 등. 도메인→인프라는 어떤
+    // 아키텍처에서도 위반(보편)이라 별칭 인식은 precision 위험이 낮다(레이어 이름만 넓힐 뿐 규칙은 불변).
+    private static final Set<String> INFRA_LAYER_DIRS = Set.of(
+        "infrastructure", "infra", "persistence", "adapter", "adapters", "dao");
+    // 애플리케이션 레이어 디렉터리 별칭 — isDddProject 게이트가 레이어드/DDD 프로젝트를 인식할 때 사용.
+    // "app"은 제외 — /app/ 은 앱 루트 패키지로 흔히 쓰여(레이어 아님) 오분류를 일으킨다.
+    private static final Set<String> APPLICATION_LAYER_DIRS = Set.of("application", "usecase", "usecases");
+
+    // 경로에 주어진 레이어 디렉터리 세그먼트(/{dir}/) 중 하나라도 포함되는지 — 슬래시 정규화 후 세그먼트 매칭
+    private static boolean containsLayerSegment(String path, Set<String> dirs) {
+        if (path == null) return false;
+        String p = path.replace("\\", "/");
+        for (String d : dirs) {
+            if (p.contains("/" + d + "/")) return true;
+        }
+        return false;
+    }
+
     // "/application/{context}/" 경로에서 컨텍스트명 추출 — 레이어 용어면(헥사고날 application/domain/ 등) null
     private String extractContextFromApplicationPath(String path) {
         int idx = path.indexOf("/application/");
@@ -611,8 +634,8 @@ public class GraphWarningService {
             String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
             String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
 
-            boolean srcIsDomain = srcPath.contains("/domain/");
-            boolean tgtIsInfra = tgtPath.contains("/infrastructure/") && !tgtPath.contains("/shared/");
+            boolean srcIsDomain = containsLayerSegment(srcPath, DOMAIN_LAYER_DIRS);
+            boolean tgtIsInfra = containsLayerSegment(tgtPath, INFRA_LAYER_DIRS) && !tgtPath.contains("/shared/");
 
             if (srcIsDomain && tgtIsInfra) {
                 String srcContext = extractContextFromDomainPath(srcPath);

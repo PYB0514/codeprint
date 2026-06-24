@@ -4,6 +4,18 @@
 
 ---
 
+## DDD 검출기 레이어 디렉터리 별칭 인식 — recall 확장 1단계 (2026-06-24, feat v0.94.4)
+
+**배경.** HIGH precision 감사 후속 recall 측정에서 **충격적 발견**: buckpal CROSS_CONTEXT FP를 고치자 4개 실제 Java 레포(buckpal·ddd-library·petclinic·realworld) 전부 HIGH 6종이 **전부 0건**. 깨끗해서가 아니라 **DDD 검출기가 Codeprint 고유 디렉터리 이름(`domain/`·`infrastructure/`)에만 묶여 recall이 사실상 0**. realworld는 도메인 레이어를 `core/`로 명명 → `DOMAIN_IMPORTS_INFRA`가 인식 못 함.
+
+**근본 원인 2겹.** ①개별 검출기(`detectDomainInfraImport`)가 `srcPath.contains("/domain/")`·`"/infrastructure/"` 리터럴. ②**게이트 `isDddProject`도** 리터럴 {domain,application,infrastructure} 2종을 요구 — 이게 진짜 차단막(`core/persistence`만 쓰는 레포는 게이트에서 막혀 모든 DDD 검출기 스킵).
+
+**해법(1단계, DOMAIN_IMPORTS_INFRA + 게이트).** 레이어 디렉터리 별칭 도입 — DOMAIN={domain,domains,core}, INFRA={infrastructure,infra,persistence,adapter,adapters,dao}, APPLICATION={application,usecase,usecases}. `containsLayerSegment` 헬퍼로 `detectDomainInfraImport`와 `isDddProject` 양쪽에 적용. "도메인→인프라는 어떤 아키텍처에서도 위반"이라 별칭은 규칙을 바꾸지 않고 이름만 넓혀 precision 위험이 낮다.
+
+**측정.** Precision: 4개 clean 레포 全 DDD HIGH 0 유지(게이트 완화로 buckpal·ddd-library가 이제 게이트 통과하나 여전히 clean). Recall: realworld `core/`→`infrastructure/` 주입 위반을 잡음(별칭 전 0 → 후 1, analyzeLocal 실측). ★**기존 LAYERED 테스트가 `"app"` 별칭의 `/app/`(앱 루트) 오분류 FP를 잡아냄** → APPLICATION에서 "app" 제거(measure-everything 검증의 가치). 단위 recall 2종(core·persistence 별칭) + 전체 테스트 green.
+
+**한계(후속).** ①CROSS_CONTEXT_IMPORT·DB_LAYER_BYPASS 검출기 **내부** 경로 추출은 아직 리터럴(게이트는 열렸으나 그 둘은 core/ 컨텍스트 추출 못 함) — 별칭화 후속. ②context-first 레이아웃(`{context}/application/`, ddd-library)은 여전히 미커버. ③별칭은 휴리스틱이라 특이 레포는 향후 `.codeprint/architecture.json` 선언으로 보완(option 3). **Java DONE까지 단계적 확장 중.**
+
 ## HIGH 경고 precision 감사 → CROSS_CONTEXT_IMPORT 헥사고날 오탐 제거 (2026-06-24, fix v0.94.3)
 
 **배경(전략).** 제품을 Java/Python/JS-React 생태계의 "무설정 아키텍처 conformance CI 게이트"로 좁히기로 함. HIGH 경고는 머지를 막는 등급이라 precision이 채택의 핵심 변수 → 실제 오픈소스 레포로 HIGH 경고 precision **실측 감사** 착수.
