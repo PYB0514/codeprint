@@ -1,5 +1,6 @@
 // 런타임 경고 목록을 타입별로 그룹핑해서 표시하는 패널
 import { useState } from 'react'
+import { type IgnoreRule, inferGlob, countMatches } from '../utils/ignoreRules'
 
 interface Warning {
   type: string
@@ -7,6 +8,15 @@ interface Warning {
   nodeIds: string[]
   message: string
   fingerprint?: string
+}
+
+// 경고에서 패턴 예외 규칙을 만들기 위한 부가 핸들러 묶음 (소유자에게만 전달)
+interface IgnoreOps {
+  fileOf: (nodeId: string) => string  // nodeId → 파일 경로 (글로브 추론·미리보기용)
+  rules: IgnoreRule[]                 // 현재 저장된 예외 규칙
+  allWarnings: Warning[]              // 미리보기 카운트 대상 (현재 보이는 경고)
+  onAdd: (rule: IgnoreRule) => void
+  onRemove: (index: number) => void
 }
 
 interface Props {
@@ -17,6 +27,8 @@ interface Props {
   // 이번 세션에 숨긴 경고 목록 + 복원 핸들러
   suppressed?: Warning[]
   onRestore?: (w: Warning) => void
+  // 패턴 예외 규칙 조작 — 소유자에게만 전달 (없으면 "무시" 액션·규칙 패널 미표시)
+  ignoreOps?: IgnoreOps
 }
 
 const SEVERITY_ORDER: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
@@ -42,7 +54,7 @@ export const WARNING_META: Record<string, { label: string; desc: string; color: 
 }
 
 // 경고 목록을 타입별로 그룹핑하여 severity 순(HIGH→MEDIUM→LOW)으로 표시
-export default function WarningPanel({ warnings, onNodeNavigate, onSuppress, suppressed, onRestore }: Props) {
+export default function WarningPanel({ warnings, onNodeNavigate, onSuppress, suppressed, onRestore, ignoreOps }: Props) {
   const grouped = new Map<string, Warning[]>()
   for (const w of warnings) {
     if (!grouped.has(w.type)) grouped.set(w.type, [])
@@ -57,11 +69,44 @@ export default function WarningPanel({ warnings, onNodeNavigate, onSuppress, sup
 
   return (
     <div className="flex flex-col gap-2">
+      {ignoreOps && ignoreOps.rules.length > 0 && (
+        <IgnoreRulesSection ops={ignoreOps} />
+      )}
       {sortedEntries.map(([type, items]) => (
-        <WarningGroup key={type} type={type} items={items} onNodeNavigate={onNodeNavigate} onSuppress={onSuppress} />
+        <WarningGroup key={type} type={type} items={items} onNodeNavigate={onNodeNavigate} onSuppress={onSuppress} ignoreOps={ignoreOps} />
       ))}
       {suppressed && suppressed.length > 0 && (
         <SuppressedGroup items={suppressed} onRestore={onRestore} />
+      )}
+    </div>
+  )
+}
+
+// 저장된 패턴 예외 규칙 목록 — 접이식, 각 규칙 제거 가능
+function IgnoreRulesSection({ ops }: { ops: IgnoreOps }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="border border-gray-700/60 rounded bg-gray-800/30">
+      <button onClick={() => setOpen(o => !o)} className="flex items-center gap-1.5 w-full text-left px-2 py-1">
+        <span className="text-xs font-semibold text-emerald-400">예외 규칙</span>
+        <span className="text-xs text-gray-500">({ops.rules.length})</span>
+        <span className="ml-auto text-gray-500 text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="flex flex-col gap-1 px-2 pb-2">
+          {ops.rules.map((r, i) => (
+            <div key={i} className="flex items-center gap-1 text-[10px] bg-gray-900/40 rounded px-1.5 py-1">
+              <span className="font-mono text-emerald-300/80 truncate">
+                {(r.type || '모든 타입')} · {(r.from || '*')} → {(r.to || '*')}
+              </span>
+              <button onClick={() => ops.onRemove(i)}
+                className="ml-auto shrink-0 text-gray-500 hover:text-red-400 px-1" title="규칙 제거 (다음 분석에 경고 복원)">✕</button>
+            </div>
+          ))}
+          <p className="text-[10px] text-gray-600 leading-relaxed mt-0.5">
+            규칙에 매치되는 경고는 억제됩니다. 제거하면 다음 그래프 조회 시 다시 나타납니다.
+          </p>
+        </div>
       )}
     </div>
   )
@@ -98,8 +143,10 @@ function SuppressedGroup({ items, onRestore }: { items: Warning[]; onRestore?: (
 }
 
 // 경고 타입별 접기/펼치기 그룹
-function WarningGroup({ type, items, onNodeNavigate, onSuppress }: { type: string; items: Warning[]; onNodeNavigate?: (nodeId: string) => void; onSuppress?: (w: Warning) => void }) {
+function WarningGroup({ type, items, onNodeNavigate, onSuppress, ignoreOps }: { type: string; items: Warning[]; onNodeNavigate?: (nodeId: string) => void; onSuppress?: (w: Warning) => void; ignoreOps?: IgnoreOps }) {
   const [open, setOpen] = useState(true)
+  // 현재 패턴 예외 폼이 열린 경고의 인덱스 (-1=닫힘)
+  const [ignoreFormFor, setIgnoreFormFor] = useState(-1)
   const meta = WARNING_META[type] ?? { label: type, desc: '', color: '#eab308', severity: 'MEDIUM' }
   const severity = items[0]?.severity ?? meta.severity ?? 'MEDIUM'
   const sevStyle = SEVERITY_STYLE[severity] ?? SEVERITY_STYLE.MEDIUM
@@ -123,27 +170,74 @@ function WarningGroup({ type, items, onNodeNavigate, onSuppress }: { type: strin
       {open && (
         <div className="flex flex-col gap-1 mt-1">
           {items.map((w, i) => (
-            <div
-              key={i}
-              className="flex items-stretch gap-1 text-[11px] bg-yellow-900/10 border border-yellow-800/30 rounded leading-snug hover:bg-yellow-900/20 hover:border-yellow-700/50 transition-colors"
-            >
-              <button
-                onClick={() => onNodeNavigate && w.nodeIds[0] && onNodeNavigate(w.nodeIds[0])}
-                className="flex-1 text-left text-yellow-200/80 px-1.5 py-1"
+            <div key={`${type}-${i}`} className="flex flex-col">
+              <div
+                className="flex items-stretch gap-1 text-[11px] bg-yellow-900/10 border border-yellow-800/30 rounded leading-snug hover:bg-yellow-900/20 hover:border-yellow-700/50 transition-colors"
               >
-                {w.message.replace(/^[^:]+:\s*/, '')}
-              </button>
-              {onSuppress && w.fingerprint && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); onSuppress(w) }}
-                  className="shrink-0 text-gray-500 hover:text-gray-300 px-1.5"
-                  title="이 경고 숨기기"
-                >✕</button>
+                  onClick={() => onNodeNavigate && w.nodeIds[0] && onNodeNavigate(w.nodeIds[0])}
+                  className="flex-1 text-left text-yellow-200/80 px-1.5 py-1"
+                >
+                  {w.message.replace(/^[^:]+:\s*/, '')}
+                </button>
+                {/* 패턴 무시 — 소유자에게만(ignoreOps 전달 시). 출발/도착 파일이 있는 관계형 경고만 */}
+                {ignoreOps && w.nodeIds.length >= 2 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setIgnoreFormFor(ignoreFormFor === i ? -1 : i) }}
+                    className="shrink-0 text-gray-500 hover:text-emerald-400 px-1"
+                    title="이 패턴을 예외로 — 같은 부류 경고를 한 번에 억제"
+                  >무시</button>
+                )}
+                {onSuppress && w.fingerprint && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onSuppress(w) }}
+                    className="shrink-0 text-gray-500 hover:text-gray-300 px-1.5"
+                    title="이 경고만 숨기기"
+                  >✕</button>
+                )}
+              </div>
+              {ignoreOps && ignoreFormFor === i && (
+                <IgnoreRuleForm
+                  warning={w}
+                  ops={ignoreOps}
+                  onDone={() => setIgnoreFormFor(-1)}
+                />
               )}
             </div>
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// 경고에서 패턴 예외 규칙을 만드는 인라인 폼 — 출발/도착 파일에서 넓은 글로브를 추론하고, 매치 건수를 실시간 미리보기
+function IgnoreRuleForm({ warning, ops, onDone }: { warning: Warning; ops: IgnoreOps; onDone: () => void }) {
+  const fromFile = warning.nodeIds[0] ? ops.fileOf(warning.nodeIds[0]) : ''
+  const toFile = warning.nodeIds[1] ? ops.fileOf(warning.nodeIds[1]) : ''
+  const [type, setType] = useState(warning.type)
+  const [from, setFrom] = useState(inferGlob(fromFile))
+  const [to, setTo] = useState(inferGlob(toFile))
+
+  const rule = { type, from, to }
+  const count = countMatches(rule, ops.allWarnings, ops.fileOf)
+
+  return (
+    <div className="mt-1 mb-0.5 ml-2 border border-emerald-800/40 bg-emerald-950/20 rounded px-2 py-1.5 flex flex-col gap-1">
+      <label className="flex items-center gap-1 text-[10px] text-gray-400">
+        <input type="checkbox" checked={!!type} onChange={e => setType(e.target.checked ? warning.type : '')} className="accent-emerald-600" />
+        {type ? type : '모든 타입'}
+      </label>
+      <input value={from} onChange={e => setFrom(e.target.value)} placeholder="출발 글로브 (예: **/application/**)"
+        className="text-[10px] bg-gray-800/80 border border-gray-700 rounded px-1.5 py-0.5 text-gray-300 placeholder-gray-600 focus:outline-none focus:border-emerald-600 font-mono" />
+      <input value={to} onChange={e => setTo(e.target.value)} placeholder="도착 글로브 (예: **/infrastructure/**)"
+        className="text-[10px] bg-gray-800/80 border border-gray-700 rounded px-1.5 py-0.5 text-gray-300 placeholder-gray-600 focus:outline-none focus:border-emerald-600 font-mono" />
+      <div className="flex items-center gap-2 mt-0.5">
+        <span className="text-[10px] text-emerald-300/80">이 규칙은 {count}개 경고를 끕니다</span>
+        <button onClick={() => { ops.onAdd(rule); onDone() }}
+          className="ml-auto text-[10px] px-2 py-0.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white">규칙 추가</button>
+        <button onClick={onDone} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800/60 text-gray-400 hover:text-gray-200">취소</button>
+      </div>
     </div>
   )
 }
