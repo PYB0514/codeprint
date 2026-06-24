@@ -266,7 +266,7 @@ public class GraphWarningService {
         return warnings;
     }
 
-    // interfaces/ 또는 application/ 레이어가 infrastructure/persistence/ 를 직접 IMPORT — DB 레이어 우회
+    // 상위 레이어(interfaces/application 별칭)가 영속화 계층(INFRA ∩ persistence 별칭)을 직접 IMPORT — DB 레이어 우회
     // FUNCTION_CALL 엣지는 정규식 분석기가 인터페이스 호출을 구현체로 오추적하므로 제외
     private List<Map<String, Object>> detectDbLayerBypass(List<Node> nodes, List<Edge> edges) {
         Map<UUID, String> nodeFilePaths = new HashMap<>();
@@ -283,9 +283,11 @@ public class GraphWarningService {
             String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
             String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
 
-            boolean srcIsUpperLayer = srcPath.contains("/interfaces/") || srcPath.contains("/application/");
-            boolean tgtIsPersistence = tgtPath.contains("/infrastructure/persistence/")
-                    || tgtPath.contains("/infrastructure/db/");
+            boolean srcIsUpperLayer = containsLayerSegment(srcPath, UPPER_LAYER_DIRS);
+            // 영속화 타깃 = INFRA 레이어이면서 동시에 영속화 세그먼트를 가진 경로 — 두 조건 교집합으로 한정해
+            // infrastructure/service(비영속화)·domain/port/repository(INFRA 밖 도메인 인터페이스) 오탐을 배제한다.
+            boolean tgtIsPersistence = containsLayerSegment(tgtPath, INFRA_LAYER_DIRS)
+                    && containsLayerSegment(tgtPath, PERSISTENCE_LAYER_DIRS);
 
             if (srcIsUpperLayer && tgtIsPersistence) {
                 // isInterfaceImpl 엣지는 정상 패턴이므로 제외
@@ -372,6 +374,16 @@ public class GraphWarningService {
     // 애플리케이션 레이어 디렉터리 별칭 — isDddProject 게이트가 레이어드/DDD 프로젝트를 인식할 때 사용.
     // "app"은 제외 — /app/ 은 앱 루트 패키지로 흔히 쓰여(레이어 아님) 오분류를 일으킨다.
     private static final Set<String> APPLICATION_LAYER_DIRS = Set.of("application", "usecase", "usecases");
+    // DB 레이어 우회의 상위(소스) 레이어 별칭 — interfaces/application 류. 이들이 영속화 계층을 직접 import하면
+    // 도메인 Repository 추상을 건너뛴 위반. presentation은 interfaces의 흔한 별칭.
+    private static final Set<String> UPPER_LAYER_DIRS = Set.of(
+        "interfaces", "presentation", "application", "usecase", "usecases");
+    // 영속화(persistence) 하위 디렉터리 별칭 — DB 접근 책임을 가진 디렉터리. DB_LAYER_BYPASS는 영속화 타깃을
+    // "INFRA 레이어(INFRA_LAYER_DIRS) ∩ 이 세그먼트"로 한정한다 — infrastructure/service 같은 비-영속화 디렉터리와
+    // domain/port/repository 같은 도메인 인터페이스(INFRA 레이어 밖)를 제외해 precision을 지킨다.
+    private static final Set<String> PERSISTENCE_LAYER_DIRS = Set.of(
+        "persistence", "db", "repository", "repositories", "dao",
+        "jpa", "jdbc", "mybatis", "mapper", "mappers", "orm", "datasource");
 
     // 경로에 주어진 레이어 디렉터리 세그먼트(/{dir}/) 중 하나라도 포함되는지 — 슬래시 정규화 후 세그먼트 매칭
     private static boolean containsLayerSegment(String path, Set<String> dirs) {
@@ -383,30 +395,48 @@ public class GraphWarningService {
         return false;
     }
 
-    // "/application/{context}/" 경로에서 컨텍스트명 추출 — 레이어 용어면(헥사고날 application/domain/ 등) null
+    // application 레이어 별칭(application/usecase 등) 바로 다음 세그먼트를 컨텍스트명으로 추출 — 레이어 용어면 null.
     private String extractContextFromApplicationPath(String path) {
-        int idx = path.indexOf("/application/");
-        if (idx < 0) return null;
-        String after = path.substring(idx + "/application/".length());
-        int slash = after.indexOf('/');
-        if (slash <= 0) return null;
-        String seg = after.substring(0, slash);
-        return LAYER_TERMS.contains(seg) ? null : seg;
+        return extractContextAfterLayer(path, APPLICATION_LAYER_DIRS, false);
     }
 
-    // "/domain/{context}/" 경로에서 컨텍스트명 추출 — 없으면 null.
-    // /domain/ 이 /application/ 하위에 중첩(application/domain/model)이면 헥사고날 레이어이지 top-level 도메인 레이어가
-    // 아니므로 컨텍스트로 보지 않는다. 추출 세그먼트가 레이어 용어인 경우도 제외.
+    // domain 레이어 별칭(domain/domains/core 등) 바로 다음 세그먼트를 컨텍스트명으로 추출 — 없으면 null.
+    // domain 마커가 application 마커 하위에 중첩(application/domain/model)이면 헥사고날 레이어이지 top-level 도메인
+    // 레이어가 아니므로 컨텍스트로 보지 않는다. 추출 세그먼트가 레이어 용어인 경우도 제외.
     private String extractContextFromDomainPath(String path) {
-        int idx = path.indexOf("/domain/");
-        if (idx < 0) return null;
-        int appIdx = path.indexOf("/application/");
-        if (appIdx >= 0 && appIdx < idx) return null;
-        String after = path.substring(idx + "/domain/".length());
-        int slash = after.indexOf('/');
-        if (slash <= 0) return null;
-        String seg = after.substring(0, slash);
-        return LAYER_TERMS.contains(seg) ? null : seg;
+        return extractContextAfterLayer(path, DOMAIN_LAYER_DIRS, true);
+    }
+
+    // 경로에서 주어진 레이어 별칭 디렉터리 바로 다음 세그먼트를 컨텍스트명으로 추출 — 레이어 용어면 다음 별칭 시도.
+    // excludeNestedUnderApplication=true면 해당 마커가 application 별칭 하위에 중첩된 경우 건너뛴다.
+    private String extractContextAfterLayer(String path, Set<String> layerDirs, boolean excludeNestedUnderApplication) {
+        String p = path.replace("\\", "/");
+        for (String layer : layerDirs) {
+            String marker = "/" + layer + "/";
+            int idx = p.indexOf(marker);
+            if (idx < 0) continue;
+            if (excludeNestedUnderApplication) {
+                int appIdx = firstLayerIndex(p, APPLICATION_LAYER_DIRS);
+                if (appIdx >= 0 && appIdx < idx) continue;
+            }
+            String after = p.substring(idx + marker.length());
+            int slash = after.indexOf('/');
+            if (slash <= 0) continue;
+            String seg = after.substring(0, slash);
+            if (LAYER_TERMS.contains(seg)) continue;
+            return seg;
+        }
+        return null;
+    }
+
+    // 경로에서 주어진 레이어 별칭 마커(/{dir}/) 중 가장 앞선 인덱스 — 없으면 -1. 중첩 도메인 가드용.
+    private static int firstLayerIndex(String p, Set<String> dirs) {
+        int best = -1;
+        for (String d : dirs) {
+            int i = p.indexOf("/" + d + "/");
+            if (i >= 0 && (best < 0 || i < best)) best = i;
+        }
+        return best;
     }
 
     // DDD 팩토리·JPA·React·콜백 패턴은 정적 FUNCTION_CALL 엣지로 추적 불가 → 제외
