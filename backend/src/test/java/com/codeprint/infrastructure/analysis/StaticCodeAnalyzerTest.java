@@ -3149,7 +3149,86 @@ class StaticCodeAnalyzerTest {
                 .doesNotContain("fake_call", "real_looking", "also_fake", "println");
     }
 
+    // ── Swift (tree-sitter) ──────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Swift 함수·생성자(init)·프로토콜 메서드를 추출하고 호출을 가장 가까운 정의에 귀속한다 (tree-sitter)")
+    void Swift_함수_init_프로토콜메서드_추출_treesitter() throws IOException {
+        Path file = writeSwiftFile("""
+                protocol Greeter {
+                    func greet() -> String
+                }
+
+                class Service {
+                    let repo: UserRepo
+                    init(repo: UserRepo) {
+                        self.repo = repo
+                    }
+                    func run(user: User) {
+                        repo.save(user)
+                        print("done")
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Swift");
+
+        // 프로토콜 메서드·생성자(정규식이 못 잡던 init)·일반 메서드 모두 추출
+        assertThat(result.functions()).contains("greet", "init", "run");
+        // navigation 호출(repo.save)은 메서드명 bare, bare 호출(print)도 호출로 귀속
+        assertThat(result.functionCalls().get("run")).contains("save", "print");
+    }
+
+    @Test
+    @DisplayName("Swift 대문자 수신자(Type/enum)는 Type::method로 한정, 소문자 변수·self는 bare (tree-sitter)")
+    void Swift_대문자수신자_한정_treesitter() throws IOException {
+        Path file = writeSwiftFile("""
+                class Worker {
+                    func run(handler: Handler) {
+                        Logger.log("start")
+                        handler.handle()
+                        self.cleanup()
+                    }
+                    func cleanup() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Swift");
+
+        // 대문자 단순 식별자 수신자 → Type::method 한정 (Logger.log)
+        assertThat(result.functionCalls().get("run")).contains("Logger::log");
+        // 소문자 변수·self 수신자 → bare 메서드명 (로컬 메서드와 매칭되게)
+        assertThat(result.functionCalls().get("run")).contains("handle", "cleanup");
+        assertThat(result.functionCalls().get("run")).doesNotContain("Logger", "log");
+    }
+
+    @Test
+    @DisplayName("Swift 주석·문자열 보간(\\(expr)) 속 식별자는 호출로 오인하지 않는다 (tree-sitter)")
+    void Swift_주석_문자열보간_제외_treesitter() throws IOException {
+        Path file = writeSwiftFile("""
+                func run() {
+                    // fakeCall() 처럼 보이는 주석
+                    let s = "alsoFake() in string \\(realInterp())"
+                    realCall()
+                }
+                func realCall() {}
+                func realInterp() -> String { return "" }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Swift");
+
+        assertThat(result.functionCalls().get("run")).contains("realCall");
+        // 문자열 보간 \\(realInterp()) 안의 호출은 AST가 식으로 인식 — 보간은 실제 실행되므로 호출로 귀속됨
+        assertThat(result.functionCalls().get("run")).doesNotContain("fakeCall", "alsoFake");
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
+
+    private Path writeSwiftFile(String content) throws IOException {
+        Path file = tempDir.resolve("TestFile.swift");
+        Files.writeString(file, content);
+        return file;
+    }
 
     private Path writeJavaFile(String content) throws IOException {
         Path file = tempDir.resolve("TestFile.java");

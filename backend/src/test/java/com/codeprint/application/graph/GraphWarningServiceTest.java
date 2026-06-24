@@ -719,6 +719,24 @@ class GraphWarningServiceTest {
         assertThat(highFanOut(warnings)).isEmpty();
     }
 
+    @Test
+    @DisplayName("Swift 테스트 파일(*Tests.swift)의 호출 8개는 HIGH_FAN_OUT 제외 — XCTest 메서드 setup+assert 다호출 노이즈 (Swift AST)")
+    void highFanOut_swiftTestFile_excluded() {
+        // Alamofire SessionTests.swift 등 *Tests.swift 의 testThat 메서드가 단일 책임 위반으로 오탐되던 노이즈 제거.
+        // Swift 테스트는 Tests/(대문자) 디렉터리라 경로 매칭이 빗나가 파일명 접미사로 제외한다.
+        Node testFn = funcNodeWithPath("testThatRequestsCanBeMassCancelled", "/Tests/SessionTests.swift");
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        nodes.add(testFn);
+        java.util.List<Edge> edges = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            Node callee = funcNodeWithPath("helper" + i, "/Source/dep" + i + ".swift");
+            nodes.add(callee);
+            edges.add(callEdge(testFn.getId(), callee.getId(), false));
+        }
+        List<Map<String, Object>> warnings = service.detect(nodes, edges);
+        assertThat(highFanOut(warnings)).isEmpty();
+    }
+
     // --- fingerprint (suppress 식별자) ---
 
     @Test
