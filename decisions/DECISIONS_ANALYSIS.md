@@ -1254,3 +1254,15 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **측정.** rtk-github-issues 오탐 7→0. bulletproof react-vite precision 0 유지 + shared→feature 위반 주입 시 FEATURE_LAYER 1 발화(redux 지문 없어 가드 무영향=recall 보존). 단위 2종(app/store 지문→CROSS_FEATURE 억제·rootReducer 지문→FEATURE_LAYER 억제).
 
 **잔여(long-tail) & 후속.** Redux도 bulletproof도 아니면서 features/만 쓰고 규칙 미강제하는 드문 앱은 여전히 오탐 가능 → 완전 해결은 eslint 의도 감지(①)가 정답이나 다층 변경이라 실측 FP 재출현 시 착수(§2 단순성). **★별개 발견: CYCLIC_IMPORT 비결정성** — rtk-issues 동일 입력·동일 명령에 CYCLIC 1↔3 변동. 내 피처 규칙 변경과 무관(다른 검출기). #363 parallelStream 파싱이 그래프/순회 순서를 비결정화한 것으로 의심 — 결정론 신뢰(해자)에 중요, 별도 조사 필요.
+
+## FEATURE_LAYER_VIOLATION에 FSD entities 레이어 추가 (JS-React conformance) (2026-06-25)
+
+**문제/목표.** #384는 app→features→shared 3계층만 검사. FSD(Feature-Sliced Design)는 app→pages→widgets→features→entities→shared 6계층 단방향이라, entities↛features 등 추가 규칙을 커버하면 FSD 레포 conformance가 강화된다.
+
+**시도 → 반증.** 처음엔 6계층 전부 추가(pages=1·widgets=2·entities=4) → bulletproof nextjs-pages에서 **FEATURE_LAYER_VIOLATION 4건 회귀**. 원인: Next.js는 `src/pages/` 를 프레임워크 라우팅으로 쓰고 bulletproof는 `src/pages/app/...` 로 구성 → `pages/` 가 **FSD 레이어 vs Next.js 라우팅으로 모호**(features/ 가 RTK vs bulletproof로 모호했던 것과 동형)하고, `pages/app/` 경로는 "app" 세그먼트와도 충돌. 
+
+**해결(교훈 적용).** 모호한 `pages/` 는 레이어로 분류하지 않는다. 검증 가능·비모호한 **entities 만 추가** → 순위 `app(0)>features(1)>entities(2)>shared(3)`. widgets 는 벤치 커버리지 없어 보류(§2/증거우선). entities 는 FSD 고유 디렉터리라 모호성 낮고, bulletproof/RTK 벤치엔 entities/ 가 없어 무회귀가 구조적으로 보장됨. bulletproof 3계층은 상대 순서(app<features<shared) 보존이라 무영향.
+
+**측정.** FSD 레퍼런스(feature-sliced/examples todo-app: app·features·entities·shared, React 17) precision 0(클린) + entities→features 위반 주입 시 FEATURE_LAYER 1 발화(recall). 회귀: bulletproof react-vite·nextjs-app·nextjs-pages(이제 0)·rtk-issues 전부 피처 경고 0. 단위 2종(entities↛features 발화·정상 하향 무발화).
+
+**★별개 발견 — 디렉터리(barrel) import 미해소.** todo-app의 실제 import는 `from "entities/task"`(디렉터리→index.ts, baseUrl=src)인데 우리 해소기가 이를 노드로 못 잇는다(구체 파일경로 `features/toggle-task/ui` 는 해소됨). 즉 index/barrel re-export import가 그래프에서 누락 → 모든 import-기반 규칙의 recall 한계(FSD뿐 아니라 광범위). #382 import 해소의 별개 갭, graph 정확도 이슈로 후속 분리. [[project_warning_vs_graph_accuracy]]

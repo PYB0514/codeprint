@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.97.2',
+    date: '2026-06-25',
+    title: 'Feature-Sliced Design entities 레이어 검사 추가 — React/JS 레이어 단방향',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: '레이어 단방향 검사(FEATURE_LAYER_VIOLATION)에 Feature-Sliced Design의 entities 레이어를 추가했습니다. 이제 app → features → entities → shared 순서를 검사해, entities가 features를 import하는 등의 역방향 의존을 잡습니다. FSD 레퍼런스(feature-sliced/examples)에서 거짓 경고 0건, 실제 위반 주입 시 정확히 검출 확인했습니다. pages·widgets 레이어는 pages/ 폴더가 Next.js 라우팅과 의미가 겹쳐 오탐 위험이 있어 의도적으로 제외했습니다.' },
+    ],
+  },
+  {
     version: 'v0.97.1',
     date: '2026-06-25',
     title: 'Redux/RTK 프로젝트 피처 경계 오탐 차단 — React/JS 분석 정확도 개선',

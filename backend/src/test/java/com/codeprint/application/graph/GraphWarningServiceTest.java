@@ -456,6 +456,41 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("FSD 6계층: entities 가 features 를 import — 단방향 위반 발화 (entities는 features보다 하위)")
+    void featureLayerViolation_fsdEntitiesImportsFeature() {
+        Node task = tsNode("Task", "src/entities/task/model.ts");
+        Node toggle = tsNode("toggleTask", "src/features/toggle-task/api.ts");
+        Node filters = tsNode("filters", "src/features/tasks-filters/ui.tsx");
+        Edge imp = importEdgeForPath(task.getId(), toggle.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(task, toggle, filters), List.of(imp));
+
+        List<Map<String, Object>> v = warnings.stream()
+                .filter(w -> "FEATURE_LAYER_VIOLATION".equals(w.get("type"))).toList();
+        assertThat(v).hasSize(1);
+        assertThat((String) v.get(0).get("message")).contains("entities").contains("features");
+    }
+
+    @Test
+    @DisplayName("FSD 정상: app→features→entities→shared 하향 import — 미발화")
+    void featureLayerViolation_fsdCorrectDirection_noWarning() {
+        Node app = tsNode("AppRoot", "src/app/index.tsx");
+        Node toggle = tsNode("toggleTask", "src/features/toggle-task/api.ts");
+        Node filters = tsNode("filters", "src/features/tasks-filters/ui.tsx");
+        Node task = tsNode("Task", "src/entities/task/model.ts");
+        Node api = tsNode("request", "src/shared/api/request.ts");
+        // app→features, features→entities, entities→shared 전부 하향(정상)
+        Edge a2f = importEdgeForPath(app.getId(), toggle.getId());
+        Edge f2e = importEdgeForPath(toggle.getId(), task.getId());
+        Edge e2s = importEdgeForPath(task.getId(), api.getId());
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(app, toggle, filters, task, api), List.of(a2f, f2e, e2s));
+
+        assertThat(warnings.stream().filter(w -> "FEATURE_LAYER_VIOLATION".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
     @DisplayName("precision: Redux/RTK(app/store 지문)에선 피처 간 import가 정상 — CROSS_FEATURE 미발화")
     void crossFeatureImport_reduxProject_noWarning() {
         // RTK는 features/A 가 features/B 의 slice 를 import 하는 게 정상(idiomatic). app/store.ts 지문으로 억제.
