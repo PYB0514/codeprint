@@ -437,9 +437,9 @@ class GraphWarningServiceTest {
     }
 
     @Test
-    @DisplayName("precision: db 별칭이어도 DB_LAYER_BYPASS 소스는 services 미포함 — services → db IMPORT 시 db-bypass 미발화 (격리)")
+    @DisplayName("precision: DB_LAYER_BYPASS 소스에 services 미포함 — services(application) → db IMPORT 시 db-bypass 미발화 (격리)")
     void dbLayerBypass_pythonServicesToDb_noWarning() {
-        // services 는 APPLICATION 별칭일 뿐 UPPER_LAYER_DIRS(db-bypass 소스)에는 없다. api/routes 소스 별칭은 별 PR로 보류.
+        // services 는 APPLICATION 별칭일 뿐 UPPER_LAYER_DIRS(db-bypass 소스=인터페이스/웹 진입)에는 없다 — application→repo는 정상.
         Node svc = funcNodeWithPath("create_article", "/app/services/articles.py");
         Node repo = funcNodeWithPath("ArticlesRepository", "/app/db/repositories/articles.py");
         Edge imp = importEdgeForPath(svc.getId(), repo.getId());
@@ -447,6 +447,21 @@ class GraphWarningServiceTest {
         List<Map<String, Object>> warnings = service.detect(List.of(svc, repo), List.of(imp));
 
         assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Python 별칭: api/routes(인터페이스) → db/repositories(영속화) IMPORT — DB_LAYER_BYPASS 발화 (py-realworld recall)")
+    void dbLayerBypass_pythonApiRoutesSource_detected() {
+        // py-realworld 류: 웹 라우트가 도메인 Repository 추상을 거치지 않고 영속화 레포를 직접 import. api·routes 가 UPPER 별칭.
+        Node route = funcNodeWithPath("create_article", "/app/api/routes/articles/articles_resource.py");
+        Node repo = funcNodeWithPath("ArticlesRepository", "/app/db/repositories/articles.py");
+        // isDddProject 게이트 개방용 도메인 레이어(core) 노드 동반
+        Node core = funcNodeWithPath("Article", "/app/models/domain/articles.py");
+        Edge imp = importEdgeForPath(route.getId(), repo.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(route, repo, core), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).hasSize(1);
     }
 
     @Test

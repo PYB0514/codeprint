@@ -409,8 +409,9 @@ public class GraphWarningService {
     private static final Set<String> APPLICATION_LAYER_DIRS = Set.of("application", "usecase", "usecases", "services");
     // DB 레이어 우회의 상위(소스) 레이어 별칭 — interfaces/application 류. 이들이 영속화 계층을 직접 import하면
     // 도메인 Repository 추상을 건너뛴 위반. presentation은 interfaces의 흔한 별칭.
+    // "api"·"routes"는 Python/JS 생태계(예: app/api/routes)의 인터페이스(웹 진입) 레이어 관용 명명이다.
     private static final Set<String> UPPER_LAYER_DIRS = Set.of(
-        "interfaces", "presentation", "application", "usecase", "usecases");
+        "interfaces", "presentation", "application", "usecase", "usecases", "api", "routes");
     // 영속화(persistence) 하위 디렉터리 별칭 — DB 접근 책임을 가진 디렉터리. DB_LAYER_BYPASS는 영속화 타깃을
     // "INFRA 레이어(INFRA_LAYER_DIRS) ∩ 이 세그먼트"로 한정한다 — infrastructure/service 같은 비-영속화 디렉터리와
     // domain/port/repository 같은 도메인 인터페이스(INFRA 레이어 밖)를 제외해 precision을 지킨다.
