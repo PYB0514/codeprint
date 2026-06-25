@@ -125,6 +125,9 @@ public class GraphWarningService {
     private List<Map<String, Object>> detectCyclicImports(List<Node> nodes, List<Edge> edges) {
         Map<UUID, Set<UUID>> adj = new HashMap<>();
         Map<UUID, String> nameMap = new HashMap<>();
+        // 결정론용 안정 정렬 키 — 노드 ID는 실행마다 랜덤 UUID라 HashMap/HashSet 순회 순서가 변해
+        // DFS 시작·이웃 방문 순서가 바뀌고 검출되는 사이클 수가 흔들렸다(같은 코드에 CYCLIC 1↔3). 파일 경로는 런 간 불변.
+        Map<UUID, String> orderKey = new HashMap<>();
         // (src, tgt) → edgeId 역인덱스 — 사이클 엣지 ID 수집용
         Map<String, String> importEdgeIds = new HashMap<>();
 
@@ -132,6 +135,9 @@ public class GraphWarningService {
             if (n.getType() == NodeType.FILE) {
                 adj.put(n.getId(), new HashSet<>());
                 nameMap.put(n.getId(), n.getName());
+                String fp = n.getFilePath();
+                orderKey.put(n.getId(), fp != null && !fp.isEmpty() ? fp
+                        : (n.getName() != null ? n.getName() : n.getId().toString()));
             }
         }
         for (Edge e : edges) {
@@ -141,14 +147,21 @@ public class GraphWarningService {
             }
         }
 
+        // 파일 경로 기준 안정 정렬(동률 시 UUID) — 결정론 보장.
+        Comparator<UUID> byPath = Comparator
+                .comparing((UUID id) -> orderKey.getOrDefault(id, id.toString()))
+                .thenComparing(UUID::toString);
+
         Set<UUID> visited = new HashSet<>();
         Set<UUID> stack = new HashSet<>();
         List<List<UUID>> cycles = new ArrayList<>();
 
-        for (UUID start : adj.keySet()) {
+        List<UUID> starts = new ArrayList<>(adj.keySet());
+        starts.sort(byPath);
+        for (UUID start : starts) {
             if (!visited.contains(start)) {
                 List<UUID> path = new ArrayList<>();
-                dfsCycle(start, adj, visited, stack, path, cycles);
+                dfsCycle(start, adj, visited, stack, path, cycles, byPath);
             }
         }
 
@@ -177,17 +190,20 @@ public class GraphWarningService {
         return warnings;
     }
 
-    // DFS로 사이클 탐지 — 스택에 있는 노드로 역방향 엣지가 오면 사이클
+    // DFS로 사이클 탐지 — 스택에 있는 노드로 역방향 엣지가 오면 사이클.
+    // 이웃을 order(파일 경로)로 정렬해 방문해 결정론 보장(랜덤 UUID HashSet 순회 순서 의존 제거).
     private void dfsCycle(UUID node, Map<UUID, Set<UUID>> adj,
                           Set<UUID> visited, Set<UUID> stack,
-                          List<UUID> path, List<List<UUID>> cycles) {
+                          List<UUID> path, List<List<UUID>> cycles, Comparator<UUID> order) {
         visited.add(node);
         stack.add(node);
         path.add(node);
 
-        for (UUID neighbor : adj.getOrDefault(node, Set.of())) {
+        List<UUID> neighbors = new ArrayList<>(adj.getOrDefault(node, Set.of()));
+        neighbors.sort(order);
+        for (UUID neighbor : neighbors) {
             if (!visited.contains(neighbor)) {
-                dfsCycle(neighbor, adj, visited, stack, path, cycles);
+                dfsCycle(neighbor, adj, visited, stack, path, cycles, order);
             } else if (stack.contains(neighbor)) {
                 int idx = path.indexOf(neighbor);
                 if (idx >= 0) {

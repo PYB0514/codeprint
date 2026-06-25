@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.97.4',
+    date: '2026-06-25',
+    title: '순환 의존(CYCLIC_IMPORT) 검사 결정성 — 같은 코드는 항상 같은 결과',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: '같은 코드를 분석해도 실행할 때마다 순환 의존(CYCLIC_IMPORT) 경고 개수가 달라지던 비결정성 버그를 수정했습니다. 원인은 순환 탐지 DFS가 노드의 임의 ID(실행마다 바뀜) 순서에 의존한 것으로, 이제 파일 경로 기준으로 순회 순서를 고정해 같은 입력은 항상 같은 결과를 냅니다. 분석 결과의 재현성은 머지 게이트 신뢰의 기본 전제입니다.' },
+    ],
+  },
+  {
     version: 'v0.97.3',
     date: '2026-06-25',
     title: 'TypeScript barrel(index) import 해소 — 그래프 정확도 개선',

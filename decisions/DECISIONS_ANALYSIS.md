@@ -1276,3 +1276,15 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **해결(additive·무회귀).** 패키지경로 브랜치 진입 전에 `matchesModulePath(file, fileWithoutExt, importPath 슬래시정규화)` 를 OR로 추가. ★점이 있는 패키지경로(Java com.example.User·Python pkg.mod·Go full path)는 슬래시 정규화 시 점이 남아 matchesModulePath에서 no-op → 기존 dotted 브랜치가 그대로 처리. 즉 dotted 언어 무영향, TS/JS bare baseUrl 의 디렉터리(→index)·파일 import recall만 추가. OR 결합이라 엣지는 늘기만 하고 줄지 않음(매칭 제거 없음).
 
 **측정(A/B, stash 토글로 main vs branch).** todo-app: 디렉터리 import 위반 주입 0→1 발화(barrel 해소). 무회귀 4종 BEFORE=AFTER 완전 동일 — bulletproof react-vite(DEAD 2), nest-realworld(CYCLIC 2·DEAD 1), gin(Go, 0), py-realworld(DB 17·DEAD 6·DOMAIN 1). dotted 언어(py/go) 동일 = no-op 입증, TS 클린 벤치 동일 = 새 barrel 엣지가 FP 안 만듦. rtk 피처 경고 0 유지(CYCLIC 1↔3 변동은 기존 비결정성, 별개 이슈). 단위 2종(디렉터리→index 해소·세그먼트 경계 오매칭 방지).
+
+## CYCLIC_IMPORT 비결정성 수정 — DFS 순회 순서 고정 (결정론, 해자) (2026-06-25)
+
+**문제.** 같은 코드를 분석해도 실행마다 CYCLIC_IMPORT 경고 개수가 달라졌다(rtk-github-issues에서 1↔3). conformance 도구가 같은 입력에 다른 결과를 내면 신뢰가 무너진다 — 서버측 결정론은 제품 해자([[project_gtm_distribution_moat]]).
+
+**원인 특정(추측 금지, 측정).** rtk를 반복 실행: 노드/엣지 수는 138로 **안정**(그래프 빌드는 결정적) but CYCLIC 카운트만 변동 → 비결정성은 `detectCyclicImports` 탐지 자체. 코드 확인: `adj`가 **랜덤 UUID 키 HashMap**이고 `for (UUID start : adj.keySet())` 순회 + 이웃 `HashSet<UUID>` 순회 순서가 매 실행 UUID 값(랜덤)에 따라 달라진다 → DFS 시작·방문 순서 변동. visited 기반 DFS라 순서에 따라 검출되는 back-edge(사이클) 수가 흔들림.
+
+**해결(최소·결정론).** 순회 순서를 **런 간 불변인 파일 경로**로 정렬(랜덤 UUID 대신). orderKey(노드→filePath, 폴백 name→uuid) + Comparator byPath(동률 시 UUID tiebreak). 시작 노드 목록 정렬 + dfsCycle 이웃 정렬. 그래프 빌드는 이미 결정적이라 탐지 순서만 고정하면 충분.
+
+**측정.** rtk: 수정 후 4회 연속 CYCLIC 1로 안정(이전 1↔3). 검출 사이클 `store→rootReducer→commentsSlice(→store)` = Redux 스토어/슬라이스 진짜 순환(정탐). nest 2회 모두 2(무회귀). 단위: 공유 노드 다중 순환 구조를 입력 순서 뒤집어 두 번 측정 → 동일 개수(order-independent 결정론 락).
+
+**범위 한정.** 카운트가 불안정했던 건 그래프 알고리즘(DFS) 기반 CYCLIC뿐. 나머지 검출기(DEAD_CODE·HIGH_FAN_OUT·BROKEN_INTERFACE 등)는 항목당 1경고 방출이라 순서와 무관하게 카운트 안정. ★별개 한계(비목표): visited 기반 DFS는 SCC에서 공유 노드를 가진 다중 사이클을 일부 누락(완전 열거 아님) — 이는 결정론과 무관한 기존 휴리스틱 특성이라 이번 범위 밖(완전 열거는 Tarjan SCC/Johnson 필요, §2 과설계 회피).
