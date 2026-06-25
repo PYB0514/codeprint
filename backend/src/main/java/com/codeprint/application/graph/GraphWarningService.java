@@ -470,8 +470,9 @@ public class GraphWarningService {
                 || l.equals("tsx") || l.equals("jsx") || l.equals("ts") || l.equals("js");
     }
 
-    // React/JS 피처-슬라이스 레이아웃의 레이어 단방향 위반(app→features→shared) 감지 — 하위 레이어가 상위를 import.
-    // bulletproof-react eslint import/no-restricted-paths zone 2·3: shared↛features·app, features↛app. FSD와 공통 교집합.
+    // React/JS 피처-슬라이스 레이아웃의 레이어 단방향 위반 감지 — 하위 레이어가 상위를 import.
+    // 순위 app→features→entities→shared: bulletproof(app/features/shared) + FSD entities 레이어.
+    // bulletproof-react eslint import/no-restricted-paths zone 2·3: shared↛features·app, features↛app 도 이 순위로 포괄.
     // CROSS_FEATURE(같은 features 레이어 내 피처 간)와 상보적. 게이트는 CROSS_FEATURE와 동일(프론트 언어 + 피처 2개↑).
     private List<Map<String, Object>> detectFeatureLayerViolation(List<Node> nodes, List<Edge> edges) {
         Map<UUID, String> nodeFilePaths = new HashMap<>();
@@ -512,38 +513,51 @@ public class GraphWarningService {
                 w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
                 w.put("edgeIds", List.of(e.getId().toString()));
                 w.put("message", "레이어 단방향 위반: " + frontendLayerLabel(srcRank) + " → " + frontendLayerLabel(tgtRank)
-                        + " 직접 import. 의존은 app → features → shared 한 방향이어야 합니다 — "
+                        + " 직접 import. 의존은 app → features → entities → shared 한 방향이어야 합니다 — "
                         + frontendLayerLabel(srcRank) + "은(는) " + frontendLayerLabel(tgtRank) + "을(를) 알면 안 됩니다."
-                        + " 공통 로직은 shared로 내리고, 조립은 상위(app)에서 하세요.");
+                        + " 공통 로직은 하위 레이어로 내리고, 조립은 상위 레이어에서 하세요.");
                 warnings.add(w);
             }
         }
         return warnings;
     }
 
-    // 공유 모듈 디렉터리 — bulletproof-react가 features/app보다 하위(피처가 의존해도 되는)로 두는 재사용 레이어.
+    // bulletproof-react가 shared 레이어로 흩어 두는 재사용 모듈 디렉터리(FSD의 단일 shared/ 와 달리 scatter).
+    // FSD 전용 레이어(pages/widgets/entities)와 shared/ 는 frontendLayerRank에서 별도 명시 판정한다.
     private static final Set<String> SHARED_DIRS = Set.of(
         "components", "hooks", "lib", "utils", "types", "stores", "config", "providers", "assets"
     );
 
-    // 프론트 레이어 순위(app=0 최상위 > features=1 > shared=2 최하위), 미분류는 -1.
-    // features 우선 판정(피처 내부 components/ 등은 SHARED가 아니라 FEATURE) → app → shared 순.
+    // 프론트 레이어 순위 — app=0 > features=1 > entities=2 > shared=3 (위가 상위, 아래가 하위). 미분류 -1.
+    // 하위(rank 큼)가 상위(rank 작음)를 import하면 단방향 위반. bulletproof(app/features/shared)+FSD entities 레이어.
+    // ★pages·widgets 는 의도적으로 미분류: pages/ 는 Next.js 프레임워크 라우팅(src/pages/app/...)으로도 흔히 쓰여
+    //   FSD 레이어와 모호(features/ 가 RTK와 모호했던 것과 동형) → 오탐 위험. widgets/ 는 벤치 미검증이라 보류.
+    //   entities 만 추가: FSD 고유 디렉터리라 모호성 낮고 entities↛features 핵심 규칙을 todo-app으로 검증.
+    // features 우선 판정(피처 내부 components/ 등은 SHARED 아닌 FEATURE).
     private static int frontendLayerRank(String path) {
         if (featureOf(path) != null) return 1;
         if (path == null) return -1;
         String p = path.replace("\\", "/");
-        if (p.contains("/app/") || p.startsWith("app/")) return 0;
+        if (hasSegment(p, "app")) return 0;
+        if (hasSegment(p, "entities")) return 2;
+        if (hasSegment(p, "shared")) return 3;
         for (String d : SHARED_DIRS) {
-            if (p.contains("/" + d + "/") || p.startsWith(d + "/")) return 2;
+            if (hasSegment(p, d)) return 3;
         }
         return -1;
+    }
+
+    // 정규화된 경로에 디렉터리 세그먼트가 있는지(/dir/ 또는 dir/ 로 시작)
+    private static boolean hasSegment(String normalizedPath, String dir) {
+        return normalizedPath.contains("/" + dir + "/") || normalizedPath.startsWith(dir + "/");
     }
 
     private static String frontendLayerLabel(int rank) {
         return switch (rank) {
             case 0 -> "app";
             case 1 -> "features";
-            case 2 -> "shared";
+            case 2 -> "entities";
+            case 3 -> "shared";
             default -> "?";
         };
     }
