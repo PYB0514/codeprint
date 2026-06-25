@@ -370,6 +370,91 @@ class GraphWarningServiceTest {
         assertThat(warnings.stream().filter(w -> "CROSS_FEATURE_IMPORT".equals(w.get("type"))).toList()).isEmpty();
     }
 
+    // 게이트(피처 2개↑) 충족용 보조 피처 노드 2개 — 레이어 단방향 테스트에서 features 레이어 존재를 보장
+    private List<Node> twoFeatureNodes() {
+        return List.of(
+                tsNode("login", "src/features/auth/api/login.ts"),
+                tsNode("getComments", "src/features/comments/api/get-comments.ts"));
+    }
+
+    @Test
+    @DisplayName("단방향: shared 가 features 를 import — FEATURE_LAYER_VIOLATION 발화 (bulletproof zone 2)")
+    void featureLayerViolation_sharedImportsFeature() {
+        Node button = tsNode("Button", "src/components/ui/button.tsx");
+        Node auth = tsNode("login", "src/features/auth/api/login.ts");
+        Edge imp = importEdgeForPath(button.getId(), auth.getId());
+
+        List<Node> nodes = new java.util.ArrayList<>(twoFeatureNodes());
+        nodes.add(button); nodes.add(auth);
+        List<Map<String, Object>> warnings = service.detect(nodes, List.of(imp));
+
+        List<Map<String, Object>> v = warnings.stream()
+                .filter(w -> "FEATURE_LAYER_VIOLATION".equals(w.get("type"))).toList();
+        assertThat(v).hasSize(1);
+        assertThat((String) v.get(0).get("message")).contains("shared").contains("features");
+    }
+
+    @Test
+    @DisplayName("단방향: features 가 app 을 import — FEATURE_LAYER_VIOLATION 발화 (bulletproof zone 3)")
+    void featureLayerViolation_featureImportsApp() {
+        Node auth = tsNode("login", "src/features/auth/api/login.ts");
+        Node router = tsNode("AppRouter", "src/app/router.tsx");
+        Edge imp = importEdgeForPath(auth.getId(), router.getId());
+
+        List<Node> nodes = new java.util.ArrayList<>(twoFeatureNodes());
+        nodes.add(auth); nodes.add(router);
+        List<Map<String, Object>> warnings = service.detect(nodes, List.of(imp));
+
+        List<Map<String, Object>> v = warnings.stream()
+                .filter(w -> "FEATURE_LAYER_VIOLATION".equals(w.get("type"))).toList();
+        assertThat(v).hasSize(1);
+        assertThat((String) v.get(0).get("message")).contains("features").contains("app");
+    }
+
+    @Test
+    @DisplayName("단방향: shared 가 app 을 import — FEATURE_LAYER_VIOLATION 발화")
+    void featureLayerViolation_sharedImportsApp() {
+        Node lib = tsNode("apiClient", "src/lib/api-client.ts");
+        Node provider = tsNode("AppProvider", "src/app/provider.tsx");
+        Edge imp = importEdgeForPath(lib.getId(), provider.getId());
+
+        List<Node> nodes = new java.util.ArrayList<>(twoFeatureNodes());
+        nodes.add(lib); nodes.add(provider);
+        List<Map<String, Object>> warnings = service.detect(nodes, List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "FEATURE_LAYER_VIOLATION".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("정상 단방향: app 이 features 를, features 가 shared 를 import — 미발화")
+    void featureLayerViolation_correctDirection_noWarning() {
+        Node router = tsNode("AppRouter", "src/app/router.tsx");
+        Node auth = tsNode("login", "src/features/auth/api/login.ts");
+        Node button = tsNode("Button", "src/components/ui/button.tsx");
+        Node comments = tsNode("getComments", "src/features/comments/api/get-comments.ts");
+        // app→features, features→shared 둘 다 정상 방향
+        Edge appToFeature = importEdgeForPath(router.getId(), auth.getId());
+        Edge featureToShared = importEdgeForPath(auth.getId(), button.getId());
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(router, auth, button, comments), List.of(appToFeature, featureToShared));
+
+        assertThat(warnings.stream().filter(w -> "FEATURE_LAYER_VIOLATION".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("precision: 백엔드(Java) shared→features 는 프론트 언어 게이트 미충족 — FEATURE_LAYER_VIOLATION 미발화")
+    void featureLayerViolation_backend_noWarning() {
+        Node util = funcNodeWithPath("helper", "src/utils/StringUtil.java");
+        Node a = funcNodeWithPath("doA", "src/features/billing/BillingService.java");
+        Node b = funcNodeWithPath("doB", "src/features/account/AccountService.java");
+        Edge imp = importEdgeForPath(util.getId(), a.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(util, a, b), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "FEATURE_LAYER_VIOLATION".equals(w.get("type"))).toList()).isEmpty();
+    }
+
     @Test
     @DisplayName("layer-first 레포의 패키지 루트는 컨텍스트로 오인하지 않음 — context-first 미적용, 기존 추출 유지")
     void crossContextImport_layerFirstRoot_notTreatedAsContext() {

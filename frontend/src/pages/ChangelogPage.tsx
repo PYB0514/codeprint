@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.97.0',
+    date: '2026-06-25',
+    title: 'React/JS 레이어 단방향 위반 감지 (FEATURE_LAYER_VIOLATION) — JS-React conformance 2단계',
+    type: 'feature',
+    items: [
+      { category: '분석 엔진', desc: 'React/JS 피처-슬라이스 구조에서 레이어 의존 방향이 뒤집힌 경우를 새로 감지합니다(HIGH). 의존은 app → features → shared 한 방향이어야 하며, 하위 레이어가 상위를 import하면 위반입니다 — 공유 모듈(components·hooks·lib·utils·types)이 features/app을 import하거나, features가 app을 import하는 경우. bulletproof-react·Feature-Sliced Design 공통 규칙(eslint import/no-restricted-paths)을 무설정으로 검사합니다. 직전 단계(피처 간 직접 import 금지, v0.96.0)와 합쳐 피처-슬라이스 경계 규칙의 공통 교집합이 완성됐습니다. 서로 다른 기능 폴더 2개 이상 + 프론트엔드(TS/JS) 언어 게이트로 백엔드 오발화를 차단합니다. 레퍼런스 레포(bulletproof-react)에서 거짓 경고 0건, 실제 위반 주입 시 정확히 검출 확인.' },
+    ],
+  },
+  {
     version: 'v0.96.0',
     date: '2026-06-25',
     title: 'React/JS 피처 경계 위반 감지 (CROSS_FEATURE_IMPORT) — JS-React conformance 1단계',

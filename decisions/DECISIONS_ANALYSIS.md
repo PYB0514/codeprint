@@ -1230,3 +1230,13 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **측정.** ddd-library cross-context **0→9**(book↔patron↔dailysheet 상호 model 참조, 전부 실제 import=recall). realworld 15+17+10·buckpal·petclinic **전부 무변화**(precision 보존). librarybranch는 model 디렉터리만 있어(레이어 1개<2) 보수적으로 컨텍스트 미인정 — 과탐보다 정확 우선. 단위 2종(context-first 발화·layer-first 루트 오인 방지). 전체 테스트 green.
 
 **★ Java recall DONE 판정.** 지배적 layout(layer-first)+core/persistence/mybatis 별칭(#374)+패턴 예외(#375·#376)+context-first(이번) 커버. 클린 레퍼런스 3종 precision 0 FP 유지, 실제 위반 레포(realworld 32·ddd-library 9) recall 입증. **남은 minor 갭=CYCLIC 패키지 레벨 cycle**(파일 레벨만 검출) — 패키지 cycle은 수용 가능한 경우가 많아 노이즈 위험, 의도적 비목표로 보류(필요 신호 시 별 PR).
+
+## JS-React 레이어 단방향 위반 (FEATURE_LAYER_VIOLATION) — conformance 2단계 (2026-06-25)
+
+**문제.** #383 CROSS_FEATURE_IMPORT(같은 features 레이어 내 피처 간 직접 import)는 bulletproof/FSD 공통 규칙의 절반. 나머지 절반=레이어 단방향(eslint `import/no-restricted-paths` zone 2·3): shared↛features·app, features↛app. 의존은 app → features → shared 한 방향이어야 함.
+
+**설계(여러 선택지 중).** ①CROSS_FEATURE 확장 ②비DDD `detectLayeredViolations`(Controller/Service/Repository) 재사용 ③별도 검출기. → **③ FEATURE_LAYER_VIOLATION 신규 검출기** 채택. 이유: ①은 같은 레이어 내(피처 간) vs 레이어 간이라 의미가 다르고 메시지·게이트가 섞임. ②의 Layer enum은 백엔드 레이어 전용(접미사·디렉터리 컨벤션)이라 프론트 app/features/shared와 무관. 새 검출기는 frontendLayerRank(app=0 > features=1 > shared=2) + LAYERED_REVERSE와 동일한 `srcRank > tgtRank` 역전 판정 재사용. **게이트는 CROSS_FEATURE와 100% 동일**(프론트 언어 + 피처 2개↑) — #383에서 전 벤치 검증된 precision을 그대로 상속. SHARED_DIRS=components/hooks/lib/utils/types/stores/config/providers/assets(bulletproof 공유 레이어), featureOf 우선 판정으로 피처 내부 components/는 shared 아닌 feature로 분류.
+
+**측정(bulletproof react-vite).** precision: FEATURE_LAYER_VIOLATION **0건**(eslint로 강제된 클린 레퍼런스, 엣지 568=#382 import 해소 활성). recall: shared(`src/components/leak-violation.ts`)가 `@/features/comments/api/get-comments`를 import하는 위반 1건 임시 주입 → **정확히 1건 발화**(@/ 해소가 #382 토대) → 제거. 무회귀: nest-realworld(features/ 미사용→게이트 닫힘, 0)·Codeprint self 프론트(0). 비프론트 벤치는 isFrontendLanguage 게이트로 구조적 차단.
+
+**부수(테스트 버그, 구현 무관).** 단위 테스트에서 `twoFeatureNodes()`가 매 호출 새 UUID 노드를 생성하는데, 엣지가 참조한 로컬 `auth` 노드를 nodes 리스트에 안 넣어 소스 path가 ""→rank -1로 스킵돼 features→app 케이스가 0건 실패. 엣지 양끝 노드를 모두 nodes에 포함하도록 수정. 런타임(벤치)이 아닌 테스트 픽스처 구성 실수.

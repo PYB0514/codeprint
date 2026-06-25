@@ -41,6 +41,8 @@ public class GraphWarningService {
         }
         // React/JS 피처-슬라이스(features/{X}/) 경계 위반 — 자체 게이트(피처 2개↑ + 프론트 언어)로 해당 레포만 발화
         warnings.addAll(detectCrossFeatureImport(nodes, edges));
+        // React/JS 레이어 단방향 위반(app→features→shared) — 하위 레이어가 상위를 import. CROSS_FEATURE와 동일 게이트.
+        warnings.addAll(detectFeatureLayerViolation(nodes, edges));
         // 사용자가 선언한 의도 아키텍처와 실제 의존을 대조 (컨벤션 무관 — 비-DDD 프로젝트도 적용)
         warnings.addAll(detectIntentDrift(nodes, edges, intent));
         // 노드 위치 조회용 인덱스 — 경고에 발생 파일 경로를 부여하기 위함
@@ -450,6 +452,82 @@ public class GraphWarningService {
         String l = lang.toLowerCase();
         return l.contains("typescript") || l.contains("javascript")
                 || l.equals("tsx") || l.equals("jsx") || l.equals("ts") || l.equals("js");
+    }
+
+    // React/JS 피처-슬라이스 레이아웃의 레이어 단방향 위반(app→features→shared) 감지 — 하위 레이어가 상위를 import.
+    // bulletproof-react eslint import/no-restricted-paths zone 2·3: shared↛features·app, features↛app. FSD와 공통 교집합.
+    // CROSS_FEATURE(같은 features 레이어 내 피처 간)와 상보적. 게이트는 CROSS_FEATURE와 동일(프론트 언어 + 피처 2개↑).
+    private List<Map<String, Object>> detectFeatureLayerViolation(List<Node> nodes, List<Edge> edges) {
+        Map<UUID, String> nodeFilePaths = new HashMap<>();
+        Map<UUID, String> nameMap = new HashMap<>();
+        for (Node n : nodes) {
+            nodeFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+            nameMap.put(n.getId(), n.getName());
+        }
+
+        // 게이트: 프론트(TS/JS) 언어 + 서로 다른 피처 2개 이상 — 피처-슬라이스 프론트엔드일 때만 적용(precision, CROSS_FEATURE와 동일).
+        Set<String> features = new HashSet<>();
+        boolean hasFrontend = false;
+        for (Node n : nodes) {
+            String f = featureOf(nodeFilePaths.get(n.getId()));
+            if (f != null) features.add(f);
+            if (isFrontendLanguage(n.getLanguage())) hasFrontend = true;
+        }
+        if (features.size() < 2 || !hasFrontend) return List.of();
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Edge e : edges) {
+            if (e.getType() != EdgeType.IMPORT) continue;
+            String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
+            String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
+            // 테스트 코드는 레이어를 자유롭게 import(픽스처)라 위반 아님 — 제외
+            if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))) continue;
+            int srcRank = frontendLayerRank(srcPath);
+            int tgtRank = frontendLayerRank(tgtPath);
+            // 둘 다 분류돼야 하고, 같은 레이어 간 import는 여기 대상 아님(피처 간은 CROSS_FEATURE가 담당)
+            if (srcRank < 0 || tgtRank < 0 || srcRank == tgtRank) continue;
+            // 하위(rank 큼) → 상위(rank 작음) import = 단방향 역전 위반
+            if (srcRank > tgtRank) {
+                Map<String, Object> w = new LinkedHashMap<>();
+                w.put("type", "FEATURE_LAYER_VIOLATION");
+                w.put("severity", "HIGH");
+                w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
+                w.put("edgeIds", List.of(e.getId().toString()));
+                w.put("message", "레이어 단방향 위반: " + frontendLayerLabel(srcRank) + " → " + frontendLayerLabel(tgtRank)
+                        + " 직접 import. 의존은 app → features → shared 한 방향이어야 합니다 — "
+                        + frontendLayerLabel(srcRank) + "은(는) " + frontendLayerLabel(tgtRank) + "을(를) 알면 안 됩니다."
+                        + " 공통 로직은 shared로 내리고, 조립은 상위(app)에서 하세요.");
+                warnings.add(w);
+            }
+        }
+        return warnings;
+    }
+
+    // 공유 모듈 디렉터리 — bulletproof-react가 features/app보다 하위(피처가 의존해도 되는)로 두는 재사용 레이어.
+    private static final Set<String> SHARED_DIRS = Set.of(
+        "components", "hooks", "lib", "utils", "types", "stores", "config", "providers", "assets"
+    );
+
+    // 프론트 레이어 순위(app=0 최상위 > features=1 > shared=2 최하위), 미분류는 -1.
+    // features 우선 판정(피처 내부 components/ 등은 SHARED가 아니라 FEATURE) → app → shared 순.
+    private static int frontendLayerRank(String path) {
+        if (featureOf(path) != null) return 1;
+        if (path == null) return -1;
+        String p = path.replace("\\", "/");
+        if (p.contains("/app/") || p.startsWith("app/")) return 0;
+        for (String d : SHARED_DIRS) {
+            if (p.contains("/" + d + "/") || p.startsWith(d + "/")) return 2;
+        }
+        return -1;
+    }
+
+    private static String frontendLayerLabel(int rank) {
+        return switch (rank) {
+            case 0 -> "app";
+            case 1 -> "features";
+            case 2 -> "shared";
+            default -> "?";
+        };
     }
 
     // 아키텍처 레이어/하위패키지 용어 — 헥사고날·클린아키텍처에서 application/domain/, application/port/ 처럼
