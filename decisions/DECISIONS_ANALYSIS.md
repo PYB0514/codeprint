@@ -4,6 +4,22 @@
 
 ---
 
+## TS/JS import 해소 정확화 — @/ alias·../ 상위경로 (2026-06-25, fix v0.95.6)
+
+**배경(JS-React conformance 토대).** 채택 레버 3타겟 중 JS-React 착수를 위해 "어떻게 분석할지" 고민. ★핵심 발견: bulletproof-react(React 아키텍처 레퍼런스, `import/no-cycle` 강제)에서 우리 CYCLIC이 **4건 오탐**. 파보니 배럴 문제가 아니라 **TS import 해소가 근본적으로 깨져 있음**.
+
+**근본원인(코드+실측).** bulletproof import 분포: `@/` alias 200건(62%)·`../` 48건·`./` 75건. `isImportMatch(importPath, filePath)`:
+- `@/components/...` → 패키지 브랜치로 빠짐, 실제 경로는 `@/`로 시작 안 해 **매칭 0**.
+- `../foo` → `replaceAll("^(\\./)+","")`가 `./`만 벗기고 `../`는 못 벗겨 endsWith 실패 **매칭 0**.
+- `./foo` → 짧은 이름 느슨한 endsWith → 동명 파일 오매칭으로 **phantom 엣지/순환**.
+→ 모던 TS(@/ 지배적)에서 import 그래프 대부분 비고 일부 phantom. 모든 JS conformance가 import 그래프 위에 서므로 이게 step 0.
+
+**해법.** `isImportMatch`에 **소스 파일 경로**를 인자로 추가(호출부 2곳 모두 보유). ①상대경로(`./ ../`)를 소스 디렉터리 기준 `resolveRelativeImport`로 분석루트 기준 절대경로 해소 후 매칭. ②`@/` → `src/` alias 해소(루트가 src 포함/미포함 양쪽 허용). ③`segmentEndsWith`(정확 일치 또는 `/`+경로)로 부분 세그먼트 오매칭 차단. 패키지 브랜치(Java/Kotlin/Go/Python 절대)는 불변.
+
+**측정(A/B 실측).** bulletproof-react: **CYCLIC 4→0**(phantom 제거), **엣지 323→568**(+245, @/·../ 회복=recall). nest-realworld: **CYCLIC 1→2** — 늘어난 1건은 `article.entity↔user.entity` 양방향 import(`../` cross-folder)로 **진짜 순환을 새로 검출**(코드 대조 확인: article.entity→`../user/user.entity`, user.entity→`../article/article.entity`). **무회귀**: java-realworld·java-ddd-library·py-realworld·py-ddd·requests·self 全 동일(절대 import는 패키지 브랜치 불변). 단위 4종(@/·../·세그먼트경계·Java 무회귀).
+
+**의의.** ①TS/JS import 그래프 정확화(메모리 project_warning_vs_graph_accuracy의 "엣지 정확도" 직접 개선) ②CYCLIC TS precision+recall 동시 개선 ③**JS-React conformance(cross-feature 격리·layering)의 필수 토대** — 이게 없으면 피처 경계 분석 불가. 후속: 피처-슬라이스 레이아웃 감지 + CROSS_FEATURE_IMPORT(bulletproof·FSD 공통 교집합부터).
+
 ## CROSS_CONTEXT Shared Kernel(seedwork) 제외 — Python 2번째 DDD 벤치 (2026-06-25, fix v0.95.5)
 
 **배경.** Python conformance를 2번째 DDD 벤치로 검증하기 위해 **바운디드 컨텍스트가 있는** Python repo `pgorecki/python-ddd`(FastAPI 모듈러 모놀리스, `src/modules/{bidding,catalog,iam}/{application,domain,infrastructure}` context-first + 공유 `src/seedwork/`)를 클론. py-realworld는 flat layer-first라 CROSS_CONTEXT 벤치가 없었음.
