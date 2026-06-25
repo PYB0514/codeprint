@@ -81,6 +81,42 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("CYCLIC_IMPORT 결정성 — 노드 입력 순서·UUID 가 달라도 동일 사이클 결과(파일 경로 기준 정렬)")
+    void cyclicImport_deterministic_orderIndependent() {
+        // BEFORE: adj(랜덤 UUID 키 HashMap)·이웃 HashSet 순회 순서가 실행마다 달라 DFS 시작/방문 순서가 변하고
+        // 검출 사이클 수가 흔들렸다(같은 코드에 CYCLIC 1↔3). 파일 경로 정렬로 결정론 보장.
+        // 공유 노드가 있는 다중 사이클(store↔rootReducer↔여러 slice) 구조를 입력 순서를 뒤집어 두 번 측정 → 동일해야 함.
+        long count1 = cyclicCount(false);
+        long count2 = cyclicCount(true);
+        assertThat(count1).isEqualTo(count2);
+    }
+
+    // 공유 노드를 가진 다중 순환 구조를 빌드해 CYCLIC_IMPORT 개수를 반환(reversed=입력 순서 뒤집기, UUID는 매 호출 새로 생성)
+    private long cyclicCount(boolean reversed) {
+        Node store = fileNode("store");
+        Node root = fileNode("rootReducer");
+        Node s1 = fileNode("sliceA");
+        Node s2 = fileNode("sliceB");
+        Node s3 = fileNode("sliceC");
+        // store→root→{s1,s2,s3}→store : 세 슬라이스가 store/root 를 공유하는 다중 순환
+        List<Edge> edges = new ArrayList<>(List.of(
+                importEdge(store.getId(), root.getId()),
+                importEdge(root.getId(), s1.getId()),
+                importEdge(root.getId(), s2.getId()),
+                importEdge(root.getId(), s3.getId()),
+                importEdge(s1.getId(), store.getId()),
+                importEdge(s2.getId(), store.getId()),
+                importEdge(s3.getId(), store.getId())));
+        List<Node> nodes = new ArrayList<>(List.of(store, root, s1, s2, s3));
+        if (reversed) {
+            java.util.Collections.reverse(nodes);
+            java.util.Collections.reverse(edges);
+        }
+        return service.detect(nodes, edges).stream()
+                .filter(w -> "CYCLIC_IMPORT".equals(w.get("type"))).count();
+    }
+
+    @Test
     @DisplayName("경고에 발생 파일 경로(file)가 primary 노드 경로로 부여된다")
     void warning_carriesPrimaryFilePath() {
         // 호출되지 않는 단일 함수 → DEAD_CODE (함수 1개라 신뢰도 게이트 미적용)
