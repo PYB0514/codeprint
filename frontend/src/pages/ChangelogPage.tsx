@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.97.1',
+    date: '2026-06-25',
+    title: 'Redux/RTK 프로젝트 피처 경계 오탐 차단 — React/JS 분석 정확도 개선',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: 'Redux Toolkit 프로젝트도 src/features/ 폴더를 쓰지만, bulletproof-react·FSD와 정반대로 피처 간 import와 features→app/store(RootState·AppThunk) import가 정상입니다. 그런데 직전에 추가한 피처 경계 검사(CROSS_FEATURE_IMPORT·FEATURE_LAYER_VIOLATION)가 이를 위반으로 잘못 잡아, 정형 RTK 앱에서 가짜 경고가 다수 발생했습니다. 이제 Redux 지문(rootReducer·app/store)이 있는 프로젝트에선 두 피처 규칙을 자동으로 끕니다. 실제 RTK 레포(rtk-github-issues)에서 거짓 경고 7건→0건, bulletproof-react는 정상 검출 그대로 유지됨을 확인했습니다.' },
+    ],
+  },
+  {
     version: 'v0.97.0',
     date: '2026-06-25',
     title: 'React/JS 레이어 단방향 위반 감지 (FEATURE_LAYER_VIOLATION) — JS-React conformance 2단계',
