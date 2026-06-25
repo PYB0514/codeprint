@@ -456,6 +456,34 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("precision: Redux/RTK(app/store 지문)에선 피처 간 import가 정상 — CROSS_FEATURE 미발화")
+    void crossFeatureImport_reduxProject_noWarning() {
+        // RTK는 features/A 가 features/B 의 slice 를 import 하는 게 정상(idiomatic). app/store.ts 지문으로 억제.
+        Node store = tsNode("store", "src/app/store.ts");
+        Node a = tsNode("fetchIssue", "src/features/issuesList/issuesSlice.ts");
+        Node b = tsNode("IssueDetailsPage", "src/features/issueDetails/IssueDetailsPage.tsx");
+        Edge cross = importEdgeForPath(b.getId(), a.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(store, a, b), List.of(cross));
+
+        assertThat(warnings.stream().filter(w -> "CROSS_FEATURE_IMPORT".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("precision: Redux/RTK(rootReducer 지문)에선 features→app/store(RootState) import가 정상 — FEATURE_LAYER 미발화")
+    void featureLayerViolation_reduxProject_noWarning() {
+        // RTK 모든 피처는 app/store 의 RootState·AppThunk 를 import — features→app 이 정상. rootReducer.ts 지문으로 억제.
+        Node rootReducer = tsNode("rootReducer", "src/app/rootReducer.ts");
+        Node a = tsNode("issuesSlice", "src/features/issuesList/issuesSlice.ts");
+        Node b = tsNode("repoSlice", "src/features/repoSearch/repoDetailsSlice.ts");
+        Edge featureToApp = importEdgeForPath(a.getId(), rootReducer.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(rootReducer, a, b), List.of(featureToApp));
+
+        assertThat(warnings.stream().filter(w -> "FEATURE_LAYER_VIOLATION".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
     @DisplayName("layer-first 레포의 패키지 루트는 컨텍스트로 오인하지 않음 — context-first 미적용, 기존 추출 유지")
     void crossContextImport_layerFirstRoot_notTreatedAsContext() {
         // io/spring 루트는 application·core 둘 다 선행하지만 그런 세그먼트가 유일(후보 1개<2) → context-first 아님.

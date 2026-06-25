@@ -1240,3 +1240,17 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **측정(bulletproof react-vite).** precision: FEATURE_LAYER_VIOLATION **0건**(eslint로 강제된 클린 레퍼런스, 엣지 568=#382 import 해소 활성). recall: shared(`src/components/leak-violation.ts`)가 `@/features/comments/api/get-comments`를 import하는 위반 1건 임시 주입 → **정확히 1건 발화**(@/ 해소가 #382 토대) → 제거. 무회귀: nest-realworld(features/ 미사용→게이트 닫힘, 0)·Codeprint self 프론트(0). 비프론트 벤치는 isFrontendLanguage 게이트로 구조적 차단.
 
 **부수(테스트 버그, 구현 무관).** 단위 테스트에서 `twoFeatureNodes()`가 매 호출 새 UUID 노드를 생성하는데, 엣지가 참조한 로컬 `auth` 노드를 nodes 리스트에 안 넣어 소스 path가 ""→rank -1로 스킵돼 features→app 케이스가 0건 실패. 엣지 양끝 노드를 모두 nodes에 포함하도록 수정. 런타임(벤치)이 아닌 테스트 픽스처 구성 실수.
+
+## JS-React 피처 규칙 Redux/RTK 오탐 차단 (precision, 적대 검증 발견) (2026-06-25)
+
+**문제(적대 검증으로 발견).** #383 CROSS_FEATURE_IMPORT·#384 FEATURE_LAYER_VIOLATION 출하 후, 사용자의 도그푸딩 직감("우리도 그 규칙 지켜야 하나")을 계기로 *실세계 features/ 앱*에 적대 검증. 정형 Redux Toolkit 앱(reduxjs/rtk-github-issues, features/ 4개)에서 **오탐 7건**: CROSS_FEATURE 2(피처 간 slice import)+FEATURE_LAYER 5(전부 `import {RootState/AppThunk} from 'app/store|app/rootReducer'`). 전부 RTK 정형 패턴이다.
+
+**근본 원인.** `features/`는 **모순된 두 컨벤션의 공유 디렉터리명**이다. bulletproof/FSD=피처 격리+features↛app(eslint 강제). RTK=피처 간 slice import 정상+모든 피처가 app/store의 타입 import 정상. 게이트("프론트+피처 2개↑")는 둘을 구분 못 한다 — 디렉터리 구조만으로 원리적 구분 불가. RTK는 bulletproof보다 압도적으로 대중적이라 채택 레버 직격.
+
+**검증 사각지대(왜 #383·#384가 이걸 못 잡았나).** 당시 precision을 클린 레퍼런스(bulletproof, 규칙 eslint 강제로 0)와 features/ 없는 벤치(nest·self)에서만 봤다. "다른 컨벤션을 따르는 실세계 features/ 앱"을 안 봤다 → 게이트가 열린 채 정상 코드를 위반으로 잡는 경우를 놓침.
+
+**해결(선택지 중).** ①eslint import/no-restricted-paths 의도 감지(정답지, 무설정+정확) ②구조 휴리스틱 ③architecture.json opt-in ④Redux 지문 억제. → 프로덕션 경고는 DB의 그래프만으로 계산(@Cacheable getWarnings, 클론 파일 삭제됨)이라 eslint를 경고 시점에 못 읽음 → ①은 분석단계 감지+영속화(스키마/파이프라인 다층 변경) 필요. 사용자 지시("가장 사용자 친화적")에 따라 **무설정+즉시출하+오탐0**을 동시 만족하는 **④ Redux 지문 억제** 채택: `rootReducer.*`(combineReducers 루트, 거의 Redux 전용)·`app/store.*`(RTK 정형 스토어, bulletproof/FSD의 app/은 router/provider라 store 없음) 노드가 있으면 두 피처 규칙 모두 억제. GraphWarningService 내부 ~15줄, 무마이그레이션.
+
+**측정.** rtk-github-issues 오탐 7→0. bulletproof react-vite precision 0 유지 + shared→feature 위반 주입 시 FEATURE_LAYER 1 발화(redux 지문 없어 가드 무영향=recall 보존). 단위 2종(app/store 지문→CROSS_FEATURE 억제·rootReducer 지문→FEATURE_LAYER 억제).
+
+**잔여(long-tail) & 후속.** Redux도 bulletproof도 아니면서 features/만 쓰고 규칙 미강제하는 드문 앱은 여전히 오탐 가능 → 완전 해결은 eslint 의도 감지(①)가 정답이나 다층 변경이라 실측 FP 재출현 시 착수(§2 단순성). **★별개 발견: CYCLIC_IMPORT 비결정성** — rtk-issues 동일 입력·동일 명령에 CYCLIC 1↔3 변동. 내 피처 규칙 변경과 무관(다른 검출기). #363 parallelStream 파싱이 그래프/순회 순서를 비결정화한 것으로 의심 — 결정론 신뢰(해자)에 중요, 별도 조사 필요.

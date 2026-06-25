@@ -407,6 +407,8 @@ public class GraphWarningService {
             if (isFrontendLanguage(n.getLanguage())) hasFrontend = true;
         }
         if (features.size() < 2 || !hasFrontend) return List.of();
+        // Redux/RTK는 features/ 를 쓰지만 피처 간 import가 정상이라 발화하면 전부 오탐 — 지문 있으면 억제(precision).
+        if (isReduxStyleProject(nodeFilePaths.values())) return List.of();
 
         List<Map<String, Object>> warnings = new ArrayList<>();
         for (Edge e : edges) {
@@ -446,6 +448,20 @@ public class GraphWarningService {
         return p.substring(start, slash);
     }
 
+    // Redux/RTK 프로젝트 지문 — features/ 를 쓰지만 피처-슬라이스(bulletproof/FSD)와 정반대 규칙을 따른다.
+    // RTK는 피처 간 slice import와 features→app/store(RootState·AppThunk) import가 정상이라, 두 피처 규칙을 발화하면 전부 오탐.
+    // 지문: rootReducer.*(combineReducers 루트, 거의 Redux 전용)·app/store.*(RTK 정형 스토어 위치).
+    // bulletproof/FSD의 app/ 은 router/provider라 store가 없어 이 지문이 없다 → recall 보존.
+    private static boolean isReduxStyleProject(Collection<String> paths) {
+        for (String raw : paths) {
+            if (raw == null) continue;
+            String p = raw.replace("\\", "/").toLowerCase();
+            if (p.matches("(.*/)?rootreducer\\.(ts|tsx|js|jsx)")) return true;
+            if (p.matches("(.*/)?app/store\\.(ts|tsx|js|jsx)")) return true;
+        }
+        return false;
+    }
+
     // 프론트(TS/JS 계열) 언어인지 — 피처-슬라이스 게이트용(백엔드 features/ 디렉터리 오발화 방지)
     private static boolean isFrontendLanguage(String lang) {
         if (lang == null) return false;
@@ -474,6 +490,8 @@ public class GraphWarningService {
             if (isFrontendLanguage(n.getLanguage())) hasFrontend = true;
         }
         if (features.size() < 2 || !hasFrontend) return List.of();
+        // Redux/RTK는 features→app/store(RootState·AppThunk) import가 정상이라 발화하면 전부 오탐 — 지문 있으면 억제(precision).
+        if (isReduxStyleProject(nodeFilePaths.values())) return List.of();
 
         List<Map<String, Object>> warnings = new ArrayList<>();
         for (Edge e : edges) {
