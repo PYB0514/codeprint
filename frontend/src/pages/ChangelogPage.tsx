@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.95.6',
+    date: '2026-06-25',
+    title: 'TypeScript/JavaScript import 분석 정확화 — @/ 별칭·상위경로(../) 해소',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: '모던 TS/JS 프로젝트가 흔히 쓰는 @/ 경로 별칭(tsconfig paths)과 ../ 상위 경로 import를 그동안 그래프가 연결하지 못해, import 관계가 대부분 비고 일부는 엉뚱한 동명 파일로 잘못 연결됐습니다. 이제 상대경로는 import한 파일 위치 기준으로 정확히 해소하고, @/ 별칭은 src 기준으로 해소합니다. 레퍼런스 React 레포(bulletproof-react) 기준 import 엣지가 323→568개로 회복되고, 잘못 잡히던 순환 의존 거짓 경고 4건이 0건으로 사라졌습니다. 반대로 ../ 미해소로 놓치던 실제 순환(TypeORM 엔티티 양방향 관계)은 새로 검출합니다.' },
+    ],
+  },
+  {
     version: 'v0.95.5',
     date: '2026-06-25',
     title: '아키텍처 검사 — 공유 커널(Shared Kernel) 거짓 경고 제거 (정확도 개선)',

@@ -162,6 +162,74 @@ class GraphBuilderTest {
         assertThat(hasNoApiCallForImport).isTrue();
     }
 
+    // 두 파일 사이에 IMPORT 엣지가 있는지 — edgeIdentifier(소스-imports-타깃)로 판별
+    private boolean hasImportEdge(ArgumentCaptor<Edge> cap, String srcName, String tgtName) {
+        return cap.getAllValues().stream()
+                .anyMatch(e -> e.getType() == EdgeType.IMPORT
+                        && e.getEdgeIdentifier().equals(srcName + "-imports-" + tgtName));
+    }
+
+    @Test
+    @DisplayName("TS @/ alias import — @/components/button → src/components/button.tsx 로 해소되어 IMPORT 엣지 생성")
+    void tsImport_atAlias_resolved() {
+        // BEFORE 버그: @/ 가 패키지 브랜치로 빠져 매칭 0건이었음(모던 TS import의 다수). 분석 루트가 src 미포함이라 'src/' 허용.
+        ParsedFile importer = parsedFileWithImports("features/auth/api/login.ts", "TypeScript",
+                List.of("@/components/ui/button"));
+        ParsedFile importee = parsedFile("components/ui/button.tsx", "TypeScript", List.of("Button"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(importer, importee));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        assertThat(hasImportEdge(cap, "login.ts", "button.tsx")).isTrue();
+    }
+
+    @Test
+    @DisplayName("TS ../ 상대 import — 소스 디렉터리 기준으로 해소되어 IMPORT 엣지 생성 (BEFORE: ../ 미해소로 엣지 0)")
+    void tsImport_parentRelative_resolved() {
+        // article.entity 가 ../user/user.entity 를 import — BEFORE는 ../ 를 못 풀어 엣지 누락(→ 진짜 순환 누락)
+        ParsedFile importer = parsedFileWithImports("article/article.entity.ts", "TypeScript",
+                List.of("../user/user.entity"));
+        ParsedFile importee = parsedFile("user/user.entity.ts", "TypeScript", List.of("UserEntity"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(importer, importee));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        assertThat(hasImportEdge(cap, "article.entity.ts", "user.entity.ts")).isTrue();
+    }
+
+    @Test
+    @DisplayName("TS 부분 세그먼트 오매칭 방지 — ../user/user.entity 가 .../my-user.entity 로 잘못 연결되지 않음")
+    void tsImport_segmentBoundary_noPartialMatch() {
+        // segmentEndsWith 가 '/'+경로 경계를 요구하므로 user.entity 가 my-user.entity 에 부분 매칭되면 안 된다.
+        ParsedFile importer = parsedFileWithImports("article/article.entity.ts", "TypeScript",
+                List.of("../user/user.entity"));
+        ParsedFile decoy = parsedFile("user/my-user.entity.ts", "TypeScript", List.of("X"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(importer, decoy));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        long importEdges = cap.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.IMPORT).count();
+        assertThat(importEdges).isZero();
+    }
+
+    @Test
+    @DisplayName("Java 패키지 import는 종전대로 매칭 (공유 isImportMatch 무회귀)")
+    void javaPackageImport_stillMatches() {
+        ParsedFile importer = parsedFileWithImports("src/com/example/UserController.java", "Java",
+                List.of("com.example.UserService"));
+        ParsedFile importee = parsedFile("src/com/example/UserService.java", "Java", List.of("createUser"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(importer, importee));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        assertThat(hasImportEdge(cap, "UserController.java", "UserService.java")).isTrue();
+    }
+
     // ── 인터페이스 → 구현체 FUNCTION_CALL 엣지 ─────────────────────────────
 
     @Test

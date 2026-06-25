@@ -115,7 +115,7 @@ public class GraphBuilder {
 
             for (String importPath : pf.imports()) {
                 fileNodeIds.entrySet().stream()
-                        .filter(e -> isImportMatch(importPath, e.getKey()))
+                        .filter(e -> isImportMatch(pf.filePath(), importPath, e.getKey()))
                         .findFirst()
                         .ifPresent(e -> {
                             String edgeIdentifier = extractFileName(pf.filePath()) + "-imports-" + extractFileName(e.getKey());
@@ -602,33 +602,32 @@ public class GraphBuilder {
     // caller가 calleeFile을 실제로 import하는지 — 기존 isImportMatch 재사용
     private boolean callerImports(ParsedFile callerFile, ParsedFile calleeFile) {
         for (String imp : callerFile.imports()) {
-            if (isImportMatch(imp, calleeFile.filePath())) return true;
+            if (isImportMatch(callerFile.filePath(), imp, calleeFile.filePath())) return true;
         }
         return false;
     }
 
-    // import 경로가 실제 파일 경로와 일치하는지 확인 — 상대경로(TS/JS/Python)와 패키지경로(Java/Kotlin) 모두 처리
-    private boolean isImportMatch(String importPath, String filePath) {
+    // import 경로가 실제 파일 경로와 일치하는지 — 상대경로(./ ../)는 소스 위치 기준 절대 해소,
+    // tsconfig alias(@/)는 src 기준 해소, 패키지경로(Java/Kotlin/Go/Python 절대)는 세그먼트 접미사 매칭.
+    private boolean isImportMatch(String sourceFilePath, String importPath, String filePath) {
         String normalizedFile = filePath.replace("\\", "/");
-        String fileWithoutExt = normalizedFile.contains(".")
-                ? normalizedFile.substring(0, normalizedFile.lastIndexOf('.'))
-                : normalizedFile;
+        String fileWithoutExt = stripExtension(normalizedFile);
 
-        // 상대경로(./  ../): ./ 제거 후 경로 세그먼트로 매칭 (TypeScript/JS/Python 상대 import)
+        // TS/JS 상대경로: 소스 디렉터리 기준으로 ./ ../ 를 적용해 분석 루트 기준 경로로 해소 후 세그먼트 정확 매칭.
+        // (기존 접미사 매칭은 ../ 를 못 풀고 짧은 ./ 이름이 동명 파일에 오매칭돼 phantom 엣지/순환을 만들었다.)
         if (importPath.startsWith("./") || importPath.startsWith("../")) {
-            String rel = importPath.replaceAll("^(\\./)+", "").replace("\\", "/");
-            return fileWithoutExt.endsWith(rel)
-                    || normalizedFile.endsWith(rel + ".ts")
-                    || normalizedFile.endsWith(rel + ".tsx")
-                    || normalizedFile.endsWith(rel + ".js")
-                    || normalizedFile.endsWith(rel + ".jsx")
-                    || normalizedFile.endsWith(rel + ".py")
-                    || normalizedFile.endsWith(rel + "/index.ts")
-                    || normalizedFile.endsWith(rel + "/index.tsx")
-                    || normalizedFile.endsWith(rel + "/index.js");
+            String resolved = resolveRelativeImport(sourceFilePath, importPath);
+            return resolved != null && matchesModulePath(normalizedFile, fileWithoutExt, resolved);
         }
 
-        // 패키지경로: com.example.User → com/example/User (Java/Kotlin/Python 절대 import)
+        // tsconfig path alias @/ → src/ (모던 TS 관용, 분석 루트가 src이거나 repo 루트일 수 있어 양쪽 허용).
+        if (importPath.startsWith("@/")) {
+            String sub = importPath.substring(2).replace("\\", "/");
+            return matchesModulePath(normalizedFile, fileWithoutExt, sub)
+                    || matchesModulePath(normalizedFile, fileWithoutExt, "src/" + sub);
+        }
+
+        // 패키지경로: com.example.User → com/example/User (Java/Kotlin/Python/Go 절대 import)
         String normalizedImport = importPath.replace(".", "/").replace("\\", "/");
         return fileWithoutExt.endsWith(normalizedImport)
                 || normalizedFile.endsWith(normalizedImport + ".java")
@@ -637,5 +636,50 @@ public class GraphBuilder {
                 || normalizedFile.endsWith(normalizedImport + ".go")
                 || normalizedFile.endsWith(normalizedImport + ".rs")
                 || normalizedFile.endsWith(normalizedImport + ".cs");
+    }
+
+    // 마지막 확장자 제거 (디렉터리 세그먼트의 점은 보존하기 위해 마지막 '/' 이후의 '.'만 본다)
+    private static String stripExtension(String path) {
+        int slash = path.lastIndexOf('/');
+        int dot = path.lastIndexOf('.');
+        return dot > slash ? path.substring(0, dot) : path;
+    }
+
+    // 상대 import(./ ../)를 소스 파일 디렉터리 기준으로 해소해 분석 루트 기준 경로 문자열을 반환.
+    private static String resolveRelativeImport(String sourceFilePath, String importPath) {
+        String src = sourceFilePath.replace("\\", "/");
+        int lastSlash = src.lastIndexOf('/');
+        java.util.Deque<String> segs = new java.util.ArrayDeque<>();
+        if (lastSlash > 0) {
+            for (String s : src.substring(0, lastSlash).split("/")) {
+                if (!s.isEmpty()) segs.addLast(s);
+            }
+        }
+        for (String part : importPath.replace("\\", "/").split("/")) {
+            if (part.isEmpty() || part.equals(".")) continue;
+            if (part.equals("..")) {
+                if (!segs.isEmpty()) segs.removeLast();
+            } else {
+                segs.addLast(part);
+            }
+        }
+        return String.join("/", segs);
+    }
+
+    // TS/JS 모듈 경로(확장자 없는 분석루트 기준 경로)가 후보 파일과 세그먼트 경계에서 일치하는지.
+    private static final String[] TS_MODULE_SUFFIXES = {
+        ".ts", ".tsx", ".js", ".jsx", ".py", "/index.ts", "/index.tsx", "/index.js"
+    };
+    private boolean matchesModulePath(String normalizedFile, String fileWithoutExt, String modulePath) {
+        if (segmentEndsWith(fileWithoutExt, modulePath)) return true;
+        for (String suffix : TS_MODULE_SUFFIXES) {
+            if (segmentEndsWith(normalizedFile, modulePath + suffix)) return true;
+        }
+        return false;
+    }
+
+    // path 가 suffix 와 정확히 같거나 '/'+suffix 로 끝나는지 — 부분 세그먼트 오매칭(button↔my-button) 방지.
+    private static boolean segmentEndsWith(String path, String suffix) {
+        return path.equals(suffix) || path.endsWith("/" + suffix);
     }
 }
