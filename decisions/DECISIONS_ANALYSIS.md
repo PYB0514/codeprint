@@ -4,6 +4,16 @@
 
 ---
 
+## CROSS_FEATURE_IMPORT — React/JS 피처 경계 위반 감지 (2026-06-25, feat v0.96.0)
+
+**배경(JS-React conformance 1단계).** TS import 해소 토대(v0.95.6) 위에서 JS-React conformance 첫 검출기. "어떻게 분석할지" 고민의 결론: Java/Python 레이어-별칭 접근은 JS에 안 통함(NestJS는 엔티티 공유라 naive cross-feature=FP 붕괴, 코드로 확인). 정답지=bulletproof-react eslint `import/no-restricted-paths`(features 상호 격리 + app→features→shared 단방향). 두 컨벤션(bulletproof·FSD)의 **공통 교집합인 cross-feature 격리**부터(최고 정밀, 분류 불필요).
+
+**해법.** `detectCrossFeatureImport`: 게이트(서로 다른 `features/{X}/` 2개↑ + 프론트 TS/JS 언어)를 통과한 레포에서 IMPORT 엣지의 `featureOf(src)≠featureOf(tgt)`면 발화(HIGH). 테스트 소스 제외(v0.95.3 일관). 프론트 언어 게이트로 **NestJS 엔티티 공유 FP 차단**(백엔드 features/ + Java/non-frontend는 미발화).
+
+**측정(A/B 실측).** **Precision**: bulletproof-react(eslint 강제 레퍼런스, features 5개+TS) CROSS_FEATURE **0**(게이트 개방+import 해소 동작하므로 위반 있었으면 발화 = 진짜 0). **Recall**: bulletproof에 `features/auth → @/features/comments` 주입 → 정확히 1건 발화(`@/` alias 해소는 v0.95.6 덕분 — 토대의 가치 입증), 주입 제거로 복원. **무회귀**: java-realworld·py-ddd·nest-realworld(features/ 미사용=article/user 폴더라 게이트 미개방, NestJS FP 회피 설계대로)·self 전부 CROSS_FEATURE 0. 단위 6종(발화·동일피처·shared·백엔드게이트·단일피처·테스트제외).
+
+**한계·후속.** ①FSD 고유 6계층 순서(app→pages→widgets→features→entities→shared)와 단방향(shared↛features·features↛app)은 별 PR(공통 교집합 다음). ②`features/` 리터럴만 — FSD의 entities/widgets 슬라이스는 후속. ③NestJS가 `src/features/` 쓰면 FP 가능하나 관용상 루트 피처폴더라 드묾(프론트 게이트가 1차 방어). opt-out 모델로 의도 패턴 ignore.
+
 ## TS/JS import 해소 정확화 — @/ alias·../ 상위경로 (2026-06-25, fix v0.95.6)
 
 **배경(JS-React conformance 토대).** 채택 레버 3타겟 중 JS-React 착수를 위해 "어떻게 분석할지" 고민. ★핵심 발견: bulletproof-react(React 아키텍처 레퍼런스, `import/no-cycle` 강제)에서 우리 CYCLIC이 **4건 오탐**. 파보니 배럴 문제가 아니라 **TS import 해소가 근본적으로 깨져 있음**.

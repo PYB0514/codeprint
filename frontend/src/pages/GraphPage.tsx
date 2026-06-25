@@ -1633,6 +1633,7 @@ function GraphPageInner() {
       ASYNC_SELF_CALL: '@Async 자기 호출 (ASYNC_SELF_CALL)',
       DB_LAYER_BYPASS: 'DB 레이어 우회 (DB_LAYER_BYPASS)',
       CROSS_CONTEXT_IMPORT: 'DDD 경계 위반 (CROSS_CONTEXT_IMPORT)',
+      CROSS_FEATURE_IMPORT: '피처 경계 위반 (CROSS_FEATURE_IMPORT)',
       MISSING_CONVERTER_MIGRATION: '@Convert 마이그레이션 필요 (MISSING_CONVERTER_MIGRATION)',
     }
     const grouped = new Map<string, string[]>()
@@ -3706,7 +3707,7 @@ function GraphPageInner() {
                       const WARNING_COLORS: Record<string, string> = {
                         CYCLIC_IMPORT: '#f97316', BROKEN_INTERFACE_CHAIN: '#ef4444',
                         ASYNC_SELF_CALL: '#eab308', DB_LAYER_BYPASS: '#8b5cf6',
-                        CROSS_CONTEXT_IMPORT: '#06b6d4', MISSING_CONVERTER_MIGRATION: '#ec4899',
+                        CROSS_CONTEXT_IMPORT: '#06b6d4', CROSS_FEATURE_IMPORT: '#0ea5e9', MISSING_CONVERTER_MIGRATION: '#ec4899',
                       }
                       const color = WARNING_COLORS[w.type] ?? '#eab308'
                       return (
