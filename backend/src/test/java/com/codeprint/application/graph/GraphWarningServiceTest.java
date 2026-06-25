@@ -450,6 +450,47 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("precision: 테스트 코드(application 패키지 *Test)가 영속화를 직접 import — DB_LAYER_BYPASS 미발화 (통합 테스트 와이어링)")
+    void dbLayerBypass_testSource_excluded() {
+        // 통합 테스트는 레포지토리를 직접 주입/생성하는 게 정상 — 프로덕션 위반 아님. java-realworld *QueryServiceTest 류 FP 제거.
+        Node test = funcNodeWithPath("shouldFetchArticle", "/src/test/java/io/spring/application/ArticleQueryServiceTest.java");
+        Node repo = funcNodeWithPath("MyBatisArticleRepository", "/src/main/java/io/spring/infrastructure/repository/MyBatisArticleRepository.java");
+        Edge imp = importEdgeForPath(test.getId(), repo.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(test, repo), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("precision: 테스트 코드(*ApiTest)가 타 컨텍스트 도메인을 직접 import — CROSS_CONTEXT_IMPORT 미발화 (테스트 픽스처)")
+    void crossContextImport_testSource_excluded() {
+        // 통합 테스트가 여러 컨텍스트의 도메인을 import하는 건 정상 — java-realworld *QueryServiceTest 류 cross-context FP 제거.
+        // 소스를 application/ 테스트 경로로 두어 제외가 없으면 srcContext=article·tgtContext=user 로 발화할 상황을 만든다.
+        Node test = funcNodeWithPath("shouldCreate", "/src/test/java/com/example/application/article/ArticleServiceTest.java");
+        Node dom = funcNodeWithPath("UserPlan", "/src/main/java/com/example/domain/user/UserPlan.java");
+        // distinct 컨텍스트 2개 성립을 위해 프로덕션 노드도 함께 둔다(C1 게이트 통과용)
+        Node app = funcNodeWithPath("createProject", "/src/main/java/com/example/application/project/ProjectService.java");
+        Edge imp = importEdgeForPath(test.getId(), dom.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(test, dom, app), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "CROSS_CONTEXT_IMPORT".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("precision: 테스트 코드(domain 패키지 *Test)가 인프라를 직접 import — DOMAIN_IMPORTS_INFRA 미발화")
+    void domainImportsInfra_testSource_excluded() {
+        Node test = funcNodeWithPath("encrypts", "/src/test/java/io/spring/core/UserServiceTest.java");
+        Node infra = funcNodeWithPath("ArticleMapper", "/src/main/java/io/spring/infrastructure/mybatis/ArticleMapper.java");
+        Edge imp = importEdgeForPath(test.getId(), infra.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(test, infra), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "DOMAIN_IMPORTS_INFRA".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
     @DisplayName("DB_TABLE 노드에 hasConverter=true 메타데이터 — MISSING_CONVERTER_MIGRATION 경고")
     void missingConverterMigration_detected() {
         Node tableNode = Node.create(graphId, NodeType.DB_TABLE, "users", "/com/example/domain/user/User.java", "java");

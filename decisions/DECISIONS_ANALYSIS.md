@@ -4,6 +4,18 @@
 
 ---
 
+## IMPORT-기반 DDD 검출기 3종 테스트 아티팩트 제외 (2026-06-25, fix v0.95.3)
+
+**배경(발견 경로).** Python conformance 다음 단계로 `api/routes`를 DB_LAYER_BYPASS 소스 별칭에 추가하려고 java-realworld 영향을 측정하던 중, db-bypass 19건 중 **10건이 `*Test.java` 소스**(`ArticleQueryServiceTest`·`UsersApiTest` 등 통합 테스트가 레포지토리를 직접 import)임을 발견. **DB_LAYER_BYPASS·CROSS_CONTEXT_IMPORT·DOMAIN_IMPORTS_INFRA 세 IMPORT-기반 검출기에 테스트 아티팩트 제외가 없던 기존 precision 버그** (DEAD_CODE·HIGH_FAN_OUT·CROSS_DOMAIN_CALL은 이미 `isTestArtifact` 제외 보유). 통합 테스트가 레포/타 컨텍스트 도메인/인프라를 직접 와이어링하는 건 정상이라 HIGH 위반이 아니다.
+
+**해법.** 세 검출기의 IMPORT 엣지 루프 진입부에 `if (isTestArtifact(srcPath, srcName)) continue;` 추가(소스 기준). 기존 헬퍼 재사용, 검출 조건 계산 전에 단락.
+
+**측정(A/B 실측, analyzeLocal).** java-realworld: **CROSS_CONTEXT_IMPORT 15→1**(테스트 14건 제거), **DB_LAYER_BYPASS 17→9**(테스트 8건 제거), 남은 것은 전부 프로덕션(application QueryService→mybatis readservice = realworld CQRS 읽기, opt-out 대상 TP). **클린 레퍼런스 무회귀**: buckpal 0·ddd-library CC 9·petclinic 0·py-realworld(DOMAIN_IMPORTS_INFRA 1)·requests 동일. self HIGH 0(§10 유지).
+
+**왜 프로덕션 손실이 불가능한가(구조적 보장).** `isTestArtifact`는 테스트 경로(`/test/`·`/tests/`)·테스트 파일명 접미사(`*Test.java`·`*.spec.ts`·`_test.go` 등)만 정밀 매칭한다. java-realworld 프로덕션은 `src/main/java/io/spring/`(테스트 마커 없음)이라 제외가 프로덕션 TP를 건드릴 수 없다 — 제거된 22건은 정의상 전부 테스트 소스 FP. 단위 3종(검출기별 테스트 소스 제외) + 기존 프로덕션 발화 테스트가 과잉 제외 회귀 가드.
+
+**다음.** 이 토대 위에서 `api/routes` DB_LAYER_BYPASS 소스 별칭 추가가 안전해짐(py-realworld 0→17 recall, java-realworld `UsersApiTest` FP는 이제 테스트 제외로 차단) — 후속 PR.
+
 ## Python conformance 레이어 별칭 — db·services 인식 (2026-06-25, fix v0.95.2)
 
 **배경(전략).** Java recall DONE(별칭화·패턴예외·context-first) 후 채택 레버 3타겟(Java/Python/JS-React) 중 **Python 차례**. 스카우트(2026-06-25): py-realworld(`app/api`·`app/core`·`app/db/repositories`·`app/services`·`app/models/domain`)에서 도메인 코드(`core/`)가 영속화(`app.db`)를 직접 import하는 **실제 DOMAIN_IMPORTS_INFRA 위반이 0건 미검출**. 원인 = `db`가 INFRA 별칭 아니고 `services`가 APPLICATION 별칭 아니라 `isDddProject` 게이트가 안 열림(`core`만 도메인으로 인식돼 1레이어 < 2). 비DDD 폴백으로 `LAYERED_BYPASS` 12(MEDIUM)만 발화.
