@@ -410,6 +410,46 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("Python 별칭: core/(도메인) → db/repositories(영속화 db 별칭) IMPORT — DOMAIN_IMPORTS_INFRA 발화 (py-realworld recall)")
+    void domainImportsInfra_pythonDbAlias_detected() {
+        // py-realworld 류: 도메인=core/, 영속화=db/repositories/. db 가 INFRA 별칭에 없으면 core→db 위반을 놓침(recall 0).
+        // core(domain)+db(infra) 2레이어로 isDddProject 게이트도 열린다.
+        Node core = funcNodeWithPath("get_app_settings", "/app/core/config.py");
+        Node repo = funcNodeWithPath("ArticlesRepository", "/app/db/repositories/articles.py");
+        Edge imp = importEdgeForPath(core.getId(), repo.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(core, repo), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "DOMAIN_IMPORTS_INFRA".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Python 별칭: services/(application 별칭) → domain/(다른 컨텍스트) IMPORT — CROSS_CONTEXT_IMPORT 발화 (services 레이어 인식)")
+    void crossContextImport_pythonServicesAlias_detected() {
+        // services 가 APPLICATION 별칭이어야 application 레이어로 인식되어 컨텍스트 추출·게이트 개방이 가능하다.
+        Node svc = funcNodeWithPath("create_article", "/app/services/article/ArticleService.py");
+        Node dom = funcNodeWithPath("User", "/app/domain/user/User.py");
+        Edge imp = importEdgeForPath(svc.getId(), dom.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(svc, dom), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "CROSS_CONTEXT_IMPORT".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("precision: db 별칭이어도 DB_LAYER_BYPASS 소스는 services 미포함 — services → db IMPORT 시 db-bypass 미발화 (격리)")
+    void dbLayerBypass_pythonServicesToDb_noWarning() {
+        // services 는 APPLICATION 별칭일 뿐 UPPER_LAYER_DIRS(db-bypass 소스)에는 없다. api/routes 소스 별칭은 별 PR로 보류.
+        Node svc = funcNodeWithPath("create_article", "/app/services/articles.py");
+        Node repo = funcNodeWithPath("ArticlesRepository", "/app/db/repositories/articles.py");
+        Edge imp = importEdgeForPath(svc.getId(), repo.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(svc, repo), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
     @DisplayName("DB_TABLE 노드에 hasConverter=true 메타데이터 — MISSING_CONVERTER_MIGRATION 경고")
     void missingConverterMigration_detected() {
         Node tableNode = Node.create(graphId, NodeType.DB_TABLE, "users", "/com/example/domain/user/User.java", "java");

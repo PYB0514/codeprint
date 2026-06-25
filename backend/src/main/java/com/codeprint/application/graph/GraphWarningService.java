@@ -394,11 +394,13 @@ public class GraphWarningService {
     private static final Set<String> DOMAIN_LAYER_DIRS = Set.of("domain", "domains", "core");
     // 인프라 레이어 디렉터리 별칭 — infrastructure 외에 infra·persistence·adapter·dao 등. 도메인→인프라는 어떤
     // 아키텍처에서도 위반(보편)이라 별칭 인식은 precision 위험이 낮다(레이어 이름만 넓힐 뿐 규칙은 불변).
+    // "db"는 Python 생태계(예: app/db/repositories)의 영속화 레이어 관용 명명이다.
     private static final Set<String> INFRA_LAYER_DIRS = Set.of(
-        "infrastructure", "infra", "persistence", "adapter", "adapters", "dao");
+        "infrastructure", "infra", "persistence", "adapter", "adapters", "dao", "db");
     // 애플리케이션 레이어 디렉터리 별칭 — isDddProject 게이트가 레이어드/DDD 프로젝트를 인식할 때 사용.
     // "app"은 제외 — /app/ 은 앱 루트 패키지로 흔히 쓰여(레이어 아님) 오분류를 일으킨다.
-    private static final Set<String> APPLICATION_LAYER_DIRS = Set.of("application", "usecase", "usecases");
+    // "services"는 Python 생태계(예: app/services)의 애플리케이션 레이어 관용 명명이다.
+    private static final Set<String> APPLICATION_LAYER_DIRS = Set.of("application", "usecase", "usecases", "services");
     // DB 레이어 우회의 상위(소스) 레이어 별칭 — interfaces/application 류. 이들이 영속화 계층을 직접 import하면
     // 도메인 Repository 추상을 건너뛴 위반. presentation은 interfaces의 흔한 별칭.
     private static final Set<String> UPPER_LAYER_DIRS = Set.of(

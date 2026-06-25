@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.95.2',
+    date: '2026-06-25',
+    title: '아키텍처 검사 — Python 프로젝트 폴더 이름 인식 (Python conformance 1단계)',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: 'Java·C# 에 이어 Python 프로젝트 구조도 인식합니다. Python 생태계가 흔히 쓰는 db/(영속화)와 services/(애플리케이션) 폴더를 레이어로 인식하도록 추가해, 도메인 코드(core/)가 db/repositories/ 를 직접 import 하는 의존 방향 위반을 새로 잡습니다. 실제 Python 레포(realworld) 기준 이 위반을 0건→1건으로 검출하고, 기존 Java 모범 구조 레포 4종 + Python requests 는 경고 수가 완전히 동일해 거짓 경고를 늘리지 않았습니다.' },
+    ],
+  },
+  {
     version: 'v0.95.1',
     date: '2026-06-25',
     title: '아키텍처 검사 — 컨텍스트 우선(context-first) 폴더 구조 인식 (recall 확대 3단계)',
