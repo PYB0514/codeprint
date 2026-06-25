@@ -627,6 +627,12 @@ public class GraphBuilder {
                     || matchesModulePath(normalizedFile, fileWithoutExt, "src/" + sub);
         }
 
+        // TS/JS baseUrl bare import: "entities/task"(→entities/task/index.ts)·"features/foo/bar"(→.ts) 같은
+        // 절대(루트 기준) import. matchesModulePath가 세그먼트 경계 + TS 확장자 + /index.* 폴백을 처리한다.
+        // ★점이 있는 패키지경로(Java com.example.User·Python pkg.mod·Go full path)는 슬래시 정규화 시 점이 남아
+        //   여기서 no-op → 아래 dotted 브랜치가 처리(순수 additive, 무회귀). 디렉터리(barrel) import recall만 추가.
+        if (matchesModulePath(normalizedFile, fileWithoutExt, importPath.replace("\\", "/"))) return true;
+
         // 패키지경로: com.example.User → com/example/User (Java/Kotlin/Python/Go 절대 import)
         String normalizedImport = importPath.replace(".", "/").replace("\\", "/");
         return fileWithoutExt.endsWith(normalizedImport)

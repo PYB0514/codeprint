@@ -230,6 +230,38 @@ class GraphBuilderTest {
         assertThat(hasImportEdge(cap, "UserController.java", "UserService.java")).isTrue();
     }
 
+    @Test
+    @DisplayName("TS baseUrl 디렉터리(barrel) import — 'entities/task' → entities/task/index.ts 로 해소 (BEFORE: 미해소로 엣지 0)")
+    void tsImport_baseUrlBarrelDirectory_resolved() {
+        // FSD·bulletproof는 각 슬라이스를 index.ts(public API)로 노출하고 'entities/task' 처럼 디렉터리로 import.
+        // BEFORE: ./ ../ @/ 아닌 bare baseUrl 은 패키지 브랜치 raw endsWith 라 디렉터리→index 폴백이 없어 엣지 누락.
+        ParsedFile importer = parsedFileWithImports("features/toggle-task/ui.tsx", "TypeScript",
+                List.of("entities/task"));
+        ParsedFile importee = parsedFile("entities/task/index.ts", "TypeScript", List.of("taskModel"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(importer, importee));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        assertThat(hasImportEdge(cap, "ui.tsx", "index.ts")).isTrue();
+    }
+
+    @Test
+    @DisplayName("TS baseUrl bare import 세그먼트 경계 — 'entities/task' 가 .../other-task/index.ts 로 오매칭되지 않음")
+    void tsImport_baseUrlBare_segmentBoundary_noPartialMatch() {
+        ParsedFile importer = parsedFileWithImports("features/toggle-task/ui.tsx", "TypeScript",
+                List.of("entities/task"));
+        ParsedFile decoy = parsedFile("entities/other-task/index.ts", "TypeScript", List.of("X"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(importer, decoy));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        long importEdges = cap.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.IMPORT).count();
+        assertThat(importEdges).isZero();
+    }
+
     // ── 인터페이스 → 구현체 FUNCTION_CALL 엣지 ─────────────────────────────
 
     @Test

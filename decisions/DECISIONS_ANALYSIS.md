@@ -1266,3 +1266,13 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **측정.** FSD 레퍼런스(feature-sliced/examples todo-app: app·features·entities·shared, React 17) precision 0(클린) + entities→features 위반 주입 시 FEATURE_LAYER 1 발화(recall). 회귀: bulletproof react-vite·nextjs-app·nextjs-pages(이제 0)·rtk-issues 전부 피처 경고 0. 단위 2종(entities↛features 발화·정상 하향 무발화).
 
 **★별개 발견 — 디렉터리(barrel) import 미해소.** todo-app의 실제 import는 `from "entities/task"`(디렉터리→index.ts, baseUrl=src)인데 우리 해소기가 이를 노드로 못 잇는다(구체 파일경로 `features/toggle-task/ui` 는 해소됨). 즉 index/barrel re-export import가 그래프에서 누락 → 모든 import-기반 규칙의 recall 한계(FSD뿐 아니라 광범위). #382 import 해소의 별개 갭, graph 정확도 이슈로 후속 분리. [[project_warning_vs_graph_accuracy]]
+
+## TS/JS baseUrl 디렉터리(barrel) import 해소 (graph 정확도·recall) (2026-06-25)
+
+**문제.** `from "entities/task"`(baseUrl=src 기준 디렉터리 → entities/task/index.ts barrel)·`from "features/foo"` 같은 index 재export import가 그래프 엣지로 안 이어졌다. FSD entities 작업(#386) 중 todo-app에 디렉터리 import 위반을 주입해도 미발화(구체 파일경로 `features/toggle-task/ui` 는 발화)로 적발.
+
+**원인.** isImportMatch에서 `./ ../`(상대)·`@/`(alias) 브랜치는 matchesModulePath(세그먼트 경계 + TS 확장자 + /index.* 폴백)를 거치지만, bare baseUrl import는 맨 아래 **패키지경로 브랜치**로 떨어진다 — 거기는 raw `endsWith`만이라 디렉터리→index 폴백도 세그먼트 경계 매칭도 없다. RTK의 `features/issuesList/issuesSlice`(구체 파일)가 잡힌 건 fileWithoutExt.endsWith 가 우연히 맞았기 때문. index/barrel은 모던 TS(FSD·bulletproof 전부 슬라이스 index.ts public API)에서 매우 흔해, 미해소 시 import 엣지 대량 누락 → graph 정확도 + 모든 import-기반 규칙(CROSS_FEATURE·FEATURE_LAYER·CYCLIC·DDD 검출기) recall 한계.
+
+**해결(additive·무회귀).** 패키지경로 브랜치 진입 전에 `matchesModulePath(file, fileWithoutExt, importPath 슬래시정규화)` 를 OR로 추가. ★점이 있는 패키지경로(Java com.example.User·Python pkg.mod·Go full path)는 슬래시 정규화 시 점이 남아 matchesModulePath에서 no-op → 기존 dotted 브랜치가 그대로 처리. 즉 dotted 언어 무영향, TS/JS bare baseUrl 의 디렉터리(→index)·파일 import recall만 추가. OR 결합이라 엣지는 늘기만 하고 줄지 않음(매칭 제거 없음).
+
+**측정(A/B, stash 토글로 main vs branch).** todo-app: 디렉터리 import 위반 주입 0→1 발화(barrel 해소). 무회귀 4종 BEFORE=AFTER 완전 동일 — bulletproof react-vite(DEAD 2), nest-realworld(CYCLIC 2·DEAD 1), gin(Go, 0), py-realworld(DB 17·DEAD 6·DOMAIN 1). dotted 언어(py/go) 동일 = no-op 입증, TS 클린 벤치 동일 = 새 barrel 엣지가 FP 안 만듦. rtk 피처 경고 0 유지(CYCLIC 1↔3 변동은 기존 비결정성, 별개 이슈). 단위 2종(디렉터리→index 해소·세그먼트 경계 오매칭 방지).
