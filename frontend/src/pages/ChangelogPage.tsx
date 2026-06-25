@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.95.3',
+    date: '2026-06-25',
+    title: '아키텍처 검사 — 테스트 코드의 거짓 경고 제거 (정확도 개선)',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: '통합 테스트가 레포지토리나 다른 컨텍스트의 도메인을 직접 import 하는 것은 정상인데, 그동안 컨텍스트 경계 위반·DB 레이어 우회·도메인→인프라 위반 검사가 테스트 코드까지 위반으로 잡아 거짓 경고(HIGH)를 냈습니다. 이제 세 검사 모두 테스트 파일(예: *Test.java·*.spec.ts·tests/ 디렉터리)을 발생원에서 제외합니다. 실제 레포(java-realworld) 기준 컨텍스트 경계 거짓 경고 15건→1건, DB 레이어 우회 17건→9건으로 줄었고(남은 것은 모두 프로덕션 코드의 실제 신호), 모범 구조 레포 3종은 변화 없습니다.' },
+    ],
+  },
+  {
     version: 'v0.95.2',
     date: '2026-06-25',
     title: '아키텍처 검사 — Python 프로젝트 폴더 이름 인식 (Python conformance 1단계)',

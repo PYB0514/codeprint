@@ -304,6 +304,9 @@ public class GraphWarningService {
             String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
             String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
 
+            // 테스트 코드가 레포지토리/영속화를 직접 import하는 것은 정상(통합 테스트 와이어링)이라 위반 아님 — 제외
+            if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))) continue;
+
             boolean srcIsUpperLayer = containsLayerSegment(srcPath, UPPER_LAYER_DIRS);
             // 영속화 타깃 = INFRA 레이어이면서 동시에 영속화 세그먼트를 가진 경로 — 두 조건 교집합으로 한정해
             // infrastructure/service(비영속화)·domain/port/repository(INFRA 밖 도메인 인터페이스) 오탐을 배제한다.
@@ -359,6 +362,9 @@ public class GraphWarningService {
             if (e.getType() != EdgeType.IMPORT) continue;
             String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
             String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
+
+            // 테스트 코드의 타 컨텍스트 import는 정상(테스트 픽스처 와이어링)이라 위반 아님 — 제외
+            if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))) continue;
 
             String srcContext = applicationContextOf(srcPath, cfContexts);
             String tgtContext = domainContextOf(tgtPath, cfContexts);
@@ -759,6 +765,9 @@ public class GraphWarningService {
             if (e.getType() != EdgeType.IMPORT) continue;
             String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
             String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
+
+            // 테스트 코드가 인프라를 직접 import하는 것은 정상이라 도메인→인프라 위반 아님 — 제외
+            if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))) continue;
 
             boolean srcIsDomain = containsLayerSegment(srcPath, DOMAIN_LAYER_DIRS);
             boolean tgtIsInfra = containsLayerSegment(tgtPath, INFRA_LAYER_DIRS) && !tgtPath.contains("/shared/");
