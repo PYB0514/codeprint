@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.96.0',
+    date: '2026-06-25',
+    title: 'React/JS 피처 경계 위반 감지 (CROSS_FEATURE_IMPORT) — JS-React conformance 1단계',
+    type: 'feature',
+    items: [
+      { category: '분석 엔진', desc: 'React/JS 피처-슬라이스 구조(src/features/{기능}/)에서 한 기능이 다른 기능을 직접 import 하는 경계 위반을 새로 감지합니다(HIGH). bulletproof-react·Feature-Sliced Design의 핵심 규칙 — 기능은 서로 의존하지 않고, 공유 로직은 shared(components·hooks·lib)로, 기능 간 연동은 상위(app/라우트)에서 조립합니다. 서로 다른 기능 폴더가 2개 이상이고 프론트엔드(TS/JS) 언어일 때만 동작해, 엔티티를 공유하는 백엔드에는 오발화하지 않습니다. 레퍼런스 레포(bulletproof-react)에서 거짓 경고 0건, 실제 위반 주입 시 정확히 검출 확인.' },
+    ],
+  },
+  {
     version: 'v0.95.6',
     date: '2026-06-25',
     title: 'TypeScript/JavaScript import 분석 정확화 — @/ 별칭·상위경로(../) 해소',

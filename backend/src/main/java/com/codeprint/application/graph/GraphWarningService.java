@@ -39,6 +39,8 @@ public class GraphWarningService {
             // 비DDD 프로젝트 — Controller/Service/Repository 레이어 컨벤션을 자동 감지해 위반 검사
             warnings.addAll(detectLayeredViolations(nodes, edges));
         }
+        // React/JS 피처-슬라이스(features/{X}/) 경계 위반 — 자체 게이트(피처 2개↑ + 프론트 언어)로 해당 레포만 발화
+        warnings.addAll(detectCrossFeatureImport(nodes, edges));
         // 사용자가 선언한 의도 아키텍처와 실제 의존을 대조 (컨벤션 무관 — 비-DDD 프로젝트도 적용)
         warnings.addAll(detectIntentDrift(nodes, edges, intent));
         // 노드 위치 조회용 인덱스 — 경고에 발생 파일 경로를 부여하기 위함
@@ -382,6 +384,72 @@ public class GraphWarningService {
             }
         }
         return warnings;
+    }
+
+    // React/JS 피처-슬라이스(features/{X}/) 레이아웃에서 features/A 가 features/B 를 직접 IMPORT — 피처 경계 위반.
+    // bulletproof-react·FSD 공통 #1 규칙: 피처는 서로 의존 금지(공유는 shared/ 경유, 연동은 상위 app/라우트). opt-out으로 의도 패턴은 ignore.
+    private List<Map<String, Object>> detectCrossFeatureImport(List<Node> nodes, List<Edge> edges) {
+        Map<UUID, String> nodeFilePaths = new HashMap<>();
+        Map<UUID, String> nameMap = new HashMap<>();
+        for (Node n : nodes) {
+            nodeFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+            nameMap.put(n.getId(), n.getName());
+        }
+
+        // 게이트: 서로 다른 피처 2개 이상 + 프론트(TS/JS) 언어 존재 — 피처-슬라이스 프론트엔드일 때만 적용(precision).
+        Set<String> features = new HashSet<>();
+        boolean hasFrontend = false;
+        for (Node n : nodes) {
+            String f = featureOf(nodeFilePaths.get(n.getId()));
+            if (f != null) features.add(f);
+            if (isFrontendLanguage(n.getLanguage())) hasFrontend = true;
+        }
+        if (features.size() < 2 || !hasFrontend) return List.of();
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Edge e : edges) {
+            if (e.getType() != EdgeType.IMPORT) continue;
+            String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
+            String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
+            // 테스트 코드는 여러 피처를 자유롭게 import(픽스처)라 위반 아님 — 제외
+            if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))) continue;
+            String srcFeature = featureOf(srcPath);
+            String tgtFeature = featureOf(tgtPath);
+            if (srcFeature != null && tgtFeature != null && !srcFeature.equals(tgtFeature)) {
+                Map<String, Object> w = new LinkedHashMap<>();
+                w.put("type", "CROSS_FEATURE_IMPORT");
+                w.put("severity", "HIGH");
+                w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
+                w.put("edgeIds", List.of(e.getId().toString()));
+                w.put("message", "피처 경계 위반: features/" + srcFeature + " → features/" + tgtFeature
+                        + " 직접 import. 피처는 서로 의존하지 않아야 합니다 — 공유 로직은 shared(components/hooks/lib)로 옮기고,"
+                        + " 피처 간 연동은 상위(app/라우트)에서 조립하세요.");
+                warnings.add(w);
+            }
+        }
+        return warnings;
+    }
+
+    // 경로에서 features/{X}/ 의 피처명 X 추출 — features 직속 파일(features/x.ts)이나 미해당이면 null.
+    private static String featureOf(String path) {
+        if (path == null) return null;
+        String p = path.replace("\\", "/");
+        int idx = p.indexOf("/features/");
+        int start;
+        if (idx >= 0) start = idx + "/features/".length();
+        else if (p.startsWith("features/")) start = "features/".length();
+        else return null;
+        int slash = p.indexOf('/', start);
+        if (slash <= start) return null;
+        return p.substring(start, slash);
+    }
+
+    // 프론트(TS/JS 계열) 언어인지 — 피처-슬라이스 게이트용(백엔드 features/ 디렉터리 오발화 방지)
+    private static boolean isFrontendLanguage(String lang) {
+        if (lang == null) return false;
+        String l = lang.toLowerCase();
+        return l.contains("typescript") || l.contains("javascript")
+                || l.equals("tsx") || l.equals("jsx") || l.equals("ts") || l.equals("js");
     }
 
     // 아키텍처 레이어/하위패키지 용어 — 헥사고날·클린아키텍처에서 application/domain/, application/port/ 처럼

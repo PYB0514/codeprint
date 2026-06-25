@@ -298,6 +298,78 @@ class GraphWarningServiceTest {
         assertThat((String) cc.get(0).get("message")).contains("catalog");
     }
 
+    // TS 함수 노드(피처-슬라이스 게이트는 프론트 언어 요구)
+    private Node tsNode(String name, String filePath) {
+        return Node.create(graphId, NodeType.FUNCTION, name, filePath, "TypeScript");
+    }
+
+    @Test
+    @DisplayName("피처-슬라이스: features/auth 가 features/comments 를 직접 import — CROSS_FEATURE_IMPORT 발화 (bulletproof #1 규칙)")
+    void crossFeatureImport_detected() {
+        Node auth = tsNode("login", "src/features/auth/api/login.ts");
+        Node comments = tsNode("getComments", "src/features/comments/api/get-comments.ts");
+        Edge imp = importEdgeForPath(auth.getId(), comments.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(auth, comments), List.of(imp));
+
+        List<Map<String, Object>> cf = warnings.stream()
+                .filter(w -> "CROSS_FEATURE_IMPORT".equals(w.get("type"))).toList();
+        assertThat(cf).hasSize(1);
+        assertThat((String) cf.get(0).get("message")).contains("auth").contains("comments");
+    }
+
+    @Test
+    @DisplayName("같은 피처 내부 import(features/auth/components → features/auth/api) — CROSS_FEATURE 미발화")
+    void crossFeatureImport_sameFeature_noWarning() {
+        Node form = tsNode("LoginForm", "src/features/auth/components/login-form.tsx");
+        Node api = tsNode("login", "src/features/auth/api/login.ts");
+        // 게이트(피처 2개↑) 충족용 다른 피처 노드
+        Node other = tsNode("getComments", "src/features/comments/api/get-comments.ts");
+        Edge imp = importEdgeForPath(form.getId(), api.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(form, api, other), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "CROSS_FEATURE_IMPORT".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("피처가 공유(shared) 모듈을 import — features 아닌 타깃이라 CROSS_FEATURE 미발화 (단방향 정상)")
+    void crossFeatureImport_toShared_noWarning() {
+        Node auth = tsNode("login", "src/features/auth/api/login.ts");
+        Node button = tsNode("Button", "src/components/ui/button.tsx");
+        Node other = tsNode("getComments", "src/features/comments/api/get-comments.ts");
+        Edge imp = importEdgeForPath(auth.getId(), button.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(auth, button, other), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "CROSS_FEATURE_IMPORT".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("precision: 백엔드(Java) features/ 디렉터리는 게이트(프론트 언어) 미충족 — CROSS_FEATURE 미발화")
+    void crossFeatureImport_backendFeaturesDir_noWarning() {
+        // 백엔드도 features/ 를 쓸 수 있으나 엔티티/타입 공유가 정상이라 오발화하면 안 됨 — 프론트 언어 게이트로 차단.
+        Node a = funcNodeWithPath("doA", "src/features/billing/BillingService.java");
+        Node b = funcNodeWithPath("doB", "src/features/account/Account.java");
+        Edge imp = importEdgeForPath(a.getId(), b.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(a, b), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "CROSS_FEATURE_IMPORT".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("피처 1개뿐이면 게이트 미개방 — CROSS_FEATURE 미발화")
+    void crossFeatureImport_singleFeature_noWarning() {
+        Node a = tsNode("login", "src/features/auth/api/login.ts");
+        Node b = tsNode("LoginForm", "src/features/auth/components/login-form.tsx");
+        Edge imp = importEdgeForPath(a.getId(), b.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(a, b), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "CROSS_FEATURE_IMPORT".equals(w.get("type"))).toList()).isEmpty();
+    }
+
     @Test
     @DisplayName("layer-first 레포의 패키지 루트는 컨텍스트로 오인하지 않음 — context-first 미적용, 기존 추출 유지")
     void crossContextImport_layerFirstRoot_notTreatedAsContext() {
