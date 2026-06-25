@@ -45,6 +45,7 @@ export const WARNING_META: Record<string, { label: string; desc: string; color: 
   DB_LAYER_BYPASS:             { label: 'DB 레이어 우회',          desc: 'Repository를 거치지 않는 직접 persistence 호출',              color: '#8b5cf6', severity: 'HIGH'   },
   CROSS_CONTEXT_IMPORT:        { label: 'DDD 컨텍스트 import 위반', desc: 'application/A가 domain/B를 직접 import — ID로만 참조해야 함', color: '#06b6d4', severity: 'HIGH'   },
   CROSS_FEATURE_IMPORT:        { label: '피처 경계 위반',           desc: 'features/A가 features/B를 직접 import — 피처는 서로 의존 금지(공유는 shared로)', color: '#0ea5e9', severity: 'HIGH'   },
+  FEATURE_LAYER_VIOLATION:     { label: '레이어 단방향 위반',       desc: '하위 레이어가 상위를 import — 의존은 app → features → shared 한 방향이어야 함', color: '#6366f1', severity: 'HIGH'   },
   DOMAIN_IMPORTS_INFRA:        { label: 'DDD 의존 방향 위반',      desc: 'domain/ 이 infrastructure/ 를 직접 import',                   color: '#ef4444', severity: 'HIGH'   },
   CROSS_DOMAIN_CALL:           { label: 'Cross-Domain 직접 호출',  desc: '도메인 경계를 넘는 직접 함수 호출 — port/ 인터페이스 경유 필요', color: '#f43f5e', severity: 'MEDIUM' },
   MISSING_CONVERTER_MIGRATION: { label: '@Convert 마이그레이션 필요', desc: '기존 평문 데이터에 Flyway 마이그레이션 미작성 가능성',       color: '#ec4899', severity: 'MEDIUM' },
