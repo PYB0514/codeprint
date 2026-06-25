@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.95.5',
+    date: '2026-06-25',
+    title: '아키텍처 검사 — 공유 커널(Shared Kernel) 거짓 경고 제거 (정확도 개선)',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: '모듈러 모놀리스에서 모든 바운디드 컨텍스트가 공유하는 베이스 코드(seedwork·shared_kernel·kernel 폴더, 예: AggregateRoot·Entity·ValueObject)를 import 하는 것은 정상인데, 컨텍스트 경계 위반 검사가 이 공유 커널을 별도 컨텍스트로 오인해 거짓 경고(HIGH)를 냈습니다. 이제 seedwork 류 공유 커널을 컨텍스트에서 제외합니다. 실제 Python DDD 레포(python-ddd)에서 컨텍스트 경계 거짓 경고 14건→1건으로 줄었고(남은 1건은 실제 모듈 간 직접 참조), 기존 레포들은 변화가 없습니다.' },
+    ],
+  },
+  {
     version: 'v0.95.4',
     date: '2026-06-25',
     title: '아키텍처 검사 — Python 웹 라우트의 DB 직접 호출 인식 (Python conformance 2단계)',

@@ -4,6 +4,18 @@
 
 ---
 
+## CROSS_CONTEXT Shared Kernel(seedwork) 제외 — Python 2번째 DDD 벤치 (2026-06-25, fix v0.95.5)
+
+**배경.** Python conformance를 2번째 DDD 벤치로 검증하기 위해 **바운디드 컨텍스트가 있는** Python repo `pgorecki/python-ddd`(FastAPI 모듈러 모놀리스, `src/modules/{bidding,catalog,iam}/{application,domain,infrastructure}` context-first + 공유 `src/seedwork/`)를 클론. py-realworld는 flat layer-first라 CROSS_CONTEXT 벤치가 없었음.
+
+**측정 발견.** py-ddd CROSS_CONTEXT_IMPORT **14건** 발화. 상세 분석: **1건 TP**(`bidding/application/event/when_listing_is_published_start_auction.py` → `catalog.domain.events` = 진짜 컨텍스트 간 직접 참조) + **13건 FP**(`{bidding,catalog,iam}/application → seedwork/domain`). seedwork는 DDD **Shared Kernel**(AggregateRoot·Entity·ValueObject·BusinessRule 베이스, 모든 컨텍스트 공유)인데 검출기가 바운디드 컨텍스트로 오인. `shared`/`common`은 이미 LAYER_TERMS라 제외되지만 `seedwork`는 없었음.
+
+**해법.** LAYER_TERMS에 `seedwork`·`shared_kernel`·`kernel` 추가(Shared Kernel 명명). LAYER_TERMS는 extractContextAfterLayer + detectContextFirstContexts 양쪽에서 "컨텍스트 아님" 판정에 쓰여, seedwork가 어디서도 컨텍스트로 인식되지 않음.
+
+**측정(A/B 실측).** py-ddd CROSS_CONTEXT **14→1**(seedwork 13 FP 제거, 진짜 bidding↔catalog TP 보존=recall 입증). **무회귀**: java-realworld(CC 1)·java-ddd-library(CC 9)·py-realworld·buckpal·petclinic·requests 전부 동일(seedwork 명칭이 타 벤치에 없음). self HIGH 0(§10). 단위 1종(seedwork 제외 + 대조 TP 발화).
+
+**의의.** ①**2번째 Python 벤치로 CROSS_CONTEXT recall 검증 완료**(context-first 전역 추론이 Python 모듈러 모놀리스에서 진짜 위반을 잡음) ②Shared Kernel FP 클래스 제거(Java/Python 공통 — Cosmic Python·pgorecki 류 seedwork 패턴). bidding→catalog의 다른 import는 테스트(v0.95.3 제외)라 프로덕션 1건만 TP로 남음.
+
 ## DB_LAYER_BYPASS 소스 별칭 api·routes — Python 웹 라우트 (2026-06-25, fix v0.95.4)
 
 **배경.** v0.95.2(db·services 별칭)로 py-realworld DOMAIN_IMPORTS_INFRA를 잡았으나, 지배적 위반인 **웹 라우트(`app/api/routes/`)가 영속화 레포(`app/db/repositories/`)를 직접 import**하는 패턴은 미검출(`api`/`routes`가 UPPER_LAYER_DIRS에 없어 db-bypass 소스로 인식 안 됨). v0.95.2에서 별 PR로 보류했던 후속.

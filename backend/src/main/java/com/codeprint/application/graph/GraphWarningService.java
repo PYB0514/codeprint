@@ -386,13 +386,16 @@ public class GraphWarningService {
 
     // 아키텍처 레이어/하위패키지 용어 — 헥사고날·클린아키텍처에서 application/domain/, application/port/ 처럼
     // 레이어명이 컨텍스트 자리에 오는 것을 바운디드 컨텍스트로 오인하지 않도록 제외(buckpal 류 교과서 FP 방지).
+    // shared·common·seedwork·shared_kernel·kernel 은 Shared Kernel(모든 컨텍스트가 공유하는 베이스)이라
+    // 바운디드 컨텍스트가 아니다 — 이를 import하는 것은 정상이므로 컨텍스트로 인식하면 cross-context 오탐을 낸다.
     private static final Set<String> LAYER_TERMS = Set.of(
         "domain", "application", "infrastructure", "interfaces", "presentation",
         "adapter", "adapters", "port", "ports", "service", "services",
         "model", "models", "entity", "entities", "repository", "repositories",
         "controller", "controllers", "usecase", "usecases", "use_case",
         "in", "out", "web", "persistence", "api", "rest", "config",
-        "common", "shared", "dto", "dtos", "mapper", "mappers", "util", "utils"
+        "common", "shared", "dto", "dtos", "mapper", "mappers", "util", "utils",
+        "seedwork", "shared_kernel", "kernel"
     );
 
     // 도메인 레이어 디렉터리 별칭 — 실제 Java 레포는 domain 외에 core·domains 로도 도메인 레이어를 명명한다.

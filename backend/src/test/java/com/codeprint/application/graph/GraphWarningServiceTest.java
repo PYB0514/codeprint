@@ -271,6 +271,34 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("Shared Kernel(seedwork) import은 cross-context 아님 — context-first 모듈러 모놀리스의 공유 베이스 (py-ddd FP 방지)")
+    void crossContextImport_sharedKernelSeedwork_excluded() {
+        // pgorecki/python-ddd 류: modules/{bidding,catalog}/{application,domain,infrastructure} + 공유 seedwork/.
+        // 모든 컨텍스트가 seedwork(AggregateRoot·Entity·ValueObject 베이스)를 import하는 건 정상 — 컨텍스트로 오인하면 FP.
+        Node biddingApp = funcNodeWithPath("place_bid", "/src/modules/bidding/application/command/place_bid.py");
+        Node biddingDom = funcNodeWithPath("Auction", "/src/modules/bidding/domain/entities.py");
+        Node biddingInfra = funcNodeWithPath("save", "/src/modules/bidding/infrastructure/repository.py");
+        Node catalogApp = funcNodeWithPath("publish_listing", "/src/modules/catalog/application/command/publish.py");
+        Node catalogDom = funcNodeWithPath("Listing", "/src/modules/catalog/domain/entities.py");
+        Node catalogInfra = funcNodeWithPath("save", "/src/modules/catalog/infrastructure/repository.py");
+        Node seedworkDom = funcNodeWithPath("AggregateRoot", "/src/seedwork/domain/aggregates.py");
+        // bidding/application 이 seedwork/domain(공유 베이스)을 import — 정상, cross-context 아님
+        Edge impSeedwork = importEdgeForPath(biddingApp.getId(), seedworkDom.getId());
+        // 대조: bidding/application 이 catalog/domain 을 직접 import — 진짜 컨텍스트 경계 위반(발화해야 함)
+        Edge impCatalog = importEdgeForPath(catalogApp.getId(), biddingDom.getId());
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(biddingApp, biddingDom, biddingInfra, catalogApp, catalogDom, catalogInfra, seedworkDom),
+                List.of(impSeedwork, impCatalog));
+
+        List<Map<String, Object>> cc = warnings.stream()
+                .filter(w -> "CROSS_CONTEXT_IMPORT".equals(w.get("type"))).toList();
+        // seedwork import은 제외되고 catalog→bidding 진짜 위반만 발화 = 1건
+        assertThat(cc).hasSize(1);
+        assertThat((String) cc.get(0).get("message")).contains("catalog");
+    }
+
+    @Test
     @DisplayName("layer-first 레포의 패키지 루트는 컨텍스트로 오인하지 않음 — context-first 미적용, 기존 추출 유지")
     void crossContextImport_layerFirstRoot_notTreatedAsContext() {
         // io/spring 루트는 application·core 둘 다 선행하지만 그런 세그먼트가 유일(후보 1개<2) → context-first 아님.
