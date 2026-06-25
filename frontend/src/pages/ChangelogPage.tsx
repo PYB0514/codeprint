@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.97.3',
+    date: '2026-06-25',
+    title: 'TypeScript barrel(index) import 해소 — 그래프 정확도 개선',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: '모던 TypeScript 프로젝트가 흔히 쓰는 디렉터리 import(예: import { x } from "entities/task" — 폴더의 index.ts가 public API를 re-export하는 barrel 패턴)를 그동안 그래프가 연결하지 못해 import 엣지가 누락됐습니다. 이제 baseUrl 기준 디렉터리 import를 해당 폴더의 index.ts로 정확히 해소합니다. 그래프 정확도가 올라가고, import를 기반으로 하는 모든 검사(피처 경계·레이어 단방향·순환 의존·DDD 경계)가 barrel import로 가려져 있던 위반까지 잡아냅니다. Java/Python/Go 등 점(.) 기반 패키지 import는 영향받지 않으며(무회귀), 레퍼런스 레포 4종에서 기존 결과 동일함을 확인했습니다.' },
+    ],
+  },
+  {
     version: 'v0.97.2',
     date: '2026-06-25',
     title: 'Feature-Sliced Design entities 레이어 검사 추가 — React/JS 레이어 단방향',
