@@ -4,6 +4,22 @@
 
 ---
 
+## DB_LAYER_BYPASS 소스 별칭 api·routes — Python 웹 라우트 (2026-06-25, fix v0.95.4)
+
+**배경.** v0.95.2(db·services 별칭)로 py-realworld DOMAIN_IMPORTS_INFRA를 잡았으나, 지배적 위반인 **웹 라우트(`app/api/routes/`)가 영속화 레포(`app/db/repositories/`)를 직접 import**하는 패턴은 미검출(`api`/`routes`가 UPPER_LAYER_DIRS에 없어 db-bypass 소스로 인식 안 됨). v0.95.2에서 별 PR로 보류했던 후속.
+
+**선결(v0.95.3).** 스카우트 측정에서 `api` 추가 시 java-realworld db-bypass +2가 전부 `UsersApiTest`(테스트)였음 → 테스트 아티팩트 제외(v0.95.3)를 먼저 출하해 안전성 확보.
+
+**해법.** `UPPER_LAYER_DIRS += "api", "routes"`. 이들은 Python/JS 인터페이스(웹 진입) 레이어 관용명.
+
+**측정(A/B 실측, analyzeLocal, v0.95.3 베이스라인 위).** py-realworld DB_LAYER_BYPASS **0→17**(recall). java-realworld **9 유지**(api-소스 db-bypass는 전부 테스트라 v0.95.3 제외로 차단, 프로덕션 api→infra 없음=코드 grep 확인). 클린 3종(buckpal·ddd-library·petclinic)·requests 무회귀. self HIGH 0(§10).
+
+**17건 성격(정직).** 13건 = `api/routes/*` → `db/repositories/*`(레포 직접 import, 강한 TP). 4건 = `api/routes/*` → `db/errors.py`(db 패키지 예외 클래스 import — 약한 신호지만 여전히 인터페이스→영속화 패키지 실제 의존). `db`가 INFRA∩PERSISTENCE 양쪽이라 `app/db/*` 전체가 영속화 타깃. **opt-out 모델**: 전부 실제 import이므로 발화가 맞고, 의도된 패턴(예: FastAPI Depends 레포 주입)은 사용자가 ignore로 억제.
+
+**게이트 보호.** DB_LAYER_BYPASS는 `isDddProject` 안에서만 발화 → 도메인·인프라 레이어가 함께 있는 레이어드/DDD 프로젝트에만 적용. 단순 라우트+db 앱(레이어 1개)은 게이트가 닫혀 무영향(precision 안전망).
+
+**다음.** Python conformance HIGH 6종 중 CROSS_CONTEXT·CYCLIC·INTENT_DRIFT의 Python recall/precision 점검, 또는 JS-React 생태계 착수.
+
 ## IMPORT-기반 DDD 검출기 3종 테스트 아티팩트 제외 (2026-06-25, fix v0.95.3)
 
 **배경(발견 경로).** Python conformance 다음 단계로 `api/routes`를 DB_LAYER_BYPASS 소스 별칭에 추가하려고 java-realworld 영향을 측정하던 중, db-bypass 19건 중 **10건이 `*Test.java` 소스**(`ArticleQueryServiceTest`·`UsersApiTest` 등 통합 테스트가 레포지토리를 직접 import)임을 발견. **DB_LAYER_BYPASS·CROSS_CONTEXT_IMPORT·DOMAIN_IMPORTS_INFRA 세 IMPORT-기반 검출기에 테스트 아티팩트 제외가 없던 기존 precision 버그** (DEAD_CODE·HIGH_FAN_OUT·CROSS_DOMAIN_CALL은 이미 `isTestArtifact` 제외 보유). 통합 테스트가 레포/타 컨텍스트 도메인/인프라를 직접 와이어링하는 건 정상이라 HIGH 위반이 아니다.

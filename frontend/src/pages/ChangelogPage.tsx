@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.95.4',
+    date: '2026-06-25',
+    title: '아키텍처 검사 — Python 웹 라우트의 DB 직접 호출 인식 (Python conformance 2단계)',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: 'DB 레이어 우회 검사가 웹 진입 레이어로 api/·routes/ 폴더(Python·JS 생태계 관용명)도 인식합니다. 웹 라우트 핸들러가 도메인 Repository 추상을 거치지 않고 영속화 레포지토리를 직접 import 하는 패턴을 잡습니다. 실제 Python 레포(realworld)에서 이 우회를 0건→17건으로 검출하고, Java 모범 구조 레포 3종 + java-realworld는 변화가 없습니다(거짓 경고 0). 이 검사는 도메인·인프라 레이어가 함께 있는 레이어드/DDD 프로젝트에서만 동작하므로 단순 앱에는 영향이 없습니다.' },
+    ],
+  },
+  {
     version: 'v0.95.3',
     date: '2026-06-25',
     title: '아키텍처 검사 — 테스트 코드의 거짓 경고 제거 (정확도 개선)',
