@@ -4,6 +4,18 @@
 
 ---
 
+## Python conformance 레이어 별칭 — db·services 인식 (2026-06-25, fix v0.95.2)
+
+**배경(전략).** Java recall DONE(별칭화·패턴예외·context-first) 후 채택 레버 3타겟(Java/Python/JS-React) 중 **Python 차례**. 스카우트(2026-06-25): py-realworld(`app/api`·`app/core`·`app/db/repositories`·`app/services`·`app/models/domain`)에서 도메인 코드(`core/`)가 영속화(`app.db`)를 직접 import하는 **실제 DOMAIN_IMPORTS_INFRA 위반이 0건 미검출**. 원인 = `db`가 INFRA 별칭 아니고 `services`가 APPLICATION 별칭 아니라 `isDddProject` 게이트가 안 열림(`core`만 도메인으로 인식돼 1레이어 < 2). 비DDD 폴백으로 `LAYERED_BYPASS` 12(MEDIUM)만 발화.
+
+**해법(Java #373/#374 직접 유추).** `INFRA_LAYER_DIRS += "db"`, `APPLICATION_LAYER_DIRS += "services"`. db는 Python 영속화(`app/db/repositories`), services는 Python 애플리케이션(`app/services`)의 관용 명명. `core`(domain)+`db`(infra) 2레이어로 게이트가 열려 DDD 검출기 가동 → core→db DOMAIN_IMPORTS_INFRA 발화.
+
+**측정(A/B 실측, analyzeLocal).** **Recall**: py-realworld DOMAIN_IMPORTS_INFRA **0→1**. **Precision 완전 보존**: java-buckpal(0)·java-ddd-library(CC 9·DC 7)·java-realworld(CC 15·DB 17·DC 10)·spring-petclinic(0)·requests(DC 1·HFO 2) **모두 BEFORE=AFTER 동일**. 단위 3종(py db 별칭 recall·services application 인식·db-bypass 격리).
+
+**트레이드오프(기록).** py-realworld가 비DDD→DDD 경로로 전환되며 `LAYERED_BYPASS` MEDIUM **12→0**. 이는 `api/routes`→`db/repositories` 호출이었는데 DDD 경로의 DB_LAYER_BYPASS 소스 별칭(`UPPER_LAYER_DIRS`)에 `api`/`routes`가 없어 발화 안 함. **의도적 격리** — `api/routes` 소스 별칭은 java-realworld `api/` 영향 측정이 필요해 **별 PR로 보류**(다음 단계에서 이 12건을 HIGH DB_LAYER_BYPASS로 복원 예정). 순효과: HIGH +1(레버), MEDIUM −12(낮은 등급, 복원 가능).
+
+**다음.** ①DB_LAYER_BYPASS 소스 별칭 `api`/`routes`(java-realworld `api/` precision 측정 선행) ②Python cross-context 레이아웃 확인 ③나머지 HIGH 타입 Python precision 감사.
+
 ## DDD 검출기 레이어 디렉터리 별칭 인식 — recall 확장 1단계 (2026-06-24, feat v0.94.4)
 
 **배경.** HIGH precision 감사 후속 recall 측정에서 **충격적 발견**: buckpal CROSS_CONTEXT FP를 고치자 4개 실제 Java 레포(buckpal·ddd-library·petclinic·realworld) 전부 HIGH 6종이 **전부 0건**. 깨끗해서가 아니라 **DDD 검출기가 Codeprint 고유 디렉터리 이름(`domain/`·`infrastructure/`)에만 묶여 recall이 사실상 0**. realworld는 도메인 레이어를 `core/`로 명명 → `DOMAIN_IMPORTS_INFRA`가 인식 못 함.
