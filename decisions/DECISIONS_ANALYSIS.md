@@ -1300,3 +1300,17 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **측정.** self 백엔드 CROSS_DOMAIN_CALL 1→0(DEAD_CODE 1·HIGH_FAN_OUT 8은 기존 LOW, 별개). java-realworld 무회귀(CC 1·DB 9·DEAD 10=문서값). 단위 1종(matches callee cross-domain 제외). 전체 테스트 green.
 
 **남은 self 항목(비목표).** HIGH_FAN_OUT 8(LOW, SRP 후보·main 진입점류)·DEAD_CODE 1(LOW)은 기존 상태로 이번 범위 밖. §10의 HIGH severity 3종(DOMAIN_IMPORTS_INFRA·CROSS_CONTEXT·DB_LAYER_BYPASS)은 self 0 유지.
+
+## 비JPA ORM 코드→테이블 엣지 1차 — Django (DB recall, 무료 그래프) (2026-06-25)
+
+**문제(백로그 Phase B #9 잔여).** 코드→테이블 CRUD 엣지가 JPA Repository(`repositoryEntityClass`) 전용이라, 비JPA ORM 데이터 접근은 DB_TABLE 노드만 있고 코드→테이블 엣지가 0. raw SQL은 이미 언어무관 처리됨(#245/#272). 무료 분석 그래프(GTM 깔때기)의 DB 흐름 recall 갭.
+
+**1차 스코프 = Django.** ★precision 함정: find()/save() 류 제네릭 메서드명은 RTK(#385)와 동형 오탐 위험 → **엔티티가 명시적으로 드러나는 패턴부터**. Django `Entity.objects.method()`는 `.objects.` 마커가 있어 FP 최저. DbAccess(entityClass, isWrite) record + ParsedFile.dbAccesses + StaticCodeAnalyzer.extractDbAccesses(Python only) + GraphBuilder가 entityClassToTableNodeId(엔티티 정의에서 생성)로 해소해 FILE→DB_TABLE(DB_READ/WRITE) 엣지. 미지의 엔티티는 map 부재로 엣지 미생성(자기제한적 precision).
+
+**★선결 발견 — Django 모델 감지 강화.** 검증 벤치(gothinkster/django-realworld) 모델은 `class Article(TimestampedModel)`처럼 프로젝트 추상 베이스를 상속 → 기존 `class X(models.Model)` 정규식이 직접 상속만 잡아 전부 놓침(실전 Django의 지배적 패턴). → 감지를 `models.Model 직접상속 OR 본문 models.*Field/ForeignKey 존재`(추상 제외)로 확장(베이스 무관). SQLAlchemy는 Column 사용이라 무충돌.
+
+**★2차 발견 — 마이그레이션 FP.** field-presence 확장이 Django 마이그레이션(`class Migration(migrations.Migration)` 안 `migrations.CreateModel(fields=[models.CharField()])`)을 모델로 오탐(django-realworld 노드 +12 중 7이 "migration"). → `/migrations/` 경로 + `migrations.Migration` 베이스 제외.
+
+**측정(A/B, stash 토글).** django-realworld: 노드 104→109(+5=정확히 모델 5개, 마이그레이션 FP 0), 엣지 89→100(+11 ORM 코드→테이블 엣지). 무회귀: py-realworld(294/486·DB17·DOMAIN1·DEAD6=문서값)·requests 동일=field-presence가 비Django Python 무영향. 전체 백엔드 테스트 green(전 언어). 단위: 추상베이스 모델 감지·마이그레이션 제외·ORM 접근 추출·DB_WRITE/READ 엣지 4종.
+
+**후속.** SQLAlchemy session.query(Entity)·Rails AR(Entity.method)·Eloquent(Entity::method)·GORM(&Entity)·Prisma client·TypeORM(타입추적). ORM당 1 PR, 명시적-엔티티 우선, 벤치 검증. conformance 게이트(유료 해자)와 별개 트랙.
