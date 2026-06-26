@@ -1288,3 +1288,15 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **측정.** rtk: 수정 후 4회 연속 CYCLIC 1로 안정(이전 1↔3). 검출 사이클 `store→rootReducer→commentsSlice(→store)` = Redux 스토어/슬라이스 진짜 순환(정탐). nest 2회 모두 2(무회귀). 단위: 공유 노드 다중 순환 구조를 입력 순서 뒤집어 두 번 측정 → 동일 개수(order-independent 결정론 락).
 
 **범위 한정.** 카운트가 불안정했던 건 그래프 알고리즘(DFS) 기반 CYCLIC뿐. 나머지 검출기(DEAD_CODE·HIGH_FAN_OUT·BROKEN_INTERFACE 등)는 항목당 1경고 방출이라 순서와 무관하게 카운트 안정. ★별개 한계(비목표): visited 기반 DFS는 SCC에서 공유 노드를 가진 다중 사이클을 일부 누락(완전 열거 아님) — 이는 결정론과 무관한 기존 휴리스틱 특성이라 이번 범위 밖(완전 열거는 Tarjan SCC/Johnson 필요, §2 과설계 회피).
+
+## CROSS_DOMAIN_CALL phantom 차단 — JDK 정규식 메서드(matches/matcher) (도그푸딩 §10, precision) (2026-06-25)
+
+**문제(도그푸딩 자가 감사로 발견).** 5 PR(v0.97.0~0.97.4) 후 self 백엔드 분석 → CROSS_DOMAIN_CALL 1건. §10은 self HIGH/경계 경고 0을 요구. 내용: `project/createProject → graph/matches`.
+
+**원인(코드 확인).** `ProjectCommandService.createProject`의 `GITHUB_URL_PATTERN.matcher(url).matches()`(JDK 정규식)가 bare `matches` 호출로 추출 → ProjectCommandService가 graph 파일을 import하지 않으므로 전역 폴백으로 graph 컨텍스트(GraphWarningService, #385에서 추가한 `p.matches(...)` 보유)의 동명 대상에 오연결된 **phantom FUNCTION_CALL 엣지**. `matches`/`matcher`는 String/Pattern의 흔한 JDK 메서드인데 두 JDK 가드 어디에도 없었음.
+
+**해결.** `matches`·`matcher`를 두 가드에 추가 — GraphBuilder.JDK_BUILTIN_CALL_NAMES(전역 폴백 엣지 차단=그래프 정확도)+GraphWarningService.JDK_COLLECTION_CALL_NAMES(cross-domain 경고 억제). 둘 다 cross-dir 폴백만 차단해 같은 디렉터리/import된 실제 matches()는 보존(recall).
+
+**측정.** self 백엔드 CROSS_DOMAIN_CALL 1→0(DEAD_CODE 1·HIGH_FAN_OUT 8은 기존 LOW, 별개). java-realworld 무회귀(CC 1·DB 9·DEAD 10=문서값). 단위 1종(matches callee cross-domain 제외). 전체 테스트 green.
+
+**남은 self 항목(비목표).** HIGH_FAN_OUT 8(LOW, SRP 후보·main 진입점류)·DEAD_CODE 1(LOW)은 기존 상태로 이번 범위 밖. §10의 HIGH severity 3종(DOMAIN_IMPORTS_INFRA·CROSS_CONTEXT·DB_LAYER_BYPASS)은 self 0 유지.

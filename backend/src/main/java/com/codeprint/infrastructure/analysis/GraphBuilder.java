@@ -27,7 +27,9 @@ public class GraphBuilder {
         "contains", "containsKey", "clear", "size", "isEmpty", "keySet", "values",
         "entrySet", "stream", "forEach", "orElse", "orElseGet", "orElseThrow",
         "ifPresent", "getOrDefault", "computeIfAbsent", "anyMatch", "allMatch",
-        "noneMatch", "findFirst", "toList"
+        "noneMatch", "findFirst", "toList",
+        // String/Pattern 정규식 메서드 — Matcher.matches()·str.matches()·Pattern.matcher() 의 전역 폴백 phantom 엣지 차단
+        "matches", "matcher"
     );
 
     // 분석된 파일 목록으로 그래프와 노드/엣지를 생성하여 저장
