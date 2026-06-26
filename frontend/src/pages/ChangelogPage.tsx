@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.97.5',
+    date: '2026-06-25',
+    title: '정규식 호출(.matches) 오탐 차단 — Cross-Domain 경고 정확도',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: 'str.matches()·Matcher.matches()·Pattern.matcher() 같은 JDK 정규식 메서드 호출이, 같은 이름의 도메인 함수로 잘못 연결돼 가짜 Cross-Domain 호출 경고를 만들던 문제를 수정했습니다. 이제 matches·matcher를 내장 메서드로 인식해 phantom 엣지와 경고를 차단합니다. Codeprint 자체 분석에서 가짜 Cross-Domain 경고 1건→0건, 레퍼런스 레포는 결과 동일(무회귀)함을 확인했습니다.' },
+    ],
+  },
+  {
     version: 'v0.97.4',
     date: '2026-06-25',
     title: '순환 의존(CYCLIC_IMPORT) 검사 결정성 — 같은 코드는 항상 같은 결과',

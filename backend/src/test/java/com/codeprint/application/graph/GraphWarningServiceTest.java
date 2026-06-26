@@ -859,6 +859,21 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("JDK 정규식 메서드(matches) callee — CROSS_DOMAIN_CALL 제외 (Matcher.matches phantom 차단)")
+    void crossDomainCall_jdkMatchesName_excluded() {
+        // ProjectCommandService.createProject 의 GITHUB_URL_PATTERN.matcher(url).matches() 가 graph 도메인의
+        // 동명 함수로 오연결되던 phantom — matches/matcher 는 JDK String/Pattern 메서드라 cross-domain 제외.
+        Node src = funcNodeWithPath("createProject", "/com/example/application/project/ProjectCommandService.java");
+        Node tgt = funcNodeWithPath("matches", "/com/example/application/graph/GraphWarningService.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(src, tgt),
+                List.of(callEdge(src.getId(), tgt.getId(), false))
+        );
+        assertThat(crossDomain(warnings)).isEmpty();
+    }
+
+    @Test
     @DisplayName("동일 이름이 2개 도메인에 존재 — bare-name 모호로 CROSS_DOMAIN_CALL 제외")
     void crossDomainCall_ambiguousName_excluded() {
         Node src = funcNodeWithPath("placeOrder", "/com/example/application/order/OrderService.java");

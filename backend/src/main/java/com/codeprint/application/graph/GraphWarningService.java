@@ -774,7 +774,9 @@ public class GraphWarningService {
         "contains", "containsKey", "clear", "size", "isEmpty", "keySet", "values",
         "entrySet", "stream", "forEach", "orElse", "orElseGet", "orElseThrow",
         "ifPresent", "getOrDefault", "computeIfAbsent", "anyMatch", "allMatch",
-        "noneMatch", "findFirst", "toList"
+        "noneMatch", "findFirst", "toList",
+        // String/Pattern 정규식 메서드 — Matcher.matches()·str.matches()·Pattern.matcher() 가 동명 도메인 함수로 오연결되는 phantom 차단
+        "matches", "matcher"
     );
 
     // getter/setter·Spring 콜백·JPA 파생쿼리·생성자 패턴 — 정적 분석으로 호출 추적 불가
