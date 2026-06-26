@@ -247,6 +247,25 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("비JPA ORM 접근(Django Entity.objects) — 호출 파일에서 엔티티 테이블로 DB_WRITE/DB_READ 엣지 생성")
+    void ormDbAccess_createsEdgeToEntityTable() {
+        // 모델 정의(Article) → DB_TABLE 노드, 별도 뷰 파일의 Article.objects.create/filter → 코드→테이블 엣지
+        ParsedFile model = parsedFileWithDb("articles/models.py", "Python",
+                List.of(new DbTableInfo("article", "Article")), List.of());
+        ParsedFile view = parsedFileWithDb("articles/views.py", "Python",
+                List.of(), List.of(new DbAccess("Article", true), new DbAccess("Article", false)));
+
+        graphBuilder.build(projectId, analysisId, List.of(model, view));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        boolean hasWrite = cap.getAllValues().stream().anyMatch(e -> e.getType() == EdgeType.DB_WRITE);
+        boolean hasRead = cap.getAllValues().stream().anyMatch(e -> e.getType() == EdgeType.DB_READ);
+        assertThat(hasWrite).isTrue();
+        assertThat(hasRead).isTrue();
+    }
+
+    @Test
     @DisplayName("TS baseUrl bare import 세그먼트 경계 — 'entities/task' 가 .../other-task/index.ts 로 오매칭되지 않음")
     void tsImport_baseUrlBare_segmentBoundary_noPartialMatch() {
         ParsedFile importer = parsedFileWithImports("features/toggle-task/ui.tsx", "TypeScript",
@@ -835,6 +854,13 @@ class GraphBuilderTest {
     private ParsedFile parsedFileWithApiCalls(String path, String lang, List<String> apiCalls) {
         return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), apiCalls, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
+    }
+
+    // DB 테이블/ORM 접근 지정 헬퍼 — 비JPA ORM 코드→테이블 엣지 테스트용 (canonical 생성자: declaredTypes/testMethods/dbAccesses 포함)
+    private ParsedFile parsedFileWithDb(String path, String lang, List<DbTableInfo> dbTables, List<DbAccess> dbAccesses) {
+        return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
+                Map.of(), List.of(), dbTables, null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                List.of(), List.of(), dbAccesses);
     }
 
     // 백엔드 컨트롤러 매핑 파일 생성 헬퍼 — controllerMappings 포함

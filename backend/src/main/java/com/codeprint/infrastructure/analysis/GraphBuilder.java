@@ -412,6 +412,26 @@ public class GraphBuilder {
             }
         }
 
+        // 비JPA ORM 데이터 접근(Django Entity.objects 등) — FILE → DB_TABLE 엣지(DB_READ/WRITE).
+        // 엔티티 클래스명을 entityClassToTableNodeId(엔티티 정의에서 생성된 테이블 노드)로 해소 — 미지의 클래스는 엣지 미생성(precision).
+        for (ParsedFile pf : parsedFiles) {
+            if (pf.dbAccesses().isEmpty()) continue;
+            UUID fileId = fileNodeIds.get(pf.filePath());
+            if (fileId == null) continue;
+            String fileBase = extractFileName(pf.filePath());
+
+            for (DbAccess access : pf.dbAccesses()) {
+                UUID tableNodeId = entityClassToTableNodeId.get(access.entityClass());
+                if (tableNodeId == null) continue;
+                EdgeType edgeType = access.isWrite() ? EdgeType.DB_WRITE : EdgeType.DB_READ;
+                String edgeId = fileBase + "-orm-" + edgeType.name().toLowerCase() + "-" + access.entityClass();
+                if (!usedDbEdgeIds.contains(edgeId)) {
+                    usedDbEdgeIds.add(edgeId);
+                    graphRepository.saveEdge(Edge.create(graphId, edgeId, edgeType, fileId, tableNodeId));
+                }
+            }
+        }
+
         // 파일 간 INSTANTIATION 엣지 생성 — new ClassName() 패턴으로 인스턴스화된 클래스의 파일과 연결
         // 클래스명(확장자 제거 파일명) → 파일 노드 ID 인덱스
         Map<String, UUID> classNameToFileId = new HashMap<>();

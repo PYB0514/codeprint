@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.98.0',
+    date: '2026-06-25',
+    title: 'Django ORM 데이터 흐름 분석 — 코드→DB 테이블 연결',
+    type: 'feature',
+    items: [
+      { category: '분석 엔진', desc: '그동안 코드와 DB 테이블을 잇는 화살표는 JPA(Spring) Repository에서만 그려졌습니다. 이제 Django 프로젝트도 Entity.objects.filter()/create() 같은 ORM 데이터 접근을 인식해, 어떤 코드가 어떤 테이블을 읽고 쓰는지 그래프에 표시합니다(읽기/쓰기 구분). 모델 감지도 강화해 class Article(models.Model) 직접 상속뿐 아니라 실전에서 흔한 공통 추상 베이스 상속(class Article(TimestampedModel))까지 잡고, 마이그레이션 파일은 모델로 오인하지 않습니다. 실제 Django 레포(django-realworld)에서 모델 테이블 5개·ORM 접근 엣지 11개가 정확히 생성되고, 다른 Python 프로젝트는 영향 없음을 확인했습니다.' },
+    ],
+  },
+  {
     version: 'v0.97.5',
     date: '2026-06-25',
     title: '정규식 호출(.matches) 오탐 차단 — Cross-Domain 경고 정확도',

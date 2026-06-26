@@ -146,8 +146,9 @@ public class StaticCodeAnalyzer {
         List<String> jsxComponents = extractJsxComponents(masked, relativePath);
         List<RawSqlAccess> rawSqlAccesses = extractRawSqlAccesses(content);
         List<String> frameworkAnnotatedMethods = extractFrameworkAnnotatedMethods(masked, language);
+        List<DbAccess> dbAccesses = extractDbAccesses(masked, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함
@@ -563,13 +564,22 @@ public class StaticCodeAnalyzer {
             }
         }
 
-        // Python: Django ORM (class X(models.Model):) — 추상 모델 제외, Meta.db_table 우선
-        if (language.equals("Python")) {
-            Matcher m = Pattern.compile("^class\\s+(\\w+)\\s*\\([^)]*\\bmodels\\.Model\\b[^)]*\\)\\s*:", Pattern.MULTILINE).matcher(content);
+        // Python: Django ORM — models.Model 직접 상속 OR 본문에 models 필드 존재(추상 베이스 상속 패턴 포함). 추상 모델 제외, Meta.db_table 우선.
+        // ★실전 Django는 class Article(TimestampedModel) 처럼 프로젝트 추상 베이스를 상속해 직접 상속만 보면 대부분 놓친다.
+        //   본문의 models.*Field/ForeignKey(모델 필드 신호)로 베이스 무관하게 잡는다(SQLAlchemy는 Column 사용이라 무충돌).
+        // 마이그레이션 파일은 migrations.CreateModel(fields=[('x', models.CharField())]) 안에 models.*Field 가 들어
+        // 모델로 오탐된다 → migrations/ 경로 전체 제외(스키마 정의일 뿐 모델 아님).
+        if (language.equals("Python") && !filePath.replace("\\", "/").contains("/migrations/")) {
+            Pattern fieldSignal = Pattern.compile("\\bmodels\\.(?:\\w*Field|ForeignKey)\\b");
+            Matcher m = Pattern.compile("^class\\s+(\\w+)\\s*\\(([^)]*)\\)\\s*:", Pattern.MULTILINE).matcher(content);
             while (m.find()) {
                 String className = m.group(1);
-                // 모델 본문(다음 최상위 class 전까지)에서 추상 여부·db_table 판정
+                String bases = m.group(2);
+                // migrations.Migration 서브클래스는 모델이 아님(경로 가드의 이중 안전망)
+                if (bases.contains("migrations.Migration")) continue;
                 String block = content.substring(m.end(), nextTopLevelClassIndex(content, m.end()));
+                boolean isDjangoModel = bases.contains("models.Model") || fieldSignal.matcher(block).find();
+                if (!isDjangoModel) continue;
                 if (Pattern.compile("\\babstract\\s*=\\s*True\\b").matcher(block).find()) continue;
                 Matcher dbt = Pattern.compile("\\bdb_table\\s*=\\s*['\"]([^'\"]+)['\"]").matcher(block);
                 String tableName = dbt.find() ? dbt.group(1) : className.toLowerCase();
@@ -997,6 +1007,28 @@ public class StaticCodeAnalyzer {
         }
 
         // 중복 제거 (같은 파일에서 동일 테이블 같은 타입 접근 반복 시)
+        return result.stream().distinct().collect(java.util.stream.Collectors.toList());
+    }
+
+    // Django ORM 쓰기 매니저 메서드 — 그 외(get/filter/all/select_related 등)는 읽기로 분류
+    private static final Set<String> DJANGO_WRITE_METHODS = Set.of(
+        "create", "bulk_create", "get_or_create", "update_or_create",
+        "update", "bulk_update", "delete"
+    );
+    // Django ORM 매니저 접근: EntityClass.objects.method(...) — 엔티티 클래스가 명시적이라 FP 낮음(generic find/save 회피).
+    private static final Pattern DJANGO_OBJECTS_ACCESS =
+        Pattern.compile("\\b([A-Z]\\w+)\\.objects\\.(\\w+)");
+
+    // 비JPA ORM 데이터 접근 추출 — 엔티티 클래스가 명시적으로 드러나는 패턴만(코드→DB_TABLE 엣지용, recall).
+    // 미지의 클래스는 GraphBuilder가 entityClassToTableNodeId에 없으면 엣지를 안 만들어 자기제한적 precision.
+    private List<DbAccess> extractDbAccesses(String content, String language) {
+        if (!language.equals("Python")) return List.of();
+        List<DbAccess> result = new ArrayList<>();
+        Matcher m = DJANGO_OBJECTS_ACCESS.matcher(content);
+        while (m.find()) {
+            boolean isWrite = DJANGO_WRITE_METHODS.contains(m.group(2));
+            result.add(new DbAccess(m.group(1), isWrite));
+        }
         return result.stream().distinct().collect(java.util.stream.Collectors.toList());
     }
 

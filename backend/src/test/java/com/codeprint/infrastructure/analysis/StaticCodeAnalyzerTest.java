@@ -1852,6 +1852,66 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("Django 프로젝트 추상 베이스 상속 모델(class Article(TimestampedModel)) — 필드 신호로 감지")
+    void Django_추상베이스_상속모델_감지() throws IOException {
+        // 실전 Django는 models.Model 직접 상속이 드물고 프로젝트 공통 추상 베이스를 상속한다. 본문 models.*Field 로 감지.
+        Path file = writePyFile("""
+                from django.db import models
+                from conduit.apps.core.models import TimestampedModel
+
+                class Article(TimestampedModel):
+                    title = models.CharField(max_length=200)
+                    author = models.ForeignKey('Profile', on_delete=models.CASCADE)
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.dbTables()).extracting(DbTableInfo::tableName)
+                .containsExactly("article");
+    }
+
+    @Test
+    @DisplayName("Django 마이그레이션 클래스(migrations.Migration)는 모델로 추출하지 않는다")
+    void Django_마이그레이션_제외() throws IOException {
+        // migrations.CreateModel(fields=[('x', models.CharField())]) 안의 models.*Field 가 모델로 오탐되면 안 됨.
+        Path file = writePyFile("""
+                from django.db import migrations, models
+
+                class Migration(migrations.Migration):
+                    operations = [
+                        migrations.CreateModel(name='Article', fields=[
+                            ('title', models.CharField(max_length=200)),
+                        ]),
+                    ]
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.dbTables()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Django ORM 접근(Entity.objects.method) — 엔티티/읽기쓰기 구분으로 dbAccesses 추출")
+    void Django_ORM_접근_추출() throws IOException {
+        Path file = writePyFile("""
+                from articles.models import Article
+
+                def list_articles():
+                    return Article.objects.filter(published=True)
+
+                def make_article():
+                    return Article.objects.create(title='x')
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.dbAccesses()).extracting(DbAccess::entityClass).contains("Article");
+        // filter=읽기, create=쓰기 둘 다 추출
+        assertThat(result.dbAccesses()).anyMatch(a -> a.entityClass().equals("Article") && !a.isWrite());
+        assertThat(result.dbAccesses()).anyMatch(a -> a.entityClass().equals("Article") && a.isWrite());
+    }
+
+    @Test
     @DisplayName("Django urls.py path/re_path에서 API 경로를 추출한다(메서드 불명 → GET)")
     void Django_URL_라우팅_추출() throws IOException {
         Path file = writePyFile("""
