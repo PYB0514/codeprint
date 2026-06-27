@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.99.0',
+    date: '2026-06-27',
+    title: 'SQLAlchemy ORM 데이터 흐름 분석 — 코드→DB 테이블 연결 (Python 2번째 ORM)',
+    type: 'feature',
+    items: [
+      { category: '분석 엔진', desc: 'Django(v0.98.0)에 이어 SQLAlchemy 프로젝트도 코드→DB 테이블 화살표를 그립니다. Flask-SQLAlchemy의 Article.query / 클래식 session.query(User) 같은 조회를 인식해 어떤 코드가 어떤 테이블을 읽는지 그래프에 표시합니다. 모델 감지도 강화해 declarative_base의 class X(Base)뿐 아니라 Flask-SQLAlchemy의 class X(db.Model), 믹스인 조합(class X(SurrogatePK, Model))까지 잡습니다. 실제 Flask 레포(flask-realworld)에서 모델 테이블 4개·조회 엣지 3개가 정확히 생성되고, SQLAlchemy를 쓰는 다른 레포(python-ddd)에서도 데이터 흐름 엣지가 늘었습니다.' },
+      { category: '정확도', desc: '모델 감지를 "Column/__tablename__ 같은 실제 테이블 필드가 있을 때만" 으로 정밀화하면서, 기존에 Pydantic 스키마(class X(BaseModel))나 설정·어댑터 클래스를 DB 테이블로 잘못 표시하던 오탐을 함께 제거했습니다(FastAPI·requests 등에서 가짜 테이블 노드 다수 제거). 같은 모델이 두 번 표시되던 중복도 해소했습니다.' },
+    ],
+  },
+  {
     version: 'v0.98.0',
     date: '2026-06-25',
     title: 'Django ORM 데이터 흐름 분석 — 코드→DB 테이블 연결',

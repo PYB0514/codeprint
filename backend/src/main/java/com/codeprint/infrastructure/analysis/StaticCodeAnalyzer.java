@@ -552,13 +552,23 @@ public class StaticCodeAnalyzer {
             }
         }
 
-        // Python: SQLAlchemy Base 상속 클래스 (class X(Base):)
-        if (language.equals("Python")) {
-            Matcher m = Pattern.compile("^class\\s+(\\w+)\\s*\\([^)]*Base[^)]*\\)\\s*:", Pattern.MULTILINE).matcher(content);
+        // Python: SQLAlchemy 선언형 모델 — base에 Base/Model 토큰 + 본문 필드 신호(Column/mapped_column/Mapped/__tablename__).
+        // ★실전은 declarative_base()의 Base뿐 아니라 Flask-SQLAlchemy db.Model(class X(Model)), 믹스인 조합(class X(SurrogatePK, Model)),
+        //   프로젝트 추상베이스(class X(TimestampedBase))까지 쓴다 → 좁은 class X(Base) 정규식은 db.Model을 놓친다.
+        //   필드 신호로 베이스 무관 감지(Django는 models.*Field라 신호 분리=무충돌). 순수 믹스인(SurrogatePK(object))은 base 토큰 없어 제외.
+        // 마이그레이션 파일(Alembic op.create_table 등)은 클래스 본문 필드가 아니므로 무관하나, 경로 가드로 이중 안전.
+        if (language.equals("Python") && !filePath.replace("\\", "/").contains("/migrations/")) {
+            Pattern saFieldSignal = Pattern.compile("=\\s*(?:db\\.)?(?:Column|mapped_column)\\(|\\bMapped\\[|\\b__tablename__\\s*=");
+            Matcher m = Pattern.compile("^class\\s+(\\w+)\\s*\\(([^)]*)\\)\\s*:", Pattern.MULTILINE).matcher(content);
             while (m.find()) {
                 String className = m.group(1);
-                // __tablename__ 우선 추출
-                Matcher tnMatcher = Pattern.compile("__tablename__\\s*=\\s*['\"]([^'\"]+)['\"]").matcher(content);
+                String bases = m.group(2);
+                if (!bases.contains("Base") && !bases.contains("Model")) continue;
+                String block = content.substring(m.end(), nextTopLevelClassIndex(content, m.end()));
+                if (!saFieldSignal.matcher(block).find()) continue;
+                // 추상 베이스(__abstract__ = True)는 테이블 아님
+                if (Pattern.compile("\\b__abstract__\\s*=\\s*True\\b").matcher(block).find()) continue;
+                Matcher tnMatcher = Pattern.compile("\\b__tablename__\\s*=\\s*['\"]([^'\"]+)['\"]").matcher(block);
                 String tableName = tnMatcher.find() ? tnMatcher.group(1) : className;
                 result.add(new DbTableInfo(tableName, className));
             }
@@ -1018,6 +1028,12 @@ public class StaticCodeAnalyzer {
     // Django ORM 매니저 접근: EntityClass.objects.method(...) — 엔티티 클래스가 명시적이라 FP 낮음(generic find/save 회피).
     private static final Pattern DJANGO_OBJECTS_ACCESS =
         Pattern.compile("\\b([A-Z]\\w+)\\.objects\\.(\\w+)");
+    // SQLAlchemy 읽기: Flask-SQLAlchemy `Entity.query`(지배적) — 대문자 수신자라 self/cls 자동 제외.
+    private static final Pattern SQLALCHEMY_MODEL_QUERY =
+        Pattern.compile("\\b([A-Z]\\w+)\\.query\\b");
+    // SQLAlchemy 읽기: classic `session.query(Entity)` / `session.query(model.Entity)` — 인자 첫 대문자 토큰이 엔티티.
+    private static final Pattern SQLALCHEMY_SESSION_QUERY =
+        Pattern.compile("\\.query\\(\\s*(?:\\w+\\.)?([A-Z]\\w+)");
 
     // 비JPA ORM 데이터 접근 추출 — 엔티티 클래스가 명시적으로 드러나는 패턴만(코드→DB_TABLE 엣지용, recall).
     // 미지의 클래스는 GraphBuilder가 entityClassToTableNodeId에 없으면 엣지를 안 만들어 자기제한적 precision.
@@ -1029,6 +1045,12 @@ public class StaticCodeAnalyzer {
             boolean isWrite = DJANGO_WRITE_METHODS.contains(m.group(2));
             result.add(new DbAccess(m.group(1), isWrite));
         }
+        // SQLAlchemy 선언형 읽기(Entity.query / session.query(Entity)) — 전부 SELECT(READ).
+        //   쓰기(session.add/delete(instance))는 인스턴스 변수라 엔티티 클래스가 호출부에 안 드러나 제외(precision, generic 회피).
+        Matcher mq = SQLALCHEMY_MODEL_QUERY.matcher(content);
+        while (mq.find()) result.add(new DbAccess(mq.group(1), false));
+        Matcher sq = SQLALCHEMY_SESSION_QUERY.matcher(content);
+        while (sq.find()) result.add(new DbAccess(sq.group(1), false));
         return result.stream().distinct().collect(java.util.stream.Collectors.toList());
     }
 
