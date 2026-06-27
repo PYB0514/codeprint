@@ -89,8 +89,11 @@ public class GraphController {
             @RequestParam(required = false) UUID graphId,
             @AuthenticationPrincipal User user) {
 
+        graphFacade.verifyProjectOwnership(projectId, user.getId());
+
+        // graphId 지정 시 해당 그래프가 이 프로젝트 소속일 때만 반환(타 프로젝트 그래프 차단)
         Optional<Graph> graphOpt = graphId != null
-                ? graphQueryService.findById(graphId)
+                ? graphQueryService.findById(graphId).filter(g -> g.getProjectId().equals(projectId))
                 : graphQueryService.findLatestByProject(projectId);
 
         return graphOpt.map(graph -> {
@@ -190,6 +193,9 @@ public class GraphController {
             @AuthenticationPrincipal User user) {
 
         graphFacade.verifyProjectOwnership(projectId, user.getId());
+        // from/to 그래프가 이 프로젝트 소속인지 확인 — 타 프로젝트 그래프 diff 차단
+        requireGraphBelongsToProject(from, projectId);
+        requireGraphBelongsToProject(to, projectId);
 
         GraphDiffService.DiffResult result = graphDiffService.diff(from, to);
 
@@ -265,6 +271,16 @@ public class GraphController {
         double y = body.getOrDefault("y", 0.0);
         graphCommandService.updateNodePosition(nodeId, x, y);
         return ResponseEntity.ok().build();
+    }
+
+    // 그래프가 해당 프로젝트 소속이 아니면 차단 — 타 프로젝트 그래프 접근 방지
+    private void requireGraphBelongsToProject(UUID graphId, UUID projectId) {
+        boolean belongs = graphQueryService.findById(graphId)
+                .map(g -> g.getProjectId().equals(projectId))
+                .orElse(false);
+        if (!belongs) {
+            throw new IllegalStateException("Graph does not belong to the project");
+        }
     }
 
     // 프로젝트에서 suppress(숨김)된 fingerprint의 경고를 제외하고 반환
