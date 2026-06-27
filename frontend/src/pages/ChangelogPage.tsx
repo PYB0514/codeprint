@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.100.0',
+    date: '2026-06-27',
+    title: 'TypeORM 데이터 흐름 분석 — 코드→DB 테이블 연결 (TypeScript/NestJS)',
+    type: 'feature',
+    items: [
+      { category: '분석 엔진', desc: 'Django·SQLAlchemy에 이어 TypeScript/NestJS의 TypeORM 프로젝트도 코드→DB 테이블 화살표를 그립니다. @InjectRepository(Article)로 주입된 Repository<Article> 리포지토리를 통해 호출하는 this.articleRepository.findOne()(읽기)·save()(쓰기), 그리고 getRepository(Article) 직접 사용을 인식해 어떤 서비스가 어떤 테이블을 읽고 쓰는지 읽기/쓰기 구분으로 표시합니다. @Entity 모델 감지도 실제 클래스명 기준으로 정확화해 리포지토리 접근과 정확히 연결됩니다. 실제 NestJS 레포(nest-realworld)에서 데이터 흐름 엣지 13개가 정확히 생성되고, TypeORM을 쓰지 않는 일반 React 프로젝트(bulletproof-react)는 결과 동일(무회귀)함을 확인했습니다.' },
+    ],
+  },
+  {
     version: 'v0.99.0',
     date: '2026-06-27',
     title: 'SQLAlchemy ORM 데이터 흐름 분석 — 코드→DB 테이블 연결 (Python 2번째 ORM)',

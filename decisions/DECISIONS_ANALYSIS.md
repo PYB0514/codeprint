@@ -1329,3 +1329,15 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 - 엣지를 늘리는 경로는 DbAccess→DB_READ 하나뿐이고 SQLAlchemy는 isWrite=false 고정 → flask +3·py-ddd +5는 필연적 DB_READ. phantom 제거 벤치는 엣지 불변 = 실제 엣지 손실 0(제거된 노드는 엣지 없는 phantom). 전체 백엔드 테스트 green. 단위: Flask db.Model+믹스인 모델 감지(믹스인 제외)·접근 추출(self 제외)·DB_READ 엣지 해소(WRITE 없음) 3종.
 
 **후속2.** Rails AR(Entity.method)·Eloquent(Entity::method)·GORM(&Entity 또는 db.Model 임베딩)·TypeORM/Prisma. SQLAlchemy 2.0 `session.execute(select(Entity))`·`session.get(Entity)`는 명시적이나 select/get이 generic이라 측정 후 별 증분(precision 우선 보류).
+
+## 비JPA ORM 코드→테이블 엣지 3차 — TypeORM (TS, lever 언어, DB recall) (2026-06-27)
+
+**문제(백로그 #9 후속, lever 언어).** SQLAlchemy(#391) 다음 ORM으로 사용자가 lever 언어 TypeORM 선택([[project_adoption_lever_focus]]: lever=Java/Python/JS-React). NestJS TypeORM 프로젝트의 데이터 접근이 코드→테이블 엣지 0.
+
+**접근 추출(정규식, AST 제네릭 해소 불필요).** ★당초 우려=injected repo(`this.articleRepository.find()`)라 `Repository<Entity>` 제네릭 내부 타입을 AST로 풀어야 할 줄(Context78 보류했던 subscript 제네릭). 그러나 엔티티가 **텍스트에 명시**되므로 content 정규식 3종으로 충분(Django/SQLAlchemy와 동일 스타일): ①`(\w+)\s*:\s*Repository<(\w+)>` → 필드명→엔티티 맵(생성자 주입 프로퍼티 포함) ②`this\.(\w+)\.(\w+)\(` → 맵된 필드만 메서드로 r/w 분류(save/insert/update/delete/remove/upsert/inc/dec=WRITE, 그 외 find/findOne/count=READ) ③`getRepository(Entity)` → READ. SQLAlchemy와 달리 r/w 양방향(save=쓰기 명시).
+
+**★선결 — TS @Entity className이 파일명이었음.** 기존 TS @Entity 감지가 `DbTableInfo.className`에 **파일명**(extractFileNameWithoutExt)을 넣고 있었음(Java도 동일하나 JPA는 repositoryEntityClass 별도 매칭이라 무관). entityClassToTableNodeId 키가 "article.entity"인데 접근 엔티티는 "ArticleEntity"(`Repository<ArticleEntity>`)라 키 불일치→엣지 0. → TS @Entity 블록이 실제 클래스명(`class\s+(\w+)`)을 className으로 쓰도록 수정. ★기존 TS DB_TABLE 노드는 들어오는 엣지가 없었으므로(TS DbAccess 부재) className 변경 안전(노드 수 불변, 키만 교정).
+
+**측정(A/B, stash 토글).** recall: nest-realworld 노드 113=113(테이블 노드 이미 존재, 고립이던 것)·엣지 172→185(**+13 DB_READ/WRITE**, 양방향). precision: bulletproof-react(React TS, TypeORM 미사용) 935/1411=935/1411 **완전 동일**=`Repository<>`/`this.x.save(` 패턴이 React 앱엔 없어 오탐 0. Python/Java는 language gate(extractDbAccesses 분기)로 자명 불변. 전체 백엔드 테스트 green + tsc green. 단위: @Entity className(파일명 아닌 클래스명)·접근 r/w 추출·DB_READ+WRITE 엣지 해소 3종.
+
+**후속3.** Prisma(`prisma.user.findMany()`, 모델 소문자라 스키마 매핑 필요)·TypeORM 2.0 `manager.find(Entity)`·MikroORM. Rails/Eloquent/GORM은 명시적-엔티티라 벤치 클론 시 저난도.

@@ -1962,6 +1962,60 @@ class StaticCodeAnalyzerTest {
                 .doesNotContain("self");
     }
 
+    // TypeORM 모델/접근 감지 테스트
+    @Test
+    @DisplayName("TypeORM @Entity — className은 실제 클래스명, 테이블명은 @Entity('x') 인자")
+    void TypeORM_Entity_클래스명_추출() throws IOException {
+        Path file = writeTsFile("""
+                import { Entity, Column } from 'typeorm';
+
+                @Entity('article')
+                export class ArticleEntity {
+                  @Column() title: string;
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.dbTables()).hasSize(1);
+        assertThat(result.dbTables().get(0).tableName()).isEqualTo("article");
+        // className은 파일명이 아니라 실제 클래스명 — 접근(Repository<ArticleEntity>) 매칭용
+        assertThat(result.dbTables().get(0).className()).isEqualTo("ArticleEntity");
+    }
+
+    @Test
+    @DisplayName("TypeORM 접근 — Repository<Entity> 필드 매핑 후 this.repo.find/save 를 읽기/쓰기로, getRepository(Entity)는 읽기")
+    void TypeORM_접근_추출() throws IOException {
+        Path file = writeTsFile("""
+                import { Repository, getRepository } from 'typeorm';
+
+                export class ArticleService {
+                  constructor(
+                    private readonly articleRepository: Repository<ArticleEntity>,
+                    private readonly userRepository: Repository<UserEntity>,
+                  ) {}
+
+                  async find() {
+                    return this.articleRepository.findOne(1);
+                  }
+                  async create(a) {
+                    return this.articleRepository.save(a);
+                  }
+                  async users() {
+                    return getRepository(UserEntity).createQueryBuilder('u').getMany();
+                  }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        // findOne=읽기, save=쓰기 둘 다 ArticleEntity 로 해소
+        assertThat(result.dbAccesses()).anyMatch(a -> a.entityClass().equals("ArticleEntity") && !a.isWrite());
+        assertThat(result.dbAccesses()).anyMatch(a -> a.entityClass().equals("ArticleEntity") && a.isWrite());
+        // getRepository(UserEntity) = 읽기
+        assertThat(result.dbAccesses()).anyMatch(a -> a.entityClass().equals("UserEntity") && !a.isWrite());
+    }
+
     @Test
     @DisplayName("Django urls.py path/re_path에서 API 경로를 추출한다(메서드 불명 → GET)")
     void Django_URL_라우팅_추출() throws IOException {
