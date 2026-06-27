@@ -286,6 +286,26 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("TypeORM 접근 — @Entity 테이블로 DB_READ/DB_WRITE 엣지 생성(클래스명 키 매칭)")
+    void typeOrmDbAccess_createsReadWriteEdgesToEntityTable() {
+        // @Entity 모델(ArticleEntity, 테이블 article) → DB_TABLE 노드(className 키=ArticleEntity),
+        // 서비스 파일의 this.articleRepository.findOne/save → 코드→테이블 READ/WRITE 엣지
+        ParsedFile entity = parsedFileWithDb("article/article.entity.ts", "TypeScript",
+                List.of(new DbTableInfo("article", "ArticleEntity")), List.of());
+        ParsedFile service = parsedFileWithDb("article/article.service.ts", "TypeScript",
+                List.of(), List.of(new DbAccess("ArticleEntity", false), new DbAccess("ArticleEntity", true)));
+
+        graphBuilder.build(projectId, analysisId, List.of(entity, service));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        boolean hasRead = cap.getAllValues().stream().anyMatch(e -> e.getType() == EdgeType.DB_READ);
+        boolean hasWrite = cap.getAllValues().stream().anyMatch(e -> e.getType() == EdgeType.DB_WRITE);
+        assertThat(hasRead).isTrue();
+        assertThat(hasWrite).isTrue();
+    }
+
+    @Test
     @DisplayName("TS baseUrl bare import 세그먼트 경계 — 'entities/task' 가 .../other-task/index.ts 로 오매칭되지 않음")
     void tsImport_baseUrlBare_segmentBoundary_noPartialMatch() {
         ParsedFile importer = parsedFileWithImports("features/toggle-task/ui.tsx", "TypeScript",

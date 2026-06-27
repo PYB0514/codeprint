@@ -538,17 +538,15 @@ public class StaticCodeAnalyzer {
         }
 
         // TypeScript/JavaScript: TypeORM @Entity() 데코레이터
+        // className은 실제 클래스명을 쓴다(TypeORM 접근 Repository<Entity> 매칭용). 테이블명은 @Entity('x') 우선, 없으면 클래스명.
         if ((language.equals("TypeScript") || language.equals("JavaScript")) && content.contains("@Entity")) {
-            // @Entity('table_name') 우선, 없으면 클래스명
-            String tableName = null;
-            Matcher teMatcher = Pattern.compile("@Entity\\s*\\(\\s*['\"]([^'\"]+)['\"]\\s*\\)").matcher(content);
-            if (teMatcher.find()) tableName = teMatcher.group(1);
-            if (tableName == null) {
-                Matcher classMatcher = Pattern.compile("\\bclass\\s+(\\w+)").matcher(content);
-                if (classMatcher.find()) tableName = classMatcher.group(1);
-            }
-            if (tableName != null) {
-                result.add(new DbTableInfo(tableName, extractFileNameWithoutExt(filePath)));
+            String className = null;
+            Matcher classMatcher = Pattern.compile("\\bclass\\s+(\\w+)").matcher(content);
+            if (classMatcher.find()) className = classMatcher.group(1);
+            if (className != null) {
+                Matcher teMatcher = Pattern.compile("@Entity\\s*\\(\\s*['\"]([^'\"]+)['\"]\\s*\\)").matcher(content);
+                String tableName = teMatcher.find() ? teMatcher.group(1) : className;
+                result.add(new DbTableInfo(tableName, className));
             }
         }
 
@@ -1034,11 +1032,31 @@ public class StaticCodeAnalyzer {
     // SQLAlchemy 읽기: classic `session.query(Entity)` / `session.query(model.Entity)` — 인자 첫 대문자 토큰이 엔티티.
     private static final Pattern SQLALCHEMY_SESSION_QUERY =
         Pattern.compile("\\.query\\(\\s*(?:\\w+\\.)?([A-Z]\\w+)");
+    // TypeORM 쓰기 메서드 — 그 외(find/findOne/count/findAndCount 등)는 읽기로 분류.
+    private static final Set<String> TYPEORM_WRITE_METHODS = Set.of(
+        "save", "insert", "update", "delete", "remove", "softDelete", "softRemove", "upsert",
+        "increment", "decrement"
+    );
+    // TypeORM 리포지토리 필드 선언: `articleRepository: Repository<ArticleEntity>` → (필드명, 엔티티). 생성자 주입 프로퍼티 포함.
+    private static final Pattern TYPEORM_REPO_FIELD =
+        Pattern.compile("(\\w+)\\s*:\\s*Repository<(\\w+)>");
+    // TypeORM 필드 경유 접근: `this.articleRepository.findOne(...)` → (필드명, 메서드).
+    private static final Pattern TYPEORM_REPO_USE =
+        Pattern.compile("this\\.(\\w+)\\.(\\w+)\\(");
+    // TypeORM 직접 명시: `getRepository(ArticleEntity)` — 쿼리빌더 통상 읽기.
+    private static final Pattern TYPEORM_GET_REPOSITORY =
+        Pattern.compile("\\bgetRepository\\((\\w+)\\)");
 
     // 비JPA ORM 데이터 접근 추출 — 엔티티 클래스가 명시적으로 드러나는 패턴만(코드→DB_TABLE 엣지용, recall).
     // 미지의 클래스는 GraphBuilder가 entityClassToTableNodeId에 없으면 엣지를 안 만들어 자기제한적 precision.
     private List<DbAccess> extractDbAccesses(String content, String language) {
-        if (!language.equals("Python")) return List.of();
+        if (language.equals("Python")) return extractPythonDbAccesses(content);
+        if (language.equals("TypeScript") || language.equals("JavaScript")) return extractTypeOrmDbAccesses(content);
+        return List.of();
+    }
+
+    // Python ORM 접근(Django objects + SQLAlchemy query) 추출
+    private List<DbAccess> extractPythonDbAccesses(String content) {
         List<DbAccess> result = new ArrayList<>();
         Matcher m = DJANGO_OBJECTS_ACCESS.matcher(content);
         while (m.find()) {
@@ -1051,6 +1069,27 @@ public class StaticCodeAnalyzer {
         while (mq.find()) result.add(new DbAccess(mq.group(1), false));
         Matcher sq = SQLALCHEMY_SESSION_QUERY.matcher(content);
         while (sq.find()) result.add(new DbAccess(sq.group(1), false));
+        return result.stream().distinct().collect(java.util.stream.Collectors.toList());
+    }
+
+    // TypeORM 접근 추출 — 엔티티가 텍스트에 명시되는 패턴만(Repository<Entity> 필드 매핑·getRepository(Entity)).
+    //   필드 경유 호출(this.repo.save/findOne)은 같은 파일 Repository<Entity> 선언으로 엔티티 해소 후 메서드로 r/w 분류.
+    private List<DbAccess> extractTypeOrmDbAccesses(String content) {
+        List<DbAccess> result = new ArrayList<>();
+        // 필드명 → 엔티티 매핑 (Repository<Entity> 타입 선언)
+        Map<String, String> repoFieldToEntity = new HashMap<>();
+        Matcher rf = TYPEORM_REPO_FIELD.matcher(content);
+        while (rf.find()) repoFieldToEntity.put(rf.group(1), rf.group(2));
+        // this.field.method() — 매핑된 필드만, 메서드로 읽기/쓰기 구분
+        Matcher use = TYPEORM_REPO_USE.matcher(content);
+        while (use.find()) {
+            String entity = repoFieldToEntity.get(use.group(1));
+            if (entity == null) continue;
+            result.add(new DbAccess(entity, TYPEORM_WRITE_METHODS.contains(use.group(2))));
+        }
+        // getRepository(Entity) — 직접 명시(쿼리빌더 통상 읽기)
+        Matcher gr = TYPEORM_GET_REPOSITORY.matcher(content);
+        while (gr.find()) result.add(new DbAccess(gr.group(1), false));
         return result.stream().distinct().collect(java.util.stream.Collectors.toList());
     }
 
