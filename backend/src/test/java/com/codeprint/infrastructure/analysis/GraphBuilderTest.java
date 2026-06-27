@@ -266,6 +266,26 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("SQLAlchemy 접근(Entity.query) — 모델 테이블로 DB_READ 엣지 생성")
+    void sqlAlchemyDbAccess_createsReadEdgeToEntityTable() {
+        // 모델 정의(User) → DB_TABLE 노드, 별도 뷰 파일의 User.query → 코드→테이블 READ 엣지
+        ParsedFile model = parsedFileWithDb("conduit/user/models.py", "Python",
+                List.of(new DbTableInfo("users", "User")), List.of());
+        ParsedFile view = parsedFileWithDb("conduit/user/views.py", "Python",
+                List.of(), List.of(new DbAccess("User", false)));
+
+        graphBuilder.build(projectId, analysisId, List.of(model, view));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        boolean hasRead = cap.getAllValues().stream().anyMatch(e -> e.getType() == EdgeType.DB_READ);
+        boolean hasWrite = cap.getAllValues().stream().anyMatch(e -> e.getType() == EdgeType.DB_WRITE);
+        assertThat(hasRead).isTrue();
+        // SQLAlchemy 읽기 전용 — WRITE 엣지 없음
+        assertThat(hasWrite).isFalse();
+    }
+
+    @Test
     @DisplayName("TS baseUrl bare import 세그먼트 경계 — 'entities/task' 가 .../other-task/index.ts 로 오매칭되지 않음")
     void tsImport_baseUrlBare_segmentBoundary_noPartialMatch() {
         ParsedFile importer = parsedFileWithImports("features/toggle-task/ui.tsx", "TypeScript",

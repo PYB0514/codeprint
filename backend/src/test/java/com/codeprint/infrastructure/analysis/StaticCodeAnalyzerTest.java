@@ -1911,6 +1911,57 @@ class StaticCodeAnalyzerTest {
         assertThat(result.dbAccesses()).anyMatch(a -> a.entityClass().equals("Article") && a.isWrite());
     }
 
+    // SQLAlchemy 선언형 모델/접근 감지 테스트
+    @Test
+    @DisplayName("Flask-SQLAlchemy db.Model 상속 + 믹스인 조합 모델에서 테이블명 추출(믹스인은 제외)")
+    void SQLAlchemy_FlaskModel_추출() throws IOException {
+        Path file = writePyFile("""
+                from conduit.database import Column, Model, SurrogatePK, db
+
+                class SurrogatePK(object):
+                    id = db.Column(db.Integer, primary_key=True)
+
+                class User(SurrogatePK, Model):
+                    __tablename__ = 'users'
+                    username = Column(db.String(80))
+
+                class Article(SurrogatePK, Model):
+                    __tablename__ = 'articles'
+                    title = db.Column(db.String(100))
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        // base=Model + 필드신호로 감지, 순수 믹스인 SurrogatePK(object)는 제외
+        assertThat(result.dbTables()).extracting(DbTableInfo::tableName)
+                .containsExactlyInAnyOrder("users", "articles");
+    }
+
+    @Test
+    @DisplayName("SQLAlchemy 접근(Entity.query / session.query(Entity)) — dbAccesses에 읽기로 추출, self/cls는 제외")
+    void SQLAlchemy_접근_추출() throws IOException {
+        Path file = writePyFile("""
+                def list_articles(session):
+                    return Article.query.filter_by(published=True).all()
+
+                def get_user(session):
+                    return session.query(User).filter_by(id=1).first()
+
+                def mixin_helper(self):
+                    return self.query.all()
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.dbAccesses()).extracting(DbAccess::entityClass)
+                .contains("Article", "User");
+        // SQLAlchemy 읽기는 전부 isWrite=false
+        assertThat(result.dbAccesses()).allMatch(a -> !a.isWrite());
+        // self.query(소문자 수신자)는 엔티티가 아니므로 미추출
+        assertThat(result.dbAccesses()).extracting(DbAccess::entityClass)
+                .doesNotContain("self");
+    }
+
     @Test
     @DisplayName("Django urls.py path/re_path에서 API 경로를 추출한다(메서드 불명 → GET)")
     void Django_URL_라우팅_추출() throws IOException {

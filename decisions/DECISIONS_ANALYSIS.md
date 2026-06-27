@@ -1314,3 +1314,18 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **측정(A/B, stash 토글).** django-realworld: 노드 104→109(+5=정확히 모델 5개, 마이그레이션 FP 0), 엣지 89→100(+11 ORM 코드→테이블 엣지). 무회귀: py-realworld(294/486·DB17·DOMAIN1·DEAD6=문서값)·requests 동일=field-presence가 비Django Python 무영향. 전체 백엔드 테스트 green(전 언어). 단위: 추상베이스 모델 감지·마이그레이션 제외·ORM 접근 추출·DB_WRITE/READ 엣지 4종.
 
 **후속.** SQLAlchemy session.query(Entity)·Rails AR(Entity.method)·Eloquent(Entity::method)·GORM(&Entity)·Prisma client·TypeORM(타입추적). ORM당 1 PR, 명시적-엔티티 우선, 벤치 검증. conformance 게이트(유료 해자)와 별개 트랙.
+
+## 비JPA ORM 코드→테이블 엣지 2차 — SQLAlchemy (DB recall + Pydantic phantom precision) (2026-06-27)
+
+**문제(백로그 #9 후속).** #390(Django)에 이어 Python 2번째 ORM. SQLAlchemy 선언형 모델의 데이터 접근(`Entity.query`·`session.query(Entity)`)이 코드→테이블 엣지로 안 그려짐. 무료 분석 그래프 DB 흐름 recall 갭(GTM 깔때기).
+
+**접근 추출.** Flask-SQLAlchemy `Entity.query`(지배적, 대문자 수신자라 self/cls 자동 제외) + 클래식 `.query(Entity)`/`.query(model.Entity)`. 둘 다 SELECT=READ. ★쓰기(`session.add/delete(instance)`)는 인스턴스 변수라 엔티티 클래스가 호출부에 안 드러나 제외(precision, #390 generic 회피 교훈) → SQLAlchemy 엣지는 전부 DB_READ(정직).
+
+**★핵심 발견 — 기존 모델 감지가 Pydantic을 오탐.** 검증 벤치(flask-realworld) 모델은 `class User(SurrogatePK, Model)`처럼 Flask-SQLAlchemy `db.Model` 상속 → 기존 `^class X(...Base...)` 정규식이 base에 "Base"가 없어 전부 놓침(recall 0). 그런데 그 정규식은 반대로 **"Base"만 포함하면 무엇이든 테이블로 오탐**하고 있었음 — FastAPI 앱의 Pydantic `class X(BaseModel)`·`BaseSettings`·`BaseRepository`·`BaseAdapter`·exception(BaseHTTPError)까지 전부 phantom DB_TABLE 노드. → 감지를 base-agnostic 필드신호(`Column(`/`mapped_column(`/`Mapped[`/`__tablename__`)로 교체(Django의 `models.*Field` 방식과 동형, 신호 분리로 무충돌). base에 Base/Model 토큰 + 필드신호 보유 + `__abstract__` 제외. 순수 믹스인(`SurrogatePK(object)`)은 base 토큰 없어 제외.
+
+**측정(A/B, stash 토글, 모든 경고 불변).**
+- recall: flask-realworld 노드 149→153(+4 테이블)·엣지 220→223(+3 DB_READ). py-ddd 엣지 755→760(+5 DB_READ, SQLAlchemy 사용 레포).
+- precision(phantom 제거): py-realworld 노드 294→278(**-16** Pydantic BaseModel 등, 엣지 486=486=엣지 없던 phantom 확인). django-realworld 109→106(-3: phantom 2 + AbstractBaseUser가 "Base" 포함해 Django 모델 User에 중복 노드 만들던 것 1). requests 669→665(-4: HTTPAdapter/Auth/Exception). py-ddd 노드 522→507(-15 net phantom).
+- 엣지를 늘리는 경로는 DbAccess→DB_READ 하나뿐이고 SQLAlchemy는 isWrite=false 고정 → flask +3·py-ddd +5는 필연적 DB_READ. phantom 제거 벤치는 엣지 불변 = 실제 엣지 손실 0(제거된 노드는 엣지 없는 phantom). 전체 백엔드 테스트 green. 단위: Flask db.Model+믹스인 모델 감지(믹스인 제외)·접근 추출(self 제외)·DB_READ 엣지 해소(WRITE 없음) 3종.
+
+**후속2.** Rails AR(Entity.method)·Eloquent(Entity::method)·GORM(&Entity 또는 db.Model 임베딩)·TypeORM/Prisma. SQLAlchemy 2.0 `session.execute(select(Entity))`·`session.get(Entity)`는 명시적이나 select/get이 generic이라 측정 후 별 증분(precision 우선 보류).
