@@ -922,3 +922,15 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 4. **마이그레이션 불필요** — `is_public` 컬럼 기존재, 파생 쿼리만 추가. 에러 메시지도 `"Project limit reached"` → `"Private project limit reached"`로 의미 명확화.
 
 **결과.** 백엔드 컴파일+전체 테스트 통과(`ProjectCommandServiceTest` 스텁 교체 + "공개 제외" 케이스 1종 추가, 메시지 어서션 갱신). 프론트 tsc 통과. ChangelogPage v0.87.1(fix). 런타임 검증(다수 프로젝트 생성+공개 전환)은 OAuth 로그인 필요 → 사용자 테스트 동반.
+
+## 그래프 조회 IDOR — getGraph 소유권 검증 누락 (2026-06-27, 보안 감사)
+
+**문제.** 보안 감사 중 `GraphController.getGraph`(`GET /api/projects/{projectId}/graph`)가 `@AuthenticationPrincipal User`를 받지만 **인가에 전혀 사용하지 않는** IDOR를 발견했다. 로그인한 임의 사용자가 남의 `projectId`(또는 `graphId`)를 넣으면 비공개 프로젝트의 전체 그래프(노드·엣지·파일경로·숨긴 경고)를 읽을 수 있었다. 같은 컨트롤러의 형제 엔드포인트(`/diff`·`/graphs`·`pin`·`annotation`·`position`)는 전부 `verifyProjectOwnership`/`verifyGraphOwnership`를 호출하는데, 가장 민감한 데이터를 반환하는 메인 읽기 함수만 누락. 부수적으로 `getGraphDiff`는 `verifyProjectOwnership(projectId)`는 했으나 `from`/`to` 그래프가 그 프로젝트 소속인지는 검증하지 않아(낮은 위험) 타 프로젝트 그래프를 diff로 비교 노출할 여지가 있었다.
+
+**이유/결정.**
+1. **기존 컨벤션 재사용(외과적)** — 새 인가 메커니즘을 만들지 않고 이미 모든 형제 엔드포인트가 쓰는 `graphFacade.verifyProjectOwnership(projectId, user.getId())`를 `getGraph` 시작부에 추가. 비소유자는 `ProjectQueryService.getProject`가 던지는 `IllegalStateException` → 409(GlobalExceptionHandler 기존 매핑)로 일관 처리. 403이 더 정확하나 기존 동작과 통일이 우선(Rule 3).
+2. **graphId 스코프 동시 차단** — `graphId` 지정 경로는 `findById(graphId).filter(g -> g.getProjectId().equals(projectId))`로 소유 프로젝트 소속 그래프만 통과(불일치 시 404). 소유권 통과 후 타 프로젝트 graphId로 우회하는 2차 경로를 함께 봉쇄.
+3. **diff from/to 스코프 가드** — `requireGraphBelongsToProject(graphId, projectId)` 헬퍼로 `from`·`to` 모두 검증, 불일치 시 `IllegalStateException`(409). 같은 PR에 묶음(직렬 의존 아님·동일 클래스 보안 갭).
+4. **TDD(소유권/경계 로직 = §4 의무)** — `GraphControllerOwnershipTest` 5종: 비소유자 getGraph 차단+데이터 미조회, 소유권 선검증, 타 프로젝트 graphId 404, 비소유자 diff 차단, 타 프로젝트 그래프 diff 차단. 전부 통과.
+
+**결과.** 백엔드 컴파일+전체 테스트 통과(신규 5종 포함, 회귀 0). 프론트 tsc 통과. ChangelogPage v0.100.1(fix, 보안). 런타임 E2E(비소유자 토큰으로 실제 401/차단 확인)는 OAuth 로그인 필요 → 사용자 테스트 동반 권장. 공개 공유(`/api/share/**`)는 별도 `isPublic` 검증 경로라 무영향.

@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.100.1',
+    date: '2026-06-27',
+    title: '비공개 프로젝트 그래프 접근 권한 검증 강화 (보안)',
+    type: 'fix',
+    items: [
+      { category: '보안', desc: '로그인한 다른 사용자가 프로젝트 ID를 추측해 비공개 프로젝트의 그래프(노드·엣지·경고)를 조회할 수 있던 권한 검증 누락을 수정했습니다. 이제 그래프 조회와 버전 비교(diff) 모두 요청자가 해당 프로젝트의 소유자인지 확인하며, 다른 프로젝트에 속한 그래프 ID로의 우회 접근도 차단합니다. 공개로 전환한 프로젝트의 공유 보기에는 영향이 없습니다.' },
+    ],
+  },
+  {
     version: 'v0.100.0',
     date: '2026-06-27',
     title: 'TypeORM 데이터 흐름 분석 — 코드→DB 테이블 연결 (TypeScript/NestJS)',
