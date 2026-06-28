@@ -1341,3 +1341,17 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **측정(A/B, stash 토글).** recall: nest-realworld 노드 113=113(테이블 노드 이미 존재, 고립이던 것)·엣지 172→185(**+13 DB_READ/WRITE**, 양방향). precision: bulletproof-react(React TS, TypeORM 미사용) 935/1411=935/1411 **완전 동일**=`Repository<>`/`this.x.save(` 패턴이 React 앱엔 없어 오탐 0. Python/Java는 language gate(extractDbAccesses 분기)로 자명 불변. 전체 백엔드 테스트 green + tsc green. 단위: @Entity className(파일명 아닌 클래스명)·접근 r/w 추출·DB_READ+WRITE 엣지 해소 3종.
 
 **후속3.** Prisma(`prisma.user.findMany()`, 모델 소문자라 스키마 매핑 필요)·TypeORM 2.0 `manager.find(Entity)`·MikroORM. Rails/Eloquent/GORM은 명시적-엔티티라 벤치 클론 시 저난도.
+
+## 분석 엔진 고도화 전략 — codebase-memory-mcp 벤치마킹 (W1 타입해소 / W2 Kotlin / W3 속도) (2026-06-29)
+
+> **참고 프로젝트.** [DeusData/codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) — Pure C·MIT·tree-sitter 158언어 코드 지식그래프 MCP 서버(★19K, 2026-02 생성). **2026-06-29부터 벤치마킹 참고 시작.** 차용은 아이디어·알고리즘만 → Java 재구현(클린룸). 걔 C 소스·번들 산출물(vendored tree-sitter 문법, Nomic 임베딩) 직접 이식 금지 — MIT 하위 라이선스 상속 회피 + 포트폴리오 위생.
+
+**문제.** 우리 call 엣지 해소(`GraphBuilder.resolveBareCall`)가 호출을 **이름(name)으로** 매칭한다 — caller import 우선, 없으면 전역 이름 폴백 + 휴리스틱 가드(JDK_BUILTIN·sameDir·iface→impl) 더미. 같은 이름 메서드가 여러 클래스에 있으면 엉뚱한 타깃에 연결되는 phantom 엣지가 구조적으로 발생([[project_warning_vs_graph_accuracy]] 엣지 정확도 갭의 근원). codebase-memory-mcp는 Hybrid LSP **수신자 타입 해소**로 이 지점을 제거 → 엔진 성숙도에서 정면 비교 시 명확히 앞선다.
+
+**이유/결정(범위 게이트).** "걔 피처 매칭"이 아니라 우리 레버(판정 precision · 활성화 · 인접 모집단)에 직접 꽂힐 때만 차용.
+- **W1 수신자 타입 해소(최우선)** — 파서(StaticCodeAnalyzer)가 선언 기반 경량 타입맵(`{var: Type}`, 어노테이션/생성자/필드 주입 포함)을 ParsedFile에 추출 → `receiver.method()`를 `Type::method`로 격상 → 기존 `resolveQualifiedCall`(이미 클래스명 정확 매칭) 경로로 흘림. 해소 실패 시 기존 bare 폴백 유지 → **recall 무손실, precision만 상승.** full LSP 아님(점진).
+- **W2 Kotlin 1등 시민화** — 현재 regex 2등(StaticCodeAnalyzer `fun`/import 패턴만, AST 경로 없음). AST 승격 + Java DDD 규칙 공유. Kotlin=Spring/Android=Java DDD와 동일 architecture 니치 → 레버 확장(걔도 Hybrid LSP 11개에 Kotlin 포함 = 주류 신호).
+- **W3 인덱싱 속도** — 걔 RAM-first(in-memory SQLite·LZ4)는 우리 Postgres·서버구조와 안 맞아 미이식. 자체 최적화만: 이름→파일 역인덱스 1회 구축(`resolveBareCall` O(호출×파일)→O(1)) + clone `waitFor` 타임아웃. **착수 전 프로파일 필수(추측 금지, §11).**
+- **🔴 명시적 비범위** — 158언어 추격·사용자용 Cypher·sub-ms 쿼리 경쟁·시맨틱 임베딩·cross-repo·IaC 인덱싱. 우리 소비자(사람·팀)·레버와 무관, 지는 레이스.
+
+**결과(현재).** 전략·명세만 기록(코드 미착수). 순서: W1 → W2 → W3(프로파일 후). 각 작업 A/B(phantom↓·recall 무손실)+결정론 회귀테스트 동반(v0.97.4 CYCLIC 비결정성 재발 금지). 제품 전략 전체(포지셔닝·3기둥·Phase 0~3 로드맵)는 PROGRESS 백로그 "🧭 codebase-memory-mcp 벤치마킹 전략", 면접 포인트는 INTERVIEW_POINTS "경쟁 분석·차별화"에 분산 기록.
