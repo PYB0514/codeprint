@@ -18,10 +18,11 @@ interface Props {
   project: Project
   onDelete: (id: string) => void
   onVisibilityChange: (id: string, isPublic: boolean) => void
+  autoStart?: boolean
 }
 
 // 프로젝트 카드 — 분석 시작/재분석, 진행률 표시, 그래프 이동
-export default function ProjectCard({ project, onDelete, onVisibilityChange }: Props) {
+export default function ProjectCard({ project, onDelete, onVisibilityChange, autoStart }: Props) {
   const navigate = useNavigate()
   const [hasGraph, setHasGraph] = useState(false)
   const [freshnessStatus, setFreshnessStatus] = useState<'latest' | 'outdated' | null>(null)
@@ -54,6 +55,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
 
   const pickerRef = useRef<HTMLDivElement>(null)
   const primaryPickerRef = useRef<HTMLDivElement>(null)
+  const autoStartedRef = useRef(false)
 
   useEffect(() => {
     axios
@@ -198,6 +200,15 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange }: P
   const handleReanalyze = async () => {
     await handleStartAnalysis(lastAnalyzedBranch ?? 'main')
   }
+
+  // 생성 직후 기본 브랜치로 자동 분석 1회 트리거
+  useEffect(() => {
+    if (autoStart && !autoStartedRef.current) {
+      autoStartedRef.current = true
+      handleStartAnalysis('')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart])
 
   // primary branch 설정 저장
   const handleSetPrimaryBranch = async (branch: string | null) => {

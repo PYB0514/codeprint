@@ -32,6 +32,7 @@ export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [showModal, setShowModal] = useState(false)
   const [pendingUrl, setPendingUrl] = useState<string | null>(null)
+  const [autoAnalyzeId, setAutoAnalyzeId] = useState<string | null>(null)
 
   // 사용자의 프로젝트 목록을 서버에서 불러와 상태에 저장
   const fetchProjects = useCallback(async () => {
@@ -201,6 +202,7 @@ export default function DashboardPage() {
                 project={project}
                 onDelete={handleDeleteProject}
                 onVisibilityChange={handleVisibilityChange}
+                autoStart={project.id === autoAnalyzeId}
               />
             ))}
           </div>
@@ -212,6 +214,7 @@ export default function DashboardPage() {
           onClose={() => { setShowModal(false); setPendingUrl(null) }}
           onCreated={(project) => {
             setProjects((prev) => [project, ...prev])
+            setAutoAnalyzeId(project.id)
             setShowModal(false)
             setPendingUrl(null)
           }}
