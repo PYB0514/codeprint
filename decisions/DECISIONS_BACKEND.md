@@ -2,6 +2,25 @@
 
 ---
 
+## 분석 견고성 — clone 행 방지 + 서버 재기동 시 stuck 분석 청소 (2026-06-29, fix, Phase 0)
+
+**문제.** 활성화 견고성 점검(Context87 Phase 0)에서 분석이 영구 멈추는 두 경로 발견.
+1. `RepoCloner.clone`이 `waitFor()`(타임아웃 없음) + `GIT_TERMINAL_PROMPT` 미설정 → 비공개 레포에 토큰이 없으면 git이 자격증명 입력 프롬프트에서 영구 행, 스레드/임시디렉터리 누수.
+2. 서버 재시작 시 in-flight 분석(RUNNING)과 @Async 핸드오프 직전 분석(PENDING)이 메모리 executor와 함께 유실 → DB엔 RUNNING/PENDING 영구 고착 → 프론트 폴링이 DONE/FAILED를 못 봐 "분석 중" 무한 표시.
+
+**해법.**
+1. clone: `pb.environment().put("GIT_TERMINAL_PROMPT","0")`로 프롬프트 차단(즉시 실패) + `waitFor(120s)` 타임아웃 → 초과 시 `destroyForcibly()`+temp 삭제+IOException. 실패는 기존 AnalysisRunner catch가 `fail()`로 전이.
+2. `StuckAnalysisCleaner`(application/analysis) — `ApplicationReadyEvent`에 `findByStatusIn(PENDING,RUNNING)`을 도메인 `fail()`로 전이. 신규 도메인 메서드 없음(기존 fail 재사용). 리포지토리 3계층에 `findByStatusIn` 추가(additive, 무회귀).
+
+**선택·트레이드오프.**
+- 타임아웃 120초: shallow `--depth=1` clone 대상(빈상태 카피 "10~30초")이라 충분 여유. 설정값 추출은 §2 단순성상 보류(상수).
+- 청소가 PENDING도 포함: PENDING 고착(핸드오프 직전 크래시)도 실제 멈춤이라 포함. ★미세 레이스 — 서버 ready 직후 동기 핸들러 실행 중 새 요청이 만든 PENDING이 드물게 함께 FAILED될 수 있음. 발생 확률 극소(핸들러 수 ms)·비용 저(사용자 재시도)라 createdAt 필터 없이 단순 유지. 재발 시 startup 시각 컷오프 추가.
+- 트리거 위치 application/analysis: AnalysisRepository(도메인 포트) 의존, 분석 컨텍스트 라이프사이클 → Cross-Context 무관, §10 준수.
+
+**검증.** compileJava green. `StuckAnalysisCleanerTest` 2종(RUNNING/PENDING→FAILED 전이+저장 / 빈목록 no-op 경계) + 분석 패키지 전체 테스트 green. ★clone 타임아웃·GIT_TERMINAL_PROMPT는 실프로세스라 단위테스트 대신 코드 검증(런타임은 서버 가동 필요). 사용자 노출 카피(재시도 안내)는 Phase 0 task 2(프론트) PR에서 동반.
+
+---
+
 ## CI 게이트 fork PR 지원 — head SHA를 PR head.sha로 조회 (2026-06-24, fix)
 
 **문제.** CI 게이트(commit status)가 `postCommitStatus`에서 `fetchLatestCommitSha(repoUrl, headBranch)`로 head SHA를 조회 — base repo에서 **브랜치명**으로 최신 커밋을 찾는다. fork PR은 head 브랜치가 **fork 레포**에 있어 base repo엔 없으므로 404 → graceful skip → fork PR엔 게이트 미적용(Context80에서 후속으로 미뤄둠).

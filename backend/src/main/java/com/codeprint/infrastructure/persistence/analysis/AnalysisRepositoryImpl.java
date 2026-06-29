@@ -3,6 +3,7 @@ package com.codeprint.infrastructure.persistence.analysis;
 
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
+import com.codeprint.domain.analysis.AnalysisStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -50,6 +51,12 @@ public class AnalysisRepositoryImpl implements AnalysisRepository {
     @Override
     public List<AnalysisResult> findAllById(List<UUID> ids) {
         return jpa.findAllById(ids);
+    }
+
+    // 상태 목록에 해당하는 분석 결과 조회
+    @Override
+    public List<AnalysisResult> findByStatusIn(List<AnalysisStatus> statuses) {
+        return jpa.findByStatusIn(statuses);
     }
 
     // 전체 분석 횟수 반환

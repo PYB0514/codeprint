@@ -2,6 +2,7 @@
 package com.codeprint.infrastructure.persistence.analysis;
 
 import com.codeprint.domain.analysis.AnalysisResult;
+import com.codeprint.domain.analysis.AnalysisStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -21,4 +22,7 @@ public interface AnalysisJpaRepository extends JpaRepository<AnalysisResult, UUI
     // 브랜치별 최신 분석 결과 조회
     @Query("SELECT a FROM AnalysisResult a WHERE a.projectId = :projectId AND a.branch = :branch ORDER BY a.createdAt DESC LIMIT 1")
     Optional<AnalysisResult> findLatestByProjectIdAndBranch(UUID projectId, String branch);
+
+    // 상태 목록에 해당하는 분석 결과 조회
+    List<AnalysisResult> findByStatusIn(List<AnalysisStatus> statuses);
 }
