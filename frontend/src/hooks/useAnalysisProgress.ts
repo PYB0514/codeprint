@@ -54,15 +54,25 @@ export function useAnalysisProgress(analysisId: string | null, onDone: () => voi
       return
     }
 
+    // 일시적 네트워크 오류로 폴 1번 실패했다고 영구 중단하지 않도록 연속 실패만 카운트
+    let consecutiveFailures = 0
+    const MAX_POLL_FAILURES = 5
+
     pollRef.current = setInterval(async () => {
       try {
         const res = await axios.get(`/api/analyses/${analysisId}`)
+        consecutiveFailures = 0
         const { progress, status: s } = res.data
         setRealProgress(progress)
         setStatus(s)
         if (s === 'DONE' || s === 'FAILED') clearInterval(pollRef.current!)
       } catch {
-        clearInterval(pollRef.current!)
+        consecutiveFailures++
+        // 연속 실패가 한계를 넘으면 폴링을 멈추고 FAILED로 표시 — 무한 "분석 중" 방지
+        if (consecutiveFailures >= MAX_POLL_FAILURES) {
+          clearInterval(pollRef.current!)
+          setStatus('FAILED')
+        }
       }
     }, 2000)
 
