@@ -118,7 +118,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
     }, 800)
   }, [primaryBranch, lastAnalyzedBranch, navigate, project.id])
 
-  const { progress, status } = useAnalysisProgress(analysisId, handleDone)
+  const { progress, status, stalled } = useAnalysisProgress(analysisId, handleDone)
 
   // 공개/비공개 상태를 서버에 반영
   const handleToggleVisibility = async () => {
@@ -330,6 +330,19 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
               style={{ width: `${progress}%` }}
             />
           </div>
+          {/* 비정상적으로 오래 걸리면 재시도 권유 (폴링은 계속됨) */}
+          {stalled && (
+            <div className="flex items-center justify-between gap-2 text-xs bg-yellow-900/30 border border-yellow-700/50 rounded px-2 py-1.5 mt-1">
+              <span className="text-yellow-400">분석이 예상보다 오래 걸립니다.</span>
+              <button
+                onClick={() => handleStartAnalysis(lastAnalyzedBranch ?? '')}
+                disabled={starting}
+                className="text-yellow-300 hover:text-yellow-100 font-medium shrink-0 disabled:opacity-40"
+              >
+                재시도
+              </button>
+            </div>
+          )}
         </div>
       )}
 

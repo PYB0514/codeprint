@@ -2,6 +2,20 @@
 
 ---
 
+## 분석 RUNNING 타임아웃 안내 — 멈추지 않고 재시도만 권유 (2026-06-29, fix, Phase 0 task2 잔여)
+
+**문제.** 분석이 서버에서 멈춰도(재시작 아닌 행) 프론트는 RUNNING 폴링만 반복하고 "분석 중" 버튼이 비활성이라 사용자가 빠져나올 길이 없었다. (#397이 폴링 단일실패는 복원했으나, 정상 응답이 계속 RUNNING인 경우는 별개.)
+
+**구현 선택 — 폴링 중단 vs 안내만.**
+- 한계 시간 후 폴링을 끊고 FAILED 처리하는 안은 탈락: 큰 레포는 정상적으로 오래(수 분) 걸릴 수 있어 진짜 진행 중인 분석을 죽일 위험.
+- **채택**: `useAnalysisProgress`가 약 180초(STALL_TICKS 90 × 2s) 연속 RUNNING/PENDING이면 `stalled=true`만 반환하고 **폴링은 계속**. ProjectCard는 `isAnalyzing && stalled`일 때 "분석이 예상보다 오래 걸립니다" 배너 + 재시도 버튼(RUNNING 중에도 새 분석 시작 가능)을 노출. 진행 중 분석을 죽이지 않으면서 탈출구 제공.
+
+**검증.** tsc 통과. ★조건부 UI 양쪽 라이브 확인(CLAUDE.md 규칙4): false=정상 분석 시 배너 없음, true=STALL_TICKS를 일시 2로 낮춰 codeprint 재분석 → RUNNING 13%에서 배너+재시도 렌더 확인(DOM hasBanner/hasRetry=true) → STALL_TICKS 90 복원. ★HMR 함정: 실행 중 폴링 인터벌은 effect deps([analysisId])라 상수 변경을 안 집어 새 분석을 시작해야 새 값 적용 — 하드 리로드+새 분석으로 검증.
+
+**결과.** #396(clone 타임아웃·재기동 stuck 청소)·#397(폴링 단일실패 복원)과 함께 분석 안정성 묶음으로 ChangelogPage v0.100.3.
+
+---
+
 ## 프로젝트 생성 시 자동 분석 — 기본 브랜치 해소를 git에 위임 (2026-06-29)
 
 **문제.** 대시보드 빈 상태 카피가 "자동 분석 — 평균 10~30초"를 약속하나, `CreateProjectModal.onCreated`가 목록 추가만 하고 분석을 트리거하지 않았다. time-to-value가 "분석 시작 → 브랜치 피커 → 선택" 4스텝 뒤에 갇혀 활성화 깔때기 이탈 지점(Phase 0)이었다.

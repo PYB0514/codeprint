@@ -7,6 +7,7 @@ export function useAnalysisProgress(analysisId: string | null, onDone: () => voi
   const [realProgress, setRealProgress] = useState(0)
   const [displayProgress, setDisplayProgress] = useState(0)
   const [status, setStatus] = useState('PENDING')
+  const [stalled, setStalled] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const animRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const onDoneRef = useRef(onDone)
@@ -51,14 +52,20 @@ export function useAnalysisProgress(analysisId: string | null, onDone: () => voi
       setRealProgress(0)
       setDisplayProgress(0)
       setStatus('PENDING')
+      setStalled(false)
       return
     }
 
+    setStalled(false)
     // 일시적 네트워크 오류로 폴 1번 실패했다고 영구 중단하지 않도록 연속 실패만 카운트
     let consecutiveFailures = 0
     const MAX_POLL_FAILURES = 5
+    // 분석이 비정상적으로 오래 RUNNING이면 안내 — 폴링은 멈추지 않고(큰 레포는 정상적으로 김) 재시도만 권유
+    let ticks = 0
+    const STALL_TICKS = 90 // 90 * 2s = 약 180초
 
     pollRef.current = setInterval(async () => {
+      ticks++
       try {
         const res = await axios.get(`/api/analyses/${analysisId}`)
         consecutiveFailures = 0
@@ -66,6 +73,7 @@ export function useAnalysisProgress(analysisId: string | null, onDone: () => voi
         setRealProgress(progress)
         setStatus(s)
         if (s === 'DONE' || s === 'FAILED') clearInterval(pollRef.current!)
+        else if (ticks >= STALL_TICKS) setStalled(true)
       } catch {
         consecutiveFailures++
         // 연속 실패가 한계를 넘으면 폴링을 멈추고 FAILED로 표시 — 무한 "분석 중" 방지
@@ -82,5 +90,5 @@ export function useAnalysisProgress(analysisId: string | null, onDone: () => voi
     }
   }, [analysisId])
 
-  return { progress: displayProgress, status }
+  return { progress: displayProgress, status, stalled }
 }
