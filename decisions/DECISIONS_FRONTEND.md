@@ -2,6 +2,22 @@
 
 ---
 
+## 프로젝트 생성 시 자동 분석 — 기본 브랜치 해소를 git에 위임 (2026-06-29)
+
+**문제.** 대시보드 빈 상태 카피가 "자동 분석 — 평균 10~30초"를 약속하나, `CreateProjectModal.onCreated`가 목록 추가만 하고 분석을 트리거하지 않았다. time-to-value가 "분석 시작 → 브랜치 피커 → 선택" 4스텝 뒤에 갇혀 활성화 깔때기 이탈 지점(Phase 0)이었다.
+
+**구현 선택 — 트리거 위치.**
+- 백엔드(ProjectCommandService가 생성 후 분석 킥오프) 탈락: project 컨텍스트가 analysis 컨텍스트를 직접 호출(Cross-Context 위반)하고, 프론트가 analysisId를 못 받아 폴링 불가.
+- **채택**: 프론트에서 트리거. ProjectCard가 이미 진행률 폴링·완료 시 그래프 이동을 소유하므로, DashboardPage가 방금 생성된 프로젝트 id(`autoAnalyzeId`)를 `autoStart` prop으로 전달 → 카드가 마운트 시 ref 1회 가드로 기존 `handleStartAnalysis('')` 호출. 새 API·새 로직 없음.
+
+**기본 브랜치 결정 — main/master 하드코딩 폴백 vs git 위임.**
+- Context87 메모는 "primary 있으면 그것, 없으면 main/master 폴백"이었으나, 갓 생성된 프로젝트는 primaryBranch가 항상 null이고 레포 기본 브랜치가 main/master가 아닐 수 있다(develop 등).
+- **채택**: `branch: null`로 POST → `RepoCloner.clone(url, null)`이 `--branch` 없이 clone해 git이 **실제 레포 기본 브랜치**를 가져온다. 하드코딩 폴백보다 정확하고 코드도 단순.
+
+**결과.** 생성 즉시 진행률 표시 → 완료 시 회로도 이동. 빈 상태 약속 이행. v0.100.2. ★전체 플로우 런타임 검증은 OAuth 로그인+서버 가동 필요(/loop라 PR 후 사용자 검증).
+
+---
+
 ## 서버 오류 traceId 화면 표시 — 토스트 라이브러리 없이 커스텀 이벤트 (2026-06-22)
 
 **문제.** 백엔드가 5xx 응답에 traceId를 넣었으나(#345), 프론트가 화면에 노출하지 않아 사용자가 신고 시 ID를 전달할 수 없었다.
