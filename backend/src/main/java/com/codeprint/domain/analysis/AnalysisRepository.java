@@ -25,6 +25,9 @@ public interface AnalysisRepository {
     // ID 목록으로 분석 결과 일괄 조회 — N+1 방지용 배치 조회
     List<AnalysisResult> findAllById(List<UUID> ids);
 
+    // 특정 상태들에 속한 분석 조회 — 서버 재기동 시 stuck 분석 청소용
+    List<AnalysisResult> findByStatusIn(List<AnalysisStatus> statuses);
+
     // 어드민 전용 — 전체 분석 횟수 조회
     long count();
 }
