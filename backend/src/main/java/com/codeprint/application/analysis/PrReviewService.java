@@ -4,12 +4,11 @@ package com.codeprint.application.analysis;
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
 import com.codeprint.domain.analysis.port.WarningDetectionPort;
+import com.codeprint.infrastructure.analysis.CachedParsedFileLoader;
 import com.codeprint.infrastructure.analysis.GraphBuilder;
-import com.codeprint.infrastructure.analysis.LanguageDetector;
 import com.codeprint.infrastructure.analysis.ParsedFile;
 import com.codeprint.infrastructure.analysis.RepoCloner;
 import com.codeprint.infrastructure.analysis.SourceFileWalker;
-import com.codeprint.infrastructure.analysis.StaticCodeAnalyzer;
 import com.codeprint.infrastructure.analysis.WalkResult;
 import com.codeprint.infrastructure.github.GitHubApiClient;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +34,7 @@ public class PrReviewService {
     private final AnalysisRepository analysisRepository;
     private final RepoCloner repoCloner;
     private final SourceFileWalker sourceFileWalker;
-    private final StaticCodeAnalyzer staticCodeAnalyzer;
+    private final CachedParsedFileLoader cachedParsedFileLoader;
     private final GraphBuilder graphBuilder;
 
     // 봇 코멘트 식별 마커 — upsert 시 기존 Codeprint 코멘트를 찾는 키. GitHub에서 HTML 주석은 렌더되지 않음
@@ -148,19 +147,8 @@ public class PrReviewService {
 
             repoDir = repoCloner.clone(repoUrl, branch);
             WalkResult walk = sourceFileWalker.walk(repoDir);
-            final Path root = repoDir;
-            List<ParsedFile> parsed = walk.files().stream()
-                    .map(f -> {
-                        String lang = LanguageDetector.detect(f.getFileName().toString()).orElse("unknown");
-                        try {
-                            return staticCodeAnalyzer.analyze(f, root, lang);
-                        } catch (Exception e) {
-                            log.warn("파일 분석 실패: {}", f, e);
-                            return null;
-                        }
-                    })
-                    .filter(pf -> pf != null)
-                    .toList();
+            // 변경된 파일만 재파싱(incremental) — PR head는 base와 내용이 거의 같아 캐시 hit률이 높다
+            List<ParsedFile> parsed = cachedParsedFileLoader.load(projectId, repoDir, walk.files());
 
             UUID graphId = graphBuilder.build(projectId, analysis.getId(), parsed, walk.totalEligible()).getId();
 

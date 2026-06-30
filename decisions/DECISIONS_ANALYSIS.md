@@ -1355,3 +1355,19 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 - **🔴 명시적 비범위** — 158언어 추격·사용자용 Cypher·sub-ms 쿼리 경쟁·시맨틱 임베딩·cross-repo·IaC 인덱싱. 우리 소비자(사람·팀)·레버와 무관, 지는 레이스.
 
 **결과(현재).** 전략·명세만 기록(코드 미착수). 순서: W1 → W2 → W3(프로파일 후). 각 작업 A/B(phantom↓·recall 무손실)+결정론 회귀테스트 동반(v0.97.4 CYCLIC 비결정성 재발 금지). 제품 전략 전체(포지셔닝·3기둥·Phase 0~3 로드맵)는 PROGRESS 백로그 "🧭 codebase-memory-mcp 벤치마킹 전략", 면접 포인트는 INTERVIEW_POINTS "경쟁 분석·차별화"에 분산 기록.
+
+## incremental 재분석 — 파싱 캐시(변경 파일만 재파싱) (2026-06-30)
+
+> **벤치마킹 근거.** Understand-Anything(★69.4k)·CodeGraph(colbymchenry ★47.4k)·GitNexus(★42k) 조사 결과 incremental 업계 정답이 **파일별 content-hash로 변경 파일만 재파싱**으로 수렴(GitNexus=SHA1, CodeGraph=FS워처+재접속 hash reconciliation). 서버형(매번 clone)인 우리는 워처 불필요, "직전 분석 대비 내용 바뀐 파일만 재파싱"만 차용.
+
+**문제.** `AnalysisRunner`·`PrReviewService.analyzeBranch`가 매 분석마다 전체 파일을 재파싱(tree-sitter, 지배적 비용) 후 그래프를 통째로 재빌드. PR head는 base와 내용이 거의 같은데도 전부 재파싱.
+
+**결정1 — 그래프 패칭이 아니라 "파싱 캐시 + 전체 결정론 재빌드".** `GraphBuilder`는 엣지를 전체 파일에 전역 해소(`resolveBareCall`)하므로 변경 파일 서브그래프만 패치하면 타 파일 caller 엣지가 틀어지고 결정론이 깨진다. → 변경 파일만 재파싱하고 안 바뀐 파일은 캐시된 `ParsedFile` 재사용, `GraphBuilder.build`는 무변경 전체 리스트로 재빌드 → 출력 비트 동일. (탈락: 그래프 패칭 = 결정론 위험 + 복잡도↑.)
+
+**결정2 — 캐시 키 = (project_id, file_path, content_hash, analyzer_version).** content_hash를 키에 넣어 PR head가 브랜치를 넘어 base의 파싱 결과 재사용(path-unique였으면 브랜치 교대 시 thrash). `analyzer_version`(코드 상수, 현재 1)은 StaticCodeAnalyzer/ParsedFile 스키마 변경 시 올려 전체 무효화 — 빠지면 "엔진 고쳤는데 결과 그대로" 버그.
+
+**결정3 — 캐시를 `ParsedFileCachePort` 뒤에 둠(3기둥 전략 정합).** 데스크탑(유료 기둥)이 같은 엔진을 로컬 store로 돌려야 하므로 구현 2개(서버 Postgres / 데스크탑 로컬) → port 정당화(단일구현 과추상화 아님). `ParsedFile`은 파싱 DTO라 domain 승격 안 함(DOMAIN_IMPORTS_INFRA 회피) — port·codec·loader 전부 infra, domain 무변경.
+
+**결정4 — JPA 스레드 바운드 → 3단계 분리.** `parallelStream` 안에서 DB 호출 금지(EntityManager 비스레드세이프 + tx 스레드 바인딩). 로더는 ①병렬 digest(해시) ②메인스레드 배치 findAll ③miss만 병렬 파싱 ④메인스레드 배치 saveAll. 동시 삽입은 `on conflict do nothing` 네이티브 upsert로 예외 없이 멱등(tx 오염 방지).
+
+**결과.** `ParsedFileJsonCodec`(round-trip 동치=결정론 가드)·`ContentHash`(SHA-256)·`ParsedFileCachePort`/Postgres 어댑터·`CachedParsedFileLoader`·V46 마이그레이션. 단위 테스트 green(codec round-trip 3·hash 3·loader 3·adapter 4). 런타임 검증(전체분석→사소변경→재파싱 수==변경 파일 수)은 백엔드 기동 필요로 미완.

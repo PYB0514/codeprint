@@ -15,6 +15,22 @@ jobs:
       run:
         working-directory: backend
 
+    # 통합 테스트(ParsedFileCacheIntegrationTest 등)가 실 Postgres에 Flyway+Hibernate validate를 돌린다 — 스키마 불일치 CI 게이트
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: codeprint
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: "1234"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
