@@ -229,6 +229,10 @@ Define success criteria. Loop until verified.
 - 처음 발생한 오류면 종류 불문(500, NPE, 마이그레이션 실패, 컴파일 에러 등) **즉시 ERROR_TRACKER.md에 기록**. 수정 여부와 무관하게 기록한다.
 - 기록 없이는 두 번째 발생 여부를 알 수 없다. 고쳤다고 기록을 건너뛰지 않는다.
 
+**GATE_GAPS.md 운용 규칙 — 게이트 사각지대 포착**
+- PR에서 구조 게이트(`codeprint/structure`)는 green인데 다른 CI 체크가 red면 = 게이트가 못 잡은 기능 결함 = **사각지대**. 즉시 GATE_GAPS.md에 기록한다.
+- 기록 후 "그래프가 이걸 구조적으로 잡을 수 있나?" 판정 → Yes면 새 게이트 규칙 후보로 등록(레버=게이트 커버리지), No면 타깃 테스트·알려진 한계로 처리. 게이트 green이 곧 안전이라는 신뢰를 지키는 단일 수단.
+
 TDD 대상 클래스 예시: `ProjectDomainService`, `GraphBuilder`, `AnalysisService`, `StripeWebhookHandler`
 
 **TDD 불필요 — 런타임 검증으로 대체한다.**
