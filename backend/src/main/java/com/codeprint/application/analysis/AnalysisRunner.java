@@ -25,7 +25,7 @@ public class AnalysisRunner {
     private final GitHubApiClient gitHubApiClient;
     private final RepoCloner repoCloner;
     private final SourceFileWalker sourceFileWalker;
-    private final StaticCodeAnalyzer staticCodeAnalyzer;
+    private final CachedParsedFileLoader cachedParsedFileLoader;
     private final GraphBuilder graphBuilder;
     private final AnalysisProgressHandler progressHandler;
 
@@ -54,22 +54,8 @@ public class AnalysisRunner {
             log.info("소스 파일 수: {} (전체 대상 {})", sourceFiles.size(), walkResult.totalEligible());
             progressHandler.sendProgress(analysisId, 40, "RUNNING");
 
-            final Path finalRepoDir = repoDir;
-            // tree-sitter 파싱은 파일별 독립·CPU 바운드 — 병렬 처리로 대형 레포 파싱 시간 단축.
-            // StaticCodeAnalyzer는 호출당 무상태(파서는 호출마다 새로 생성, 가변 인스턴스/정적 필드 없음)라 동시 호출 안전.
-            // toList()는 인코딩 순서를 보존하므로 parsedFiles 순서는 순차 처리와 동일(GraphBuilder 결과 불변).
-            List<ParsedFile> parsedFiles = sourceFiles.parallelStream()
-                    .map(file -> {
-                        String lang = LanguageDetector.detect(file.getFileName().toString()).orElse("unknown");
-                        try {
-                            return staticCodeAnalyzer.analyze(file, finalRepoDir, lang);
-                        } catch (Exception e) {
-                            log.warn("파일 분석 실패: {}", file, e);
-                            return null;
-                        }
-                    })
-                    .filter(pf -> pf != null)
-                    .toList();
+            // 변경된 파일만 재파싱하고 안 바뀐 파일은 캐시된 ParsedFile을 재사용(incremental) — 순서 보존(GraphBuilder 결과 불변)
+            List<ParsedFile> parsedFiles = cachedParsedFileLoader.load(projectId, repoDir, sourceFiles);
             progressHandler.sendProgress(analysisId, 70, "RUNNING");
 
             graphBuilder.build(projectId, analysisId, parsedFiles, walkResult.totalEligible());
