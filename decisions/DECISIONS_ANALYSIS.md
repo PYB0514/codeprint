@@ -1371,3 +1371,11 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **결정4 — JPA 스레드 바운드 → 3단계 분리.** `parallelStream` 안에서 DB 호출 금지(EntityManager 비스레드세이프 + tx 스레드 바인딩). 로더는 ①병렬 digest(해시) ②메인스레드 배치 findAll ③miss만 병렬 파싱 ④메인스레드 배치 saveAll. 동시 삽입은 `on conflict do nothing` 네이티브 upsert로 예외 없이 멱등(tx 오염 방지).
 
 **결과.** `ParsedFileJsonCodec`(round-trip 동치=결정론 가드)·`ContentHash`(SHA-256)·`ParsedFileCachePort`/Postgres 어댑터·`CachedParsedFileLoader`·V46 마이그레이션. 단위 테스트 green(codec round-trip 3·hash 3·loader 3·adapter 4). 런타임 검증(전체분석→사소변경→재파싱 수==변경 파일 수)은 백엔드 기동 필요로 미완.
+
+## CROSS_DOMAIN_CALL precision — 헥사고날 하위레이어 오인식 FP 제거 (2026-07-01)
+
+**문제.** 정밀도 감사(레버 [[../memory/project_adoption_lever_focus]]) 첫 실측에서 텍스트북 헥사고날 레포 **buckpal**(thombergs)에 `CROSS_DOMAIN_CALL`(MEDIUM) **16건 전부 오탐**. `service/sendMoney → model/withdraw` 등 — buckpal은 단일 바운디드 컨텍스트인데 `application/domain/{service,model}` 하위레이어를 별개 도메인으로 오인식. (HIGH 6종은 buckpal에서 0 = 블로킹 게이트 precision은 양호.)
+
+**원인.** `detectCrossDomainFunctionCall` 전용 `extractBoundedContext`가 `/domain/` 뒤 세그먼트를 무조건 컨텍스트로 취급 — 레이어 용어(LAYER_TERMS) 스킵도, application 하위 중첩(`application/domain/`) 가드도 없었음. 반면 CROSS_CONTEXT_IMPORT는 이미 `domainContextOf`/`applicationContextOf`(가드 포함)로 해결돼 있던 비대칭.
+
+**결정/결과.** `extractBoundedContext`를 폐기하고 `functionContextOf`(= `domainContextOf` ?? `applicationContextOf`, 레이어-인지 추출기) 도입. 헥사고날 `application/domain/service`는 null 반환 → cross-domain 미발화. layer-first(`{layer}/{context}`)는 컨텍스트 그대로 추출 → 무회귀. **A/B: buckpal 16→0, Codeprint backend 불변(HIGH_FAN_OUT 8·DEAD_CODE 1·CROSS_DOMAIN 0).** 회귀 테스트 `crossDomainCall_hexagonalSubLayers_excluded` + 기존 genuine-violation 테스트로 recall 유지 확인. 전체 백엔드 스위트 green.
