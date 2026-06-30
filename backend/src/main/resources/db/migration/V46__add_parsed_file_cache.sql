@@ -4,7 +4,7 @@ create table parsed_file_cache (
     id               uuid          primary key,
     project_id       uuid          not null,
     file_path        varchar(1000) not null,
-    content_hash     char(64)      not null,
+    content_hash     varchar(64)   not null,
     analyzer_version int           not null,
     parsed_json      text          not null,
     updated_at       timestamptz   not null default now()
