@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.100.5',
+    date: '2026-07-01',
+    title: '분석 정확도 — 헥사고날 구조 오탐 제거',
+    type: 'fix',
+    items: [
+      { category: '정확도', desc: '헥사고날(포트&어댑터) 구조 프로젝트에서 같은 도메인 안의 service→model 호출을 "도메인 경계 위반"으로 잘못 경고하던 오탐을 제거했습니다. application/domain/service → application/domain/model 처럼 단일 컨텍스트의 하위 레이어 간 호출은 더 이상 Cross-Domain 경고를 만들지 않습니다(컨텍스트 추출이 레이어 구조를 인지하도록 개선). 진짜 도메인 간 호출 탐지는 그대로 유지됩니다. 교과서 레포 buckpal 기준 오탐 16건 → 0건.' },
+    ],
+  },
+  {
     version: 'v0.100.4',
     date: '2026-06-30',
     title: '재분석 속도 개선 — 변경된 파일만 다시 분석',

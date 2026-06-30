@@ -998,11 +998,15 @@ public class GraphWarningService {
             nameMap.put(n.getId(), n.getName());
         }
 
+        // 컨텍스트 추출은 CROSS_CONTEXT_IMPORT와 동일한 레이어-인지 추출기(레이어 용어 스킵·application 하위 중첩 가드)를 쓴다 —
+        // 헥사고날 단일 컨텍스트(application/domain/{service,model})를 별개 도메인으로 오인식하던 FP를 제거(buckpal 16건).
+        Set<String> cfContexts = detectContextFirstContexts(nodeFilePaths.values());
+
         // 함수명 → 등장 도메인 집합 — 동일 이름이 2개 이상 도메인에 있으면 bare-name 해석이 모호 → 오탐 제외용
         Map<String, Set<String>> funcNameToDomains = new HashMap<>();
         for (Node n : nodes) {
             if (n.getType() != NodeType.FUNCTION) continue;
-            String domain = extractBoundedContext(n.getFilePath() != null ? n.getFilePath() : "");
+            String domain = functionContextOf(n.getFilePath() != null ? n.getFilePath() : "", cfContexts);
             if (domain == null) continue;
             funcNameToDomains.computeIfAbsent(n.getName(), k -> new HashSet<>()).add(domain);
         }
@@ -1018,8 +1022,8 @@ public class GraphWarningService {
             // 테스트 코드는 아키텍처 위반 대상이 아님
             if (isTestPath(srcPath) || isTestPath(tgtPath)) continue;
 
-            String srcDomain = extractBoundedContext(srcPath);
-            String tgtDomain = extractBoundedContext(tgtPath);
+            String srcDomain = functionContextOf(srcPath, cfContexts);
+            String tgtDomain = functionContextOf(tgtPath, cfContexts);
 
             if (srcDomain == null || tgtDomain == null) continue;
             if (srcDomain.equals(tgtDomain)) continue;
@@ -1110,15 +1114,12 @@ public class GraphWarningService {
     }
 
     // 파일 경로에서 Bounded Context 이름 추출 (domain/X, application/X, infrastructure/X → X)
-    private String extractBoundedContext(String path) {
-        for (String layer : List.of("/domain/", "/application/", "/infrastructure/")) {
-            int idx = path.indexOf(layer);
-            if (idx < 0) continue;
-            String after = path.substring(idx + layer.length());
-            int slash = after.indexOf('/');
-            if (slash > 0) return after.substring(0, slash);
-        }
-        return null;
+    // 함수 파일의 바운디드 컨텍스트 — domain/application 레이어-인지 추출기로 해소(레이어 용어·application 하위 중첩 가드 포함).
+    // 헥사고날 단일 컨텍스트(application/domain/service 등)는 null → cross-domain 오탐 방지. layer-first({layer}/{context})는 그대로 컨텍스트 추출.
+    private String functionContextOf(String path, Set<String> cfContexts) {
+        String dc = domainContextOf(path, cfContexts);
+        if (dc != null) return dc;
+        return applicationContextOf(path, cfContexts);
     }
 
     // 엣지가 같은 파일 내 호출(sameFile 마커)인지 여부

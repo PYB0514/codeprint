@@ -900,6 +900,21 @@ class GraphWarningServiceTest {
         assertThat(crossDomain(warnings)).isEmpty();
     }
 
+    @Test
+    @DisplayName("헥사고날 단일 컨텍스트(application/domain/{service,model}) 내부 호출 — CROSS_DOMAIN_CALL 제외 (buckpal FP)")
+    void crossDomainCall_hexagonalSubLayers_excluded() {
+        // buckpal: application/domain/service/SendMoneyService → application/domain/model/Account.
+        // service·model 은 단일 컨텍스트의 하위레이어이지 별개 도메인이 아니다(레이어 용어·application 하위 중첩 가드로 컨텍스트=null).
+        Node src = funcNodeWithPath("sendMoney", "/io/reflectoring/buckpal/application/domain/service/SendMoneyService.java");
+        Node tgt = funcNodeWithPath("withdraw", "/io/reflectoring/buckpal/application/domain/model/Account.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(src, tgt),
+                List.of(callEdge(src.getId(), tgt.getId(), false))
+        );
+        assertThat(crossDomain(warnings)).isEmpty();
+    }
+
     // --- DEAD_CODE 오탐 제외 ---
 
     // 특정 노드가 DEAD_CODE로 플래그됐는지 확인
