@@ -2,7 +2,29 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
 import AppHeader from '../components/AppHeader'
+
+interface PreparePaymentResponse {
+  orderId: string; amount: number; orderName: string
+  customerName: string; customerKey: string; clientKey: string
+}
+
+// 토스 결제창 호출 — 팀 결제(신규 생성/좌석 증가) 공용, 승인은 TeamPaymentSuccessPage에서 처리
+async function requestTeamPayment(prepared: PreparePaymentResponse) {
+  const { orderId, amount, orderName, customerName, customerKey, clientKey } = prepared
+  const tossPayments = await loadTossPayments(clientKey)
+  const payment = tossPayments.payment({ customerKey })
+  await payment.requestPayment({
+    method: 'CARD',
+    amount: { currency: 'KRW', value: amount },
+    orderId,
+    orderName,
+    customerName,
+    successUrl: window.location.origin + '/payment/team-success',
+    failUrl: window.location.origin + '/payment/fail',
+  })
+}
 
 interface TeamResponse {
   id: string
@@ -41,6 +63,8 @@ export default function TeamsPage() {
   const [inviteUserId, setInviteUserId] = useState('')
   const [creating, setCreating] = useState(false)
   const [inviting, setInviting] = useState(false)
+  const [increasingSeats, setIncreasingSeats] = useState(false)
+  const [additionalSeats, setAdditionalSeats] = useState(1)
   const [error, setError] = useState<string | null>(null)
 
   // 내 팀 목록 불러오기
@@ -71,21 +95,40 @@ export default function TeamsPage() {
     fetchTeams()
   }, [])
 
-  // 팀 생성 처리
+  // 팀 생성 결제 시작 — Toss 결제창 호출, 승인·팀 생성은 리다이렉트 후 TeamPaymentSuccessPage에서 처리
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) return
     setCreating(true)
     setError(null)
     try {
-      await axios.post('/api/teams', { name: newTeamName.trim(), plan: 'DESKTOP', seats: newTeamSeats })
-      setShowCreateModal(false)
-      setNewTeamName('')
-      await fetchTeams()
+      const res = await axios.post<PreparePaymentResponse>('/api/teams/payment/prepare', {
+        teamName: newTeamName.trim(),
+        seats: newTeamSeats,
+      })
+      await requestTeamPayment(res.data)
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      setError(err.response?.data?.message ?? '팀 생성에 실패했습니다.')
-    } finally {
+      setError(err.response?.data?.message ?? '결제 페이지 연결에 실패했습니다.')
       setCreating(false)
+    }
+  }
+
+  // 좌석 증가 결제 시작 — 차액만 Toss 결제, 승인 후 TeamPaymentSuccessPage에서 좌석 변경 반영
+  const handleIncreaseSeats = async () => {
+    if (!selectedTeam || additionalSeats < 1) return
+    setIncreasingSeats(true)
+    setError(null)
+    try {
+      const newSeats = selectedTeam.totalSeats + additionalSeats
+      const res = await axios.post<PreparePaymentResponse>(
+        `/api/teams/${selectedTeam.id}/seats/payment/prepare`,
+        { newSeats }
+      )
+      await requestTeamPayment(res.data)
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      setError(err.response?.data?.message ?? '결제 페이지 연결에 실패했습니다.')
+      setIncreasingSeats(false)
     }
   }
 
@@ -303,13 +346,30 @@ export default function TeamsPage() {
                   </div>
                 )}
 
-                {/* 석수 변경 안내 */}
+                {/* 좌석 증가 결제 */}
                 <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-                  <h3 className="font-semibold mb-3">석수 변경</h3>
-                  <p className="text-sm text-gray-400">
+                  <h3 className="font-semibold mb-3">좌석 증가</h3>
+                  <p className="text-sm text-gray-400 mb-3">
                     좌석당 {PRICE_PER_SEAT.toLocaleString('ko-KR')}원/월 · 현재 {selectedTeam.totalSeats}석
                   </p>
-                  <p className="text-xs text-gray-500 mt-3">석수 변경은 고객센터를 통해 요청해주세요.</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      value={additionalSeats}
+                      onChange={(e) => setAdditionalSeats(Math.max(1, Number(e.target.value)))}
+                      className="w-24 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
+                    <span className="text-sm text-gray-400">석 추가</span>
+                    <button
+                      onClick={handleIncreaseSeats}
+                      disabled={increasingSeats}
+                      className="ml-auto bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition"
+                    >
+                      {increasingSeats ? '결제 페이지 이동 중…' : `${(additionalSeats * PRICE_PER_SEAT).toLocaleString('ko-KR')}원 결제하고 증설`}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-3">좌석 감소는 고객센터를 통해 요청해주세요.</p>
                 </div>
 
                 {/* 위험 구역 — 팀 삭제 */}

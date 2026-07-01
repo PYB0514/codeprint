@@ -2,6 +2,24 @@
 
 ---
 
+## 팀 결제 실배선 — seat 기반 Toss 결제로 팀 생성·좌석 증가 (2026-07-01, 기능)
+
+**문제.** PR #413·#414로 "Desktop 라이센스" 요금제와 팀 생성 결제 방어선(`UserPlanPort.isPaidPlan`)까지 만들었지만, 실제로는 **팀장 개인 계정이 이미 DESKTOP인지만 검사**할 뿐 팀 자체의 seat 기반 결제(seats×9,900원, 프론트 TeamsPage가 이미 표시 중이던 금액)는 한 번도 트리거되지 않았다. `TeamApplicationService.createTeam` 주석에도 "좌석 결제 연동 전 최소 방어선"이라 명시돼 있던 임시 게이트.
+
+**결정 — 개인 플랜과 팀 결제를 별개로 분리(사용자 확정).** "팀장이 개인 Desktop을 살 필요는 없고, 팀 결제 자체가 독립적으로 성립해야 한다"는 방향으로 확정 → `isPaidPlan` 게이트를 완전히 제거하고, 팀 생성 자체를 결제 승인 시점으로 옮김(결제 confirm 전엔 DB에 팀 row가 생기지 않음). 좌석 증가도 동일 원칙: 차액(newSeats-현재)×9,900원만 결제(사용자 확정 — 일반 SaaS 업그레이드 관례), 감소는 결제 없이 즉시 반영.
+
+**설계 — 기존 Pro 결제 패턴 재사용.** `TossPaymentOrder`/`PaymentApplicationService`(Pro 전용, 고정 9,900원)는 건드리지 않고 병렬로 `TeamPaymentOrder`(teamId nullable — null이면 신규 팀 생성 주문, 있으면 좌석 증가 주문)를 추가. `PaymentGatewayPort`는 이미 PG사에 무관한 범용 인터페이스라 그대로 재사용 가능했음(수정 불필요).
+
+**Cross-context 배선 — `UserUpgradeAdapter` 선례를 그대로 따름.** Payment 컨텍스트가 결제 완료 후 Team 컨텍스트에 팀 생성/좌석변경을 반영해야 하는데, 기존 `UserUpgradePort`→`UserUpgradeAdapter`(infrastructure/adapter/, UserRepository 직접 사용) 패턴을 그대로 답습해 `TeamProvisioningPort`→`TeamProvisioningAdapter` 추가. 처음엔 `infrastructure/persistence/team/`에 만들었다가, 기존 어댑터가 전부 `infrastructure/adapter/`(컨텍스트 무관 공용 폴더)에 있는 걸 뒤늦게 확인하고 그쪽으로 옮김(컨벤션 일치, §3).
+
+**confirm() 통합 — 분기는 데이터에 이미 있음.** 신규팀/좌석증가를 별도 API(prepare는 2종: `/api/teams/payment/prepare`, `/api/teams/{id}/seats/payment/prepare`)로 받되, **confirm은 하나로 통합** — `orderId`로 조회한 주문 자체에 `teamId` 유무가 저장돼 있어 프론트가 어떤 종류의 결제인지 알 필요가 없음(Toss 리다이렉트 성공 페이지도 1개로 통일).
+
+**자가검사에서 발견 — confirm()의 책임 과다.** `analyzeLocal` 자가검사에서 신규 `confirm()`이 13개 함수 호출로 HIGH_FAN_OUT 신규 발생(기존 self 베이스라인 8건 대비 +2). 검증(멱등·소유권·금액)과 결제 캡처(게이트웨이 승인+주문 저장)를 `verifyAndCapturePayment()` private 메서드로 추출해 8개로 낮춤 — 총 신호 수(HIGH_FAN_OUT+DEAD_CODE)가 리팩토링 전과 동일(9)해짐(부수로 `monthlyPricePerSeat()`가 이제 실제로 호출돼 기존 DEAD_CODE 1건이 해소된 것과 상쇄).
+
+**결과.** 신규 5파일(`TeamPaymentOrder`·`TeamPaymentOrderRepository`+JPA구현체 2개·`TeamProvisioningPort`·`TeamProvisioningAdapter`·`TeamPaymentApplicationService`·`TeamPaymentController`) + `V48__add_team_payment_orders.sql`. 기존 `TeamApplicationService.createTeam()`/`POST /api/teams`/`UserPlanPort`/`UserPlanAdapter` 제거(더는 쓰이지 않음), `upgradePlan()`→`decreaseSeats()`로 좁힘(증가 시도는 IllegalStateException). 프론트 TeamsPage 결제 리다이렉트 플로우로 교체 + `TeamPaymentSuccessPage` 신규. TDD 9종(결제 승인은 분기 많은 도메인 규칙 — §4 의무) 전부 통과, 기존 테스트(TeamApplicationServiceTest 갱신 포함) 회귀 0. compileJava·tsc 통과. **OAuth 로그인이 필요한 실제 Toss 체크아웃 E2E는 사용자 테스트 필요(push 전 확인 예정).**
+
+---
+
 ## 로컬 워치 데몬(LocalWatcher) — 파일 변경 감지 자동 재분석 MVP (2026-07-01, 기능)
 
 **배경.** "데스크탑 라이센스"라는 이름을 팔고 있지만(#413·#414) 실체가 될 로컬 소프트웨어가 아직 없다는 문제의식(PROGRESS.md 백로그)에서 출발 — 그 첫 실체로 파일 저장 시 자동 재분석하는 워치 데몬을 `./gradlew watchLocal`로 추가.

@@ -2,7 +2,6 @@
 package com.codeprint.application.team;
 
 import com.codeprint.domain.team.*;
-import com.codeprint.domain.team.port.UserPlanPort;
 import com.codeprint.shared.plan.UserPlan;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,20 +17,6 @@ public class TeamApplicationService {
     private final TeamRepository teamRepository;
     private final TeamMemberRepository memberRepository;
     private final TeamProjectAllocationRepository allocationRepository;
-    private final UserPlanPort userPlanPort;
-
-    // 팀 생성 — 개인 Desktop 라이센스 보유자만 가능 (좌석 결제 연동 전 최소 방어선)
-    @Transactional
-    public Team createTeam(UUID ownerUserId, String name, UserPlan plan, int seats) {
-        if (!userPlanPort.isPaidPlan(ownerUserId)) {
-            throw new IllegalStateException("Desktop 라이센스 구매 후 팀을 만들 수 있습니다.");
-        }
-        Team team = Team.create(ownerUserId, name, plan, seats);
-        teamRepository.save(team);
-        // 팀장 자신도 OWNER로 등록
-        memberRepository.save(TeamMember.add(team.getId(), ownerUserId, TeamRole.OWNER));
-        return team;
-    }
 
     // 팀 삭제 — 팀장만 가능, 멤버·석수배분은 DB CASCADE로 함께 삭제
     @Transactional
@@ -95,12 +80,15 @@ public class TeamApplicationService {
         allocationRepository.save(allocation);
     }
 
-    // 팀 플랜 업그레이드
+    // 팀 좌석 수 감소 — 증가는 결제가 필요하므로 /api/teams/{id}/seats/payment/prepare 경유
     @Transactional
-    public Team upgradePlan(UUID teamId, UUID requesterId, UserPlan newPlan, int seats) {
+    public Team decreaseSeats(UUID teamId, UUID requesterId, int seats) {
         Team team = getTeamOrThrow(teamId);
         verifyOwner(team, requesterId);
-        team.upgradePlan(newPlan, seats);
+        if (seats > team.getTotalSeats()) {
+            throw new IllegalStateException("좌석 증가는 결제가 필요합니다. 좌석 증가 결제를 이용해주세요.");
+        }
+        team.upgradePlan(UserPlan.DESKTOP, seats);
         return teamRepository.save(team);
     }
 

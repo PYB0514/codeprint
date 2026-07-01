@@ -2,7 +2,6 @@
 package com.codeprint.application.team;
 
 import com.codeprint.domain.team.*;
-import com.codeprint.domain.team.port.UserPlanPort;
 import com.codeprint.shared.plan.UserPlan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,40 +23,9 @@ class TeamApplicationServiceTest {
     @Mock private TeamRepository teamRepository;
     @Mock private TeamMemberRepository memberRepository;
     @Mock private TeamProjectAllocationRepository allocationRepository;
-    @Mock private UserPlanPort userPlanPort;
 
     private TeamApplicationService service() {
-        return new TeamApplicationService(teamRepository, memberRepository, allocationRepository, userPlanPort);
-    }
-
-    // --- createTeam: 팀 생성 ---
-
-    @Test
-    @DisplayName("createTeam — Desktop 라이센스 보유자면 팀 생성 + 소유자를 OWNER로 등록 + 전달받은 seats 저장")
-    void createTeam_teamPlan() {
-        UUID owner = UUID.randomUUID();
-        when(userPlanPort.isPaidPlan(owner)).thenReturn(true);
-        when(memberRepository.save(any(TeamMember.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        Team team = service().createTeam(owner, "team", UserPlan.DESKTOP, 15);
-
-        assertThat(team.getOwnerUserId()).isEqualTo(owner);
-        assertThat(team.getTotalSeats()).isEqualTo(15);
-        verify(teamRepository).save(any(Team.class));
-        verify(memberRepository).save(any(TeamMember.class));
-    }
-
-    @Test
-    @DisplayName("createTeam — Desktop 라이센스 미보유면 IllegalStateException, 저장 안 함")
-    void createTeam_notPaid_rejected() {
-        UUID owner = UUID.randomUUID();
-        when(userPlanPort.isPaidPlan(owner)).thenReturn(false);
-
-        assertThatThrownBy(() -> service().createTeam(owner, "team", UserPlan.DESKTOP, 15))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Desktop 라이센스");
-        verify(teamRepository, never()).save(any());
-        verify(memberRepository, never()).save(any());
+        return new TeamApplicationService(teamRepository, memberRepository, allocationRepository);
     }
 
     // --- deleteTeam: 소유권 검증 ---
@@ -339,32 +307,44 @@ class TeamApplicationServiceTest {
         verify(allocationRepository, never()).save(any());
     }
 
-    // --- upgradePlan: 소유권 검증 ---
+    // --- decreaseSeats: 소유권 검증 + 증가 거부 ---
 
     @Test
-    @DisplayName("upgradePlan — 소유자면 플랜·총석수를 전달받은 값으로 갱신")
-    void upgradePlan_success() {
+    @DisplayName("decreaseSeats — 소유자면 총석수를 전달받은 값(감소)으로 갱신")
+    void decreaseSeats_success() {
         UUID owner = UUID.randomUUID();
         Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15); // 15석
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(teamRepository.save(team)).thenReturn(team);
 
-        Team result = service().upgradePlan(team.getId(), owner, UserPlan.DESKTOP, 40);
+        Team result = service().decreaseSeats(team.getId(), owner, 10);
 
-        assertThat(result.getPlan()).isEqualTo(UserPlan.DESKTOP);
-        assertThat(result.getTotalSeats()).isEqualTo(40);
+        assertThat(result.getTotalSeats()).isEqualTo(10);
         verify(teamRepository).save(team);
     }
 
     @Test
-    @DisplayName("upgradePlan — 소유자가 아니면 SecurityException")
-    void upgradePlan_notOwner_rejected() {
+    @DisplayName("decreaseSeats — 소유자가 아니면 SecurityException")
+    void decreaseSeats_notOwner_rejected() {
         UUID owner = UUID.randomUUID();
         Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
 
-        assertThatThrownBy(() -> service().upgradePlan(team.getId(), UUID.randomUUID(), UserPlan.DESKTOP, 40))
+        assertThatThrownBy(() -> service().decreaseSeats(team.getId(), UUID.randomUUID(), 10))
                 .isInstanceOf(SecurityException.class);
+        verify(teamRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("decreaseSeats — 현재보다 많은 석수(증가)는 IllegalStateException, 결제 경유 안내")
+    void decreaseSeats_increaseAttempt_rejected() {
+        UUID owner = UUID.randomUUID();
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
+        when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
+
+        assertThatThrownBy(() -> service().decreaseSeats(team.getId(), owner, 20))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("결제가 필요");
         verify(teamRepository, never()).save(any());
     }
 }
