@@ -33,7 +33,7 @@ public class TeamController {
     public ResponseEntity<TeamResponse> createTeam(
             @Valid @RequestBody CreateTeamRequest req,
             @AuthenticationPrincipal User user) {
-        Team team = teamService.createTeam(user.getId(), req.name(), req.plan());
+        Team team = teamService.createTeam(user.getId(), req.name(), req.plan(), req.seats());
         return ResponseEntity.status(201).body(toResponse(team));
     }
 
@@ -107,7 +107,7 @@ public class TeamController {
             @PathVariable UUID teamId,
             @Valid @RequestBody UpgradePlanRequest req,
             @AuthenticationPrincipal User user) {
-        Team team = teamService.upgradePlan(teamId, user.getId(), req.plan());
+        Team team = teamService.upgradePlan(teamId, user.getId(), req.plan(), req.seats());
         return ResponseEntity.ok(toResponse(team));
     }
 
@@ -118,10 +118,10 @@ public class TeamController {
                 t.getTotalSeats(), used, t.getCreatedAt());
     }
 
-    record CreateTeamRequest(@NotBlank String name, @NotNull UserPlan plan) {}
+    record CreateTeamRequest(@NotBlank String name, @NotNull UserPlan plan, @Min(1) int seats) {}
     record AddMemberRequest(@NotNull UUID userId) {}
     record AllocateSeatsRequest(@Min(0) int seats) {}
-    record UpgradePlanRequest(@NotNull UserPlan plan) {}
+    record UpgradePlanRequest(@NotNull UserPlan plan, @Min(1) int seats) {}
 
     record TeamResponse(UUID id, String name, String plan, int totalSeats, int usedSeats, Instant createdAt) {}
     record MemberResponse(UUID id, UUID userId, String role, Instant joinedAt) {}

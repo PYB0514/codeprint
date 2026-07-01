@@ -1,4 +1,4 @@
-// 팀 플랜 대시보드 — 팀 생성, 멤버 관리, 석수 배분
+// 팀 Desktop 라이센스 대시보드 — 팀 생성, 멤버 관리, 석수 배분
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -25,23 +25,8 @@ interface AllocationResponse {
   allocatedSeats: number
 }
 
-const PLAN_LABELS: Record<string, string> = {
-  TEAM_STARTER: 'Team Starter',
-  TEAM_GROWTH: 'Team Growth',
-  TEAM_BUSINESS: 'Team Business',
-}
-
-const PLAN_SEATS: Record<string, number> = {
-  TEAM_STARTER: 15,
-  TEAM_GROWTH: 40,
-  TEAM_BUSINESS: 999,
-}
-
-const PLAN_PRICES: Record<string, string> = {
-  TEAM_STARTER: '39,000원/월',
-  TEAM_GROWTH: '79,000원/월',
-  TEAM_BUSINESS: '149,000원/월',
-}
+// Desktop 라이센스 좌석당 월 요금(원) — 팀 총 요금 = 좌석 수 × 이 값
+const PRICE_PER_SEAT = 9_900
 
 // 팀 대시보드 페이지 렌더링
 export default function TeamsPage() {
@@ -52,7 +37,7 @@ export default function TeamsPage() {
   const [allocations, setAllocations] = useState<AllocationResponse[]>([])
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newTeamName, setNewTeamName] = useState('')
-  const [newTeamPlan, setNewTeamPlan] = useState<string>('TEAM_STARTER')
+  const [newTeamSeats, setNewTeamSeats] = useState(5)
   const [inviteUserId, setInviteUserId] = useState('')
   const [creating, setCreating] = useState(false)
   const [inviting, setInviting] = useState(false)
@@ -92,7 +77,7 @@ export default function TeamsPage() {
     setCreating(true)
     setError(null)
     try {
-      await axios.post('/api/teams', { name: newTeamName.trim(), plan: newTeamPlan })
+      await axios.post('/api/teams', { name: newTeamName.trim(), plan: 'DESKTOP', seats: newTeamSeats })
       setShowCreateModal(false)
       setNewTeamName('')
       await fetchTeams()
@@ -138,9 +123,7 @@ export default function TeamsPage() {
   }
 
   const remainingSeats = selectedTeam
-    ? selectedTeam.totalSeats === 999
-      ? '무제한'
-      : `${selectedTeam.totalSeats - selectedTeam.usedSeats}석 남음`
+    ? `${selectedTeam.totalSeats - selectedTeam.usedSeats}석 남음`
     : ''
 
   return (
@@ -152,7 +135,7 @@ export default function TeamsPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold">팀 관리</h1>
-            <p className="text-gray-400 text-sm mt-1">팀 플랜으로 협업자를 초대하고 석수를 관리하세요.</p>
+            <p className="text-gray-400 text-sm mt-1">Desktop 라이센스로 협업자를 초대하고 석수를 관리하세요.</p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -196,7 +179,7 @@ export default function TeamsPage() {
                   }`}
                 >
                   <div className="font-medium truncate">{team.name}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">{PLAN_LABELS[team.plan] ?? team.plan}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Desktop 라이센스 · {team.totalSeats}석</div>
                 </button>
               ))}
             </div>
@@ -210,30 +193,28 @@ export default function TeamsPage() {
                     <div>
                       <h2 className="text-xl font-bold">{selectedTeam.name}</h2>
                       <span className="text-xs bg-blue-600/20 text-blue-400 border border-blue-600/40 px-2 py-0.5 rounded mt-1 inline-block">
-                        {PLAN_LABELS[selectedTeam.plan] ?? selectedTeam.plan}
+                        Desktop 라이센스
                       </span>
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold text-blue-400">
-                        {selectedTeam.totalSeats === 999 ? '∞' : selectedTeam.totalSeats}석
+                        {selectedTeam.totalSeats}석
                       </div>
                       <div className="text-xs text-gray-400">{remainingSeats}</div>
                     </div>
                   </div>
-                  {selectedTeam.totalSeats !== 999 && (
-                    <div>
-                      <div className="flex justify-between text-xs text-gray-400 mb-1">
-                        <span>사용 중: {selectedTeam.usedSeats}석</span>
-                        <span>총 {selectedTeam.totalSeats}석</span>
-                      </div>
-                      <div className="w-full bg-gray-800 rounded-full h-2">
-                        <div
-                          className="bg-blue-500 h-2 rounded-full transition-all"
-                          style={{ width: `${Math.min(100, (selectedTeam.usedSeats / selectedTeam.totalSeats) * 100)}%` }}
-                        />
-                      </div>
+                  <div>
+                    <div className="flex justify-between text-xs text-gray-400 mb-1">
+                      <span>사용 중: {selectedTeam.usedSeats}석</span>
+                      <span>총 {selectedTeam.totalSeats}석</span>
                     </div>
-                  )}
+                    <div className="w-full bg-gray-800 rounded-full h-2">
+                      <div
+                        className="bg-blue-500 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (selectedTeam.usedSeats / selectedTeam.totalSeats) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* 멤버 관리 */}
@@ -308,31 +289,13 @@ export default function TeamsPage() {
                   </div>
                 )}
 
-                {/* 플랜 업그레이드 안내 */}
+                {/* 석수 변경 안내 */}
                 <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-                  <h3 className="font-semibold mb-3">플랜 업그레이드</h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    {(['TEAM_STARTER', 'TEAM_GROWTH', 'TEAM_BUSINESS'] as const).map((plan) => (
-                      <div
-                        key={plan}
-                        className={`rounded-lg border p-4 ${
-                          selectedTeam.plan === plan
-                            ? 'border-blue-600 bg-blue-600/10'
-                            : 'border-gray-700 bg-gray-800/50'
-                        }`}
-                      >
-                        <div className="font-medium text-sm mb-1">{PLAN_LABELS[plan]}</div>
-                        <div className="text-xs text-gray-400 mb-2">
-                          {PLAN_SEATS[plan] === 999 ? '무제한 석수' : `최대 ${PLAN_SEATS[plan]}석`}
-                        </div>
-                        <div className="text-xs font-semibold text-blue-400">{PLAN_PRICES[plan]}</div>
-                        {selectedTeam.plan === plan && (
-                          <div className="text-xs text-green-400 mt-2">현재 플랜</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-3">플랜 변경은 고객센터를 통해 요청해주세요.</p>
+                  <h3 className="font-semibold mb-3">석수 변경</h3>
+                  <p className="text-sm text-gray-400">
+                    좌석당 {PRICE_PER_SEAT.toLocaleString('ko-KR')}원/월 · 현재 {selectedTeam.totalSeats}석
+                  </p>
+                  <p className="text-xs text-gray-500 mt-3">석수 변경은 고객센터를 통해 요청해주세요.</p>
                 </div>
               </div>
             )}
@@ -361,37 +324,18 @@ export default function TeamsPage() {
               </div>
 
               <div>
-                <label className="block text-sm text-gray-400 mb-2">플랜 선택</label>
-                <div className="space-y-2">
-                  {(['TEAM_STARTER', 'TEAM_GROWTH', 'TEAM_BUSINESS'] as const).map((plan) => (
-                    <label
-                      key={plan}
-                      className={`flex items-center justify-between cursor-pointer rounded-lg border p-3 transition ${
-                        newTeamPlan === plan
-                          ? 'border-blue-600 bg-blue-600/10'
-                          : 'border-gray-700 hover:border-gray-500'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="radio"
-                          name="plan"
-                          value={plan}
-                          checked={newTeamPlan === plan}
-                          onChange={() => setNewTeamPlan(plan)}
-                          className="accent-blue-500"
-                        />
-                        <div>
-                          <div className="text-sm font-medium">{PLAN_LABELS[plan]}</div>
-                          <div className="text-xs text-gray-400">
-                            {PLAN_SEATS[plan] === 999 ? '무제한 석수' : `최대 ${PLAN_SEATS[plan]}석`}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-xs text-blue-400 font-semibold">{PLAN_PRICES[plan]}</div>
-                    </label>
-                  ))}
-                </div>
+                <label className="block text-sm text-gray-400 mb-1">석수</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={newTeamSeats}
+                  onChange={(e) => setNewTeamSeats(Math.max(1, Number(e.target.value)))}
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Desktop 라이센스 · 좌석당 {PRICE_PER_SEAT.toLocaleString('ko-KR')}원/월 · 총{' '}
+                  {(newTeamSeats * PRICE_PER_SEAT).toLocaleString('ko-KR')}원/월
+                </p>
               </div>
             </div>
 

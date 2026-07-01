@@ -1,4 +1,4 @@
-// Team 엔티티 단위 테스트 — 플랜 기반 석수 산정·플랜 업그레이드 전이 회귀 방지
+// Team 엔티티 단위 테스트 — 명시적 석수 설정·플랜 업그레이드 전이 회귀 방지
 package com.codeprint.domain.team;
 
 import com.codeprint.shared.plan.UserPlan;
@@ -14,25 +14,25 @@ class TeamTest {
     private final UUID ownerId = UUID.randomUUID();
 
     @Test
-    @DisplayName("create — 플랜 기본 석수로 totalSeats 설정 (TEAM_STARTER=15)")
-    void create_setsSeatsFromPlan() {
-        Team team = Team.create(ownerId, "팀", UserPlan.TEAM_STARTER);
+    @DisplayName("create — 전달받은 seats 값으로 totalSeats 설정")
+    void create_setsSeatsFromParameter() {
+        Team team = Team.create(ownerId, "팀", UserPlan.DESKTOP, 15);
 
         assertThat(team.getId()).isNotNull();
         assertThat(team.getOwnerUserId()).isEqualTo(ownerId);
-        assertThat(team.getPlan()).isEqualTo(UserPlan.TEAM_STARTER);
+        assertThat(team.getPlan()).isEqualTo(UserPlan.DESKTOP);
         assertThat(team.getTotalSeats()).isEqualTo(15);
         assertThat(team.getCreatedAt()).isNotNull();
     }
 
     @Test
-    @DisplayName("upgradePlan — 플랜과 totalSeats를 새 플랜 기준으로 갱신")
+    @DisplayName("upgradePlan — 플랜과 totalSeats를 전달받은 값으로 갱신")
     void upgradePlan_updatesPlanAndSeats() {
-        Team team = Team.create(ownerId, "팀", UserPlan.TEAM_STARTER);
+        Team team = Team.create(ownerId, "팀", UserPlan.DESKTOP, 15);
 
-        team.upgradePlan(UserPlan.TEAM_GROWTH);
+        team.upgradePlan(UserPlan.DESKTOP, 40);
 
-        assertThat(team.getPlan()).isEqualTo(UserPlan.TEAM_GROWTH);
+        assertThat(team.getPlan()).isEqualTo(UserPlan.DESKTOP);
         assertThat(team.getTotalSeats()).isEqualTo(40);
     }
 }

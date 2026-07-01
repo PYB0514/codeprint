@@ -110,15 +110,15 @@ public class AdminController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // 사용자 플랜 변경 (FREE↔PRO) — 감사 로그를 남기는 인가된 관리자 액션. 결제 주문을 위조하지 않고 별도 grant 기록으로 모델링.
+    // 사용자 플랜 변경 (FREE↔DESKTOP) — 감사 로그를 남기는 인가된 관리자 액션. 결제 주문을 위조하지 않고 별도 grant 기록으로 모델링.
     @PostMapping("/users/{id}/plan")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> changePlan(@PathVariable UUID id,
                                         @Valid @RequestBody PlanGrantRequest req,
                                         @AuthenticationPrincipal User admin) {
         String target = req.plan().toUpperCase();
-        if (!target.equals("FREE") && !target.equals("PRO")) {
-            return ResponseEntity.badRequest().body(Map.of("message", "plan은 FREE 또는 PRO만 가능합니다. (팀 플랜은 별도 경로)"));
+        if (!target.equals("FREE") && !target.equals("DESKTOP")) {
+            return ResponseEntity.badRequest().body(Map.of("message", "plan은 FREE 또는 DESKTOP만 가능합니다. (팀 플랜은 별도 경로)"));
         }
         Optional<User> opt = userRepository.findById(id);
         if (opt.isEmpty()) return ResponseEntity.notFound().build();
@@ -128,7 +128,7 @@ public class AdminController {
         if (target.equals(oldPlan)) {
             return ResponseEntity.ok(Map.of("message", "이미 해당 플랜입니다.", "plan", oldPlan));
         }
-        if (target.equals("PRO")) user.upgradeToPro();
+        if (target.equals("DESKTOP")) user.upgradeToPro();
         else user.downgradeToFree();
         userRepository.save(user);
         // 감사 로그 — 자기 자신에게 부여하는 경우도 기록 (권한 남용 추적)

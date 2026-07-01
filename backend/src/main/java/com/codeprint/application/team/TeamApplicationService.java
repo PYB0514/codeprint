@@ -20,9 +20,8 @@ public class TeamApplicationService {
 
     // 팀 생성 (플랜 구매 완료 후 호출)
     @Transactional
-    public Team createTeam(UUID ownerUserId, String name, UserPlan plan) {
-        if (!plan.isTeamPlan()) throw new IllegalArgumentException("팀 플랜이 아닙니다: " + plan);
-        Team team = Team.create(ownerUserId, name, plan);
+    public Team createTeam(UUID ownerUserId, String name, UserPlan plan, int seats) {
+        Team team = Team.create(ownerUserId, name, plan, seats);
         teamRepository.save(team);
         // 팀장 자신도 OWNER로 등록
         memberRepository.save(TeamMember.add(team.getId(), ownerUserId, TeamRole.OWNER));
@@ -85,11 +84,10 @@ public class TeamApplicationService {
 
     // 팀 플랜 업그레이드
     @Transactional
-    public Team upgradePlan(UUID teamId, UUID requesterId, UserPlan newPlan) {
+    public Team upgradePlan(UUID teamId, UUID requesterId, UserPlan newPlan, int seats) {
         Team team = getTeamOrThrow(teamId);
         verifyOwner(team, requesterId);
-        if (!newPlan.isTeamPlan()) throw new IllegalArgumentException("팀 플랜이 아닙니다: " + newPlan);
-        team.upgradePlan(newPlan);
+        team.upgradePlan(newPlan, seats);
         return teamRepository.save(team);
     }
 

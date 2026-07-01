@@ -29,13 +29,13 @@ class UserTest {
     }
 
     @Test
-    @DisplayName("upgradeToPro() — 플랜이 PRO로 변경")
+    @DisplayName("upgradeToPro() — 플랜이 DESKTOP으로 변경")
     void upgradeToPro_changesPlanToPro() {
         User user = User.create(1L, "a@github.com", "a");
 
         user.upgradeToPro();
 
-        assertThat(user.getPlan()).isEqualTo(UserPlan.PRO);
+        assertThat(user.getPlan()).isEqualTo(UserPlan.DESKTOP);
         assertThat(user.getUpdatedAt()).isNotNull();
     }
 

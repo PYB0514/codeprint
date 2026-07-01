@@ -154,7 +154,7 @@ export default function LandingPage() {
 
             <p className="text-gray-400 text-base max-w-md leading-relaxed">
               URL 하나로 파일 구조, 함수 호출 흐름, DB 연결 관계를 시각화한다.
-              런타임 경고 감지와 AI 분석까지 — 무료로 프로젝트 3개까지.
+              런타임 경고 감지와 AI 분석까지 — 전부 무료.
             </p>
 
             {/* URL 입력 — 바로 분석 시작 */}
@@ -253,7 +253,7 @@ export default function LandingPage() {
           {/* 가격 안내 섹션 */}
           <section className="w-full max-w-2xl flex flex-col gap-4">
             <h2 className="text-xl font-bold text-center">요금제</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Free */}
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col gap-3">
                 <div>
@@ -262,7 +262,7 @@ export default function LandingPage() {
                   <p className="text-xs text-gray-500 mt-0.5">영구 무료</p>
                 </div>
                 <ul className="flex flex-col gap-1.5 text-xs text-gray-400">
-                  <li>✓ 비공개 프로젝트 3개</li>
+                  <li>✓ 비공개 프로젝트 무제한</li>
                   <li>✓ 그래프 시각화 전체</li>
                   <li>✓ 경고 감지 8종</li>
                   <li>✓ 팀 협업 최대 5명</li>
@@ -276,47 +276,27 @@ export default function LandingPage() {
                 </button>
               </div>
 
-              {/* Pro */}
+              {/* Desktop 라이센스 */}
               <div className="bg-gray-900 border border-blue-500/40 rounded-xl p-5 flex flex-col gap-3 relative">
                 <span className="absolute top-3 right-3 text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">추천</span>
                 <div>
-                  <p className="text-sm font-semibold text-blue-400">Pro</p>
+                  <p className="text-sm font-semibold text-blue-400">Desktop 라이센스</p>
                   <p className="text-2xl font-bold mt-1">₩9,900</p>
-                  <p className="text-xs text-gray-500 mt-0.5">월정액</p>
+                  <p className="text-xs text-gray-500 mt-0.5">좌석당 월정액</p>
                 </div>
                 <ul className="flex flex-col gap-1.5 text-xs text-gray-400">
                   <li>✓ 비공개 프로젝트 무제한</li>
                   <li>✓ AI 설명 / 코드 생성</li>
                   <li>✓ 그래프 버전 히스토리</li>
                   <li>✓ 경고 MD 내보내기</li>
+                  <li>✓ 개인 1석 또는 팀 N석 선택</li>
                   <li>✓ Free 모든 기능 포함</li>
                 </ul>
                 <button
                   onClick={handleLogin}
                   className="mt-auto w-full py-2 bg-blue-600 hover:bg-blue-500 text-sm font-medium rounded-lg transition-colors"
                 >
-                  Pro 시작
-                </button>
-              </div>
-
-              {/* Team */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-purple-400">Team</p>
-                  <p className="text-2xl font-bold mt-1">₩39,000~</p>
-                  <p className="text-xs text-gray-500 mt-0.5">팀 규모별 월정액</p>
-                </div>
-                <ul className="flex flex-col gap-1.5 text-xs text-gray-400">
-                  <li>✓ Pro 모든 기능 포함</li>
-                  <li>✓ 팀 협업 / 좌석 관리</li>
-                  <li>✓ Starter / Growth / Business</li>
-                  <li>✓ 최대 40명+</li>
-                </ul>
-                <button
-                  onClick={() => navigate('/teams')}
-                  className="mt-auto w-full py-2 bg-gray-800 hover:bg-gray-700 text-sm rounded-lg transition-colors"
-                >
-                  팀 플랜 보기
+                  Desktop 라이센스 시작
                 </button>
               </div>
             </div>
