@@ -136,6 +136,7 @@ PostCompact 훅으로부터 신호를 받으면 **1회라도** 즉시 아래 순
 *자가 진단 (codeprint MCP, push 전 항상)*
 - push 전 `codeprint` MCP(`get_warnings`)로 이번 변경사항을 자가검사(HIGH/MEDIUM 경고 확인)
 - MCP는 `localhost:8080` 백엔드 서버가 떠 있어야 호출됨. 꺼져 있으면 §0 "서버 시작 금지" 그대로 적용 — 직접 켜지 말고 사용자에게 켜달라고 요청한 뒤 재시도
+- **개발 중간 자가검사**: push 직전 1회로 미루지 않는다. 관련 파일을 여러 개 고친 뒤 자연스러운 멈춤 지점(한 기능 단위 완료, 다음 파일로 넘어가기 전 등)마다 `get_warnings`로 중간 점검한다 — 문제를 push 직전이 아니라 만드는 시점에 바로 발견하기 위함
 
 **규칙 5: DECISIONS.md 기록**
 아래 중 하나라도 해당하면 push 전에 `decisions/` 폴더 내 주제별 파일에 기록한다. (`DECISIONS_BACKEND.md`, `DECISIONS_RAILWAY.md`, `DECISIONS_FRONTEND.md`, `DECISIONS_INFRA.md` 등 — 루트에 DECISIONS.md를 만들지 않는다.)
