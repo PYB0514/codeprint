@@ -1434,3 +1434,13 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **수정.** `core/events.py`와 달리 이번엔 **이미 이 정확한 프로젝트 유형을 위한 전용 검출기가 존재**(`FEATURE_LAYER_VIOLATION` — `app→features→entities→shared` 의미를 정확히 앎) — 그 게이트(프론트 언어+피처 2개 이상)를 `detectLayeredViolations`에도 재사용해 FSD/피처-슬라이스 프로젝트에서는 이 백엔드 지향 검출기 자체를 스킵. `isReduxStyleProject`(#385)와 동일 패턴(다른 컨벤션이 같은 디렉터리명을 다르게 쓰면 특화 검출기에게 양보).
 
 **A/B.** fsd-examples LAYERED_REVERSE_DEPENDENCY 3→0(전체 0건). spring-petclinic(0)·express(DEAD_CODE만) 무변(피처-슬라이스 아님, 게이트 미작동). 회귀 테스트 `layeredReverse_fsdFeatureSliced_gated`(신규 게이트로 미발화) + 기존 `layeredReverse_modelImportsController`(java, 게이트 미해당이라 계속 발화) 무회귀. 백엔드 전체 665테스트 green.
+
+## HIGH precision 폭 — context-first 레이아웃 2번째 레포(IDDD_Samples) 측정 (2026-07-01, 측정만·미수정)
+
+**측정.** py-ddd(Python) 외 두 번째 context-first형 레포로 Vaughn Vernon의 `IDDD_Samples`(Java, 4개 독립 Gradle 모듈=바운디드 컨텍스트: agilepm·collaboration·common·identityaccess, DDD 교과서) 클론(`C:\Dev\codeprint-bench\iddd-samples`) 후 `analyzeLocal`. 500파일·150경고.
+
+**결과 — HIGH 정밀도 양호.** `CROSS_CONTEXT_IMPORT`·`DOMAIN_IMPORTS_INFRA` **0건**(4개 컨텍스트 분리가 실제로 잘 지켜짐 — 단, 이 레포는 `domain/model/{하위컨텍스트}` 3단 중첩이라 우리 컨텍스트 추출기가 애초에 인식 못 하는 구조라 recall 미검증인 채로 0인지 진짜 위반이 없어서 0인지는 미확정, §다음 참고). `DB_LAYER_BYPASS` 15건은 코드 대조 결과 **전부 기존에 이미 정탐으로 인정된 두 패턴**: ①`*QueryService.java → AbstractQueryService.java/JoinOn.java`(CQRS 읽기 전용 쿼리 서비스가 리포지토리 추상을 우회 — #379에서 java-realworld로 이미 확인된 수용된 TP 패턴) ②`ApplicationServiceLifeCycle.java`(애플리케이션 부트스트랩/컴포지션 루트, 5건)가 LevelDB 구현체를 직접 와이어링. `CYCLIC_IMPORT` 4건은 `User↔DomainRegistry↔AuthorizationService/TenantProvisioningService`(서비스 로케이터 패턴의 전형적 순환) — 실제 코드 결함으로 보임(진짜 TP).
+
+**애매 사례(미수정) — 컴포지션 루트 예외.** `ApplicationServiceLifeCycle`처럼 애플리케이션 시작 시 구체 구현체를 와이어링하는 클래스는 아키텍처 문헌상 레이어링 규칙의 의도적 예외(무엇이든 알아야 배선 가능)다. 현재 `DB_LAYER_BYPASS`는 이런 컴포지션 루트를 구분하지 않음. 좁히려면 "*LifeCycle·*Bootstrap·*Configuration류 파일명 제외" 같은 휴리스틱이 필요하나, ①이번 레포에서 5/15건뿐(폭 작음) ②java-realworld 등 기존 Spring 벤치에서는 이 패턴이 안 나타남(회귀 없음 확인됨, #379) ③Spring `@Configuration` 류가 진짜 배선 코드인지 위장한 위반인지는 파일명만으론 신뢰 낮음 — **수정하지 않고 다음 세션 후보로만 기록**.
+
+**다음.** context-first 3단 중첩(`domain/model/{ctx}`) 레이아웃의 컨텍스트 추출 recall은 별도 측정 필요(이번엔 precision만 확인). 컴포지션 루트 예외는 사용자 판단 대기.
