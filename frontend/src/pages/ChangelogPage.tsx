@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.103.0',
+    date: '2026-07-01',
+    title: '팀 결제 실배선 — 좌석 기반 Toss 결제로 팀 생성·좌석 증가',
+    type: 'feature',
+    items: [
+      { category: '팀', desc: '팀 생성이 실제 Toss 결제(좌석 수 × 9,900원)를 거치도록 바뀌었습니다. 개인 Desktop 라이센스 보유 여부와 무관하게 팀 결제만으로 팀을 만들 수 있습니다.' },
+      { category: '팀', desc: '좌석 증가 시 늘어난 좌석만큼만 결제하는 기능을 추가했습니다. 좌석 감소는 결제 없이 바로 반영됩니다.' },
+    ],
+  },
+  {
     version: 'v0.102.0',
     date: '2026-07-01',
     title: '팀 삭제 기능 추가 + 팀 생성 보호 강화',

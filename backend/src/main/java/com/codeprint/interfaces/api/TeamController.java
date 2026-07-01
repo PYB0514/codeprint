@@ -6,10 +6,8 @@ import com.codeprint.domain.team.Team;
 import com.codeprint.domain.team.TeamMember;
 import com.codeprint.domain.team.TeamProjectAllocation;
 import com.codeprint.domain.user.User;
-import com.codeprint.shared.plan.UserPlan;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -27,15 +25,6 @@ import java.util.UUID;
 public class TeamController {
 
     private final TeamApplicationService teamService;
-
-    // 팀 생성
-    @PostMapping
-    public ResponseEntity<TeamResponse> createTeam(
-            @Valid @RequestBody CreateTeamRequest req,
-            @AuthenticationPrincipal User user) {
-        Team team = teamService.createTeam(user.getId(), req.name(), req.plan(), req.seats());
-        return ResponseEntity.status(201).body(toResponse(team));
-    }
 
     // 팀 삭제
     @DeleteMapping("/{teamId}")
@@ -110,13 +99,13 @@ public class TeamController {
         return ResponseEntity.ok(Map.of("allocatedSeats", req.seats(), "remainingSeats", remaining));
     }
 
-    // 플랜 업그레이드
+    // 좌석 수 감소 (증가는 /api/teams/{teamId}/seats/payment/prepare 경유)
     @PutMapping("/{teamId}/plan")
-    public ResponseEntity<TeamResponse> upgradePlan(
+    public ResponseEntity<TeamResponse> decreaseSeats(
             @PathVariable UUID teamId,
-            @Valid @RequestBody UpgradePlanRequest req,
+            @Valid @RequestBody DecreaseSeatsRequest req,
             @AuthenticationPrincipal User user) {
-        Team team = teamService.upgradePlan(teamId, user.getId(), req.plan(), req.seats());
+        Team team = teamService.decreaseSeats(teamId, user.getId(), req.seats());
         return ResponseEntity.ok(toResponse(team));
     }
 
@@ -127,10 +116,9 @@ public class TeamController {
                 t.getTotalSeats(), used, t.getCreatedAt());
     }
 
-    record CreateTeamRequest(@NotBlank String name, @NotNull UserPlan plan, @Min(1) int seats) {}
     record AddMemberRequest(@NotNull UUID userId) {}
     record AllocateSeatsRequest(@Min(0) int seats) {}
-    record UpgradePlanRequest(@NotNull UserPlan plan, @Min(1) int seats) {}
+    record DecreaseSeatsRequest(@Min(1) int seats) {}
 
     record TeamResponse(UUID id, String name, String plan, int totalSeats, int usedSeats, Instant createdAt) {}
     record MemberResponse(UUID id, UUID userId, String role, Instant joinedAt) {}

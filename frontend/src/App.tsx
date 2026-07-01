@@ -33,6 +33,7 @@ const DonateSuccessPage = lazy(() => import('./pages/DonateSuccessPage'))
 const DonateFailPage = lazy(() => import('./pages/DonateFailPage'))
 const JoinCollaborationPage = lazy(() => import('./pages/JoinCollaborationPage'))
 const TeamsPage = lazy(() => import('./pages/TeamsPage'))
+const TeamPaymentSuccessPage = lazy(() => import('./pages/TeamPaymentSuccessPage'))
 
 import CookieBanner from './components/CookieBanner'
 import NoticeBanner from './components/NoticeBanner'
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="/community" element={<CommunityPage />} />
           <Route path="/community/posts/:postId/graph" element={<CommunityPostGraphPage />} />
           <Route path="/payment/success" element={<PaymentSuccessPage />} />
+          <Route path="/payment/team-success" element={<TeamPaymentSuccessPage />} />
           <Route path="/payment/cancel" element={<PaymentCancelPage />} />
           <Route path="/payment/fail" element={<PaymentCancelPage />} />
           <Route path="/changelog" element={<ChangelogPage />} />
