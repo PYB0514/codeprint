@@ -133,6 +133,10 @@ PostCompact 훅으로부터 신호를 받으면 **1회라도** 즉시 아래 순
 *OAuth 로그인이 필요한 플로우*
 - GitHub 로그인이 필요한 부분은 사용자에게 직접 테스트를 요청하고 결과를 확인한 뒤 push
 
+*자가 진단 (codeprint MCP, push 전 항상)*
+- push 전 `codeprint` MCP(`get_warnings`)로 이번 변경사항을 자가검사(HIGH/MEDIUM 경고 확인)
+- MCP는 `localhost:8080` 백엔드 서버가 떠 있어야 호출됨. 꺼져 있으면 §0 "서버 시작 금지" 그대로 적용 — 직접 켜지 말고 사용자에게 켜달라고 요청한 뒤 재시도
+
 **규칙 5: DECISIONS.md 기록**
 아래 중 하나라도 해당하면 push 전에 `decisions/` 폴더 내 주제별 파일에 기록한다. (`DECISIONS_BACKEND.md`, `DECISIONS_RAILWAY.md`, `DECISIONS_FRONTEND.md`, `DECISIONS_INFRA.md` 등 — 루트에 DECISIONS.md를 만들지 않는다.)
 - 버그 원인을 파악하고 수정했다
