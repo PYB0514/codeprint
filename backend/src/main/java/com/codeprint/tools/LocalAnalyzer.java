@@ -7,8 +7,8 @@ import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.GraphRepository;
 import com.codeprint.domain.graph.Node;
+import com.codeprint.infrastructure.analysis.CachedParsedFileLoader;
 import com.codeprint.infrastructure.analysis.GraphBuilder;
-import com.codeprint.infrastructure.analysis.LanguageDetector;
 import com.codeprint.infrastructure.analysis.ParsedFile;
 import com.codeprint.infrastructure.analysis.SourceFileWalker;
 import com.codeprint.infrastructure.analysis.StaticCodeAnalyzer;
@@ -31,41 +31,9 @@ public class LocalAnalyzer {
         Path rootDir = args.length > 0 ? Path.of(args[0]) : Path.of(".");
         System.out.println("분석 대상: " + rootDir.toAbsolutePath());
 
-        SourceFileWalker walker = new SourceFileWalker();
-        StaticCodeAnalyzer analyzer = new StaticCodeAnalyzer();
-
-        List<Path> files = walker.walk(rootDir).files();
-        System.out.println("소스 파일 수: " + files.size());
-
-        List<ParsedFile> parsedFiles = new ArrayList<>();
-        for (Path file : files) {
-            String lang = LanguageDetector.detect(file.getFileName().toString()).orElse("unknown");
-            try {
-                parsedFiles.add(analyzer.analyze(file, rootDir, lang));
-            } catch (Exception e) {
-                System.err.println("분석 실패 (무시): " + file + " — " + e.getMessage());
-            }
-        }
-        System.out.println("파싱 완료: " + parsedFiles.size() + " 파일");
-
-        // 프로덕션과 동일한 GraphBuilder로 그래프 구성 — 인메모리 Repository로 DB 없이 실행.
-        // 과거 자체 재구현(buildGraph)은 인터페이스→구현체 우선 매칭·sameFile 마커·isFrameworkAnnotated 메타가 빠져
-        // 프로덕션보다 호출 해소가 약했고 미호출 비율이 부풀려져(예: petclinic 19% vs 프로덕션 1%) 임계값 교정에 쓸 수 없었다.
-        InMemoryGraphRepository repo = new InMemoryGraphRepository();
-        GraphBuilder builder = new GraphBuilder(repo);
-        Graph graph = builder.build(UUID.randomUUID(), UUID.randomUUID(), parsedFiles);
-        List<Node> nodes = repo.findNodesByGraphId(graph.getId());
-        List<Edge> edges = repo.findEdgesByGraphId(graph.getId());
-        System.out.println("노드: " + nodes.size() + ", 엣지: " + edges.size());
-
-        // 의도 아키텍처 선언(.codeprint/architecture.json)이 있으면 INTENT_DRIFT까지 검사
-        ArchitectureIntent intent = loadIntent(rootDir);
-        if (intent != null) {
-            System.out.println("의도 선언 로드: 모듈 " + intent.modules().size() + "개, 규칙 " + intent.rules().size() + "개");
-        }
-
-        GraphWarningService warningService = new GraphWarningService();
-        List<Map<String, Object>> warnings = warningService.detect(nodes, edges, intent);
+        UUID projectId = UUID.randomUUID();
+        CachedParsedFileLoader loader = new CachedParsedFileLoader(new StaticCodeAnalyzer(), new InMemoryParsedFileCachePort());
+        List<Map<String, Object>> warnings = analyze(rootDir, projectId, loader);
 
         if (warnings.isEmpty()) {
             System.out.println("\n✅ 워닝 없음");
@@ -80,6 +48,35 @@ public class LocalAnalyzer {
             System.out.println("\n--- 유형별 요약 ---");
             counts.forEach((type, count) -> System.out.println("  " + type + ": " + count + "개"));
         }
+    }
+
+    // rootDir을 분석해 워닝 목록을 반환 — LocalWatcher가 동일 loader(캐시 유지)로 반복 호출
+    static List<Map<String, Object>> analyze(Path rootDir, UUID projectId, CachedParsedFileLoader loader) throws Exception {
+        SourceFileWalker walker = new SourceFileWalker();
+        List<Path> files = walker.walk(rootDir).files();
+        System.out.println("소스 파일 수: " + files.size());
+
+        List<ParsedFile> parsedFiles = loader.load(projectId, rootDir, files);
+        System.out.println("파싱 완료: " + parsedFiles.size() + " 파일");
+
+        // 프로덕션과 동일한 GraphBuilder로 그래프 구성 — 인메모리 Repository로 DB 없이 실행.
+        // 과거 자체 재구현(buildGraph)은 인터페이스→구현체 우선 매칭·sameFile 마커·isFrameworkAnnotated 메타가 빠져
+        // 프로덕션보다 호출 해소가 약했고 미호출 비율이 부풀려져(예: petclinic 19% vs 프로덕션 1%) 임계값 교정에 쓸 수 없었다.
+        InMemoryGraphRepository repo = new InMemoryGraphRepository();
+        GraphBuilder builder = new GraphBuilder(repo);
+        Graph graph = builder.build(projectId, UUID.randomUUID(), parsedFiles);
+        List<Node> nodes = repo.findNodesByGraphId(graph.getId());
+        List<Edge> edges = repo.findEdgesByGraphId(graph.getId());
+        System.out.println("노드: " + nodes.size() + ", 엣지: " + edges.size());
+
+        // 의도 아키텍처 선언(.codeprint/architecture.json)이 있으면 INTENT_DRIFT까지 검사
+        ArchitectureIntent intent = loadIntent(rootDir);
+        if (intent != null) {
+            System.out.println("의도 선언 로드: 모듈 " + intent.modules().size() + "개, 규칙 " + intent.rules().size() + "개");
+        }
+
+        GraphWarningService warningService = new GraphWarningService();
+        return warningService.detect(nodes, edges, intent);
     }
 
     // rootDir/.codeprint/architecture.json 을 읽어 의도 아키텍처를 구성 — 없거나 파싱 실패면 null
