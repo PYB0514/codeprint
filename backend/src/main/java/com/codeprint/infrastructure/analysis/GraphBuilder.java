@@ -117,6 +117,10 @@ public class GraphBuilder {
 
             for (String importPath : pf.imports()) {
                 fileNodeIds.entrySet().stream()
+                        // 자기 자신 매칭 차단 — bare npm 패키지명(예: 'zustand')이 동명 로컬 파일(zustand.ts)의
+                        // 경로 접미사와 우연히 일치해 자기참조 IMPORT phantom(CYCLIC_IMPORT 1노드 자가순환)을 만듦.
+                        // 파일이 스스로를 import하는 것은 어떤 언어에서도 성립하지 않으므로 항상 안전한 차단.
+                        .filter(e -> !sourceFileId.equals(e.getValue()))
                         .filter(e -> isImportMatch(pf.filePath(), importPath, e.getKey()))
                         .findFirst()
                         .ifPresent(e -> {
@@ -653,11 +657,19 @@ public class GraphBuilder {
         // 절대(루트 기준) import. matchesModulePath가 세그먼트 경계 + TS 확장자 + /index.* 폴백을 처리한다.
         // ★점이 있는 패키지경로(Java com.example.User·Python pkg.mod·Go full path)는 슬래시 정규화 시 점이 남아
         //   여기서 no-op → 아래 dotted 브랜치가 처리(순수 additive, 무회귀). 디렉터리(barrel) import recall만 추가.
-        if (matchesModulePath(normalizedFile, fileWithoutExt, importPath.replace("\\", "/"))) return true;
+        // ★슬래시 없는 단일 세그먼트(예: 'zustand')는 npm 패키지 bare specifier가 지배적 — 실제 baseUrl 절대
+        //   import는 항상 디렉터리+파일(entities/task류)이라 슬래시를 동반한다. 슬래시 요구로 npm 패키지가
+        //   동명 로컬 파일(zustand.ts↔zustand.ts)로 자기/교차 매칭돼 CYCLIC_IMPORT phantom을 만드는 것을 차단
+        //   (2026-07-01 bulletproof-react __mocks__/zustand.ts 3개 교차순환 측정으로 발견).
+        if (importPath.contains("/")
+                && matchesModulePath(normalizedFile, fileWithoutExt, importPath.replace("\\", "/"))) return true;
 
         // 패키지경로: com.example.User → com/example/User (Java/Kotlin/Python/Go 절대 import)
         String normalizedImport = importPath.replace(".", "/").replace("\\", "/");
-        return fileWithoutExt.endsWith(normalizedImport)
+        // 확장자 없는 raw endsWith 매칭은 아래 6개 언어 확장자 체크와 중복(각 언어는 자기 확장자 접미사로 이미
+        // 커버됨) — TS/JS(.ts/.tsx/.js/.jsx)만 확장자 목록에 없어 이 raw 매칭에 전적으로 의존하는데, 슬래시 없는
+        // 단일 세그먼트(zustand 등 npm 패키지)가 여기로 새서 동명 로컬 파일과 오매칭됐다. 슬래시 요구로 차단.
+        return (normalizedImport.contains("/") && fileWithoutExt.endsWith(normalizedImport))
                 || normalizedFile.endsWith(normalizedImport + ".java")
                 || normalizedFile.endsWith(normalizedImport + ".kt")
                 || normalizedFile.endsWith(normalizedImport + ".py")
