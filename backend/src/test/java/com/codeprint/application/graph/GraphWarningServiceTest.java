@@ -1609,6 +1609,23 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("LAYERED_REVERSE_DEPENDENCY 미발화 — FSD 피처-슬라이스 게이트 (fsd-examples 실측: entities→shared/api가 " +
+            "CONTROLLER_DIRS 'api' 별칭에 오분류돼 레이어 역전 오탐이던 것을 전용 FEATURE_LAYER_VIOLATION 게이트로 스킵)")
+    void layeredReverse_fsdFeatureSliced_gated() {
+        Node entity = Node.create(graphId, NodeType.FILE, "lib.ts", "entities/task/lib.ts", "typescript");
+        Node sharedApi = Node.create(graphId, NodeType.FILE, "index.ts", "shared/api/index.ts", "typescript");
+        // 게이트가 요구하는 피처 2개 이상(features/{X}/) 동반
+        Node featureA = Node.create(graphId, NodeType.FILE, "ui.ts", "features/toggle-task/ui.ts", "typescript");
+        Node featureB = Node.create(graphId, NodeType.FILE, "ui.ts", "features/add-task/ui.ts", "typescript");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(entity, sharedApi, featureA, featureB),
+                List.of(importEdgeForPath(entity.getId(), sharedApi.getId())));
+
+        assertThat(warnings).noneMatch(w -> "LAYERED_REVERSE_DEPENDENCY".equals(w.get("type")));
+    }
+
+    @Test
     @DisplayName("Model 정방향 — Service가 Model을 import하는 것은 정상(경고 없음)")
     void layered_serviceImportsModel_noWarning() {
         Node svc = nodeAt("OwnerService", "/app/service/OwnerService.java");
