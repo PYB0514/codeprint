@@ -764,6 +764,20 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("precision: 컴포지션 루트(*LifeCycle)가 영속화 구현체를 직접 import — DB_LAYER_BYPASS 미발화 (IDDD_Samples 실측)")
+    void dbLayerBypass_compositionRoot_excluded() {
+        // ApplicationServiceLifeCycle.java 가 LevelDBEventStore.java 를 직접 배선 — 애플리케이션 부트스트랩은
+        // 구체 구현체를 알아야 배선 가능하므로 레이어링 규칙의 의도적 예외(2026-07-01 IDDD_Samples 측정).
+        Node lifecycle = funcNodeWithPath("startup", "/com/saasovation/agilepm/application/ApplicationServiceLifeCycle.java");
+        Node store = funcNodeWithPath("LevelDBEventStore", "/com/saasovation/agilepm/infrastructure/persistence/LevelDBEventStore.java");
+        Edge imp = importEdgeForPath(lifecycle.getId(), store.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(lifecycle, store), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
     @DisplayName("precision: 테스트 코드(application 패키지 *Test)가 영속화를 직접 import — DB_LAYER_BYPASS 미발화 (통합 테스트 와이어링)")
     void dbLayerBypass_testSource_excluded() {
         // 통합 테스트는 레포지토리를 직접 주입/생성하는 게 정상 — 프로덕션 위반 아님. java-realworld *QueryServiceTest 류 FP 제거.

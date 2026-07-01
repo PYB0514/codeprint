@@ -327,7 +327,9 @@ public class GraphWarningService {
             // 테스트 코드가 레포지토리/영속화를 직접 import하는 것은 정상(통합 테스트 와이어링)이라 위반 아님 — 제외
             if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))) continue;
 
-            boolean srcIsUpperLayer = containsLayerSegment(srcPath, UPPER_LAYER_DIRS);
+            // 컴포지션 루트/부트스트랩 클래스는 애플리케이션 시작 시 구체 구현체를 배선하는 것이 설계 의도라
+            // 레이어링 규칙의 의도적 예외(IDDD_Samples ApplicationServiceLifeCycle 측정으로 발견, 2026-07-01).
+            boolean srcIsUpperLayer = containsLayerSegment(srcPath, UPPER_LAYER_DIRS) && !isCompositionRoot(srcPath);
             // 영속화 타깃 = INFRA 레이어이면서 동시에 영속화 세그먼트를 가진 경로 — 두 조건 교집합으로 한정해
             // infrastructure/service(비영속화)·domain/port/repository(INFRA 밖 도메인 인터페이스) 오탐을 배제한다.
             // errors/exceptions 파일은 리포지토리 CRUD가 아닌 예외 타입 정의라 "직접 persistence 호출"이 아님(py-realworld
@@ -630,6 +632,19 @@ public class GraphWarningService {
         String stem = (dot > 0 ? base.substring(0, dot) : base).toLowerCase();
         return stem.equals("error") || stem.equals("errors")
                 || stem.equals("exception") || stem.equals("exceptions");
+    }
+
+    // 컴포지션 루트/부트스트랩 클래스 — 애플리케이션 시작 시 구체 구현체를 배선하는 것이 설계 의도라
+    // 레이어링 규칙(DB_LAYER_BYPASS)의 의도적 예외. 클래스명 접미사로 판별(DI/부트스트랩 공통 관용명).
+    private static boolean isCompositionRoot(String path) {
+        if (path == null) return false;
+        String p = path.replace("\\", "/");
+        int slash = p.lastIndexOf('/');
+        String base = slash >= 0 ? p.substring(slash + 1) : p;
+        int dot = base.lastIndexOf('.');
+        String className = dot > 0 ? base.substring(0, dot) : base;
+        return className.endsWith("LifeCycle") || className.endsWith("Lifecycle")
+                || className.endsWith("Bootstrap") || className.endsWith("Configuration");
     }
 
     // 경로에 주어진 레이어 디렉터리 세그먼트(/{dir}/) 중 하나라도 포함되는지 — 슬래시 정규화 후 세그먼트 매칭

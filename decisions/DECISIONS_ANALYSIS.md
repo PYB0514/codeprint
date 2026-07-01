@@ -1444,3 +1444,13 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **애매 사례(미수정) — 컴포지션 루트 예외.** `ApplicationServiceLifeCycle`처럼 애플리케이션 시작 시 구체 구현체를 와이어링하는 클래스는 아키텍처 문헌상 레이어링 규칙의 의도적 예외(무엇이든 알아야 배선 가능)다. 현재 `DB_LAYER_BYPASS`는 이런 컴포지션 루트를 구분하지 않음. 좁히려면 "*LifeCycle·*Bootstrap·*Configuration류 파일명 제외" 같은 휴리스틱이 필요하나, ①이번 레포에서 5/15건뿐(폭 작음) ②java-realworld 등 기존 Spring 벤치에서는 이 패턴이 안 나타남(회귀 없음 확인됨, #379) ③Spring `@Configuration` 류가 진짜 배선 코드인지 위장한 위반인지는 파일명만으론 신뢰 낮음 — **수정하지 않고 다음 세션 후보로만 기록**.
 
 **다음.** context-first 3단 중첩(`domain/model/{ctx}`) 레이아웃의 컨텍스트 추출 recall은 별도 측정 필요(이번엔 precision만 확인). 컴포지션 루트 예외는 사용자 판단 대기.
+
+## DB_LAYER_BYPASS 컴포지션 루트 예외 적용 (2026-07-01, fix)
+
+**사용자 판단.** 위 "애매 사례"를 사용자에게 제시 → **적용 결정**(2026-07-01). 폭이 작다는 이유로 미루기보다, 컴포지션 루트가 레이어링 규칙의 예외라는 근거(아키텍처 문헌 공통 합의)가 명확해 정밀도를 개선하기로 함.
+
+**수정.** `isCompositionRoot(path)` 추가 — 클래스명 접미사가 `LifeCycle`/`Lifecycle`/`Bootstrap`/`Configuration`이면 true(DI/부트스트랩 공통 관용명, 언어 무관). `detectDbLayerBypass`의 `srcIsUpperLayer` 조건에 `&& !isCompositionRoot(srcPath)` 추가. 회귀 테스트 `dbLayerBypass_compositionRoot_excluded`.
+
+**A/B.** IDDD_Samples DB_LAYER_BYPASS 15→10(-5, `ApplicationServiceLifeCycle→LevelDB*` 전부 제거, CQRS `*QueryService→AbstractQueryService/JoinOn` 10건은 기존 인정 패턴대로 불변). java-realworld(9)·py-realworld(12)·buckpal(0)·self(HIGH_FAN_OUT 8·DEAD_CODE 1) 전부 문서값과 동일=무회귀(`*LifeCycle`/`*Bootstrap`/`*Configuration` 파일이 없는 레포는 영향 0). 백엔드 전체 666테스트 green.
+
+**이로써 Context89 정밀도 감사 3항목(HIGH recall 측정·precision 폭·JS-React) + 사용자 지시 후속 1항목(컴포지션 루트) 모두 완료.**

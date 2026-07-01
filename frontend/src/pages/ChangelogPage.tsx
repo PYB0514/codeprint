@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.100.10',
+    date: '2026-07-01',
+    title: '분석 정확도 — 애플리케이션 부트스트랩 코드 오탐 제거',
+    type: 'fix',
+    items: [
+      { category: '정확도', desc: '애플리케이션 시작 시 DB 구현체를 배선하는 부트스트랩/컴포지션 루트 코드(*LifeCycle·*Bootstrap·*Configuration류)를 "DB 레이어 우회"로 잘못 경고하던 오탐을 제거했습니다. 이런 코드는 구체 구현체를 직접 다루는 것이 설계 의도이며, 실제 아키텍처 위반 탐지는 그대로 유지됩니다.' },
+    ],
+  },
+  {
     version: 'v0.100.9',
     date: '2026-07-01',
     title: '분석 정확도 — FSD 프론트엔드 레이어 오탐 제거',
