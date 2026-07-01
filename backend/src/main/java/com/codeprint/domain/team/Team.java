@@ -37,20 +37,20 @@ public class Team {
     private Instant createdAt;
 
     // 팀 생성
-    public static Team create(UUID ownerUserId, String name, UserPlan plan) {
+    public static Team create(UUID ownerUserId, String name, UserPlan plan, int seats) {
         Team t = new Team();
         t.id = UUID.randomUUID();
         t.ownerUserId = ownerUserId;
         t.name = name;
         t.plan = plan;
-        t.totalSeats = plan.defaultTotalSeats();
+        t.totalSeats = seats;
         t.createdAt = Instant.now();
         return t;
     }
 
     // 팀 플랜 업그레이드
-    public void upgradePlan(UserPlan newPlan) {
+    public void upgradePlan(UserPlan newPlan, int seats) {
         this.plan = newPlan;
-        this.totalSeats = newPlan.defaultTotalSeats();
+        this.totalSeats = seats;
     }
 }

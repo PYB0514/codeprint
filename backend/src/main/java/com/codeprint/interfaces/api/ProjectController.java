@@ -54,8 +54,7 @@ public class ProjectController {
             @AuthenticationPrincipal User user) {
         ProjectResponse response = ProjectResponse.from(
                 projectCommandService.createProject(
-                        user.getId(), request.githubRepoUrl(), request.name(), request.description(),
-                        user.getPlan().maxProjects()));
+                        user.getId(), request.githubRepoUrl(), request.name(), request.description()));
         return ResponseEntity.status(201).body(response);
     }
 

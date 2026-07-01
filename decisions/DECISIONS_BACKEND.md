@@ -2,6 +2,25 @@
 
 ---
 
+## 요금제 재설계 — Pro/Team 5단계 → Desktop 라이센스 통합, 무료 프로젝트 개수 제한 삭제 (2026-07-01, 기능)
+
+**문제.** `UserPlan`이 `FREE, PRO, TEAM_STARTER, TEAM_GROWTH, TEAM_BUSINESS` 5단계였는데 TEAM 3단계는 `monthlyPrice()`·`defaultTotalSeats()` 값만 다르고 실제 기능 차이가 전혀 없는 스텁이었다. 또한 FREE 플랜은 비공개 프로젝트 3개로 제한돼 있었는데, 실제 비용 방어는 `RateLimitFilter`(분석 시작 IP당 분당 10회)가 이미 담당하고 있어 프로젝트 개수 제한은 별도 가치 없이 사용자 경험만 해치는 규칙이었다.
+
+**해법.**
+1. `UserPlan`을 `FREE, DESKTOP` 2단계로 축소. `isPro()`/`isTeamPlan()`/`maxProjects()`/`defaultTotalSeats()`/`monthlyPrice()`를 `isPaid()`/`monthlyPricePerSeat()`로 재설계 — "개인 1석 또는 팀 N석"이라는 단일 개념으로 통합하고 좌석 수는 항상 명시적 파라미터로 받는다.
+2. `Team.create`/`upgradePlan`이 `plan.defaultTotalSeats()`로 좌석 수를 유도하던 것을 `seats`(int) 명시적 파라미터로 전달받도록 변경. `TeamController`의 `CreateTeamRequest`/`UpgradePlanRequest`에 `@Min(1) int seats` 필드 추가.
+3. `ProjectLimit` VO와 `ProjectCommandService.createProject`의 개수 제한 체크(`ProjectLimit.of(maxProjects).isExceeded(currentCount)`)를 완전히 제거. `ProjectController`가 더 이상 `user.getPlan().maxProjects()`를 전달하지 않음.
+4. `V47__migrate_plan_to_desktop.sql`로 `users.plan`/`teams.plan`의 기존 `PRO`/`TEAM_STARTER`/`TEAM_GROWTH`/`TEAM_BUSINESS` 값을 `DESKTOP`으로 일괄 UPDATE.
+
+**선택·트레이드오프.**
+- `User.upgradeToPro()`/`downgradeToFree()` 메서드명 자체는 유지(내부 대입값만 `UserPlan.DESKTOP`으로 변경). `PaymentApplicationService`→`UserUpgradePort`→`UserUpgradeAdapter`로 이어지는 Toss 결제 연동 체인 전체가 이 이름에 의존하고 있어, 이번 PR 범위(요금제 모델 재설계)를 벗어나는 리네이밍은 별도 PR로 미룸(§3 외과적 변경).
+- `CollaborationApplicationService`의 `ownerIsPro=false` 스텁도 동일 이유로 이번 범위에서 제외.
+- 프론트 `TeamsPage.tsx`(팀 생성/업그레이드 모달)와 `AdminPage.tsx`(관리자 플랜 변경)는 사용자 지시에 명시되진 않았으나, 백엔드 API 계약(`TeamController`의 seats 필드 추가, `UserPlan` 값 변경)이 바뀌면서 그대로 두면 400 에러·표시 오류가 나는 필연적 종속 파일이라 함께 수정.
+
+**검증.** `./gradlew compileJava`·관련 테스트(Plan/Team/Project)·`npx tsc -b` 통과 확인(본문 참조).
+
+---
+
 ## 분석 견고성 — clone 행 방지 + 서버 재기동 시 stuck 분석 청소 (2026-06-29, fix, Phase 0)
 
 **문제.** 활성화 견고성 점검(Context87 Phase 0)에서 분석이 영구 멈추는 두 경로 발견.

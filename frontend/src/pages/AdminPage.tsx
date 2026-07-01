@@ -195,9 +195,9 @@ export default function AdminPage() {
     }
   }
 
-  // 사용자 플랜 변경 (FREE↔PRO) — 사유 입력 필수, 감사 로그 기록
+  // 사용자 플랜 변경 (FREE↔DESKTOP) — 사유 입력 필수, 감사 로그 기록
   const changePlan = async (user: UserItem) => {
-    const target = user.plan === 'PRO' ? 'FREE' : 'PRO'
+    const target = user.plan === 'DESKTOP' ? 'FREE' : 'DESKTOP'
     const reason = prompt(`${user.username}의 플랜을 ${user.plan} → ${target}로 변경합니다.\n사유를 입력하세요 (감사 로그에 기록됩니다):`)
     if (reason === null) return
     if (!reason.trim()) { alert('사유는 필수입니다.'); return }
@@ -416,7 +416,7 @@ export default function AdminPage() {
                   <td className="px-6 py-3 text-gray-400">{user.email}</td>
                   <td className="px-6 py-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                      user.plan === 'PRO' ? 'bg-purple-900/60 text-purple-300' : 'bg-gray-700 text-gray-300'
+                      user.plan === 'DESKTOP' ? 'bg-purple-900/60 text-purple-300' : 'bg-gray-700 text-gray-300'
                     }`}>{user.plan}</span>
                   </td>
                   <td className="px-6 py-3">
@@ -436,7 +436,7 @@ export default function AdminPage() {
                         onClick={() => changePlan(user)}
                         className="text-xs px-3 py-1 rounded bg-purple-900/60 hover:bg-purple-800 text-purple-300 transition-colors"
                       >
-                        {user.plan === 'PRO' ? 'FREE로' : 'PRO로'}
+                        {user.plan === 'DESKTOP' ? 'FREE로' : 'DESKTOP으로'}
                       </button>
                       {user.role !== 'ADMIN' && (
                         <button
@@ -495,7 +495,7 @@ export default function AdminPage() {
                     <td className="px-6 py-3">
                       <span className="text-gray-500">{g.oldPlan}</span>
                       <span className="text-gray-600 mx-1">→</span>
-                      <span className={g.newPlan === 'PRO' ? 'text-purple-300 font-semibold' : 'text-gray-300'}>{g.newPlan}</span>
+                      <span className={g.newPlan === 'DESKTOP' ? 'text-purple-300 font-semibold' : 'text-gray-300'}>{g.newPlan}</span>
                     </td>
                     <td className="px-6 py-3 text-gray-300 max-w-[300px] truncate">{g.reason}</td>
                     <td className="px-6 py-3 text-gray-500 font-mono text-xs">{g.actorAdminId.slice(0, 8)}</td>

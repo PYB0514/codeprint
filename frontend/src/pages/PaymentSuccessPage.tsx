@@ -1,4 +1,4 @@
-﻿// Pro 플랜 결제 성공 처리 페이지 — 토스 리다이렉트 후 백엔드 승인 요청
+﻿// Desktop 라이센스 결제 성공 처리 페이지 — 토스 리다이렉트 후 백엔드 승인 요청
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
@@ -36,7 +36,7 @@ export default function PaymentSuccessPage() {
         {status === 'success' && (
           <>
             <div className="text-5xl mb-4">🎉</div>
-            <h1 className="text-2xl font-bold mb-2">Pro 업그레이드 완료!</h1>
+            <h1 className="text-2xl font-bold mb-2">Desktop 라이센스 업그레이드 완료!</h1>
             <p className="text-gray-400 mb-2">이제 프로젝트를 무제한으로 만들 수 있어요.</p>
             <p className="text-gray-500 text-sm mb-6">결제 금액: 9,900원</p>
             <button

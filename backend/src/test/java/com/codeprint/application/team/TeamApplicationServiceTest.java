@@ -1,4 +1,4 @@
-// TeamApplicationService 단위 테스트 — 좌석 제한(경계)·석수 배분 총합·소유권·플랜 검증 회귀 방지
+// TeamApplicationService 단위 테스트 — 좌석 제한(경계)·석수 배분 총합·소유권 검증 회귀 방지
 package com.codeprint.application.team;
 
 import com.codeprint.domain.team.*;
@@ -28,30 +28,20 @@ class TeamApplicationServiceTest {
         return new TeamApplicationService(teamRepository, memberRepository, allocationRepository);
     }
 
-    // --- createTeam: 팀 플랜 검증 ---
+    // --- createTeam: 팀 생성 ---
 
     @Test
-    @DisplayName("createTeam — 팀 플랜이면 팀 생성 + 소유자를 OWNER로 등록")
+    @DisplayName("createTeam — 팀 생성 + 소유자를 OWNER로 등록 + 전달받은 seats 저장")
     void createTeam_teamPlan() {
         UUID owner = UUID.randomUUID();
         when(memberRepository.save(any(TeamMember.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Team team = service().createTeam(owner, "team", UserPlan.TEAM_STARTER);
+        Team team = service().createTeam(owner, "team", UserPlan.DESKTOP, 15);
 
         assertThat(team.getOwnerUserId()).isEqualTo(owner);
         assertThat(team.getTotalSeats()).isEqualTo(15);
         verify(teamRepository).save(any(Team.class));
         verify(memberRepository).save(any(TeamMember.class));
-    }
-
-    @Test
-    @DisplayName("createTeam — 팀 플랜이 아니면(FREE/PRO) IllegalArgumentException, 저장 안 함")
-    void createTeam_nonTeamPlan_rejected() {
-        assertThatThrownBy(() -> service().createTeam(UUID.randomUUID(), "team", UserPlan.PRO))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("팀 플랜이 아닙니다");
-        verify(teamRepository, never()).save(any());
-        verify(memberRepository, never()).save(any());
     }
 
     // --- addMember: 좌석 제한 경계 + 소유권 + 중복 ---
@@ -60,7 +50,7 @@ class TeamApplicationServiceTest {
     @DisplayName("addMember — 소유자 + 좌석 여유 + 비중복이면 멤버 추가")
     void addMember_success() {
         UUID owner = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER); // 15석
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15); // 15석
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(memberRepository.countMembersExcludingOwner(team.getId())).thenReturn(10L);
         when(memberRepository.findByTeamIdAndUserId(eq(team.getId()), any())).thenReturn(Optional.empty());
@@ -76,7 +66,7 @@ class TeamApplicationServiceTest {
     @DisplayName("addMember — 소유자가 아니면 SecurityException, 저장 안 함")
     void addMember_notOwner_rejected() {
         UUID owner = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER);
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
 
         assertThatThrownBy(() -> service().addMember(team.getId(), UUID.randomUUID(), UUID.randomUUID()))
@@ -88,7 +78,7 @@ class TeamApplicationServiceTest {
     @DisplayName("addMember — 좌석이 가득 차면(현재=총석수) IllegalStateException (경계값)")
     void addMember_seatsFull_rejected() {
         UUID owner = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER); // 15석
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15); // 15석
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(memberRepository.countMembersExcludingOwner(team.getId())).thenReturn(15L);
 
@@ -102,7 +92,7 @@ class TeamApplicationServiceTest {
     @DisplayName("addMember — 좌석 경계 바로 아래(현재=총석수-1)면 추가 허용")
     void addMember_justUnderLimit_allowed() {
         UUID owner = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER); // 15석
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15); // 15석
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(memberRepository.countMembersExcludingOwner(team.getId())).thenReturn(14L);
         when(memberRepository.findByTeamIdAndUserId(eq(team.getId()), any())).thenReturn(Optional.empty());
@@ -114,10 +104,10 @@ class TeamApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("addMember — TEAM_BUSINESS(무제한 좌석)는 멤버가 많아도 좌석 제한 우회")
+    @DisplayName("addMember — 총석수가 MAX_VALUE(무제한 좌석)면 멤버가 많아도 좌석 제한 우회")
     void addMember_businessUnlimited_allowed() {
         UUID owner = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_BUSINESS); // MAX_VALUE석
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, Integer.MAX_VALUE); // MAX_VALUE석
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(memberRepository.countMembersExcludingOwner(team.getId())).thenReturn(1000L); // 멤버가 많아도
         when(memberRepository.findByTeamIdAndUserId(eq(team.getId()), any())).thenReturn(Optional.empty());
@@ -134,7 +124,7 @@ class TeamApplicationServiceTest {
     void addMember_duplicate_rejected() {
         UUID owner = UUID.randomUUID();
         UUID newUser = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER);
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(memberRepository.countMembersExcludingOwner(team.getId())).thenReturn(5L);
         when(memberRepository.findByTeamIdAndUserId(team.getId(), newUser))
@@ -164,7 +154,7 @@ class TeamApplicationServiceTest {
     void removeMember_success() {
         UUID owner = UUID.randomUUID();
         UUID target = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER);
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
         TeamMember member = TeamMember.add(team.getId(), target, TeamRole.MEMBER);
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(memberRepository.findByTeamIdAndUserId(team.getId(), target)).thenReturn(Optional.of(member));
@@ -178,7 +168,7 @@ class TeamApplicationServiceTest {
     @DisplayName("removeMember — 소유자가 아니면 SecurityException, 삭제 안 함")
     void removeMember_notOwner_rejected() {
         UUID owner = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER);
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
 
         assertThatThrownBy(() -> service().removeMember(team.getId(), UUID.randomUUID(), UUID.randomUUID()))
@@ -190,7 +180,7 @@ class TeamApplicationServiceTest {
     @DisplayName("removeMember — 팀장 본인은 제거 불가 (IllegalStateException)")
     void removeMember_owner_rejected() {
         UUID owner = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER);
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
 
         assertThatThrownBy(() -> service().removeMember(team.getId(), owner, owner))
@@ -204,7 +194,7 @@ class TeamApplicationServiceTest {
     void removeMember_notMember_noop() {
         UUID owner = UUID.randomUUID();
         UUID target = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER);
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(memberRepository.findByTeamIdAndUserId(team.getId(), target)).thenReturn(Optional.empty());
 
@@ -220,7 +210,7 @@ class TeamApplicationServiceTest {
     void allocateSeats_newWithinTotal() {
         UUID owner = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER); // 15석
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15); // 15석
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(allocationRepository.sumAllocatedSeatsByTeamId(team.getId())).thenReturn(0);
         when(allocationRepository.findByTeamIdAndProjectId(team.getId(), projectId)).thenReturn(Optional.empty());
@@ -234,7 +224,7 @@ class TeamApplicationServiceTest {
     @DisplayName("allocateSeats — 소유자가 아니면 SecurityException")
     void allocateSeats_notOwner_rejected() {
         UUID owner = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER);
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
 
         assertThatThrownBy(() -> service().allocateSeats(team.getId(), UUID.randomUUID(), UUID.randomUUID(), 5))
@@ -246,7 +236,7 @@ class TeamApplicationServiceTest {
     @DisplayName("allocateSeats — 음수 석수는 IllegalArgumentException")
     void allocateSeats_negative_rejected() {
         UUID owner = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER);
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
 
         assertThatThrownBy(() -> service().allocateSeats(team.getId(), owner, UUID.randomUUID(), -1))
@@ -260,7 +250,7 @@ class TeamApplicationServiceTest {
     void allocateSeats_exceedsTotal_rejected() {
         UUID owner = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER); // 15석
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15); // 15석
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(allocationRepository.sumAllocatedSeatsByTeamId(team.getId())).thenReturn(14); // 기존 14
         when(allocationRepository.findByTeamIdAndProjectId(team.getId(), projectId)).thenReturn(Optional.empty());
@@ -277,7 +267,7 @@ class TeamApplicationServiceTest {
     void allocateSeats_reallocateExcludesOwnExisting() {
         UUID owner = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER); // 15석
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15); // 15석
         TeamProjectAllocation existing = TeamProjectAllocation.allocate(team.getId(), projectId, 10);
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(allocationRepository.sumAllocatedSeatsByTeamId(team.getId())).thenReturn(15); // 전체 15 (이 프로젝트 10 포함)
@@ -295,7 +285,7 @@ class TeamApplicationServiceTest {
     void allocateSeats_zeroDeletes() {
         UUID owner = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER);
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
         TeamProjectAllocation existing = TeamProjectAllocation.allocate(team.getId(), projectId, 5);
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(allocationRepository.sumAllocatedSeatsByTeamId(team.getId())).thenReturn(5);
@@ -307,19 +297,19 @@ class TeamApplicationServiceTest {
         verify(allocationRepository, never()).save(any());
     }
 
-    // --- upgradePlan: 소유권 + 팀 플랜 검증 ---
+    // --- upgradePlan: 소유권 검증 ---
 
     @Test
-    @DisplayName("upgradePlan — 소유자 + 팀 플랜이면 플랜·총석수 갱신")
+    @DisplayName("upgradePlan — 소유자면 플랜·총석수를 전달받은 값으로 갱신")
     void upgradePlan_success() {
         UUID owner = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER); // 15석
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15); // 15석
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(teamRepository.save(team)).thenReturn(team);
 
-        Team result = service().upgradePlan(team.getId(), owner, UserPlan.TEAM_GROWTH);
+        Team result = service().upgradePlan(team.getId(), owner, UserPlan.DESKTOP, 40);
 
-        assertThat(result.getPlan()).isEqualTo(UserPlan.TEAM_GROWTH);
+        assertThat(result.getPlan()).isEqualTo(UserPlan.DESKTOP);
         assertThat(result.getTotalSeats()).isEqualTo(40);
         verify(teamRepository).save(team);
     }
@@ -328,24 +318,11 @@ class TeamApplicationServiceTest {
     @DisplayName("upgradePlan — 소유자가 아니면 SecurityException")
     void upgradePlan_notOwner_rejected() {
         UUID owner = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER);
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
 
-        assertThatThrownBy(() -> service().upgradePlan(team.getId(), UUID.randomUUID(), UserPlan.TEAM_GROWTH))
+        assertThatThrownBy(() -> service().upgradePlan(team.getId(), UUID.randomUUID(), UserPlan.DESKTOP, 40))
                 .isInstanceOf(SecurityException.class);
-        verify(teamRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("upgradePlan — 팀 플랜이 아니면 IllegalArgumentException")
-    void upgradePlan_nonTeamPlan_rejected() {
-        UUID owner = UUID.randomUUID();
-        Team team = Team.create(owner, "t", UserPlan.TEAM_STARTER);
-        when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
-
-        assertThatThrownBy(() -> service().upgradePlan(team.getId(), owner, UserPlan.PRO))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("팀 플랜이 아닙니다");
         verify(teamRepository, never()).save(any());
     }
 }

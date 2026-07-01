@@ -80,7 +80,7 @@ class UserCommandServiceTest {
     }
 
     @Test
-    @DisplayName("PRO 업그레이드 — plan=PRO 저장")
+    @DisplayName("PRO 업그레이드 — plan=DESKTOP 저장")
     void upgradeToPro_setsPlan() {
         User user = User.create(1L, "e@x.com", "u"); // 기본 FREE
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -89,7 +89,7 @@ class UserCommandServiceTest {
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
-        assertThat(captor.getValue().getPlan()).isEqualTo(UserPlan.PRO);
+        assertThat(captor.getValue().getPlan()).isEqualTo(UserPlan.DESKTOP);
     }
 
     @Test

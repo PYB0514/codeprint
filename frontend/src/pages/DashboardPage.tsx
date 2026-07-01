@@ -70,7 +70,7 @@ export default function DashboardPage() {
     setProjects((prev) => prev.map((p) => p.id === projectId ? { ...p, isPublic } : p))
   }
 
-  // 토스페이먼츠 결제창 호출하여 Pro 플랜 업그레이드
+  // 토스페이먼츠 결제창 호출하여 Desktop 라이센스 업그레이드
   const handleUpgrade = async () => {
     try {
       const res = await axios.post<{
@@ -103,9 +103,6 @@ export default function DashboardPage() {
     )
   }
 
-  const projectLimit = user.plan === 'FREE' ? 3 : null
-  const canCreate = projectLimit === null || projects.length < projectLimit
-
   return (
     <div className="app-page min-h-screen bg-gray-950 text-white">
       <AppHeader />
@@ -135,8 +132,8 @@ export default function DashboardPage() {
         {user.plan === 'FREE' && (
           <div className="flex items-center justify-between bg-gradient-to-r from-gray-900 to-gray-800 border border-gray-700 rounded-xl px-5 py-4 mb-6">
             <div>
-              <p className="text-sm font-medium text-white">Pro 플랜으로 업그레이드</p>
-              <p className="text-xs text-gray-400 mt-0.5">프로젝트 무제한 + AI 기능 사용 가능</p>
+              <p className="text-sm font-medium text-white">Desktop 라이센스로 업그레이드</p>
+              <p className="text-xs text-gray-400 mt-0.5">AI 기능 + 그래프 버전 히스토리 사용 가능</p>
             </div>
             <button
               onClick={handleUpgrade}
@@ -150,15 +147,9 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold">내 프로젝트</h1>
           <div className="flex items-center gap-3">
-            {projectLimit !== null && (
-              <span className="text-sm text-gray-400">
-                {projects.length} / {projectLimit}
-              </span>
-            )}
             <button
               onClick={() => setShowModal(true)}
-              disabled={!canCreate}
-              className="bg-white text-black text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="bg-white text-black text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-200"
             >
               + 새 프로젝트
             </button>

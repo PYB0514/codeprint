@@ -85,9 +85,9 @@ public class User {
         this.updatedAt = Instant.now();
     }
 
-    // 사용자 플랜을 PRO로 업그레이드
+    // 사용자 플랜을 DESKTOP으로 업그레이드
     public void upgradeToPro() {
-        this.plan = UserPlan.PRO;
+        this.plan = UserPlan.DESKTOP;
         this.updatedAt = Instant.now();
     }
 

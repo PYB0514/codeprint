@@ -1,4 +1,4 @@
-// ProjectCommandService 단위 테스트 — 플랜별 프로젝트 수 제한(경계)·소유권 검증·URL 검증 회귀 방지
+// ProjectCommandService 단위 테스트 — 소유권 검증·URL 검증 회귀 방지
 package com.codeprint.application.project;
 
 import com.codeprint.domain.project.Project;
@@ -32,16 +32,15 @@ class ProjectCommandServiceTest {
         service = new ProjectCommandService(projectRepository);
     }
 
-    // --- createProject: 프로젝트 수 제한 경계 ---
+    // --- createProject: URL 검증 + 생성 ---
 
     @Test
-    @DisplayName("createProject — FREE(max=3): 현재 2개면 생성 허용 (경계 바로 아래)")
-    void createProject_underLimit_allowed() {
+    @DisplayName("createProject — 유효한 URL이면 비공개 프로젝트 생성")
+    void createProject_valid_created() {
         UUID userId = UUID.randomUUID();
-        when(projectRepository.countPrivateByUserId(userId)).thenReturn(2);
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Project created = service.createProject(userId, VALID_URL, "codeprint", "desc", 3);
+        Project created = service.createProject(userId, VALID_URL, "codeprint", "desc");
 
         assertThat(created.getUserId()).isEqualTo(userId);
         assertThat(created.getGithubRepoUrl()).isEqualTo(VALID_URL);
@@ -50,55 +49,14 @@ class ProjectCommandServiceTest {
     }
 
     @Test
-    @DisplayName("createProject — FREE(max=3): 현재 3개면 제한 초과로 거부 (경계값)")
-    void createProject_atLimit_rejected() {
-        UUID userId = UUID.randomUUID();
-        when(projectRepository.countPrivateByUserId(userId)).thenReturn(3);
-
-        assertThatThrownBy(() -> service.createProject(userId, VALID_URL, "n", "d", 3))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Private project limit reached");
-        verify(projectRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("createProject — PRO(max=MAX_VALUE): 다수 보유해도 생성 허용")
-    void createProject_proUnlimited_allowed() {
-        UUID userId = UUID.randomUUID();
-        when(projectRepository.countPrivateByUserId(userId)).thenReturn(1000);
-        when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        Project created = service.createProject(userId, VALID_URL, "n", "d", Integer.MAX_VALUE);
-
-        assertThat(created).isNotNull();
-        verify(projectRepository).save(any(Project.class));
-    }
-
-    @Test
-    @DisplayName("createProject — 잘못된 GitHub URL은 IllegalArgumentException, 제한 검사 이전에 차단")
-    void createProject_invalidUrl_rejectedBeforeLimitCheck() {
+    @DisplayName("createProject — 잘못된 GitHub URL은 IllegalArgumentException")
+    void createProject_invalidUrl_rejected() {
         UUID userId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.createProject(userId, "https://gitlab.com/a/b", "n", "d", 3))
+        assertThatThrownBy(() -> service.createProject(userId, "https://gitlab.com/a/b", "n", "d"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid GitHub repository URL");
-        verify(projectRepository, never()).countPrivateByUserId(any());
         verify(projectRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("createProject — 제한은 비공개 수만 카운트 (공개 프로젝트는 무제한)")
-    void createProject_limitCountsPrivateOnly() {
-        UUID userId = UUID.randomUUID();
-        // 비공개 2개 — 공개 프로젝트는 countPrivateByUserId 쿼리에서 제외되므로 개수 무관
-        when(projectRepository.countPrivateByUserId(userId)).thenReturn(2);
-        when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        Project created = service.createProject(userId, VALID_URL, "codeprint", "desc", 3);
-
-        assertThat(created).isNotNull();
-        verify(projectRepository).countPrivateByUserId(userId);
-        verify(projectRepository).save(any(Project.class));
     }
 
     @Test
@@ -106,7 +64,7 @@ class ProjectCommandServiceTest {
     void createProject_variousInvalidUrls_rejected() {
         UUID userId = UUID.randomUUID();
         for (String bad : new String[]{"http://github.com/a/b", "https://github.com/onlyone", "not-a-url", "https://github.com/a/b/c"}) {
-            assertThatThrownBy(() -> service.createProject(userId, bad, "n", "d", 3))
+            assertThatThrownBy(() -> service.createProject(userId, bad, "n", "d"))
                     .as("URL: %s", bad)
                     .isInstanceOf(IllegalArgumentException.class);
         }

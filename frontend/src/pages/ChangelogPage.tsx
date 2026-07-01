@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.101.0',
+    date: '2026-07-01',
+    title: '요금제 개편 — 무료 프로젝트 개수 제한 제거, Desktop 라이센스 도입',
+    type: 'feature',
+    items: [
+      { category: '요금제', desc: '무료 플랜의 비공개 프로젝트 3개 제한을 제거했습니다. 이제 무료 사용자도 프로젝트를 무제한으로 만들 수 있습니다.' },
+      { category: '요금제', desc: 'Pro·Team(Starter/Growth/Business) 5단계 요금제를 Desktop 라이센스로 통합했습니다. 개인은 1석, 팀은 원하는 좌석 수만큼 구매해 AI 기능과 그래프 버전 히스토리를 사용할 수 있습니다.' },
+    ],
+  },
+  {
     version: 'v0.100.10',
     date: '2026-07-01',
     title: '분석 정확도 — 애플리케이션 부트스트랩 코드 오탐 제거',
