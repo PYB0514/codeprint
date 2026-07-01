@@ -1019,8 +1019,10 @@ public class GraphWarningService {
 
             // infrastructure/ 레이어는 여러 도메인을 브릿지하는 역할 — cross-domain 허용
             if (srcPath.contains("/infrastructure/") || tgtPath.contains("/infrastructure/")) continue;
-            // 테스트 코드는 아키텍처 위반 대상이 아님
-            if (isTestPath(srcPath) || isTestPath(tgtPath)) continue;
+            // 테스트 코드는 아키텍처 위반 대상이 아님 — isTestPath(Java src/test·JS test/spec 한정)는 pytest
+            // tests/·test_*.py 관례를 못 걸러 Python DDD 레포에서 대량 오탐(다른 검출기와 동일한 isTestArtifact로 통일)
+            if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))
+                    || isTestArtifact(tgtPath, nameMap.getOrDefault(e.getTargetNodeId(), ""))) continue;
 
             String srcDomain = functionContextOf(srcPath, cfContexts);
             String tgtDomain = functionContextOf(tgtPath, cfContexts);

@@ -1379,3 +1379,20 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **원인.** `detectCrossDomainFunctionCall` 전용 `extractBoundedContext`가 `/domain/` 뒤 세그먼트를 무조건 컨텍스트로 취급 — 레이어 용어(LAYER_TERMS) 스킵도, application 하위 중첩(`application/domain/`) 가드도 없었음. 반면 CROSS_CONTEXT_IMPORT는 이미 `domainContextOf`/`applicationContextOf`(가드 포함)로 해결돼 있던 비대칭.
 
 **결정/결과.** `extractBoundedContext`를 폐기하고 `functionContextOf`(= `domainContextOf` ?? `applicationContextOf`, 레이어-인지 추출기) 도입. 헥사고날 `application/domain/service`는 null 반환 → cross-domain 미발화. layer-first(`{layer}/{context}`)는 컨텍스트 그대로 추출 → 무회귀. **A/B: buckpal 16→0, Codeprint backend 불변(HIGH_FAN_OUT 8·DEAD_CODE 1·CROSS_DOMAIN 0).** 회귀 테스트 `crossDomainCall_hexagonalSubLayers_excluded` + 기존 genuine-violation 테스트로 recall 유지 확인. 전체 백엔드 스위트 green.
+
+## HIGH recall 통제 측정 + CROSS_DOMAIN_CALL pytest FP 발견·수정 (2026-07-01, fix)
+
+**배경.** Context89 지시(레버 [[../memory/project_adoption_lever_focus]]) — precision은 buckpal로 확인됐으나 recall(HIGH 6종이 실제 위반을 잡는지)은 미측정. `./gradlew analyzeLocal`로 클린 레포에 의도적 위반을 주입해 HIGH 6종을 개별 검증.
+
+**측정 방법·결과(6종 전부 recall 확인).**
+- **CYCLIC_IMPORT** — buckpal에 상호 import 2개 파일 주입(`MoneyTransferProperties`↔`SendMoneyUseCase`, 실제로는 무관계) → 정확히 1건 발화, 노이즈 0.
+- **DOMAIN_IMPORTS_INFRA** — buckpal `application/domain/model/Account.java`가 `adapter/out/persistence/AccountJpaEntity`를 import하도록 주입 → 발화(같은 엣지가 `application` 세그먼트도 가져 DB_LAYER_BYPASS도 동시 발화 — 두 검출기 모두 정탐이라 문제 아님, 부록 격리 테스트로 재확인).
+- **DB_LAYER_BYPASS** — `application/port/in/SendMoneyUseCase.java`(도메인 마커 없음)가 persistence를 직접 import하도록 격리 주입 → 정확히 1건, DOMAIN_IMPORTS_INFRA와 독립적으로 발화 확인.
+- **CROSS_CONTEXT_IMPORT** — buckpal은 설계상 단일 컨텍스트라 인위 주입이 부자연스러움(컨텍스트 2개 이상 게이트가 있어 억지 구조 변경 필요) → 대신 실제 다중 컨텍스트 레포 **py-ddd**(modules/{bidding,catalog,iam})의 기존 실측 1건(`application/bidding → domain/catalog`, #381에서 발견)이 현재 코드에서도 안정적으로 재현됨을 확인 = 실전 recall 증거로 채택.
+- **CROSS_FEATURE_IMPORT·FEATURE_LAYER_VIOLATION** — #383·#384·#386에서 이미 주입 기반 recall 확인 완료(bulletproof-react/todo-app), 이번 세션 재측정 없음(로직 변경 없어 회귀 위험 낮음).
+
+**부수 발견 — CROSS_DOMAIN_CALL(MEDIUM) 2차 정밀도 버그.** py-ddd 측정 중 `CROSS_DOMAIN_CALL` **18건 오탐** 발견(전부 `modules/{ctx}/tests/test_*.py` pytest 테스트가 도메인 함수를 호출하는 정상 패턴). **원인**: `detectCrossDomainFunctionCall`이 테스트 제외에 `isTestPath`(Java `/src/test/`·JS `.test.`/`.spec.`/`__tests__`만 인식, C-14에서 "test라는 비즈니스 도메인 오인 방지" 의도로 좁게 설계)를 쓰는데, 이는 pytest `tests/`+`test_*.py`·Go `_test.go` 관례를 못 거름. 다른 모든 검출기(DB_LAYER_BYPASS·CROSS_CONTEXT_IMPORT 등)는 이미 포괄적인 `isTestArtifact`를 쓰고 있어 비대칭이었음 — **같은 함수(`detectCrossDomainFunctionCall`)의 2번째 정밀도 버그**(1번째는 바로 위 항목, 같은 날)라 CLAUDE.md §4 규칙대로 회귀 테스트 의무 적용.
+
+**수정.** `isTestPath` → `isTestArtifact(path, name)`로 교체(src·tgt 양쪽). 회귀 테스트 `crossDomainCall_pytestPath_excluded` 추가. **A/B**: py-ddd CROSS_DOMAIN_CALL 18→0(CROSS_CONTEXT_IMPORT 1·DOMAIN_IMPORTS_INFRA 1·DEAD_CODE 9 불변=recall 보존), java-realworld(CC1·DB9·DEAD10)·nest-realworld(CYCLIC2·DEAD1)·requests(FANOUT2·DEAD1)·self(FANOUT8·DEAD1) 전부 문서값과 동일=무회귀. 전체 백엔드 스위트(660 테스트) green.
+
+**결론.** HIGH 6종 recall 전부 확인(구조 게이트 신뢰 가능) + MEDIUM 1종 precision 버그 추가 수정. `isTestPath`는 이제 `detectLayeredViolations`(이미 `isTestArtifact`와 OR로 중복 사용 중) 1곳만 남아 사실상 죽은 협소 검사 — 이번 범위 밖이라 미정리(§3 surgical, 별도 플래그).
