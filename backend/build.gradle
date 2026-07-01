@@ -110,6 +110,15 @@ task analyzeLocal(type: JavaExec, dependsOn: classes) {
     args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
 }
 
+// 로컬 코드베이스 워치모드 — 파일 변경 감지 시 증분 재분석, 워닝 diff만 출력 (Spring/DB 불필요)
+task watchLocal(type: JavaExec, dependsOn: classes) {
+    group = 'codeprint'
+    description = '로컬 소스 디렉터리를 감시하며 변경 시 자동 재분석 (Ctrl+C로 종료)'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.codeprint.tools.LocalWatcher'
+    args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
+}
+
 // tree-sitter A/B 회귀 도구 — Java 함수·호출 추출을 정규식과 비교 (DB 불필요)
 task treesitterPoc(type: JavaExec, dependsOn: classes) {
     group = 'codeprint'
