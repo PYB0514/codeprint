@@ -200,6 +200,45 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("TS bare npm 패키지 import가 동명 로컬 파일로 자기매칭되지 않음 — IMPORT 자기순환 phantom 방지 (bulletproof-react zustand.ts 발견)")
+    void tsImport_bareNpmPackage_noSelfMatch() {
+        // __mocks__/zustand.ts 가 `import * as zustand from 'zustand'`(npm 패키지, 상대/alias 아님) →
+        // bare 세그먼트 매칭이 파일 자신의 stripped 경로(".../zustand")와 접미사 일치해 자기참조 IMPORT 생성 →
+        // CYCLIC_IMPORT 1노드 자가순환 phantom(2026-07-01 bulletproof-react 측정으로 발견).
+        // 함수 1개를 동반해 CONTAINS 엣지가 발생하도록 함(단일 파일+import뿐이면 saveEdge 미호출로 stub 검증 불가)
+        ParsedFile mock = parsedFileWithCallsAndImports("apps/react-vite/__mocks__/zustand.ts", "TypeScript",
+                List.of("create"), Map.of(), List.of("zustand"));
+
+        graphBuilder.build(projectId, analysisId, List.of(mock));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        long importEdges = cap.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.IMPORT).count();
+        assertThat(importEdges).isZero();
+    }
+
+    @Test
+    @DisplayName("TS bare npm 패키지 import가 동명의 '다른' 로컬 파일로도 교차매칭되지 않음 — 슬래시 없는 bare는 baseUrl 매칭 제외")
+    void tsImport_bareNpmPackage_noCrossFileMatch() {
+        // bulletproof-react 실측: __mocks__/zustand.ts 가 3개 앱(nextjs-app·nextjs-pages·react-vite)에 각각
+        // 존재 — 자기매칭 차단만으로는 서로 다른 zustand.ts끼리 교차 매칭돼 CYCLIC_IMPORT(zustand.ts→zustand.ts,
+        // 서로 다른 파일)가 남았음. 슬래시 없는 단일 세그먼트는 baseUrl 매칭에서 완전히 제외해야 근본 해결.
+        ParsedFile mockA = parsedFileWithCallsAndImports("apps/react-vite/__mocks__/zustand.ts", "TypeScript",
+                List.of("create"), Map.of(), List.of("zustand"));
+        ParsedFile mockB = parsedFileWithCallsAndImports("apps/nextjs-app/__mocks__/zustand.ts", "TypeScript",
+                List.of("create"), Map.of(), List.of("zustand"));
+
+        graphBuilder.build(projectId, analysisId, List.of(mockA, mockB));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        long importEdges = cap.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.IMPORT).count();
+        assertThat(importEdges).isZero();
+    }
+
+    @Test
     @DisplayName("TS 부분 세그먼트 오매칭 방지 — ../user/user.entity 가 .../my-user.entity 로 잘못 연결되지 않음")
     void tsImport_segmentBoundary_noPartialMatch() {
         // segmentEndsWith 가 '/'+경로 경계를 요구하므로 user.entity 가 my-user.entity 에 부분 매칭되면 안 된다.

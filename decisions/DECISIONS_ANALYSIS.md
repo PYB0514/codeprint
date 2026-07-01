@@ -1414,3 +1414,13 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **수정.** `isErrorModule(path)` 추가(파일명 stem이 error/errors/exception/exceptions면 true, 언어 무관). `detectDbLayerBypass`의 `tgtIsPersistence` 조건에 `&& !isErrorModule(tgtPath)` 추가. 회귀 테스트 `dbLayerBypass_errorsModule_excluded`.
 
 **A/B.** py-realworld DB_LAYER_BYPASS 17→12(-5, errors.py 대상 전부 제거·나머지 12건은 `routes/*.py → repositories/*.py` 진짜 리포지토리 직접접근으로 불변), DOMAIN_IMPORTS_INFRA 1·DEAD_CODE 6 불변. java-realworld(DB_LAYER_BYPASS 9)·buckpal(0)·ddd-library·petclinic·self(HIGH_FAN_OUT 8·DEAD_CODE 1) 전부 문서값과 동일=무회귀(errors.py류 파일이 없는 레포는 영향 0). 백엔드 전체 661테스트 green.
+
+## JS-React 정밀도 감사 — bare npm 패키지 import 자기/교차 매칭 CYCLIC_IMPORT phantom 제거 (2026-07-01, fix)
+
+**측정.** Python 감사에 이어 JS-React 벤치(bulletproof-react·fsd-examples·rtk-essentials·rtk-issues) `analyzeLocal` 실행. bulletproof-react만 **CYCLIC_IMPORT 1건** 신규 발견(직전 #382 측정 시 0이었던 것과 달리 — 리포 상태 변화 아니라 검출 자체의 버그). CROSS_FEATURE_IMPORT·FEATURE_LAYER_VIOLATION은 전부 0(precision 양호, 재확인).
+
+**원인(코드+실측).** 메시지가 `zustand.ts → zustand.ts`(같은 파일명, 다른 경로) — `apps/{react-vite,nextjs-app,nextjs-pages}/__mocks__/zustand.ts` 3개가 각각 Jest/Vitest 관례로 `import * as zustand from 'zustand'`(npm 패키지 bare specifier, 상대·alias 아님) 사용. `isImportMatch`의 TS baseUrl bare 매칭(`matchesModulePath`)과 그 아래 dotted-package 폴백(`fileWithoutExt.endsWith(normalizedImport)`, 확장자 무관 raw endsWith)이 슬래시 없는 단일 세그먼트 `"zustand"`를 세그먼트 경계 없이 자기 자신 및 동명의 **다른 앱** `zustand.ts`로도 오매칭 — 서로 무관한 3개 Jest 목 파일이 phantom IMPORT 엣지로 얽혀 CYCLIC_IMPORT 발화. 실제 baseUrl 절대 import(`entities/task` 류)는 항상 디렉터리+파일(≥1 슬래시)인 반면 npm 패키지 bare specifier는 흔히 슬래시 없는 단일 단어(zustand·react 등)라는 차이를 이용.
+
+**수정 2단계.** ①`GraphBuilder`의 IMPORT 엣지 생성 루프에 소스=타깃 자기매칭 차단(범용 안전망, 어떤 언어든 파일이 스스로를 import하는 것은 성립 불가). ②`isImportMatch`의 TS baseUrl bare 매칭과 dotted-package raw endsWith 매칭 양쪽에 `importPath.contains("/")` 요구 추가 — 슬래시 없는 단일 세그먼트는 baseUrl 절대 import 후보에서 제외. Java/Kotlin/Python/Go/Rust/C#은 이미 확장자 접미사(`.java`/`.py` 등) 전용 체크로 별도 커버되므로 이 raw 매칭 좁히기의 영향을 받지 않음(dotted 패키지경로는 슬래시 정규화 후 대부분 `/` 포함이라 무회귀).
+
+**A/B.** bulletproof-react CYCLIC_IMPORT 1→0(엣지 1411→1405, phantom 6개 제거), nest-realworld CYCLIC_IMPORT 2(진짜 순환 article↔user·article↔comment, 문서값과 동일=무회귀), self 프론트(HIGH_FAN_OUT 1)·백엔드(HIGH_FAN_OUT 8·DEAD_CODE 1) 무변. 회귀 테스트 2종(`tsImport_bareNpmPackage_noSelfMatch`·`tsImport_bareNpmPackage_noCrossFileMatch`) 추가. 백엔드 전체 664테스트 green.

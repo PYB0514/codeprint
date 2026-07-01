@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.100.8',
+    date: '2026-07-01',
+    title: '분석 정확도 — JS/TS npm 패키지 import 순환 오탐 제거',
+    type: 'fix',
+    items: [
+      { category: '정확도', desc: '`import x from \'zustand\'`처럼 npm 패키지를 그대로 import하는 코드가, 우연히 같은 이름을 가진 다른 로컬 파일과 잘못 연결돼 "순환 의존"으로 경고되던 오탐을 제거했습니다. 진짜 로컬 파일 간 순환 의존 탐지는 그대로 유지됩니다.' },
+    ],
+  },
+  {
     version: 'v0.100.7',
     date: '2026-07-01',
     title: '분석 정확도 — DB 예외 클래스 import 오탐 제거',
