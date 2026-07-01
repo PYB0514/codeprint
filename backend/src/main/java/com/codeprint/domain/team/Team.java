@@ -1,6 +1,7 @@
 // 팀 플랜을 보유하는 팀 엔티티 (Seat Pool 단위)
 package com.codeprint.domain.team;
 
+import com.codeprint.infrastructure.persistence.team.TeamJpaRepository;
 import com.codeprint.shared.plan.UserPlan;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
