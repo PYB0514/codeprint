@@ -6,4 +6,7 @@ import java.util.UUID;
 public interface UserInfoPort {
     // 유저 ID로 사용자명 조회
     String findUsernameById(UUID userId);
+
+    // 유저가 유료(Desktop 라이센스) 플랜인지 확인
+    boolean isPaidPlan(UUID userId);
 }

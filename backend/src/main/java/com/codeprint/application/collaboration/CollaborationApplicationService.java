@@ -43,11 +43,10 @@ public class CollaborationApplicationService {
         CollaborationSession session = sessionRepository.findByInviteCode(inviteCode)
                 .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 초대 코드입니다."));
 
-        // TODO: 오너가 Pro 플랜이면 제한 없음 (Stripe 연동 후 구현)
-        boolean ownerIsPro = false;
-        if (!ownerIsPro && !session.hasParticipant(userId)
+        boolean ownerIsPaid = userInfoPort.isPaidPlan(session.getOwnerId());
+        if (!ownerIsPaid && !session.hasParticipant(userId)
                 && session.getParticipants().size() >= FREE_PARTICIPANT_LIMIT) {
-            throw new IllegalStateException("Free 플랜은 최대 6명까지 협업할 수 있습니다. 오너가 Pro로 업그레이드하면 무제한 초대가 가능합니다.");
+            throw new IllegalStateException("Free 플랜은 최대 6명까지 협업할 수 있습니다. 오너가 Desktop 라이센스로 업그레이드하면 무제한 초대가 가능합니다.");
         }
 
         session.addParticipant(userId);

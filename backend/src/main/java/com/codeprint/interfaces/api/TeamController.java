@@ -37,6 +37,15 @@ public class TeamController {
         return ResponseEntity.status(201).body(toResponse(team));
     }
 
+    // 팀 삭제
+    @DeleteMapping("/{teamId}")
+    public ResponseEntity<Void> deleteTeam(
+            @PathVariable UUID teamId,
+            @AuthenticationPrincipal User user) {
+        teamService.deleteTeam(teamId, user.getId());
+        return ResponseEntity.noContent().build();
+    }
+
     // 내 팀 목록 조회
     @GetMapping("/mine")
     public ResponseEntity<List<TeamResponse>> getMyTeams(@AuthenticationPrincipal User user) {
