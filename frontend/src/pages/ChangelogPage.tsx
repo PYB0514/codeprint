@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.100.9',
+    date: '2026-07-01',
+    title: '분석 정확도 — FSD 프론트엔드 레이어 오탐 제거',
+    type: 'fix',
+    items: [
+      { category: '정확도', desc: 'FSD(Feature-Sliced Design) 컨벤션을 쓰는 프론트엔드 프로젝트에서 entities 레이어가 shared/api(공유 API 클라이언트)를 참조하는 정상 패턴을, "api" 디렉터리명을 백엔드 컨트롤러로 오인해 "레이어 역전"으로 잘못 경고하던 오탐을 제거했습니다. 전용 피처-슬라이스 레이어 검출기가 이미 정확히 처리하는 프로젝트에서는 이 경고가 더 이상 발생하지 않습니다.' },
+    ],
+  },
+  {
     version: 'v0.100.8',
     date: '2026-07-01',
     title: '분석 정확도 — JS/TS npm 패키지 import 순환 오탐 제거',

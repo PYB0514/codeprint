@@ -1309,6 +1309,19 @@ public class GraphWarningService {
     //   2. LAYERED_BYPASS: Controller가 Repository를 직접 import — Service 레이어가 존재할 때만(우회로 판단)
     // 게이팅: 분류된 레이어가 2종 이상이어야 "레이어드 프로젝트"로 인정(단순 앱·평면 구조 오탐 방지)
     private List<Map<String, Object>> detectLayeredViolations(List<Node> nodes, List<Edge> edges) {
+        // FSD/피처-슬라이스 프론트엔드 게이트 — CONTROLLER_DIRS의 "api" 별칭이 FSD shared/api(공유 API 클라이언트,
+        // 최하위 레이어)를 백엔드 Controller로 오분류해 entities→shared/api를 "레이어 역전"으로 오탐(fsd-examples
+        // 실측, 2026-07-01). 이런 프로젝트는 전용 FEATURE_LAYER_VIOLATION(app→features→entities→shared 의미를
+        // 정확히 앎)이 이미 커버하므로 동일 게이트(프론트 언어+피처 2개↑)로 이 검출기를 스킵한다.
+        Set<String> features = new HashSet<>();
+        boolean hasFrontend = false;
+        for (Node n : nodes) {
+            String f = featureOf(n.getFilePath());
+            if (f != null) features.add(f);
+            if (isFrontendLanguage(n.getLanguage())) hasFrontend = true;
+        }
+        if (features.size() >= 2 && hasFrontend) return List.of();
+
         Map<UUID, Layer> nodeLayer = new HashMap<>();
         Map<UUID, String> nameMap = new HashMap<>();
         EnumSet<Layer> present = EnumSet.noneOf(Layer.class);

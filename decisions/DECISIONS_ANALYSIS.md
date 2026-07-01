@@ -1424,3 +1424,13 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **수정 2단계.** ①`GraphBuilder`의 IMPORT 엣지 생성 루프에 소스=타깃 자기매칭 차단(범용 안전망, 어떤 언어든 파일이 스스로를 import하는 것은 성립 불가). ②`isImportMatch`의 TS baseUrl bare 매칭과 dotted-package raw endsWith 매칭 양쪽에 `importPath.contains("/")` 요구 추가 — 슬래시 없는 단일 세그먼트는 baseUrl 절대 import 후보에서 제외. Java/Kotlin/Python/Go/Rust/C#은 이미 확장자 접미사(`.java`/`.py` 등) 전용 체크로 별도 커버되므로 이 raw 매칭 좁히기의 영향을 받지 않음(dotted 패키지경로는 슬래시 정규화 후 대부분 `/` 포함이라 무회귀).
 
 **A/B.** bulletproof-react CYCLIC_IMPORT 1→0(엣지 1411→1405, phantom 6개 제거), nest-realworld CYCLIC_IMPORT 2(진짜 순환 article↔user·article↔comment, 문서값과 동일=무회귀), self 프론트(HIGH_FAN_OUT 1)·백엔드(HIGH_FAN_OUT 8·DEAD_CODE 1) 무변. 회귀 테스트 2종(`tsImport_bareNpmPackage_noSelfMatch`·`tsImport_bareNpmPackage_noCrossFileMatch`) 추가. 백엔드 전체 664테스트 green.
+
+## LAYERED_REVERSE_DEPENDENCY — FSD 피처-슬라이스 오분류 오탐 제거 (2026-07-01, fix)
+
+**측정.** 같은 JS-React 감사에서 `fsd-examples`(feature-sliced/examples, 표준 FSD `app/entities/features/pages/shared`) 3건 발견: `Model 'lib.ts' → Controller 'index.ts'`.
+
+**원인(코드+실측).** `entities/task/lib.ts`가 `shared/api`(타입 전용 import, `import type { Task } from "shared/api"`)를 참조 — `shared/api`는 FSD의 최하위 공유 레이어일 뿐인데, 비DDD 레이어드 검출기(`detectLayeredViolations`)의 `classifyLayer`가 디렉터리 세그먼트 `api`를 `CONTROLLER_DIRS` 별칭(백엔드 REST 진입점 관용명)으로 오분류 → `entities`(MODEL)가 `shared/api`(CONTROLLER로 오분류)를 import하는 것을 "최하위→최상위 레이어 역전"으로 오탐. `entities`는 이미 `MODEL_DIRS`(`entities` 포함)라 정확히 분류됐지만 타깃 쪽이 틀렸음. `core`(도메인)/`api`(REST)처럼 컨벤션이 충돌하는 디렉터리명의 또 다른 사례(같은 세션 DOMAIN_IMPORTS_INFRA `core/events.py`와 동형).
+
+**수정.** `core/events.py`와 달리 이번엔 **이미 이 정확한 프로젝트 유형을 위한 전용 검출기가 존재**(`FEATURE_LAYER_VIOLATION` — `app→features→entities→shared` 의미를 정확히 앎) — 그 게이트(프론트 언어+피처 2개 이상)를 `detectLayeredViolations`에도 재사용해 FSD/피처-슬라이스 프로젝트에서는 이 백엔드 지향 검출기 자체를 스킵. `isReduxStyleProject`(#385)와 동일 패턴(다른 컨벤션이 같은 디렉터리명을 다르게 쓰면 특화 검출기에게 양보).
+
+**A/B.** fsd-examples LAYERED_REVERSE_DEPENDENCY 3→0(전체 0건). spring-petclinic(0)·express(DEAD_CODE만) 무변(피처-슬라이스 아님, 게이트 미작동). 회귀 테스트 `layeredReverse_fsdFeatureSliced_gated`(신규 게이트로 미발화) + 기존 `layeredReverse_modelImportsController`(java, 게이트 미해당이라 계속 발화) 무회귀. 백엔드 전체 665테스트 green.
