@@ -901,6 +901,20 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("pytest 테스트 경로(modules/x/tests/test_*.py)의 cross-domain 호출 — CROSS_DOMAIN_CALL 제외 (py-ddd FP)")
+    void crossDomainCall_pytestPath_excluded() {
+        // isTestPath는 Java src/test·JS test/spec만 인식해 pytest tests/ 관례를 놓쳤음(py-ddd 18건 오탐, 2026-07-01 측정).
+        Node src = funcNodeWithPath("test_place_one_bid", "/src/modules/bidding/tests/domain/test_bidding.py");
+        Node tgt = funcNodeWithPath("place_bid", "/src/modules/bidding/domain/entities.py");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(src, tgt),
+                List.of(callEdge(src.getId(), tgt.getId(), false))
+        );
+        assertThat(crossDomain(warnings)).isEmpty();
+    }
+
+    @Test
     @DisplayName("헥사고날 단일 컨텍스트(application/domain/{service,model}) 내부 호출 — CROSS_DOMAIN_CALL 제외 (buckpal FP)")
     void crossDomainCall_hexagonalSubLayers_excluded() {
         // buckpal: application/domain/service/SendMoneyService → application/domain/model/Account.
