@@ -749,6 +749,21 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("precision: routes → db/errors.py(순수 예외 타입) IMPORT — DB_LAYER_BYPASS 미발화 (py-realworld FP)")
+    void dbLayerBypass_errorsModule_excluded() {
+        // app/db/errors.py = class EntityDoesNotExist(Exception) 뿐인 예외 타입 정의. 라우트가 except로 잡는
+        // 표준 패턴이라 "직접 persistence 호출"이 아닌데도 db/ 아래라 오탐(2026-07-01 py-realworld 측정).
+        Node route = funcNodeWithPath("get_article", "/app/api/routes/articles.py");
+        Node errors = funcNodeWithPath("EntityDoesNotExist", "/app/db/errors.py");
+        Node core = funcNodeWithPath("Article", "/app/models/domain/articles.py");
+        Edge imp = importEdgeForPath(route.getId(), errors.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(route, errors, core), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "DB_LAYER_BYPASS".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
     @DisplayName("precision: 테스트 코드(application 패키지 *Test)가 영속화를 직접 import — DB_LAYER_BYPASS 미발화 (통합 테스트 와이어링)")
     void dbLayerBypass_testSource_excluded() {
         // 통합 테스트는 레포지토리를 직접 주입/생성하는 게 정상 — 프로덕션 위반 아님. java-realworld *QueryServiceTest 류 FP 제거.
