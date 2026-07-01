@@ -126,6 +126,23 @@ class CollaborationApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("joinSession — 오너가 Desktop 라이센스(유료)면 6명 초과여도 참가 허용")
+    void joinSession_ownerPaid_unlimitedParticipants_allowed() {
+        UUID owner = UUID.randomUUID();
+        CollaborationSession session = CollaborationSession.create(UUID.randomUUID(), owner, "CODE1234");
+        for (int i = 0; i < 6; i++) session.addParticipant(UUID.randomUUID()); // 6명 = FREE 한도 초과 상태
+        UUID newUser = UUID.randomUUID();
+        when(sessionRepository.findByInviteCode("CODE1234")).thenReturn(Optional.of(session));
+        when(sessionRepository.save(session)).thenReturn(session);
+        when(userInfoPort.isPaidPlan(owner)).thenReturn(true);
+
+        service.joinSession("CODE1234", newUser);
+
+        assertThat(session.hasParticipant(newUser)).isTrue();
+        verify(sessionRepository).save(session);
+    }
+
+    @Test
     @DisplayName("joinSession — 6명 가득이어도 이미 참가자인 유저의 재참가는 허용 (제한 우회)")
     void joinSession_alreadyParticipantAtLimit_allowed() {
         CollaborationSession session = CollaborationSession.create(UUID.randomUUID(), UUID.randomUUID(), "CODE1234");

@@ -13,4 +13,7 @@ public interface TeamRepository {
 
     // 특정 유저가 소유한 팀 목록
     List<Team> findByOwnerUserId(UUID ownerUserId);
+
+    // 팀 삭제 (멤버·석수배분은 DB CASCADE로 함께 삭제됨)
+    void deleteById(UUID id);
 }

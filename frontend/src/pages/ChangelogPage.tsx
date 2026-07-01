@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.102.0',
+    date: '2026-07-01',
+    title: '팀 삭제 기능 추가 + 팀 생성 보호 강화',
+    type: 'feature',
+    items: [
+      { category: '팀', desc: '팀 관리 페이지에 팀 삭제 기능을 추가했습니다. 삭제 시 멤버·석수 배분 정보도 함께 정리됩니다.' },
+      { category: '팀', desc: '팀 생성은 Desktop 라이센스 보유자만 가능하도록 제한했습니다.' },
+    ],
+  },
+  {
     version: 'v0.101.0',
     date: '2026-07-01',
     title: '요금제 개편 — 무료 프로젝트 개수 제한 제거, Desktop 라이센스 도입',
