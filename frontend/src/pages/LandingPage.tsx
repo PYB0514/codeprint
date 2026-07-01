@@ -154,7 +154,7 @@ export default function LandingPage() {
 
             <p className="text-gray-400 text-base max-w-md leading-relaxed">
               URL 하나로 파일 구조, 함수 호출 흐름, DB 연결 관계를 시각화한다.
-              런타임 경고 감지와 AI 분석까지 — 무료로 프로젝트 3개까지.
+              런타임 경고 감지와 AI 분석까지 — 전부 무료.
             </p>
 
             {/* URL 입력 — 바로 분석 시작 */}
