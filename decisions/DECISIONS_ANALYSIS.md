@@ -1406,3 +1406,11 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **사례 2 — DOMAIN_IMPORTS_INFRA, `app/core/events.py`.** `app/core/events.py`가 `app/db/events.py`(connect_to_db/close_db_connection)를 import. `core`는 `DOMAIN_LAYER_DIRS` 별칭(#373에서 realworld류 진짜 도메인 레이어 인식 위해 추가)인데, 이 레포의 `app/core/`는 DDD 도메인이 아니라 FastAPI 부트스트랩(config·events·security) — 앱 시작/종료 훅이 DB 커넥션을 열고 닫는 것은 정상 인프라 배선이지 도메인 위반이 아님. `core`가 Python 생태계에서 "도메인"과 "앱 부트스트랩" 양쪽 의미로 쓰이는 진짜 모호성.
 
 **판단 보류.** 두 사례 모두 검출기 버그(명백한 비일관성)가 아니라 **recall vs precision 트레이드오프**다 — 좁히면(예: DB_LAYER_BYPASS를 `Repository`/`*_repository.py` 명시적 패턴으로 한정, `core`에서 이벤트/설정 파일명 제외) 이 두 FP는 사라지지만 다른 레포의 진짜 위반을 놓칠 위험(측정 안 됨). 사용자 판단 필요 — 수정하지 않고 다음 세션 후보로만 기록.
+
+## DB_LAYER_BYPASS errors/exceptions 모듈 오탐 제거 (2026-07-01, fix)
+
+**사용자 판단.** 위 두 사례를 사용자에게 제시 — **사례 1(DB_LAYER_BYPASS/errors.py)은 수정, 사례 2(DOMAIN_IMPORTS_INFRA/core/events.py)는 보류**로 결정. 근거: ①errors.py는 경고 메시지가 "직접 persistence 호출"이라 명시하는데 실제로는 호출이 전혀 없는 예외 타입 import라 메시지 자체가 사실과 다름 — 파일명(errors/exceptions) 기반 제외는 언어 무관 일반화 가능하고 안전. ②반대로 core/events.py를 필터링하면 DDD에서 흔한 "domain events"(파일명이 흔히 events.py)가 인프라를 직접 건드리는 **진짜 위반**을 놓칠 위험이 있어 recall 손실이 더 위험 — 보류.
+
+**수정.** `isErrorModule(path)` 추가(파일명 stem이 error/errors/exception/exceptions면 true, 언어 무관). `detectDbLayerBypass`의 `tgtIsPersistence` 조건에 `&& !isErrorModule(tgtPath)` 추가. 회귀 테스트 `dbLayerBypass_errorsModule_excluded`.
+
+**A/B.** py-realworld DB_LAYER_BYPASS 17→12(-5, errors.py 대상 전부 제거·나머지 12건은 `routes/*.py → repositories/*.py` 진짜 리포지토리 직접접근으로 불변), DOMAIN_IMPORTS_INFRA 1·DEAD_CODE 6 불변. java-realworld(DB_LAYER_BYPASS 9)·buckpal(0)·ddd-library·petclinic·self(HIGH_FAN_OUT 8·DEAD_CODE 1) 전부 문서값과 동일=무회귀(errors.py류 파일이 없는 레포는 영향 0). 백엔드 전체 661테스트 green.

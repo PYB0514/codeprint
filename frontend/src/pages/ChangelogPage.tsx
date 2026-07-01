@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.100.7',
+    date: '2026-07-01',
+    title: '분석 정확도 — DB 예외 클래스 import 오탐 제거',
+    type: 'fix',
+    items: [
+      { category: '정확도', desc: '라우트/서비스 코드가 DB 계층의 예외 클래스(errors.py·exceptions.py 등)를 import해 에러를 처리하는 표준 패턴을 "DB 레이어 우회"로 잘못 경고하던 오탐을 제거했습니다. 실제 리포지토리를 직접 우회하는 진짜 위반 탐지는 그대로 유지됩니다.' },
+    ],
+  },
+  {
     version: 'v0.100.6',
     date: '2026-07-01',
     title: '분석 정확도 — Python 테스트 코드 오탐 제거',

@@ -330,8 +330,11 @@ public class GraphWarningService {
             boolean srcIsUpperLayer = containsLayerSegment(srcPath, UPPER_LAYER_DIRS);
             // 영속화 타깃 = INFRA 레이어이면서 동시에 영속화 세그먼트를 가진 경로 — 두 조건 교집합으로 한정해
             // infrastructure/service(비영속화)·domain/port/repository(INFRA 밖 도메인 인터페이스) 오탐을 배제한다.
+            // errors/exceptions 파일은 리포지토리 CRUD가 아닌 예외 타입 정의라 "직접 persistence 호출"이 아님(py-realworld
+            // app/db/errors.py 측정으로 발견 — 라우트가 except EntityDoesNotExist로 잡는 표준 패턴을 오탐으로 지목).
             boolean tgtIsPersistence = containsLayerSegment(tgtPath, INFRA_LAYER_DIRS)
-                    && containsLayerSegment(tgtPath, PERSISTENCE_LAYER_DIRS);
+                    && containsLayerSegment(tgtPath, PERSISTENCE_LAYER_DIRS)
+                    && !isErrorModule(tgtPath);
 
             if (srcIsUpperLayer && tgtIsPersistence) {
                 // isInterfaceImpl 엣지는 정상 패턴이므로 제외
@@ -615,6 +618,19 @@ public class GraphWarningService {
     private static final Set<String> PERSISTENCE_LAYER_DIRS = Set.of(
         "persistence", "db", "repository", "repositories", "dao",
         "jpa", "jdbc", "mybatis", "mapper", "mappers", "orm", "datasource");
+
+    // 파일명이 error(s)/exception(s) 모듈인지 — 언어 무관(errors.py·Errors.java·exceptions.ts 등). 이런 파일은
+    // 리포지토리 CRUD가 아닌 예외 타입 정의뿐이라 persistence 계층에 있어도 "직접 호출"이 성립하지 않는다.
+    private static boolean isErrorModule(String path) {
+        if (path == null) return false;
+        String p = path.replace("\\", "/");
+        int slash = p.lastIndexOf('/');
+        String base = slash >= 0 ? p.substring(slash + 1) : p;
+        int dot = base.lastIndexOf('.');
+        String stem = (dot > 0 ? base.substring(0, dot) : base).toLowerCase();
+        return stem.equals("error") || stem.equals("errors")
+                || stem.equals("exception") || stem.equals("exceptions");
+    }
 
     // 경로에 주어진 레이어 디렉터리 세그먼트(/{dir}/) 중 하나라도 포함되는지 — 슬래시 정규화 후 세그먼트 매칭
     private static boolean containsLayerSegment(String path, Set<String> dirs) {
