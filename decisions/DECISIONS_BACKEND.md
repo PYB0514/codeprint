@@ -2,6 +2,27 @@
 
 ---
 
+## 팀 생성 결제 방어선 + Collaboration 유료 게이트 실배선 + 팀 삭제 API (2026-07-01, 기능+보안)
+
+**문제 1 (보안, 이전부터 있던 갭).** `POST /api/teams`(팀 생성)에 결제 검증이 전혀 없었다. 로그인만 하면 어떤 FREE 사용자든 프론트를 거치지 않고 API를 직접 호출해서 `{plan: "DESKTOP", seats: 999}`를 보내면 결제 없이 즉시 팀을 만들 수 있었다. 요금제 재설계(위 항목) 전 원래 코드도 `isTeamPlan()` 체크뿐이라 클라이언트가 보낸 값만 확인했지 실제 결제 여부는 검증하지 않았다.
+
+**문제 2 (보안, Collaboration 우회 발견).** `CollaborationApplicationService.joinSession`의 `ownerIsPro=false` 하드코딩 스텁 때문에 실시간 협업 세션 참가자 제한(Free 6명)이 사실상 항상 적용되고 있었다. 더 심각한 건, 이 스텁을 고치지 않고 그냥 둘 경우 발생하는 사업모델 허점이었다 — Team이 유료화된 상태에서 Collaboration이 무제한 무료로 남으면, 사용자가 Team을 사는 대신 초대코드 기반 Collaboration 세션을 계속 새로 만들어 여러 명이 실시간으로 협업하는 우회로가 된다(팀의 핵심 가치를 무료로 대체).
+
+**문제 3 (기능 갭).** `TeamRepository`/`TeamController`에 팀 삭제 API가 아예 없었다. 브라우저 런타임 검증 중 테스트로 만든 팀을 지울 방법이 없어서 발견.
+
+**해법.**
+1. `domain/team/port/UserPlanPort`(신규, Collaboration의 `UserInfoPort`와 동일 패턴) + `infrastructure/persistence/team/UserPlanAdapter` — `TeamApplicationService.createTeam`이 호출자의 `UserPlan.isPaid()`를 확인, 미결제면 `IllegalStateException`.
+2. `UserInfoPort`에 `isPaidPlan(UUID)` 추가, `CollaborationApplicationService.joinSession`의 하드코딩 `false`를 실제 조회로 교체.
+3. `TeamRepository.deleteById` + `TeamApplicationService.deleteTeam`(소유자만) + `DELETE /api/teams/{teamId}`. DB에 이미 `ON DELETE CASCADE`가 걸려있어(`team_members`·`team_project_allocations`) 리포지토리 구현은 단순 delete 한 줄로 충분.
+
+**선택·트레이드오프.**
+- 팀 생성 방어선은 "이미 개인 Desktop 라이센스가 있어야 팀을 만들 수 있다"는 최소 방어선이다. 좌석 수만큼 실제 결제(차액 청구)하는 완전한 흐름은 별도 PR(seat 결제 연동)로 미룸 — 사용자가 "관련 기능부터 마무리 짓고 결제 연동은 나중에"로 순서를 정함.
+- Team과 Collaboration은 서로 다른 도메인(Team=영속 조직 구조, Collaboration=초대코드 기반 일회성 세션)이라 각자 자기 컨텍스트의 포트(`UserPlanPort`/`UserInfoPort`)로 User 플랜을 조회하게 함 — 하나의 포트를 공유하지 않고 의도적으로 중복(DDD 크로스컨텍스트 규칙, Shared Kernel은 `UserPlan` enum 자체까지만).
+
+**검증.** `./gradlew compileJava` + 관련 테스트 35종(TeamApplicationServiceTest 10·CollaborationApplicationServiceTest 23·TeamTest 2) 전부 통과. `npx tsc -b` 통과. ★브라우저 E2E: 팀 삭제 버튼 클릭 → DB에서 `teams`·`team_members` 0건 확인(CASCADE 정상), 결제 방어선 통과 후 유료 사용자 팀 생성 회귀 없음 확인.
+
+---
+
 ## 요금제 재설계 — Pro/Team 5단계 → Desktop 라이센스 통합, 무료 프로젝트 개수 제한 삭제 (2026-07-01, 기능)
 
 **문제.** `UserPlan`이 `FREE, PRO, TEAM_STARTER, TEAM_GROWTH, TEAM_BUSINESS` 5단계였는데 TEAM 3단계는 `monthlyPrice()`·`defaultTotalSeats()` 값만 다르고 실제 기능 차이가 전혀 없는 스텁이었다. 또한 FREE 플랜은 비공개 프로젝트 3개로 제한돼 있었는데, 실제 비용 방어는 `RateLimitFilter`(분석 시작 IP당 분당 10회)가 이미 담당하고 있어 프로젝트 개수 제한은 별도 가치 없이 사용자 경험만 해치는 규칙이었다.

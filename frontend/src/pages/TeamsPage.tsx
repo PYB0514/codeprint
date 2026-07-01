@@ -122,6 +122,20 @@ export default function TeamsPage() {
     }
   }
 
+  // 팀 삭제 처리
+  const handleDeleteTeam = async () => {
+    if (!selectedTeam) return
+    if (!window.confirm(`"${selectedTeam.name}" 팀을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return
+    try {
+      await axios.delete(`/api/teams/${selectedTeam.id}`)
+      setSelectedTeam(null)
+      await fetchTeams()
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      setError(err.response?.data?.message ?? '팀 삭제에 실패했습니다.')
+    }
+  }
+
   const remainingSeats = selectedTeam
     ? `${selectedTeam.totalSeats - selectedTeam.usedSeats}석 남음`
     : ''
@@ -296,6 +310,18 @@ export default function TeamsPage() {
                     좌석당 {PRICE_PER_SEAT.toLocaleString('ko-KR')}원/월 · 현재 {selectedTeam.totalSeats}석
                   </p>
                   <p className="text-xs text-gray-500 mt-3">석수 변경은 고객센터를 통해 요청해주세요.</p>
+                </div>
+
+                {/* 위험 구역 — 팀 삭제 */}
+                <div className="bg-gray-900 border border-red-900/50 rounded-xl p-6">
+                  <h3 className="font-semibold mb-3 text-red-400">위험 구역</h3>
+                  <p className="text-sm text-gray-400 mb-3">팀을 삭제하면 멤버·석수 배분 정보가 모두 함께 삭제되며 되돌릴 수 없습니다.</p>
+                  <button
+                    onClick={handleDeleteTeam}
+                    className="text-sm bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-900/50 rounded-lg px-4 py-2 transition"
+                  >
+                    팀 삭제
+                  </button>
                 </div>
               </div>
             )}

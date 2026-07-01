@@ -2,6 +2,7 @@
 package com.codeprint.application.team;
 
 import com.codeprint.domain.team.*;
+import com.codeprint.domain.team.port.UserPlanPort;
 import com.codeprint.shared.plan.UserPlan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,17 +24,19 @@ class TeamApplicationServiceTest {
     @Mock private TeamRepository teamRepository;
     @Mock private TeamMemberRepository memberRepository;
     @Mock private TeamProjectAllocationRepository allocationRepository;
+    @Mock private UserPlanPort userPlanPort;
 
     private TeamApplicationService service() {
-        return new TeamApplicationService(teamRepository, memberRepository, allocationRepository);
+        return new TeamApplicationService(teamRepository, memberRepository, allocationRepository, userPlanPort);
     }
 
     // --- createTeam: 팀 생성 ---
 
     @Test
-    @DisplayName("createTeam — 팀 생성 + 소유자를 OWNER로 등록 + 전달받은 seats 저장")
+    @DisplayName("createTeam — Desktop 라이센스 보유자면 팀 생성 + 소유자를 OWNER로 등록 + 전달받은 seats 저장")
     void createTeam_teamPlan() {
         UUID owner = UUID.randomUUID();
+        when(userPlanPort.isPaidPlan(owner)).thenReturn(true);
         when(memberRepository.save(any(TeamMember.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Team team = service().createTeam(owner, "team", UserPlan.DESKTOP, 15);
@@ -42,6 +45,45 @@ class TeamApplicationServiceTest {
         assertThat(team.getTotalSeats()).isEqualTo(15);
         verify(teamRepository).save(any(Team.class));
         verify(memberRepository).save(any(TeamMember.class));
+    }
+
+    @Test
+    @DisplayName("createTeam — Desktop 라이센스 미보유면 IllegalStateException, 저장 안 함")
+    void createTeam_notPaid_rejected() {
+        UUID owner = UUID.randomUUID();
+        when(userPlanPort.isPaidPlan(owner)).thenReturn(false);
+
+        assertThatThrownBy(() -> service().createTeam(owner, "team", UserPlan.DESKTOP, 15))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Desktop 라이센스");
+        verify(teamRepository, never()).save(any());
+        verify(memberRepository, never()).save(any());
+    }
+
+    // --- deleteTeam: 소유권 검증 ---
+
+    @Test
+    @DisplayName("deleteTeam — 소유자면 삭제")
+    void deleteTeam_success() {
+        UUID owner = UUID.randomUUID();
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
+        when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
+
+        service().deleteTeam(team.getId(), owner);
+
+        verify(teamRepository).deleteById(team.getId());
+    }
+
+    @Test
+    @DisplayName("deleteTeam — 소유자가 아니면 SecurityException, 삭제 안 함")
+    void deleteTeam_notOwner_rejected() {
+        UUID owner = UUID.randomUUID();
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
+        when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
+
+        assertThatThrownBy(() -> service().deleteTeam(team.getId(), UUID.randomUUID()))
+                .isInstanceOf(SecurityException.class);
+        verify(teamRepository, never()).deleteById(any());
     }
 
     // --- addMember: 좌석 제한 경계 + 소유권 + 중복 ---

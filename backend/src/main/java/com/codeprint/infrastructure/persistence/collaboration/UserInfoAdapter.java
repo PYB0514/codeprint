@@ -21,4 +21,12 @@ public class UserInfoAdapter implements UserInfoPort {
                 .map(u -> u.getUsername())
                 .orElse("(알 수 없음)");
     }
+
+    // 유저가 유료(Desktop 라이센스) 플랜인지 확인
+    @Override
+    public boolean isPaidPlan(UUID userId) {
+        return userRepository.findById(userId)
+                .map(u -> u.getPlan().isPaid())
+                .orElse(false);
+    }
 }

@@ -2,6 +2,7 @@
 package com.codeprint.application.team;
 
 import com.codeprint.domain.team.*;
+import com.codeprint.domain.team.port.UserPlanPort;
 import com.codeprint.shared.plan.UserPlan;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,15 +18,27 @@ public class TeamApplicationService {
     private final TeamRepository teamRepository;
     private final TeamMemberRepository memberRepository;
     private final TeamProjectAllocationRepository allocationRepository;
+    private final UserPlanPort userPlanPort;
 
-    // 팀 생성 (플랜 구매 완료 후 호출)
+    // 팀 생성 — 개인 Desktop 라이센스 보유자만 가능 (좌석 결제 연동 전 최소 방어선)
     @Transactional
     public Team createTeam(UUID ownerUserId, String name, UserPlan plan, int seats) {
+        if (!userPlanPort.isPaidPlan(ownerUserId)) {
+            throw new IllegalStateException("Desktop 라이센스 구매 후 팀을 만들 수 있습니다.");
+        }
         Team team = Team.create(ownerUserId, name, plan, seats);
         teamRepository.save(team);
         // 팀장 자신도 OWNER로 등록
         memberRepository.save(TeamMember.add(team.getId(), ownerUserId, TeamRole.OWNER));
         return team;
+    }
+
+    // 팀 삭제 — 팀장만 가능, 멤버·석수배분은 DB CASCADE로 함께 삭제
+    @Transactional
+    public void deleteTeam(UUID teamId, UUID requesterId) {
+        Team team = getTeamOrThrow(teamId);
+        verifyOwner(team, requesterId);
+        teamRepository.deleteById(teamId);
     }
 
     // 팀원 추가 (초대 수락 시 호출)
