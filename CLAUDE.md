@@ -163,7 +163,9 @@ PR 머지를 제안할 때 반드시 아래 블록을 출력한다. 브라우저
 ```
 ## 머지 전 확인
 - [ ] 변경된 기능을 브라우저에서 직접 확인했다: [스크린샷 또는 확인 내용]
+- [ ] main 브랜치 보호 규칙이 유지되고 있다: [`gh api repos/{owner}/{repo}/branches/main/protection` 확인 결과 — required_status_checks에 codeprint/structure 포함 여부]
 ```
+> 브랜치 보호 확인 항목은 2026-07-01 발견(GATE_GAPS.md [G-2]) — main에 보호 규칙 자체가 없어 CI 체크가 전부 무력화돼 있던 걸 사용자가 지적해 뒤늦게 설정. 설정이 다시 사라지거나(실수로 규칙 삭제) required check 이름이 워크플로 변경으로 안 맞게 되는 걸 조기에 잡기 위한 항목.
 
 ---
 
