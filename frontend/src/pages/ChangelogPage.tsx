@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.100.6',
+    date: '2026-07-01',
+    title: '분석 정확도 — Python 테스트 코드 오탐 제거',
+    type: 'fix',
+    items: [
+      { category: '정확도', desc: 'pytest 컨벤션(tests/ 디렉터리·test_*.py 파일)을 쓰는 Python 프로젝트에서 테스트 코드가 도메인 함수를 호출하는 정상 패턴을 "도메인 경계 위반"으로 잘못 경고하던 오탐을 제거했습니다. 실제 DDD 레포 기준 오탐 18건 → 0건, 진짜 도메인 간 호출 탐지는 그대로 유지됩니다.' },
+    ],
+  },
+  {
     version: 'v0.100.5',
     date: '2026-07-01',
     title: '분석 정확도 — 헥사고날 구조 오탐 제거',
