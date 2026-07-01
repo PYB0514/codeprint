@@ -1396,3 +1396,13 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **수정.** `isTestPath` → `isTestArtifact(path, name)`로 교체(src·tgt 양쪽). 회귀 테스트 `crossDomainCall_pytestPath_excluded` 추가. **A/B**: py-ddd CROSS_DOMAIN_CALL 18→0(CROSS_CONTEXT_IMPORT 1·DOMAIN_IMPORTS_INFRA 1·DEAD_CODE 9 불변=recall 보존), java-realworld(CC1·DB9·DEAD10)·nest-realworld(CYCLIC2·DEAD1)·requests(FANOUT2·DEAD1)·self(FANOUT8·DEAD1) 전부 문서값과 동일=무회귀. 전체 백엔드 스위트(660 테스트) green.
 
 **결론.** HIGH 6종 recall 전부 확인(구조 게이트 신뢰 가능) + MEDIUM 1종 precision 버그 추가 수정. `isTestPath`는 이제 `detectLayeredViolations`(이미 `isTestArtifact`와 OR로 중복 사용 중) 1곳만 남아 사실상 죽은 협소 검사 — 이번 범위 밖이라 미정리(§3 surgical, 별도 플래그).
+
+## Python HIGH precision 감사 — 애매 사례 2건 발견 (측정만, 미수정) (2026-07-01)
+
+**측정.** py-realworld·flask-realworld·cosmic-python·django-realworld 4개 클린 Python 레포에 `analyzeLocal`. flask-realworld·cosmic-python·django-realworld는 HIGH형 경고 0건(DEAD_CODE만). py-realworld만 DB_LAYER_BYPASS 17·DOMAIN_IMPORTS_INFRA 1 — 코드 대조로 판정.
+
+**사례 1 — DB_LAYER_BYPASS, `app/db/errors.py`.** 17건 중 4건이 `routes/*.py → app/db/errors.py`. 대조 결과 `errors.py`는 `class EntityDoesNotExist(Exception)` 단 3줄 — 리포지토리 CRUD가 아닌 예외 타입 정의. 라우트가 `except EntityDoesNotExist`로 잡는 표준 FastAPI 패턴이라 "도메인 Repository를 거치지 않는 직접 persistence 호출"이라는 메시지는 과장(실제로는 호출이 아니라 예외 타입 import). 단, `db/` 아래 있다는 사실 자체는 결합(모듈 이동 시 깨짐)이라 "우회" 판정이 완전히 틀린 것은 아님 — 애매. **나머지 13건은 `routes/*.py → repositories/*.py`(진짜 리포지토리 직접 접근)로 명확한 TP, #380에서 이미 같은 수치로 확인됨(recall 재확인, 신규 아님).**
+
+**사례 2 — DOMAIN_IMPORTS_INFRA, `app/core/events.py`.** `app/core/events.py`가 `app/db/events.py`(connect_to_db/close_db_connection)를 import. `core`는 `DOMAIN_LAYER_DIRS` 별칭(#373에서 realworld류 진짜 도메인 레이어 인식 위해 추가)인데, 이 레포의 `app/core/`는 DDD 도메인이 아니라 FastAPI 부트스트랩(config·events·security) — 앱 시작/종료 훅이 DB 커넥션을 열고 닫는 것은 정상 인프라 배선이지 도메인 위반이 아님. `core`가 Python 생태계에서 "도메인"과 "앱 부트스트랩" 양쪽 의미로 쓰이는 진짜 모호성.
+
+**판단 보류.** 두 사례 모두 검출기 버그(명백한 비일관성)가 아니라 **recall vs precision 트레이드오프**다 — 좁히면(예: DB_LAYER_BYPASS를 `Repository`/`*_repository.py` 명시적 패턴으로 한정, `core`에서 이벤트/설정 파일명 제외) 이 두 FP는 사라지지만 다른 레포의 진짜 위반을 놓칠 위험(측정 안 됨). 사용자 판단 필요 — 수정하지 않고 다음 세션 후보로만 기록.
