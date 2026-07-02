@@ -557,6 +557,18 @@ const fetchGraph = useCallback(async () => {
 
 **검증:** `tsc -b` 통과. ShareGraphPage를 claude-in-chrome으로 공개레포(gin)에 라이브 로드해 ①빈 상태 훑어보기 ②검색어("router") 입력 시 10개 이하 결과·ƒ 아이콘 정상 ③레이아웃 전환·라벨모드 토글 클릭 후 콘솔 에러 없음 확인. GraphPage는 OAuth라 코드 대조 + `#tour-layout` 앵커 보존 확인만.
 
+## GraphPage/ShareGraphPage 공유 컴포넌트 추출 — PR3 범례 (2026-07-03)
+
+**문제:** PR3 착수 전 조사 결과 GraphPage 범례는 ShareGraphPage보다 훨씬 많은 기능이 얽혀있었음 — 라벨 클릭이 필터링뿐 아니라 `activateDomain`을 통해 흐름 재생(`openDomainFlows`) 사이드바까지 열고, 도메인 모드엔 DB 테이블 전용 범례 줄(클릭 시 `domain-summary` 사이드바 오픈)과 레이어 모드 전용 "전체 보기" 리셋 버튼까지 포함. ShareGraphPage 범례는 라벨이 클릭 불가능한 단순 텍스트였음. 사용자에게 확인 → "공유그래프 본연의 권한(읽기 전용)을 초과하지 않는 선에서 GraphPage 사양에 최대한 맞추라"는 답변.
+
+**적용 범위 판단:** 필터링(라벨 클릭 → 해당 도메인/레이어만 보기)과 "전체 보기" 리셋은 **읽기 동작**이고 ShareGraphPage가 이미 상단 탭바로 동일 필터링을 하고 있어(`setActiveDomainTab` + `fitView`) 범례에 재배선만 하면 됨 — 그대로 포팅. 반면 DB 테이블 범례 줄은 GraphPage의 `domain-summary` 사이드바(흐름 체인 목록을 보여주는 전용 패널)에 의존하는데 **이 사이드바 시스템 자체가 ShareGraphPage에 없음**(ShareGraphPage 사이드바는 단일 `selectedNode` 표시만 지원) — 이건 "범례" 한 항목이 아니라 계획서가 이미 최우선순위 뒤로 미뤄둔 "노드상세패널/흐름재생"(candidate #5, "가장 복잡한 조건부 렌더라 마지막 순위") 전체를 새로 만드는 일이라 이번 PR3 범위에서 제외 — DB 범례 줄은 이번엔 포팅하지 않음.
+
+**데이터 identity 불일치 발견·해결:** GraphPage는 `activeDomainTab`에 소문자 키(예: `application`)를 저장하고 opaque 토글도 같은 키를 씀. ShareGraphPage는 `activeDomainTab`에 대문자 라벨(예: `Application`, 섹션 노드의 `data.label`과 매칭)을 저장하지만 opaque 토글(`toggleDomainOpaque`)은 여전히 소문자 키가 필요 — 같은 논리적 엔티티가 두 페이지에서 다른 identity 공간을 씀. `GraphLegend` 컴포넌트의 `onLabelClick`/`isActive`를 `key` 문자열이 아닌 **엔트리 객체 전체**(`{key,label,color}`)를 받도록 설계해 각 페이지가 자기 규약에 맞는 필드(GraphPage=`entry.key`, ShareGraphPage=`entry.label`)를 골라 쓰도록 해결.
+
+**결과:** `components/GraphLegend.tsx` 신규 — opaque 토글 버튼(2페이지 4곳에서 byte-identical하던 인라인 스타일 제거) + 옵션 라벨클릭 + 옵션 전체보기 리셋. ShareGraphPage에 `activateTab`(필터+fitView, 기존 상단 탭바 로직과 동일해 탭바 자체도 이 함수로 통합) 신규 추가, 범례 라벨 클릭·전체보기 리셋 버튼 신규 이식(기존엔 불가능했던 기능).
+
+**검증:** `tsc -b` 통과. ShareGraphPage(ripgrep, 레이어 모드 — 14개 크레이트라 범례 노출)로 클릭 검증: 라벨 클릭 시 범례·상단 탭바 양쪽 active 하이라이트 동기화, 전체보기 리셋 정상, opaque 토글(○→◑) 별도 정상 동작, 콘솔 에러 없음. **도메인 모드 범례는 미검증** — 벤치마크용 공개레포 5개(gin·sinatra·Newtonsoft.Json·mini-redis·ripgrep) 전부 도메인 그룹이 2개 이하라 도메인 모드에서 범례 자체가 렌더되지 않음(코드 조건 `availableTabs.length > 2`). 레이어 모드와 완전히 동일한 컴포넌트·배선 패턴이라 코드 대조로 갈음. GraphPage는 OAuth라 코드 대조만.
+
 ## 경고 패턴 예외 UI — "무시" 액션 + 규칙 패널 (2026-06-25)
 
 **문제:** 백엔드 패턴 예외(글로브 IGNORE, #375)를 사용자가 쓰려면 UI 필요. opt-out 모델 실용화의 마지막 조각.

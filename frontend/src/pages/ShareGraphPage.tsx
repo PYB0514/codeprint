@@ -24,6 +24,7 @@ import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
 import WarningPanel from '../components/WarningPanel'
 import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewToggles'
+import { GraphLegend } from '../components/GraphLegend'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -198,6 +199,12 @@ function ShareGraphInner() {
       setEdges(applyEdgeVisibility(le, se, sc, si, sb, sdb, sapi))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
+  }
+
+  // 도메인/레이어 탭 활성화 — 상단 탭바 클릭과 동일 동작(필터 + 화면 맞춤), 범례 라벨 클릭에서도 재사용
+  const activateTab = (tab: string) => {
+    setActiveDomainTab(tab)
+    setTimeout(() => fitView({ duration: 400, padding: 0.15 }), 50)
   }
 
   // 노드 라벨 표시 모드를 이름/주석 간 전환
@@ -416,69 +423,34 @@ function ShareGraphInner() {
             </div>
           </div>
 
-          {/* 범례 — 도메인/레이어 다중 표시 토글 */}
+          {/* 범례 — 도메인/레이어 다중 표시 토글 + 라벨 클릭으로 필터(상단 탭바와 동일 동작) */}
           {availableTabs.length > 2 && (
             <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
               {layoutPreset === 'domain' && (
-                <>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">범례 (클릭 = 가리기)</p>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                    {domainSections.map(({ key, color }) => {
-                      const opaque = opaqueDomainSet.has(key)
-                      const label = key.charAt(0).toUpperCase() + key.slice(1)
-                      return (
-                        <div key={key} className="flex items-center gap-1.5 py-0.5 px-1 rounded">
-                          <button
-                            onClick={() => toggleDomainOpaque(key)}
-                            title={opaque ? '내용 표시' : '내용 가리기'}
-                            style={{
-                              width: 16, height: 16, borderRadius: 3,
-                              border: `1px solid ${color}88`,
-                              background: opaque ? color : `${color}22`,
-                              color: opaque ? '#fff' : color,
-                              fontSize: 9, cursor: 'pointer',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              flexShrink: 0,
-                            }}
-                          >
-                            {opaque ? '◑' : '○'}
-                          </button>
-                          <span className="text-xs truncate text-gray-400 flex-1 min-w-0">{label}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </>
+                <GraphLegend
+                  headerText="범례 (○ 클릭 = 가리기, 이름 클릭 = 해당 도메인만 보기)"
+                  entries={domainSections.map(({ key, color }) => ({ key, label: key.charAt(0).toUpperCase() + key.slice(1), color }))}
+                  opaqueSet={opaqueDomainSet}
+                  onToggleOpaque={toggleDomainOpaque}
+                  isActive={(entry) => activeDomainTab === entry.label}
+                  onLabelClick={(entry) => activateTab(entry.label)}
+                  labelTitle="이 도메인만 보기"
+                  onReset={() => activateTab('전체')}
+                  resetActive={activeDomainTab === '전체'}
+                />
               )}
               {layoutPreset === 'layer' && (
-                <>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">범례 (클릭 = 가리기)</p>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                    {layerSections.map(({ label, key, color }) => {
-                      const opaque = opaqueLayerSet.has(key)
-                      return (
-                        <div key={key} className="flex items-center gap-1.5 py-0.5 px-1 rounded">
-                          <button
-                            onClick={() => toggleLayerOpaque(key)}
-                            title={opaque ? '내용 표시' : '내용 가리기'}
-                            style={{
-                              width: 16, height: 16, borderRadius: 3,
-                              border: `1px solid ${color}88`,
-                              background: opaque ? color : `${color}22`,
-                              color: opaque ? '#fff' : color,
-                              fontSize: 9, cursor: 'pointer',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              flexShrink: 0,
-                            }}
-                          >
-                            {opaque ? '◑' : '○'}
-                          </button>
-                          <span className="text-xs truncate text-gray-400 flex-1 min-w-0">{label}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </>
+                <GraphLegend
+                  headerText="범례 (○ 클릭 = 가리기, 이름 클릭 = 해당 레이어만 보기)"
+                  entries={layerSections}
+                  opaqueSet={opaqueLayerSet}
+                  onToggleOpaque={toggleLayerOpaque}
+                  isActive={(entry) => activeDomainTab === entry.label}
+                  onLabelClick={(entry) => activateTab(entry.label)}
+                  labelTitle="이 레이어만 보기"
+                  onReset={() => activateTab('전체')}
+                  resetActive={activeDomainTab === '전체'}
+                />
               )}
             </div>
           )}
@@ -508,7 +480,7 @@ function ShareGraphInner() {
           {availableTabs.length > 2 && (
             <div className="flex items-center gap-0.5 px-2 py-1 bg-gray-950/90 border-b border-gray-800 overflow-x-auto shrink-0">
               <button
-                onClick={() => { setActiveDomainTab('전체'); setTimeout(() => fitView({ duration: 400, padding: 0.15 }), 50) }}
+                onClick={() => activateTab('전체')}
                 className={`flex-shrink-0 text-xs px-3 py-1 rounded transition-colors ${
                   activeDomainTab === '전체'
                     ? 'bg-blue-700/60 text-blue-200 border border-blue-600/60'
@@ -520,7 +492,7 @@ function ShareGraphInner() {
               {availableTabs.filter(t => t !== '전체').map(tab => (
                 <button
                   key={tab}
-                  onClick={() => { setActiveDomainTab(tab); setTimeout(() => fitView({ duration: 400, padding: 0.15 }), 50) }}
+                  onClick={() => activateTab(tab)}
                   className={`flex-shrink-0 text-xs px-3 py-1 rounded transition-colors ${
                     activeDomainTab === tab
                       ? 'bg-blue-600/30 text-blue-300 border border-blue-600/40'

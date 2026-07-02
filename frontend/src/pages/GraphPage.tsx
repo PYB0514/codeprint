@@ -34,6 +34,7 @@ import TeamChatPanel from '../components/TeamChatPanel'
 import AiAnalysisSection from '../components/AiAnalysisSection'
 import ArchitectureIntentPanel from '../components/ArchitectureIntentPanel'
 import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewToggles'
+import { GraphLegend } from '../components/GraphLegend'
 import { type IgnoreRule, loadIgnoreRules, saveIgnoreRules } from '../utils/ignoreRules'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode, sketch: SketchNode }
@@ -2685,50 +2686,17 @@ function GraphPageInner() {
             <LeftSection title="범례">
               {layoutPreset === 'domain' && (
                 <>
-                  <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">도메인 (클릭 = 해당 도메인만 보기)</p>
-                  {/* 전체 보기 — 필터 해제 (상단 탭바의 '전체' 대체) */}
-                  <button
-                    onClick={resetDomainTab}
-                    className={`w-full text-left text-xs px-1.5 py-1 mb-1 rounded transition-colors ${
-                      activeDomainTab === null ? 'bg-blue-700/40 text-blue-200' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-                    }`}
-                  >
-                    전체 보기
-                  </button>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mb-2">
-                  {availableTabs.map((key) => {
-                    const color = domainColorMap.get(key)?.color ?? '#6b7280'
-                    const label = key.charAt(0).toUpperCase() + key.slice(1)
-                    const opaque = opaqueDomainSet.has(key)
-                    const active = activeDomainTab === key
-                    return (
-                      <div key={key} className={`flex items-center gap-1.5 py-0.5 px-1 rounded ${active ? 'bg-gray-800/80' : ''}`}>
-                        <button
-                          onClick={() => toggleDomainOpaque(key)}
-                          title={opaque ? '내용 표시' : '내용 가리기'}
-                          style={{
-                            width: 16, height: 16, borderRadius: 3,
-                            border: `1px solid ${color}88`,
-                            background: opaque ? color : `${color}22`,
-                            color: opaque ? '#fff' : color,
-                            fontSize: 9, cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            flexShrink: 0,
-                          }}
-                        >
-                          {opaque ? '◑' : '○'}
-                        </button>
-                        <span
-                          className={`text-xs truncate cursor-pointer transition-colors flex-1 min-w-0 ${active ? 'text-white font-semibold' : 'text-gray-400 hover:text-white'}`}
-                          onClick={() => activateDomain(key)}
-                          title="이 도메인만 보기 + 흐름 목록"
-                        >
-                          {label}
-                        </span>
-                      </div>
-                    )
-                  })}
-                  </div>
+                  <GraphLegend
+                    headerText="도메인 (클릭 = 해당 도메인만 보기)"
+                    entries={availableTabs.map((key) => ({ key, label: key.charAt(0).toUpperCase() + key.slice(1), color: domainColorMap.get(key)?.color ?? '#6b7280' }))}
+                    opaqueSet={opaqueDomainSet}
+                    onToggleOpaque={toggleDomainOpaque}
+                    isActive={(entry) => activeDomainTab === entry.key}
+                    onLabelClick={(entry) => activateDomain(entry.key)}
+                    labelTitle="이 도메인만 보기 + 흐름 목록"
+                    onReset={resetDomainTab}
+                    resetActive={activeDomainTab === null}
+                  />
                   {/* DB 테이블 범례 */}
                   <div className="flex items-center gap-1.5 py-0.5 mb-2">
                     <span style={{ width: 16, height: 16, borderRadius: 3, border: '1px solid #22d3ee88', background: '#22d3ee22', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 9, color: '#22d3ee' }}>◇</span>
@@ -2747,47 +2715,17 @@ function GraphPageInner() {
               )}
               {layoutPreset === 'layer' && (
                 <>
-                  <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">계층형 레이어 (클릭 = 해당 레이어만 보기)</p>
-                  <button
-                    onClick={resetDomainTab}
-                    className={`w-full text-left text-xs px-1.5 py-1 mb-1 rounded transition-colors ${
-                      activeDomainTab === null ? 'bg-blue-700/40 text-blue-200' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-                    }`}
-                  >
-                    전체 보기
-                  </button>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                  {layerSections.map(({ label, color, key }) => {
-                    const opaque = opaqueLayerSet.has(key)
-                    const active = activeDomainTab === key
-                    return (
-                      <div key={key} className={`flex items-center gap-1.5 py-0.5 px-1 rounded ${active ? 'bg-gray-800/80' : ''}`}>
-                        <button
-                          onClick={() => toggleLayerOpaque(key)}
-                          title={opaque ? '내용 표시' : '내용 가리기'}
-                          style={{
-                            width: 16, height: 16, borderRadius: 3,
-                            border: `1px solid ${color}88`,
-                            background: opaque ? color : `${color}22`,
-                            color: opaque ? '#fff' : color,
-                            fontSize: 9, cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            flexShrink: 0,
-                          }}
-                        >
-                          {opaque ? '◑' : '○'}
-                        </button>
-                        <span
-                          className={`text-xs truncate flex-1 min-w-0 cursor-pointer hover:text-white ${active ? 'text-white font-semibold' : 'text-gray-400'}`}
-                          onClick={() => activateDomain(key)}
-                          title="이 레이어만 보기"
-                        >
-                          {label}
-                        </span>
-                      </div>
-                    )
-                  })}
-                  </div>
+                  <GraphLegend
+                    headerText="계층형 레이어 (클릭 = 해당 레이어만 보기)"
+                    entries={layerSections}
+                    opaqueSet={opaqueLayerSet}
+                    onToggleOpaque={toggleLayerOpaque}
+                    isActive={(entry) => activeDomainTab === entry.key}
+                    onLabelClick={(entry) => activateDomain(entry.key)}
+                    labelTitle="이 레이어만 보기"
+                    onReset={resetDomainTab}
+                    resetActive={activeDomainTab === null}
+                  />
                   <div className="border-t border-gray-800 my-2" />
                 </>
               )}

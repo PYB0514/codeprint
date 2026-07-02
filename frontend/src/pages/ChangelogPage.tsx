@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.107.0',
+    date: '2026-07-03',
+    title: '공유 그래프 뷰어 — 범례 클릭으로 도메인/레이어 필터링 추가',
+    type: 'feature',
+    items: [
+      { category: '공유 그래프', desc: '범례에서 도메인·레이어 이름을 클릭하면 해당 항목만 필터링해서 볼 수 있습니다. 이전에는 가리기(○) 토글만 가능했습니다.' },
+      { category: '공유 그래프', desc: '범례에 "전체 보기" 버튼을 추가해 필터를 한 번에 해제할 수 있습니다.' },
+    ],
+  },
+  {
     version: 'v0.106.0',
     date: '2026-07-03',
     title: '공유 그래프 뷰어 — 라벨 표시 모드(이름/주석) 전환 추가 + 노드 검색 정확도 개선',
