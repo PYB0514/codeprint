@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.104.1',
+    date: '2026-07-02',
+    title: '공유 그래프 화면 — 큰 프로젝트에서 빈 화면으로 보이던 버그 수정',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: '파일이 많은 프로젝트의 공유 그래프(/share/{id})가 접속 시 빈 화면으로 보이던 문제를 수정했습니다. 이제 전체 그래프가 화면에 맞춰 표시됩니다.' },
+    ],
+  },
+  {
     version: 'v0.104.0',
     date: '2026-07-02',
     title: '오늘의 공개레포 — 매일 자동 분석되는 오픈소스 쇼케이스',
