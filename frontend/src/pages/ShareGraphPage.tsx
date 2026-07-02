@@ -265,6 +265,16 @@ function ShareGraphInner() {
     [nodes]
   )
 
+  // 레이어 섹션 키+라벨+색상 목록 — 고정 DDD 8종 목록 대신 실제 렌더된 섹션에서 동적으로 파생(비DDD 프로젝트도 커버)
+  const layerSections = useMemo(() =>
+    nodes.filter(n => n.id.startsWith('layer-section-')).map(n => ({
+      key: n.id.replace('layer-section-', ''),
+      label: String(n.data?.label ?? ''),
+      color: String(n.data?.color ?? '#6b7280'),
+    })),
+    [nodes]
+  )
+
   // 탭 필터링된 노드 ID 집합
   const tabFilteredNodeIds = useMemo(() => {
     if (activeDomainTab === '전체') return null
@@ -431,16 +441,7 @@ function ShareGraphInner() {
                 <>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">범례 (클릭 = 가리기)</p>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                    {[
-                      { label: 'Domain',         key: 'domain',         color: '#3b82f6' },
-                      { label: 'Application',    key: 'application',    color: '#eab308' },
-                      { label: 'Infrastructure', key: 'infrastructure', color: '#a855f7' },
-                      { label: 'Interfaces',     key: 'interfaces',     color: '#10b981' },
-                      { label: 'Pages',          key: 'pages',          color: '#06b6d4' },
-                      { label: 'Components',     key: 'components',     color: '#0ea5e9' },
-                      { label: 'Hooks / Utils',  key: 'hooks',          color: '#f97316' },
-                      { label: 'Database',       key: 'database',       color: '#ef4444' },
-                    ].filter(({ label }) => availableTabs.includes(label)).map(({ label, key, color }) => {
+                    {layerSections.map(({ label, key, color }) => {
                       const opaque = opaqueLayerSet.has(key)
                       return (
                         <div key={key} className="flex items-center gap-1.5 py-0.5 px-1 rounded">

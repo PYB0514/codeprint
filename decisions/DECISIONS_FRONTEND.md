@@ -21,6 +21,11 @@
 2. **경고 섹션이 좌측 사이드바를 항상 꽉 채워 범례가 화면 밖으로 밀림** — ShareGraphPage는 PR #327(GraphPage 사이드바 경량화, 경고를 우측 하단 코너 플로팅 기본 접힘 패널로 전환)의 대상이 아니었던 것으로 확인(GraphPage만 반영됨, ShareGraphPage는 그 이후에도 계속 인라인 풀사이즈였음 — 이번 이식 작업으로 새로 드러난 동일 계열의 반영 누락). GraphPage와 동일한 우측 하단 코너 플로팅(기본 접힘 칩, 클릭 시 확장) 패턴으로 교체, 단 AI 분석·suppress/restore/ignore 등 쓰기 액션은 이식 대상이 아니므로 제외하고 `WarningPanel warnings={warnings}` 읽기 전용 렌더만 유지.
 - 두 건 다 claude-in-chrome으로 재검증(레이어·도메인 모드 색상 분화 확인, 경고 칩 접힘→확장 정상 동작), `tsc -b` 통과, 콘솔 에러 0.
 
+**★★ 3번째 발견 — 사용자가 "오늘의 공개레포" 5개(gin·sinatra·Newtonsoft.Json·mini-redis·ripgrep)를 직접 순회 검증하다 잡음(더 심각)**: 레이어 모드 범례가 codeprint 자신 말고는 전부 비어 있었음. 원인은 레이어 범례가 `Domain/Application/Infrastructure/...` **고정 8개 이름 배열**이었기 때문 — DDD/Java·Spring 컨벤션 디렉터리명이라, 이 컨벤션을 안 쓰는 실제 오픈소스 레포 대부분(=지금 자동으로 노출 중인 "오늘의 공개레포" 쇼케이스 5개 거의 전부)에서 하나도 매치 안 됨. codeprint 자기 자신 하나로만 검증해 발견 못 한 표본 편향. **이 고정 배열은 GraphPage(로그인 소유자 화면)에도 원래부터 있던 동일 버그**(`GraphPage.tsx` 레이어 범례, 이번에 확인) — ShareGraphPage뿐 아니라 GraphPage도 같이 수정.
+- **수정**: 두 페이지 다 고정 배열 대신 실제 렌더된 `layer-section-*` 노드에서 key/label/color를 동적으로 파생(`layerSections` memo, 도메인 범례의 `domainSections`와 동일 패턴) — `buildLayout`의 `getFallbackLayerMeta`가 이미 비DDD 프로젝트에도 파일/폴더 단위 폴백 섹션+색상을 만들어주고 있어(`graphLayout.ts`), 그걸 그대로 읽기만 하면 됨. GraphPage 쪽은 `clickable = availableTabs.includes(key)` 가드도 함께 제거(하드코딩 파일경로 기반 7종 목록 대조용이었는데, 실제 필터링 로직(`tabFilteredNodeIds`)은 임의의 폴백 키도 이미 지원해서 불필요하게 좁은 제약이었음).
+- **검증**: gin(파일 단위 폴백 섹션 46개)으로 재확인 — 범례가 실제 파일명 목록으로 가득 채워지고, 토글 클릭 시 정상 dim. `tsc -b` 통과, 콘솔 에러 0.
+- **교훈**: 자기 자신(codeprint) 하나로 검증하는 건 "실제 서비스에서 보게 될 프로젝트 분포"를 대표하지 못한다 — 이번처럼 공개 쇼케이스에 노출되는 실제 다양한 언어/컨벤션 레포로 교차검증해야 이런 표본 편향형 버그를 잡을 수 있음.
+
 ---
 
 ## 랜딩페이지 정리 — 광고 사이드바 제거·요금제 문구 실측 수정·섹션 재배치 (2026-07-02)
