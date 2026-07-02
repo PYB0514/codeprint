@@ -2,6 +2,18 @@
 
 ---
 
+## 팀 좌석당 가격 인하 + 개인/팀 가격 분리 (2026-07-01, 가격 결정)
+
+**배경.** PR #419 라이브 테스트 직후 사용자가 "유입되기엔 좀 비싼거 같다"며 좌석당 가격 인하를 요청. 초회 할인·5석 무료 등 프로모션 방안도 논의했으나, 실사용자 0명 상태에서 할인 로직(남용 방지 등)을 미리 정교화하는 건 이르다고 판단해 보류하고 **정가 자체를 낮추는 쪽**으로 결정.
+
+**발견 — 개인/팀 가격이 원래 랜딩페이지 카피상 통일돼 있었음.** `UserPlan.monthlyPricePerSeat()`를 낮추려다 보니, 랜딩페이지가 "좌석당 월정액 ₩9,900 · 개인 1석 또는 팀 N석"이라는 문구로 개인·팀을 **같은 좌석당 단가**처럼 안내하고 있었는데, 실제 백엔드는 개인 결제(`PaymentApplicationService.PRO_AMOUNT=9900`, 하드코딩)와 팀 좌석 단가(`UserPlan.monthlyPricePerSeat()`)가 **이미 분리된 별개 상수**였다는 걸 재확인. 이번 변경으로 팀만 낮추면 실제 가격이 갈리므로 카피도 갈라야 했음.
+
+**결정(사용자 확정).** ①팀 좌석당 가격만 9,900원 → 4,900원으로 인하, 개인 Pro는 9,900원 유지 — "개인 과금모델은 다른 느낌으로 분리하는 게 맞다"는 사용자 판단. ②랜딩페이지 문구를 "개인 ₩9,900/월 · 팀은 좌석당 ₩4,900/월"로 갈라서 두 가격이 다르다는 걸 명시.
+
+**결과.** `UserPlan.monthlyPricePerSeat()` DESKTOP 4_900으로 변경(개인 `PaymentApplicationService.PRO_AMOUNT`는 미변경). `UserPlanTest`·`TeamPaymentApplicationServiceTest` 금액 assertion 전부 갱신. `TeamsPage.tsx PRICE_PER_SEAT`·`LandingPage.tsx` 카피 동기화. ChangelogPage에 v0.103.0(팀 결제 실배선, 당시 9,900원)과 별개로 **새 PATCH v0.103.1**(가격 인하)을 추가 — 이미 태그된 v0.103.0 항목은 그 시점 실제 가격을 정확히 기록한 역사적 사실이라 수정하지 않음. compileJava·백엔드 단위테스트(Mockito, DB 불필요)·프론트 tsc 통과. Docker DB가 이 세션에서 내려가 있어 DB 연동 통합테스트(`ParsedFileCacheIntegrationTest` 등, 팀 결제와 무관)는 별도 확인 필요 — 이번 변경과 무관한 환경 이슈임을 실패 스택트레이스(`Connection to localhost:5432 refused`)로 확인.
+
+---
+
 ## 팀 결제 실배선 — seat 기반 Toss 결제로 팀 생성·좌석 증가 (2026-07-01, 기능)
 
 **문제.** PR #413·#414로 "Desktop 라이센스" 요금제와 팀 생성 결제 방어선(`UserPlanPort.isPaidPlan`)까지 만들었지만, 실제로는 **팀장 개인 계정이 이미 DESKTOP인지만 검사**할 뿐 팀 자체의 seat 기반 결제(seats×9,900원, 프론트 TeamsPage가 이미 표시 중이던 금액)는 한 번도 트리거되지 않았다. `TeamApplicationService.createTeam` 주석에도 "좌석 결제 연동 전 최소 방어선"이라 명시돼 있던 임시 게이트.

@@ -13,7 +13,7 @@ public enum UserPlan {
     public int monthlyPricePerSeat() {
         return switch (this) {
             case FREE -> 0;
-            case DESKTOP -> 9_900;
+            case DESKTOP -> 4_900;
         };
     }
 }

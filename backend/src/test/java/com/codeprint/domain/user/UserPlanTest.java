@@ -17,9 +17,9 @@ class UserPlanTest {
     }
 
     @Test
-    @DisplayName("monthlyPricePerSeat — FREE=0원, DESKTOP=9,900원")
+    @DisplayName("monthlyPricePerSeat — FREE=0원, DESKTOP=4,900원")
     void monthlyPricePerSeat_perPlan() {
         assertThat(UserPlan.FREE.monthlyPricePerSeat()).isEqualTo(0);
-        assertThat(UserPlan.DESKTOP.monthlyPricePerSeat()).isEqualTo(9_900);
+        assertThat(UserPlan.DESKTOP.monthlyPricePerSeat()).isEqualTo(4_900);
     }
 }
