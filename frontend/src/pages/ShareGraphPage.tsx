@@ -162,10 +162,11 @@ function ShareGraphInner() {
 
         setNodes(finalNodes)
         setEdges(applyEdgeVisibility(builtEdges, se, sc, si, sb, sdb, sapi))
+        setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
       })
       .catch(() => setError('프로젝트를 찾을 수 없거나 비공개 상태입니다.'))
       .finally(() => setLoading(false))
-  }, [projectId, searchParams])
+  }, [projectId, searchParams, fitView])
 
   // bgEnabled 또는 ownerBgUrl 변화 시 body 배경이미지 동기화
   useEffect(() => {
@@ -347,7 +348,7 @@ function ShareGraphInner() {
         </aside>
 
         {/* 그래프 캔버스 */}
-        <div className="flex-1 h-full flex flex-col">
+        <div className="flex-1 h-full flex flex-col min-w-0">
           {/* 도메인/레이어 탭바 */}
           {availableTabs.length > 2 && (
             <div className="flex items-center gap-0.5 px-2 py-1 bg-gray-950/90 border-b border-gray-800 overflow-x-auto shrink-0">

@@ -2,7 +2,18 @@
 
 ---
 
-## 분석 RUNNING 타임아웃 안내 — 멈추지 않고 재시도만 권유 (2026-06-29, fix, Phase 0 task2 잔여)
+## ShareGraphPage 대형 레포 빈 화면 — fitView 미호출 + flexbox min-width 버그 2건 (2026-07-02, fix, 부수 발견)
+
+**문제.** "오늘의 공개레포" 라이브 검증 중 gin-gonic/gin(파일 다수) 공유 그래프(`/share/{projectId}`)가 진입 시 완전히 빈 화면으로 보임. 좌측 "노드 검색" 목록도 비어 보였음.
+
+**조사 과정.**
+1. 좌측 노드 목록: `indexNodes` 계산 로직(검색어 없으면 전체 노드 표시)은 코드상 정상. 브라우저 JS로 사이드바 DOM의 `textContent`를 직접 추출해보니 실제로는 `auth.go`, `searchCredential` 등 수백 개 항목이 **정상적으로 채워져 있었음** — `text-gray-600` 10~11px 텍스트가 `bg-gray-950` 배경과 대비가 낮아 스크린샷/육안으로 안 보였을 뿐. GraphPage.tsx의 동일 목록도 같은 색상 조합(`text-gray-600`)을 쓰고 있어 앱 전체의 기존 디자인 컨벤션 — **버그 아님, 수정 안 함**.
+2. 그래프 캔버스: `.react-flow__viewport`의 `transform`이 로드 후에도 `translate(0,0) scale(1)`(미조정 기본값)에 머물러 있었음. `<ReactFlow fitView>`의 `fitView` prop은 **최초 마운트 시 1회만** 자동 실행되는데, `nodes`/`edges`가 `useNodesState([])`로 빈 배열 시작 후 `axios` 응답이 온 뒤에야 `setNodes`로 채워지는 구조라, 최초 마운트 시점엔 노드가 없어 자동 fitView가 사실상 no-op이었음. `GraphPage.tsx`는 데이터 로드 `.then()` 직후 `setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)`을 명시적으로 호출하는데(1127번째 줄), `ShareGraphPage.tsx`의 동일 위치엔 이 호출이 아예 없었음.
+3. 위 fitView 호출을 추가한 뒤에도 여전히 빈 화면 — `.react-flow__pane`의 실제 렌더 폭이 **3270px**로, 뷰포트(1178px)보다 훨씬 넓게 부풀어 있었음. 원인은 flexbox 기본값 `min-width: auto` — 그래프 캔버스를 감싸는 `<div className="flex-1 h-full flex flex-col">`(그래프 캔버스 wrapper)가 부모(`flex-1 flex overflow-hidden`, 1178px로 정상 측정)의 폭 제약을 무시하고 **내부 ReactFlow 콘텐츠 크기만큼 늘어나** 있었음. `fitView`는 이 부풀어진(3270px) 컨테이너 기준으로 "맞춤" 계산을 해서, 실제 화면에 클리핑되는 좌측 1178px 슬라이스엔 콘텐츠가 거의 안 걸리는 위치로 이동해버림. `GraphPage.tsx`의 동일 wrapper(4039번째 줄)는 **이미 `min-w-0`을 갖고 있어** 이 버그가 없었음 — `ShareGraphPage.tsx`만 이 클래스가 누락된 상태.
+
+**결정.** ①`ShareGraphPage.tsx` 데이터 로드 effect에 `setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)` 추가(`GraphPage.tsx`와 동일 패턴, `fitView`를 effect 의존성 배열에도 추가) ②그래프 캔버스 wrapper에 `min-w-0` 클래스 추가. 둘 다 기존 `GraphPage.tsx`에 이미 있는 패턴을 그대로 가져온 것 — 신규 메커니즘 도입 없음(§3 외과적 수정).
+
+**결과.** claude-in-chrome 라이브 검증: 수정 전 완전 빈 화면(`.react-flow__pane` 너비 3270px, transform 미조정) → fitView 추가만으로는 여전히 빈 화면(transform은 계산됐으나 부풀어진 컨테이너 기준이라 여전히 어긋남) → `min-w-0` 추가 후 `.react-flow__pane` 너비가 정상 측정되고 파일별 그래프가 화면에 꽉 차게 렌더링됨(auth.go·auth_test.go·benchmarks_test.go 등 실제 노드 확인). `tsc -b` 통과. `GraphPage.tsx`는 애초에 두 패턴 모두 갖고 있어 무영향(같은 버그 없음 확인 완료).
 
 **문제.** 분석이 서버에서 멈춰도(재시작 아닌 행) 프론트는 RUNNING 폴링만 반복하고 "분석 중" 버튼이 비활성이라 사용자가 빠져나올 길이 없었다. (#397이 폴링 단일실패는 복원했으나, 정상 응답이 계속 RUNNING인 경우는 별개.)
 
