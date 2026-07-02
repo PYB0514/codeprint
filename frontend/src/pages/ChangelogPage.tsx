@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.104.0',
+    date: '2026-07-02',
+    title: '오늘의 공개레포 — 매일 자동 분석되는 오픈소스 쇼케이스',
+    type: 'feature',
+    items: [
+      { category: '랜딩페이지', desc: '매일 유명 오픈소스 5개를 시스템이 자동으로 선정·분석해 랜딩페이지에 카드로 보여줍니다. 클릭하면 바로 분석 결과 화면으로 이동합니다.' },
+    ],
+  },
+  {
     version: 'v0.103.1',
     date: '2026-07-01',
     title: '팀 좌석당 가격 인하 — 9,900원 → 4,900원',

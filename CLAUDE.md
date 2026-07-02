@@ -63,9 +63,8 @@ PostCompact 훅으로부터 신호를 받으면 **1회라도** 즉시 아래 순
 
 사용자의 명시적 지시가 없으면 위 기준대로 자율 진행한다. 방향이 불확실할 때만 짧게 묻는다.
 
-**서버 시작 금지.**
-백엔드(Spring Boot) / 프론트엔드(npm run dev) 서버를 Claude가 직접 시작하지 않는다.
-서버가 꺼져 있으면 사용자에게 켜달라고 요청한다.
+**서버 기동 — Preview 도구로 직접 관리 (2026-07-02부터).**
+`mcp__Claude_Preview__preview_start`(`.claude/launch.json` 기반)로 프론트엔드·백엔드 모두 Claude가 직접 켜도 된다 — 사용자 승인, 이전엔 이 도구가 없어 사용자가 직접 실행했었음. Docker Postgres 컨테이너(`docker compose up -d`)도 직접 기동 가능(Docker Desktop 자체 실행은 여전히 사용자 담당, 데몬이 꺼져 있으면 켜달라고 요청). `npm run dev`/`./gradlew bootRun`을 Bash로 직접 실행하는 건 계속 금지 — 반드시 preview_start 경유.
 
 **Claude in Chrome — 언제 쓸지.**
 - 프론트엔드 코드 변경 후 PR 올리기 전 `http://localhost:3000` 직접 접속해서 확인
@@ -116,9 +115,9 @@ PostCompact 훅으로부터 신호를 받으면 **1회라도** 즉시 아래 순
 - `npx tsc -b` — 프론트 타입 오류 없음 (`--noEmit` 아님, unused variable도 잡으려면 `-b`)
 
 *런타임 검증 (코드 변경 시 항상)*
-- Docker DB 실행 중인지 확인 (`docker compose up -d`)
-- 백엔드/프론트 서버가 꺼져 있으면 사용자에게 켜달라고 요청
-- 변경된 기능을 Claude in Chrome으로 직접 동작 확인
+- Docker DB 실행 중인지 확인, 꺼져 있으면 `docker compose up -d`로 직접 기동
+- 백엔드/프론트 서버가 꺼져 있으면 `preview_start`로 직접 기동
+- 변경된 기능을 Preview 도구(또는 Claude in Chrome)로 직접 동작 확인
 
   변경 유형별 최소 확인 동작 (이것만큼은 반드시):
   - 새 버튼/링크 추가 → 클릭해서 실제 목적지 확인
@@ -135,7 +134,7 @@ PostCompact 훅으로부터 신호를 받으면 **1회라도** 즉시 아래 순
 
 *자가 진단 (codeprint MCP, push 전 항상)*
 - push 전 `codeprint` MCP(`get_warnings`)로 이번 변경사항을 자가검사(HIGH/MEDIUM 경고 확인)
-- MCP는 `localhost:8080` 백엔드 서버가 떠 있어야 호출됨. 꺼져 있으면 §0 "서버 시작 금지" 그대로 적용 — 직접 켜지 말고 사용자에게 켜달라고 요청한 뒤 재시도
+- MCP는 `localhost:8080` 백엔드 서버가 떠 있어야 호출됨. 꺼져 있으면 §0 "서버 기동" 그대로 적용 — `preview_start`로 직접 켠 뒤 재시도
 - **개발 중간 자가검사**: push 직전 1회로 미루지 않는다. 관련 파일을 여러 개 고친 뒤 자연스러운 멈춤 지점(한 기능 단위 완료, 다음 파일로 넘어가기 전 등)마다 `get_warnings`로 중간 점검한다 — 문제를 push 직전이 아니라 만드는 시점에 바로 발견하기 위함
 
 **규칙 5: DECISIONS.md 기록**
