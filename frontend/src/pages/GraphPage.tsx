@@ -19,6 +19,7 @@ import { toPng } from 'html-to-image'
 import { buildLayout, downloadTreeText, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry, ColumnInfo } from '../utils/graphLayout'
 import { extractDomain, buildDomainColorMap, buildKnownDomains } from '../utils/graphLayout'
+import { isDbEdgeType, applyEdgeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
@@ -67,12 +68,6 @@ type SidebarContent =
   | { kind: 'api-call'; frontFile: string; frontFileNodeId: string; ctrlFile: string; ctrlFileNodeId: string; flowChain: FlowStep[] }
   | { kind: 'warning'; nodeName: string; nodeWarnings: { type: string; message: string }[] }
   | { kind: 'domain-summary'; domainName: string; color: string; flows: { id: string; label: string; preview: string[] }[] }
-
-// DB 엣지 타입 판별 — 신규 CRUD 타입 + 레거시 DB_WRITE 포함
-const DB_EDGE_TYPES = new Set(['DB_READ', 'DB_WRITE', 'DB_CREATE', 'DB_UPDATE', 'DB_DELETE'])
-function isDbEdgeType(t: string | undefined): boolean {
-  return DB_EDGE_TYPES.has(t ?? '')
-}
 
 // CRUD 타입별 색상 — graphLayout.ts의 DB_EDGE_COLORS와 동기화
 const DB_CRUD_COLOR: Record<string, string> = {
@@ -686,23 +681,6 @@ function GraphPageInner() {
   const [presetSaving, setPresetSaving] = useState(false)
   const [pendingSaveSlot, setPendingSaveSlot] = useState<number | null>(null)
   const [presetSaveName, setPresetSaveName] = useState('')
-
-  // 엣지 타입별 초기 hidden 상태 적용
-  const applyEdgeVisibility = useCallback((edges: Edge[], se: boolean, sc: boolean, si: boolean, sb: boolean, sdb: boolean, sapi: boolean) =>
-    edges.map((e) => {
-      const d = e.data as { type?: string; broken?: boolean } | undefined
-      const t = d?.type
-      const broken = d?.broken
-      const hidden =
-        t === 'IMPORT' && broken ? !sb :
-        t === 'IMPORT' ? !se :
-        t === 'FUNCTION_CALL' ? !sc :
-        t === 'INSTANTIATION' ? !si :
-        isDbEdgeType(t) ? !sdb :
-        t === 'API_CALL' ? !sapi :
-        false
-      return { ...e, hidden }
-    }), [])
 
   // 클릭된 노드의 직접 연결 엣지(1단계)를 토글 상태와 무관하게 강조 표시
   useEffect(() => {
@@ -2860,8 +2838,8 @@ function GraphPageInner() {
         onMouseMove={collabSessionId ? handleCollabMouseMove : undefined}
         fitView
         fitViewOptions={{ padding: 0.1 }}
-        minZoom={0.05}
-        maxZoom={2}
+        minZoom={GRAPH_MIN_ZOOM}
+        maxZoom={GRAPH_MAX_ZOOM}
         onlyRenderVisibleElements
       >
         <Background color="#1f2937" gap={20} />

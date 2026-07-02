@@ -1045,6 +1045,36 @@ export function buildLayout(
   return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges, ...dbReadEdges, ...dbWriteEdges, ...dbCrudEdges, ...apiCallEdges] }
 }
 
+// 그래프 뷰 줌 한계 — GraphPage/ShareGraphPage 공통
+export const GRAPH_MIN_ZOOM = 0.05
+export const GRAPH_MAX_ZOOM = 2
+
+// DB 엣지 타입 판별
+export function isDbEdgeType(t: string | undefined): boolean {
+  return t === 'DB_READ' || t === 'DB_WRITE' || t === 'DB_CREATE' || t === 'DB_UPDATE' || t === 'DB_DELETE'
+}
+
+// 엣지 타입별 hidden 여부 적용
+export function applyEdgeVisibility(
+  edges: Edge[],
+  se: boolean, sc: boolean, si: boolean, sb: boolean, sdb: boolean, sapi: boolean
+): Edge[] {
+  return edges.map((e) => {
+    const d = e.data as { type?: string; broken?: boolean } | undefined
+    const t = d?.type
+    const broken = d?.broken
+    const hidden =
+      t === 'IMPORT' && broken ? !sb :
+      t === 'IMPORT' ? !se :
+      t === 'FUNCTION_CALL' ? !sc :
+      t === 'INSTANTIATION' ? !si :
+      isDbEdgeType(t) ? !sdb :
+      t === 'API_CALL' ? !sapi :
+      false
+    return { ...e, hidden }
+  })
+}
+
 // AI 컨텍스트용 트리 다운로드 — "파일명 — 주석" 형태로 이름과 역할을 함께 표시
 export function downloadTreeText(rawNodes: RawNode[]): void {
   const fileNodes = rawNodes.filter((n) => n.type === 'FILE')
