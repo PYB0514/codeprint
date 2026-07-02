@@ -59,7 +59,10 @@ class TreeSitterCSharpAnalyzer extends AbstractTreeSitterAnalyzer {
                 || type.equals("constructor_declaration")
                 || type.equals("local_function_statement")) {
             TSNode nameNode = node.getChildByFieldName("name");
-            String name = (nameNode != null && !nameNode.isNull()) ? text(nameNode, src) : "";
+            String rawName = (nameNode != null && !nameNode.isNull()) ? text(nameNode, src) : "";
+            // #if/#endif 전처리기 지시문 주변에서 그래머가 노드 경계를 잘못 잡아 공백 섞인 깨진 텍스트가
+            // 나오는 경우가 있어(예: "id IgnoreCultureForTypedAttribu") 유효 식별자만 함수로 인정
+            String name = isValidIdentifier(rawName) ? rawName : "";
             if (!name.isEmpty()) functions.add(name);
             // 메서드 스코프 = 필드(전역) 복사본 + 이 메서드의 파라미터(+지역변수는 본문 순회 중 추가)
             Map<String, String> methodScope = new LinkedHashMap<>(scope);
