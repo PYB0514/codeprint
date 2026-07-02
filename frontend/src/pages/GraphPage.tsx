@@ -19,7 +19,7 @@ import { toPng } from 'html-to-image'
 import { buildLayout, downloadTreeText, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry, ColumnInfo } from '../utils/graphLayout'
 import { extractDomain, buildDomainColorMap, buildKnownDomains } from '../utils/graphLayout'
-import { isDbEdgeType, applyEdgeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM } from '../utils/graphLayout'
+import { isDbEdgeType, applyEdgeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, searchNodes } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
@@ -33,6 +33,7 @@ import WarningPanel from '../components/WarningPanel'
 import TeamChatPanel from '../components/TeamChatPanel'
 import AiAnalysisSection from '../components/AiAnalysisSection'
 import ArchitectureIntentPanel from '../components/ArchitectureIntentPanel'
+import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewToggles'
 import { type IgnoreRule, loadIgnoreRules, saveIgnoreRules } from '../utils/ignoreRules'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode, sketch: SketchNode }
@@ -2316,25 +2317,8 @@ function GraphPageInner() {
 
         {/* 전역 뷰 컨트롤 — 레이아웃·라벨 토글 + 프리셋·내보내기 팝업 */}
         <span className="w-px h-5 bg-gray-700" />
-        <button
-          id="tour-layout"
-          onClick={toggleLayoutPreset}
-          title="레이아웃 전환"
-          className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2.5 py-1.5 rounded-lg border border-gray-700"
-        >
-          <span className={layoutPreset === 'layer' ? 'text-white' : 'text-gray-500'}>계층형</span>
-          <span className="text-gray-600">/</span>
-          <span className={layoutPreset === 'domain' ? 'text-white' : 'text-gray-500'}>도메인</span>
-        </button>
-        <button
-          onClick={toggleLabelMode}
-          title="라벨 표시 모드"
-          className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2.5 py-1.5 rounded-lg border border-gray-700"
-        >
-          <span className={labelMode === 'name' ? 'text-white' : 'text-gray-500'}>이름</span>
-          <span className="text-gray-600">/</span>
-          <span className={labelMode === 'comment' ? 'text-white' : 'text-gray-500'}>주석</span>
-        </button>
+        <LayoutPresetToggle layoutPreset={layoutPreset} onToggle={toggleLayoutPreset} id="tour-layout" />
+        <LabelModeToggle labelMode={labelMode} onToggle={toggleLabelMode} />
         <div className="relative">
           <button
             onClick={() => setOpenToolbarMenu(m => m === 'preset' ? null : 'preset')}
@@ -2486,11 +2470,7 @@ function GraphPageInner() {
                 className="w-full text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500"
               />
               {nodeSearchQuery.trim() && (() => {
-                const q = nodeSearchQuery.trim().toLowerCase()
-                const results = rawNodes.filter(n =>
-                  n.type !== 'GROUP' &&
-                  (n.name.toLowerCase().includes(q) || (n.comment ?? '').toLowerCase().includes(q))
-                ).slice(0, 10)
+                const results = searchNodes(rawNodes, nodeSearchQuery)
                 return results.length === 0 ? (
                   <p className="text-[10px] text-gray-600 mt-1 px-1">결과 없음</p>
                 ) : (

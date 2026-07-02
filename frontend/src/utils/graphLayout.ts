@@ -1049,6 +1049,15 @@ export function buildLayout(
 export const GRAPH_MIN_ZOOM = 0.05
 export const GRAPH_MAX_ZOOM = 2
 
+// 노드 이름/주석 검색 — 파일명 · 함수명 · 주석 매치, 최대 limit개
+export function searchNodes(rawNodes: RawNode[], query: string, limit = 10): RawNode[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+  return rawNodes
+    .filter((n) => n.type !== 'GROUP' && (n.name.toLowerCase().includes(q) || (n.comment ?? '').toLowerCase().includes(q)))
+    .slice(0, limit)
+}
+
 // DB 엣지 타입 판별
 export function isDbEdgeType(t: string | undefined): boolean {
   return t === 'DB_READ' || t === 'DB_WRITE' || t === 'DB_CREATE' || t === 'DB_UPDATE' || t === 'DB_DELETE'

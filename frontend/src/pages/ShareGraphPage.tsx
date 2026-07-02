@@ -16,13 +16,14 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { buildLayout, applyEdgeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM } from '../utils/graphLayout'
+import { buildLayout, applyEdgeVisibility, searchNodes, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset } from '../utils/graphLayout'
 import type { Node, Edge } from '@xyflow/react'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
 import WarningPanel from '../components/WarningPanel'
+import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewToggles'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -199,6 +200,18 @@ function ShareGraphInner() {
     }
   }
 
+  // 노드 라벨 표시 모드를 이름/주석 간 전환
+  const toggleLabelMode = () => {
+    const next: LabelMode = labelMode === 'name' ? 'comment' : 'name'
+    setLabelMode(next)
+    if (rawNodesCache.length > 0) {
+      const { nodes: ln, edges: le } = buildLayout(rawNodesCache, rawEdgesCache, next, layoutPreset)
+      setNodes(ln)
+      const { se, sc, si, sb, sdb, sapi } = edgeVisibility
+      setEdges(applyEdgeVisibility(le, se, sc, si, sb, sdb, sapi))
+    }
+  }
+
   // 레이어 섹션 opaque 토글 — 섹션 덮기 + 내부 파일/함수 노드 hidden (layer 모드 전용)
   const toggleLayerOpaque = (layer: string) => {
     setOpaqueLayerSet((prev) => {
@@ -282,11 +295,21 @@ function ShareGraphInner() {
     return baseEdges
   }, [edges, tabFilteredNodeIds, focusedNodeId])
 
-  // 인덱스에 표시할 노드 (section/group 제외, 검색 필터)
-  const indexNodes = nodes.filter(n =>
-    n.type !== 'sectionNode' && n.type !== 'groupNode' && !n.hidden &&
-    (nodeSearch === '' || String(n.data?.name ?? n.id).toLowerCase().includes(nodeSearch.toLowerCase()))
-  )
+  // 인덱스에 표시할 노드 — 검색어 있으면 원본(RawNode) 대상으로 GraphPage와 동일하게 매치(주석 포함, 최대 10개)
+  // 검색어 없으면 현재 화면에 보이는(hidden 아닌) 노드 전체를 훑어보기 목록으로 표시
+  const indexItems = nodeSearch.trim()
+    ? searchNodes(rawNodesCache, nodeSearch).map(n => ({
+        id: n.id,
+        icon: n.type === 'FILE' ? '📄' : n.type === 'FUNCTION' ? 'ƒ' : n.type === 'DB_TABLE' ? '🗄' : '◎',
+        label: n.name,
+      }))
+    : nodes
+        .filter(n => n.type !== 'sectionNode' && n.type !== 'groupNode' && !n.hidden)
+        .map(n => ({
+          id: n.id,
+          icon: n.type === 'fileNode' ? '📄' : n.type === 'DB_TABLE' ? '🗄' : 'ƒ',
+          label: String(n.data?.name ?? n.id),
+        }))
 
   if (loading) {
     return (
@@ -314,15 +337,8 @@ function ShareGraphInner() {
           <span className="text-gray-500 text-xs">읽기 전용</span>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={toggleLayoutPreset}
-            title="레이아웃 전환"
-            className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2.5 py-1.5 rounded-lg border border-gray-700"
-          >
-            <span className={layoutPreset === 'layer' ? 'text-white' : 'text-gray-500'}>계층형</span>
-            <span className="text-gray-600">/</span>
-            <span className={layoutPreset === 'domain' ? 'text-white' : 'text-gray-500'}>도메인</span>
-          </button>
+          <LayoutPresetToggle layoutPreset={layoutPreset} onToggle={toggleLayoutPreset} />
+          <LabelModeToggle labelMode={labelMode} onToggle={toggleLabelMode} />
           <span className="text-gray-400 text-xs">공유된 그래프</span>
           <button
             onClick={() => navigate('/')}
@@ -382,20 +398,18 @@ function ShareGraphInner() {
               className="w-full text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500"
             />
             <div className="flex flex-col gap-0.5 max-h-64 overflow-y-auto">
-              {indexNodes.length === 0 ? (
+              {indexItems.length === 0 ? (
                 <p className="text-[10px] text-gray-600 px-1">결과 없음</p>
               ) : (
-                indexNodes.map(n => (
+                indexItems.map(n => (
                   <button
                     key={n.id}
                     onClick={() => handleFocusNode(n.id)}
                     className={`w-full text-left text-[11px] px-2 py-1 rounded hover:bg-gray-700 truncate transition-colors ${selectedNode?.id === n.id ? 'bg-gray-700 text-white' : 'text-gray-300'}`}
-                    title={String(n.data?.name ?? n.id)}
+                    title={n.label}
                   >
-                    <span className="text-gray-600 mr-1">
-                      {n.type === 'fileNode' ? '📄' : n.type === 'DB_TABLE' ? '🗄' : 'ƒ'}
-                    </span>
-                    {String(n.data?.name ?? n.id)}
+                    <span className="text-gray-600 mr-1">{n.icon}</span>
+                    {n.label}
                   </button>
                 ))
               )}
