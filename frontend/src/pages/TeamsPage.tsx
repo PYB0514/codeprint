@@ -48,7 +48,7 @@ interface AllocationResponse {
 }
 
 // Desktop 라이센스 좌석당 월 요금(원) — 팀 총 요금 = 좌석 수 × 이 값
-const PRICE_PER_SEAT = 9_900
+const PRICE_PER_SEAT = 4_900
 
 // 팀 대시보드 페이지 렌더링
 export default function TeamsPage() {

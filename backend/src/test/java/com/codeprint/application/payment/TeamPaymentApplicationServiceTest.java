@@ -37,13 +37,13 @@ class TeamPaymentApplicationServiceTest {
     // --- prepareNewTeam ---
 
     @Test
-    @DisplayName("prepareNewTeam — 좌석 수 × 9,900원으로 주문 생성·저장")
+    @DisplayName("prepareNewTeam — 좌석 수 × 4,900원으로 주문 생성·저장")
     void prepareNewTeam_createsOrder() {
         UUID owner = UUID.randomUUID();
 
         var result = service.prepareNewTeam(owner, "team", 5);
 
-        assertThat(result.amount()).isEqualTo(5L * 9_900);
+        assertThat(result.amount()).isEqualTo(5L * 4_900);
         assertThat(result.orderId()).startsWith("team-new-");
         verify(orderRepository).save(any(TeamPaymentOrder.class));
     }
@@ -51,7 +51,7 @@ class TeamPaymentApplicationServiceTest {
     // --- prepareSeatIncrease ---
 
     @Test
-    @DisplayName("prepareSeatIncrease — 차액(newSeats-현재)×9,900원으로 주문 생성")
+    @DisplayName("prepareSeatIncrease — 차액(newSeats-현재)×4,900원으로 주문 생성")
     void prepareSeatIncrease_chargesDeltaOnly() {
         UUID owner = UUID.randomUUID();
         UUID teamId = UUID.randomUUID();
@@ -59,7 +59,7 @@ class TeamPaymentApplicationServiceTest {
 
         var result = service.prepareSeatIncrease(owner, teamId, 8);
 
-        assertThat(result.amount()).isEqualTo(3L * 9_900);
+        assertThat(result.amount()).isEqualTo(3L * 4_900);
         verify(orderRepository).save(any(TeamPaymentOrder.class));
     }
 
@@ -117,9 +117,9 @@ class TeamPaymentApplicationServiceTest {
         UUID owner = UUID.randomUUID();
         when(orderRepository.isConfirmed("order-2")).thenReturn(false);
         when(orderRepository.findById("order-2"))
-                .thenReturn(Optional.of(TeamPaymentOrder.forNewTeam("order-2", owner, "t", 5, 49500L)));
+                .thenReturn(Optional.of(TeamPaymentOrder.forNewTeam("order-2", owner, "t", 5, 24500L)));
 
-        var outcome = service.confirm(UUID.randomUUID(), "pk", "order-2", 49500L);
+        var outcome = service.confirm(UUID.randomUUID(), "pk", "order-2", 24500L);
 
         assertThat(outcome.result()).isEqualTo(TeamPaymentApplicationService.Result.FORBIDDEN);
         verify(paymentGateway, never()).confirmPayment(any(), any(), anyLong());
@@ -131,7 +131,7 @@ class TeamPaymentApplicationServiceTest {
         UUID owner = UUID.randomUUID();
         when(orderRepository.isConfirmed("order-3")).thenReturn(false);
         when(orderRepository.findById("order-3"))
-                .thenReturn(Optional.of(TeamPaymentOrder.forNewTeam("order-3", owner, "t", 5, 49500L)));
+                .thenReturn(Optional.of(TeamPaymentOrder.forNewTeam("order-3", owner, "t", 5, 24500L)));
 
         var outcome = service.confirm(owner, "pk", "order-3", 1000L);
 
@@ -146,16 +146,16 @@ class TeamPaymentApplicationServiceTest {
     void confirm_newTeam_success() {
         UUID owner = UUID.randomUUID();
         UUID newTeamId = UUID.randomUUID();
-        TeamPaymentOrder order = TeamPaymentOrder.forNewTeam("order-4", owner, "myteam", 5, 49500L);
+        TeamPaymentOrder order = TeamPaymentOrder.forNewTeam("order-4", owner, "myteam", 5, 24500L);
         when(orderRepository.isConfirmed("order-4")).thenReturn(false);
         when(orderRepository.findById("order-4")).thenReturn(Optional.of(order));
         when(teamProvisioningPort.createTeam(owner, "myteam", 5)).thenReturn(newTeamId);
 
-        var outcome = service.confirm(owner, "pk-4", "order-4", 49500L);
+        var outcome = service.confirm(owner, "pk-4", "order-4", 24500L);
 
         assertThat(outcome.result()).isEqualTo(TeamPaymentApplicationService.Result.OK);
         assertThat(outcome.teamId()).isEqualTo(newTeamId);
-        verify(paymentGateway).confirmPayment("pk-4", "order-4", 49500L);
+        verify(paymentGateway).confirmPayment("pk-4", "order-4", 24500L);
         verify(orderRepository).save(order);
         verify(teamProvisioningPort).createTeam(owner, "myteam", 5);
         verify(teamProvisioningPort, never()).changeSeats(any(), anyInt());
@@ -168,15 +168,15 @@ class TeamPaymentApplicationServiceTest {
     void confirm_seatIncrease_success() {
         UUID owner = UUID.randomUUID();
         UUID teamId = UUID.randomUUID();
-        TeamPaymentOrder order = TeamPaymentOrder.forSeatIncrease("order-5", owner, teamId, 8, 29700L);
+        TeamPaymentOrder order = TeamPaymentOrder.forSeatIncrease("order-5", owner, teamId, 8, 14700L);
         when(orderRepository.isConfirmed("order-5")).thenReturn(false);
         when(orderRepository.findById("order-5")).thenReturn(Optional.of(order));
 
-        var outcome = service.confirm(owner, "pk-5", "order-5", 29700L);
+        var outcome = service.confirm(owner, "pk-5", "order-5", 14700L);
 
         assertThat(outcome.result()).isEqualTo(TeamPaymentApplicationService.Result.OK);
         assertThat(outcome.teamId()).isEqualTo(teamId);
-        verify(paymentGateway).confirmPayment("pk-5", "order-5", 29700L);
+        verify(paymentGateway).confirmPayment("pk-5", "order-5", 14700L);
         verify(teamProvisioningPort).changeSeats(teamId, 8);
         verify(teamProvisioningPort, never()).createTeam(any(), any(), anyInt());
     }

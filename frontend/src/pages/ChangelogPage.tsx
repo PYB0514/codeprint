@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.103.1',
+    date: '2026-07-01',
+    title: '팀 좌석당 가격 인하 — 9,900원 → 4,900원',
+    type: 'fix',
+    items: [
+      { category: '팀', desc: '팀 좌석당 월 요금을 9,900원에서 4,900원으로 낮췄습니다(개인 Desktop 라이센스는 9,900원 그대로).' },
+    ],
+  },
+  {
     version: 'v0.103.0',
     date: '2026-07-01',
     title: '팀 결제 실배선 — 좌석 기반 Toss 결제로 팀 생성·좌석 증가',
