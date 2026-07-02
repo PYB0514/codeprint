@@ -11,6 +11,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.105.0',
+    date: '2026-07-02',
+    title: '공유 그래프 뷰어 — 레이아웃 전환·범례 다중 표시 토글 추가',
+    type: 'feature',
+    items: [
+      { category: '공유 그래프', desc: '로그인 없이 보는 공유 그래프(/share/{id})에서도 계층형/도메인 레이아웃을 버튼으로 바로 전환할 수 있습니다. 이전에는 공유 링크에 담긴 프리셋으로 고정돼 있었습니다.' },
+      { category: '공유 그래프', desc: '좌측 범례에서 도메인·레이어를 개별적으로 가리기/보이기 할 수 있는 다중 토글을 추가했습니다. 로그인한 소유자용 화면(GraphPage)에만 있던 기능입니다.' },
+      { category: '계층형 뷰', desc: 'DDD 폴더 구조(domain/application/infrastructure 등)를 쓰지 않는 프로젝트에서 계층형 뷰가 파일마다 따로 박스로 갈라지거나(예: gin) 전부 하나로 뭉치던(예: ripgrep) 문제를 수정했습니다. 이제 실제 폴더 구조(예: Rust crate 단위)를 기준으로 의미 있게 묶어서 보여줍니다.' },
+    ],
+  },
+  {
     version: 'v0.104.2',
     date: '2026-07-02',
     title: '랜딩페이지 정리 — 광고 배너 제거, 요금제 문구 실제 기능에 맞게 수정',

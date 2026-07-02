@@ -92,8 +92,14 @@ export function getGroupKey(filePath: string, commonPrefix: string): string {
       return parts[i + 1] ? `${parts[i]}/${parts[i + 1]}` : parts[i]
     }
   }
-  // 레이어 못 찾으면 첫 번째 의미있는 폴더
-  return parts[0] ?? 'root'
+  // 레이어 못 찾으면(비DDD 프로젝트) 실제 폴더 구조로 그룹핑 — src/lib/crates/packages/pkg 같은
+  // 의미 없는 래퍼 디렉터리는 건너뛰고 그 다음 세그먼트(진짜 모듈명, 예: ripgrep의 crates/core → core)를
+  // 키로 쓴다. 래퍼를 다 건너뛰어도 남는 디렉터리가 없으면(서브디렉터리 없이 파일이 바로 있음, 예: gin의
+  // 루트 .go 파일들) 파일마다 박스가 갈라지지 않도록 공통 'root' 키로 묶는다.
+  const NON_SEMANTIC_WRAPPER_DIRS = new Set(['src', 'lib', 'crates', 'packages', 'pkg'])
+  let dirParts = parts.slice(0, -1)
+  while (dirParts.length > 0 && NON_SEMANTIC_WRAPPER_DIRS.has(dirParts[0])) dirParts = dirParts.slice(1)
+  return dirParts[0] ?? 'root'
 }
 
 // 공통 prefix 계산
