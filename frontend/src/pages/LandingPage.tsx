@@ -14,7 +14,7 @@ const FEATURES = [
       </svg>
     ),
     title: '파일·함수 구조 시각화',
-    desc: 'import 관계와 함수 호출 흐름을 노드-엣지 그래프로 표현한다. 파일 234개, 함수 903개, 엣지 2205개까지 렌더링.',
+    desc: 'import 관계와 함수 호출 흐름을 노드-엣지 그래프로 렌더링한다.',
     color: 'text-blue-400',
     bg: 'bg-blue-500/10 border-blue-500/20',
   },
@@ -25,7 +25,7 @@ const FEATURES = [
       </svg>
     ),
     title: '전체 흐름 추적 (DFS)',
-    desc: 'API 엔드포인트 클릭 → 콜체인 자동 추적. upstream·downstream 경로를 사이드바에서 실시간 확인하고 흐름 재생.',
+    desc: 'API 엔드포인트 클릭 한 번으로 콜체인을 자동 추적한다. upstream·downstream 경로를 사이드바에서 확인하고 흐름을 재생한다.',
     color: 'text-emerald-400',
     bg: 'bg-emerald-500/10 border-emerald-500/20',
   },
@@ -36,7 +36,7 @@ const FEATURES = [
       </svg>
     ),
     title: '런타임 경고 감지',
-    desc: '순환 의존, @Async 자기 호출, DDD 경계 위반, DB 레이어 우회 등 실제 운영에서 터지는 패턴을 정적 분석으로 사전 감지.',
+    desc: '순환 의존, DDD 경계 위반, DB 레이어 우회 등 15종의 위험 패턴을 정적 분석으로 사전 감지한다.',
     color: 'text-amber-400',
     bg: 'bg-amber-500/10 border-amber-500/20',
   },
@@ -47,7 +47,7 @@ const FEATURES = [
       </svg>
     ),
     title: 'AI 분석 · 코드 생성',
-    desc: 'Claude·ChatGPT·Gemini 중 원하는 AI로 함수 설명 요청. 누락된 구현체 패턴 감지 후 코드 초안 자동 생성.',
+    desc: '본인 API 키로 Claude·ChatGPT·Gemini 중 원하는 AI에게 함수 설명을 요청한다. 누락된 구현체를 감지해 코드 초안을 생성한다.',
     color: 'text-purple-400',
     bg: 'bg-purple-500/10 border-purple-500/20',
   },
@@ -58,7 +58,7 @@ const FEATURES = [
       </svg>
     ),
     title: '실시간 협업 · 커뮤니티',
-    desc: '초대 코드로 팀원 초대, 커서 오버레이로 동시 편집. 그래프를 커뮤니티에 게시하고 아키텍처 리뷰 수신.',
+    desc: '초대 코드로 팀원을 초대해 커서 오버레이로 동시 편집한다. 그래프를 커뮤니티에 게시해 아키텍처 리뷰를 받는다.',
     color: 'text-cyan-400',
     bg: 'bg-cyan-500/10 border-cyan-500/20',
   },
@@ -69,7 +69,7 @@ const FEATURES = [
       </svg>
     ),
     title: '이미지 · AI 컨텍스트 내보내기',
-    desc: '전체 그래프를 원본 크기 PNG로 저장. 함수명-한국어 주석 형태 .md로 내보내 AI 프롬프트 컨텍스트로 활용.',
+    desc: '전체 그래프를 원본 크기 PNG로 저장한다. 함수명-주석 형태 .md로 내보내 AI 프롬프트 컨텍스트로 바로 활용한다.',
     color: 'text-rose-400',
     bg: 'bg-rose-500/10 border-rose-500/20',
   },
@@ -124,103 +124,85 @@ export default function LandingPage() {
     <div className="min-h-screen flex flex-col bg-gray-950 text-white">
       <AppHeader onLogin={handleLogin} />
 
-      {/* 본문 — 양옆 광고 + 중앙 콘텐츠 */}
-      <div className="flex flex-1">
+      <main className="flex-1 flex flex-col items-center gap-16 px-6 py-12">
 
-        {/* 좌측 광고 배너 */}
-        <aside className="hidden lg:flex w-36 shrink-0 items-start justify-center pt-10 border-r border-gray-800/50">
-          <div
-            className="w-32 bg-gray-900 border border-gray-800 rounded-lg flex items-center justify-center text-xs text-gray-600 sticky top-10 text-center leading-loose"
-            style={{ height: 600 }}
-          >
-            광고<br />128×600
+        {/* 히어로 섹션 */}
+        <section className="w-full max-w-2xl flex flex-col items-center gap-6 text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-gray-800 border border-gray-700 rounded-full text-xs text-gray-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            13개 언어 지원 · tree-sitter AST 분석
           </div>
-        </aside>
 
-        {/* 중앙 메인 콘텐츠 */}
-        <main className="flex-1 flex flex-col items-center gap-16 px-6 py-12">
+          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight leading-tight">
+            GitHub 레포를<br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">인터랙티브 회로도</span>로
+          </h1>
 
-          {/* 히어로 섹션 */}
-          <section className="w-full max-w-2xl flex flex-col items-center gap-6 text-center">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-gray-800 border border-gray-700 rounded-full text-xs text-gray-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              13개 언어 지원 · tree-sitter AST 분석
-            </div>
+          <p className="text-gray-400 text-base max-w-md leading-relaxed">
+            URL 하나로 파일 구조, 함수 호출 흐름, DB 연결 관계를 시각화한다.
+            런타임 경고 감지와 AI 분석까지 — 전부 무료.
+          </p>
 
-            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight leading-tight">
-              GitHub 레포를<br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">인터랙티브 회로도</span>로
-            </h1>
-
-            <p className="text-gray-400 text-base max-w-md leading-relaxed">
-              URL 하나로 파일 구조, 함수 호출 흐름, DB 연결 관계를 시각화한다.
-              런타임 경고 감지와 AI 분석까지 — 전부 무료.
-            </p>
-
-            {/* URL 입력 — 바로 분석 시작 */}
-            <form
-              onSubmit={(e) => { e.preventDefault(); handleTryUrl() }}
-              className="flex w-full max-w-md gap-2"
+          {/* URL 입력 — 바로 분석 시작 */}
+          <form
+            onSubmit={(e) => { e.preventDefault(); handleTryUrl() }}
+            className="flex w-full max-w-md gap-2"
+          >
+            <input
+              type="text"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              placeholder="github.com/owner/repo"
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none focus:ring-2 focus:ring-white/20"
+            />
+            <button
+              type="submit"
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
             >
-              <input
-                type="text"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="github.com/owner/repo"
-                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none focus:ring-2 focus:ring-white/20"
-              />
-              <button
-                type="submit"
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
-              >
-                분석 시작
-              </button>
-            </form>
+              분석 시작
+            </button>
+          </form>
 
-            <div className="flex items-center gap-3 mt-1">
-              {loggedIn ? (
-                <>
-                  <button
-                    onClick={() => navigate('/dashboard')}
-                    className="px-6 py-3 bg-white text-black rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-                  >
-                    내 프로젝트 보기
-                  </button>
-                  <button
-                    onClick={() => navigate('/community')}
-                    className="px-6 py-3 border border-gray-700 text-gray-300 rounded-lg font-medium hover:border-gray-500 hover:text-white transition-colors"
-                  >
-                    커뮤니티 둘러보기
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={handleLogin}
-                    className="flex items-center gap-2 px-6 py-3 bg-white text-black rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-                  >
-                    <GithubIcon />
-                    GitHub로 무료 시작
-                  </button>
-                  <button
-                    onClick={() => navigate('/community')}
-                    className="px-6 py-3 border border-gray-700 text-gray-300 rounded-lg font-medium hover:border-gray-500 hover:text-white transition-colors"
-                  >
-                    커뮤니티 둘러보기
-                  </button>
-                </>
-              )}
-            </div>
-          </section>
+          <div className="flex items-center gap-3 mt-1">
+            {loggedIn ? (
+              <>
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="px-6 py-3 bg-white text-black rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                >
+                  내 프로젝트 보기
+                </button>
+                <button
+                  onClick={() => navigate('/community')}
+                  className="px-6 py-3 border border-gray-700 text-gray-300 rounded-lg font-medium hover:border-gray-500 hover:text-white transition-colors"
+                >
+                  커뮤니티 둘러보기
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={handleLogin}
+                  className="flex items-center gap-2 px-6 py-3 bg-white text-black rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                >
+                  <GithubIcon />
+                  GitHub로 무료 시작
+                </button>
+                <button
+                  onClick={() => navigate('/community')}
+                  className="px-6 py-3 border border-gray-700 text-gray-300 rounded-lg font-medium hover:border-gray-500 hover:text-white transition-colors"
+                >
+                  커뮤니티 둘러보기
+                </button>
+              </>
+            )}
+          </div>
+        </section>
 
-          {/* 제품 미리보기 — 그래프 UI 목업 */}
-          <section className="w-full max-w-2xl">
-            <GraphMockup />
-          </section>
-
-          {/* 사용 방법 3단계 */}
-          <section className="w-full max-w-2xl flex flex-col gap-4">
-            <h2 className="text-xl font-bold text-center">어떻게 사용하나요?</h2>
+        {/* 사용법 + 주요 기능 — 나란히 배치 */}
+        <section className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="flex flex-col gap-4">
+            <h2 className="text-xl font-bold text-center lg:text-left">어떻게 사용하나요?</h2>
             <div className="flex flex-col gap-3">
               {STEPS.map((s) => (
                 <div key={s.step} className="flex items-start gap-4 bg-gray-900 border border-gray-800 rounded-xl p-4">
@@ -232,97 +214,80 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
-          </section>
+          </div>
 
-          {/* 기능 소개 카드 6종 */}
-          <section className="w-full max-w-2xl flex flex-col gap-4">
-            <h2 className="text-xl font-bold text-center">주요 기능</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-4">
+            <h2 className="text-xl font-bold text-center lg:text-left">주요 기능</h2>
+            <div className="flex flex-col gap-2">
               {FEATURES.map((f) => (
-                <div key={f.title} className={`border rounded-xl p-4 flex flex-col gap-3 ${f.bg}`}>
-                  <span className={f.color}>{f.icon}</span>
+                <div key={f.title} className={`border rounded-xl p-3 flex items-start gap-3 ${f.bg}`}>
+                  <span className={`${f.color} shrink-0 mt-0.5`}>{f.icon}</span>
                   <div>
                     <p className="font-semibold text-sm">{f.title}</p>
-                    <p className="text-gray-400 text-xs mt-1 leading-relaxed">{f.desc}</p>
+                    <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">{f.desc}</p>
                   </div>
                 </div>
               ))}
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* 오늘의 공개레포 — 시스템이 매일 선정·분석한 오픈소스 쇼케이스 */}
-          <FeaturedReposSection />
+        {/* 오늘의 공개레포 — 시스템이 매일 선정·분석한 오픈소스 쇼케이스 */}
+        <FeaturedReposSection />
 
-          {/* 가격 안내 섹션 */}
-          <section className="w-full max-w-2xl flex flex-col gap-4">
-            <h2 className="text-xl font-bold text-center">요금제</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Free */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-gray-300">Free</p>
-                  <p className="text-2xl font-bold mt-1">₩0</p>
-                  <p className="text-xs text-gray-500 mt-0.5">영구 무료</p>
-                </div>
-                <ul className="flex flex-col gap-1.5 text-xs text-gray-400">
-                  <li>✓ 비공개 프로젝트 무제한</li>
-                  <li>✓ 그래프 시각화 전체</li>
-                  <li>✓ 경고 감지 8종</li>
-                  <li>✓ 팀 협업 최대 5명</li>
-                  <li>✓ 커뮤니티 갤러리</li>
-                </ul>
-                <button
-                  onClick={handleLogin}
-                  className="mt-auto w-full py-2 bg-gray-800 hover:bg-gray-700 text-sm rounded-lg transition-colors"
-                >
-                  무료 시작
-                </button>
+        {/* 가격 안내 섹션 */}
+        <section className="w-full max-w-2xl flex flex-col gap-4">
+          <h2 className="text-xl font-bold text-center">요금제</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Free */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col gap-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-300">Free</p>
+                <p className="text-2xl font-bold mt-1">₩0</p>
+                <p className="text-xs text-gray-500 mt-0.5">영구 무료</p>
               </div>
-
-              {/* Desktop 라이센스 */}
-              <div className="bg-gray-900 border border-blue-500/40 rounded-xl p-5 flex flex-col gap-3 relative">
-                <span className="absolute top-3 right-3 text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">추천</span>
-                <div>
-                  <p className="text-sm font-semibold text-blue-400">Desktop 라이센스</p>
-                  <p className="text-2xl font-bold mt-1">₩9,900<span className="text-sm font-normal text-gray-500">/월</span></p>
-                  <p className="text-xs text-gray-500 mt-0.5">팀은 좌석당 ₩4,900/월</p>
-                </div>
-                <ul className="flex flex-col gap-1.5 text-xs text-gray-400">
-                  <li>✓ 비공개 프로젝트 무제한</li>
-                  <li>✓ AI 설명 / 코드 생성</li>
-                  <li>✓ 그래프 버전 히스토리</li>
-                  <li>✓ 경고 MD 내보내기</li>
-                  <li>✓ 개인 1석 또는 팀 N석 선택</li>
-                  <li>✓ Free 모든 기능 포함</li>
-                </ul>
-                <button
-                  onClick={handleLogin}
-                  className="mt-auto w-full py-2 bg-blue-600 hover:bg-blue-500 text-sm font-medium rounded-lg transition-colors"
-                >
-                  Desktop 라이센스 시작
-                </button>
-              </div>
+              <ul className="flex flex-col gap-1.5 text-xs text-gray-400">
+                <li>✓ 비공개 프로젝트 무제한</li>
+                <li>✓ 그래프 시각화 전체</li>
+                <li>✓ 경고 감지 15종 (HIGH 8종 포함)</li>
+                <li>✓ AI 설명 · 코드 생성 (본인 API 키)</li>
+                <li>✓ 그래프 버전 히스토리 · 경고 MD 내보내기</li>
+                <li>✓ 협업 세션 최대 6명 (오너 포함)</li>
+                <li>✓ 커뮤니티 갤러리</li>
+              </ul>
+              <button
+                onClick={handleLogin}
+                className="mt-auto w-full py-2 bg-gray-800 hover:bg-gray-700 text-sm rounded-lg transition-colors"
+              >
+                무료 시작
+              </button>
             </div>
-          </section>
 
-          {/* 하단 광고 배너 */}
-          <div className="w-full max-w-2xl bg-gray-900 border border-gray-800 rounded-xl flex items-center justify-center text-xs text-gray-600 min-h-[90px]">
-            [광고 배너 영역 — 728×90]
+            {/* Desktop 라이센스 */}
+            <div className="bg-gray-900 border border-blue-500/40 rounded-xl p-5 flex flex-col gap-3 relative">
+              <span className="absolute top-3 right-3 text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">추천</span>
+              <div>
+                <p className="text-sm font-semibold text-blue-400">Desktop 라이센스</p>
+                <p className="text-2xl font-bold mt-1">₩9,900<span className="text-sm font-normal text-gray-500">/월</span></p>
+                <p className="text-xs text-gray-500 mt-0.5">팀은 좌석당 ₩4,900/월</p>
+              </div>
+              <ul className="flex flex-col gap-1.5 text-xs text-gray-400">
+                <li>✓ 협업 세션 인원 제한 해제</li>
+                <li>✓ 정식 팀 생성 · 좌석(seat) 관리</li>
+                <li>✓ 개인 1석 또는 팀 N석 선택</li>
+                <li>✓ Free 모든 기능 포함</li>
+              </ul>
+              <button
+                onClick={handleLogin}
+                className="mt-auto w-full py-2 bg-blue-600 hover:bg-blue-500 text-sm font-medium rounded-lg transition-colors"
+              >
+                Desktop 라이센스 시작
+              </button>
+            </div>
           </div>
+        </section>
 
-        </main>
-
-        {/* 우측 광고 배너 */}
-        <aside className="hidden lg:flex w-36 shrink-0 items-start justify-center pt-10 border-l border-gray-800/50">
-          <div
-            className="w-32 bg-gray-900 border border-gray-800 rounded-lg flex items-center justify-center text-xs text-gray-600 sticky top-10 text-center leading-loose"
-            style={{ height: 600 }}
-          >
-            광고<br />128×600
-          </div>
-        </aside>
-
-      </div>
+      </main>
 
       <Footer />
     </div>
@@ -351,12 +316,12 @@ function FeaturedReposSection() {
   if (repos.length === 0) return null
 
   return (
-    <section className="w-full max-w-2xl flex flex-col gap-4">
+    <section className="w-full max-w-4xl flex flex-col gap-4">
       <div className="text-center">
         <h2 className="text-xl font-bold">오늘의 공개레포</h2>
         <p className="text-gray-500 text-xs mt-1">매일 유명 오픈소스를 분석해 보여드려요 — 클릭하면 바로 분석 결과로 이동</p>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {repos.map((r) => (
           <button
             key={r.projectId}
@@ -378,175 +343,6 @@ function FeaturedReposSection() {
         ))}
       </div>
     </section>
-  )
-}
-
-// 그래프 UI 목업 — 실제 그래프 페이지 스타일을 SVG로 표현
-function GraphMockup() {
-  // 도메인별 노드 그룹 정의
-  const domains = [
-    { name: 'Project', color: '#60a5fa', x: 28, y: 30, nodes: ['ProjectService', 'ProjectRepo', 'ProjectCtrl'] },
-    { name: 'User', color: '#34d399', x: 230, y: 30, nodes: ['UserService', 'AuthHandler', 'UserRepo'] },
-    { name: 'Analysis', color: '#f97316', x: 28, y: 165, nodes: ['Analyzer', 'GraphBuilder', 'RepoCloner'] },
-    { name: 'Graph', color: '#a78bfa', x: 230, y: 165, nodes: ['GraphService', 'NodeRepo', 'EdgeRepo'] },
-  ]
-
-  // 엣지 연결 정의 (도메인 인덱스, 노드 인덱스)
-  const edges = [
-    { x1: 128, y1: 68, x2: 230, y2: 68, color: '#4b5563' },
-    { x1: 128, y1: 88, x2: 230, y2: 88, color: '#4b5563' },
-    { x1: 88, y1: 128, x2: 88, y2: 165, color: '#4b5563' },
-    { x1: 290, y1: 128, x2: 290, y2: 165, color: '#4b5563' },
-    { x1: 128, y1: 200, x2: 230, y2: 200, color: '#4b5563' },
-    { x1: 128, y1: 220, x2: 230, y2: 220, color: '#4b5563' },
-  ]
-
-  return (
-    <div className="w-full bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden shadow-2xl">
-      {/* 상단 툴바 목업 */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-800 bg-gray-950">
-        <div className="flex gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-red-500/60" />
-          <span className="w-3 h-3 rounded-full bg-yellow-500/60" />
-          <span className="w-3 h-3 rounded-full bg-green-500/60" />
-        </div>
-        <div className="flex-1 flex items-center gap-3 ml-3">
-          <span className="text-xs text-gray-500">← 대시보드</span>
-          <span className="text-xs text-gray-600 border border-gray-800 rounded px-2 py-0.5">
-            파일 234 · 함수 903 · 엣지 2205
-          </span>
-          <span className="text-xs bg-blue-600/30 text-blue-300 border border-blue-600/30 rounded px-2 py-0.5">커뮤니티에 공유</span>
-        </div>
-        <div className="flex gap-1">
-          <span className="text-xs text-gray-600 border border-gray-800 rounded px-2 py-0.5">계층</span>
-          <span className="text-xs text-white bg-gray-700 rounded px-2 py-0.5">도메인</span>
-        </div>
-      </div>
-
-      {/* 그래프 영역 */}
-      <div className="flex">
-        {/* 좌측 미니 사이드바 */}
-        <div className="w-28 border-r border-gray-800 p-2 flex flex-col gap-1 text-xs">
-          <p className="text-gray-600 text-[10px] mb-1">노드 필터</p>
-          {['FILE', 'FUNCTION', 'DB', 'API'].map((t) => (
-            <div key={t} className="flex items-center gap-1.5 text-gray-500">
-              <span className={`w-2 h-2 rounded-sm ${t === 'FILE' ? 'bg-blue-400' : t === 'FUNCTION' ? 'bg-emerald-400' : t === 'DB' ? 'bg-amber-400' : 'bg-purple-400'}`} />
-              <span className="text-[10px]">{t}</span>
-            </div>
-          ))}
-          <div className="mt-3 border-t border-gray-800 pt-2">
-            <p className="text-gray-600 text-[10px] mb-1">도메인</p>
-            {domains.map((d) => (
-              <div key={d.name} className="flex items-center gap-1.5 text-gray-500">
-                <span className="w-2 h-2 rounded-sm" style={{ background: d.color + '66' }} />
-                <span className="text-[10px]">{d.name}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 border-t border-gray-800 pt-2">
-            <p className="text-amber-400 text-[10px]">⚠ 경고 (3)</p>
-          </div>
-        </div>
-
-        {/* SVG 그래프 캔버스 */}
-        <div className="flex-1 relative overflow-hidden" style={{ minHeight: 280 }}>
-          <svg width="100%" height="280" viewBox="0 0 420 280" className="w-full">
-            {/* 배경 점선 그리드 */}
-            <defs>
-              <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                <circle cx="1" cy="1" r="0.5" fill="#374151" opacity="0.4" />
-              </pattern>
-              <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                <path d="M0,0 L6,3 L0,6 Z" fill="#4b5563" />
-              </marker>
-            </defs>
-            <rect width="420" height="280" fill="url(#grid)" />
-
-            {/* 엣지 */}
-            {edges.map((e, i) => (
-              <line key={i} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke={e.color} strokeWidth="1" markerEnd="url(#arrow)" opacity="0.7" />
-            ))}
-
-            {/* 도메인 섹션 박스 + 노드 */}
-            {domains.map((d) => (
-              <g key={d.name}>
-                {/* 섹션 박스 */}
-                <rect
-                  x={d.x} y={d.y} width="180" height="120"
-                  rx="8" ry="8"
-                  fill={d.color + '11'}
-                  stroke={d.color + '44'}
-                  strokeWidth="1"
-                />
-                {/* 섹션 레이블 */}
-                <text x={d.x + 8} y={d.y + 14} fontSize="9" fill={d.color} fontWeight="600" opacity="0.8">
-                  {d.name}
-                </text>
-                {/* 노드들 */}
-                {d.nodes.map((name, ni) => (
-                  <g key={name}>
-                    <rect
-                      x={d.x + 10} y={d.y + 22 + ni * 28}
-                      width="155" height="20"
-                      rx="4" ry="4"
-                      fill={d.color + '22'}
-                      stroke={d.color + '55'}
-                      strokeWidth="0.8"
-                    />
-                    <text
-                      x={d.x + 18} y={d.y + 35 + ni * 28}
-                      fontSize="8" fill={d.color}
-                      opacity="0.9"
-                    >
-                      {name}
-                    </text>
-                  </g>
-                ))}
-              </g>
-            ))}
-
-            {/* 경고 노드 강조 */}
-            <rect x="38" y="187" width="155" height="20" rx="4" fill="transparent" stroke="#f59e0b" strokeWidth="1.2" opacity="0.6" strokeDasharray="3,2" />
-          </svg>
-
-          {/* 우측 미니맵 */}
-          <div className="absolute bottom-3 right-3 w-20 h-14 bg-gray-950 border border-gray-700 rounded opacity-80 overflow-hidden">
-            <svg width="80" height="56" viewBox="0 0 420 280">
-              {domains.map((d) => (
-                <rect key={d.name} x={d.x} y={d.y} width="180" height="120" rx="4" fill={d.color + '33'} />
-              ))}
-            </svg>
-          </div>
-        </div>
-
-        {/* 우측 미니 사이드바 — 노드 상세 */}
-        <div className="w-32 border-l border-gray-800 p-3 text-xs flex flex-col gap-2">
-          <p className="text-gray-600 text-[10px]">노드 상세</p>
-          <div className="bg-gray-800 rounded-lg p-2 flex flex-col gap-1">
-            <p className="text-blue-300 text-[10px] font-medium">ProjectService</p>
-            <p className="text-gray-500 text-[10px]">프로젝트 생성·조회·삭제</p>
-          </div>
-          <div className="border-t border-gray-800 pt-2">
-            <p className="text-gray-600 text-[10px] mb-1">호출 대상</p>
-            <p className="text-emerald-400 text-[10px]">→ ProjectRepo</p>
-            <p className="text-emerald-400 text-[10px]">→ UserService</p>
-          </div>
-          <div className="border-t border-gray-800 pt-2">
-            <p className="text-gray-600 text-[10px] mb-1">호출 주체</p>
-            <p className="text-purple-400 text-[10px]">← ProjectCtrl</p>
-          </div>
-        </div>
-      </div>
-
-      {/* 하단 경고 바 */}
-      <div className="flex items-center gap-3 px-4 py-2 border-t border-gray-800 bg-gray-950 text-[11px]">
-        <span className="text-amber-400">⚠ DB 레이어 우회 (2)</span>
-        <span className="text-gray-600">·</span>
-        <span className="text-red-400">↻ 순환 의존 (1)</span>
-        <span className="flex-1" />
-        <span className="text-gray-600">F — fitView &nbsp; / — 검색 &nbsp; ? — 단축키</span>
-      </div>
-    </div>
   )
 }
 
