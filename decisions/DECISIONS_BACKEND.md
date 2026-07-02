@@ -2,6 +2,27 @@
 
 ---
 
+## 정기결제(구독 라이프사이클) — 설계만 정리, 착수는 계약 체결 후 (2026-07-02, 설계·미착수)
+
+**문제.** PR #419·#420 마무리 중 확인: `user`/`team`/`payment` 도메인 어디에도 `billingKey`·만료일·스케줄러가 없다. 개인 Pro(`PaymentApplicationService`)·팀 결제(`TeamPaymentApplicationService`) 전부 **1회성 카드결제로 영구 플랜을 부여**하는 구조 — "/월" 가격 표시와 달리 실제 재청구 로직이 전혀 없다. PR #419로 팀 결제가 라이브로 붙은 지금, 이 갭은 매출 누수로 직결된다.
+
+**블로커 — 코드 문제가 아니라 계약 문제.** WebSearch로 토스페이먼츠 자동결제(빌링) 문서 확인 결과: ①자동결제는 **리스크 검토 + 별도 계약** 후에만 사용 가능(사업자등록 대기 중인 지금 신청 불가) ②토스는 스케줄링을 제공하지 않음 — "이 카드로 이 금액을 매달"은 **우리 서버가 직접 크론으로 자동결제 승인 API를 호출**해야 함 ③실패(카드만료·잔액부족) 시 재시도/유예기간 정책도 토스가 아니라 우리가 설계해야 함. 기존 백로그 "Toss 라이브 키 — [non-code: 사업자등록]"과 같은 카테고리의 블로커.
+
+**사용자 결정.**
+1. **기존 결제자는 레거시로 영구 유지** — 소급 재결제 요구 안 함. 신규 가입자부터만 정기결제 적용(체결 이후).
+2. **이번 세션은 코드 착수 안 함, 문서 설계만.** 계약 전에 빌링키 발급·실결제 API를 검증 없이 미리 짜두는 건 "결제배관을 사용자 0명 상태서 먼저 짓는" 것과 같은 순서역행 — 계약 체결 후 실제 API 문서를 정독하며 착수하기로 함.
+
+**설계안(계약 체결 후 참고용, 미착수).**
+- 신규 엔티티 `Subscription`(User/Team 공통 소유 개념) — `ownerType`(USER/TEAM)·`ownerId`·`billingKey`(nullable)·`plan`·`seats`·`status`(ACTIVE/PAST_DUE/CANCELED/**LEGACY_PERMANENT**)·`nextBillingDate`·`gracePeriodEndsAt`. 기존 `User.plan`/`Team.plan`은 그대로 두고(하위호환), Subscription이 "왜 지금 유료인지"의 근거 계층이 됨.
+- 기존 결제자 마이그레이션: `status=LEGACY_PERMANENT`, `nextBillingDate=null`(위 사용자 결정 ①).
+- `RecurringBillingPort`(domain/payment/port, 기존 `PaymentGatewayPort`와 같은 자리) — `chargeRenewal(subscription)`. 계약 전엔 구현체 없이 인터페이스만, 계약 후 `TossBillingAdapter`로 구현(기존 Port/Adapter 컨벤션 그대로 재사용).
+- 스케줄러(`@Scheduled` 매일 0시) — `nextBillingDate <= today && status=ACTIVE`인 Subscription 조회 → `chargeRenewal` 호출 → 성공 시 `nextBillingDate` +1개월, 실패 시 `status=PAST_DUE` + 유예기간 부여.
+- **미해결(계약 체결 후 재논의 필요)**: 빌링키 발급 시 최초 결제가 즉시 되는지 별도 호출인지 / 재시도 횟수·간격 / 유예기간 만료 시 다운그레이드 정책(팀 좌석 강제 축소 vs 접근만 차단) / 결제 실패 알림 필요 여부.
+
+**다음 순서.** 사업자등록 완료 → Toss 자동결제 계약 신청·승인 → 그때 위 설계안 재검토하며 실제 착수. PROGRESS.md 백로그 "구독 라이프사이클" 항목에서 이 문서를 참조.
+
+---
+
 ## 팀 좌석당 가격 인하 + 개인/팀 가격 분리 (2026-07-01, 가격 결정)
 
 **배경.** PR #419 라이브 테스트 직후 사용자가 "유입되기엔 좀 비싼거 같다"며 좌석당 가격 인하를 요청. 초회 할인·5석 무료 등 프로모션 방안도 논의했으나, 실사용자 0명 상태에서 할인 로직(남용 방지 등)을 미리 정교화하는 건 이르다고 판단해 보류하고 **정가 자체를 낮추는 쪽**으로 결정.
