@@ -2,6 +2,20 @@
 
 ---
 
+## 오늘의 공개레포 — 시스템 큐레이션 로테이션 + 시스템 계정 + facebook/react Windows clone 실패 (2026-07-02, 기능)
+
+**문제.** 랜딩페이지에 매일 공개 오픈소스 5개를 시스템이 자동 분석해 노출하는 기능. 두 가지 설계 갭이 있었다: ①레포 선정 방식(백로그에 "GitHub Search API 자동" vs "큐레이션 리스트 로테이션" 두 안이 미결정 상태) ②노출용 프로젝트를 누가 소유하는가(기존 `Project.userId`는 `nullable=false`).
+
+**이유/결정.**
+1. **선정 방식 하이브리드** — 사용자 지시("1,2를 적절히 섞으면")로 큐레이션 후보 풀(언어별 대표 오픈소스 15개, `featured_repos` 테이블에 시딩)을 유지하되, 완전 개방형 GitHub Search API 호출은 배제(크기 제한·라이선스 리스크 없는 임의 레포가 걸릴 위험). 대신 각 후보의 star 수·description은 `GET /repos/{owner}/{repo}`(공개, 토큰 불필요)로 매일 실시간 조회해 "라이브 데이터" 요소를 반영. 로테이션은 `last_featured_at ASC NULLS FIRST LIMIT 5`(순수 SQL, 매일 가장 오래 노출 안 된 5개 우선).
+2. **전용 시스템 계정** — `Project.userId` NOT NULL 제약을 건드리지 않고, `users` 테이블에 고정 UUID(`00000000-0000-0000-0000-000000000000`) 시스템 계정을 시딩("Codeprint 공식", `github_id=-1`, 토큰 없음). 공개 레포 clone·GitHub API 조회 둘 다 토큰 없이도 동작 확인(`RepoCloner.clone`은 파라미터에 토큰이 없고, `GitHubApiClient`는 토큰 null이면 Authorization 헤더 생략). `UserRole.SYSTEM` 같은 신규 역할은 추가하지 않음(ADMIN 권한 오염 방지, 기존 USER 역할로 충분).
+3. **Cross-Context 포트 3종** — `application/featured`가 `application/project`·`application/analysis`를 직접 주입받지 않도록 `ProjectProvisioningPort`/`AnalysisTriggerPort`/`RepoMetadataPort`(domain/featured/port) + 어댑터(infrastructure/adapter) 도입. 기존 `TeamProvisioningPort`/`Adapter`와 동일 패턴 — 어댑터는 상대 컨텍스트의 application 서비스가 아닌 **domain 레포지토리·팩토리에 직접 위임**(얇은 오케스트레이션이라 애플리케이션 서비스 재사용보다 도메인 재사용이 더 외과적).
+4. **HIGH_FAN_OUT 자가검사 즉시 대응** — `refreshDailyFeatured()` 최초 구현이 8개 함수 호출로 자체 게이트 임계(7개) 초과. `featureOne`/`resolveProjectId`/`persistMetadata` 3개 private 메서드로 분리해 각각 4개 이하로 낮춤(PR #419 `verifyAndCapturePayment()` 추출과 동일 패턴).
+5. **facebook/react Windows clone 실패 → 큐레이션 교체** — 실제 라이브 트리거(`POST /api/dev/trigger-featured-repos`, `@Profile("local")` 신규 개발용 엔드포인트) 검증 중 5개 중 4개는 성공(DONE), facebook/react만 `FAILED`. 원인은 `RepoCloner`(`git clone --depth=1`)가 아니라 **Windows MAX_PATH 제약** — react 레포의 깊은 테스트 픽스처 경로(`compiler/packages/babel-plugin-react-compiler/src/__tests__/fixtures/.../function-with-conditional-callsite-in-another-function.expect.md`)가 체크아웃 단계에서 "Filename too long"으로 실패. `git config core.longpaths true` 같은 환경설정 수정은 팀원마다 다시 설정해야 해 불안정 → **큐레이션 목록에서 axios/axios로 교체**가 더 안전하다고 판단. V49가 이미 로컬에 적용된 상태라 Flyway 관례대로 V50에서 `UPDATE`(V49 파일 직접 수정 금지 — checksum mismatch 유발). 이미 생성된 실패 프로젝트의 `project_id`도 함께 NULL로 리셋(안 그러면 이름·URL이 facebook/react로 고정된 채 재사용돼 불일치).
+
+**결과.** 백엔드 단위 테스트 3종(`FeaturedRepoServiceTest`) + 전체 회귀 665테스트 green. 자가검사(`analyzeLocal`) HIGH_FAN_OUT 신규 0(리팩토링 후). ★실 라이브 검증: Docker DB + `preview_start`(신규 backend launch.json 설정)로 백엔드 직접 기동 → V49·V50 마이그레이션 실 적용 확인 → `/api/dev/trigger-featured-repos` 2회 트리거로 로테이션(같은 5개 재선정 안 함) + 4/5 분석 성공 + star/description 실 GitHub 데이터 저장 확인 → `GET /api/featured-repos` 응답 JSON 확인 → claude-in-chrome으로 랜딩페이지 카드 렌더링(이미지+star+설명)과 카드 클릭 → `/share/{projectId}` 이동 → 실제 분석된 그래프(gin-gonic/gin 실 파일·함수) 노출까지 눈으로 확인. **부수 발견(오늘 작업과 무관, 별도 task로 분리)**: `ShareGraphPage.tsx`의 좌측 노드 검색 목록이 채워지지 않고 "Fit View" 버튼도 빈 화면으로 돌아가는 기존 버그 — 코드는 검색어 없으면 전체 노드를 보여주게 돼 있으나 실제로는 비어 보임, 캔버스에는 노드가 정상 렌더링되는데도. `spawn_task`로 플래그.
+**★ 세션 중 별도 결정 — Preview 도구로 서버 직접 관리 허용**: 이전엔 "백엔드/프론트 서버를 Claude가 직접 시작하지 않는다"였으나, `mcp__Claude_Preview__preview_start` 도구 등장으로 사용자가 명시적으로 정책 변경 승인(2026-07-02) — 프론트·백엔드 모두 `preview_start`로 직접 기동 가능(`npm run dev`/`gradlew bootRun`을 Bash로 직접 실행하는 것은 여전히 금지, `.claude/launch.json`에 backend 설정 신규 추가). Docker Postgres 컨테이너(`docker compose up -d`)도 직접 기동 가능(Docker Desktop 자체 실행은 사용자 담당). CLAUDE.md §0 갱신. ★단, 프론트 preview 브라우저 패널은 실제 머신과 분리된 네트워크(백엔드 8080 포트에 도달 불가, ECONNREFUSED)라 프론트+백엔드 동시 연동 확인은 claude-in-chrome(사용자 실제 Chrome)으로 최종 검증.
+
 ## 정기결제(구독 라이프사이클) — 설계만 정리, 착수는 계약 체결 후 (2026-07-02, 설계·미착수)
 
 **문제.** PR #419·#420 마무리 중 확인: `user`/`team`/`payment` 도메인 어디에도 `billingKey`·만료일·스케줄러가 없다. 개인 Pro(`PaymentApplicationService`)·팀 결제(`TeamPaymentApplicationService`) 전부 **1회성 카드결제로 영구 플랜을 부여**하는 구조 — "/월" 가격 표시와 달리 실제 재청구 로직이 전혀 없다. PR #419로 팀 결제가 라이브로 붙은 지금, 이 갭은 매출 누수로 직결된다.

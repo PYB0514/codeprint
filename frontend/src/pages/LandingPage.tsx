@@ -250,6 +250,9 @@ export default function LandingPage() {
             </div>
           </section>
 
+          {/* 오늘의 공개레포 — 시스템이 매일 선정·분석한 오픈소스 쇼케이스 */}
+          <FeaturedReposSection />
+
           {/* 가격 안내 섹션 */}
           <section className="w-full max-w-2xl flex flex-col gap-4">
             <h2 className="text-xl font-bold text-center">요금제</h2>
@@ -323,6 +326,58 @@ export default function LandingPage() {
 
       <Footer />
     </div>
+  )
+}
+
+// 오늘의 공개레포 응답 타입
+interface FeaturedRepo {
+  projectId: string
+  repoFullName: string
+  language: string
+  stars: number | null
+  description: string | null
+  ogImageUrl: string
+}
+
+// 오늘의 공개레포 — 매일 시스템이 선정·분석한 오픈소스 카드 목록
+function FeaturedReposSection() {
+  const navigate = useNavigate()
+  const [repos, setRepos] = useState<FeaturedRepo[]>([])
+
+  useEffect(() => {
+    axios.get('/api/featured-repos').then((res) => setRepos(res.data)).catch(() => {})
+  }, [])
+
+  if (repos.length === 0) return null
+
+  return (
+    <section className="w-full max-w-2xl flex flex-col gap-4">
+      <div className="text-center">
+        <h2 className="text-xl font-bold">오늘의 공개레포</h2>
+        <p className="text-gray-500 text-xs mt-1">매일 유명 오픈소스를 분석해 보여드려요 — 클릭하면 바로 분석 결과로 이동</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {repos.map((r) => (
+          <button
+            key={r.projectId}
+            onClick={() => navigate(`/share/${r.projectId}`)}
+            className="text-left bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-gray-600 transition-colors"
+          >
+            <img src={r.ogImageUrl} alt={r.repoFullName} className="w-full h-32 object-cover bg-gray-800" loading="lazy" />
+            <div className="p-3 flex flex-col gap-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-blue-300 truncate">{r.repoFullName}</span>
+                {r.stars != null && (
+                  <span className="text-xs text-amber-400 shrink-0">★ {r.stars.toLocaleString()}</span>
+                )}
+              </div>
+              <p className="text-gray-500 text-xs line-clamp-2">{r.description ?? r.language}</p>
+              <span className="text-[10px] text-gray-600 mt-1">{r.language}</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
   )
 }
 

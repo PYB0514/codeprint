@@ -26,6 +26,30 @@ public class GitHubApiClient {
             .build();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    // owner/repo 형식으로 star 수·description을 조회 (공개 레포는 토큰 없이도 동작)
+    public RepoMetadata fetchRepoMetadata(String repoFullName) {
+        String apiUrl = "https://api.github.com/repos/" + repoFullName;
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28")
+                    .GET().build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new RuntimeException("GitHub API " + response.statusCode() + " — " + response.body());
+            }
+            JsonNode root = objectMapper.readTree(response.body());
+            Integer stars = root.hasNonNull("stargazers_count") ? root.get("stargazers_count").asInt() : null;
+            String description = root.hasNonNull("description") ? root.get("description").asText() : null;
+            return new RepoMetadata(stars, description);
+        } catch (Exception e) {
+            throw new RuntimeException("GitHub 레포 메타데이터 조회 실패: " + repoFullName, e);
+        }
+    }
+
+    public record RepoMetadata(Integer stars, String description) {}
+
     // GitHub 레포 URL에서 브랜치 목록을 조회 (최대 100개)
     public List<String> fetchBranches(String githubRepoUrl, String githubAccessToken) {
         String ownerRepo = extractOwnerRepo(githubRepoUrl);
