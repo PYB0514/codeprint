@@ -16,7 +16,7 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { buildLayout } from '../utils/graphLayout'
+import { buildLayout, applyEdgeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset } from '../utils/graphLayout'
 import type { Node, Edge } from '@xyflow/react'
 import GroupNode from '../components/GroupNode'
@@ -25,32 +25,6 @@ import FileNode from '../components/FileNode'
 import WarningPanel from '../components/WarningPanel'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
-
-// DB 엣지 타입 판별
-function isDbEdgeType(t: string | undefined): boolean {
-  return t === 'DB_READ' || t === 'DB_WRITE' || t === 'DB_CREATE' || t === 'DB_UPDATE' || t === 'DB_DELETE'
-}
-
-// 엣지 타입별 hidden 여부 적용
-function applyEdgeVisibility(
-  edges: Edge[],
-  se: boolean, sc: boolean, si: boolean, sb: boolean, sdb: boolean, sapi: boolean
-): Edge[] {
-  return edges.map((e) => {
-    const d = e.data as { type?: string; broken?: boolean } | undefined
-    const t = d?.type
-    const broken = d?.broken
-    const hidden =
-      t === 'IMPORT' && broken ? !sb :
-      t === 'IMPORT' ? !se :
-      t === 'FUNCTION_CALL' ? !sc :
-      t === 'INSTANTIATION' ? !si :
-      isDbEdgeType(t) ? !sdb :
-      t === 'API_CALL' ? !sapi :
-      false
-    return { ...e, hidden }
-  })
-}
 
 // layer 모드에서 opaque 섹션의 자손 노드 hidden 처리
 function applyOpaqueLayerSet(nodes: Node[], opaqueLayerSet: Set<string>): Node[] {
@@ -552,8 +526,8 @@ function ShareGraphInner() {
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
             fitView
-            minZoom={0.05}
-            maxZoom={2}
+            minZoom={GRAPH_MIN_ZOOM}
+            maxZoom={GRAPH_MAX_ZOOM}
             onlyRenderVisibleElements
             nodesDraggable={false}
             nodesConnectable={false}

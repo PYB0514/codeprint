@@ -537,6 +537,14 @@ const fetchGraph = useCallback(async () => {
 
 **측정 기반 다음 단계 보류:** Phase 2의 도메인 기본 접힘·노드 LOD는 컬링만으로 freeze가 해소되는지 **브라우저 검증 후** 필요성을 재평가한다(투기적 선구현 금지). 검증 포인트: 319파일 freeze 해소 + 부모/자식 sub-flow(그룹 박스·파일 안 함수 노드)가 스크롤·확대 시 정상 렌더되는지.
 
+## GraphPage/ShareGraphPage 공유 컴포넌트 추출 — PR1 상수/순수함수 (2026-07-02)
+
+**문제:** ShareGraphPage 뷰어 확장 작업(Context94) 중 색상 하드코딩·범례 빈 목록 등 회귀가 반복돼, 두 페이지가 "보기" 로직을 서로 다르게 재구현하고 있음이 드러남. 사용자 판단으로 페이지 통째 병합 대신 공유 컴포넌트/훅 추출로 방향 확정, PR을 리스크 낮은 순으로 분할(PROGRESS.md 백로그 참조).
+
+**PR1 스코프 선택:** 코드 검색 결과 `isDbEdgeType`·`applyEdgeVisibility`(엣지 hidden 판정 로직)·`minZoom`/`maxZoom` 값(0.05/2)이 두 파일에 **완전히 동일하게** 중복돼 있었음 — 순수 함수/상수라 추출 시 동작 변경 위험이 0에 가까움. `applyOpaqueLayerSet`(레이어/도메인 dim 토글)도 중복이지만 GraphPage는 단일 레이어 토글(`toggleLayerOpaque`)로, ShareGraphPage는 전체 집합 배치 적용(`applyOpaqueLayerSet`)으로 구현 형태가 달라 완전 동일 리팩토링이 아님 — 이건 백로그 candidate #1(상태 훅 통합, "가장 신중하게")과 겹치므로 이번 PR1에서 제외하고 이후 PR로 미룸.
+
+**결과:** `graphLayout.ts`(두 페이지가 이미 import하던 공유 유틸)에 `GRAPH_MIN_ZOOM`/`GRAPH_MAX_ZOOM`·`isDbEdgeType`·`applyEdgeVisibility` export 추가, 양쪽 페이지의 로컬 정의 제거 후 import로 교체. `tsc -b` 통과, ShareGraphPage를 claude-in-chrome으로 공개레포(gin)에 라이브 로드해 콘솔 에러 없음·그래프 정상 렌더 확인(GraphPage는 OAuth 로그인 필요해 코드 대조로만 확인).
+
 ## 경고 패턴 예외 UI — "무시" 액션 + 규칙 패널 (2026-06-25)
 
 **문제:** 백엔드 패턴 예외(글로브 IGNORE, #375)를 사용자가 쓰려면 UI 필요. opt-out 모델 실용화의 마지막 조각.
