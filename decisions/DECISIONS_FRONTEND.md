@@ -2,6 +2,20 @@
 
 ---
 
+## 계층형 뷰 폴백 — DDD 미감지 프로젝트의 그룹핑 방식 (2026-07-02)
+
+**문제.** 사용자 관찰: "도메인을 계층형으로 분석하는 건 쉬운데 계층형을 DDD로 분석하는 건 무리가 있다" — 계층형 뷰(`getGroupKey`)가 domain/application/infrastructure 같은 DDD 레이어명을 못 찾으면 `parts[0]`(경로 첫 세그먼트)를 그대로 그룹 키로 썼는데, 두 가지 방향으로 퇴화함을 실측 확인: ①gin(Go, 파일이 레포 루트에 바로 있음) → 루트 파일 하나하나가 각각 `parts[0]`(파일명 자체, 서브디렉터리 없어서)가 돼 **범례 46개**(파일당 박스 1개) ②ripgrep(Rust, `crates/{core,printer,...}` 10개 워크스페이스 크레이트) → 모든 파일의 `parts[0]`이 항상 `'crates'`라 **10개 크레이트가 전부 한 박스로 뭉개짐**.
+
+**근본원인.** `GraphWarningService.isDddProject()`는 이미 "DDD 감지 → DDD 전용 검출기, 미감지 → 범용 레이어드 검출기"로 분기하는데(경고 쪽), **시각화(`getGroupKey`) 쪽엔 이 분기가 없어서** DDD 미감지 시에도 같은 알고리즘(첫 세그먼트=그룹)을 그대로 쓰다가 리포별 구조에 따라 양방향으로 망가진 것.
+
+**설계 논의.** 처음엔 ①실제 폴더 구조를 재귀적으로 반영(N단계 중첩) ②언어별 관례 인식(Go 패키지·Rust crate·Python 패키지) 두 방향을 제안했으나, 실측해보니 문제의 정확한 원인은 훨씬 좁았음 — `parts[0]`이 "서브디렉터리가 있으면 그 디렉터리명(맞음)"과 "서브디렉터리가 없으면 파일명 자체(틀림)"를 구분 안 하고, `crates`/`src` 같은 의미 없는 래퍼 디렉터리를 그냥 그룹 키로 써버리는(틀림) 두 가지 좁은 결함이었음. 재귀 중첩이나 언어별 특수 처리 없이 **의미 없는 래퍼 디렉터리를 건너뛰고 그 다음 세그먼트를 그룹 키로 쓰는 것**만으로 두 사례 다 해결됨 — 큰 재설계보다 훨씬 작은 수정으로 충분(CLAUDE.md §1 재사용성/과잉설계 방지 규칙과 같은 맥락, 처음 제안한 두 옵션은 과잉 설계였음).
+
+**수정.** `getGroupKey`(`graphLayout.ts`) — 레이어 키워드 매칭 실패 시, 파일명을 뺀 디렉터리 세그먼트에서 `src`/`lib`/`crates`/`packages`/`pkg` 같은 의미 없는 래퍼를 앞에서부터 건너뛰고 남은 첫 세그먼트를 그룹 키로 사용. 다 건너뛰어도(또는 애초에 서브디렉터리가 없어도) 남는 게 없으면 공통 `'root'` 키로 묶어 루트 파일들이 각자 박스가 되는 것을 방지. DDD 레이어명이 발견되는 프로젝트는 이 폴백 코드에 도달하지 않아 무영향.
+
+**검증.** claude-in-chrome 라이브 3종 대조: gin 범례 46→7개(Root·Binding·Codec·GinS·Internal·Render·Testdata, 루트 .go 파일들이 하나의 ROOT 박스 안에 파일별 카드로 정상 표시), ripgrep 범례 → 10개 크레이트가 각각 분리된 섹션(Cli·Core·Globset·Grep·Ignore·Matcher·Pcre2·Printer·Regex·Searcher) + Root/Fuzz/Brew/Tests, codeprint 자신(DDD 프로젝트) 범례 10개 그대로 무회귀(Application·Backend·Domain·Infrastructure·Interfaces·Frontend·Components·Hooks/Utils·Pages·Database). `tsc -b` 통과, 콘솔 에러 0.
+
+---
+
 ## ShareGraphPage 뷰어 기능 확장 1단계 — 레이아웃 전환 + 범례 다중 토글 이식 (2026-07-02)
 
 **문제.** PROGRESS.md 백로그(2026-07-02 Plan)에 따라 GraphPage에는 있고 ShareGraphPage엔 없는 "보기" 기능 중 프론트 전용 2가지(①레이아웃 프리셋 전환 버튼 ②도메인/레이어 다중 토글 범례)를 이식.
