@@ -100,6 +100,7 @@ function ShareGraphInner() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [nodeSearch, setNodeSearch] = useState('')
   const [showChat, setShowChat] = useState(false)
+  const [warningPanelOpen, setWarningPanelOpen] = useState(false)
   const [activeDomainTab, setActiveDomainTab] = useState<string>('전체')
   const [ownerBgUrl, setOwnerBgUrl] = useState<string | null>(null)
   const [bgEnabled, setBgEnabled] = useState(false)
@@ -255,9 +256,12 @@ function ShareGraphInner() {
     return ['전체', ...Array.from(new Set(sections)).sort()]
   }, [nodes])
 
-  // 도메인 섹션 키 목록(소문자, id 기준) — 범례 opaque 토글은 라벨이 아닌 이 키로 매칭
-  const domainSectionKeys = useMemo(() =>
-    nodes.filter(n => n.id.startsWith('domain-section-')).map(n => n.id.replace('domain-section-', '')),
+  // 도메인 섹션 키+색상 목록(소문자, id 기준) — 범례 opaque 토글은 라벨이 아닌 이 키로 매칭, 색상은 섹션 노드 실제 색상 재사용
+  const domainSections = useMemo(() =>
+    nodes.filter(n => n.id.startsWith('domain-section-')).map(n => ({
+      key: n.id.replace('domain-section-', ''),
+      color: String(n.data?.color ?? '#6b7280'),
+    })),
     [nodes]
   )
 
@@ -389,18 +393,6 @@ function ShareGraphInner() {
             </div>
           </div>
 
-          {/* 경고 섹션 */}
-          <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              경고
-              {warnings.length > 0 && <span className="ml-1 text-yellow-400 font-normal">({warnings.length})</span>}
-            </p>
-            {warnings.length === 0 ? (
-              <p className="text-[10px] text-gray-600 px-1">경고 없음</p>
-            ) : (
-              <WarningPanel warnings={warnings} />
-            )}
-          </div>
           {/* 범례 — 도메인/레이어 다중 표시 토글 */}
           {availableTabs.length > 2 && (
             <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
@@ -408,7 +400,7 @@ function ShareGraphInner() {
                 <>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">범례 (클릭 = 가리기)</p>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                    {domainSectionKeys.map((key) => {
+                    {domainSections.map(({ key, color }) => {
                       const opaque = opaqueDomainSet.has(key)
                       const label = key.charAt(0).toUpperCase() + key.slice(1)
                       return (
@@ -418,8 +410,9 @@ function ShareGraphInner() {
                             title={opaque ? '내용 표시' : '내용 가리기'}
                             style={{
                               width: 16, height: 16, borderRadius: 3,
-                              border: '1px solid #6b728088',
-                              background: opaque ? '#6b7280' : '#6b728022',
+                              border: `1px solid ${color}88`,
+                              background: opaque ? color : `${color}22`,
+                              color: opaque ? '#fff' : color,
                               fontSize: 9, cursor: 'pointer',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               flexShrink: 0,
@@ -439,15 +432,15 @@ function ShareGraphInner() {
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">범례 (클릭 = 가리기)</p>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
                     {[
-                      { label: 'Domain',         key: 'domain' },
-                      { label: 'Application',    key: 'application' },
-                      { label: 'Infrastructure', key: 'infrastructure' },
-                      { label: 'Interfaces',     key: 'interfaces' },
-                      { label: 'Pages',          key: 'pages' },
-                      { label: 'Components',     key: 'components' },
-                      { label: 'Hooks / Utils',  key: 'hooks' },
-                      { label: 'Database',       key: 'database' },
-                    ].filter(({ label }) => availableTabs.includes(label)).map(({ label, key }) => {
+                      { label: 'Domain',         key: 'domain',         color: '#3b82f6' },
+                      { label: 'Application',    key: 'application',    color: '#eab308' },
+                      { label: 'Infrastructure', key: 'infrastructure', color: '#a855f7' },
+                      { label: 'Interfaces',     key: 'interfaces',     color: '#10b981' },
+                      { label: 'Pages',          key: 'pages',          color: '#06b6d4' },
+                      { label: 'Components',     key: 'components',     color: '#0ea5e9' },
+                      { label: 'Hooks / Utils',  key: 'hooks',          color: '#f97316' },
+                      { label: 'Database',       key: 'database',       color: '#ef4444' },
+                    ].filter(({ label }) => availableTabs.includes(label)).map(({ label, key, color }) => {
                       const opaque = opaqueLayerSet.has(key)
                       return (
                         <div key={key} className="flex items-center gap-1.5 py-0.5 px-1 rounded">
@@ -456,8 +449,9 @@ function ShareGraphInner() {
                             title={opaque ? '내용 표시' : '내용 가리기'}
                             style={{
                               width: 16, height: 16, borderRadius: 3,
-                              border: '1px solid #6b728088',
-                              background: opaque ? '#6b7280' : '#6b728022',
+                              border: `1px solid ${color}88`,
+                              background: opaque ? color : `${color}22`,
+                              color: opaque ? '#fff' : color,
                               fontSize: 9, cursor: 'pointer',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               flexShrink: 0,
@@ -542,6 +536,31 @@ function ShareGraphInner() {
             <Controls />
             <MiniMap nodeColor="#6b7280" maskColor="rgba(17,24,39,0.7)" />
           </ReactFlow>
+
+          {/* 코너 플로팅 — 경고 (우측 하단, 기본 접힘, GraphPage와 동일 패턴) */}
+          <div className="absolute z-30 bottom-4 right-4">
+            {warningPanelOpen ? (
+              <div className="w-72 max-h-[60vh] flex flex-col bg-gray-950/95 border border-gray-800 rounded-xl shadow-2xl backdrop-blur-sm overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 flex-shrink-0">
+                  <span className="text-xs font-semibold text-gray-300">🔎 경고{warnings.length > 0 && <span className="ml-1 text-yellow-400">({warnings.length})</span>}</span>
+                  <button onClick={() => setWarningPanelOpen(false)} title="접기" className="text-gray-500 hover:text-gray-200 text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-gray-800">▾</button>
+                </div>
+                <div className="p-2 overflow-y-auto">
+                  {warnings.length === 0 ? (
+                    <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
+                  ) : (
+                    <WarningPanel warnings={warnings} />
+                  )}
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setWarningPanelOpen(true)} className="flex items-center gap-2 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-200 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-sm">
+                <span className="text-base">🔎</span> 경고
+                {warnings.length > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/60 text-yellow-300 border border-yellow-700/50">{warnings.length}</span>}
+                <span className="text-gray-500 text-xs">▴</span>
+              </button>
+            )}
+          </div>
           </div>
         </div>
 
