@@ -569,6 +569,18 @@ const fetchGraph = useCallback(async () => {
 
 **검증:** `tsc -b` 통과. ShareGraphPage(ripgrep, 레이어 모드 — 14개 크레이트라 범례 노출)로 클릭 검증: 라벨 클릭 시 범례·상단 탭바 양쪽 active 하이라이트 동기화, 전체보기 리셋 정상, opaque 토글(○→◑) 별도 정상 동작, 콘솔 에러 없음. **도메인 모드 범례는 미검증** — 벤치마크용 공개레포 5개(gin·sinatra·Newtonsoft.Json·mini-redis·ripgrep) 전부 도메인 그룹이 2개 이하라 도메인 모드에서 범례 자체가 렌더되지 않음(코드 조건 `availableTabs.length > 2`). 레이어 모드와 완전히 동일한 컴포넌트·배선 패턴이라 코드 대조로 갈음. GraphPage는 OAuth라 코드 대조만.
 
+## GraphPage/ShareGraphPage 공유 컴포넌트 추출 — PR4 경고 코너패널 셸 (2026-07-03)
+
+**문제:** 코너 플로팅 패널(칩+펼침+헤더) 패턴이 GraphPage에 2곳(우측 하단 "분석·경고", 좌측 하단 "아키텍처 의도"), ShareGraphPage에 1곳("경고") — 총 3곳에서 byte-identical한 셸 구조(칩 버튼·헤더·접기 버튼·스크롤 컨테이너)가 중복돼 있었음. `WarningPanel` 자체(내용물)는 이미 이전 세션에 공유 컴포넌트로 분리돼 있었으나 이를 감싸는 "셸"은 각 페이지가 따로 구현.
+
+**결과:** `components/CornerPanel.tsx` 신규 — `open/onOpen/onClose`, `icon/title/count`, `headerExtra`(옵션 슬롯, GraphPage의 MD 내보내기 버튼 주입), `panelClassName`(너비·최대높이, Tailwind 임의값은 호출부에 리터럴로 전달해 JIT 스캔 보장), `style`(좌/우 위치, 사이드바 폭에 따라 페이지별로 다르게 계산). GraphPage 2곳·ShareGraphPage 1곳 전부 이 컴포넌트로 교체.
+
+**MD 내보내기 함수 이관 + 신규 이식:** `downloadWarningsMd`(경고를 마크다운으로 다운로드, 순수 클라이언트 함수·서버 호출 없음)를 GraphPage 로컬 정의에서 `graphLayout.ts`(`downloadTreeText`와 같은 위치)로 이동. 이미 화면에 보이는 데이터를 파일로 저장하는 **읽기 동작**이라 ShareGraphPage에도 그대로 이식(기존엔 GraphPage 전용, 신규 기능).
+
+**부수 수정:** `headerExtra={warnings.length > 0 && (...)}` 패턴이 `warnings.length`가 0일 때 `0 && X`가 `0`(falsy 숫자)으로 평가돼 React가 문자 그대로 "0"을 렌더링하는 사전 존재 버그를 발견(다른 위치의 count 배지들은 원래도 같은 패턴을 쓰고 있었으나 `CornerPanel` 내부에서 `!!count`로 새로 설계해 문제 없음) — 이번에 손댄 `headerExtra` 줄만 `? ... : undefined` 삼항으로 교정, 관련 없는 다른 줄은 손대지 않음(Surgical Changes).
+
+**검증:** `tsc -b` 통과. ShareGraphPage(Newtonsoft.Json, 경고 93개)에서 라이브 검증: 칩 펼침→헤더 "🔎 경고(93)" 정상, MD 내보내기 버튼(신규 포팅) 클릭 시 에러 없음, 접기 버튼으로 칩 복귀 정상, 콘솔 에러 없음. GraphPage 2개 패널(분석·경고 / 아키텍처 의도)은 OAuth라 코드 대조만.
+
 ## 경고 패턴 예외 UI — "무시" 액션 + 규칙 패널 (2026-06-25)
 
 **문제:** 백엔드 패턴 예외(글로브 IGNORE, #375)를 사용자가 쓰려면 UI 필요. opt-out 모델 실용화의 마지막 조각.
