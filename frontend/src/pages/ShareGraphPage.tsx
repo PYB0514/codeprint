@@ -103,6 +103,13 @@ function ShareGraphInner() {
   const [activeDomainTab, setActiveDomainTab] = useState<string>('전체')
   const [ownerBgUrl, setOwnerBgUrl] = useState<string | null>(null)
   const [bgEnabled, setBgEnabled] = useState(false)
+  const [rawNodesCache, setRawNodesCache] = useState<RawNode[]>([])
+  const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
+  const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
+  const [labelMode, setLabelMode] = useState<LabelMode>('name')
+  const [edgeVisibility, setEdgeVisibility] = useState({ se: false, sc: false, si: false, sb: true, sdb: false, sapi: true })
+  const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
+  const [opaqueDomainSet, setOpaqueDomainSet] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, connected, sendMessage } = useGraphChat(graphId, null)
 
@@ -153,14 +160,20 @@ function ShareGraphInner() {
         const sb  = edgeCfg.broken ?? true
         const sdb = edgeCfg.db     ?? false
         const sapi = edgeCfg.api   ?? true
-        const opaqueLayerSet = new Set((cfg.opaqueLayerSet as string[]) ?? [])
+        const initialOpaqueLayerSet = new Set((cfg.opaqueLayerSet as string[]) ?? [])
 
         const { nodes: builtNodes, edges: builtEdges } = buildLayout(raw.nodes, raw.edges, lm, lp)
 
         const finalNodes = lp === 'domain'
           ? builtNodes
-          : applyOpaqueLayerSet(builtNodes, opaqueLayerSet)
+          : applyOpaqueLayerSet(builtNodes, initialOpaqueLayerSet)
 
+        setRawNodesCache(raw.nodes)
+        setRawEdgesCache(raw.edges)
+        setLayoutPreset(lp)
+        setLabelMode(lm)
+        setEdgeVisibility({ se, sc, si, sb, sdb, sapi })
+        setOpaqueLayerSet(initialOpaqueLayerSet)
         setNodes(finalNodes)
         setEdges(applyEdgeVisibility(builtEdges, se, sc, si, sb, sdb, sapi))
         setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
@@ -193,11 +206,60 @@ function ShareGraphInner() {
     setChatInput('')
   }
 
+  // 계층형 ↔ 도메인 뷰 전환
+  const toggleLayoutPreset = () => {
+    const next: LayoutPreset = layoutPreset === 'layer' ? 'domain' : 'layer'
+    setLayoutPreset(next)
+    setOpaqueLayerSet(new Set())
+    setOpaqueDomainSet(new Set())
+    setActiveDomainTab('전체')
+    if (rawNodesCache.length > 0) {
+      const { nodes: ln, edges: le } = buildLayout(rawNodesCache, rawEdgesCache, labelMode, next)
+      setNodes(ln)
+      const { se, sc, si, sb, sdb, sapi } = edgeVisibility
+      setEdges(applyEdgeVisibility(le, se, sc, si, sb, sdb, sapi))
+      setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
+    }
+  }
+
+  // 레이어 섹션 opaque 토글 — 섹션 덮기 + 내부 파일/함수 노드 hidden (layer 모드 전용)
+  const toggleLayerOpaque = (layer: string) => {
+    setOpaqueLayerSet((prev) => {
+      const next = new Set(prev)
+      if (next.has(layer)) next.delete(layer)
+      else next.add(layer)
+      setNodes((nds) => applyOpaqueLayerSet(nds, next))
+      return next
+    })
+  }
+
+  // 도메인 섹션 opaque 토글 — 섹션 덮기 + 내부 파일/함수 노드 hidden (domain 모드 전용)
+  const toggleDomainOpaque = (domain: string) => {
+    setOpaqueDomainSet((prev) => {
+      const next = new Set(prev)
+      if (next.has(domain)) next.delete(domain)
+      else next.add(domain)
+      const isOpaque = next.has(domain)
+      setNodes((nds) => nds.map((n) => {
+        if (n.id === `domain-section-${domain}`) return { ...n, data: { ...n.data, opaque: isOpaque } }
+        if ((n.data.domain as string) === domain) return { ...n, hidden: isOpaque }
+        return n
+      }))
+      return next
+    })
+  }
+
   // 도메인/레이어 탭 목록 — sectionNode 라벨에서 추출
   const availableTabs = useMemo(() => {
     const sections = nodes.filter(n => n.type === 'sectionNode').map(n => String(n.data?.label ?? ''))
     return ['전체', ...Array.from(new Set(sections)).sort()]
   }, [nodes])
+
+  // 도메인 섹션 키 목록(소문자, id 기준) — 범례 opaque 토글은 라벨이 아닌 이 키로 매칭
+  const domainSectionKeys = useMemo(() =>
+    nodes.filter(n => n.id.startsWith('domain-section-')).map(n => n.id.replace('domain-section-', '')),
+    [nodes]
+  )
 
   // 탭 필터링된 노드 ID 집합
   const tabFilteredNodeIds = useMemo(() => {
@@ -262,6 +324,15 @@ function ShareGraphInner() {
           <span className="text-gray-500 text-xs">읽기 전용</span>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={toggleLayoutPreset}
+            title="레이아웃 전환"
+            className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2.5 py-1.5 rounded-lg border border-gray-700"
+          >
+            <span className={layoutPreset === 'layer' ? 'text-white' : 'text-gray-500'}>계층형</span>
+            <span className="text-gray-600">/</span>
+            <span className={layoutPreset === 'domain' ? 'text-white' : 'text-gray-500'}>도메인</span>
+          </button>
           <span className="text-gray-400 text-xs">공유된 그래프</span>
           <button
             onClick={() => navigate('/')}
@@ -330,6 +401,80 @@ function ShareGraphInner() {
               <WarningPanel warnings={warnings} />
             )}
           </div>
+          {/* 범례 — 도메인/레이어 다중 표시 토글 */}
+          {availableTabs.length > 2 && (
+            <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
+              {layoutPreset === 'domain' && (
+                <>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">범례 (클릭 = 가리기)</p>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                    {domainSectionKeys.map((key) => {
+                      const opaque = opaqueDomainSet.has(key)
+                      const label = key.charAt(0).toUpperCase() + key.slice(1)
+                      return (
+                        <div key={key} className="flex items-center gap-1.5 py-0.5 px-1 rounded">
+                          <button
+                            onClick={() => toggleDomainOpaque(key)}
+                            title={opaque ? '내용 표시' : '내용 가리기'}
+                            style={{
+                              width: 16, height: 16, borderRadius: 3,
+                              border: '1px solid #6b728088',
+                              background: opaque ? '#6b7280' : '#6b728022',
+                              fontSize: 9, cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {opaque ? '◑' : '○'}
+                          </button>
+                          <span className="text-xs truncate text-gray-400 flex-1 min-w-0">{label}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+              {layoutPreset === 'layer' && (
+                <>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">범례 (클릭 = 가리기)</p>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                    {[
+                      { label: 'Domain',         key: 'domain' },
+                      { label: 'Application',    key: 'application' },
+                      { label: 'Infrastructure', key: 'infrastructure' },
+                      { label: 'Interfaces',     key: 'interfaces' },
+                      { label: 'Pages',          key: 'pages' },
+                      { label: 'Components',     key: 'components' },
+                      { label: 'Hooks / Utils',  key: 'hooks' },
+                      { label: 'Database',       key: 'database' },
+                    ].filter(({ label }) => availableTabs.includes(label)).map(({ label, key }) => {
+                      const opaque = opaqueLayerSet.has(key)
+                      return (
+                        <div key={key} className="flex items-center gap-1.5 py-0.5 px-1 rounded">
+                          <button
+                            onClick={() => toggleLayerOpaque(key)}
+                            title={opaque ? '내용 표시' : '내용 가리기'}
+                            style={{
+                              width: 16, height: 16, borderRadius: 3,
+                              border: '1px solid #6b728088',
+                              background: opaque ? '#6b7280' : '#6b728022',
+                              fontSize: 9, cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {opaque ? '◑' : '○'}
+                          </button>
+                          <span className="text-xs truncate text-gray-400 flex-1 min-w-0">{label}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* 배경이미지 토글 — 오너 배경이 있을 때만 표시 */}
           {ownerBgUrl && (
             <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">

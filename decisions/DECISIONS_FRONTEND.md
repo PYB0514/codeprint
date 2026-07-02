@@ -2,6 +2,22 @@
 
 ---
 
+## ShareGraphPage 뷰어 기능 확장 1단계 — 레이아웃 전환 + 범례 다중 토글 이식 (2026-07-02)
+
+**문제.** PROGRESS.md 백로그(2026-07-02 Plan)에 따라 GraphPage에는 있고 ShareGraphPage엔 없는 "보기" 기능 중 프론트 전용 2가지(①레이아웃 프리셋 전환 버튼 ②도메인/레이어 다중 토글 범례)를 이식.
+
+**구현.** GraphPage의 `toggleLayoutPreset`/`toggleLayerOpaque`/`toggleDomainOpaque` 로직을 거의 그대로 포트. ShareGraphPage는 원래 `layoutPreset`·`labelMode`·엣지 가시성·`opaqueLayerSet`을 로드 시점 로컬 상수로만 썼던 것(재계산 불가) → state로 승격 + `rawNodesCache`/`rawEdgesCache`를 추가해 `buildLayout` 재호출이 가능하도록 함.
+
+**★ 구현 중 발견·수정한 버그(포팅 과정에서 캐치, 배포 전)**: `toggleDomainOpaque(domain)`은 `n.data.domain`(소문자 키, 예: `payment`)과 정확히 일치해야 섹션·자식 노드를 숨긴다. 그런데 ShareGraphPage의 기존 `availableTabs`(상단 탭바용)는 `sectionNode.data.label`(대문자, 예: `Payment`)에서 만들어진 목록이라, 이걸 그대로 범례 도메인 목록에 재사용하면 대소문자 불일치로 토글이 아무 것도 안 하는 조용한 버그가 될 뻔했음. → `domainSectionKeys`(sectionNode id에서 `domain-section-` 접두어를 제거한 소문자 키 목록)를 별도로 파생해 범례 전용으로 사용, 표시 라벨만 첫 글자 대문자화. 레이어 모드 범례도 동일 문제(고정 8종 배열의 `key`(소문자)를 `availableTabs`(라벨)와 직접 비교하면 항상 빈 배열) — `label` 기준으로 필터링하도록 수정, `LAYER_META_PRE`의 정확한 표기(`Hooks / Utils`, `Infrastructure`)까지 맞춤.
+
+**검증.** `tsc -b` 통과. claude-in-chrome으로 codeprint 자체 공개 그래프(`172463ea-eb9c-493e-9c93-016f06870c25`, 실제 DDD 레이어·도메인 보유)에서 라이브 검증: 레이어 모드 범례 8종 전부 렌더 + Domain 레이어 토글 시 해당 섹션 박스만 회색으로 dim되고 내부 노드 숨김 확인(스크린샷), 레이아웃 전환 버튼으로 계층형→도메인 재빌드 성공(20개 도메인 섹션 정상 렌더), 도메인 범례에서 Payment 토글 → 탭 필터로 확인 시 해당 도메인 콘텐츠 숨김 재확인. 콘솔 에러 0.
+**부수 확인**: mini-redis(비-DDD 소형 Rust 레포)로 먼저 테스트했을 때 두 모드 다 범례가 빈 목록으로 보였으나, 이는 버그가 아니라 GraphPage와 동일한 기존 한계(레이어 모드는 고정 8종 DDD 레이어명만 인식, 도메인 모드는 도메인이 1개(`Common`)뿐이면 `availableTabs.length > 2` 게이트에 걸려 범례 자체를 숨김) — 실제 DDD 구조가 있는 프로젝트(codeprint 자신)로 재검증해 정상 확인.
+**도구 함정**: `preview_screenshot`(Preview MCP)이 이 페이지에서 반복적으로 30초 타임아웃 — 처음엔 앱이 멈춘 것으로 의심했으나 `preview_eval`로 `document.body.innerText` 직접 확인 결과 페이지는 정상 렌더 중이었음. React Flow 캔버스가 있는 무거운 페이지에서 스크린샷 캡처 자체가 실패하는 도구 한계로 추정(claude-in-chrome 스크린샷은 정상 동작) — 다음에 같은 타임아웃을 보면 앱을 의심하기 전에 `preview_eval`로 먼저 실제 렌더 상태를 확인할 것.
+
+**스코프 제외(계획대로)**: ③버전 기록 열람(신규 백엔드 엔드포인트 필요, 별도 PR) ④스케치 모드(선택, 후순위). ShareGraphPage 516→661줄로 커졌으나 GraphPage 대비 여전히 훨씬 작아 커스텀 훅 추출 리팩토링은 이번 PR에서 보류(추측성 선제 리팩토링 지양, §2).
+
+---
+
 ## 랜딩페이지 정리 — 광고 사이드바 제거·요금제 문구 실측 수정·섹션 재배치 (2026-07-02)
 
 **문제.** 사용자 지시로 랜딩페이지(`LandingPage.tsx`) 정리: ①광고 사이드바(좌/우/하단 3곳, 실제 광고 미연동 placeholder) 제거 ②요금제 카드 문구가 실제 코드와 맞는지 확인 ③대문의 그래프 목업(정적 SVG 예시) 삭제 ④"사용법" 섹션을 위로, 그 아래 "오늘의 공개레포" 배치 ⑤"주요 기능" 텍스트 다듬기.
