@@ -545,6 +545,18 @@ const fetchGraph = useCallback(async () => {
 
 **결과:** `graphLayout.ts`(두 페이지가 이미 import하던 공유 유틸)에 `GRAPH_MIN_ZOOM`/`GRAPH_MAX_ZOOM`·`isDbEdgeType`·`applyEdgeVisibility` export 추가, 양쪽 페이지의 로컬 정의 제거 후 import로 교체. `tsc -b` 통과, ShareGraphPage를 claude-in-chrome으로 공개레포(gin)에 라이브 로드해 콘솔 에러 없음·그래프 정상 렌더 확인(GraphPage는 OAuth 로그인 필요해 코드 대조로만 확인).
 
+## GraphPage/ShareGraphPage 공유 컴포넌트 추출 — PR2 노드검색+상단툴바 (2026-07-03)
+
+**문제:** PR1 다음 순서인 "노드검색+상단툴바"를 시작하려 코드를 보니, 계획서(PROGRESS.md)가 예상한 것과 달리 노드검색은 완전한 코드 중복이 아니었음 — GraphPage는 원본 `RawNode[]`를 검색(주석 매치·최대 10개), ShareGraphPage는 레이아웃 계산이 끝난 React Flow `Node[]`를 검색(제한 없음·주석 미지원)해 데이터 모양 자체가 달랐다. 사용자에게 "왜 다른지, 통일할 가치 있으면 통일해라" 확인 받음 — 실제로는 의도된 아키텍처 차이가 아니라 ShareGraphPage가 나중에 더 단순하게 구현되며 자연 발생한 드리프트(이번 작업 전체가 다루는 패턴과 동일).
+
+**결정 — 검색어 있을 때만 통일, 빈 상태는 유지:** `searchNodes(rawNodes, query, limit=10)` 순수 함수를 `graphLayout.ts`에 추가(GraphPage 로직 그대로 이관). GraphPage는 이 함수를 호출하도록 교체(순수 리팩토링). ShareGraphPage는 **검색어가 있을 때만** `rawNodesCache`(이미 보유 중)에 대해 같은 함수를 호출 — 결과 10개 제한·주석 매치·정확한 타입 기반 아이콘(FILE/FUNCTION/DB_TABLE)까지 GraphPage와 동일해짐. **검색어가 빈 상태(전체 노드 훑어보기)는 그대로 `nodes`(현재 화면에 보이는·hidden 아닌 노드) 기반 유지** — rawNodesCache로 바꾸면 도메인/레이어 필터·opaque 토글로 숨겨진 노드까지 노출되는 회귀가 생기므로 제외. 두 브랜치를 `{id, icon, label}`로 정규화해 렌더 코드는 하나로 통일.
+
+**부수 발견(미수정, task로 분리):** 위 조사 중 ShareGraphPage의 빈 상태 브라우징에서 DB_TABLE 아이콘이 항상 'ƒ'로 잘못 표시되는 기존 버그 발견 — `buildLayout`이 DB_TABLE 노드에 React Flow `type`을 명시적으로 안 정해(undefined) 아이콘 판정(`n.type === 'DB_TABLE'`)이 항상 false. 이번 PR 스코프가 아니라 별도 task로 분리(`spawn_task`).
+
+**상단 툴바:** 레이아웃 전환 버튼(byte-identical)에 더해, 이번에 ShareGraphPage에 라벨모드(이름/주석) 토글을 신규 이식(기존엔 GraphPage 전용 기능 — "Google Sheets" 원칙에 따른 기능 포팅, 단순 리팩토링 아님). 두 버튼이 이제 양쪽에서 완전히 동일해져 `components/GraphViewToggles.tsx`(`LayoutPresetToggle`/`LabelModeToggle`)로 추출, 두 페이지 모두 교체.
+
+**검증:** `tsc -b` 통과. ShareGraphPage를 claude-in-chrome으로 공개레포(gin)에 라이브 로드해 ①빈 상태 훑어보기 ②검색어("router") 입력 시 10개 이하 결과·ƒ 아이콘 정상 ③레이아웃 전환·라벨모드 토글 클릭 후 콘솔 에러 없음 확인. GraphPage는 OAuth라 코드 대조 + `#tour-layout` 앵커 보존 확인만.
+
 ## 경고 패턴 예외 UI — "무시" 액션 + 규칙 패널 (2026-06-25)
 
 **문제:** 백엔드 패턴 예외(글로브 IGNORE, #375)를 사용자가 쓰려면 UI 필요. opt-out 모델 실용화의 마지막 조각.
