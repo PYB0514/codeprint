@@ -1172,3 +1172,33 @@ export function downloadTreeText(rawNodes: RawNode[]): void {
   a.click()
   URL.revokeObjectURL(url)
 }
+
+// 경고 목록을 타입별로 그룹핑하여 마크다운 파일로 다운로드
+export function downloadWarningsMd(warningList: { type: string; nodeIds: string[]; message: string }[]): void {
+  const WARNING_LABELS: Record<string, string> = {
+    CYCLIC_IMPORT: '순환 의존 (CYCLIC_IMPORT)',
+    BROKEN_INTERFACE_CHAIN: '인터페이스 미구현 (BROKEN_INTERFACE_CHAIN)',
+    ASYNC_SELF_CALL: '@Async 자기 호출 (ASYNC_SELF_CALL)',
+    DB_LAYER_BYPASS: 'DB 레이어 우회 (DB_LAYER_BYPASS)',
+    CROSS_CONTEXT_IMPORT: 'DDD 경계 위반 (CROSS_CONTEXT_IMPORT)',
+    CROSS_FEATURE_IMPORT: '피처 경계 위반 (CROSS_FEATURE_IMPORT)',
+    FEATURE_LAYER_VIOLATION: '레이어 단방향 위반 (FEATURE_LAYER_VIOLATION)',
+    MISSING_CONVERTER_MIGRATION: '@Convert 마이그레이션 필요 (MISSING_CONVERTER_MIGRATION)',
+  }
+  const grouped = new Map<string, string[]>()
+  for (const w of warningList) {
+    if (!grouped.has(w.type)) grouped.set(w.type, [])
+    grouped.get(w.type)!.push(w.message)
+  }
+  const lines = [`# 런타임 경고 리포트\n`, `> 총 ${warningList.length}개 경고\n`]
+  for (const [type, msgs] of grouped.entries()) {
+    lines.push(`\n## ${WARNING_LABELS[type] ?? type} (${msgs.length}개)\n`)
+    msgs.forEach(m => lines.push(`- ${m.replace(/^[^:]+:\s*/, '')}`))
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = 'codeprint-warnings.md'
+  a.click()
+  URL.revokeObjectURL(a.href)
+}

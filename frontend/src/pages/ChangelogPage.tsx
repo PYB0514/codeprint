@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.108.0',
+    date: '2026-07-03',
+    title: '공유 그래프 뷰어 — 경고 마크다운 내보내기 추가',
+    type: 'feature',
+    items: [
+      { category: '공유 그래프', desc: '경고 패널에서 경고 목록을 마크다운 파일로 내보낼 수 있는 버튼을 추가했습니다. 이전에는 로그인한 소유자용 화면(GraphPage)에만 있던 기능입니다.' },
+    ],
+  },
+  {
     version: 'v0.107.0',
     date: '2026-07-03',
     title: '공유 그래프 뷰어 — 범례 클릭으로 도메인/레이어 필터링 추가',

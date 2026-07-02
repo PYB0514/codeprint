@@ -16,7 +16,7 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { buildLayout, applyEdgeVisibility, searchNodes, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM } from '../utils/graphLayout'
+import { buildLayout, applyEdgeVisibility, searchNodes, downloadWarningsMd, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset } from '../utils/graphLayout'
 import type { Node, Edge } from '@xyflow/react'
 import GroupNode from '../components/GroupNode'
@@ -25,6 +25,7 @@ import FileNode from '../components/FileNode'
 import WarningPanel from '../components/WarningPanel'
 import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewToggles'
 import { GraphLegend } from '../components/GraphLegend'
+import { CornerPanel } from '../components/CornerPanel'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -527,29 +528,25 @@ function ShareGraphInner() {
           </ReactFlow>
 
           {/* 코너 플로팅 — 경고 (우측 하단, 기본 접힘, GraphPage와 동일 패턴) */}
-          <div className="absolute z-30 bottom-4 right-4">
-            {warningPanelOpen ? (
-              <div className="w-72 max-h-[60vh] flex flex-col bg-gray-950/95 border border-gray-800 rounded-xl shadow-2xl backdrop-blur-sm overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 flex-shrink-0">
-                  <span className="text-xs font-semibold text-gray-300">🔎 경고{warnings.length > 0 && <span className="ml-1 text-yellow-400">({warnings.length})</span>}</span>
-                  <button onClick={() => setWarningPanelOpen(false)} title="접기" className="text-gray-500 hover:text-gray-200 text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-gray-800">▾</button>
-                </div>
-                <div className="p-2 overflow-y-auto">
-                  {warnings.length === 0 ? (
-                    <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
-                  ) : (
-                    <WarningPanel warnings={warnings} />
-                  )}
-                </div>
-              </div>
+          <CornerPanel
+            open={warningPanelOpen}
+            onOpen={() => setWarningPanelOpen(true)}
+            onClose={() => setWarningPanelOpen(false)}
+            icon="🔎"
+            title="경고"
+            count={warnings.length}
+            panelClassName="w-72 max-h-[60vh]"
+            style={{ right: '16px' }}
+            headerExtra={warnings.length > 0 ? (
+              <button onClick={() => downloadWarningsMd(warnings)} title="경고 마크다운 내보내기" className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
+            ) : undefined}
+          >
+            {warnings.length === 0 ? (
+              <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
             ) : (
-              <button onClick={() => setWarningPanelOpen(true)} className="flex items-center gap-2 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-200 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-sm">
-                <span className="text-base">🔎</span> 경고
-                {warnings.length > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/60 text-yellow-300 border border-yellow-700/50">{warnings.length}</span>}
-                <span className="text-gray-500 text-xs">▴</span>
-              </button>
+              <WarningPanel warnings={warnings} />
             )}
-          </div>
+          </CornerPanel>
           </div>
         </div>
 

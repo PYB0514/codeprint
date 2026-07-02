@@ -16,7 +16,7 @@ import {
 import type { Edge, EdgeMouseHandler, Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
-import { buildLayout, downloadTreeText, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
+import { buildLayout, downloadTreeText, downloadWarningsMd, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry, ColumnInfo } from '../utils/graphLayout'
 import { extractDomain, buildDomainColorMap, buildKnownDomains } from '../utils/graphLayout'
 import { isDbEdgeType, applyEdgeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, searchNodes } from '../utils/graphLayout'
@@ -35,6 +35,7 @@ import AiAnalysisSection from '../components/AiAnalysisSection'
 import ArchitectureIntentPanel from '../components/ArchitectureIntentPanel'
 import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewToggles'
 import { GraphLegend } from '../components/GraphLegend'
+import { CornerPanel } from '../components/CornerPanel'
 import { type IgnoreRule, loadIgnoreRules, saveIgnoreRules } from '../utils/ignoreRules'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode, sketch: SketchNode }
@@ -1606,36 +1607,6 @@ function GraphPageInner() {
     return () => clearTimeout(timer)
   }, [nodeSearchQuery, rawNodes, setNodes])
 
-  // 경고 목록을 타입별로 그룹핑하여 마크다운 파일로 다운로드
-  const downloadWarningsMd = (warningList: { type: string; nodeIds: string[]; message: string }[]) => {
-    const WARNING_LABELS: Record<string, string> = {
-      CYCLIC_IMPORT: '순환 의존 (CYCLIC_IMPORT)',
-      BROKEN_INTERFACE_CHAIN: '인터페이스 미구현 (BROKEN_INTERFACE_CHAIN)',
-      ASYNC_SELF_CALL: '@Async 자기 호출 (ASYNC_SELF_CALL)',
-      DB_LAYER_BYPASS: 'DB 레이어 우회 (DB_LAYER_BYPASS)',
-      CROSS_CONTEXT_IMPORT: 'DDD 경계 위반 (CROSS_CONTEXT_IMPORT)',
-      CROSS_FEATURE_IMPORT: '피처 경계 위반 (CROSS_FEATURE_IMPORT)',
-      FEATURE_LAYER_VIOLATION: '레이어 단방향 위반 (FEATURE_LAYER_VIOLATION)',
-      MISSING_CONVERTER_MIGRATION: '@Convert 마이그레이션 필요 (MISSING_CONVERTER_MIGRATION)',
-    }
-    const grouped = new Map<string, string[]>()
-    for (const w of warningList) {
-      if (!grouped.has(w.type)) grouped.set(w.type, [])
-      grouped.get(w.type)!.push(w.message)
-    }
-    const lines = [`# 런타임 경고 리포트\n`, `> 총 ${warningList.length}개 경고\n`]
-    for (const [type, msgs] of grouped.entries()) {
-      lines.push(`\n## ${WARNING_LABELS[type] ?? type} (${msgs.length}개)\n`)
-      msgs.forEach(m => lines.push(`- ${m.replace(/^[^:]+:\s*/, '')}`))
-    }
-    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = 'codeprint-warnings.md'
-    a.click()
-    URL.revokeObjectURL(a.href)
-  }
-
   // 전체 그래프를 원본 크기 PNG로 다운로드
   const handleExportImage = useCallback(async () => {
     const flowEl = flowRef.current?.querySelector('.react-flow__viewport') as HTMLElement | null
@@ -2793,68 +2764,53 @@ function GraphPageInner() {
 
       {/* 코너 플로팅 — 아키텍처 의도 (좌측 하단, 기본 접힘) */}
       {projectId && (
-        <div className="absolute z-30 bottom-4" style={{ left: leftOpen ? `${leftWidth + 16}px` : '20px' }}>
-          {archPanelOpen ? (
-            <div className="w-72 max-h-[55vh] flex flex-col bg-gray-950/95 border border-gray-800 rounded-xl shadow-2xl backdrop-blur-sm overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 flex-shrink-0">
-                <span className="text-xs font-semibold text-gray-300">🏛 아키텍처 의도</span>
-                <button onClick={() => setArchPanelOpen(false)} title="접기" className="text-gray-500 hover:text-gray-200 text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-gray-800">▾</button>
-              </div>
-              <div className="p-2 overflow-y-auto">
-                <ArchitectureIntentPanel projectId={projectId} onSaved={() => fetchGraph()} />
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setArchPanelOpen(true)} className="flex items-center gap-2 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-200 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-sm">
-              <span className="text-base">🏛</span> 아키텍처 의도 <span className="text-gray-500 text-xs">▴</span>
-            </button>
-          )}
-        </div>
+        <CornerPanel
+          open={archPanelOpen}
+          onOpen={() => setArchPanelOpen(true)}
+          onClose={() => setArchPanelOpen(false)}
+          icon="🏛"
+          title="아키텍처 의도"
+          panelClassName="w-72 max-h-[55vh]"
+          style={{ left: leftOpen ? `${leftWidth + 16}px` : '20px' }}
+        >
+          <ArchitectureIntentPanel projectId={projectId} onSaved={() => fetchGraph()} />
+        </CornerPanel>
       )}
 
       {/* 코너 플로팅 — 분석·경고 (우측 하단, 기본 접힘) */}
-      <div className="absolute z-30 bottom-4" style={{ right: rightCollapsed ? '16px' : `${rightWidth + 16}px` }}>
-        {analysisPanelOpen ? (
-          <div className="w-80 max-h-[60vh] flex flex-col bg-gray-950/95 border border-gray-800 rounded-xl shadow-2xl backdrop-blur-sm overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 flex-shrink-0">
-              <span className="text-xs font-semibold text-gray-300">🔎 분석 · 경고{warnings.length > 0 && <span className="ml-1 text-yellow-400">({warnings.length})</span>}</span>
-              <div className="flex items-center gap-1">
-                {warnings.length > 0 && (
-                  <button onClick={() => downloadWarningsMd(warnings)} title="경고 마크다운 내보내기" className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
-                )}
-                <button onClick={() => setAnalysisPanelOpen(false)} title="접기" className="text-gray-500 hover:text-gray-200 text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-gray-800">▾</button>
-              </div>
-            </div>
-            <div className="p-2 overflow-y-auto flex flex-col gap-2">
-              <AiAnalysisSection graphId={graphId} />
-              {(warnings.length > 0 || suppressedWarnings.length > 0) ? (
-                <WarningPanel
-                  warnings={warnings}
-                  onNodeNavigate={handleSearchNodeClick}
-                  onSuppress={handleSuppressWarning}
-                  suppressed={suppressedWarnings}
-                  onRestore={handleRestoreWarning}
-                  ignoreOps={{
-                    fileOf: fileOfNodeId,
-                    rules: ignoreRules,
-                    allWarnings: warnings,
-                    onAdd: handleAddIgnore,
-                    onRemove: handleRemoveIgnore,
-                  }}
-                />
-              ) : (
-                <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
-              )}
-            </div>
-          </div>
+      <CornerPanel
+        open={analysisPanelOpen}
+        onOpen={() => setAnalysisPanelOpen(true)}
+        onClose={() => setAnalysisPanelOpen(false)}
+        icon="🔎"
+        title="분석 · 경고"
+        count={warnings.length}
+        panelClassName="w-80 max-h-[60vh]"
+        style={{ right: rightCollapsed ? '16px' : `${rightWidth + 16}px` }}
+        headerExtra={warnings.length > 0 ? (
+          <button onClick={() => downloadWarningsMd(warnings)} title="경고 마크다운 내보내기" className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
+        ) : undefined}
+      >
+        <AiAnalysisSection graphId={graphId} />
+        {(warnings.length > 0 || suppressedWarnings.length > 0) ? (
+          <WarningPanel
+            warnings={warnings}
+            onNodeNavigate={handleSearchNodeClick}
+            onSuppress={handleSuppressWarning}
+            suppressed={suppressedWarnings}
+            onRestore={handleRestoreWarning}
+            ignoreOps={{
+              fileOf: fileOfNodeId,
+              rules: ignoreRules,
+              allWarnings: warnings,
+              onAdd: handleAddIgnore,
+              onRemove: handleRemoveIgnore,
+            }}
+          />
         ) : (
-          <button onClick={() => setAnalysisPanelOpen(true)} className="flex items-center gap-2 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-200 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-sm">
-            <span className="text-base">🔎</span> 분석 · 경고
-            {warnings.length > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/60 text-yellow-300 border border-yellow-700/50">{warnings.length}</span>}
-            <span className="text-gray-500 text-xs">▴</span>
-          </button>
+          <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
         )}
-      </div>
+      </CornerPanel>
 
       {/* 분석 완료 결과 카드 — 구조 카운트 + 경고 가치 + 경고 보기 CTA */}
       {resultCard && (
