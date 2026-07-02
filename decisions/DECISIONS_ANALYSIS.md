@@ -1454,3 +1454,19 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **A/B.** IDDD_Samples DB_LAYER_BYPASS 15→10(-5, `ApplicationServiceLifeCycle→LevelDB*` 전부 제거, CQRS `*QueryService→AbstractQueryService/JoinOn` 10건은 기존 인정 패턴대로 불변). java-realworld(9)·py-realworld(12)·buckpal(0)·self(HIGH_FAN_OUT 8·DEAD_CODE 1) 전부 문서값과 동일=무회귀(`*LifeCycle`/`*Bootstrap`/`*Configuration` 파일이 없는 레포는 영향 0). 백엔드 전체 666테스트 green.
 
 **이로써 Context89 정밀도 감사 3항목(HIGH recall 측정·precision 폭·JS-React) + 사용자 지시 후속 1항목(컴포지션 루트) 모두 완료.**
+
+---
+
+## "오늘의 공개레포" 5개 경고 정밀도 감사 — C# 전처리기(#if/#endif) 주변 이름 손상 (2026-07-02, fix)
+
+**계기.** 사용자 지시로 랜딩페이지에 실제 노출 중인 "오늘의 공개레포" 5개(gin-gonic/gin·sinatra/sinatra·JamesNK/Newtonsoft.Json·tokio-rs/mini-redis·BurntSushi/ripgrep)의 실제 경고를 `get_warnings`로 조회해 진짜 결함인지 엔진 오탐인지 소스와 직접 대조.
+
+**측정.** gin은 경고 0건(1285함수 전부 분석 확인, 잘 관리된 코드베이스로 판단해 정상 처리). sinatra·mini-redis는 소량(5~8건)이고 파일명·경고 내용이 소스와 일치해 정탐. **Newtonsoft.Json에서 DEAD_CODE 이름이 소스와 다른 케이스 다수 발견**(예: 경고는 `"id IgnoreCultureForTypedAttribu"`, 실제 소스 2451줄은 `IgnoreCultureForTypedAttributes()`) — 실제 레포를 클론해 소스 대조로 확정.
+
+**원인(코드+실측).** `Src/Newtonsoft.Json.Tests/Converters/XmlNodeConverterTest.cs`는 `#if`/`#endif` 전처리기 지시문을 86줄 보유(NUnit 조건부 컴파일 테스트 다수) + 파일 선두 UTF-8 BOM. tree-sitter-c-sharp 그래머가 이 전처리기 지시문 주변에서 `method_declaration`의 `name` 필드 노드 경계를 잘못 잡아, 공백·"id " 접두어가 섞인 손상된 텍스트를 이름으로 추출 — `TreeSitterCSharpAnalyzer.walk()`가 tree-sitter가 준 `name` 필드를 그대로 신뢰해 검증 없이 `functions`에 넣던 것이 원인. (파일 선두 BOM 자체는 `StaticCodeAnalyzer`가 이미 제거하고 넘기므로 별개 — `﻿` 스트립 후에도 손상 재현됨, 그래머의 전처리기 처리 한계로 판단.)
+
+**수정.** `AbstractTreeSitterAnalyzer`에 공유 헬퍼 `isValidIdentifier(String)` 추가(`[A-Za-z_@][A-Za-z0-9_]*` — C# `@` 검증 식별자 이스케이프 포함, 공백·구두점 섞이면 항상 false). `TreeSitterCSharpAnalyzer.walk()`가 `name` 필드 텍스트를 이 검증을 통과할 때만 `functions`에 추가하고, 실패 시 해당 메서드 본문 내 호출은 가장 가까운 유효 상위 스코프(`enclosing`)에 귀속(완전 유실 대신 근사 귀속). 트레이드오프: 손상된 노드의 **진짜 이름은 그래머 손상으로 복구 불가**이므로 해당 3개 메서드(`IgnoreCultureForTypedAttributes`·`NonStandardAttributeValues`·`NonStandardElementsValues` 등)는 함수 노드로 아예 잡히지 않게 됨(recall 소폭 손실) — 단 손상된 이름을 그래프·DEAD_CODE에 노출하는 것보다 안전한 선택으로 판단(이미 이 엔진이 다른 곳(ripgrep 미호출비율 20% 케이스)에서도 "불확실하면 개별 경고 생략" 원칙을 쓰고 있어 일관됨.
+
+**검증(A/B, 실제 레포 직접 파싱).** 임시 테스트 하네스로 실제 클론된 `XmlNodeConverterTest.cs`(3443줄, BOM 스트립 후)를 `TreeSitterCSharpAnalyzer`에 직접 통과 — 수정 전 이 파일 하나에서만 30개 이상의 손상된(공백 포함) 이름이 `functions`에 섞여 있었던 것과 달리, 수정 후 **79개 함수 전부 정상 식별자, 손상 이름 0개** 확인. `./gradlew compileJava` 통과(서버 정지 후 실행). 임시 검증 테스트는 로컬 스크래치패드 절대경로를 참조해 커밋하지 않고 삭제(다른 환경에서 재현 불가한 하네스).
+
+**추가 발견(미수정, 별도 판단 필요) — HIGH_FAN_OUT 빌더 패턴 정밀도.** ripgrep `printer_standard`(hiargs.rs) 25개 호출 경고를 소스 대조 — 전부 **하나의 `StandardBuilder` 객체**에 대한 `.byte_offset().color_specs()...` 플루언트 체이닝(빌더 패턴 설정)으로, 서로 다른 25개 책임이 아니었음. 현재 `detectHighFanOut`은 호출 대상의 다양성과 무관하게 엣지 개수만 세어(같은 파일 내 호출만 제외) 빌더 체이닝과 진짜 SRP 위반을 구분 못 함 — 카운팅 알고리즘 변경이 필요한 더 큰 작업이라 이번엔 미수정, 사용자 판단 대기(고칠 경우 여러 벤치마크 A/B 필요).

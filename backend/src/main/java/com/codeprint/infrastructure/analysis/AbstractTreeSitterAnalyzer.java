@@ -89,4 +89,12 @@ abstract class AbstractTreeSitterAnalyzer {
         if (s < 0 || e > src.length || s >= e) return "";
         return new String(src, s, e - s, StandardCharsets.UTF_8);
     }
+
+    // "name" 필드로 추출한 텍스트가 유효한 식별자 형태인지 검증 — 전처리기 지시문(#if/#endif) 등
+    // 그래머가 처리 못 하는 구문 주변에서 노드 경계가 어긋나 공백·구두점 섞인 깨진 텍스트를 "이름"으로
+    // 잘못 추출하는 경우가 있음(발견: C# Newtonsoft.Json, #if 주변). 공백 등이 섞이면 절대 유효 식별자가
+    // 아니므로 여기서 걸러 DEAD_CODE·그래프 노드로 흘러들어가는 것을 막는다.
+    protected static boolean isValidIdentifier(String name) {
+        return name.matches("[A-Za-z_@][A-Za-z0-9_]*");
+    }
 }
