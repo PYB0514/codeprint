@@ -1,4 +1,5 @@
 ﻿// 프로젝트 코드 구조를 React Flow로 시각화하는 그래프 페이지
+// ⚠️ 새 "보기"(필터·조회·전환) 기능 추가 시 ShareGraphPage.tsx도 반영 검토 — 저장/수정 액션만 여기 전용, 보기는 비로그인도 동등해야 함(2026-07-02 결정)
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
