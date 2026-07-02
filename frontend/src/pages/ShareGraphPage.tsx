@@ -101,6 +101,8 @@ function ShareGraphInner() {
   const [nodeSearch, setNodeSearch] = useState('')
   const [showChat, setShowChat] = useState(false)
   const [warningPanelOpen, setWarningPanelOpen] = useState(false)
+  const [leftOpen, setLeftOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
   const [activeDomainTab, setActiveDomainTab] = useState<string>('전체')
   const [ownerBgUrl, setOwnerBgUrl] = useState<string | null>(null)
   const [bgEnabled, setBgEnabled] = useState(false)
@@ -370,8 +372,31 @@ function ShareGraphInner() {
       {/* 본문 */}
       <div className="flex-1 flex overflow-hidden">
 
+        {/* 좌측 사이드바 접힘 — 얇은 스트립 + 펼치기 버튼만 표시 */}
+        {!leftOpen && (
+          <div className="w-6 shrink-0 bg-gray-950 border-r border-gray-800 flex items-start justify-center pt-3">
+            <button
+              onClick={() => setLeftOpen(true)}
+              title="사이드바 펼치기"
+              className="w-5 h-5 flex items-center justify-center rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white text-xs leading-none"
+            >
+              ›
+            </button>
+          </div>
+        )}
+
         {/* 좌측 사이드바 */}
+        {leftOpen && (
         <aside className="w-56 shrink-0 bg-gray-950 border-r border-gray-800 flex flex-col overflow-y-auto">
+          <div className="flex items-center justify-end px-2 py-1.5 border-b border-gray-800/60 shrink-0">
+            <button
+              onClick={() => setLeftOpen(false)}
+              title="사이드바 접기"
+              className="w-6 h-6 flex items-center justify-center rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white text-sm leading-none"
+            >
+              ‹
+            </button>
+          </div>
 
           {/* 노드 검색 섹션 */}
           <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
@@ -487,6 +512,7 @@ function ShareGraphInner() {
             </div>
           )}
         </aside>
+        )}
 
         {/* 그래프 캔버스 */}
         <div className="flex-1 h-full flex flex-col min-w-0">
@@ -526,6 +552,8 @@ function ShareGraphInner() {
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
             fitView
+            minZoom={0.05}
+            maxZoom={2}
             onlyRenderVisibleElements
             nodesDraggable={false}
             nodesConnectable={false}
@@ -565,16 +593,39 @@ function ShareGraphInner() {
           </div>
         </div>
 
+        {/* 우측 사이드바 접힘 — 얇은 스트립 + 펼치기 버튼만 표시 */}
+        {!rightOpen && (
+          <div className="w-6 shrink-0 bg-gray-900 border-l border-gray-800 flex items-start justify-center pt-3">
+            <button
+              onClick={() => setRightOpen(true)}
+              title="사이드바 펼치기"
+              className="w-5 h-5 flex items-center justify-center rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white text-xs leading-none"
+            >
+              ‹
+            </button>
+          </div>
+        )}
+
         {/* 우측 사이드바 */}
+        {rightOpen && (
         <aside className="w-64 shrink-0 bg-gray-900 border-l border-gray-800 flex flex-col overflow-hidden">
 
           {/* 노드 상세 */}
           <div className="flex flex-col overflow-hidden" style={{ flex: selectedNode ? '0 0 auto' : '1' }}>
             <div className="px-3 py-2.5 border-b border-gray-800 shrink-0 flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">노드 정보</span>
-              {selectedNode && (
-                <button onClick={() => setSelectedNode(null)} className="text-gray-600 hover:text-gray-300 text-xs">✕</button>
-              )}
+              <div className="flex items-center gap-1.5">
+                {selectedNode && (
+                  <button onClick={() => setSelectedNode(null)} className="text-gray-600 hover:text-gray-300 text-xs">✕</button>
+                )}
+                <button
+                  onClick={() => setRightOpen(false)}
+                  title="사이드바 접기"
+                  className="w-6 h-6 flex items-center justify-center rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white text-sm leading-none"
+                >
+                  ›
+                </button>
+              </div>
             </div>
 
             {selectedNode ? (
@@ -665,6 +716,7 @@ function ShareGraphInner() {
             )}
           </div>
         </aside>
+        )}
 
       </div>
     </div>

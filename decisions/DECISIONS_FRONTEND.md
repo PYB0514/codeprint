@@ -2,7 +2,15 @@
 
 ---
 
-## 계층형 뷰 폴백 — DDD 미감지 프로젝트의 그룹핑 방식 (2026-07-02)
+## ShareGraphPage 사이드바 접기 + 줌아웃 범위 확대 (2026-07-02, PR #427 머지 직후 사용자 발견)
+
+**문제.** PR #427 머지 직후 사용자가 실사용 중 발견: ShareGraphPage에 사이드바 최소화 버튼이 없고, 마우스 휠로 화면을 축소해도 일정 배율 이하로 안 줄어듦.
+
+**원인.** ①좌/우 `<aside>`가 GraphPage와 달리 조건부 렌더 없는 고정 flex sibling이라 접기/펼치기 자체가 없었음(기능 자체가 이식 안 됨) ②`<ReactFlow>`에 `minZoom`을 지정 안 해 React Flow 기본값(0.5)이 적용 — GraphPage는 `minZoom={0.05}`를 명시.
+
+**수정(재사용 원칙대로 GraphPage 값 그대로 참조).** ①`leftOpen`/`rightOpen` state 추가, 접힘 시 얇은 스트립(펼치기 버튼만)으로 대체 — GraphPage는 절대 위치(absolute overlay) 구조라 그대로 포트하지 않고, ShareGraphPage의 기존 flex 레이아웃 구조는 유지한 채 같은 상호작용(헤더의 접기 버튼 + 접혔을 때 가장자리 펼치기 버튼)만 재현 ②`minZoom={0.05}`·`maxZoom={2}`를 GraphPage와 동일 값으로 추가.
+
+**검증.** claude-in-chrome — 좌/우 각각 접기→얇은 스트립+펼치기 버튼 렌더 확인, 펼치기 클릭으로 복원 확인. 휠 이벤트 시뮬레이션으로 `.react-flow__viewport` transform이 `scale(0.05)`까지 도달 확인(기존 0.5 상한 대비 10배 이상 확장). `tsc -b` 통과, 콘솔 에러 0.
 
 **문제.** 사용자 관찰: "도메인을 계층형으로 분석하는 건 쉬운데 계층형을 DDD로 분석하는 건 무리가 있다" — 계층형 뷰(`getGroupKey`)가 domain/application/infrastructure 같은 DDD 레이어명을 못 찾으면 `parts[0]`(경로 첫 세그먼트)를 그대로 그룹 키로 썼는데, 두 가지 방향으로 퇴화함을 실측 확인: ①gin(Go, 파일이 레포 루트에 바로 있음) → 루트 파일 하나하나가 각각 `parts[0]`(파일명 자체, 서브디렉터리 없어서)가 돼 **범례 46개**(파일당 박스 1개) ②ripgrep(Rust, `crates/{core,printer,...}` 10개 워크스페이스 크레이트) → 모든 파일의 `parts[0]`이 항상 `'crates'`라 **10개 크레이트가 전부 한 박스로 뭉개짐**.
 
