@@ -194,6 +194,7 @@ Before implementing:
 - If multiple interpretations exist, present them — don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
 - If something is unclear, stop. Name what's confusing. Ask.
+- **재사용성 먼저 확인한다.** 코드 작성 전에 비슷한 기능이 이미 어딘가(자매 페이지·기존 서비스·유틸)에 검증된 채로 있는지 먼저 찾는다. 있으면 새로 설계·재구현하지 말고 로직·색상 소스·상태 구조까지 최대한 그대로 옮겨쓰는 것을 기본으로 한다. "비슷하게 새로 짜면 되겠지"는 재구현 과정에서 원본과 미묘하게 갈라져 회귀(색상 하드코딩, key/label 불일치 등)를 만들고 일을 오히려 키운다 — 원본을 그대로 참조하면 애초에 발생 안 할 버그였다. (2026-07-02, ShareGraphPage 이식 중 반복 발견)
 
 ### 2. Simplicity First
 Minimum code that solves the problem. Nothing speculative.

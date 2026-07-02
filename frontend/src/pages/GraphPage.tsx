@@ -2140,6 +2140,16 @@ function GraphPageInner() {
     return buildDomainColorMap(domains)
   }, [rawNodes, commonPrefix, knownDomains])
 
+  // 레이어 섹션 키+라벨+색상 목록 — 고정 DDD 8종 목록 대신 실제 렌더된 섹션에서 동적으로 파생(비DDD 프로젝트도 커버)
+  const layerSections = useMemo(() =>
+    nodes.filter(n => n.id.startsWith('layer-section-')).map(n => ({
+      key: n.id.replace('layer-section-', ''),
+      label: String(n.data?.label ?? ''),
+      color: String(n.data?.color ?? '#6b7280'),
+    })),
+    [nodes]
+  )
+
   // 도메인 활성화 — 좌측 도메인 클릭 시 [그래프 필터 + 우측 흐름 패널 + 확대]를 한 번에 수행 (상단 탭 기능 통합)
   const activateDomain = useCallback((key: string) => {
     setActiveDomainTab(key)
@@ -2789,18 +2799,8 @@ function GraphPageInner() {
                     전체 보기
                   </button>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                  {[
-                    { label: 'Domain',        color: '#3b82f6', key: 'domain' },
-                    { label: 'Application',   color: '#eab308', key: 'application' },
-                    { label: 'Infra',         color: '#a855f7', key: 'infrastructure' },
-                    { label: 'Interfaces',    color: '#10b981', key: 'interfaces' },
-                    { label: 'Pages',         color: '#06b6d4', key: 'pages' },
-                    { label: 'Components',    color: '#0ea5e9', key: 'components' },
-                    { label: 'Hooks/Utils',   color: '#f97316', key: 'hooks' },
-                    { label: 'Database',      color: '#ef4444', key: 'database' },
-                  ].map(({ label, color, key }) => {
+                  {layerSections.map(({ label, color, key }) => {
                     const opaque = opaqueLayerSet.has(key)
-                    const clickable = availableTabs.includes(key)
                     const active = activeDomainTab === key
                     return (
                       <div key={key} className={`flex items-center gap-1.5 py-0.5 px-1 rounded ${active ? 'bg-gray-800/80' : ''}`}>
@@ -2820,9 +2820,9 @@ function GraphPageInner() {
                           {opaque ? '◑' : '○'}
                         </button>
                         <span
-                          className={`text-xs truncate flex-1 min-w-0 ${clickable ? 'cursor-pointer' : ''} ${active ? 'text-white font-semibold' : 'text-gray-400'} ${clickable ? 'hover:text-white' : ''}`}
-                          onClick={clickable ? () => activateDomain(key) : undefined}
-                          title={clickable ? '이 레이어만 보기' : undefined}
+                          className={`text-xs truncate flex-1 min-w-0 cursor-pointer hover:text-white ${active ? 'text-white font-semibold' : 'text-gray-400'}`}
+                          onClick={() => activateDomain(key)}
+                          title="이 레이어만 보기"
                         >
                           {label}
                         </span>

@@ -2,6 +2,46 @@
 
 ---
 
+## 계층형 뷰 폴백 — DDD 미감지 프로젝트의 그룹핑 방식 (2026-07-02)
+
+**문제.** 사용자 관찰: "도메인을 계층형으로 분석하는 건 쉬운데 계층형을 DDD로 분석하는 건 무리가 있다" — 계층형 뷰(`getGroupKey`)가 domain/application/infrastructure 같은 DDD 레이어명을 못 찾으면 `parts[0]`(경로 첫 세그먼트)를 그대로 그룹 키로 썼는데, 두 가지 방향으로 퇴화함을 실측 확인: ①gin(Go, 파일이 레포 루트에 바로 있음) → 루트 파일 하나하나가 각각 `parts[0]`(파일명 자체, 서브디렉터리 없어서)가 돼 **범례 46개**(파일당 박스 1개) ②ripgrep(Rust, `crates/{core,printer,...}` 10개 워크스페이스 크레이트) → 모든 파일의 `parts[0]`이 항상 `'crates'`라 **10개 크레이트가 전부 한 박스로 뭉개짐**.
+
+**근본원인.** `GraphWarningService.isDddProject()`는 이미 "DDD 감지 → DDD 전용 검출기, 미감지 → 범용 레이어드 검출기"로 분기하는데(경고 쪽), **시각화(`getGroupKey`) 쪽엔 이 분기가 없어서** DDD 미감지 시에도 같은 알고리즘(첫 세그먼트=그룹)을 그대로 쓰다가 리포별 구조에 따라 양방향으로 망가진 것.
+
+**설계 논의.** 처음엔 ①실제 폴더 구조를 재귀적으로 반영(N단계 중첩) ②언어별 관례 인식(Go 패키지·Rust crate·Python 패키지) 두 방향을 제안했으나, 실측해보니 문제의 정확한 원인은 훨씬 좁았음 — `parts[0]`이 "서브디렉터리가 있으면 그 디렉터리명(맞음)"과 "서브디렉터리가 없으면 파일명 자체(틀림)"를 구분 안 하고, `crates`/`src` 같은 의미 없는 래퍼 디렉터리를 그냥 그룹 키로 써버리는(틀림) 두 가지 좁은 결함이었음. 재귀 중첩이나 언어별 특수 처리 없이 **의미 없는 래퍼 디렉터리를 건너뛰고 그 다음 세그먼트를 그룹 키로 쓰는 것**만으로 두 사례 다 해결됨 — 큰 재설계보다 훨씬 작은 수정으로 충분(CLAUDE.md §1 재사용성/과잉설계 방지 규칙과 같은 맥락, 처음 제안한 두 옵션은 과잉 설계였음).
+
+**수정.** `getGroupKey`(`graphLayout.ts`) — 레이어 키워드 매칭 실패 시, 파일명을 뺀 디렉터리 세그먼트에서 `src`/`lib`/`crates`/`packages`/`pkg` 같은 의미 없는 래퍼를 앞에서부터 건너뛰고 남은 첫 세그먼트를 그룹 키로 사용. 다 건너뛰어도(또는 애초에 서브디렉터리가 없어도) 남는 게 없으면 공통 `'root'` 키로 묶어 루트 파일들이 각자 박스가 되는 것을 방지. DDD 레이어명이 발견되는 프로젝트는 이 폴백 코드에 도달하지 않아 무영향.
+
+**검증.** claude-in-chrome 라이브 3종 대조: gin 범례 46→7개(Root·Binding·Codec·GinS·Internal·Render·Testdata, 루트 .go 파일들이 하나의 ROOT 박스 안에 파일별 카드로 정상 표시), ripgrep 범례 → 10개 크레이트가 각각 분리된 섹션(Cli·Core·Globset·Grep·Ignore·Matcher·Pcre2·Printer·Regex·Searcher) + Root/Fuzz/Brew/Tests, codeprint 자신(DDD 프로젝트) 범례 10개 그대로 무회귀(Application·Backend·Domain·Infrastructure·Interfaces·Frontend·Components·Hooks/Utils·Pages·Database). `tsc -b` 통과, 콘솔 에러 0.
+
+---
+
+## ShareGraphPage 뷰어 기능 확장 1단계 — 레이아웃 전환 + 범례 다중 토글 이식 (2026-07-02)
+
+**문제.** PROGRESS.md 백로그(2026-07-02 Plan)에 따라 GraphPage에는 있고 ShareGraphPage엔 없는 "보기" 기능 중 프론트 전용 2가지(①레이아웃 프리셋 전환 버튼 ②도메인/레이어 다중 토글 범례)를 이식.
+
+**구현.** GraphPage의 `toggleLayoutPreset`/`toggleLayerOpaque`/`toggleDomainOpaque` 로직을 거의 그대로 포트. ShareGraphPage는 원래 `layoutPreset`·`labelMode`·엣지 가시성·`opaqueLayerSet`을 로드 시점 로컬 상수로만 썼던 것(재계산 불가) → state로 승격 + `rawNodesCache`/`rawEdgesCache`를 추가해 `buildLayout` 재호출이 가능하도록 함.
+
+**★ 구현 중 발견·수정한 버그(포팅 과정에서 캐치, 배포 전)**: `toggleDomainOpaque(domain)`은 `n.data.domain`(소문자 키, 예: `payment`)과 정확히 일치해야 섹션·자식 노드를 숨긴다. 그런데 ShareGraphPage의 기존 `availableTabs`(상단 탭바용)는 `sectionNode.data.label`(대문자, 예: `Payment`)에서 만들어진 목록이라, 이걸 그대로 범례 도메인 목록에 재사용하면 대소문자 불일치로 토글이 아무 것도 안 하는 조용한 버그가 될 뻔했음. → `domainSectionKeys`(sectionNode id에서 `domain-section-` 접두어를 제거한 소문자 키 목록)를 별도로 파생해 범례 전용으로 사용, 표시 라벨만 첫 글자 대문자화. 레이어 모드 범례도 동일 문제(고정 8종 배열의 `key`(소문자)를 `availableTabs`(라벨)와 직접 비교하면 항상 빈 배열) — `label` 기준으로 필터링하도록 수정, `LAYER_META_PRE`의 정확한 표기(`Hooks / Utils`, `Infrastructure`)까지 맞춤.
+
+**검증.** `tsc -b` 통과. claude-in-chrome으로 codeprint 자체 공개 그래프(`172463ea-eb9c-493e-9c93-016f06870c25`, 실제 DDD 레이어·도메인 보유)에서 라이브 검증: 레이어 모드 범례 8종 전부 렌더 + Domain 레이어 토글 시 해당 섹션 박스만 회색으로 dim되고 내부 노드 숨김 확인(스크린샷), 레이아웃 전환 버튼으로 계층형→도메인 재빌드 성공(20개 도메인 섹션 정상 렌더), 도메인 범례에서 Payment 토글 → 탭 필터로 확인 시 해당 도메인 콘텐츠 숨김 재확인. 콘솔 에러 0.
+**부수 확인**: mini-redis(비-DDD 소형 Rust 레포)로 먼저 테스트했을 때 두 모드 다 범례가 빈 목록으로 보였으나, 이는 버그가 아니라 GraphPage와 동일한 기존 한계(레이어 모드는 고정 8종 DDD 레이어명만 인식, 도메인 모드는 도메인이 1개(`Common`)뿐이면 `availableTabs.length > 2` 게이트에 걸려 범례 자체를 숨김) — 실제 DDD 구조가 있는 프로젝트(codeprint 자신)로 재검증해 정상 확인.
+**도구 함정**: `preview_screenshot`(Preview MCP)이 이 페이지에서 반복적으로 30초 타임아웃 — 처음엔 앱이 멈춘 것으로 의심했으나 `preview_eval`로 `document.body.innerText` 직접 확인 결과 페이지는 정상 렌더 중이었음. React Flow 캔버스가 있는 무거운 페이지에서 스크린샷 캡처 자체가 실패하는 도구 한계로 추정(claude-in-chrome 스크린샷은 정상 동작) — 다음에 같은 타임아웃을 보면 앱을 의심하기 전에 `preview_eval`로 먼저 실제 렌더 상태를 확인할 것.
+
+**스코프 제외(계획대로)**: ③버전 기록 열람(신규 백엔드 엔드포인트 필요, 별도 PR) ④스케치 모드(선택, 후순위). ShareGraphPage 516→661줄로 커졌으나 GraphPage 대비 여전히 훨씬 작아 커스텀 훅 추출 리팩토링은 이번 PR에서 보류(추측성 선제 리팩토링 지양, §2).
+
+**★ PR 리뷰 중 사용자 발견·즉시 수정 2건(같은 PR에 반영)**:
+1. **범례 아이콘이 전부 동일한 회색이었음** — 포팅 시 GraphPage가 도메인/레이어마다 실제 섹션 색상(`domainColorMap`/레이어별 고정 컬러)을 범례 아이콘에 쓰던 것을 회색 하나로 단순화해버린 회귀. 레이어 범례는 GraphPage의 고정 8색 배열을 그대로 이식(`Domain #3b82f6` 등), 도메인 범례는 실제 `domain-section-*` 노드의 `data.color`를 재사용(`domainSections` memo)하도록 수정 — 재구현 대신 이미 렌더링에 쓰이는 색상 소스를 그대로 참조해 캔버스와 항상 일치 보장.
+2. **경고 섹션이 좌측 사이드바를 항상 꽉 채워 범례가 화면 밖으로 밀림** — ShareGraphPage는 PR #327(GraphPage 사이드바 경량화, 경고를 우측 하단 코너 플로팅 기본 접힘 패널로 전환)의 대상이 아니었던 것으로 확인(GraphPage만 반영됨, ShareGraphPage는 그 이후에도 계속 인라인 풀사이즈였음 — 이번 이식 작업으로 새로 드러난 동일 계열의 반영 누락). GraphPage와 동일한 우측 하단 코너 플로팅(기본 접힘 칩, 클릭 시 확장) 패턴으로 교체, 단 AI 분석·suppress/restore/ignore 등 쓰기 액션은 이식 대상이 아니므로 제외하고 `WarningPanel warnings={warnings}` 읽기 전용 렌더만 유지.
+- 두 건 다 claude-in-chrome으로 재검증(레이어·도메인 모드 색상 분화 확인, 경고 칩 접힘→확장 정상 동작), `tsc -b` 통과, 콘솔 에러 0.
+
+**★★ 3번째 발견 — 사용자가 "오늘의 공개레포" 5개(gin·sinatra·Newtonsoft.Json·mini-redis·ripgrep)를 직접 순회 검증하다 잡음(더 심각)**: 레이어 모드 범례가 codeprint 자신 말고는 전부 비어 있었음. 원인은 레이어 범례가 `Domain/Application/Infrastructure/...` **고정 8개 이름 배열**이었기 때문 — DDD/Java·Spring 컨벤션 디렉터리명이라, 이 컨벤션을 안 쓰는 실제 오픈소스 레포 대부분(=지금 자동으로 노출 중인 "오늘의 공개레포" 쇼케이스 5개 거의 전부)에서 하나도 매치 안 됨. codeprint 자기 자신 하나로만 검증해 발견 못 한 표본 편향. **이 고정 배열은 GraphPage(로그인 소유자 화면)에도 원래부터 있던 동일 버그**(`GraphPage.tsx` 레이어 범례, 이번에 확인) — ShareGraphPage뿐 아니라 GraphPage도 같이 수정.
+- **수정**: 두 페이지 다 고정 배열 대신 실제 렌더된 `layer-section-*` 노드에서 key/label/color를 동적으로 파생(`layerSections` memo, 도메인 범례의 `domainSections`와 동일 패턴) — `buildLayout`의 `getFallbackLayerMeta`가 이미 비DDD 프로젝트에도 파일/폴더 단위 폴백 섹션+색상을 만들어주고 있어(`graphLayout.ts`), 그걸 그대로 읽기만 하면 됨. GraphPage 쪽은 `clickable = availableTabs.includes(key)` 가드도 함께 제거(하드코딩 파일경로 기반 7종 목록 대조용이었는데, 실제 필터링 로직(`tabFilteredNodeIds`)은 임의의 폴백 키도 이미 지원해서 불필요하게 좁은 제약이었음).
+- **검증**: gin(파일 단위 폴백 섹션 46개)으로 재확인 — 범례가 실제 파일명 목록으로 가득 채워지고, 토글 클릭 시 정상 dim. `tsc -b` 통과, 콘솔 에러 0.
+- **교훈**: 자기 자신(codeprint) 하나로 검증하는 건 "실제 서비스에서 보게 될 프로젝트 분포"를 대표하지 못한다 — 이번처럼 공개 쇼케이스에 노출되는 실제 다양한 언어/컨벤션 레포로 교차검증해야 이런 표본 편향형 버그를 잡을 수 있음.
+
+---
+
 ## 랜딩페이지 정리 — 광고 사이드바 제거·요금제 문구 실측 수정·섹션 재배치 (2026-07-02)
 
 **문제.** 사용자 지시로 랜딩페이지(`LandingPage.tsx`) 정리: ①광고 사이드바(좌/우/하단 3곳, 실제 광고 미연동 placeholder) 제거 ②요금제 카드 문구가 실제 코드와 맞는지 확인 ③대문의 그래프 목업(정적 SVG 예시) 삭제 ④"사용법" 섹션을 위로, 그 아래 "오늘의 공개레포" 배치 ⑤"주요 기능" 텍스트 다듬기.
