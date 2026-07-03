@@ -64,4 +64,10 @@ public interface PostRepository {
 
     // 그래프 첨부 게시글만 최신순 조회
     List<Post> findByGraphIdNotNull(org.springframework.data.domain.Pageable pageable);
+
+    // 그래프 스냅샷 목록 저장
+    void saveSnapshots(List<PostGraphSnapshot> snapshots);
+
+    // 게시글 ID로 그래프 스냅샷 목록 조회 (노출 순)
+    List<PostGraphSnapshot> findSnapshotsByPostId(UUID postId);
 }

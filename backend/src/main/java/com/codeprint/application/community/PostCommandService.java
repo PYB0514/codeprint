@@ -4,13 +4,16 @@ package com.codeprint.application.community;
 import com.codeprint.domain.community.Comment;
 import com.codeprint.domain.community.Post;
 import com.codeprint.domain.community.PostAttachment;
+import com.codeprint.domain.community.PostGraphSnapshot;
 import com.codeprint.domain.community.PostRepository;
 import com.codeprint.infrastructure.storage.S3Service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,6 +38,33 @@ public class PostCommandService {
     public Optional<Post> findById(UUID postId) {
         return postRepository.findById(postId);
     }
+
+    // 게시글을 비공개로 전환 — 커뮤니티 피드 목록엔 안 뜨지만 직접 링크로는 계속 접근 가능
+    public Post makePrivate(UUID postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
+        post.makePrivate();
+        return postRepository.save(post);
+    }
+
+    // 프로젝트+프리셋 슬롯에서 캡처한 그래프 스냅샷 목록을 게시글에 첨부 저장
+    public void saveGraphSnapshots(UUID postId, List<SnapshotToSave> snapshots) {
+        List<PostGraphSnapshot> entities = new ArrayList<>();
+        int position = 0;
+        for (SnapshotToSave s : snapshots) {
+            entities.add(PostGraphSnapshot.create(postId, s.projectId(), s.graphId(), s.config(), position++));
+        }
+        postRepository.saveSnapshots(entities);
+    }
+
+    // 게시글 ID로 그래프 스냅샷 목록 조회
+    @Transactional(readOnly = true)
+    public List<PostGraphSnapshot> getGraphSnapshots(UUID postId) {
+        return postRepository.findSnapshotsByPostId(postId);
+    }
+
+    // 저장할 그래프 스냅샷 정보 — 캡처 시점의 graphId(불변)·config 사본
+    public record SnapshotToSave(UUID projectId, UUID graphId, Map<String, Object> config) {}
 
     // 게시글에 댓글을 추가
     public Comment addComment(UUID postId, UUID userId, String content) {

@@ -52,6 +52,10 @@ public class Post {
     @Column(name = "view_count", nullable = false)
     private long viewCount = 0;
 
+    // PUBLIC(기본) 또는 PRIVATE — PRIVATE는 커뮤니티 피드 목록엔 안 뜨지만 직접 링크로는 접근 가능
+    @Column(nullable = false, length = 20)
+    private String visibility = "PUBLIC";
+
     @Column(name = "repo_url", length = 500)
     private String repoUrl;
 
@@ -84,6 +88,16 @@ public class Post {
     // 조회수 1 증가
     public void incrementViewCount() {
         this.viewCount++;
+    }
+
+    // 비공개로 전환 — 커뮤니티 피드 목록엔 안 뜨지만 직접 링크로는 계속 접근 가능
+    public void makePrivate() {
+        this.visibility = "PRIVATE";
+    }
+
+    // 공개 게시글인지 확인
+    public boolean isPublic() {
+        return "PUBLIC".equals(visibility);
     }
 
     // 게시글 제목과 내용을 수정

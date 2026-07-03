@@ -4,6 +4,9 @@ package com.codeprint.infrastructure.adapter;
 import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.domain.community.port.GraphReadPort;
 import com.codeprint.domain.graph.Edge;
+import com.codeprint.domain.graph.GraphViewPreset;
+import com.codeprint.domain.graph.GraphViewPresetDefaults;
+import com.codeprint.domain.graph.GraphViewPresetRepository;
 import com.codeprint.domain.graph.Node;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -17,6 +20,7 @@ import java.util.UUID;
 public class GraphReadAdapter implements GraphReadPort {
 
     private final GraphQueryService graphQueryService;
+    private final GraphViewPresetRepository presetRepository;
 
     // graphId의 노드·엣지를 community NodeView/EdgeView로 매핑하여 스냅샷 반환
     @Override
@@ -33,6 +37,19 @@ public class GraphReadAdapter implements GraphReadPort {
     @Override
     public Optional<UUID> findProjectId(UUID graphId) {
         return graphQueryService.findById(graphId).map(graph -> graph.getProjectId());
+    }
+
+    // 프로젝트의 최신 그래프 + 지정 슬롯의 프리셋 config(저장 안 됐으면 기본값) 조회
+    @Override
+    public Optional<PresetSnapshot> findLatestPresetConfig(UUID projectId, UUID userId, int presetSlot) {
+        return graphQueryService.findLatestByProject(projectId)
+                .map(graph -> {
+                    Map<String, Object> config = presetRepository
+                            .findByGraphIdAndUserIdAndSlot(graph.getId(), userId, presetSlot)
+                            .map(GraphViewPreset::getConfig)
+                            .orElseGet(() -> GraphViewPresetDefaults.defaultConfig(presetSlot));
+                    return new PresetSnapshot(graph.getId(), config);
+                });
     }
 
     // graph 도메인 Node → community NodeView (comment는 metadata에서 추출, filePath·language는 원본 null 유지)
