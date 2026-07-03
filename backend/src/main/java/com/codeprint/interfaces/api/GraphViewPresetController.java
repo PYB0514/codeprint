@@ -4,6 +4,7 @@ package com.codeprint.interfaces.api;
 import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.domain.graph.GraphViewPreset;
+import com.codeprint.domain.graph.GraphViewPresetDefaults;
 import com.codeprint.domain.graph.GraphViewPresetRepository;
 import com.codeprint.domain.user.User;
 import jakarta.validation.Valid;
@@ -45,12 +46,6 @@ public class GraphViewPresetController {
 
         // 슬롯 1~4 기본값 채움
         List<Map<String, Object>> result = new java.util.ArrayList<>();
-        String[][] defaults = {
-            {"계층-이름",   "layer",  "name"},
-            {"계층-주석",   "layer",  "comment"},
-            {"도메인-이름", "domain", "name"},
-            {"도메인-주석", "domain", "comment"},
-        };
         for (int slot = 1; slot <= 4; slot++) {
             if (bySlot.containsKey(slot)) {
                 GraphViewPreset p = bySlot.get(slot);
@@ -61,11 +56,10 @@ public class GraphViewPresetController {
                 item.put("isDefault", false);
                 result.add(item);
             } else {
-                String[] def = defaults[slot - 1];
                 Map<String, Object> item = new java.util.LinkedHashMap<>();
                 item.put("slot", slot);
-                item.put("name", def[0]);
-                item.put("config", buildDefaultConfig(def[1], def[2]));
+                item.put("name", GraphViewPresetDefaults.defaultName(slot));
+                item.put("config", GraphViewPresetDefaults.defaultConfig(slot));
                 item.put("isDefault", true);
                 result.add(item);
             }
@@ -111,26 +105,6 @@ public class GraphViewPresetController {
                     return ResponseEntity.ok(body);
                 })
                 .orElse(ResponseEntity.notFound().build());
-    }
-
-    // 기본 프리셋 config 생성
-    private Map<String, Object> buildDefaultConfig(String layoutPreset, String labelMode) {
-        Map<String, Object> edges = new java.util.LinkedHashMap<>();
-        edges.put("import", false);
-        edges.put("call", false);
-        edges.put("inst", false);
-        edges.put("broken", true);
-        edges.put("db", false);
-        edges.put("api", true);
-        Map<String, Object> config = new java.util.LinkedHashMap<>();
-        config.put("layoutPreset", layoutPreset);
-        config.put("labelMode", labelMode);
-        config.put("edges", edges);
-        config.put("opaqueLayerSet", List.of());
-        config.put("hiddenLayers", List.of());
-        config.put("hiddenGroups", List.of());
-        config.put("hiddenNodes", List.of());
-        return config;
     }
 
     // 프리셋 저장 요청 DTO

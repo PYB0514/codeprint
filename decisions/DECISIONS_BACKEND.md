@@ -1089,3 +1089,18 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** 백엔드 컴파일+전체 테스트 통과. 기존 단위 테스트(`PaymentApplicationServiceTest`·`TeamPaymentApplicationServiceTest`)를 새 `findByIdForUpdate` 목으로 갱신. `DonationApplicationServiceTest`에 DB 제약 경합 케이스 추가. **실 Postgres 동시성 통합 테스트 신규**(`PaymentApplicationServiceConcurrencyIntegrationTest`) — 두 스레드가 동일 orderId로 `confirm()`을 동시 호출해도 게이트웨이 승인·Pro 승급이 정확히 1회만 실행됨을 실 DB(로컬 docker compose)에서 검증 완료. TeamPaymentApplicationService는 동일 패턴이라 별도 동시성 통합 테스트는 생략(코드 대조로 갈음, §2).
 
 **자가검사(`analyzeLocal`) 부수 발견 — HIGH_FAN_OUT 자기유발.** `TeamPaymentApplicationService.confirm()`을 처음에 완전히 인라인했더니 기존엔 안 걸리던 HIGH_FAN_OUT(13개 호출)을 새로 유발(자가검사 전체 9→10건). `git stash`로 베이스라인과 대조해 신규 발생임을 확인 후 `provision(order)` private 메서드로 신규 팀 생성/좌석 변경 분기를 재분리해 원래 9건으로 복귀(§10 "self 프로젝트 0개 유지" 기준, §3 단일책임 재분리). 교훈: 헬퍼 인라인 단순화가 항상 안전한 게 아니라 호출 수를 늘려 자체 게이트를 유발할 수 있음 — 리팩토링 후에도 자가검사 재실행 필수.
+
+## 게시글 기반 공유그래프 재설계 — PR-A: DB 마이그레이션 + PostGraphSnapshot 도메인 모델 (2026-07-03)
+
+**문제.** 사용자가 ShareGraphPage(실시간 웹소켓 채팅 + 여러 프리셋 전환 + 자유 레이아웃 전환)의 방향 자체에 의문을 제기 — "불특정 수백 명이 실시간으로 그래프를 같이 만지는 건 코스트 대비 가치가 안 맞는다", "공유그래프는 게시글 성격이 더 강하다"는 판단(대화 중 확정, `PROGRESS.md` "★★★ 게시글 기반 공유그래프 전면 재설계" 참조). 게시글에 (프로젝트, 프리셋 번호)를 등록하면 그 순간의 설정을 스냅샷으로 얼려 고정된 뷰 하나를 보여주는 방식으로 전환하기로 했고, 이번 PR-A는 그 기반(DB+도메인+캡처 API)만 구현.
+
+**이유/결정.**
+1. **그래프 데이터는 이미 불변, 얼려야 할 건 프리셋 config뿐** — `graphId`는 분석마다 새 행이 생기는 기존 구조라 특정 그래프를 참조하면 데이터 자체는 자동으로 스냅샷됨. 반면 `GraphViewPreset`(슬롯 1~4)은 저장할 때마다 기존 슬롯을 삭제 후 재삽입하는 덮어쓰기 방식이라, 게시글이 슬롯을 "참조"만 하면 나중에 소유자가 그 슬롯을 수정할 때 이미 발행된 게시글도 같이 바뀌는 문제가 생김. → `post_graph_snapshots` 테이블에 config JSON을 **복사해서 저장**(참조 아님).
+2. **기존 Post.graphId/hidden* 필드는 그대로 유지, 신규 스냅샷 테이블은 추가적으로 도입** — 레거시 단일 첨부 게시글(`Post.graphId` + `hiddenLayers/hiddenGroups/hiddenNodeNames`)의 필터 스키마가 새 프리셋 config 스키마(layoutPreset/labelMode/edges/opaqueLayerSet)와 호환되지 않아 손실 없는 자동 마이그레이션이 불가능. 데이터 손실 위험한 변환 대신, 레거시 게시글은 기존 경로로 계속 렌더링되게 두고 신규 다중 스냅샷 메커니즘은 앞으로의 게시글부터 적용(§3 외과적 변경).
+3. **CASCADE 삭제** — `post_graph_snapshots.post_id`에 `ON DELETE CASCADE` FK. 게시글 삭제 시 스냅샷이 DB에 고아로 남지 않도록(사용자 지적: "게시글 삭제하면 접근도 안 되는 공유페이지가 DB에 계속 남는다").
+4. **DDD 포트 재사용** — community 도메인이 이미 graph 컨텍스트를 `GraphReadPort`(`domain/community/port/`)로 우회하고 있어(`findGraphSnapshot`/`findProjectId`), 새 캡처 로직도 같은 포트에 `findLatestPresetConfig(projectId, userId, slot)` 메서드로 추가(새 포트 신설 안 함, 기존 컨벤션 재사용). 어댑터(`GraphReadAdapter`)가 `GraphQueryService`(최신 그래프 조회) + `GraphViewPresetRepository`(저장된 슬롯) + `GraphViewPresetDefaults`(신규, 저장 안 된 슬롯 기본값)를 조합.
+5. **기본값 로직 중복 제거** — `GraphViewPresetController`의 `buildDefaultConfig` private 메서드가 캡처 어댑터에도 그대로 필요해질 뻔했음 → `domain/graph/GraphViewPresetDefaults`(순수 함수)로 추출해 컨트롤러·어댑터 양쪽이 재사용(신규 중복 사전 차단).
+6. **비공개(PRIVATE) 게시글** — `Post.visibility`(PUBLIC 기본/PRIVATE) 필드 + `makePrivate()` 도메인 메서드. `Post.create()` 시그니처는 안 건드리고(7개 호출처 영향 없음) 생성 후 별도 `PostCommandService.makePrivate(postId)`로 전환하는 방식 채택 — `updatePost`와 동일한 fetch-mutate-save 패턴이라 일관성 유지.
+7. **노드 코멘트 읽기 권한 완화는 이번 PR 범위 아님** — 사용자 확정("생성·수정·삭제는 권한 확인, 읽기는 공개여부만 확인")이나 실제 뷰어 UI가 붙는 PR-C에서 함께 처리하기로 미룸(지금 바꿔봐야 호출하는 곳이 없어 검증 불가).
+
+**결과.** Flyway `V51__add_post_visibility_and_graph_snapshots.sql`(posts.visibility 컬럼 + post_graph_snapshots 테이블). 백엔드 컴파일+전체 테스트 통과(신규 단위 테스트: `PostTest`·`PostCommandServiceTest`·`GraphViewPresetDefaultsTest`·`GraphReadAdapterTest` + 실 Postgres 통합 테스트 `PostGraphSnapshotIntegrationTest`로 CASCADE 삭제 실제 검증). `analyzeLocal` 자가검사 HIGH_FAN_OUT 9건 유지(신규 위반 없음). 프론트 UI(PR-B) 전까지는 API만 존재, 브라우저 검증은 PR-B에서 글쓰기 화면과 함께.

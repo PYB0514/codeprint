@@ -3,6 +3,7 @@ package com.codeprint.application.community;
 
 import com.codeprint.domain.community.Comment;
 import com.codeprint.domain.community.Post;
+import com.codeprint.domain.community.PostGraphSnapshot;
 import com.codeprint.domain.community.PostRepository;
 import com.codeprint.infrastructure.storage.S3Service;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -200,5 +202,58 @@ class PostCommandServiceTest {
         assertThatThrownBy(() -> service.deletePost(postId, UUID.randomUUID()))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(postRepository, never()).deleteById(any());
+    }
+
+    // --- makePrivate ---
+
+    @Test
+    @DisplayName("makePrivate — 게시글을 비공개로 전환 후 저장")
+    void makePrivate_switchesAndSaves() {
+        UUID postId = UUID.randomUUID();
+        Post post = postOwnedBy(UUID.randomUUID());
+        when(postRepository.findById(postId)).thenReturn(Optional.of(post));
+        when(postRepository.save(post)).thenReturn(post);
+
+        Post result = service.makePrivate(postId);
+
+        assertThat(result.isPublic()).isFalse();
+        verify(postRepository).save(post);
+    }
+
+    @Test
+    @DisplayName("makePrivate — 존재하지 않는 게시글이면 IllegalArgumentException")
+    void makePrivate_notFound_throws() {
+        UUID postId = UUID.randomUUID();
+        when(postRepository.findById(postId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.makePrivate(postId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Post not found");
+        verify(postRepository, never()).save(any());
+    }
+
+    // --- saveGraphSnapshots ---
+
+    @Test
+    @DisplayName("saveGraphSnapshots — 스냅샷 목록을 순서대로 position 부여해 저장")
+    void saveGraphSnapshots_assignsPositionInOrder() {
+        UUID postId = UUID.randomUUID();
+        UUID projectId1 = UUID.randomUUID();
+        UUID graphId1 = UUID.randomUUID();
+        UUID projectId2 = UUID.randomUUID();
+        UUID graphId2 = UUID.randomUUID();
+
+        service.saveGraphSnapshots(postId, List.of(
+                new PostCommandService.SnapshotToSave(projectId1, graphId1, Map.of("layoutPreset", "layer")),
+                new PostCommandService.SnapshotToSave(projectId2, graphId2, Map.of("layoutPreset", "domain"))));
+
+        org.mockito.ArgumentCaptor<List<PostGraphSnapshot>> captor = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(postRepository).saveSnapshots(captor.capture());
+        List<PostGraphSnapshot> saved = captor.getValue();
+        assertThat(saved).hasSize(2);
+        assertThat(saved.get(0).getPosition()).isZero();
+        assertThat(saved.get(0).getProjectId()).isEqualTo(projectId1);
+        assertThat(saved.get(1).getPosition()).isEqualTo(1);
+        assertThat(saved.get(1).getProjectId()).isEqualTo(projectId2);
     }
 }

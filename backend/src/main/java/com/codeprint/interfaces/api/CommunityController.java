@@ -15,6 +15,8 @@ import com.codeprint.domain.community.PostRepository;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -112,6 +114,18 @@ public class CommunityController {
                     .map(a -> new PostCommandService.AttachmentInfo(a.s3Key(), a.originalFilename(), a.contentType()))
                     .toList();
             postCommandService.saveAttachments(post.getId(), infos);
+        }
+        if (request.graphSnapshots() != null && !request.graphSnapshots().isEmpty()) {
+            List<PostCommandService.SnapshotToSave> toSave = new java.util.ArrayList<>();
+            for (GraphSnapshotRequest spec : request.graphSnapshots()) {
+                communityFacade.captureGraphSnapshot(spec.projectId(), user.getId(), spec.presetSlot())
+                        .ifPresent(snap -> toSave.add(new PostCommandService.SnapshotToSave(
+                                spec.projectId(), snap.graphId(), snap.config())));
+            }
+            postCommandService.saveGraphSnapshots(post.getId(), toSave);
+        }
+        if ("PRIVATE".equals(request.visibility())) {
+            post = postCommandService.makePrivate(post.getId());
         }
         return ResponseEntity.status(201).body(toPostResponse(post, user.getUsername(), user));
     }
@@ -388,10 +402,14 @@ public class CommunityController {
     public record CreatePostRequest(
             @NotBlank String title, String content, String feedbackType, UUID graphId,
             List<String> hiddenLayers, List<String> hiddenGroups, List<String> hiddenNodeNames,
-            List<AttachmentRequest> attachments) {}
+            List<AttachmentRequest> attachments,
+            @Valid List<GraphSnapshotRequest> graphSnapshots, String visibility) {}
 
     // 첨부파일 요청 DTO
     public record AttachmentRequest(String s3Key, String originalFilename, String contentType) {}
+
+    // 그래프 스냅샷 첨부 요청 DTO — 프로젝트+프리셋 슬롯을 지정하면 그 순간의 설정을 캡처
+    public record GraphSnapshotRequest(UUID projectId, @Min(1) @Max(4) int presetSlot) {}
 
     // 첨부파일 응답 DTO
     public record AttachmentResponse(UUID id, String originalFilename, String contentType, String url) {}

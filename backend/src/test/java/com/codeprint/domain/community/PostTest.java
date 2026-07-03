@@ -61,4 +61,24 @@ class PostTest {
         assertThat(post.getTitle()).isEqualTo("새제목");
         assertThat(post.getContent()).isEqualTo("새내용");
     }
+
+    @Test
+    @DisplayName("create — 기본 공개범위는 PUBLIC")
+    void create_defaultsToPublic() {
+        Post post = Post.create(userId, graphId, "제목", "내용", null,
+                null, null, null, null);
+
+        assertThat(post.isPublic()).isTrue();
+    }
+
+    @Test
+    @DisplayName("makePrivate — 비공개로 전환")
+    void makePrivate_switchesToPrivate() {
+        Post post = Post.create(userId, graphId, "제목", "내용", null,
+                null, null, null, null);
+
+        post.makePrivate();
+
+        assertThat(post.isPublic()).isFalse();
+    }
 }

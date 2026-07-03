@@ -4,6 +4,7 @@ package com.codeprint.infrastructure.persistence.community;
 import com.codeprint.domain.community.Comment;
 import com.codeprint.domain.community.Post;
 import com.codeprint.domain.community.PostAttachment;
+import com.codeprint.domain.community.PostGraphSnapshot;
 import com.codeprint.domain.community.PostRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -21,6 +22,7 @@ public class PostRepositoryImpl implements PostRepository {
     private final PostJpaRepository postJpa;
     private final CommentJpaRepository commentJpa;
     private final PostAttachmentJpaRepository attachmentJpa;
+    private final PostGraphSnapshotJpaRepository snapshotJpa;
 
     // 게시글 엔티티를 저장하고 반환
     @Override
@@ -135,5 +137,17 @@ public class PostRepositoryImpl implements PostRepository {
     @Override
     public List<Post> findByGraphIdNotNull(Pageable pageable) {
         return postJpa.findByGraphIdNotNullOrderByCreatedAtDesc(pageable);
+    }
+
+    // 그래프 스냅샷 목록 저장
+    @Override
+    public void saveSnapshots(List<PostGraphSnapshot> snapshots) {
+        snapshotJpa.saveAll(snapshots);
+    }
+
+    // 게시글 ID로 그래프 스냅샷 목록 조회 (노출 순)
+    @Override
+    public List<PostGraphSnapshot> findSnapshotsByPostId(UUID postId) {
+        return snapshotJpa.findByPostIdOrderByPositionAsc(postId);
     }
 }
