@@ -600,3 +600,16 @@ const fetchGraph = useCallback(async () => {
 **★ 데이터 손실 방지:** ArchitectureIntent는 modules·rules·ignore를 한 JSON에 저장하는데, 기존 `ArchitectureIntentPanel.save()`가 modules+rules만 PUT → 백엔드가 ignore를 빈목록으로 덮어씀. 경고 패널에서 추가한 예외 규칙이 의도 패널 저장 시 사라지는 버그. **해결:** ArchitectureIntentPanel이 ignore를 로드해 저장 시 그대로 라운드트립(편집 안 해도 보존). clear()도 ignore 있으면 DELETE 대신 PUT(modules/rules만 비움). saveIgnoreRules도 역으로 modules/rules를 라운드트립.
 
 **구현:** `utils/ignoreRules.ts`(글로브 추론·매칭·API 라운드트립), WarningPanel에 IgnoreRuleForm(인라인, 실시간 카운트)·IgnoreRulesSection(규칙 목록·제거), GraphPage 연동(fileOfNodeId·add/remove→저장→fetchGraph 재조회). nodeIds≥2 관계형 경고만 "무시" 표시. ShareGraphPage(비소유자)는 ignoreOps 미전달로 미표시. `tsc -b` 통과. **브라우저 검증은 사용자 서버 기동 후.**
+
+## 게시글 기반 공유그래프 재설계 — PR-B: 공유 모달·글쓰기 폼 개편 (2026-07-03)
+
+**문제.** GraphPage의 기존 "커뮤니티에 공유" 모달은 레이어/그룹/개별 노드를 체크박스로 골라 "숨김"으로 표시하는 방식이었음. 코드 추적 결과 이 체크박스 state(`shareHiddenLayers/Groups/Nodes`)는 그래프 렌더링에 **전혀 영향을 주지 않고** `applyPresetConfig`가 프리셋 로드 시 값을 복원하기만 하는, 사실상 죽은 기능이었음(PR-A가 만든 스냅샷 방식으로 대체 가능).
+
+**결정.**
+1. **체크박스 3종 완전 삭제** — state·`availableLayers`(하드코딩 8개 레이어명)·`availableGroups`(useMemo) 전부 제거, 사용처가 이 모달뿐임을 grep으로 확인 후 삭제. `buildCurrentConfig`/`applyPresetConfig`에서도 `hiddenLayers/hiddenGroups/hiddenNodes` 필드 제거(프리셋 config 스키마에서 완전히 빠짐 — 기존 저장된 프리셋에 남아있어도 이제 아무도 안 읽어 무해).
+2. **프리셋 슬롯 드롭다운 + 공개/비공개 토글로 교체** — 이미 로드돼 있던 `presets`(4슬롯) state를 그대로 재사용(추가 API 호출 불필요). `handleShareSubmit`이 `graphId`+hidden* 대신 `graphSnapshots:[{projectId,presetSlot}]`+`visibility` 전송.
+3. **커뮤니티 글쓰기 폼(`CommunityPage.tsx`)도 동일 개편** — "그래프 연결"이 프로젝트 선택 시 최신 그래프를 바로 붙이던 것을, 프로젝트 선택 → 프리셋 목록 조회(`/api/graphs/{graphId}/presets`) → 슬롯 선택으로 변경. `linkedGraphId`→`linkedProjectId`로 개명(더 이상 그래프ID를 직접 안 다룸, 서버가 projectId로 최신 그래프를 알아서 해석).
+
+**런타임 검증 중 발견한 버그(백엔드):** 비공개 게시글이 커뮤니티 전체 피드에 그대로 노출되는 실제 버그를 발견 — 상세 원인·수정은 `decisions/DECISIONS_BACKEND.md` "PR-B" 참조.
+
+**결과.** `tsc -b` 통과. claude-in-chrome으로 실 로그인 세션(GitHub OAuth) E2E 검증 — GraphPage 공유 모달에서 슬롯3(도메인-이름) 선택+비공개 등록, 커뮤니티 글쓰기 폼에서 프로젝트 연결 후 슬롯1(계층-이름) 기본값+공개 등록, 둘 다 DB에서 `post_graph_snapshots.config`가 선택한 슬롯과 정확히 일치함을 확인. 테스트 게시글은 삭제로 정리(겸 CASCADE 재확인). ChangelogPage v0.110.0(feature).

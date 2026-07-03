@@ -55,7 +55,9 @@ public class UserController {
     public ResponseEntity<List<PostSummaryResponse>> getUserPosts(
             @PathVariable UUID userId,
             @AuthenticationPrincipal User currentUser) {
+        // 비공개 게시글은 목록에서 제외 — 작성자 본인이 자기 프로필을 볼 때만 예외적으로 보임
         List<Post> posts = postRepository.findByUserId(userId).stream()
+                .filter(p -> p.isPublic() || (currentUser != null && currentUser.getId().equals(userId)))
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                 .toList();
         return ResponseEntity.ok(toPostSummaries(posts, currentUser));

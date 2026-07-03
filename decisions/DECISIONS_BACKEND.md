@@ -1104,3 +1104,15 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 7. **노드 코멘트 읽기 권한 완화는 이번 PR 범위 아님** — 사용자 확정("생성·수정·삭제는 권한 확인, 읽기는 공개여부만 확인")이나 실제 뷰어 UI가 붙는 PR-C에서 함께 처리하기로 미룸(지금 바꿔봐야 호출하는 곳이 없어 검증 불가).
 
 **결과.** Flyway `V51__add_post_visibility_and_graph_snapshots.sql`(posts.visibility 컬럼 + post_graph_snapshots 테이블). 백엔드 컴파일+전체 테스트 통과(신규 단위 테스트: `PostTest`·`PostCommandServiceTest`·`GraphViewPresetDefaultsTest`·`GraphReadAdapterTest` + 실 Postgres 통합 테스트 `PostGraphSnapshotIntegrationTest`로 CASCADE 삭제 실제 검증). `analyzeLocal` 자가검사 HIGH_FAN_OUT 9건 유지(신규 위반 없음). 프론트 UI(PR-B) 전까지는 API만 존재, 브라우저 검증은 PR-B에서 글쓰기 화면과 함께.
+
+## 게시글 기반 공유그래프 재설계 — PR-B: 글쓰기 화면 + GraphPage 공유 버튼 (2026-07-03)
+
+**문제.** PR-A가 만든 스냅샷 캡처 API를 실제로 호출하는 UI가 필요. 조사 결과 GraphPage에 이미 "커뮤니티에 공유" 버튼 + 모달이 존재했음(레이어/그룹/개별 노드를 체크박스로 골라 숨기는 방식, `shareHiddenLayers/Groups/Nodes` state). 이 체크박스들은 실제로는 그래프 렌더링에 전혀 영향을 주지 않고 `applyPresetConfig`가 단지 상태를 복원만 할 뿐이라는 걸 코드 추적으로 확인 — 이번 스냅샷 방식(프리셋 슬롯 통째로 캡처)으로 완전히 대체 가능해 안전하게 제거.
+
+**이유/결정.**
+1. **체크박스 UI 완전 제거, 프리셋 슬롯 드롭다운으로 교체** — `shareHiddenLayers/Groups/Nodes` state·`availableLayers/availableGroups` computed 값 전부 삭제(오직 이 모달에서만 쓰이던 걸 확인 후 제거). `buildCurrentConfig`/`applyPresetConfig`에서도 해당 필드 제거(저장되는 프리셋 config 스키마에서 `hiddenLayers/hiddenGroups/hiddenNodes` 키 제거 — 기존 저장된 프리셋에 이 키가 남아있어도 이제 아무도 안 읽으므로 무해).
+2. **커뮤니티 글쓰기 폼(`CommunityPage.tsx`)도 동일하게 개편** — 기존 "그래프 연결"이 프로젝트 선택 시 최신 graphId를 그대로 붙이던 것(프리셋 개념 없음)을, 프로젝트 선택 → 그 프로젝트 최신 그래프의 프리셋 목록(`/api/graphs/{graphId}/presets`) 조회 → 슬롯 선택으로 변경. `handleSubmitPost`가 `graphId` 대신 `graphSnapshots:[{projectId,presetSlot}]` + `visibility`를 전송.
+3. **★런타임 검증 중 발견한 실제 버그 — 비공개 게시글이 전체 피드에 노출됨.** `visibility` 컬럼은 저장되지만 `GET /api/community/posts`의 6개 분기(전체/검색/팔로잉/좋아요순/조회순/갤러리)가 전부 이를 걸러내지 않고 있었음 — "비공개" 토글의 존재 이유 자체가 빠진 상태. `CommunityController.getPosts()`에 `filterVisible(posts, user)` 헬퍼(공개이거나 요청자 본인 게시글만 통과) 추가로 모든 분기를 한 번에 커버(개별 JPA 쿼리 6개를 전부 고치는 대신 응답 조립 직전 한 지점에서 필터). `UserController.getUserPosts`(공개 프로필의 게시글 목록)도 동일 누락이 있어 같은 방식으로 수정.
+4. **자가검사 HIGH_FAN_OUT 재발** — 필터 로직을 인라인으로 넣었더니 `getPosts()`가 새로 9개 호출로 걸림(베이스라인 9→10) → PR-A 때와 동일하게 `filterVisible` private 메서드로 분리해 원복.
+
+**결과.** `tsc -b` 통과. 실 브라우저 E2E 검증(claude-in-chrome, 로그인 세션) — ① GraphPage "커뮤니티에 공유" 모달에서 슬롯3(도메인-이름) 선택+비공개로 등록 → DB 확인 결과 `post_graph_snapshots.config`에 `layoutPreset=domain, labelMode=name` 정확히 캡처, `posts.visibility=PRIVATE` ② 커뮤니티 글쓰기 폼에서 프로젝트 연결→슬롯1(계층-이름) 기본값→공개로 등록 → `config.layoutPreset=layer` 확인 ③ 비공개 게시글이 비로그인 요청(`curl`, 쿠키 없음)에는 목록에서 실제로 빠지고, 작성자 로그인 세션에는 보이는 것 확인 ④ 게시글 삭제 시 스냅샷 CASCADE 삭제 실제 DB로 재확인(테스트 게시글 정리 겸). 백엔드 전체 테스트 재실행 green, `analyzeLocal` HIGH_FAN_OUT 9건 유지. 상세 UI 변경은 `decisions/DECISIONS_FRONTEND.md` 참조.

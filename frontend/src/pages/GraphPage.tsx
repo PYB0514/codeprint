@@ -16,7 +16,7 @@ import {
 import type { Edge, EdgeMouseHandler, Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
-import { buildLayout, downloadTreeText, downloadWarningsMd, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
+import { buildLayout, downloadTreeText, downloadWarningsMd } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry, ColumnInfo } from '../utils/graphLayout'
 import { extractDomain, buildDomainColorMap, buildKnownDomains } from '../utils/graphLayout'
 import { isDbEdgeType, applyEdgeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, searchNodes } from '../utils/graphLayout'
@@ -522,9 +522,8 @@ function GraphPageInner() {
   const [shareTitle, setShareTitle] = useState('')
   const [shareContent, setShareContent] = useState('')
   const [shareFeedbackType, setShareFeedbackType] = useState('GENERAL')
-  const [shareHiddenLayers, setShareHiddenLayers] = useState<Set<string>>(new Set())
-  const [shareHiddenGroups, setShareHiddenGroups] = useState<Set<string>>(new Set())
-  const [shareHiddenNodes, setShareHiddenNodes] = useState<Set<string>>(new Set())
+  const [sharePresetSlot, setSharePresetSlot] = useState(1)
+  const [shareVisibility, setShareVisibility] = useState<'PUBLIC' | 'PRIVATE'>('PUBLIC')
   const [shareSubmitting, setShareSubmitting] = useState(false)
   const flowRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -1153,19 +1152,9 @@ function GraphPageInner() {
     }
   }
 
-  // 현재 그래프에서 그룹 키 목록 추출
-  const availableGroups = useMemo(() => {
-    const fileNodes = rawNodes.filter((n) => n.type === 'FILE' && n.filePath)
-    const commonPrefix = findCommonPrefix(fileNodes.map((n) => n.filePath))
-    const groups = new Set(fileNodes.map((n) => getGroupKey(n.filePath, commonPrefix)))
-    return Array.from(groups).sort()
-  }, [rawNodes])
-
-  const availableLayers = ['domain', 'application', 'infrastructure', 'interfaces', 'pages', 'components', 'hooks', 'utils']
-
   // 커뮤니티에 그래프 첨부 게시글 제출
   const handleShareSubmit = async () => {
-    if (!shareTitle.trim() || !shareContent.trim() || !graphId) return
+    if (!shareTitle.trim() || !shareContent.trim() || !projectId) return
     setShareSubmitting(true)
     try {
       await axios.post(
@@ -1174,18 +1163,15 @@ function GraphPageInner() {
           title: shareTitle,
           content: shareContent,
           feedbackType: shareFeedbackType,
-          graphId,
-          hiddenLayers: Array.from(shareHiddenLayers),
-          hiddenGroups: Array.from(shareHiddenGroups),
-          hiddenNodeNames: Array.from(shareHiddenNodes),
+          graphSnapshots: [{ projectId, presetSlot: sharePresetSlot }],
+          visibility: shareVisibility,
         }
       )
       setShowShareModal(false)
       setShareTitle('')
       setShareContent('')
-      setShareHiddenLayers(new Set())
-      setShareHiddenGroups(new Set())
-      setShareHiddenNodes(new Set())
+      setSharePresetSlot(1)
+      setShareVisibility('PUBLIC')
       alert('커뮤니티에 게시글이 등록되었습니다.')
     } catch {
       alert('게시 실패. 다시 시도해주세요.')
@@ -1207,10 +1193,7 @@ function GraphPageInner() {
       api: showApiCallEdges,
     },
     opaqueLayerSet: Array.from(opaqueLayerSet),
-    hiddenLayers: Array.from(shareHiddenLayers),
-    hiddenGroups: Array.from(shareHiddenGroups),
-    hiddenNodes: Array.from(shareHiddenNodes),
-  }), [layoutPreset, labelMode, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges, opaqueLayerSet, shareHiddenLayers, shareHiddenGroups, shareHiddenNodes])
+  }), [layoutPreset, labelMode, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges, opaqueLayerSet])
 
   // 프리셋 config를 현재 뷰 상태에 적용
   const applyPresetConfig = useCallback((config: Record<string, unknown>) => {
@@ -1234,9 +1217,6 @@ function GraphPageInner() {
     setShowDbEdges(sdb)
     setShowApiCallEdges(sapi)
     setOpaqueLayerSet(newOpaqueSet)
-    setShareHiddenLayers(new Set((config.hiddenLayers as string[]) ?? []))
-    setShareHiddenGroups(new Set((config.hiddenGroups as string[]) ?? []))
-    setShareHiddenNodes(new Set((config.hiddenNodes as string[]) ?? []))
 
     if (rawNodes.length > 0) {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, lm, lp, openFileSidebar)
@@ -3680,92 +3660,46 @@ function GraphPageInner() {
               className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none resize-none"
             />
 
-            {/* 레이어 숨기기 */}
+            {/* 공유할 뷰(프리셋) 선택 — 등록 시점의 설정을 스냅샷으로 고정, 이후 프리셋을 바꿔도 게시글엔 영향 없음 */}
             <div>
-              <p className="text-xs text-gray-400 mb-2 font-medium">레이어 숨기기</p>
-              <div className="flex flex-wrap gap-2">
-                {availableLayers.map((layer) => (
-                  <button
-                    key={layer}
-                    onClick={() => setShareHiddenLayers((prev) => {
-                      const next = new Set(prev)
-                      next.has(layer) ? next.delete(layer) : next.add(layer)
-                      return next
-                    })}
-                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                      shareHiddenLayers.has(layer)
-                        ? 'bg-red-900/40 border-red-700 text-red-400'
-                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
-                    }`}
-                  >
-                    {shareHiddenLayers.has(layer) ? '🚫 ' : ''}{layer}
-                  </button>
+              <p className="text-xs text-gray-400 mb-2 font-medium">공유할 뷰</p>
+              <select
+                value={sharePresetSlot}
+                onChange={(e) => setSharePresetSlot(Number(e.target.value))}
+                className="w-full bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none"
+              >
+                {presets.map((p) => (
+                  <option key={p.slot} value={p.slot}>{p.name}</option>
                 ))}
-              </div>
+              </select>
             </div>
 
-            {/* 그룹 숨기기 */}
-            {availableGroups.length > 0 && (
-              <div>
-                <p className="text-xs text-gray-400 mb-2 font-medium">그룹 숨기기</p>
-                <div className="flex flex-wrap gap-2">
-                  {availableGroups.map((group) => (
-                    <button
-                      key={group}
-                      onClick={() => setShareHiddenGroups((prev) => {
-                        const next = new Set(prev)
-                        next.has(group) ? next.delete(group) : next.add(group)
-                        return next
-                      })}
-                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                        shareHiddenGroups.has(group)
-                          ? 'bg-red-900/40 border-red-700 text-red-400'
-                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
-                      }`}
-                    >
-                      {shareHiddenGroups.has(group) ? '🚫 ' : ''}{group}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 개별 노드 숨기기 */}
+            {/* 공개범위 */}
             <div>
-              <p className="text-xs text-gray-400 mb-2 font-medium">개별 노드 숨기기 <span className="text-gray-600">({rawNodes.length}개)</span></p>
-              <div className="max-h-36 overflow-y-auto flex flex-col gap-1 bg-gray-800/40 rounded-lg p-2">
-                {rawNodes.filter((n) => n.type === 'FILE' || n.type === 'FUNCTION').map((n) => (
-                  <button
-                    key={n.id}
-                    onClick={() => setShareHiddenNodes((prev) => {
-                      const next = new Set(prev)
-                      next.has(n.name) ? next.delete(n.name) : next.add(n.name)
-                      return next
-                    })}
-                    className={`text-left text-xs px-2 py-1 rounded transition-colors ${
-                      shareHiddenNodes.has(n.name)
-                        ? 'bg-red-900/30 text-red-400'
-                        : 'text-gray-400 hover:bg-gray-700'
-                    }`}
-                  >
-                    {shareHiddenNodes.has(n.name) ? '🚫 ' : ''}
-                    <span className="text-gray-600 mr-1">{n.type === 'FILE' ? '📄' : 'ƒ'}</span>
-                    {n.name}
-                  </button>
-                ))}
+              <p className="text-xs text-gray-400 mb-2 font-medium">공개범위</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShareVisibility('PUBLIC')}
+                  className={`flex-1 text-xs px-3 py-2 rounded-lg border transition-colors ${
+                    shareVisibility === 'PUBLIC'
+                      ? 'bg-blue-900/40 border-blue-600 text-blue-300'
+                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  공개 — 커뮤니티 피드에 표시
+                </button>
+                <button
+                  onClick={() => setShareVisibility('PRIVATE')}
+                  className={`flex-1 text-xs px-3 py-2 rounded-lg border transition-colors ${
+                    shareVisibility === 'PRIVATE'
+                      ? 'bg-blue-900/40 border-blue-600 text-blue-300'
+                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  비공개 — 링크로만 접근
+                </button>
               </div>
             </div>
-
-            {/* 숨김 요약 */}
-            {(shareHiddenLayers.size > 0 || shareHiddenGroups.size > 0 || shareHiddenNodes.size > 0) && (
-              <p className="text-xs text-yellow-500">
-                숨김: {[
-                  shareHiddenLayers.size > 0 && `레이어 ${shareHiddenLayers.size}개`,
-                  shareHiddenGroups.size > 0 && `그룹 ${shareHiddenGroups.size}개`,
-                  shareHiddenNodes.size > 0 && `노드 ${shareHiddenNodes.size}개`,
-                ].filter(Boolean).join(', ')}
-              </p>
-            )}
 
             <div className="flex justify-end gap-2 pt-2 border-t border-gray-800">
               <button onClick={() => setShowShareModal(false)} className="text-sm text-gray-500 hover:text-white px-4 py-2">취소</button>
