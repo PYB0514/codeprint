@@ -581,6 +581,16 @@ const fetchGraph = useCallback(async () => {
 
 **검증:** `tsc -b` 통과. ShareGraphPage(Newtonsoft.Json, 경고 93개)에서 라이브 검증: 칩 펼침→헤더 "🔎 경고(93)" 정상, MD 내보내기 버튼(신규 포팅) 클릭 시 에러 없음, 접기 버튼으로 칩 복귀 정상, 콘솔 에러 없음. GraphPage 2개 패널(분석·경고 / 아키텍처 의도)은 OAuth라 코드 대조만.
 
+## GraphPage/ShareGraphPage 공유 컴포넌트 추출 — PR6 사이드바 리사이즈 (2026-07-03)
+
+**문제:** 백로그 "PR6 사이드바 접기/리사이즈 셸" 착수 전 조사 결과, "접기"와 "리사이즈"가 실제로는 완전히 다른 상태였음. 접기(collapse)는 PR #429(2026-07-02)에서 이미 ShareGraphPage에 이식 완료(단, GraphPage의 절대위치 오버레이 구조를 그대로 포트하지 않고 ShareGraphPage 기존 flex 레이아웃에 맞춰 재구현 — 커밋 메시지에 명시). 반면 **리사이즈(사이드바 경계선 드래그로 폭 조절)는 GraphPage에만 있고 ShareGraphPage엔 애초에 존재한 적이 없었음** — `git show`로 PR #429 diff를 직접 확인해 검증. 세션 중 사용자가 "마우스 휠로 화면 확대축소되는 그거 아니냐"고 리사이즈를 캔버스 줌(React Flow 내장, 양쪽 다 이미 있음)과 혼동해 재확인 후 범위 확정.
+
+**결정 — 신규 기능으로 포팅:** 사용자 확인 결과 리사이즈를 ShareGraphPage에도 추가하기로 결정(이전에 없던 기능이라 v0.109.0 MINOR 대상). GraphPage의 좌/우 리사이즈 로직(`leftResizing`/`rightResizing` ref + 전역 mousemove/mouseup 리스너 + delta 계산)이 두 곳에서 거의 동일하게 중복돼 있어, 이번에 `hooks/useSidebarResize.ts`(신규)로 추출 — `direction: 'left'|'right'`로 드래그 방향 반전 처리, `{width, startResize}` 반환. GraphPage 좌/우 인라인 로직을 이 훅으로 교체(dedup) + ShareGraphPage 좌/우에 신규 적용(포팅).
+
+**레이아웃 차이 흡수:** GraphPage 사이드바는 `absolute` 오버레이라 리사이즈 핸들이 캔버스 위에 뜨는 반면, ShareGraphPage는 flexbox 문서 흐름 안에 있어 핸들을 `aside`에 `relative` + 핸들을 `absolute` 자식으로 앵커링하는 것만으로 충분(다른 오버레이 UI의 위치 보정 불필요 — flex가 자동으로 리플로우). 초기 폭은 기존 고정폭(w-56=224px, w-64=256px)을 유지해 첫 렌더 시 시각적 점프 없음, 클램프는 GraphPage와 동일값(좌 160~420, 우 240~520)으로 통일.
+
+**검증:** `tsc -b` 통과. ShareGraphPage(gin)에서 `preview_eval`로 mousedown→mousemove→mouseup 시퀀스를 단계별(각각 별도 호출로 이벤트 루프를 넘겨) 검증 — 동일 eval 호출 내 동기 읽기는 React 배치 업데이트 반영 전이라 스테일 값을 반환하는 함정 발견(이전 세션 교훈과 동일 패턴), 호출을 분리해 재검증 후 드래그 중 실시간 반영(224→284px, +60 일치)·해제 후 추가 이동 무시(284px 고정)·최댓값 클램프(420px) 전부 정상 확인. 접기→펼치기 후에도 리사이즈한 폭(420px) 유지 확인(state 보존, 정상). GraphPage는 OAuth라 코드 대조만(동일 클램프 값·동일 훅 사용).
+
 ## 경고 패턴 예외 UI — "무시" 액션 + 규칙 패널 (2026-06-25)
 
 **문제:** 백엔드 패턴 예외(글로브 IGNORE, #375)를 사용자가 쓰려면 UI 필요. opt-out 모델 실용화의 마지막 조각.
