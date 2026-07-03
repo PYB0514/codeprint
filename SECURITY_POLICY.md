@@ -122,7 +122,8 @@
 - [x] S3 파일 타입/크기 검증 (Phase 1 + 10MB 제한 추가)
 - [x] JWT 만료 1시간 단축
 - [x] S3 다운로드 presigned URL 15분
-- [x] Stripe Webhook → 토스페이먼츠로 교체 완료, race condition 불해당
+- [x] Stripe Webhook → 토스페이먼츠로 교체 완료
+- [x] 결제 승인 TOCTOU race condition 수정 — `PaymentApplicationService`/`TeamPaymentApplicationService.confirm()`에 행 잠금(`@Lock(PESSIMISTIC_WRITE)`) + `@Transactional` 적용, 실 Postgres 동시성 테스트로 검증 (PR #434, v0.108.1, 2026-07-03). ★위 "race condition 불해당" 기록은 부정확했음 — 실제로는 더블클릭/재시도 시 결제 이중 승인이 가능했던 취약점이었음, 상세 `decisions/DECISIONS_BACKEND.md` 참조
 
 ### Phase 3 — 유료화 전 필수
 - [x] JWT HttpOnly 쿠키 전환 (PR #142, v0.28.0)
