@@ -8,6 +8,7 @@ import com.codeprint.domain.payment.port.TeamProvisioningPort;
 import com.codeprint.shared.plan.UserPlan;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -44,45 +45,36 @@ public class TeamPaymentApplicationService {
         return new PrepareResult(orderId, amount);
     }
 
-    // 결제 승인 — 멱등·소유권·금액 검증 후 게이트웨이 승인 + 팀 생성 또는 좌석 변경
+    // 결제 승인 — 행 잠금 조회로 동시 요청 직렬화 + 멱등·소유권·금액 검증 후 게이트웨이 승인 + 팀 생성 또는 좌석 변경
+    @Transactional
     public ConfirmOutcome confirm(UUID ownerUserId, String paymentKey, String orderId, long amount) {
-        CaptureResult captured = verifyAndCapturePayment(ownerUserId, paymentKey, orderId, amount);
-        if (captured.order() == null) {
-            return new ConfirmOutcome(captured.rejection(), null);
-        }
-
-        TeamPaymentOrder order = captured.order();
-        if (order.isNewTeam()) {
-            UUID teamId = teamProvisioningPort.createTeam(order.getOwnerUserId(), order.getTeamName(), order.getSeats());
-            return new ConfirmOutcome(Result.OK, teamId);
-        }
-        teamProvisioningPort.changeSeats(order.getTeamId(), order.getSeats());
-        return new ConfirmOutcome(Result.OK, order.getTeamId());
-    }
-
-    // 멱등·소유권·금액 검증 후 게이트웨이 승인까지 처리 — 거절 시 order=null, rejection에 사유
-    private CaptureResult verifyAndCapturePayment(UUID ownerUserId, String paymentKey, String orderId, long amount) {
-        if (orderRepository.isConfirmed(orderId)) {
-            return new CaptureResult(null, Result.ALREADY_CONFIRMED);
-        }
-
-        TeamPaymentOrder order = orderRepository.findById(orderId)
+        TeamPaymentOrder order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주문: " + orderId));
 
+        if (order.getStatus() == TeamPaymentOrder.Status.CONFIRMED) {
+            return new ConfirmOutcome(Result.ALREADY_CONFIRMED, null);
+        }
         if (!order.getOwnerUserId().equals(ownerUserId)) {
-            return new CaptureResult(null, Result.FORBIDDEN);
+            return new ConfirmOutcome(Result.FORBIDDEN, null);
         }
         if (order.getAmount() != amount) {
-            return new CaptureResult(null, Result.AMOUNT_MISMATCH);
+            return new ConfirmOutcome(Result.AMOUNT_MISMATCH, null);
         }
 
         paymentGateway.confirmPayment(paymentKey, orderId, amount);
         order.confirm(paymentKey);
         orderRepository.save(order);
-        return new CaptureResult(order, null);
+        return new ConfirmOutcome(Result.OK, provision(order));
     }
 
-    private record CaptureResult(TeamPaymentOrder order, Result rejection) {}
+    // 신규 팀 생성 또는 기존 팀 좌석 변경 실행 — 결과 teamId 반환
+    private UUID provision(TeamPaymentOrder order) {
+        if (order.isNewTeam()) {
+            return teamProvisioningPort.createTeam(order.getOwnerUserId(), order.getTeamName(), order.getSeats());
+        }
+        teamProvisioningPort.changeSeats(order.getTeamId(), order.getSeats());
+        return order.getTeamId();
+    }
 
     // 결제 주문 생성 결과
     public record PrepareResult(String orderId, long amount) {}

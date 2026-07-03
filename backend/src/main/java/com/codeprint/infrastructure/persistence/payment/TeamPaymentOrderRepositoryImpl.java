@@ -26,11 +26,9 @@ public class TeamPaymentOrderRepositoryImpl implements TeamPaymentOrderRepositor
         return jpa.findById(orderId).map(TeamPaymentOrderJpaRepository.TeamPaymentOrderRecord::toDomain);
     }
 
-    // 이미 처리 완료된 주문인지 확인
+    // 행 잠금을 건 상태로 조회 (confirm 동시 요청 직렬화 전용, 호출자가 @Transactional이어야 잠금 유지)
     @Override
-    public boolean isConfirmed(String orderId) {
-        return jpa.findById(orderId)
-            .map(r -> "CONFIRMED".equals(r.status))
-            .orElse(false);
+    public Optional<TeamPaymentOrder> findByIdForUpdate(String orderId) {
+        return jpa.findByOrderId(orderId).map(TeamPaymentOrderJpaRepository.TeamPaymentOrderRecord::toDomain);
     }
 }

@@ -7,6 +7,7 @@ import com.codeprint.domain.payment.port.PaymentGatewayPort;
 import com.codeprint.domain.payment.port.UserUpgradePort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -28,15 +29,15 @@ public class PaymentApplicationService {
         return new PrepareResult(orderId, PRO_AMOUNT);
     }
 
-    // 결제 승인 — 멱등(이미 승인)·소유권·금액 검증 후 게이트웨이 승인 + Pro 승급
+    // 결제 승인 — 행 잠금 조회로 동시 요청 직렬화 + 멱등(이미 승인)·소유권·금액 검증 후 게이트웨이 승인 + Pro 승급
+    @Transactional
     public ConfirmOutcome confirm(UUID userId, String paymentKey, String orderId, long amount) {
-        if (orderRepository.isConfirmed(orderId)) {
-            return ConfirmOutcome.ALREADY_CONFIRMED;
-        }
-
-        TossPaymentOrder order = orderRepository.findById(orderId)
+        TossPaymentOrder order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주문: " + orderId));
 
+        if (order.getStatus() == TossPaymentOrder.Status.CONFIRMED) {
+            return ConfirmOutcome.ALREADY_CONFIRMED;
+        }
         if (!order.getUserId().equals(userId)) {
             return ConfirmOutcome.FORBIDDEN;
         }

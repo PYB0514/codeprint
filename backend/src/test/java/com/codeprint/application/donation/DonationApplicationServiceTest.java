@@ -11,6 +11,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.List;
 import java.util.UUID;
@@ -74,6 +75,18 @@ class DonationApplicationServiceTest {
         assertThatThrownBy(() -> service.confirm(userId, "u", "pk-1", "order-1", 5000L))
                 .isInstanceOf(IllegalStateException.class);
         verify(donationRepository, never()).save(any(Donation.class));
+    }
+
+    @Test
+    @DisplayName("결제 확인 — existsByOrderId 통과 후 동시요청 경합으로 DB UNIQUE 제약 위반 시 예외 없이 멱등 무시")
+    void confirm_raceConditionOnSave_idempotentSkip() {
+        when(donationRepository.existsByOrderId("order-1")).thenReturn(false);
+        doThrow(new DataIntegrityViolationException("duplicate key"))
+                .when(donationRepository).save(any(Donation.class));
+
+        service.confirm(userId, "u", "pk-1", "order-1", 5000L);
+
+        verify(paymentGateway).confirmPayment("pk-1", "order-1", 5000L);
     }
 
     @Test
