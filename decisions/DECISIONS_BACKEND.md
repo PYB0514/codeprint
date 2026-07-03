@@ -1074,3 +1074,18 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 4. **TDD(소유권/경계 로직 = §4 의무)** — `GraphControllerOwnershipTest` 5종: 비소유자 getGraph 차단+데이터 미조회, 소유권 선검증, 타 프로젝트 graphId 404, 비소유자 diff 차단, 타 프로젝트 그래프 diff 차단. 전부 통과.
 
 **결과.** 백엔드 컴파일+전체 테스트 통과(신규 5종 포함, 회귀 0). 프론트 tsc 통과. ChangelogPage v0.100.1(fix, 보안). 런타임 E2E(비소유자 토큰으로 실제 401/차단 확인)는 OAuth 로그인 필요 → 사용자 테스트 동반 권장. 공개 공유(`/api/share/**`)는 별도 `isPublic` 검증 경로라 무영향.
+
+## 결제 승인 Race Condition — 행 잠금 직렬화 (2026-07-03, 사용자 제공 가이드 문서 기반 감사)
+
+**문제.** 사용자가 "AI 생성 코드 흔한 버그" 가이드(Race Condition/Partial Write/멱등성)를 컨텍스트로 제공하며 결제·재고·포인트 경로를 점검해달라고 요청. 감사 결과 `PaymentApplicationService.confirm()`(Toss Pro 결제)·`TeamPaymentApplicationService.confirm()`(팀 생성/좌석증가 결제) 둘 다 `isConfirmed(orderId)` 체크 → `findById` → 외부 게이트웨이 승인 → `save()` 순서였으나 **`@Transactional`도 행 잠금도 전혀 없었다.** 더블클릭이나 클라이언트 재시도로 같은 orderId가 동시에 두 번 들어오면 두 요청 모두 `isConfirmed()`를 false로 읽고 통과 → Toss 게이트웨이 승인 중복 호출(이중 결제 위험) + 팀 신규생성/Pro승급 같은 사이드이펙트가 중복 실행될 수 있는 전형적 TOCTOU였다. `DonationApplicationService.confirm()`도 동일 패턴이었으나 `donations.order_id`에 UNIQUE 제약(V17)이 우연히 있어 중복 INSERT 자체는 막히되 예외 미처리로 두 번째 요청이 500이 되는 부수 문제가 있었다.
+
+**이유/결정.**
+1. **원자적 UPDATE 한 줄로 축소 불가** — confirm 흐름은 소유권·금액 검증 + 외부 게이트웨이 호출 + 사이드이펙트(팀 생성 등)가 얽혀 있어 가이드의 "① 원자적 연산" 단일 UPDATE로는 못 줄임 → "③ 행 잠금"(SELECT ... FOR UPDATE) 채택. `isConfirmed()`+`findById()` 2개 쿼리를 `findByIdForUpdate()`(JPA `@Lock(PESSIMISTIC_WRITE)` 파생 쿼리) 1개로 합치고 상태 체크를 로컬 필드로 이동 — 쿼리도 줄고 TOCTOU 창도 닫힘.
+2. **@Transactional을 서비스 메서드에 추가** — 잠금은 트랜잭션 생존 기간에만 유효하므로 `confirm()` 공개 메서드에 `@Transactional` 필수. 트레이드오프: 외부 HTTP 호출(Toss 게이트웨이)이 DB 행 잠금을 쥔 채 실행됨 — 동시 두 번째 요청은 첫 요청 커밋까지 블록(실패가 아니라 대기). 이중 결제보다 지연이 훨씬 싼 트레이드오프라 판단, 별도 예약phase 설계는 이번 스코프 밖.
+3. **TeamPaymentApplicationService의 `verifyAndCapturePayment`/`CaptureResult` 사후 분리 제거** — 잠금 조회 통합으로 더 이상 필요 없어진 중간 레이어라 인라인(§2 단순성, 새로 생긴 불필요 계층 정리). 단, 신규 팀 생성/좌석 변경 분기는 `provision()` private 메서드로 남김(아래 자가검사 부수 발견 참조).
+4. **DonationApplicationService는 잠금 대신 예외 안전망** — INSERT 기반 흐름(사전 생성된 주문 없음)이라 잠금 대상 행이 존재하지 않음. 기존 UNIQUE 제약을 살리고 `save()`를 `DataIntegrityViolationException`으로 감싸 중복 시 500 대신 멱등 무시로 격하.
+5. **범위 제한(§2)** — `GitHubWebhookService`도 GitHub 웹훅 재전송 시 중복 트리거 가능성이 있으나 결제/재고/포인트가 아니고 부작용도 낮아(중복 PR 코멘트 정도) 이번 스코프에서 제외, 별도 후속으로 남김.
+
+**결과.** 백엔드 컴파일+전체 테스트 통과. 기존 단위 테스트(`PaymentApplicationServiceTest`·`TeamPaymentApplicationServiceTest`)를 새 `findByIdForUpdate` 목으로 갱신. `DonationApplicationServiceTest`에 DB 제약 경합 케이스 추가. **실 Postgres 동시성 통합 테스트 신규**(`PaymentApplicationServiceConcurrencyIntegrationTest`) — 두 스레드가 동일 orderId로 `confirm()`을 동시 호출해도 게이트웨이 승인·Pro 승급이 정확히 1회만 실행됨을 실 DB(로컬 docker compose)에서 검증 완료. TeamPaymentApplicationService는 동일 패턴이라 별도 동시성 통합 테스트는 생략(코드 대조로 갈음, §2).
+
+**자가검사(`analyzeLocal`) 부수 발견 — HIGH_FAN_OUT 자기유발.** `TeamPaymentApplicationService.confirm()`을 처음에 완전히 인라인했더니 기존엔 안 걸리던 HIGH_FAN_OUT(13개 호출)을 새로 유발(자가검사 전체 9→10건). `git stash`로 베이스라인과 대조해 신규 발생임을 확인 후 `provision(order)` private 메서드로 신규 팀 생성/좌석 변경 분기를 재분리해 원래 9건으로 복귀(§10 "self 프로젝트 0개 유지" 기준, §3 단일책임 재분리). 교훈: 헬퍼 인라인 단순화가 항상 안전한 게 아니라 호출 수를 늘려 자체 게이트를 유발할 수 있음 — 리팩토링 후에도 자가검사 재실행 필수.

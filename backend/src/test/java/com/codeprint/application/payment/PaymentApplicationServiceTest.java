@@ -49,7 +49,9 @@ class PaymentApplicationServiceTest {
     @Test
     @DisplayName("confirm — 이미 승인된 주문이면 ALREADY_CONFIRMED, 게이트웨이·승급 미호출")
     void confirm_alreadyConfirmed() {
-        when(orderRepository.isConfirmed("order-1")).thenReturn(true);
+        TossPaymentOrder confirmed = new TossPaymentOrder("order-1", UUID.randomUUID(), 9900L);
+        confirmed.confirm("pk-existing");
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(confirmed));
 
         var outcome = service.confirm(UUID.randomUUID(), "pk", "order-1", 9900L);
 
@@ -61,8 +63,7 @@ class PaymentApplicationServiceTest {
     @Test
     @DisplayName("confirm — 존재하지 않는 주문이면 IllegalArgumentException")
     void confirm_orderNotFound() {
-        when(orderRepository.isConfirmed("order-x")).thenReturn(false);
-        when(orderRepository.findById("order-x")).thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate("order-x")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.confirm(UUID.randomUUID(), "pk", "order-x", 9900L))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -75,8 +76,7 @@ class PaymentApplicationServiceTest {
     void confirm_notOwner() {
         UUID owner = UUID.randomUUID();
         UUID other = UUID.randomUUID();
-        when(orderRepository.isConfirmed("order-2")).thenReturn(false);
-        when(orderRepository.findById("order-2"))
+        when(orderRepository.findByIdForUpdate("order-2"))
                 .thenReturn(Optional.of(new TossPaymentOrder("order-2", owner, 9900L)));
 
         var outcome = service.confirm(other, "pk", "order-2", 9900L);
@@ -90,8 +90,7 @@ class PaymentApplicationServiceTest {
     @DisplayName("confirm — 금액 불일치면 AMOUNT_MISMATCH, 게이트웨이·승급 미호출")
     void confirm_amountMismatch() {
         UUID userId = UUID.randomUUID();
-        when(orderRepository.isConfirmed("order-3")).thenReturn(false);
-        when(orderRepository.findById("order-3"))
+        when(orderRepository.findByIdForUpdate("order-3"))
                 .thenReturn(Optional.of(new TossPaymentOrder("order-3", userId, 9900L)));
 
         var outcome = service.confirm(userId, "pk", "order-3", 5000L);
@@ -106,8 +105,7 @@ class PaymentApplicationServiceTest {
     void confirm_success() {
         UUID userId = UUID.randomUUID();
         TossPaymentOrder order = new TossPaymentOrder("order-4", userId, 9900L);
-        when(orderRepository.isConfirmed("order-4")).thenReturn(false);
-        when(orderRepository.findById("order-4")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-4")).thenReturn(Optional.of(order));
 
         var outcome = service.confirm(userId, "pk-4", "order-4", 9900L);
 

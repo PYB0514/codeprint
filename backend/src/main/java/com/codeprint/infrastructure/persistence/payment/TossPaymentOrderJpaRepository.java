@@ -4,13 +4,19 @@ package com.codeprint.infrastructure.persistence.payment;
 import com.codeprint.domain.payment.TossPaymentOrder;
 import jakarta.persistence.*;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface TossPaymentOrderJpaRepository extends JpaRepository<TossPaymentOrderJpaRepository.TossPaymentOrderRecord, String> {
+
+    // confirm 동시 요청 직렬화용 — SELECT ... FOR UPDATE
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<TossPaymentOrderRecord> findByOrderId(String orderId);
 
     @Entity
     @Table(name = "toss_payment_orders")

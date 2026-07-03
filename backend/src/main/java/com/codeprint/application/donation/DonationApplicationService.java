@@ -6,6 +6,7 @@ import com.codeprint.domain.donation.DonationRepository;
 import com.codeprint.domain.donation.port.PaymentGatewayPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +32,13 @@ public class DonationApplicationService {
         paymentGateway.confirmPayment(paymentKey, orderId, amount);
 
         Donation donation = Donation.create(userId, username, amount, paymentKey, orderId);
-        donationRepository.save(donation);
+        try {
+            donationRepository.save(donation);
+        } catch (DataIntegrityViolationException e) {
+            // existsByOrderId 체크와 save 사이의 동시 요청 경합 — order_id UNIQUE 제약이 막아준 중복, 멱등 무시
+            log.warn("중복 후원 요청 무시(DB 제약): orderId={}", orderId);
+            return;
+        }
         log.info("후원 완료: userId={}, amount={}", userId, amount);
     }
 

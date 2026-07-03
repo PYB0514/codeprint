@@ -12,6 +12,6 @@ public interface TossPaymentOrderRepository {
     // orderId로 주문 조회
     Optional<TossPaymentOrder> findById(String orderId);
 
-    // 이미 처리 완료된 주문인지 확인
-    boolean isConfirmed(String orderId);
+    // 행 잠금을 건 상태로 조회 (confirm 동시 요청 직렬화 전용)
+    Optional<TossPaymentOrder> findByIdForUpdate(String orderId);
 }
