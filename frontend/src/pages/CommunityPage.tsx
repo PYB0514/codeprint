@@ -77,9 +77,12 @@ export default function CommunityPage() {
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [attachedFiles, setAttachedFiles] = useState<{ file: File; s3Key: string; uploading: boolean }[]>([])
   const [myProjects, setMyProjects] = useState<MyProject[]>([])
-  const [linkedGraphId, setLinkedGraphId] = useState<string | null>(null)
+  const [linkedProjectId, setLinkedProjectId] = useState<string | null>(null)
   const [linkedProjectName, setLinkedProjectName] = useState<string | null>(null)
   const [linkingGraph, setLinkingGraph] = useState(false)
+  const [presetOptions, setPresetOptions] = useState<{ slot: number; name: string }[]>([])
+  const [selectedPresetSlot, setSelectedPresetSlot] = useState(1)
+  const [postVisibility, setPostVisibility] = useState<'PUBLIC' | 'PRIVATE'>('PUBLIC')
   const [postPage, setPostPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -150,23 +153,28 @@ export default function CommunityPage() {
     setPostAttachments(res.data.attachments ?? [])
   }
 
-  // 프로젝트 선택 시 최신 그래프 ID 조회 후 연결
+  // 프로젝트 선택 시 최신 그래프의 프리셋 목록 조회 후 연결(선택한 프리셋 번호가 등록 시점에 스냅샷으로 캡처됨)
   const handleLinkProject = async (projectId: string) => {
     if (!projectId) {
-      setLinkedGraphId(null)
+      setLinkedProjectId(null)
       setLinkedProjectName(null)
+      setPresetOptions([])
       return
     }
     setLinkingGraph(true)
     try {
-      const res = await axios.get<{ graphId: string }>(`/api/projects/${projectId}/graph`)
+      const graphRes = await axios.get<{ graphId: string }>(`/api/projects/${projectId}/graph`)
+      const presetRes = await axios.get<{ slot: number; name: string }[]>(`/api/graphs/${graphRes.data.graphId}/presets`)
       const project = myProjects.find((p) => p.id === projectId)
-      setLinkedGraphId(res.data.graphId)
+      setLinkedProjectId(projectId)
       setLinkedProjectName(project?.name ?? null)
+      setPresetOptions(presetRes.data.map((p) => ({ slot: p.slot, name: p.name })))
+      setSelectedPresetSlot(1)
     } catch {
       alert('그래프를 불러오지 못했습니다. 먼저 분석을 완료해주세요.')
-      setLinkedGraphId(null)
+      setLinkedProjectId(null)
       setLinkedProjectName(null)
+      setPresetOptions([])
     } finally {
       setLinkingGraph(false)
     }
@@ -203,14 +211,24 @@ export default function CommunityPage() {
       .map((f) => ({ s3Key: f.s3Key, originalFilename: f.file.name, contentType: f.file.type }))
     const res = await axios.post<Post>(
       '/api/community/posts',
-      { title: newTitle, content: newContent, feedbackType: newFeedbackType, graphId: linkedGraphId, attachments }
+      {
+        title: newTitle,
+        content: newContent,
+        feedbackType: newFeedbackType,
+        attachments,
+        graphSnapshots: linkedProjectId ? [{ projectId: linkedProjectId, presetSlot: selectedPresetSlot }] : undefined,
+        visibility: postVisibility,
+      }
     )
     setPosts((prev) => [res.data, ...prev])
     setNewTitle('')
     setNewContent('')
     setAttachedFiles([])
-    setLinkedGraphId(null)
+    setLinkedProjectId(null)
     setLinkedProjectName(null)
+    setPresetOptions([])
+    setSelectedPresetSlot(1)
+    setPostVisibility('PUBLIC')
     setShowWriteForm(false)
   }
 
@@ -401,19 +419,30 @@ export default function CommunityPage() {
                 rows={5}
                 className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none resize-none"
               />
-              {/* 그래프 연결 */}
+              {/* 그래프 연결 — 프로젝트+프리셋을 선택하면 등록 시점의 설정을 스냅샷으로 캡처(이후 프리셋을 바꿔도 게시글엔 영향 없음) */}
               {myProjects.length > 0 && (
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs text-gray-400">그래프 연결 (선택)</label>
                   {linkedProjectName ? (
-                    <div className="flex items-center gap-2 bg-gray-800 px-3 py-2 rounded-lg border border-blue-600/40">
-                      <span className="text-xs text-blue-400 flex-1">📊 {linkedProjectName}</span>
-                      <button
-                        onClick={() => { setLinkedGraphId(null); setLinkedProjectName(null) }}
-                        className="text-xs text-gray-500 hover:text-red-400"
+                    <div className="flex flex-col gap-2 bg-gray-800 px-3 py-2 rounded-lg border border-blue-600/40">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-blue-400 flex-1">📊 {linkedProjectName}</span>
+                        <button
+                          onClick={() => { setLinkedProjectId(null); setLinkedProjectName(null); setPresetOptions([]) }}
+                          className="text-xs text-gray-500 hover:text-red-400"
+                        >
+                          해제
+                        </button>
+                      </div>
+                      <select
+                        value={selectedPresetSlot}
+                        onChange={(e) => setSelectedPresetSlot(Number(e.target.value))}
+                        className="bg-gray-900 text-white text-xs px-2.5 py-1.5 rounded-lg border border-gray-700 focus:outline-none"
                       >
-                        해제
-                      </button>
+                        {presetOptions.map((p) => (
+                          <option key={p.slot} value={p.slot}>{p.name}</option>
+                        ))}
+                      </select>
                     </div>
                   ) : (
                     <select
@@ -430,6 +459,33 @@ export default function CommunityPage() {
                   )}
                 </div>
               )}
+
+              {/* 공개범위 */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-400">공개범위</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPostVisibility('PUBLIC')}
+                    className={`flex-1 text-xs px-3 py-2 rounded-lg border transition-colors ${
+                      postVisibility === 'PUBLIC'
+                        ? 'bg-blue-900/40 border-blue-600 text-blue-300'
+                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    공개 — 커뮤니티 피드에 표시
+                  </button>
+                  <button
+                    onClick={() => setPostVisibility('PRIVATE')}
+                    className={`flex-1 text-xs px-3 py-2 rounded-lg border transition-colors ${
+                      postVisibility === 'PRIVATE'
+                        ? 'bg-blue-900/40 border-blue-600 text-blue-300'
+                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    비공개 — 링크로만 접근
+                  </button>
+                </div>
+              </div>
 
               {/* 파일 첨부 */}
               <div className="flex flex-col gap-2">

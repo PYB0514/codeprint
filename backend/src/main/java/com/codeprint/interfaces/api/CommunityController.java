@@ -70,7 +70,14 @@ public class CommunityController {
         } else {
             raw = postCommandService.getPosts(page, size);
         }
-        return ResponseEntity.ok(toPostResponses(raw, user));
+        return ResponseEntity.ok(toPostResponses(filterVisible(raw, user), user));
+    }
+
+    // 비공개 게시글은 목록에서 제외 — 작성자 본인에게만 예외적으로 보임(직접 링크로만 접근 가능해야 함)
+    private List<Post> filterVisible(List<Post> posts, User user) {
+        return posts.stream()
+                .filter(p -> p.isPublic() || (user != null && p.getUserId().equals(user.getId())))
+                .toList();
     }
 
     // 게시글 단건 + 댓글 + 첨부파일 목록 조회
