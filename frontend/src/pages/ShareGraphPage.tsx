@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { useGraphChat } from '../hooks/useGraphChat'
+import { useSidebarResize } from '../hooks/useSidebarResize'
 import {
   ReactFlow,
   Background,
@@ -80,6 +81,8 @@ function ShareGraphInner() {
   const [warningPanelOpen, setWarningPanelOpen] = useState(false)
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
+  const { width: leftWidth, startResize: startLeftResize } = useSidebarResize(224, 160, 420, 'left')
+  const { width: rightWidth, startResize: startRightResize } = useSidebarResize(256, 240, 520, 'right')
   const [activeDomainTab, setActiveDomainTab] = useState<string>('전체')
   const [ownerBgUrl, setOwnerBgUrl] = useState<string | null>(null)
   const [bgEnabled, setBgEnabled] = useState(false)
@@ -385,7 +388,7 @@ function ShareGraphInner() {
 
         {/* 좌측 사이드바 */}
         {leftOpen && (
-        <aside className="w-56 shrink-0 bg-gray-950 border-r border-gray-800 flex flex-col overflow-y-auto">
+        <aside className="relative shrink-0 bg-gray-950 border-r border-gray-800 flex flex-col overflow-y-auto" style={{ width: `${leftWidth}px` }}>
           <div className="flex items-center justify-end px-2 py-1.5 border-b border-gray-800/60 shrink-0">
             <button
               onClick={() => setLeftOpen(false)}
@@ -395,6 +398,12 @@ function ShareGraphInner() {
               ‹
             </button>
           </div>
+          {/* 좌측 사이드바 리사이즈 핸들 */}
+          <div
+            onMouseDown={startLeftResize}
+            className="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60 transition-colors"
+            style={{ userSelect: 'none' }}
+          />
 
           {/* 노드 검색 섹션 */}
           <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
@@ -565,7 +574,13 @@ function ShareGraphInner() {
 
         {/* 우측 사이드바 */}
         {rightOpen && (
-        <aside className="w-64 shrink-0 bg-gray-900 border-l border-gray-800 flex flex-col overflow-hidden">
+        <aside className="relative shrink-0 bg-gray-900 border-l border-gray-800 flex flex-col overflow-hidden" style={{ width: `${rightWidth}px` }}>
+          {/* 우측 사이드바 리사이즈 핸들 */}
+          <div
+            onMouseDown={startRightResize}
+            className="absolute top-0 left-0 h-full w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60 transition-colors"
+            style={{ userSelect: 'none' }}
+          />
 
           {/* 노드 상세 */}
           <div className="flex flex-col overflow-hidden" style={{ flex: selectedNode ? '0 0 auto' : '1' }}>

@@ -27,6 +27,7 @@ import SketchNode from '../components/SketchNode'
 import OnboardingTour, { isTourDone } from '../components/OnboardingTour'
 import AppHeader from '../components/AppHeader'
 import { useCollaboration } from '../hooks/useCollaboration'
+import { useSidebarResize } from '../hooks/useSidebarResize'
 import CollaborationPanel from '../components/CollaborationPanel'
 import CursorOverlay from '../components/CursorOverlay'
 import WarningPanel from '../components/WarningPanel'
@@ -473,12 +474,8 @@ function GraphPageInner() {
   const [archPanelOpen, setArchPanelOpen] = useState(false)
   const [analysisPanelOpen, setAnalysisPanelOpen] = useState(false)
   const [leftOpen, setLeftOpen] = useState(true)
-  const [leftWidth, setLeftWidth] = useState(220)
-  const [rightWidth, setRightWidth] = useState(320)
-  const leftResizing = useRef(false)
-  const rightResizing = useRef(false)
-  const dragStartX = useRef(0)
-  const dragStartWidth = useRef(0)
+  const { width: leftWidth, startResize: startLeftResize } = useSidebarResize(220, 160, 420, 'left')
+  const { width: rightWidth, startResize: startRightResize } = useSidebarResize(320, 240, 520, 'right')
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('domain')
   const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
@@ -801,24 +798,6 @@ function GraphPageInner() {
       localStorage.setItem('graphBgEnabled', String(next))
       return next
     })
-  }, [])
-
-  // 사이드바 드래그 리사이즈 — 전역 mousemove/mouseup 처리
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (leftResizing.current) {
-        const delta = e.clientX - dragStartX.current
-        setLeftWidth(Math.min(420, Math.max(160, dragStartWidth.current + delta)))
-      }
-      if (rightResizing.current) {
-        const delta = dragStartX.current - e.clientX
-        setRightWidth(Math.min(520, Math.max(240, dragStartWidth.current + delta)))
-      }
-    }
-    const onUp = () => { leftResizing.current = false; rightResizing.current = false }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
   }, [])
 
   // 흐름 재생 — 커서 이동 시 노드/엣지 하이라이트 적용 (노드 중심 스텝)
@@ -2706,7 +2685,7 @@ function GraphPageInner() {
 
           {/* 왼쪽 사이드바 리사이즈 핸들 */}
           <div
-            onMouseDown={(e) => { leftResizing.current = true; dragStartX.current = e.clientX; dragStartWidth.current = leftWidth; e.preventDefault() }}
+            onMouseDown={startLeftResize}
             className="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60 transition-colors"
             style={{ userSelect: 'none' }}
           />
@@ -3619,7 +3598,7 @@ function GraphPageInner() {
         {/* 오른쪽 사이드바 리사이즈 핸들 — collapse 아닐 때만 */}
         {!rightCollapsed && (
           <div
-            onMouseDown={(e) => { rightResizing.current = true; dragStartX.current = e.clientX; dragStartWidth.current = rightWidth; e.preventDefault() }}
+            onMouseDown={startRightResize}
             className="absolute top-0 left-0 h-full w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60 transition-colors"
             style={{ userSelect: 'none' }}
           />

@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.109.0',
+    date: '2026-07-03',
+    title: '공유 그래프 뷰어 — 사이드바 폭 드래그 조절 추가',
+    type: 'feature',
+    items: [
+      { category: '공유 그래프', desc: '로그인 없이 보는 공유 그래프(/share/{id})에서도 좌/우 사이드바 경계선을 마우스로 드래그해 폭을 조절할 수 있습니다. 이전에는 고정 폭이었습니다.' },
+    ],
+  },
+  {
     version: 'v0.108.1',
     date: '2026-07-03',
     title: '결제 승인 동시 요청 처리 안전성 강화',
