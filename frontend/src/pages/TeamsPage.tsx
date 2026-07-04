@@ -192,7 +192,7 @@ export default function TeamsPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold">팀 관리</h1>
-            <p className="text-gray-400 text-sm mt-1">Desktop 라이센스로 협업자를 초대하고 석수를 관리하세요.</p>
+            <p className="text-gray-400 text-sm mt-1">Pro · Desktop 좌석으로 협업자를 초대하고 석수를 관리하세요.</p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -236,7 +236,7 @@ export default function TeamsPage() {
                   }`}
                 >
                   <div className="font-medium truncate">{team.name}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">Desktop 라이센스 · {team.totalSeats}석</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Pro · Desktop · {team.totalSeats}석</div>
                 </button>
               ))}
             </div>
@@ -250,7 +250,7 @@ export default function TeamsPage() {
                     <div>
                       <h2 className="text-xl font-bold">{selectedTeam.name}</h2>
                       <span className="text-xs bg-blue-600/20 text-blue-400 border border-blue-600/40 px-2 py-0.5 rounded mt-1 inline-block">
-                        Desktop 라이센스
+                        Pro · Desktop
                       </span>
                     </div>
                     <div className="text-right">
@@ -419,7 +419,7 @@ export default function TeamsPage() {
                   className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Desktop 라이센스 · 좌석당 {PRICE_PER_SEAT.toLocaleString('ko-KR')}원/월 · 총{' '}
+                  Pro · Desktop · 좌석당 {PRICE_PER_SEAT.toLocaleString('ko-KR')}원/월 · 총{' '}
                   {(newTeamSeats * PRICE_PER_SEAT).toLocaleString('ko-KR')}원/월
                 </p>
               </div>

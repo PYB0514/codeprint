@@ -36,8 +36,8 @@ export default function PaymentSuccessPage() {
         {status === 'success' && (
           <>
             <div className="text-5xl mb-4">🎉</div>
-            <h1 className="text-2xl font-bold mb-2">Desktop 라이센스 업그레이드 완료!</h1>
-            <p className="text-gray-400 mb-2">이제 프로젝트를 무제한으로 만들 수 있어요.</p>
+            <h1 className="text-2xl font-bold mb-2">Pro · Desktop 업그레이드 완료!</h1>
+            <p className="text-gray-400 mb-2">협업 세션 인원 제한이 해제되고 정식 팀을 만들 수 있어요.</p>
             <p className="text-gray-500 text-sm mb-6">결제 금액: 9,900원</p>
             <button
               onClick={() => navigate('/mypage')}

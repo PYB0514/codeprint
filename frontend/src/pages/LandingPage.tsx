@@ -162,6 +162,10 @@ export default function LandingPage() {
               분석 시작
             </button>
           </form>
+          <p className="text-xs text-gray-500 -mt-2">
+            내 레포가 아니어도 됩니다 — 공개 레포라면 무엇이든 분석할 수 있어요.
+            {!loggedIn && ' GitHub 로그인 후 분석이 자동 시작됩니다.'}
+          </p>
 
           <div className="flex items-center gap-3 mt-1">
             {loggedIn ? (
@@ -263,11 +267,11 @@ export default function LandingPage() {
               </button>
             </div>
 
-            {/* Desktop 라이센스 */}
+            {/* Pro · Desktop — 개인 결제는 정기결제 도입 전까지 임시 중단 */}
             <div className="bg-gray-900 border border-blue-500/40 rounded-xl p-5 flex flex-col gap-3 relative">
               <span className="absolute top-3 right-3 text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">추천</span>
               <div>
-                <p className="text-sm font-semibold text-blue-400">Desktop 라이센스</p>
+                <p className="text-sm font-semibold text-blue-400">Pro · Desktop</p>
                 <p className="text-2xl font-bold mt-1">₩9,900<span className="text-sm font-normal text-gray-500">/월</span></p>
                 <p className="text-xs text-gray-500 mt-0.5">팀은 좌석당 ₩4,900/월</p>
               </div>
@@ -276,13 +280,17 @@ export default function LandingPage() {
                 <li>✓ 정식 팀 생성 · 좌석(seat) 관리</li>
                 <li>✓ 개인 1석 또는 팀 N석 선택</li>
                 <li>✓ Free 모든 기능 포함</li>
+                <li className="text-gray-500">🖥 데스크탑 앱(로컬 폴더 분석) 출시 예정</li>
               </ul>
               <button
-                onClick={handleLogin}
-                className="mt-auto w-full py-2 bg-blue-600 hover:bg-blue-500 text-sm font-medium rounded-lg transition-colors"
+                disabled
+                className="mt-auto w-full py-2 bg-gray-800 text-gray-500 text-sm font-medium rounded-lg cursor-not-allowed"
               >
-                Desktop 라이센스 시작
+                개인 결제 준비 중
               </button>
+              <p className="text-[11px] text-gray-600 -mt-1">
+                개인 결제는 정기결제 도입 준비로 잠시 중단했습니다. 팀 결제는 팀 페이지에서 계속 가능합니다.
+              </p>
             </div>
           </div>
         </section>
