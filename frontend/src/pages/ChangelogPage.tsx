@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.114.0',
+    date: '2026-07-05',
+    title: '마이페이지 신설 — 내 프로젝트·내가 쓴 글 통합',
+    type: 'feature',
+    items: [
+      { category: '마이페이지', desc: '헤더 닉네임/아바타를 클릭하면 마이페이지로 이동합니다. 내 프로젝트와 내가 쓴 글을 탭으로 한곳에서 확인할 수 있고, 팀 관리·설정으로 바로가기도 제공합니다. 기존 /dashboard 링크는 자동으로 마이페이지로 연결됩니다.' },
+    ],
+  },
+  {
     version: 'v0.113.0',
     date: '2026-07-05',
     title: '공유 그래프·커뮤니티 그래프 뷰어에 흐름 재생 추가',

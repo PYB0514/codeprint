@@ -1,5 +1,5 @@
 // 앱 라우팅 루트
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Suspense, lazy } from 'react'
 
 // 초기 로드에 항상 필요한 경량 페이지는 정적 import 유지
@@ -8,7 +8,7 @@ import LoginPage from './pages/LoginPage'
 import AuthCallbackPage from './pages/AuthCallbackPage'
 
 // React Flow, 커뮤니티 에디터 등 무거운 페이지는 지연 로드
-const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const MyPage = lazy(() => import('./pages/MyPage'))
 const GraphPage = lazy(() => import('./pages/GraphPage'))
 const ShareGraphPage = lazy(() => import('./pages/ShareGraphPage'))
 const CommunityPage = lazy(() => import('./pages/CommunityPage'))
@@ -49,7 +49,8 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/mypage" element={<MyPage />} />
+          <Route path="/dashboard" element={<Navigate to="/mypage" replace />} />
           <Route path="/projects/:projectId/graph" element={<GraphPage />} />
           <Route path="/share/:projectId" element={<ShareGraphPage />} />
           <Route path="/community" element={<CommunityPage />} />
