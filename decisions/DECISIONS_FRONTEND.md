@@ -2,6 +2,16 @@
 
 ---
 
+## 경고 라벨 맵 중복이 만든 누락 버그 2건 — WARNING_META 단일 소스 통합 (2026-07-05, PR 경고 카피 재작성)
+
+**문제.** v1.0 UX 리뷰(Fable 5)에서 경고 카피를 재작성하려고 노출 지점을 전수 조사하다 중복 소스가 만든 누락 버그 2건 발견. ①`WarningPanel.tsx`의 `WARNING_META`에 INTENT_DRIFT 항목이 없어 "아키텍처 의도" 위반 경고가 패널에 **코드명(INTENT_DRIFT) 그대로** 노출(라인 152 폴백 `{ label: type }` 경유). ②`graphLayout.ts`의 `downloadWarningsMd`가 자체 `WARNING_LABELS` 맵(8종)을 따로 들고 있어 이후 추가된 7종(DEAD_CODE·HIGH_FAN_OUT·CROSS_DOMAIN_CALL·LAYERED_* 2종·DOMAIN_IMPORTS_INFRA·INTENT_DRIFT)이 MD 리포트에서 코드명으로만 표기.
+
+**원인.** 같은 정보(경고 타입→라벨)를 두 곳에서 관리 — 새 경고 타입을 추가할 때 WARNING_META만 갱신하고 MD 내보내기 쪽 맵은 아무도 기억하지 못하는 구조. §1 재사용 원칙이 경고한 "중복 소스 드리프트"의 전형.
+
+**결과.** ①WARNING_META에 INTENT_DRIFT 정식 항목 추가(HIGH, #a855f7). ②`downloadWarningsMd`의 자체 맵을 삭제하고 `WARNING_META`를 import해 단일 소스화(WarningPanel→utils/ignoreRules 외 import 없음을 확인해 순환 없음). 리포트 제목 "런타임 경고 리포트"→"구조 경고 리포트" 오칭도 정정. 아울러 15종 라벨·설명을 "무엇이 문제/왜 위험/뭘 하면 되는지" 구조의 쉬운 말로 재작성하고, HowItWorksPage 가이드에 빠져 있던 5종을 추가해 15종 전부 커버.
+
+---
+
 ## 마이페이지(/mypage) 신설 — 라우트 통합 범위 결정 (2026-07-05)
 
 **배경.** Context98에서 사용자가 지시한 두 번째 항목("헤더 닉네임 클릭 시 마이페이지로 이동, 글/프로젝트/설정/팀 통합"). 세션 초입에 미결정 사항을 물었더니 사용자가 "2번(완전 대체)으로 하고 깨지는건 마이그레이션 해. 아니면 설정이나 팀 정도는 남겨도 될거같기도 한데 다른 사이트들 벤치마킹해봐"라고 답 — 처음 고른 선택지를 스스로 헤징하며 벤치마킹을 요청.

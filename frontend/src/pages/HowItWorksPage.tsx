@@ -50,6 +50,26 @@ const WARNING_GUIDE: Record<string, { example: string; limitation: string }> = {
     example: '한 함수가 너무 많은 함수를 호출 — 단일 책임 원칙(SRP) 위반 가능성.',
     limitation: '오케스트레이터(분석 파이프라인, 응답 조립 등)는 팬아웃이 큰 게 정상. getter·라이브러리 호출까지 세어 숫자가 부풀 수 있어 참고용(LOW).',
   },
+  CROSS_FEATURE_IMPORT: {
+    example: 'features/주문 이 features/결제 를 직접 import — 기능 폴더끼리는 서로 몰라야 하고, 공유할 코드는 shared/에 둡니다(bulletproof-react·FSD 공통 규칙).',
+    limitation: '서로 다른 기능 폴더가 2개 이상인 프론트엔드 프로젝트에서만 활성화. 피처 간 참조가 관례인 Redux 스타일 프로젝트는 자동 제외.',
+  },
+  FEATURE_LAYER_VIOLATION: {
+    example: 'shared/가 features/를 import하는 등 app → features → shared 방향을 거꾸로 탐 — 공용 코드가 특정 기능에 묶임.',
+    limitation: '기능 폴더 구조가 있는 프론트엔드 프로젝트에서만 활성화(위와 동일 조건).',
+  },
+  LAYERED_REVERSE_DEPENDENCY: {
+    example: 'Repository가 Controller를 import하는 등 아래 계층이 위 계층을 참조 — 계층 구조가 뒤집힌 신호.',
+    limitation: '폴더명 기반으로 계층을 판별하므로 관례적 이름(controller/service/repository 등)을 쓰지 않는 프로젝트에선 감지되지 않음.',
+  },
+  LAYERED_BYPASS: {
+    example: 'Controller가 Service 없이 Repository를 직접 import — 비즈니스 로직이 Controller로 새는 패턴.',
+    limitation: '단순 CRUD 화면에서는 의도적 생략일 수 있음(MEDIUM). 팀 컨벤션이면 숨기거나 패턴 예외로 처리하세요.',
+  },
+  INTENT_DRIFT: {
+    example: '그래프 사이드바 "아키텍처 의도"에서 선언한 금지 규칙(예: domain → infrastructure 금지)을 실제 import가 어긴 경우.',
+    limitation: '규칙을 선언한 프로젝트에서만 동작 — 선언이 없으면 이 검사는 실행되지 않습니다.',
+  },
 }
 
 // 그래프 구성 요소 설명
