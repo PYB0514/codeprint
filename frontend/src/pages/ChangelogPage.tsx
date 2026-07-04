@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.111.0',
+    date: '2026-07-04',
+    title: '커뮤니티 게시글 그래프 스냅샷 뷰어 추가',
+    type: 'feature',
+    items: [
+      { category: '커뮤니티', desc: '게시글에 첨부된 그래프 스냅샷을 카드로 확인하고 클릭해 전용 화면에서 볼 수 있습니다. 노드 검색, 계층/도메인 레이아웃 전환, 도메인·레이어 범례로 가리기, 엣지 종류별 표시/숨김, 노드 클릭 시 상세 정보 확인이 가능합니다.' },
+    ],
+  },
+  {
     version: 'v0.110.0',
     date: '2026-07-03',
     title: '커뮤니티 공유 방식 개편 — 프리셋 스냅샷 + 공개/비공개',

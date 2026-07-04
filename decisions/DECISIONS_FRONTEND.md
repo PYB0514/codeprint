@@ -612,4 +612,20 @@ const fetchGraph = useCallback(async () => {
 
 **런타임 검증 중 발견한 버그(백엔드):** 비공개 게시글이 커뮤니티 전체 피드에 그대로 노출되는 실제 버그를 발견 — 상세 원인·수정은 `decisions/DECISIONS_BACKEND.md` "PR-B" 참조.
 
+## 게시글 기반 공유그래프 재설계 — PR-C 2단계: 다중 스냅샷 카드 목록 + 단일 스냅샷 뷰어 (2026-07-04)
+
+**문제.** PR-C 1단계 백엔드 엔드포인트(`GET /snapshots`)는 있었지만 이를 호출하는 프론트가 없어 신규 스냅샷 게시글은 여전히 그래프를 볼 방법이 없었음. 레이아웃 방식을 사용자에게 직접 확인(AskUserQuestion) — 후보 ①세로 스택(모든 스냅샷을 한 페이지에 순서대로) ②탭 전환 ③그리드(2열) 중 사용자가 전부 거부하고 **"오늘의 공개레포"처럼 카드 목록 + 클릭 시 개별 공유그래프 화면 진입** 방식을 지정. 이는 세 후보 어디에도 없던 네 번째 방향이라 별도로 설계.
+
+**결정.**
+1. **카드 목록은 새 페이지가 아니라 기존 게시글 상세 패널 안에 배치** — `CommunityPage.tsx`의 `selectedPost.graphId && <button>그래프 보기→</button>` 자리를 `postSnapshots.length > 0` 분기로 교체(레거시 단일 첨부는 그대로 폴백 유지). 별도 "스냅샷 목록" 페이지를 만들지 않은 이유: 게시글 상세는 이미 존재하는 화면이고, 카드 자체는 그래프 미리보기 없이 텍스트 라벨(스냅샷 번호+`계층/도메인-이름/주석`)만으로 충분히 가볍기 때문(오늘의 공개레포는 OG 이미지가 있어 카드가 무거워도 됐지만, 지금은 프로젝트당 카드 1개가 압도적으로 흔한 케이스라 과설계 방지, §2).
+2. **새 라우트 `/community/posts/:postId/graph/:position` 신설, 기존 `/graph`(파라미터 없음)는 레거시 전용으로 그대로 둠** — `CommunityPostGraphPage.tsx` 내부에서 `position` URL 파라미터 유무로 완전히 분리된 두 내부 컴포넌트(`CommunityPostGraphInner`=레거시, `CommunityPostSnapshotInner`=신규)를 분기 렌더링. 레거시 컴포넌트는 한 줄도 안 건드림(§3 외과적 변경) — 기존 단일 그래프 첨부 게시글의 동작·URL이 그대로 보존됨.
+3. **신규 뷰어는 ShareGraphPage.tsx를 뼈대로 재구성** — 채팅(`useGraphChat`)·경고패널·배경이미지·대형레포 절단안내는 이번 스코프에서 제외(PROGRESS.md 계획상 3·4단계로 분리), 나머지(노드검색·레이아웃/라벨 토글·도메인/레이어 범례+opaque 토글+탭필터·사이드바 리사이즈/접기·노드 클릭 상세정보)는 ShareGraphPage와 최대한 동일 코드 재사용(`buildLayout`/`applyEdgeVisibility`/`searchNodes`/`GRAPH_MIN_ZOOM`/`GRAPH_MAX_ZOOM`/`GraphLegend`/`LayoutPresetToggle`/`LabelModeToggle`/`useSidebarResize` 전부 기존 공유 유틸·컴포넌트를 그대로 import, 새로 안 만듦 — §1 재사용성 먼저 확인).
+4. **엣지 타입 토글 UI 신규 추가** — 조사 결과 기존 ShareGraphPage는 `edgeVisibility` state는 있지만 이를 사용자가 바꿀 수 있는 버튼이 아예 없었음(프리셋에서 초기값만 읽고 끝). PROGRESS.md 계획상 "엣지타입 토글"이 뷰어가 조작 가능해야 할 항목으로 명시돼 있어 새로 추가. GraphPage의 엣지 섹션(`의존성/콜체인/생성/끊긴연결/DB연결/API호출` 6종, 동일 라벨)과 시각적 컨벤션은 맞추되, GraphPage 자체의 JSX/훅은 건드리지 않고(가장 복잡하고 테스트가 두꺼운 페이지라 blast radius 최소화) 새 컴포넌트 안에 독립적으로 작게 재구현. 레이아웃/라벨 토글과 달리 엣지 가시성 변경은 그래프 좌표 재계산이 필요 없어(`buildLayout` 재호출 없이) `builtEdgesCache`(레이아웃 직후·가시성 필터 적용 전 엣지)를 별도 캐시해 `applyEdgeVisibility`만 재적용 — 토글마다 전체 레이아웃을 다시 그리지 않도록 최적화.
+5. **카드 라벨은 config에서 파생, 백엔드 DTO 확장 없음** — `config.layoutPreset`/`labelMode`로 "도메인-이름" 같은 짧은 라벨만 생성(`snapshotLabel` 순수함수). 프로젝트명·리포 URL 등 풍부한 카드 정보는 스코프 아웃(PR-D가 "오늘의 공개레포"를 게시글 스냅샷으로 흡수할 때 재검토, 지금은 프로젝트당 스냅샷 1개가 실제 케이스라 과설계 방지).
+6. **피드 목록의 "📊 그래프" 배지는 이번에 안 건드림** — `post.graphId`(레거시)만 체크하는 기존 로직 그대로 유지. 신규 스냅샷 게시글은 이 배지가 안 뜨는 상태로 남지만, 피드 배지를 스냅샷 유무까지 반영하려면 `PostResponse` DTO에 카운트 필드 추가+피드 N+1 우려가 있어 별도 판단 필요(문서만 남기고 미착수).
+
+**★런타임 검증 중 발견한 실제 버그(백엔드, 이번 세션과 무관한 기존 결함) — 게시글 단건 조회 permitAll 누락.** 프론트 rewrite를 claude-in-chrome(비로그인 상태)으로 검증하다 `handleSelectPost`의 상세 fetch(`GET /api/community/posts/{id}`, 댓글·첨부·이번 스냅샷 fetch가 전부 이 뒤에 연쇄)가 실행되지 않는 것을 발견 — 원인은 `SecurityConfig` permitAll 목록에 게시글 **목록**(`/api/community/posts`)만 있고 **단건 상세**는 없어 비로그인 요청이 GitHub OAuth로 302 리다이렉트되던 것(axios 401 인터셉터가 리프레시 시도 후 조용히 리다이렉트해 콘솔에 에러가 안 남아 발견이 늦어짐 — `performance.getEntriesByType('resource')`로 실제 네트워크 요청 목록을 직접 대조해서야 확인). `.requestMatchers(HttpMethod.GET, "/api/community/posts/*").permitAll()` 추가로 수정(PUT/DELETE는 그대로 인증 필요). 상세 `ERROR_TRACKER.md` [SEC-2], 백엔드 변경 근거는 `decisions/DECISIONS_BACKEND.md` 참조.
+
+**결과.** `tsc -b` 통과. claude-in-chrome 비로그인 세션으로 E2E 검증 — 실 DB에 스냅샷 행 삽입(gin-gonic/gin, 도메인 레이아웃) 후 ①게시글 상세에서 "📊 스냅샷 1 도메인-이름" 카드 렌더 확인 ②클릭 시 `/community/posts/{id}/graph/0`으로 정상 이동 ③새 뷰어에서 노드 1385개 렌더·계층↔도메인 레이아웃 전환 시 범례 등장·엣지타입 토글(의존성) 클릭 시 버튼 활성 스타일 전환·파일 노드 클릭 시 우측 상세 패널 표시 전부 확인 ④레거시 게시글("테스트 게시글", 그래프 미첨부)은 카드·레거시 링크 둘 다 안 뜸(회귀 없음) 확인. 검증 후 테스트 스냅샷 행 삭제. 백엔드 전체 테스트 재실행 green.
+
 **결과.** `tsc -b` 통과. claude-in-chrome으로 실 로그인 세션(GitHub OAuth) E2E 검증 — GraphPage 공유 모달에서 슬롯3(도메인-이름) 선택+비공개 등록, 커뮤니티 글쓰기 폼에서 프로젝트 연결 후 슬롯1(계층-이름) 기본값+공개 등록, 둘 다 DB에서 `post_graph_snapshots.config`가 선택한 슬롯과 정확히 일치함을 확인. 테스트 게시글은 삭제로 정리(겸 CASCADE 재확인). ChangelogPage v0.110.0(feature).

@@ -48,6 +48,19 @@ interface Attachment {
   url: string
 }
 
+// 게시글 그래프 스냅샷 메타 — 카드 목록 표시용(전체 노드/엣지는 뷰어 진입 시 조회)
+interface PostSnapshotMeta {
+  position: number
+  config: { layoutPreset?: string; labelMode?: string }
+}
+
+// 스냅샷 config로 카드에 표시할 짧은 라벨 생성
+function snapshotLabel(config: PostSnapshotMeta['config']): string {
+  const layout = config.layoutPreset === 'domain' ? '도메인' : '계층'
+  const label = config.labelMode === 'comment' ? '주석' : '이름'
+  return `${layout}-${label}`
+}
+
 const FEEDBACK_LABELS: Record<string, string> = {
   ARCHITECTURE_REVIEW: '아키텍처 리뷰',
   GENERAL: '일반',
@@ -63,6 +76,7 @@ export default function CommunityPage() {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const [comments, setComments] = useState<Comment[]>([])
   const [postAttachments, setPostAttachments] = useState<Attachment[]>([])
+  const [postSnapshots, setPostSnapshots] = useState<PostSnapshotMeta[]>([])
   const [showWriteForm, setShowWriteForm] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newContent, setNewContent] = useState('')
@@ -146,11 +160,18 @@ export default function CommunityPage() {
   // 게시글 클릭 시 상세, 댓글, 첨부파일 로드
   const handleSelectPost = async (post: Post) => {
     setSelectedPost(post)
+    setPostSnapshots([])
     const res = await axios.get<{ post: Post; comments: Comment[]; attachments: Attachment[] }>(
       `/api/community/posts/${post.id}`
     )
     setComments(res.data.comments)
     setPostAttachments(res.data.attachments ?? [])
+    try {
+      const snapRes = await axios.get<PostSnapshotMeta[]>(`/api/community/posts/${post.id}/snapshots`)
+      setPostSnapshots(snapRes.data)
+    } catch {
+      setPostSnapshots([])
+    }
   }
 
   // 프로젝트 선택 시 최신 그래프의 프리셋 목록 조회 후 연결(선택한 프리셋 번호가 등록 시점에 스냅샷으로 캡처됨)
@@ -761,7 +782,20 @@ export default function CommunityPage() {
                 </div>
               )}
 
-              {selectedPost.graphId && (
+              {postSnapshots.length > 0 ? (
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {postSnapshots.map((snap) => (
+                    <button
+                      key={snap.position}
+                      onClick={() => navigate(`/community/posts/${selectedPost.id}/graph/${snap.position}`)}
+                      className="text-left bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 hover:border-gray-500 transition-colors"
+                    >
+                      <span className="text-xs text-blue-300 font-medium">📊 스냅샷 {snap.position + 1}</span>
+                      <p className="text-[10px] text-gray-500 mt-0.5">{snapshotLabel(snap.config)}</p>
+                    </button>
+                  ))}
+                </div>
+              ) : selectedPost.graphId && (
                 <button
                   onClick={() => navigate(`/community/posts/${selectedPost.id}/graph`)}
                   className="mt-3 text-xs text-blue-400 hover:text-blue-300"

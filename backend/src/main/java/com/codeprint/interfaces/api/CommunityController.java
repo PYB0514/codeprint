@@ -11,7 +11,9 @@ import com.codeprint.domain.community.PostBookmark;
 import com.codeprint.domain.community.PostBookmarkRepository;
 import com.codeprint.domain.community.PostLike;
 import com.codeprint.domain.community.PostLikeRepository;
+import com.codeprint.domain.community.PostGraphSnapshot;
 import com.codeprint.domain.community.PostRepository;
+import com.codeprint.domain.community.port.GraphReadPort;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
 import jakarta.validation.Valid;
@@ -137,7 +139,7 @@ public class CommunityController {
         return ResponseEntity.status(201).body(toPostResponse(post, user.getUsername(), user));
     }
 
-    // 게시글에 첨부된 그래프를 숨김 필터 적용하여 반환
+    // 게시글에 첨부된 그래프를 숨김 필터 적용하여 반환 (레거시 단일 첨부 전용 — 다중 스냅샷은 /snapshots)
     @GetMapping("/posts/{postId}/graph")
     public ResponseEntity<?> getPostGraph(@PathVariable UUID postId) {
         Post post = postCommandService.findById(postId)
@@ -145,46 +147,78 @@ public class CommunityController {
         if (post.getGraphId() == null) return ResponseEntity.notFound().build();
 
         return communityFacade.getGraphSnapshot(post.getGraphId())
-                .map(snapshot -> {
-                    List<Map<String, Object>> nodeData = snapshot.nodes().stream()
-                            .filter(n -> !n.hidden())
-                            .map(n -> {
-                                Map<String, Object> node = new java.util.LinkedHashMap<>();
-                                node.put("id", n.id().toString());
-                                node.put("type", n.type());
-                                node.put("name", n.name());
-                                node.put("filePath", n.filePath() != null ? n.filePath() : "");
-                                node.put("language", n.language() != null ? n.language() : "");
-                                node.put("posX", n.posX());
-                                node.put("posY", n.posY());
-                                if (n.comment() != null) {
-                                    node.put("comment", n.comment());
-                                }
-                                return node;
-                            })
-                            .toList();
-
-                    List<Map<String, Object>> edgeData = snapshot.edges().stream()
-                            .filter(e -> !e.hidden())
-                            .map(e -> Map.<String, Object>of(
-                                    "id", e.id().toString(),
-                                    "type", e.type(),
-                                    "source", e.source().toString(),
-                                    "target", e.target().toString(),
-                                    "edgeIdentifier", e.edgeIdentifier()
-                            ))
-                            .toList();
-
-                    return ResponseEntity.ok(Map.of(
-                            "graphId", snapshot.graphId().toString(),
-                            "nodes", nodeData,
-                            "edges", edgeData,
-                            "hiddenLayers", post.getHiddenLayers(),
-                            "hiddenGroups", post.getHiddenGroups(),
-                            "hiddenNodeNames", post.getHiddenNodeNames()
-                    ));
-                })
+                .map(snapshot -> ResponseEntity.ok(Map.of(
+                        "graphId", snapshot.graphId().toString(),
+                        "nodes", toNodeMaps(snapshot.nodes()),
+                        "edges", toEdgeMaps(snapshot.edges()),
+                        "hiddenLayers", post.getHiddenLayers(),
+                        "hiddenGroups", post.getHiddenGroups(),
+                        "hiddenNodeNames", post.getHiddenNodeNames()
+                )))
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    // 게시글에 첨부된 그래프 스냅샷 목록 조회 (신규 다중 스냅샷 — 각각 캡처 시점 config 포함)
+    @GetMapping("/posts/{postId}/snapshots")
+    public ResponseEntity<List<Map<String, Object>>> getPostSnapshots(@PathVariable UUID postId) {
+        postCommandService.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
+        List<Map<String, Object>> result = postCommandService.getGraphSnapshots(postId).stream()
+                .map(this::toSnapshotResponse)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        return ResponseEntity.ok(result);
+    }
+
+    // 스냅샷 하나를 노드·엣지·캡처된 config 포함 응답 Map으로 변환 (그래프 소실 시 null)
+    private Map<String, Object> toSnapshotResponse(PostGraphSnapshot snapshot) {
+        return communityFacade.getGraphSnapshot(snapshot.getGraphId())
+                .<Map<String, Object>>map(gs -> {
+                    Map<String, Object> map = new java.util.LinkedHashMap<>();
+                    map.put("projectId", snapshot.getProjectId().toString());
+                    map.put("graphId", gs.graphId().toString());
+                    map.put("nodes", toNodeMaps(gs.nodes()));
+                    map.put("edges", toEdgeMaps(gs.edges()));
+                    map.put("config", snapshot.getConfig());
+                    map.put("position", snapshot.getPosition());
+                    return map;
+                })
+                .orElse(null);
+    }
+
+    // 그래프 노드 뷰 목록 → 프론트 응답 Map 목록 변환 (숨김 노드 제외) — /graph, /snapshots 공용
+    static List<Map<String, Object>> toNodeMaps(List<GraphReadPort.NodeView> nodes) {
+        return nodes.stream()
+                .filter(n -> !n.hidden())
+                .map(n -> {
+                    Map<String, Object> node = new java.util.LinkedHashMap<>();
+                    node.put("id", n.id().toString());
+                    node.put("type", n.type());
+                    node.put("name", n.name());
+                    node.put("filePath", n.filePath() != null ? n.filePath() : "");
+                    node.put("language", n.language() != null ? n.language() : "");
+                    node.put("posX", n.posX());
+                    node.put("posY", n.posY());
+                    if (n.comment() != null) {
+                        node.put("comment", n.comment());
+                    }
+                    return node;
+                })
+                .toList();
+    }
+
+    // 그래프 엣지 뷰 목록 → 프론트 응답 Map 목록 변환 (숨김 엣지 제외) — /graph, /snapshots 공용
+    static List<Map<String, Object>> toEdgeMaps(List<GraphReadPort.EdgeView> edges) {
+        return edges.stream()
+                .filter(e -> !e.hidden())
+                .map(e -> Map.<String, Object>of(
+                        "id", e.id().toString(),
+                        "type", e.type(),
+                        "source", e.source().toString(),
+                        "target", e.target().toString(),
+                        "edgeIdentifier", e.edgeIdentifier()
+                ))
+                .toList();
     }
 
     // 댓글 작성 — 게시글 작성자에게 알림 발송
