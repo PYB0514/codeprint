@@ -1116,3 +1116,16 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 4. **자가검사 HIGH_FAN_OUT 재발** — 필터 로직을 인라인으로 넣었더니 `getPosts()`가 새로 9개 호출로 걸림(베이스라인 9→10) → PR-A 때와 동일하게 `filterVisible` private 메서드로 분리해 원복.
 
 **결과.** `tsc -b` 통과. 실 브라우저 E2E 검증(claude-in-chrome, 로그인 세션) — ① GraphPage "커뮤니티에 공유" 모달에서 슬롯3(도메인-이름) 선택+비공개로 등록 → DB 확인 결과 `post_graph_snapshots.config`에 `layoutPreset=domain, labelMode=name` 정확히 캡처, `posts.visibility=PRIVATE` ② 커뮤니티 글쓰기 폼에서 프로젝트 연결→슬롯1(계층-이름) 기본값→공개로 등록 → `config.layoutPreset=layer` 확인 ③ 비공개 게시글이 비로그인 요청(`curl`, 쿠키 없음)에는 목록에서 실제로 빠지고, 작성자 로그인 세션에는 보이는 것 확인 ④ 게시글 삭제 시 스냅샷 CASCADE 삭제 실제 DB로 재확인(테스트 게시글 정리 겸). 백엔드 전체 테스트 재실행 green, `analyzeLocal` HIGH_FAN_OUT 9건 유지. 상세 UI 변경은 `decisions/DECISIONS_FRONTEND.md` 참조.
+
+## 게시글 기반 공유그래프 재설계 — PR-C 1단계: 다중 스냅샷 조회 엔드포인트 (2026-07-04)
+
+**문제.** PR-B로 게시글에 다중 그래프 스냅샷(`post_graph_snapshots`)을 저장할 수 있게 됐지만, 이를 읽어오는 API가 없었다. 기존 `GET /api/community/posts/{postId}/graph`는 레거시 단일 첨부(`post.graphId`)만 읽어서 `post.graphId`가 null인 신규 스냅샷 게시글은 그래프를 아예 못 불러오는 상태(Context96에서 발견해 다음 세션으로 이월한 선행 문제).
+
+**이유/결정.**
+1. **레거시 `/graph`는 그대로 두고 신규 `/snapshots` 추가** — 두 응답 스키마가 다름(레거시는 `post.hiddenLayers/hiddenGroups/hiddenNodeNames` 단일 세트, 신규는 스냅샷마다 독립된 `config` JSONB). 억지로 하나로 합치면 두 세대가 서로의 필드를 오염시켜 프론트 분기가 더 복잡해진다고 판단, 별도 엔드포인트 채택(§3 외과적 변경 — 기존 게시글 렌더링 경로 무변경).
+2. **노드/엣지 Map 변환 로직 공용 추출** — 기존 `getPostGraph`가 인라인 람다로 노드/엣지를 `Map<String,Object>`로 변환하던 코드를 그대로 복붙하면 스냅샷마다(N개) 완전히 동일한 코드가 중복된다 — `toNodeMaps`/`toEdgeMaps` static 메서드로 추출해 `/graph`·`/snapshots` 양쪽이 재사용(§1 재사용성 먼저 확인, `getPostGraph` 자체도 이 리팩토링으로 함께 단순화됨 — 순수 추출이라 동작 변화 없음, 기존 테스트로 회귀 없음 확인).
+3. **응답에 `hiddenLayers/hiddenGroups/hiddenNodeNames`를 넣지 않음** — 레거시는 이 필드들로 프론트가 별도 필터링을 하지만, 신규 스냅샷은 그 정보가 이미 `config.hiddenLayers/hiddenGroups/hiddenNodes`(프리셋 캡처 시점 값)에 들어있어 중복. 프론트는 `config`만 보고 필터링하면 됨.
+4. **permitAll 추가 — 기존 `/graph`와 동일 근거로 판단** — `SECURITY_POLICY.md` 3기준 적용: ①비인증 접근 이유=공유 그래프 뷰어는 비로그인 방문자도 봐야 함(기존 `/graph`와 동일 목적) ②민감 데이터 없음=노드명·파일경로·주석·프리셋 설정뿐, 토큰·개인정보 없음 ③소유권 개념=비공개(`PRIVATE`) 게시글도 설계상 "직접 링크로는 접근 가능"해야 하는 공개 리소스로 취급(PR-A/B에서 이미 확정된 정책, `/graph`도 동일하게 방문자 소유권 검사 없이 서빙 중이라 일관성 유지). `SecurityConfig`의 permitAll 목록에 `/api/community/posts/*/snapshots` 추가.
+5. **존재하지 않는 그래프는 통째로 건너뜀(개별 스냅샷 실패가 전체 응답을 막지 않음)** — 스냅샷의 `graphId`가 가리키는 그래프가 삭제 등으로 소실된 경우 `communityFacade.getGraphSnapshot`이 empty를 반환 → 해당 스냅샷만 `null`로 필터링해 응답에서 제외. 게시글 전체를 404로 만들지 않음(다른 정상 스냅샷은 계속 보여야 하므로).
+
+**결과.** 백엔드 컴파일+전체 테스트 통과(신규 단위 2종: `toNodeMaps` 숨김 필터+comment 유무 분기, `toEdgeMaps` 숨김 필터 — `CommunityControllerAssembleTest`에 추가). ★런타임 검증: DB에 실제 스냅샷 행(gin-gonic/gin 그래프, 도메인 레이아웃 config)을 직접 삽입 후 `curl`로 `GET /snapshots` 호출 → `nodes`(숨김 제외)·`edges`·`config`(layoutPreset=domain, labelMode=name, hiddenLayers=[] 등 캡처값 그대로)·`position` 전부 정확히 반환 확인, 스냅샷 없는 게시글은 빈 배열 200, 존재하지 않는 postId는 400 확인. 검증 후 테스트 삽입 행 정리. ★codeprint MCP 자가검사는 이번 세션 미연결(세션 시작 시 Docker가 꺼져있어 `/mcp/rpc` 초기 연결 실패 추정, PR #414에서 남긴 기존 갭과 동일 — 세션 재시작 필요) → 전체 테스트 통과 + 수동 코드 리뷰(호출 수·레이어 방향)로 갈음, 다음 세션에서 재확인 필요. 프론트(`CommunityPostGraphPage.tsx` 다중 스냅샷 렌더)는 PR-C 2단계로 이어서 진행.

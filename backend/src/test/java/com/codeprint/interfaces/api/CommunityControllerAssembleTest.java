@@ -2,6 +2,7 @@
 package com.codeprint.interfaces.api;
 
 import com.codeprint.domain.community.Post;
+import com.codeprint.domain.community.port.GraphReadPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -85,5 +86,33 @@ class CommunityControllerAssembleTest {
         assertThat(r.commentCount()).isZero();
         assertThat(r.bookmarkedByMe()).isFalse();
         assertThat(r.likedByMe()).isFalse();
+    }
+
+    @Test
+    @DisplayName("toNodeMaps — 숨김 노드 제외, comment는 있을 때만 필드 포함")
+    void toNodeMaps_filtersHiddenAndOmitsNullComment() {
+        GraphReadPort.NodeView visible = new GraphReadPort.NodeView(
+                UUID.randomUUID(), "CLASS", "Foo", "Foo.java", "java", 1.0, 2.0, "주석", false);
+        GraphReadPort.NodeView hidden = new GraphReadPort.NodeView(
+                UUID.randomUUID(), "CLASS", "Bar", "Bar.java", "java", 3.0, 4.0, null, true);
+
+        List<Map<String, Object>> result = CommunityController.toNodeMaps(List.of(visible, hidden));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0)).containsEntry("name", "Foo").containsEntry("comment", "주석");
+    }
+
+    @Test
+    @DisplayName("toEdgeMaps — 숨김 엣지 제외")
+    void toEdgeMaps_filtersHidden() {
+        GraphReadPort.EdgeView visible = new GraphReadPort.EdgeView(
+                UUID.randomUUID(), "CALL", UUID.randomUUID(), UUID.randomUUID(), "a->b", false);
+        GraphReadPort.EdgeView hidden = new GraphReadPort.EdgeView(
+                UUID.randomUUID(), "CALL", UUID.randomUUID(), UUID.randomUUID(), "c->d", true);
+
+        List<Map<String, Object>> result = CommunityController.toEdgeMaps(List.of(visible, hidden));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0)).containsEntry("edgeIdentifier", "a->b");
     }
 }
