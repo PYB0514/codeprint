@@ -1,6 +1,6 @@
 # Codeprint — 프로젝트 개요
 
-> 아키텍처·데이터 모델 → [`ARCHITECTURE.md`](ARCHITECTURE.md) · 분석 엔진 상세 → [`ANALYSIS_ENGINE.md`](ANALYSIS_ENGINE.md) · 개발 원칙 → [`../CLAUDE.md`](../CLAUDE.md)
+> 아키텍처·데이터 모델 → [`ARCHITECTURE.md`](ARCHITECTURE.md) · 분석 엔진 상세 → [`ANALYSIS_ENGINE.md`](ANALYSIS_ENGINE.md) · 전체 기능·API 인벤토리 → [`FEATURES.md`](FEATURES.md) · 사용자 관점 기능 요약 → [`USER_FEATURES.md`](USER_FEATURES.md) · 제품 전략/지향점 → [`../PRODUCT_STRATEGY.md`](../PRODUCT_STRATEGY.md) · 개발 원칙 → [`../CLAUDE.md`](../CLAUDE.md)
 
 ## 프로젝트 개요
 
@@ -31,7 +31,7 @@
 - **ORM**: Spring Data JPA (Hibernate)
 - **DB**: PostgreSQL
 - **인증**: Spring Security + OAuth2 (GitHub OAuth)
-- **코드 분석 엔진**: 정규식 기반 정적 분석기 (언어별 패턴, 현재 11개 언어). Tree-sitter 전환은 향후 검토 항목.
+- **코드 분석 엔진**: tree-sitter AST 기반 정적 분석기(정규식 폴백 유지) — Java·Python·TypeScript/JavaScript·Go·Rust·C·C++·C#·PHP·Ruby·Swift 11개 언어. 경고 감지기 15종(HIGH 7·MEDIUM 4·LOW 2·INTENT_DRIFT 포함, 상세는 [`docs/FEATURES.md`](FEATURES.md) 참조).
 - **비동기 처리**: Spring @Async + WebSocket (분석 진행률 실시간 푸시)
 - **결제**: 토스페이먼츠 (테스트 키 있음, 라이브 키는 사업자 등록 필요)
 - **AI 연동**: Anthropic API (Claude)
@@ -56,8 +56,7 @@
 
 - **IDE**: VS Code (Spring Boot Dashboard 확장 설치됨)
 - **터미널**: VS Code 통합 터미널 또는 CMD/PowerShell
-- **백엔드 실행**: VS Code Spring Boot Dashboard 또는 터미널에서 `.\gradlew.bat bootRun` — **Claude가 직접 시작하지 않음, 사용자에게 요청**
-- **프론트 실행**: VS Code 터미널에서 `npm run dev` — **Claude가 직접 시작하지 않음, 사용자에게 요청**
+- **백엔드/프론트 실행**: 2026-07-02부터 `mcp__Claude_Preview__preview_start`(`.claude/launch.json` 기반)로 Claude가 직접 기동 가능(사용자 승인됨). 수동 실행 시 백엔드는 `.\gradlew.bat bootRun`, 프론트는 `npm run dev`.
 - **DB**: Docker (`docker compose up -d` — PC 재시작 후 수동 실행 필요)
 - **gh CLI**: 설치됨, CMD에서 사용 (PowerShell 새 세션 필요 시 PATH 자동 인식)
 
@@ -77,20 +76,16 @@ C:\Dev\codeprint\
 
 ---
 
-## 기능 출시 순서
+## 현재 기능 범위
 
-| 단계 | 기능 |
-|---|---|
-| 1차 MVP | GitHub 로그인, 레포 분석, React Flow 시각화, 드래그, 엣지 호버 모달, 프로젝트 3개 제한 |
-| 2차 | 공유/비공개 토글, 커뮤니티 게시판, 이미지 내보내기 |
-| 3차 | 결제, 프로젝트 수 확장, 노드/엣지 커스터마이징 |
-| 4차 | AI 누락 감지/코드 생성, 노드 코멘트, 커뮤니티 팔로우 |
+> 전체 기능·API 인벤토리는 [`docs/FEATURES.md`](FEATURES.md), 사용자 관점 요약은 [`docs/USER_FEATURES.md`](USER_FEATURES.md) 참조. 이 표는 더 이상 유지하지 않음(2026-07-05부로 두 문서로 대체 — 아래는 마지막으로 유지되던 초기 로드맵, 실제 개발은 이 순서를 따르지 않고 훨씬 광범위하게 확장됨).
+
+무료 개수 제한(프로젝트 3개)은 성장 레버 보호를 위해 폐지됨(PR #413). 프로젝트 시각화·경고 감지·커뮤니티·팔로우·북마크·DM·AI 설명(BYO-key)까지 전부 Free 티어에서 제공되며, 유료는 팀/조직 단위(좌석제)와 향후 Desktop 라이선스로 분리됨.
 
 ---
 
 ## 과금 모델
 
-- **Free**: 프로젝트 3개
-- **Pro**: 월정액 9,900원, 프로젝트 무제한 + AI 기능
-- **Team**: Seat Pool 기반 팀 플랜 (Starter/Growth/Business)
+- **Free (개인)**: 사실상 전 기능 무료 — 공개/비공개 분석 무제한, 그래프 시각화, 경고 감지, 커뮤니티/팔로우/DM, AI 설명(본인 API 키). 개수 제한 없음.
+- **DESKTOP (개인·팀 공용 단일 유료 티어)**: 좌석당 4,900원/월, 팀 단위 좌석제(Toss Payments). 과거 FREE/PRO/TEAM_STARTER/GROWTH/BUSINESS 5단계 모델은 2026-07-01 PR #413으로 FREE/DESKTOP 2단계로 축소됨 — 상세는 `PRODUCT_STRATEGY.md` §13 참조.
 - 결제: 토스페이먼츠 (테스트 키 운영 중, 라이브 키는 사업자 등록 후)
