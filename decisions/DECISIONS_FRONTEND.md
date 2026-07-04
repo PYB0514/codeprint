@@ -2,6 +2,18 @@
 
 ---
 
+## GraphPage 흐름 재생 → ShareGraphPage·CommunityPostGraphPage 이식 (2026-07-05, PR-흐름재생)
+
+**배경.** Context98 세션에서 사용자가 claude-in-chrome으로 직접 앱을 확인한 뒤 "GraphPage에만 있는 흐름 재생(호출 트리를 단계별로 따라가는 기능)을 공유 그래프에도 넣어달라"고 지시. 이식 범위를 물었더니("ShareGraphPage만? 아니면 CommunityPostGraphPage도?") 사용자가 "쉐어그래프랑 커뮤니티포스트그래프랑 같은거아냐?"라고 반문 — 사용자 입장에서 둘은 구분할 이유가 없는 동일한 "그래프 보기" 경험이라는 뜻으로 받아들여 두 뷰어 모두에 이식하기로 확정.
+
+**설계.** GraphPage.tsx에 있던 순수 함수/타입(`buildCallTree`·`CallTreeNode`·`PlaybackItem` 등, ~190줄)을 `utils/flowPlayback.ts`로, 상태·이펙트·핸들러(`startPlayback`/`resetPlayback`/분기선택 등, ~95줄)를 `hooks/useFlowPlayback.ts`로, 재생 패널 JSX(~180줄)를 `components/FlowPlaybackPanel.tsx`로 추출 — 기존 PR1~PR4(GraphPage/ShareGraphPage 공유 컴포넌트 추출) 패턴을 그대로 재사용. GraphPage.tsx는 이 세 모듈을 다시 import하도록 리팩터링(동작 무변경). 페이지별로 다른 부분(엣지 표시 토글·resetPlayback 시 부가 정리)은 `restoreEdgeStyles`/`onStart` 콜백으로 주입받게 설계해 훅 자체는 페이지 특수 사정과 분리.
+
+**엣지 스타일 복원 방식이 페이지마다 다름 — 실수할 뻔한 지점.** GraphPage의 기존 `resetPlayback`은 엣지 스타일을 `e.data.type`/`broken`으로부터 다시 계산해서 덮어씀(strokeDasharray는 버려짐 — playback 도입 이전부터 있던 기존 동작, 이번에 손대지 않음). ShareGraphPage·CommunityPostGraphPage는 원래 playback이 없었으므로 이 방식을 그대로 베끼면 재생을 한 번이라도 실행한 뒤 엣지의 `strokeDasharray`(타입별 점선 구분)가 사라지는 **새 회귀**가 생길 뻔했음. 대신 두 페이지는 이미 갖고 있던 재료(ShareGraphPage: `buildLayout` 재호출, CommunityPostGraphPage: `builtEdgesCache`)로 엣지를 처음부터 다시 만들어 `restoreEdgeStyles`를 구현 — 기존 레이아웃/라벨 토글 핸들러가 쓰던 것과 동일한 패턴이라 완전히 복원됨.
+
+**검증.** `tsc -b` 통과(3개 페이지 전부). 실 데이터로 브라우저 검증(OAuth 불필요한 두 뷰어): ①ShareGraphPage — gin-gonic/gin 공개 그래프(`/share/{projectId}`)에서 `searchCredential` 함수 노드 클릭 → 흐름 재생 패널 등장(`TestBasicAuthSucceed → ... → searchCredential`, 1/4단계) → `→` 버튼으로 4/4까지 진행 → `↺ 처음부터` 버튼 노출 확인 → 패널 `✕`로 재생 종료 확인. ②CommunityPostGraphPage(스냅샷 뷰어) — 실 게시글(`AdminDigestService` 그래프 첨부)에서 `computeDigest` 함수 클릭 → 재생 패널(1/5단계) + 기존 PR-C 노드 코멘트 섹션이 함께 정상 렌더 확인(회귀 없음). ③GraphPage — 리팩터링 후 `tsc` 통과 + 비로그인 상태로 라우트 진입 시 에러 없이 정상 에러 화면 렌더(모듈 로드 자체는 검증) 확인했으나, 로그인 필요한 실제 재생 인터랙션은 OAuth 계정 필요로 이 세션에서는 미검증 — 머지 전 사용자 확인 필요.
+
+---
+
 ## ShareGraphPage 사이드바 접기 + 줌아웃 범위 확대 (2026-07-02, PR #427 머지 직후 사용자 발견)
 
 **문제.** PR #427 머지 직후 사용자가 실사용 중 발견: ShareGraphPage에 사이드바 최소화 버튼이 없고, 마우스 휠로 화면을 축소해도 일정 배율 이하로 안 줄어듦.

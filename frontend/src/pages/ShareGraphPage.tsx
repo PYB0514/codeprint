@@ -1,6 +1,6 @@
 ﻿// 공개 프로젝트 읽기 전용 그래프 뷰어 (비인증 접근 허용)
 // ⚠️ GraphPage.tsx에 새 "보기"(필터·조회·전환) 기능이 추가되면 여기도 반영 검토 — 저장/수정 액션(프리셋 저장·코멘트·suppress 등)만 GraphPage 전용, 보기는 동등해야 함(2026-07-02 결정, 백로그: PROGRESS.md "ShareGraphPage 뷰어 기능 확장")
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { useSidebarResize } from '../hooks/useSidebarResize'
@@ -26,6 +26,8 @@ import WarningPanel from '../components/WarningPanel'
 import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewToggles'
 import { GraphLegend } from '../components/GraphLegend'
 import { CornerPanel } from '../components/CornerPanel'
+import { FlowPlaybackPanel } from '../components/FlowPlaybackPanel'
+import { useFlowPlayback } from '../hooks/useFlowPlayback'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -90,10 +92,34 @@ function ShareGraphInner() {
   const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
   const [opaqueDomainSet, setOpaqueDomainSet] = useState<Set<string>>(new Set())
 
-  // 노드 클릭 시 우측 사이드바 표시
+  // 흐름 재생 — 종료 시 레이아웃 재빌드로 기본 엣지 스타일 복원 (dasharray 등 타입별 스타일 보존)
+  const restorePlaybackEdgeStyles = useCallback(() => {
+    const { edges: rebuilt } = buildLayout(rawNodesCache, rawEdgesCache, labelMode, layoutPreset)
+    const { se, sc, si, sb, sdb, sapi } = edgeVisibility
+    return applyEdgeVisibility(rebuilt, se, sc, si, sb, sdb, sapi)
+  }, [rawNodesCache, rawEdgesCache, labelMode, layoutPreset, edgeVisibility])
+
+  const {
+    callTree, playbackItems, playbackCursor, playbackPlaying, activePath, pendingBranchNodeId, playbackRootNodeId,
+    setPlaybackCursor, setPlaybackPlaying, setPendingBranchNodeId,
+    startPlayback, resetPlayback, selectBranchImmediate, confirmBranch,
+  } = useFlowPlayback({
+    rawNodes: rawNodesCache, rawEdges: rawEdgesCache, setNodes, setEdges, getNodes: () => nodes, fitView,
+    restoreEdgeStyles: restorePlaybackEdgeStyles,
+  })
+
+  // 노드 클릭 시 우측 사이드바 표시 + 함수/DB 노드는 흐름 재생 시작
   const handleNodeClick: NodeMouseHandler = (_, node) => {
-    if (node.type === 'sectionNode' || node.type === 'groupNode') return
+    if (node.type === 'sectionNode') return
+    if (node.type === 'groupNode') { resetPlayback(); return }
     setSelectedNode(node)
+    if (node.type === 'fileNode') { resetPlayback(); return }
+    const raw = rawNodesCache.find(n => n.id === node.id)
+    if (raw && (raw.type === 'FUNCTION' || raw.type === 'API_ENDPOINT' || raw.type === 'DB_TABLE')) {
+      startPlayback(node.id)
+    } else {
+      resetPlayback()
+    }
   }
 
   // 좌측 노드 목록 클릭 시 해당 노드로 이동
@@ -579,8 +605,26 @@ function ShareGraphInner() {
               </div>
             </div>
 
+            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
+            <FlowPlaybackPanel
+              callTree={callTree}
+              playbackItems={playbackItems}
+              playbackCursor={playbackCursor}
+              playbackPlaying={playbackPlaying}
+              activePath={activePath}
+              pendingBranchNodeId={pendingBranchNodeId}
+              playbackRootNodeId={playbackRootNodeId}
+              rawNodes={rawNodesCache}
+              setPlaybackCursor={setPlaybackCursor}
+              setPlaybackPlaying={setPlaybackPlaying}
+              setPendingBranchNodeId={setPendingBranchNodeId}
+              resetPlayback={resetPlayback}
+              selectBranchImmediate={selectBranchImmediate}
+              confirmBranch={confirmBranch}
+              startPlayback={startPlayback}
+            />
             {selectedNode ? (
-              <div className="p-3 flex flex-col gap-2.5 overflow-y-auto">
+              <div className="flex flex-col gap-2.5">
                 <p className="text-sm font-medium text-white break-words leading-snug">
                   {String(selectedNode.data?.name ?? selectedNode.id)}
                 </p>
@@ -612,10 +656,11 @@ function ShareGraphInner() {
                 </div>
               </div>
             ) : (
-              <div className="p-3 flex-1 flex items-center justify-center">
+              <div className="flex-1 flex items-center justify-center">
                 <p className="text-xs text-gray-600 text-center">노드를 클릭하면<br />상세 정보가 표시됩니다.</p>
               </div>
             )}
+            </div>
           </div>
         </aside>
         )}

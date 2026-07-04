@@ -1,5 +1,5 @@
 // 커뮤니티 게시글에 첨부된 그래프 — 숨김 필터 적용 읽기 전용 뷰어
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
@@ -25,6 +25,8 @@ import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewTogg
 import { GraphLegend } from '../components/GraphLegend'
 import { CornerPanel } from '../components/CornerPanel'
 import { useSidebarResize } from '../hooks/useSidebarResize'
+import { FlowPlaybackPanel } from '../components/FlowPlaybackPanel'
+import { useFlowPlayback } from '../hooks/useFlowPlayback'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -256,10 +258,33 @@ function CommunityPostSnapshotInner() {
   const [graphId, setGraphId] = useState<string | null>(null)
   const [nodeComments, setNodeComments] = useState<NodeCommentView[]>([])
 
-  // 노드 클릭 시 우측 사이드바 표시
+  // 흐름 재생 — 종료 시 표시 토글 기준 기본 엣지 스타일 복원
+  const restorePlaybackEdgeStyles = useCallback(() => {
+    const { se, sc, si, sb, sdb, sapi } = edgeVisibility
+    return applyEdgeVisibility(builtEdgesCache, se, sc, si, sb, sdb, sapi)
+  }, [builtEdgesCache, edgeVisibility])
+
+  const {
+    callTree, playbackItems, playbackCursor, playbackPlaying, activePath, pendingBranchNodeId, playbackRootNodeId,
+    setPlaybackCursor, setPlaybackPlaying, setPendingBranchNodeId,
+    startPlayback, resetPlayback, selectBranchImmediate, confirmBranch,
+  } = useFlowPlayback({
+    rawNodes: rawNodesCache, rawEdges: rawEdgesCache, setNodes, setEdges, getNodes: () => nodes, fitView,
+    restoreEdgeStyles: restorePlaybackEdgeStyles,
+  })
+
+  // 노드 클릭 시 우측 사이드바 표시 + 함수/DB 노드는 흐름 재생 시작
   const handleNodeClick: NodeMouseHandler = (_, node) => {
-    if (node.type === 'sectionNode' || node.type === 'groupNode') return
+    if (node.type === 'sectionNode') return
+    if (node.type === 'groupNode') { resetPlayback(); return }
     setSelectedNode(node)
+    if (node.type === 'fileNode') { resetPlayback(); return }
+    const raw = rawNodesCache.find(n => n.id === node.id)
+    if (raw && (raw.type === 'FUNCTION' || raw.type === 'API_ENDPOINT' || raw.type === 'DB_TABLE')) {
+      startPlayback(node.id)
+    } else {
+      resetPlayback()
+    }
   }
 
   // 좌측 노드 목록 클릭 시 해당 노드로 이동
@@ -732,8 +757,26 @@ function CommunityPostSnapshotInner() {
               </div>
             </div>
 
+            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
+            <FlowPlaybackPanel
+              callTree={callTree}
+              playbackItems={playbackItems}
+              playbackCursor={playbackCursor}
+              playbackPlaying={playbackPlaying}
+              activePath={activePath}
+              pendingBranchNodeId={pendingBranchNodeId}
+              playbackRootNodeId={playbackRootNodeId}
+              rawNodes={rawNodesCache}
+              setPlaybackCursor={setPlaybackCursor}
+              setPlaybackPlaying={setPlaybackPlaying}
+              setPendingBranchNodeId={setPendingBranchNodeId}
+              resetPlayback={resetPlayback}
+              selectBranchImmediate={selectBranchImmediate}
+              confirmBranch={confirmBranch}
+              startPlayback={startPlayback}
+            />
             {selectedNode ? (
-              <div className="p-3 flex flex-col gap-2.5 overflow-y-auto">
+              <div className="flex flex-col gap-2.5">
                 <p className="text-sm font-medium text-white break-words leading-snug">
                   {String(selectedNode.data?.name ?? selectedNode.id)}
                 </p>
@@ -779,10 +822,11 @@ function CommunityPostSnapshotInner() {
                 </div>
               </div>
             ) : (
-              <div className="p-3 flex-1 flex items-center justify-center">
+              <div className="flex-1 flex items-center justify-center">
                 <p className="text-xs text-gray-600 text-center">노드를 클릭하면<br />상세 정보가 표시됩니다.</p>
               </div>
             )}
+            </div>
           </div>
         </aside>
         )}
