@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.112.1',
+    date: '2026-07-04',
+    title: '공유 그래프 실시간 채팅 제거',
+    type: 'fix',
+    items: [
+      { category: '공유 그래프', desc: '공유 그래프 뷰어의 실시간 채팅 기능을 제거했습니다. 게시글에는 이미 댓글 기능이 있어 중복이었습니다.' },
+    ],
+  },
+  {
     version: 'v0.112.0',
     date: '2026-07-04',
     title: '커뮤니티 게시글 그래프 스냅샷 뷰어 — 경고 확인·노드 코멘트 열람 추가',
