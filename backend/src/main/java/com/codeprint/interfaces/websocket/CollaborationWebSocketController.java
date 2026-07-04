@@ -70,39 +70,6 @@ public class CollaborationWebSocketController {
         messagingTemplate.convertAndSend("/topic/collab/" + sessionId, event);
     }
 
-    // 그래프 채팅 메시지를 해당 그래프 구독자 전체에게 브로드캐스트
-    @MessageMapping("/graph/{graphId}/chat")
-    public void handleChat(
-            @DestinationVariable String graphId,
-            @Payload Map<String, Object> payload,
-            Principal principal) {
-        String username;
-        String userId;
-        if (principal != null) {
-            User user = extractUser(principal);
-            if (user != null) {
-                username = user.getUsername();
-                userId = user.getId().toString();
-            } else {
-                username = (String) payload.getOrDefault("anonymousName", "익명");
-                userId = "anon-" + username;
-            }
-        } else {
-            username = (String) payload.getOrDefault("anonymousName", "익명");
-            userId = "anon-" + username;
-        }
-
-        Map<String, Object> event = Map.of(
-                "type", "chat",
-                "userId", userId,
-                "username", username,
-                "message", payload.getOrDefault("message", ""),
-                "timestamp", java.time.Instant.now().toEpochMilli()
-        );
-
-        messagingTemplate.convertAndSend("/topic/graph/" + graphId + "/chat", event);
-    }
-
     // 팀채팅 메시지를 해당 룸 구독자 전체에게 브로드캐스트 (인증 필수)
     @MessageMapping("/team/{roomId}/chat")
     public void handleTeamChat(

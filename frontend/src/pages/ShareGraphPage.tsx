@@ -1,9 +1,8 @@
 ﻿// 공개 프로젝트 읽기 전용 그래프 뷰어 (비인증 접근 허용)
 // ⚠️ GraphPage.tsx에 새 "보기"(필터·조회·전환) 기능이 추가되면 여기도 반영 검토 — 저장/수정 액션(프리셋 저장·코멘트·suppress 등)만 GraphPage 전용, 보기는 동등해야 함(2026-07-02 결정, 백로그: PROGRESS.md "ShareGraphPage 뷰어 기능 확장")
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
-import { useGraphChat } from '../hooks/useGraphChat'
 import { useSidebarResize } from '../hooks/useSidebarResize'
 import {
   ReactFlow,
@@ -73,11 +72,8 @@ function ShareGraphInner() {
   const [warnings, setWarnings] = useState<{ type: string; nodeIds: string[]; message: string }[]>([])
   // 대형 레포 절단 안내 — 전체 대상 파일 수 > 분석된 파일 수일 때 표시
   const [truncation, setTruncation] = useState<{ analyzed: number; total: number } | null>(null)
-  const [graphId, setGraphId] = useState<string | null>(null)
-  const [chatInput, setChatInput] = useState('')
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [nodeSearch, setNodeSearch] = useState('')
-  const [showChat, setShowChat] = useState(false)
   const [warningPanelOpen, setWarningPanelOpen] = useState(false)
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
@@ -93,9 +89,6 @@ function ShareGraphInner() {
   const [edgeVisibility, setEdgeVisibility] = useState({ se: false, sc: false, si: false, sb: true, sdb: false, sapi: true })
   const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
   const [opaqueDomainSet, setOpaqueDomainSet] = useState<Set<string>>(new Set())
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const { messages, connected, sendMessage } = useGraphChat(graphId, null)
-
 
   // 노드 클릭 시 우측 사이드바 표시
   const handleNodeClick: NodeMouseHandler = (_, node) => {
@@ -126,7 +119,6 @@ function ShareGraphInner() {
       .then(([graphRes, presetRes]) => {
         const raw = graphRes.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; message: string }[]; ownerBgUrl?: string | null; analyzedFileCount?: number; totalFileCount?: number }
         if (raw.warnings) setWarnings(raw.warnings)
-        setGraphId(raw.graphId)
         if (raw.ownerBgUrl) setOwnerBgUrl(raw.ownerBgUrl)
         // 500개 초과 절단 시에만 안내 (기존 그래프는 카운트 없음)
         if (raw.totalFileCount != null && raw.analyzedFileCount != null && raw.totalFileCount > raw.analyzedFileCount) {
@@ -175,19 +167,6 @@ function ShareGraphInner() {
     }
     return () => { document.body.classList.remove('has-bg') }
   }, [bgEnabled, ownerBgUrl])
-
-  // 새 채팅 메시지 수신 시 스크롤
-  useEffect(() => {
-    if (showChat) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, showChat])
-
-  // 채팅 메시지 전송
-  const handleSendChat = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!chatInput.trim()) return
-    sendMessage(chatInput)
-    setChatInput('')
-  }
 
   // 계층형 ↔ 도메인 뷰 전환
   const toggleLayoutPreset = () => {
@@ -583,7 +562,7 @@ function ShareGraphInner() {
           />
 
           {/* 노드 상세 */}
-          <div className="flex flex-col overflow-hidden" style={{ flex: selectedNode ? '0 0 auto' : '1' }}>
+          <div className="flex flex-col overflow-hidden flex-1">
             <div className="px-3 py-2.5 border-b border-gray-800 shrink-0 flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">노드 정보</span>
               <div className="flex items-center gap-1.5">
@@ -636,55 +615,6 @@ function ShareGraphInner() {
               <div className="p-3 flex-1 flex items-center justify-center">
                 <p className="text-xs text-gray-600 text-center">노드를 클릭하면<br />상세 정보가 표시됩니다.</p>
               </div>
-            )}
-          </div>
-
-          {/* 채팅 */}
-          <div className="flex flex-col border-t border-gray-800" style={{ flex: showChat ? '1' : '0 0 auto', overflow: 'hidden' }}>
-            <button
-              onClick={() => setShowChat(v => !v)}
-              className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-800 transition-colors shrink-0"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">💬 채팅</span>
-                {connected && <span className="w-1.5 h-1.5 rounded-full bg-green-400" />}
-              </div>
-              <span className="text-gray-600 text-xs">{showChat ? '▲' : '▼'}</span>
-            </button>
-
-            {showChat && (
-              <>
-                <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 min-h-0">
-                  {messages.length === 0 && (
-                    <p className="text-xs text-gray-600 text-center mt-4">
-                      아직 메시지가 없습니다.<br />첫 메시지를 보내보세요.
-                    </p>
-                  )}
-                  {messages.map((msg, i) => (
-                    <div key={i} className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-gray-500">{msg.username}</span>
-                      <span className="text-xs text-white bg-gray-800 rounded-lg px-2.5 py-1.5 break-words">{msg.message}</span>
-                    </div>
-                  ))}
-                  <div ref={messagesEndRef} />
-                </div>
-                <form onSubmit={handleSendChat} className="p-2 border-t border-gray-800 flex gap-1.5 shrink-0">
-                  <input
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    placeholder="메시지 입력..."
-                    className="flex-1 bg-gray-800 text-white text-xs px-2.5 py-1.5 rounded border border-gray-700 focus:outline-none focus:border-gray-500 placeholder-gray-600"
-                    maxLength={500}
-                  />
-                  <button
-                    type="submit"
-                    disabled={!connected || !chatInput.trim()}
-                    className="text-xs bg-blue-600 text-white px-2.5 py-1.5 rounded hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    전송
-                  </button>
-                </form>
-              </>
             )}
           </div>
         </aside>

@@ -641,3 +641,15 @@ const fetchGraph = useCallback(async () => {
 4. **경고 데이터는 스냅샷 응답에 이미 포함** — 백엔드 `/snapshots` 응답에 `warnings` 필드가 추가돼(decisions/DECISIONS_BACKEND.md "PR-C 3단계" 참조) 프론트는 별도 API 호출 없이 스냅샷 로드 시점에 함께 세팅.
 
 **결과.** `tsc -b` 통과. claude-in-chrome 비로그인 세션 E2E 검증 — ①gin-gonic/gin(경고 0건) 스냅샷으로 대조 후 codeprint 자기분석 그래프(HIGH_FAN_OUT 베이스라인 10건)로 교체해 경고 코너패널에 "과도한 의존" 그룹+MD 내보내기 버튼 노출 확인, 버튼 클릭 시 예외 없이 다운로드 트리거 확인 ②실 노드 코멘트 1건 DB 직접 삽입 후 해당 노드 클릭 시 비로그인 세션에서 코멘트 내용 정상 표시, 코멘트 없는 노드는 "코멘트가 없습니다" 확인 ③`curl`(쿠키 없음)로 `GET /api/graphs/{graphId}/nodes/{nodeId}/comments` 200 확인. 검증 후 테스트 데이터(스냅샷 행·코멘트) 정리. 백엔드 신규 단위 테스트(`GraphFacadeTest` 6종, `GraphReadAdapterTest` 2종) 포함 전체 테스트 재실행 green.
+
+## 공유 그래프 실시간 채팅 완전 제거 (2026-07-04)
+
+**문제.** PROGRESS.md 계획의 남은 마지막 조각 — `ShareGraphPage`의 실시간 채팅(STOMP `useGraphChat`)을 제거. 게시글에 이미 댓글 기능이 있어 중복이었고, `CommunityPostGraphPage`(신규 스냅샷 뷰어)는 애초에 채팅을 이식하지 않았으므로 이번 제거는 `ShareGraphPage` 단독 정리.
+
+**결정.**
+1. **`useGraphChat.ts` 훅 파일 삭제** — grep으로 사용처가 `ShareGraphPage.tsx` 하나뿐임을 재확인 후 파일 자체를 삭제(다른 곳에서 재사용 가능성 없음).
+2. **채팅 관련 state·이펙트·JSX 블록 전부 제거** — `chatInput`/`showChat`/`messagesEndRef`, 스크롤 이펙트, `handleSendChat`, 우측 사이드바 "채팅" 섹션(펼치기 버튼·메시지 목록·입력폼). 노드 상세 패널의 `flex: selectedNode ? '0 0 auto' : '1'`(채팅 섹션과 공간을 나눠 쓰던 조건부 크기)을 `flex-1` 고정으로 변경 — 채팅이 없어졌으니 노드 상세가 항상 남은 공간 전체를 차지(신규 스냅샷 뷰어의 동일 패널과 동일 패턴으로 통일).
+3. **`graphId` state 함께 제거(orphan)** — `useGraphChat(graphId, null)` 호출이 유일한 소비처였는데 제거되면서 `graphId` state 자체가 완전히 안 읽히는 죽은 코드가 됨 — §3 "내 변경이 만든 미사용 코드는 제거" 원칙에 따라 `setGraphId` 호출까지 함께 삭제.
+4. **백엔드 `/graph/{graphId}/chat` STOMP 핸들러 제거** — `CollaborationWebSocketController.handleChat()` 삭제. 같은 클래스의 `/team/{roomId}/chat`(팀 채팅, 별개 기능)·`/collab/{sessionId}/*`(커서·선택·presence)는 무관해 그대로 유지.
+
+**결과.** `tsc -b` 통과, 백엔드 컴파일+전체 테스트 통과(회귀 없음). ★런타임 검증 중 발견: claude-in-chrome으로 신규 스냅샷 뷰어(`CommunityPostSnapshotInner`)를 테스트하다 콘솔에 "Rules of Hooks" 경고 4건이 누적돼 있는 걸 발견 — 원인 추적 결과 이번 세션 중 해당 컴포넌트를 여러 차례 Edit하는 동안 Vite HMR이 라이브 인스턴스를 핫스왑하면서 발생한 개발 중 일시적 아티팩트(훅 개수가 달라진 신구 버전이 같은 렌더 트리에서 충돌)로 확인 — 완전히 새로 고침한 페이지에서는 재현되지 않음(코드 자체를 정적으로 재검토해도 모든 훅이 조건부 return 이전에 무조건 호출되는 순서로 배치돼 있어 실제 위반 없음). 실제 버그 아님으로 판단, 수정 불필요. claude-in-chrome으로 `/share/{projectId}` 재확인 — "채팅" 텍스트 완전히 사라짐, 노드 검색·범례·경고패널 등 기존 기능은 정상 렌더(노드 1398개), 콘솔 신규 에러 없음.
