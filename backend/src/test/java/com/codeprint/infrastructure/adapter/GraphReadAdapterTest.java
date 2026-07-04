@@ -2,6 +2,7 @@
 package com.codeprint.infrastructure.adapter;
 
 import com.codeprint.application.graph.GraphQueryService;
+import com.codeprint.application.graph.WarningSuppressionService;
 import com.codeprint.domain.community.port.GraphReadPort;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.GraphViewPreset;
@@ -12,8 +13,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,12 +27,41 @@ class GraphReadAdapterTest {
 
     @Mock private GraphQueryService graphQueryService;
     @Mock private GraphViewPresetRepository presetRepository;
+    @Mock private WarningSuppressionService warningSuppressionService;
 
     private GraphReadAdapter adapter;
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
-        adapter = new GraphReadAdapter(graphQueryService, presetRepository);
+        adapter = new GraphReadAdapter(graphQueryService, presetRepository, warningSuppressionService);
+    }
+
+    @Test
+    @DisplayName("findActiveWarnings — 숨김 처리된 fingerprint의 경고는 제외")
+    void findActiveWarnings_filtersSuppressed() {
+        UUID projectId = UUID.randomUUID();
+        UUID graphId = UUID.randomUUID();
+        Graph graph = Graph.create(projectId, UUID.randomUUID());
+        when(graphQueryService.findById(graphId)).thenReturn(Optional.of(graph));
+        when(warningSuppressionService.getSuppressedFingerprints(projectId)).thenReturn(Set.of("fp-hidden"));
+        when(graphQueryService.getWarnings(graphId)).thenReturn(List.of(
+                Map.of("fingerprint", "fp-hidden", "message", "숨김됨"),
+                Map.of("fingerprint", "fp-visible", "message", "활성")
+        ));
+
+        List<Map<String, Object>> result = adapter.findActiveWarnings(graphId);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0)).containsEntry("fingerprint", "fp-visible");
+    }
+
+    @Test
+    @DisplayName("findActiveWarnings — 그래프 없으면 빈 목록")
+    void findActiveWarnings_graphNotFound_empty() {
+        UUID graphId = UUID.randomUUID();
+        when(graphQueryService.findById(graphId)).thenReturn(Optional.empty());
+
+        assertThat(adapter.findActiveWarnings(graphId)).isEmpty();
     }
 
     @Test
