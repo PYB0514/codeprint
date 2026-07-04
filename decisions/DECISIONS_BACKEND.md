@@ -1156,3 +1156,16 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 5. **스냅샷 응답에 warnings 필드 추가** — `CommunityController.toSnapshotResponse`가 `communityFacade.getActiveWarnings(graphId)`(신규, `GraphReadPort` 위임)를 호출해 `warnings` 키로 포함. 스냅샷별로 매번 계산(캐싱 없음 — 기존 `/graph`·`/share` 엔드포인트도 매 요청 계산이라 일관성 유지, `graphQueryService.getWarnings`가 이미 내부적으로 detect 결과 캐시를 가짐).
 
 **결과.** 백엔드 컴파일+전체 테스트 통과(신규 8종: `GraphFacadeTest` 6종, `GraphReadAdapterTest` 2종 추가). ★런타임 검증: gin-gonic/gin(경고 0건) 대조 후 codeprint 자기분석 그래프(HIGH_FAN_OUT 기존 베이스라인 10건)로 스냅샷 삽입 → `/snapshots` 응답에 `warnings` 10건 정확히 반환 확인(같은 프로젝트의 기존 `/share/{projectId}/graph` 응답과 대조해 0건 케이스도 일치 검증). `curl`(쿠키 없음)로 `GET /api/graphs/{graphId}/nodes/{nodeId}/comments` 200 확인. 실 코멘트 1건 DB 직접 삽입 후 비로그인 브라우저 세션에서 정상 조회 확인, 검증 후 테스트 데이터 정리. 프론트 변경은 `decisions/DECISIONS_FRONTEND.md` "PR-C 3단계" 참조.
+
+## 피드 갤러리 필터·그래프 배지가 신규 스냅샷 게시글을 누락하던 결함 수정 (2026-07-05)
+
+**문제.** PROGRESS.md 다음 액션 1번 — "📊 그래프" 배지 확장 여부 판단. 조사 결과 배지보다 범위가 큰 실제 버그였음: 커뮤니티 "갤러리" 탭(`graphOnly=true`)이 `PostRepository.findByGraphIdNotNull`만 사용하는데, PR-B(2026-07-03)부터 신규 게시글은 **항상** `post_graph_snapshots`로 저장되고 `post.graphId`는 계속 null이라, **PR-B 이후 만들어진 모든 그래프 첨부 게시글이 갤러리 탭에서 전부 안 보이는 상태**였다. 같은 이유로 피드/프로필의 "📊 그래프" 배지도 신규 게시글엔 전혀 안 떴다. MCP 도구(`search_public_projects`, AI 에이전트가 공개 프로젝트를 검색하는 툴)도 동일 결함으로 신규 게시글을 놓치고 있었다.
+
+**이유/결정.**
+1. **`hasGraph` 개념 도입 — `graphId != null OR 스냅샷 존재`** — 레거시 단일 첨부와 신규 다중 스냅샷 두 세대를 하나의 boolean으로 통합. `PostJpaRepository`에 JPQL EXISTS 서브쿼리(`WHERE p.graphId IS NOT NULL OR EXISTS (SELECT 1 FROM PostGraphSnapshot s WHERE s.postId = p.id)`)로 갤러리 필터 자체를 교체(`findByGraphIdNotNull` → `findWithGraphOrSnapshots`, 유일한 호출처라 이름 그대로 교체하고 옛 메서드 제거 — 죽은 코드 안 남김).
+2. **배지용 N+1 방지 — 기존 배치 패턴 재사용** — `PostGraphSnapshotJpaRepository.findDistinctPostIdsByPostIdIn(postIds)`(신규, IN 배치 조회)로 페이지 단위 postId 목록 중 스냅샷을 가진 것만 한 번에 조회. `CommunityController.assemble`/`UserController.assembleSummaries`(둘 다 이미 북마크·좋아요·댓글수를 이 방식으로 배치 처리 중이던 곳)에 `postsWithSnapshots` Set 파라미터를 추가해 동일 패턴으로 확장 — 새 쿼리 방식을 발명하지 않고 기존 컨벤션 그대로 따름.
+3. **응답 DTO에 `hasGraph` 필드 추가(프론트가 직접 계산 안 함)** — `PostResponse`/`PostSummaryResponse` 둘 다 `graphId`(레거시 호환용, 계속 유지)와 별개로 `hasGraph`를 추가. 프론트는 배지 조건을 `post.graphId &&` → `post.hasGraph &&`로 교체만 하면 됨(스냅샷 유무 판단 로직을 프론트로 내리지 않음 — 백엔드가 진실 소스).
+4. **MCP `toolSearchPublicProjects`도 같은 결함 — 함께 수정** — `resolvePublicProjectEntry`가 `post.getGraphId() == null`이면 무조건 `null` 반환하던 것을, graphId가 없으면 `postRepository.findSnapshotsByPostId(post.getId())`의 첫 번째 스냅샷(position 0)의 graphId로 폴백하도록 수정. 목록 조회(`findByGraphIdNotNull`→`findWithGraphOrSnapshots`)만 고치고 이 후속 해석 단계를 놓쳤으면 "목록엔 있는데 상세 정보가 다 빠지는" 반쪽짜리 수정이 될 뻔했음 — grep으로 `findByGraphIdNotNull`의 모든 호출처를 재확인하다 발견.
+5. **TDD** — `assemble`/`assembleSummaries`는 이미 배치 조립 순수 함수로 테스트되고 있어(§4 대상), `CommunityControllerAssembleTest`·`UserControllerAssembleTest`에 `hasGraph`(레거시 graphId만/스냅샷만/둘 다 없음 3분기) 검증 케이스 추가.
+
+**결과.** 백엔드 컴파일+전체 테스트 통과(회귀 없음). ★런타임 검증: 스냅샷만 있고 `graphId=null`인 실제 게시글로 ①갤러리 탭(`?graphOnly=true`) 응답에 포함되는지 ②전체 피드 응답의 `hasGraph:true` ③MCP `search_public_projects` 결과에 프로젝트 정보 정상 포함(이전엔 목록 자체에서 빠졌음) 전부 확인, `graphId`/스냅샷 둘 다 없는 게시글은 `hasGraph:false`로 대조 확인. claude-in-chrome으로 커뮤니티 피드·갤러리 탭·유저 프로필 페이지 3곳 모두 배지 정상 노출 확인. 검증 후 테스트 데이터 정리. 프론트 변경은 `decisions/DECISIONS_FRONTEND.md` 참조.

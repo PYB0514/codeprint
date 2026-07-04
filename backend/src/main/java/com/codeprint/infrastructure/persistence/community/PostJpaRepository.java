@@ -31,6 +31,7 @@ public interface PostJpaRepository extends JpaRepository<Post, UUID> {
     // 조회수 내림차순 조회
     List<Post> findAllByOrderByViewCountDesc(Pageable pageable);
 
-    // 그래프 첨부 게시글만 최신순 조회
-    List<Post> findByGraphIdNotNullOrderByCreatedAtDesc(Pageable pageable);
+    // 그래프가 첨부된 게시글만 최신순 조회 — 레거시 단일 첨부(graphId) 또는 신규 다중 스냅샷 둘 다 포함
+    @Query("SELECT p FROM Post p WHERE p.graphId IS NOT NULL OR EXISTS (SELECT 1 FROM PostGraphSnapshot s WHERE s.postId = p.id) ORDER BY p.createdAt DESC")
+    List<Post> findWithGraphOrSnapshotsOrderByCreatedAtDesc(Pageable pageable);
 }

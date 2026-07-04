@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -60,7 +61,7 @@ public class CommunityController {
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         List<Post> raw;
         if (graphOnly) {
-            raw = postRepository.findByGraphIdNotNull(pageable);
+            raw = postRepository.findWithGraphOrSnapshots(pageable);
         } else if (q != null && !q.isBlank()) {
             raw = postRepository.findByTitleContainingIgnoreCaseOrContentContainingIgnoreCaseOrderByCreatedAtDesc(q, q, pageable);
         } else if ("following".equals(feed) && user != null) {
@@ -336,8 +337,9 @@ public class CommunityController {
         Set<UUID> myLikes = currentUser == null ? Set.of()
                 : likeRepository.findByUserIdAndPostIdIn(currentUser.getId(), postIds).stream()
                         .map(PostLike::getPostId).collect(Collectors.toSet());
+        Set<UUID> postsWithSnapshots = new HashSet<>(postRepository.findPostIdsWithSnapshots(postIds));
 
-        return assemble(posts, usernames, bookmarkCounts, likeCounts, commentCounts, myBookmarks, myLikes);
+        return assemble(posts, usernames, bookmarkCounts, likeCounts, commentCounts, myBookmarks, myLikes, postsWithSnapshots);
     }
 
     // [postId, count] 행 목록을 postId→count Map으로 변환 (없는 글은 호출측에서 0 기본값)
@@ -354,7 +356,8 @@ public class CommunityController {
                                        Map<UUID, Long> likeCounts,
                                        Map<UUID, Long> commentCounts,
                                        Set<UUID> myBookmarks,
-                                       Set<UUID> myLikes) {
+                                       Set<UUID> myLikes,
+                                       Set<UUID> postsWithSnapshots) {
         return posts.stream().map(p -> new PostResponse(
                 p.getId(),
                 p.getTitle(),
@@ -370,7 +373,8 @@ public class CommunityController {
                 myLikes.contains(p.getId()),
                 p.getViewCount(),
                 commentCounts.getOrDefault(p.getId(), 0L),
-                p.getRepoUrl()
+                p.getRepoUrl(),
+                p.getGraphId() != null || postsWithSnapshots.contains(p.getId())
         )).toList();
     }
 
@@ -389,6 +393,7 @@ public class CommunityController {
         boolean likedByMe = currentUser != null &&
                 likeRepository.existsByUserIdAndPostId(currentUser.getId(), post.getId());
         long commentCount = postRepository.countCommentsByPostId(post.getId());
+        boolean hasGraph = post.getGraphId() != null || !postRepository.findSnapshotsByPostId(post.getId()).isEmpty();
         return new PostResponse(
                 post.getId(),
                 post.getTitle(),
@@ -404,7 +409,8 @@ public class CommunityController {
                 likedByMe,
                 post.getViewCount(),
                 commentCount,
-                post.getRepoUrl()
+                post.getRepoUrl(),
+                hasGraph
         );
     }
 
@@ -465,7 +471,7 @@ public class CommunityController {
             UUID graphId, UUID userId, String authorUsername, Instant createdAt,
             long bookmarkCount, boolean bookmarkedByMe,
             long likeCount, boolean likedByMe,
-            long viewCount, long commentCount, String repoUrl) {}
+            long viewCount, long commentCount, String repoUrl, boolean hasGraph) {}
 
     // 댓글 응답 DTO
     public record CommentResponse(

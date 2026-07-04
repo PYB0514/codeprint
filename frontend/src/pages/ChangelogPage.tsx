@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.112.2',
+    date: '2026-07-05',
+    title: '갤러리 탭·그래프 배지가 최신 게시글을 놓치던 문제 수정',
+    type: 'fix',
+    items: [
+      { category: '커뮤니티', desc: '그래프 스냅샷이 첨부된 게시글이 커뮤니티 갤러리 탭과 "📊 그래프" 배지에서 누락되던 문제를 수정했습니다.' },
+    ],
+  },
+  {
     version: 'v0.112.1',
     date: '2026-07-04',
     title: '공유 그래프 실시간 채팅 제거',

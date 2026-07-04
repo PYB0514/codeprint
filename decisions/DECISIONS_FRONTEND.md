@@ -653,3 +653,11 @@ const fetchGraph = useCallback(async () => {
 4. **백엔드 `/graph/{graphId}/chat` STOMP 핸들러 제거** — `CollaborationWebSocketController.handleChat()` 삭제. 같은 클래스의 `/team/{roomId}/chat`(팀 채팅, 별개 기능)·`/collab/{sessionId}/*`(커서·선택·presence)는 무관해 그대로 유지.
 
 **결과.** `tsc -b` 통과, 백엔드 컴파일+전체 테스트 통과(회귀 없음). ★런타임 검증 중 발견: claude-in-chrome으로 신규 스냅샷 뷰어(`CommunityPostSnapshotInner`)를 테스트하다 콘솔에 "Rules of Hooks" 경고 4건이 누적돼 있는 걸 발견 — 원인 추적 결과 이번 세션 중 해당 컴포넌트를 여러 차례 Edit하는 동안 Vite HMR이 라이브 인스턴스를 핫스왑하면서 발생한 개발 중 일시적 아티팩트(훅 개수가 달라진 신구 버전이 같은 렌더 트리에서 충돌)로 확인 — 완전히 새로 고침한 페이지에서는 재현되지 않음(코드 자체를 정적으로 재검토해도 모든 훅이 조건부 return 이전에 무조건 호출되는 순서로 배치돼 있어 실제 위반 없음). 실제 버그 아님으로 판단, 수정 불필요. claude-in-chrome으로 `/share/{projectId}` 재확인 — "채팅" 텍스트 완전히 사라짐, 노드 검색·범례·경고패널 등 기존 기능은 정상 렌더(노드 1398개), 콘솔 신규 에러 없음.
+
+## 피드 갤러리 필터·그래프 배지가 신규 스냅샷 게시글을 누락하던 결함 수정 (2026-07-05)
+
+**문제.** 배지 확장 여부 판단 결과, 백엔드 조사에서 배지보다 범위가 큰 실제 버그로 확인됨 — 상세 원인은 `decisions/DECISIONS_BACKEND.md` 참조. 프론트는 백엔드가 새로 내려주는 `hasGraph` 필드로 교체만 하면 되는 단순 반영.
+
+**결정.** `CommunityPage.tsx`·`UserProfilePage.tsx`의 `Post`/`PostSummary` 인터페이스에 `hasGraph: boolean` 추가, 피드 카드·프로필 카드의 "📊 그래프" 배지 조건을 `post.graphId &&` → `post.hasGraph &&`로 교체. `CommunityPage.tsx`의 게시글 상세 패널 안 레거시 "그래프 보기 →" 버튼(`selectedPost.graphId &&`)은 건드리지 않음 — 이건 스냅샷이 하나도 없을 때만 보이는 레거시 단일 첨부 전용 폴백이라 `graphId` 자체를 확인하는 게 맞음(§3, 의도 다른 조건을 억지로 통일 안 함).
+
+**결과.** `tsc -b` 통과. claude-in-chrome 비로그인 세션 E2E — 스냅샷만 있고 `graphId=null`인 게시글에 대해 ①커뮤니티 피드 카드에 "📊 그래프" 배지 노출 ②"갤러리" 탭 클릭 시 목록에 포함 ③유저 프로필 페이지 글목록에도 배지 노출, 전부 확인. 검증 후 테스트 데이터 정리.

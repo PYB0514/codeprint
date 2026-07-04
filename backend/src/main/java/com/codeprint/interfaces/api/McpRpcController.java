@@ -129,7 +129,7 @@ public class McpRpcController {
     private List<Map<String, Object>> toolSearchPublicProjects(Map<String, Object> args) {
         String query = args.get("query") instanceof String s ? s.toLowerCase() : null;
 
-        List<Post> posts = postRepository.findByGraphIdNotNull(PageRequest.of(0, 50));
+        List<Post> posts = postRepository.findWithGraphOrSnapshots(PageRequest.of(0, 50));
 
         return posts.stream()
                 .filter(p -> query == null
@@ -141,9 +141,15 @@ public class McpRpcController {
                 .toList();
     }
 
-    // 게시글의 그래프 → 프로젝트 정보 조회 — 비공개 프로젝트이면 null 반환
+    // 게시글의 그래프 → 프로젝트 정보 조회 — 비공개 프로젝트이면 null 반환 (레거시 단일 첨부 또는 신규 스냅샷 중 첫 번째)
     private Map<String, Object> resolvePublicProjectEntry(Post post) {
         UUID graphId = post.getGraphId();
+        if (graphId == null) {
+            graphId = postRepository.findSnapshotsByPostId(post.getId()).stream()
+                    .findFirst()
+                    .map(com.codeprint.domain.community.PostGraphSnapshot::getGraphId)
+                    .orElse(null);
+        }
         if (graphId == null) return null;
 
         Optional<Graph> graphOpt = graphQueryService.findById(graphId);

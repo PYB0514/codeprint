@@ -25,7 +25,7 @@ class UserControllerAssembleTest {
         UUID pid = post.getId();
 
         List<UserController.PostSummaryResponse> result = UserController.assembleSummaries(
-                List.of(post), Map.of(pid, 5L), Set.of(pid));
+                List.of(post), Map.of(pid, 5L), Set.of(pid), Set.of());
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).bookmarkCount()).isEqualTo(5L);
@@ -38,9 +38,25 @@ class UserControllerAssembleTest {
         Post post = newPost(UUID.randomUUID());
 
         List<UserController.PostSummaryResponse> result = UserController.assembleSummaries(
-                List.of(post), Map.of(), Set.of());
+                List.of(post), Map.of(), Set.of(), Set.of());
 
         assertThat(result.get(0).bookmarkCount()).isZero();
         assertThat(result.get(0).bookmarkedByMe()).isFalse();
+    }
+
+    @Test
+    @DisplayName("assembleSummaries — hasGraph: 레거시 graphId 또는 스냅샷 존재 시 true")
+    void assembleSummaries_hasGraph() {
+        UUID userId = UUID.randomUUID();
+        Post legacyGraphPost = Post.create(userId, UUID.randomUUID(), "제목", "내용", "GENERAL", null, null, null, null);
+        Post snapshotPost = newPost(userId);
+        Post noGraphPost = newPost(userId);
+
+        List<UserController.PostSummaryResponse> result = UserController.assembleSummaries(
+                List.of(legacyGraphPost, snapshotPost, noGraphPost), Map.of(), Set.of(), Set.of(snapshotPost.getId()));
+
+        assertThat(result.stream().filter(r -> r.id().equals(legacyGraphPost.getId())).findFirst().orElseThrow().hasGraph()).isTrue();
+        assertThat(result.stream().filter(r -> r.id().equals(snapshotPost.getId())).findFirst().orElseThrow().hasGraph()).isTrue();
+        assertThat(result.stream().filter(r -> r.id().equals(noGraphPost.getId())).findFirst().orElseThrow().hasGraph()).isFalse();
     }
 }

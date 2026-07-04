@@ -53,7 +53,8 @@ class CommunityControllerAssembleTest {
                 Map.of(pid, 7L),
                 Map.of(pid, 4L),
                 Set.of(pid),
-                Set.of());
+                Set.of(),
+                Set.of(pid));
 
         assertThat(result).hasSize(1);
         CommunityController.PostResponse r = result.get(0);
@@ -63,6 +64,27 @@ class CommunityControllerAssembleTest {
         assertThat(r.commentCount()).isEqualTo(4L);
         assertThat(r.bookmarkedByMe()).isTrue();   // myBookmarks 에 포함
         assertThat(r.likedByMe()).isFalse();        // myLikes 비어있음
+        assertThat(r.hasGraph()).isTrue();          // postsWithSnapshots 에 포함
+    }
+
+    @Test
+    @DisplayName("assemble — hasGraph: 레거시 graphId만 있어도 true, 스냅샷도 graphId도 없으면 false")
+    void assemble_hasGraph_legacyOrSnapshotOrNeither() {
+        UUID author = UUID.randomUUID();
+        Post legacyGraphPost = Post.create(author, UUID.randomUUID(), "제목", "내용", "GENERAL", null, null, null, null);
+        Post noGraphPost = newPost(author);
+
+        List<CommunityController.PostResponse> result = CommunityController.assemble(
+                List.of(legacyGraphPost, noGraphPost),
+                Map.of(author, "alice"),
+                Map.of(), Map.of(), Map.of(),
+                Set.of(), Set.of(),
+                Set.of());
+
+        CommunityController.PostResponse legacy = result.stream().filter(r -> r.id().equals(legacyGraphPost.getId())).findFirst().orElseThrow();
+        CommunityController.PostResponse none = result.stream().filter(r -> r.id().equals(noGraphPost.getId())).findFirst().orElseThrow();
+        assertThat(legacy.hasGraph()).isTrue();
+        assertThat(none.hasGraph()).isFalse();
     }
 
     @Test
@@ -77,6 +99,7 @@ class CommunityControllerAssembleTest {
                 Map.of(),
                 Map.of(),
                 Set.of(),
+                Set.of(),
                 Set.of());
 
         CommunityController.PostResponse r = result.get(0);
@@ -86,6 +109,7 @@ class CommunityControllerAssembleTest {
         assertThat(r.commentCount()).isZero();
         assertThat(r.bookmarkedByMe()).isFalse();
         assertThat(r.likedByMe()).isFalse();
+        assertThat(r.hasGraph()).isFalse();
     }
 
     @Test

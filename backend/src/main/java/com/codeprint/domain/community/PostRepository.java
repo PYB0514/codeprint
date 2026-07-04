@@ -62,12 +62,15 @@ public interface PostRepository {
     // 조회수 내림차순 게시글 목록 조회
     List<Post> findAllByOrderByViewCountDesc(org.springframework.data.domain.Pageable pageable);
 
-    // 그래프 첨부 게시글만 최신순 조회
-    List<Post> findByGraphIdNotNull(org.springframework.data.domain.Pageable pageable);
+    // 그래프가 첨부된 게시글만 최신순 조회 (레거시 단일 첨부 + 신규 다중 스냅샷 모두 포함)
+    List<Post> findWithGraphOrSnapshots(org.springframework.data.domain.Pageable pageable);
 
     // 그래프 스냅샷 목록 저장
     void saveSnapshots(List<PostGraphSnapshot> snapshots);
 
     // 게시글 ID로 그래프 스냅샷 목록 조회 (노출 순)
     List<PostGraphSnapshot> findSnapshotsByPostId(UUID postId);
+
+    // 주어진 게시글 ID 중 그래프 스냅샷을 가진 것만 반환 (N+1 제거용 배치 존재 확인)
+    List<UUID> findPostIdsWithSnapshots(List<UUID> postIds);
 }
