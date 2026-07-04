@@ -1,4 +1,4 @@
-// 런타임 경고 목록을 타입별로 그룹핑해서 표시하는 패널
+// 구조 경고 목록을 타입별로 그룹핑해서 표시하는 패널
 import { useState } from 'react'
 import { type IgnoreRule, inferGlob, countMatches } from '../utils/ignoreRules'
 
@@ -39,20 +39,21 @@ const SEVERITY_STYLE: Record<string, { label: string; bg: string; text: string }
 }
 
 export const WARNING_META: Record<string, { label: string; desc: string; color: string; severity: string }> = {
-  CYCLIC_IMPORT:               { label: '순환 의존',              desc: 'A→B→A IMPORT 사이클',                                       color: '#f97316', severity: 'HIGH'   },
-  BROKEN_INTERFACE_CHAIN:      { label: '인터페이스 미구현',       desc: '구현체 엣지 없는 인터페이스 메서드',                           color: '#ef4444', severity: 'MEDIUM' },
-  ASYNC_SELF_CALL:             { label: '@Async 자기 호출',        desc: '프록시 우회로 비동기 무시됨',                                  color: '#eab308', severity: 'MEDIUM' },
-  DB_LAYER_BYPASS:             { label: 'DB 레이어 우회',          desc: 'Repository를 거치지 않는 직접 persistence 호출',              color: '#8b5cf6', severity: 'HIGH'   },
-  CROSS_CONTEXT_IMPORT:        { label: 'DDD 컨텍스트 import 위반', desc: 'application/A가 domain/B를 직접 import — ID로만 참조해야 함', color: '#06b6d4', severity: 'HIGH'   },
-  CROSS_FEATURE_IMPORT:        { label: '피처 경계 위반',           desc: 'features/A가 features/B를 직접 import — 피처는 서로 의존 금지(공유는 shared로)', color: '#0ea5e9', severity: 'HIGH'   },
-  FEATURE_LAYER_VIOLATION:     { label: '레이어 단방향 위반',       desc: '하위 레이어가 상위를 import — 의존은 app → features → shared 한 방향이어야 함', color: '#6366f1', severity: 'HIGH'   },
-  DOMAIN_IMPORTS_INFRA:        { label: 'DDD 의존 방향 위반',      desc: 'domain/ 이 infrastructure/ 를 직접 import',                   color: '#ef4444', severity: 'HIGH'   },
-  CROSS_DOMAIN_CALL:           { label: 'Cross-Domain 직접 호출',  desc: '도메인 경계를 넘는 직접 함수 호출 — port/ 인터페이스 경유 필요', color: '#f43f5e', severity: 'MEDIUM' },
-  MISSING_CONVERTER_MIGRATION: { label: '@Convert 마이그레이션 필요', desc: '기존 평문 데이터에 Flyway 마이그레이션 미작성 가능성',       color: '#ec4899', severity: 'MEDIUM' },
-  DEAD_CODE:                   { label: '데드 코드 후보',           desc: '아무 곳에서도 호출되지 않는 함수',                             color: '#6b7280', severity: 'LOW'    },
-  HIGH_FAN_OUT:                { label: '과도한 의존 (SRP 위반)',   desc: '7개 초과 함수 호출 — 단일 책임 원칙 위반 가능성',               color: '#f59e0b', severity: 'LOW'    },
-  LAYERED_REVERSE_DEPENDENCY:  { label: '레이어 역전 의존',        desc: '하위 레이어가 상위 레이어를 직접 import (Repository→Controller 등)', color: '#dc2626', severity: 'HIGH'   },
-  LAYERED_BYPASS:              { label: 'Service 레이어 우회',      desc: 'Controller가 Repository를 직접 접근 — Service 레이어 미경유',  color: '#14b8a6', severity: 'MEDIUM' },
+  CYCLIC_IMPORT:               { label: '순환 의존',              desc: '파일들이 서로를 import해 고리를 이룹니다 — 한쪽만 고쳐도 연쇄로 영향받고 초기화 오류의 원인이 됩니다. 공통 부분을 제3의 파일로 분리하세요.', color: '#f97316', severity: 'HIGH'   },
+  BROKEN_INTERFACE_CHAIN:      { label: '인터페이스 미구현',       desc: '인터페이스에 선언만 있고 연결된 구현을 찾지 못했습니다 — 미완성 코드거나 죽은 선언일 수 있습니다.', color: '#ef4444', severity: 'MEDIUM' },
+  ASYNC_SELF_CALL:             { label: '@Async 자기 호출',        desc: '같은 클래스 안에서 @Async 메서드를 부르면 비동기가 조용히 무시됩니다(Spring 프록시 한계) — 별도 클래스로 분리하세요.', color: '#eab308', severity: 'MEDIUM' },
+  DB_LAYER_BYPASS:             { label: 'DB 계층 건너뛰기',        desc: 'Repository(저장소 계층)를 거치지 않고 DB에 직접 접근합니다 — 검증·트랜잭션 규칙이 우회될 수 있습니다.', color: '#8b5cf6', severity: 'HIGH'   },
+  CROSS_CONTEXT_IMPORT:        { label: '다른 도메인 내부 참조',    desc: '한 도메인 모듈이 다른 도메인의 내부 클래스를 직접 import합니다 — 모듈이 서로 얽혀 분리·수정이 어려워집니다. ID나 인터페이스로만 참조하세요.', color: '#06b6d4', severity: 'HIGH'   },
+  CROSS_FEATURE_IMPORT:        { label: '기능 폴더 간 직접 참조',   desc: '기능 폴더(features/A)가 다른 기능 폴더(features/B)를 직접 import합니다 — 기능끼리 얽힙니다. 공유할 코드는 shared/로 옮기세요.', color: '#0ea5e9', severity: 'HIGH'   },
+  FEATURE_LAYER_VIOLATION:     { label: '레이어 단방향 위반',       desc: '의존은 app → features → shared 한 방향이어야 하는데 거꾸로 import했습니다 — 공용 코드가 특정 기능에 묶여 재사용이 깨집니다.', color: '#6366f1', severity: 'HIGH'   },
+  DOMAIN_IMPORTS_INFRA:        { label: '핵심 로직 → 인프라 의존',  desc: '비즈니스 로직(domain/)이 DB·외부 연동 코드(infrastructure/)를 직접 import합니다 — 핵심 로직이 특정 기술에 묶여 테스트·교체가 어려워집니다.', color: '#ef4444', severity: 'HIGH'   },
+  CROSS_DOMAIN_CALL:           { label: '도메인 경계 넘는 호출',    desc: '다른 도메인의 함수를 중간 인터페이스 없이 직접 호출합니다 — port 인터페이스를 두면 각 도메인을 독립적으로 수정할 수 있습니다.', color: '#f43f5e', severity: 'MEDIUM' },
+  MISSING_CONVERTER_MIGRATION: { label: '@Convert 마이그레이션 필요', desc: '필드에 @Convert(암호화 등)를 붙였는데 기존 DB 데이터를 변환하는 마이그레이션이 없을 수 있습니다 — 조회 시 오류 위험. 이미 처리했다면 숨기세요.', color: '#ec4899', severity: 'MEDIUM' },
+  DEAD_CODE:                   { label: '데드 코드 후보',           desc: '프로젝트 안에서 호출하는 곳을 찾지 못한 함수입니다 — 안 쓰는 코드거나, 프레임워크가 호출해 분석에 안 보일 수도 있어 "후보"입니다.', color: '#6b7280', severity: 'LOW'    },
+  HIGH_FAN_OUT:                { label: '한 함수에 몰린 책임',      desc: '함수 하나가 7개 넘는 함수를 호출합니다 — 하는 일이 많아 수정 영향 범위가 큽니다. 역할별 분리를 검토하세요.', color: '#f59e0b', severity: 'LOW'    },
+  LAYERED_REVERSE_DEPENDENCY:  { label: '레이어 역전 의존',        desc: '아래 계층(Repository 등)이 위 계층(Controller 등)을 import합니다 — 계층 구조가 뒤집혀 재사용과 테스트가 어려워집니다.', color: '#dc2626', severity: 'HIGH'   },
+  LAYERED_BYPASS:              { label: 'Service 계층 건너뛰기',    desc: 'Controller가 Service를 건너뛰고 Repository를 직접 호출합니다 — 비즈니스 로직이 Controller에 흩어질 위험이 있습니다.', color: '#14b8a6', severity: 'MEDIUM' },
+  INTENT_DRIFT:                { label: '선언한 구조 규칙 위반',    desc: '"아키텍처 의도"에서 직접 선언한 금지 규칙을 어긴 import입니다 — 내가 정한 구조 규칙에서 벗어난 코드입니다.', color: '#a855f7', severity: 'HIGH'   },
 }
 
 // 경고 목록을 타입별로 그룹핑하여 severity 순(HIGH→MEDIUM→LOW)으로 표시
