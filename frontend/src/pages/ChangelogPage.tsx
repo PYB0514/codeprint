@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.112.0',
+    date: '2026-07-04',
+    title: '커뮤니티 게시글 그래프 스냅샷 뷰어 — 경고 확인·노드 코멘트 열람 추가',
+    type: 'feature',
+    items: [
+      { category: '커뮤니티', desc: '게시글 그래프 스냅샷 화면에서 구조 경고 목록을 확인하고 마크다운으로 내보낼 수 있습니다. 노드를 클릭하면 해당 노드에 달린 코멘트도 함께 확인할 수 있습니다(읽기 전용).' },
+    ],
+  },
+  {
     version: 'v0.111.0',
     date: '2026-07-04',
     title: '커뮤니티 게시글 그래프 스냅샷 뷰어 추가',

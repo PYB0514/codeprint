@@ -14,14 +14,16 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { buildLayout, applyEdgeVisibility, searchNodes, getGroupKey, findCommonPrefix, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM } from '../utils/graphLayout'
+import { buildLayout, applyEdgeVisibility, searchNodes, getGroupKey, findCommonPrefix, downloadWarningsMd, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset } from '../utils/graphLayout'
 import type { Node, Edge } from '@xyflow/react'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
+import WarningPanel from '../components/WarningPanel'
 import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewToggles'
 import { GraphLegend } from '../components/GraphLegend'
+import { CornerPanel } from '../components/CornerPanel'
 import { useSidebarResize } from '../hooks/useSidebarResize'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
@@ -204,6 +206,15 @@ interface PostSnapshot {
     opaqueLayerSet?: string[]
   }
   position: number
+  warnings: { type: string; nodeIds: string[]; message: string }[]
+}
+
+// 노드 코멘트 응답 타입 (읽기 전용)
+interface NodeCommentView {
+  id: string
+  content: string
+  userId: string
+  createdAt: number
 }
 
 // 엣지 타입 토글 항목 정의 (구조 파악 목적 — GraphPage 엣지 섹션과 동일 라벨)
@@ -240,6 +251,10 @@ function CommunityPostSnapshotInner() {
   const [edgeVisibility, setEdgeVisibility] = useState({ se: false, sc: false, si: false, sb: true, sdb: false, sapi: true })
   const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
   const [opaqueDomainSet, setOpaqueDomainSet] = useState<Set<string>>(new Set())
+  const [warnings, setWarnings] = useState<{ type: string; nodeIds: string[]; message: string }[]>([])
+  const [warningPanelOpen, setWarningPanelOpen] = useState(false)
+  const [graphId, setGraphId] = useState<string | null>(null)
+  const [nodeComments, setNodeComments] = useState<NodeCommentView[]>([])
 
   // 노드 클릭 시 우측 사이드바 표시
   const handleNodeClick: NodeMouseHandler = (_, node) => {
@@ -290,12 +305,26 @@ function CommunityPostSnapshotInner() {
         setOpaqueLayerSet(initialOpaqueLayerSet)
         setNodes(finalNodes)
         setEdges(applyEdgeVisibility(builtEdges, se, sc, si, sb, sdb, sapi))
+        setGraphId(snapshot.graphId)
+        setWarnings(snapshot.warnings ?? [])
         setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
       })
       .catch(() => setError('그래프를 불러오지 못했습니다.'))
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId, position])
+
+  // 선택된 노드가 바뀌면 코멘트 목록을 읽기 전용으로 조회
+  useEffect(() => {
+    if (!graphId || !selectedNode) {
+      setNodeComments([])
+      return
+    }
+    axios
+      .get<NodeCommentView[]>(`/api/graphs/${graphId}/nodes/${selectedNode.id}/comments`)
+      .then((res) => setNodeComments(res.data))
+      .catch(() => setNodeComments([]))
+  }, [graphId, selectedNode])
 
   // 계층형 ↔ 도메인 뷰 전환
   const toggleLayoutPreset = () => {
@@ -640,6 +669,27 @@ function CommunityPostSnapshotInner() {
               <Controls />
               <MiniMap nodeColor="#6b7280" maskColor="rgba(17,24,39,0.7)" />
             </ReactFlow>
+
+            {/* 코너 플로팅 — 경고 (우측 하단, 기본 접힘, 읽기 전용) */}
+            <CornerPanel
+              open={warningPanelOpen}
+              onOpen={() => setWarningPanelOpen(true)}
+              onClose={() => setWarningPanelOpen(false)}
+              icon="🔎"
+              title="경고"
+              count={warnings.length}
+              panelClassName="w-72 max-h-[60vh]"
+              style={{ right: '16px' }}
+              headerExtra={warnings.length > 0 ? (
+                <button onClick={() => downloadWarningsMd(warnings)} title="경고 마크다운 내보내기" className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
+              ) : undefined}
+            >
+              {warnings.length === 0 ? (
+                <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
+              ) : (
+                <WarningPanel warnings={warnings} onNodeNavigate={handleFocusNode} />
+              )}
+            </CornerPanel>
           </div>
         </div>
 
@@ -711,6 +761,20 @@ function CommunityPostSnapshotInner() {
                       <span className="text-[10px] text-gray-500 w-10 shrink-0 mt-0.5">설명</span>
                       <span className="text-xs text-gray-300 break-words">{String(selectedNode.data.comment)}</span>
                     </div>
+                  )}
+                </div>
+
+                {/* 노드 코멘트 — 읽기 전용(작성·삭제는 GraphPage 소유자 전용) */}
+                <div className="border-t border-gray-800 pt-2.5 flex flex-col gap-1.5">
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">코멘트 {nodeComments.length > 0 && `(${nodeComments.length})`}</p>
+                  {nodeComments.length === 0 ? (
+                    <p className="text-[11px] text-gray-600">코멘트가 없습니다.</p>
+                  ) : (
+                    nodeComments.map((c) => (
+                      <div key={c.id} className="text-xs text-gray-300 bg-gray-800/60 rounded px-2 py-1.5 break-words">
+                        {c.content}
+                      </div>
+                    ))
                   )}
                 </div>
               </div>

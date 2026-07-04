@@ -612,6 +612,8 @@ const fetchGraph = useCallback(async () => {
 
 **런타임 검증 중 발견한 버그(백엔드):** 비공개 게시글이 커뮤니티 전체 피드에 그대로 노출되는 실제 버그를 발견 — 상세 원인·수정은 `decisions/DECISIONS_BACKEND.md` "PR-B" 참조.
 
+**결과.** `tsc -b` 통과. claude-in-chrome으로 실 로그인 세션(GitHub OAuth) E2E 검증 — GraphPage 공유 모달에서 슬롯3(도메인-이름) 선택+비공개 등록, 커뮤니티 글쓰기 폼에서 프로젝트 연결 후 슬롯1(계층-이름) 기본값+공개 등록, 둘 다 DB에서 `post_graph_snapshots.config`가 선택한 슬롯과 정확히 일치함을 확인. 테스트 게시글은 삭제로 정리(겸 CASCADE 재확인). ChangelogPage v0.110.0(feature).
+
 ## 게시글 기반 공유그래프 재설계 — PR-C 2단계: 다중 스냅샷 카드 목록 + 단일 스냅샷 뷰어 (2026-07-04)
 
 **문제.** PR-C 1단계 백엔드 엔드포인트(`GET /snapshots`)는 있었지만 이를 호출하는 프론트가 없어 신규 스냅샷 게시글은 여전히 그래프를 볼 방법이 없었음. 레이아웃 방식을 사용자에게 직접 확인(AskUserQuestion) — 후보 ①세로 스택(모든 스냅샷을 한 페이지에 순서대로) ②탭 전환 ③그리드(2열) 중 사용자가 전부 거부하고 **"오늘의 공개레포"처럼 카드 목록 + 클릭 시 개별 공유그래프 화면 진입** 방식을 지정. 이는 세 후보 어디에도 없던 네 번째 방향이라 별도로 설계.
@@ -628,4 +630,14 @@ const fetchGraph = useCallback(async () => {
 
 **결과.** `tsc -b` 통과. claude-in-chrome 비로그인 세션으로 E2E 검증 — 실 DB에 스냅샷 행 삽입(gin-gonic/gin, 도메인 레이아웃) 후 ①게시글 상세에서 "📊 스냅샷 1 도메인-이름" 카드 렌더 확인 ②클릭 시 `/community/posts/{id}/graph/0`으로 정상 이동 ③새 뷰어에서 노드 1385개 렌더·계층↔도메인 레이아웃 전환 시 범례 등장·엣지타입 토글(의존성) 클릭 시 버튼 활성 스타일 전환·파일 노드 클릭 시 우측 상세 패널 표시 전부 확인 ④레거시 게시글("테스트 게시글", 그래프 미첨부)은 카드·레거시 링크 둘 다 안 뜸(회귀 없음) 확인. 검증 후 테스트 스냅샷 행 삭제. 백엔드 전체 테스트 재실행 green.
 
-**결과.** `tsc -b` 통과. claude-in-chrome으로 실 로그인 세션(GitHub OAuth) E2E 검증 — GraphPage 공유 모달에서 슬롯3(도메인-이름) 선택+비공개 등록, 커뮤니티 글쓰기 폼에서 프로젝트 연결 후 슬롯1(계층-이름) 기본값+공개 등록, 둘 다 DB에서 `post_graph_snapshots.config`가 선택한 슬롯과 정확히 일치함을 확인. 테스트 게시글은 삭제로 정리(겸 CASCADE 재확인). ChangelogPage v0.110.0(feature).
+## 게시글 기반 공유그래프 재설계 — PR-C 3단계: 경고 코너패널·MD내보내기·노드 코멘트 읽기전용 포팅 (2026-07-04)
+
+**문제.** PROGRESS.md 계획의 마지막 조각 — `CommunityPostSnapshotInner`에 경고 확인·MD 내보내기·노드 코멘트(읽기 전용)를 ShareGraphPage와 동등하게 포팅.
+
+**결정.**
+1. **경고 코너패널 — ShareGraphPage 패턴 그대로 이식** — `CornerPanel`+`WarningPanel`(둘 다 기존 공유 컴포넌트)을 그대로 import. `WarningPanel`은 `ignoreOps`/`onSuppress` prop을 안 넘기면 자동으로 읽기 전용(무시·숨기기 버튼 미표시)이라 컴포넌트 자체 수정 없이 그대로 재사용 가능했음(props 설계가 이미 읽기전용을 지원 — 별도 "읽기전용 모드" 분기를 새로 만들 필요 없었음).
+2. **MD 내보내기 — 기존 유틸 함수 그대로 호출** — `downloadWarningsMd`(graphLayout.ts, 이미 ShareGraphPage가 쓰던 함수) 재사용, 신규 로직 없음.
+3. **노드 코멘트 — 목록만, 작성/삭제 UI 없음** — `selectedNode` 변경 시 `GET /api/graphs/{graphId}/nodes/{nodeId}/comments`를 호출해 텍스트 목록만 렌더(입력창·삭제 버튼 없음 — 사용자 확정: "생성·수정·삭제는 권한 확인, 읽기는 공개여부만 확인"이 이미 백엔드 `verifyGraphReadAccess`로 구현됐고, 프론트는 그에 맞춰 읽기 동작만 노출). 노드 선택 해제 시 목록 초기화.
+4. **경고 데이터는 스냅샷 응답에 이미 포함** — 백엔드 `/snapshots` 응답에 `warnings` 필드가 추가돼(decisions/DECISIONS_BACKEND.md "PR-C 3단계" 참조) 프론트는 별도 API 호출 없이 스냅샷 로드 시점에 함께 세팅.
+
+**결과.** `tsc -b` 통과. claude-in-chrome 비로그인 세션 E2E 검증 — ①gin-gonic/gin(경고 0건) 스냅샷으로 대조 후 codeprint 자기분석 그래프(HIGH_FAN_OUT 베이스라인 10건)로 교체해 경고 코너패널에 "과도한 의존" 그룹+MD 내보내기 버튼 노출 확인, 버튼 클릭 시 예외 없이 다운로드 트리거 확인 ②실 노드 코멘트 1건 DB 직접 삽입 후 해당 노드 클릭 시 비로그인 세션에서 코멘트 내용 정상 표시, 코멘트 없는 노드는 "코멘트가 없습니다" 확인 ③`curl`(쿠키 없음)로 `GET /api/graphs/{graphId}/nodes/{nodeId}/comments` 200 확인. 검증 후 테스트 데이터(스냅샷 행·코멘트) 정리. 백엔드 신규 단위 테스트(`GraphFacadeTest` 6종, `GraphReadAdapterTest` 2종) 포함 전체 테스트 재실행 green.
