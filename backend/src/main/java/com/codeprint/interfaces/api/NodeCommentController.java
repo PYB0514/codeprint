@@ -21,14 +21,14 @@ public class NodeCommentController {
     private final NodeCommentService nodeCommentService;
     private final GraphFacade graphFacade;
 
-    // 노드 코멘트 목록 조회 — 그래프 소유자만 접근 가능
+    // 노드 코멘트 목록 조회 — 소유자이거나 프로젝트가 공개면 접근 가능(읽기 전용, 공유 뷰어용)
     @GetMapping("/api/graphs/{graphId}/nodes/{nodeId}/comments")
     public ResponseEntity<List<Map<String, Object>>> getComments(
             @PathVariable UUID graphId,
             @PathVariable String nodeId,
             @AuthenticationPrincipal User user) {
 
-        verifyOwnership(graphId, user);
+        graphFacade.verifyGraphReadAccess(graphId, user != null ? user.getId() : null);
 
         List<Map<String, Object>> result = nodeCommentService.getComments(graphId, nodeId).stream()
                 .map(this::toResponse)

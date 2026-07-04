@@ -181,6 +181,7 @@ public class CommunityController {
                     map.put("edges", toEdgeMaps(gs.edges()));
                     map.put("config", snapshot.getConfig());
                     map.put("position", snapshot.getPosition());
+                    map.put("warnings", communityFacade.getActiveWarnings(gs.graphId()));
                     return map;
                 })
                 .orElse(null);

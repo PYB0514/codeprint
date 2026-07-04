@@ -2,6 +2,7 @@
 package com.codeprint.infrastructure.adapter;
 
 import com.codeprint.application.graph.GraphQueryService;
+import com.codeprint.application.graph.WarningSuppressionService;
 import com.codeprint.domain.community.port.GraphReadPort;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.GraphViewPreset;
@@ -11,8 +12,10 @@ import com.codeprint.domain.graph.Node;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
@@ -21,6 +24,7 @@ public class GraphReadAdapter implements GraphReadPort {
 
     private final GraphQueryService graphQueryService;
     private final GraphViewPresetRepository presetRepository;
+    private final WarningSuppressionService warningSuppressionService;
 
     // graphId의 노드·엣지를 community NodeView/EdgeView로 매핑하여 스냅샷 반환
     @Override
@@ -50,6 +54,19 @@ public class GraphReadAdapter implements GraphReadPort {
                             .orElseGet(() -> GraphViewPresetDefaults.defaultConfig(presetSlot));
                     return new PresetSnapshot(graph.getId(), config);
                 });
+    }
+
+    // graphId의 활성 경고(프로젝트 단위 숨김 규칙 제외) 조회
+    @Override
+    public List<Map<String, Object>> findActiveWarnings(UUID graphId) {
+        return graphQueryService.findById(graphId)
+                .map(graph -> {
+                    Set<String> suppressed = warningSuppressionService.getSuppressedFingerprints(graph.getProjectId());
+                    return graphQueryService.getWarnings(graphId).stream()
+                            .filter(w -> !suppressed.contains(w.get("fingerprint")))
+                            .toList();
+                })
+                .orElse(List.of());
     }
 
     // graph 도메인 Node → community NodeView (comment는 metadata에서 추출, filePath·language는 원본 null 유지)

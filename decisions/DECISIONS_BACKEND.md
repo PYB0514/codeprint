@@ -1143,3 +1143,16 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 3. **SECURITY_POLICY.md 3기준 재확인** — ①비인증 접근 이유: 목록·그래프·스냅샷이 이미 공개인데 상세만 막혀 있는 게 오히려 비일관적. ②민감 데이터 없음: 게시글 본문·댓글·첨부 메타데이터뿐(토큰·개인정보 없음). ③소유권 개념: 비공개(PRIVATE) 게시글도 PR-A/B에서 이미 "직접 링크로는 접근 가능"이 확정 정책이라 permitAll 확장이 새로운 프라이버시 노출을 만들지 않음(오히려 목록·그래프·스냅샷과의 일관성 확보).
 
 **결과.** 백엔드 컴파일+전체 테스트 통과(회귀 없음). ★런타임 검증: `curl`(쿠키 없음)로 `GET /api/community/posts/{postId}` 200 확인, claude-in-chrome 비로그인 세션으로 게시글 클릭 → 상세·댓글·스냅샷 카드 전부 정상 로드 확인. `ERROR_TRACKER.md` [SEC-2]에 기록.
+
+## 게시글 기반 공유그래프 재설계 — PR-C 3단계: 경고 조회 + 노드 코멘트 읽기 권한 완화 (2026-07-04)
+
+**문제.** PROGRESS.md 계획의 마지막 조각 — 공유 스냅샷 뷰어에 경고 패널·MD 내보내기·노드 코멘트(읽기 전용)를 붙이려면 백엔드가 두 가지를 새로 노출해야 했다: ①스냅샷 응답에 그래프 경고 목록 ②노드 코멘트 GET을 비소유자·비로그인도 볼 수 있게.
+
+**이유/결정.**
+1. **경고 조회 — 기존 suppress 필터링 로직 재사용** — `GraphController`가 이미 `warningSuppressionService.getSuppressedFingerprints(projectId)`로 프로젝트 단위(사용자 무관) 숨김 규칙을 적용 중이라, 같은 방식을 `GraphReadPort.findActiveWarnings(graphId)`(신규) + `GraphReadAdapter` 구현으로 그대로 재사용(§1). `GraphController`의 private `filterSuppressed`/`partitionSuppressed`는 손대지 않음(다른 응답 형태— suppressed 분리 반환— 라 그대로 두는 게 더 외과적).
+2. **노드 코멘트 GET 권한 — 새 메서드로 소유자 검증과 분리** — 기존 `verifyOwnership`(=오너만)을 고치는 대신 `GraphFacade.verifyGraphReadAccess(graphId, userId)`(신규)를 추가해 GET에서만 사용. 로직: 프로젝트가 공개면 `userId` 상관없이 통과, 비공개면 `userId`가 있어야 하고 소유자여야 함(기존 `getPublicProject`/`getProject` 그대로 위임, 새 인가 규칙 발명 안 함). POST/DELETE는 여전히 `verifyOwnership`(오너 전용) — "생성·수정·삭제는 권한 확인, 읽기는 공개여부만 확인" 사용자 확정 사항 그대로.
+3. **TDD 적용** — `verifyGraphReadAccess`는 분기 3개 이상(공개+비로그인 통과/공개+로그인 통과/비공개+소유자 통과/비공개+비소유자 차단/비공개+비로그인 차단/그래프없음)인 권한 로직이라 §4 의무 대상. `GraphFacadeTest` 신규 6종 + `GraphReadAdapterTest`에 `findActiveWarnings` 2종 추가(숨김 필터링·그래프없음).
+4. **permitAll — GET만 스코프** — `/api/graphs/*/nodes/*/comments` GET permitAll 추가(POST/DELETE는 기존 인증 유지, `/api/community/posts/*` 때와 동일 컨벤션).
+5. **스냅샷 응답에 warnings 필드 추가** — `CommunityController.toSnapshotResponse`가 `communityFacade.getActiveWarnings(graphId)`(신규, `GraphReadPort` 위임)를 호출해 `warnings` 키로 포함. 스냅샷별로 매번 계산(캐싱 없음 — 기존 `/graph`·`/share` 엔드포인트도 매 요청 계산이라 일관성 유지, `graphQueryService.getWarnings`가 이미 내부적으로 detect 결과 캐시를 가짐).
+
+**결과.** 백엔드 컴파일+전체 테스트 통과(신규 8종: `GraphFacadeTest` 6종, `GraphReadAdapterTest` 2종 추가). ★런타임 검증: gin-gonic/gin(경고 0건) 대조 후 codeprint 자기분석 그래프(HIGH_FAN_OUT 기존 베이스라인 10건)로 스냅샷 삽입 → `/snapshots` 응답에 `warnings` 10건 정확히 반환 확인(같은 프로젝트의 기존 `/share/{projectId}/graph` 응답과 대조해 0건 케이스도 일치 검증). `curl`(쿠키 없음)로 `GET /api/graphs/{graphId}/nodes/{nodeId}/comments` 200 확인. 실 코멘트 1건 DB 직접 삽입 후 비로그인 브라우저 세션에서 정상 조회 확인, 검증 후 테스트 데이터 정리. 프론트 변경은 `decisions/DECISIONS_FRONTEND.md` "PR-C 3단계" 참조.

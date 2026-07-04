@@ -31,6 +31,19 @@ public class GraphFacade {
                 .ifPresent(graph -> projectQueryService.getProject(graph.getProjectId(), userId));
     }
 
+    // 그래프 읽기 접근 허용 — 프로젝트가 공개면 누구나, 비공개면 소유자만 (노드 코멘트 등 읽기 전용 API용)
+    public void verifyGraphReadAccess(UUID graphId, UUID userId) {
+        UUID projectId = graphQueryService.findById(graphId)
+                .map(Graph::getProjectId)
+                .orElseThrow(() -> new IllegalArgumentException("Graph not found: " + graphId));
+        try {
+            projectQueryService.getPublicProject(projectId);
+        } catch (IllegalStateException notPublic) {
+            if (userId == null) throw notPublic;
+            projectQueryService.getProject(projectId, userId);
+        }
+    }
+
     // 공개 프로젝트 조회 — 비인증 접근용
     public com.codeprint.domain.project.Project getPublicProject(UUID projectId) {
         return projectQueryService.getPublicProject(projectId);

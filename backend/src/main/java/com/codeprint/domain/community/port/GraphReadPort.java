@@ -17,6 +17,9 @@ public interface GraphReadPort {
     // 프로젝트의 최신 그래프에서 지정 슬롯의 프리셋 설정을 조회(저장 안 됐으면 기본값) — 게시글 스냅샷 캡처 전용
     Optional<PresetSnapshot> findLatestPresetConfig(UUID projectId, UUID userId, int presetSlot);
 
+    // graphId의 활성 경고(프로젝트 단위 숨김 규칙 제외) 조회 — 공유 스냅샷 뷰어 전용
+    List<Map<String, Object>> findActiveWarnings(UUID graphId);
+
     // 그래프 노드·엣지 스냅샷 (community 소유 published language)
     record GraphSnapshot(UUID graphId, List<NodeView> nodes, List<EdgeView> edges) {}
 

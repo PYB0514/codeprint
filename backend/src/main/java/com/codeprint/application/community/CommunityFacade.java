@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,6 +38,11 @@ public class CommunityFacade {
     // 게시글 등록 시점에 프로젝트+프리셋 슬롯의 설정을 스냅샷으로 캡처(이후 원본 프리셋이 바뀌어도 무관)
     public Optional<GraphReadPort.PresetSnapshot> captureGraphSnapshot(UUID projectId, UUID userId, int presetSlot) {
         return graphReadPort.findLatestPresetConfig(projectId, userId, presetSlot);
+    }
+
+    // 그래프의 활성 경고 목록 반환 (스냅샷 뷰어 전용)
+    public List<Map<String, Object>> getActiveWarnings(UUID graphId) {
+        return graphReadPort.findActiveWarnings(graphId);
     }
 
     // 팔로잉 유저의 게시글 목록 조회
