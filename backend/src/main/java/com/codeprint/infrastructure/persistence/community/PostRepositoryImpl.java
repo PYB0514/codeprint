@@ -133,10 +133,10 @@ public class PostRepositoryImpl implements PostRepository {
         return postJpa.findAllByOrderByViewCountDesc(pageable);
     }
 
-    // 그래프 첨부 게시글만 최신순 조회
+    // 그래프가 첨부된 게시글만 최신순 조회 (레거시 단일 첨부 + 신규 다중 스냅샷 모두 포함)
     @Override
-    public List<Post> findByGraphIdNotNull(Pageable pageable) {
-        return postJpa.findByGraphIdNotNullOrderByCreatedAtDesc(pageable);
+    public List<Post> findWithGraphOrSnapshots(Pageable pageable) {
+        return postJpa.findWithGraphOrSnapshotsOrderByCreatedAtDesc(pageable);
     }
 
     // 그래프 스냅샷 목록 저장
@@ -149,5 +149,11 @@ public class PostRepositoryImpl implements PostRepository {
     @Override
     public List<PostGraphSnapshot> findSnapshotsByPostId(UUID postId) {
         return snapshotJpa.findByPostIdOrderByPositionAsc(postId);
+    }
+
+    // 주어진 게시글 ID 중 그래프 스냅샷을 가진 것만 반환
+    @Override
+    public List<UUID> findPostIdsWithSnapshots(List<UUID> postIds) {
+        return snapshotJpa.findDistinctPostIdsByPostIdIn(postIds);
     }
 }

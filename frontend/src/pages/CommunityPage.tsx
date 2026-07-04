@@ -31,6 +31,7 @@ interface Post {
   viewCount: number
   commentCount: number
   repoUrl?: string | null
+  hasGraph: boolean
 }
 
 interface Comment {
@@ -594,7 +595,7 @@ export default function CommunityPage() {
                             {FEEDBACK_LABELS[post.feedbackType] ?? post.feedbackType}
                           </span>
                         )}
-                        {post.graphId && (
+                        {post.hasGraph && (
                           <span className="text-xs text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded">
                             📊 그래프
                           </span>

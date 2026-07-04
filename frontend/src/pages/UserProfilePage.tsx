@@ -38,6 +38,7 @@ interface PostSummary {
   createdAt: string
   bookmarkCount: number
   bookmarkedByMe: boolean
+  hasGraph: boolean
 }
 
 const FEEDBACK_LABELS: Record<string, string> = {
@@ -222,7 +223,7 @@ export default function UserProfilePage() {
                             {FEEDBACK_LABELS[post.feedbackType] ?? post.feedbackType}
                           </span>
                         )}
-                        {post.graphId && (
+                        {post.hasGraph && (
                           <span className="text-xs text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded">
                             📊 그래프
                           </span>

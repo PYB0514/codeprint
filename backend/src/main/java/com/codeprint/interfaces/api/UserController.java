@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -90,19 +91,22 @@ public class UserController {
         Set<UUID> myBookmarks = currentUser == null ? Set.of()
                 : bookmarkRepository.findByUserIdAndPostIdIn(currentUser.getId(), postIds).stream()
                         .map(PostBookmark::getPostId).collect(Collectors.toSet());
+        Set<UUID> postsWithSnapshots = new HashSet<>(postRepository.findPostIdsWithSnapshots(postIds));
 
-        return assembleSummaries(posts, bookmarkCounts, myBookmarks);
+        return assembleSummaries(posts, bookmarkCounts, myBookmarks, postsWithSnapshots);
     }
 
     // 배치 조회한 북마크 메타로 요약 DTO 목록 조립 (순수 함수 — 카운트 없는 글은 0)
     static List<PostSummaryResponse> assembleSummaries(List<Post> posts,
                                                        Map<UUID, Long> bookmarkCounts,
-                                                       Set<UUID> myBookmarks) {
+                                                       Set<UUID> myBookmarks,
+                                                       Set<UUID> postsWithSnapshots) {
         return posts.stream().map(p -> new PostSummaryResponse(
                 p.getId(), p.getTitle(), p.getFeedbackType(),
                 p.getGraphId(), p.getCreatedAt(),
                 bookmarkCounts.getOrDefault(p.getId(), 0L),
-                myBookmarks.contains(p.getId())
+                myBookmarks.contains(p.getId()),
+                p.getGraphId() != null || postsWithSnapshots.contains(p.getId())
         )).toList();
     }
 
@@ -115,5 +119,5 @@ public class UserController {
     // 게시글 요약 응답 DTO
     public record PostSummaryResponse(
             UUID id, String title, String feedbackType, UUID graphId,
-            Instant createdAt, long bookmarkCount, boolean bookmarkedByMe) {}
+            Instant createdAt, long bookmarkCount, boolean bookmarkedByMe, boolean hasGraph) {}
 }
