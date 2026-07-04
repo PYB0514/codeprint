@@ -40,10 +40,10 @@ export default function PaymentSuccessPage() {
             <p className="text-gray-400 mb-2">이제 프로젝트를 무제한으로 만들 수 있어요.</p>
             <p className="text-gray-500 text-sm mb-6">결제 금액: 9,900원</p>
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/mypage')}
               className="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium transition-colors"
             >
-              대시보드로 이동
+              마이페이지로 이동
             </button>
           </>
         )}
@@ -55,10 +55,10 @@ export default function PaymentSuccessPage() {
               결제는 완료됐을 수 있습니다. 고객센터로 문의해 주세요.
             </p>
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/mypage')}
               className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors"
             >
-              대시보드로 돌아가기
+              마이페이지로 돌아가기
             </button>
           </>
         )}

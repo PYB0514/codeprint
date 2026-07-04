@@ -283,10 +283,10 @@ export default function AppHeader({ onLogin }: Props) {
                 src={user.avatarUrl}
                 alt={user.username}
                 className="w-7 h-7 rounded-full object-cover cursor-pointer"
-                onClick={() => navigate('/settings')}
+                onClick={() => navigate('/mypage')}
               />
             ) : (
-              <span className="text-gray-400">{user.username}</span>
+              <span className="text-gray-400 cursor-pointer hover:text-white" onClick={() => navigate('/mypage')}>{user.username}</span>
             )}
             {user.plan && (
               <span className="bg-gray-800 px-2 py-0.5 rounded text-xs text-gray-300">{user.plan}</span>

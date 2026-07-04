@@ -92,7 +92,7 @@ export default function LandingPage() {
   // 쿠키 기반 인증 상태 확인 + 청크 프리페치
   useEffect(() => {
     axios.get('/api/auth/me').then(() => setLoggedIn(true)).catch(() => {})
-    import('../pages/DashboardPage')
+    import('../pages/MyPage')
     import('../pages/GraphPage')
   }, [])
 
@@ -102,13 +102,13 @@ export default function LandingPage() {
     window.location.href = `${apiUrl}/oauth2/authorization/github`
   }
 
-  // URL 입력 후 분석 시작 — 로그인 상태면 대시보드로, 아니면 OAuth 후 자동 팝업
+  // URL 입력 후 분석 시작 — 로그인 상태면 마이페이지로, 아니면 OAuth 후 자동 팝업
   const handleTryUrl = () => {
     const trimmed = urlInput.trim()
     if (!trimmed) return
     localStorage.setItem('pendingAnalysisUrl', trimmed)
     if (loggedIn) {
-      navigate('/dashboard')
+      navigate('/mypage')
     } else {
       const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
       window.location.href = `${apiUrl}/oauth2/authorization/github`
@@ -167,7 +167,7 @@ export default function LandingPage() {
             {loggedIn ? (
               <>
                 <button
-                  onClick={() => navigate('/dashboard')}
+                  onClick={() => navigate('/mypage')}
                   className="px-6 py-3 bg-white text-black rounded-lg font-semibold hover:bg-gray-100 transition-colors"
                 >
                   내 프로젝트 보기

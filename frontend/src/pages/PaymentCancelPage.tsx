@@ -12,10 +12,10 @@ export default function PaymentCancelPage() {
       <h1 className="text-xl font-semibold">결제가 취소되었습니다.</h1>
       <p className="text-gray-400 text-sm">언제든지 다시 업그레이드할 수 있습니다.</p>
       <button
-        onClick={() => navigate('/dashboard')}
+        onClick={() => navigate('/mypage')}
         className="mt-2 text-sm bg-white text-black font-medium px-4 py-2 rounded-lg hover:bg-gray-200"
       >
-        대시보드로 돌아가기
+        마이페이지로 돌아가기
       </button>
     </div>
   )

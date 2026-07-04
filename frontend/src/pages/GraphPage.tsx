@@ -1830,7 +1830,7 @@ function GraphPageInner() {
         <p className="text-gray-500 text-sm">{error}</p>
         <div className="flex gap-3 mt-2">
           <button onClick={() => window.location.reload()} className="text-sm bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-1.5 rounded-lg">다시 시도</button>
-          <button onClick={() => navigate('/dashboard')} className="text-sm text-gray-400 hover:text-gray-200 underline">대시보드로</button>
+          <button onClick={() => navigate('/mypage')} className="text-sm text-gray-400 hover:text-gray-200 underline">마이페이지로</button>
         </div>
       </div>
     )
@@ -1893,10 +1893,10 @@ function GraphPageInner() {
       {/* 상단 바 — 내비 + 통계만 */}
       <div className="absolute z-10 flex items-center gap-3" style={{ top: (outdated || freshnessError || truncation) ? '44px' : '16px', left: leftOpen ? `${leftWidth + 8}px` : '20px' }}>
         <button
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate('/mypage')}
           className="bg-gray-800 hover:bg-gray-700 text-white text-sm px-3 py-1.5 rounded-lg"
         >
-          ← 대시보드
+          ← 마이페이지
         </button>
         <span className="text-gray-500 text-sm">
           파일 {counts.files} · 함수 {counts.funcs} · 엣지 {counts.edges}
@@ -2036,7 +2036,7 @@ function GraphPageInner() {
           {/* 사이드바 헤더 */}
           <div className="flex items-center justify-between px-3 py-3 border-b border-gray-800 flex-shrink-0">
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/mypage')}
               className="text-xs font-bold text-gray-300 hover:text-white tracking-widest uppercase transition-colors"
             >
               Codeprint
@@ -2369,9 +2369,9 @@ function GraphPageInner() {
             </ul>
             <div className="flex gap-2 mt-2">
               <button
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate('/mypage')}
                 className="text-sm bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-1.5 rounded-lg"
-              >대시보드에서 재분석</button>
+              >마이페이지에서 재분석</button>
             </div>
           </div>
         </div>
