@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.113.0',
+    date: '2026-07-05',
+    title: '공유 그래프·커뮤니티 그래프 뷰어에 흐름 재생 추가',
+    type: 'feature',
+    items: [
+      { category: '공유 그래프', desc: '공유 그래프와 커뮤니티 게시글 그래프 뷰어에서도 함수/DB 노드를 클릭하면 호출 흐름을 단계별로 재생해볼 수 있습니다. 분기 지점에서 경로를 선택하며 자동/수동으로 진행할 수 있습니다.' },
+    ],
+  },
+  {
     version: 'v0.112.2',
     date: '2026-07-05',
     title: '갤러리 탭·그래프 배지가 최신 게시글을 놓치던 문제 수정',
