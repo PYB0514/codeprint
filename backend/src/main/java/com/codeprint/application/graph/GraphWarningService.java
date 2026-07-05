@@ -853,6 +853,15 @@ public class GraphWarningService {
         return false;
     }
 
+    // HIGH_FAN_OUT 조율자 예외 — Controller/ApplicationService/Facade(백엔드), 페이지 합성 루트 *Inner(프론트)는
+    // 여러 협력자를 모아 조립하는 게 본연의 역할이라 fan-out이 높은 게 정상이다(단일 책임 위반 신호 아님).
+    private boolean isOrchestratorArtifact(String fp, String name) {
+        String normalized = fp.replace("\\", "/");
+        if (normalized.endsWith("Controller.java")) return true;
+        if (normalized.contains("/application/") && (normalized.endsWith("ApplicationService.java") || normalized.endsWith("Facade.java"))) return true;
+        return name != null && name.endsWith("Inner");
+    }
+
     // DEAD_CODE 신뢰도 게이트 — 미호출 함수 비율이 이 값을 넘으면 호출 추출 자체가 불완전하다고 보고 개별 경고를 생략한다.
     // 재캘리브레이션(2026-06-17, production-parity 측정): LocalAnalyzer↔GraphBuilder 정렬 후 신뢰 가능한 수치로 재측정.
     //   정상 앱/DDD: petclinic 0%·gin 0.1%·codeprint 0.1%. 약-추출 라이브러리: requests 5.3%(38건, 전부 Python
@@ -1212,6 +1221,9 @@ public class GraphWarningService {
             // 진입점 main — 부트스트랩(Spring main·CLI main·func main 등)은 본질적으로 여러 협력자를 호출하므로
             // 단일 책임 위반이 아니다. "조율자를 SRP 위반으로 부르는" 과탐을 막는다(테스트 함수 제외와 동일 원리).
             if ("main".equals(fnName)) continue;
+            // 조율자(오케스트레이터) — Controller/ApplicationService/Facade와 프론트 페이지 합성 루트(*Inner)는
+            // 여러 협력자를 모아 조립하는 게 본연의 역할이라 fan-out이 자연히 높다. main 예외와 동일 원리를 확장.
+            if (isOrchestratorArtifact(filePathMap.getOrDefault(entry.getKey(), ""), fnName)) continue;
             // 파일 내 동명 머지 노드 — union된 fan-out이라 단일 책임 신호 아님(정밀 가드: 노드별 머지 다중도)
             if (mergedDefCountMap.getOrDefault(entry.getKey(), 1) >= 2) continue;
             Map<String, Object> w = new LinkedHashMap<>();
