@@ -14,7 +14,7 @@ import {
 } from '@xyflow/react'
 import type { Node, Edge } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { buildLayout } from '../utils/graphLayout'
+import { buildLayout, GRAPH_ARIA_LABELS } from '../utils/graphLayout'
 import type { RawNode, RawEdge } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
@@ -261,6 +261,7 @@ function DiffPageInner() {
           fitView
           minZoom={0.05}
           maxZoom={2}
+          ariaLabelConfig={GRAPH_ARIA_LABELS}
           onlyRenderVisibleElements
         >
           <Background color="#1f2937" gap={24} />

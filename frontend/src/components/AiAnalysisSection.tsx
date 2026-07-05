@@ -1,5 +1,6 @@
 // AI 누락 패턴 감지 결과를 표시하는 좌측 사이드바 섹션
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import axios from 'axios'
 
 interface DetectedIssue {
@@ -29,6 +30,14 @@ export default function AiAnalysisSection({ graphId }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(true)
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null)
+
+  // 등록된 AI API 키 존재 여부 사전 확인
+  useEffect(() => {
+    axios.get<{ provider: string; registered: boolean }[]>('/api/ai/keys')
+      .then((res) => setHasApiKey(res.data.some((p) => p.registered)))
+      .catch(() => setHasApiKey(null))
+  }, [])
 
   const analyze = async () => {
     if (!graphId) return
@@ -56,9 +65,15 @@ export default function AiAnalysisSection({ graphId }: Props) {
       </button>
       {open && (
         <div className="px-3 pb-3 flex flex-col gap-2">
+          {hasApiKey === false && (
+            <p className="text-xs text-gray-500 leading-snug">
+              등록된 AI API 키가 없습니다.{' '}
+              <Link to="/settings" className="text-blue-400 hover:underline">설정에서 키 등록하기</Link>
+            </p>
+          )}
           <button
             onClick={analyze}
-            disabled={!graphId || loading}
+            disabled={!graphId || loading || hasApiKey === false}
             className="w-full text-left text-xs px-2 py-1.5 rounded bg-blue-900/40 hover:bg-blue-900/70 text-blue-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? '분석 중...' : '🔍 누락 패턴 감지'}

@@ -14,7 +14,7 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { buildLayout, applyEdgeVisibility, searchNodes, getGroupKey, findCommonPrefix, downloadWarningsMd, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM } from '../utils/graphLayout'
+import { buildLayout, applyEdgeVisibility, searchNodes, getGroupKey, findCommonPrefix, downloadWarningsMd, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset } from '../utils/graphLayout'
 import type { Node, Edge } from '@xyflow/react'
 import GroupNode from '../components/GroupNode'
@@ -185,6 +185,7 @@ function CommunityPostGraphInner() {
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
+          ariaLabelConfig={GRAPH_ARIA_LABELS}
         >
           <Background color="#374151" gap={20} />
           <Controls />
@@ -683,6 +684,7 @@ function CommunityPostSnapshotInner() {
               fitView
               minZoom={GRAPH_MIN_ZOOM}
               maxZoom={GRAPH_MAX_ZOOM}
+              ariaLabelConfig={GRAPH_ARIA_LABELS}
               onlyRenderVisibleElements
               nodesDraggable={false}
               nodesConnectable={false}
@@ -784,7 +786,10 @@ function CommunityPostSnapshotInner() {
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-gray-500 w-10 shrink-0">타입</span>
                     <span className="text-xs font-mono bg-gray-800 text-blue-300 px-1.5 py-0.5 rounded">
-                      {NODE_TYPE_LABEL[selectedNode.type ?? ''] ?? selectedNode.type ?? '-'}
+                      {(() => {
+                        const rawType = rawNodesCache.find(n => n.id === selectedNode.id)?.type ?? selectedNode.type
+                        return NODE_TYPE_LABEL[rawType ?? ''] ?? rawType ?? '-'
+                      })()}
                     </span>
                   </div>
                   {!!selectedNode.data?.domain && String(selectedNode.data.domain) !== 'common' && (

@@ -16,7 +16,7 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { buildLayout, applyEdgeVisibility, searchNodes, downloadWarningsMd, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM } from '../utils/graphLayout'
+import { buildLayout, applyEdgeVisibility, searchNodes, downloadWarningsMd, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset } from '../utils/graphLayout'
 import type { Node, Edge } from '@xyflow/react'
 import GroupNode from '../components/GroupNode'
@@ -111,6 +111,8 @@ function ShareGraphInner() {
   const [truncation, setTruncation] = useState<{ analyzed: number; total: number } | null>(null)
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [nodeSearch, setNodeSearch] = useState('')
+  // 노드 검색 목록 — 파일 단위 접기(기본 전부 접힘), 검색 중엔 무시
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set())
   const [warningPanelOpen, setWarningPanelOpen] = useState(false)
   const [tourRunning, setTourRunning] = useState(false)
   const [leftOpen, setLeftOpen] = useState(true)
@@ -351,20 +353,37 @@ function ShareGraphInner() {
   }, [edges, tabFilteredNodeIds, focusedNodeId])
 
   // 인덱스에 표시할 노드 — 검색어 있으면 원본(RawNode) 대상으로 GraphPage와 동일하게 매치(주석 포함, 최대 10개)
-  // 검색어 없으면 현재 화면에 보이는(hidden 아닌) 노드 전체를 훑어보기 목록으로 표시
   const indexItems = nodeSearch.trim()
     ? searchNodes(rawNodesCache, nodeSearch).map(n => ({
         id: n.id,
         icon: n.type === 'FILE' ? '📄' : n.type === 'FUNCTION' ? 'ƒ' : n.type === 'DB_TABLE' ? '🗄' : '◎',
         label: n.name,
       }))
-    : nodes
-        .filter(n => n.type !== 'sectionNode' && n.type !== 'groupNode' && !n.hidden)
-        .map(n => ({
-          id: n.id,
-          icon: n.type === 'fileNode' ? '📄' : n.type === 'DB_TABLE' ? '🗄' : 'ƒ',
-          label: String(n.data?.name ?? n.id),
-        }))
+    : []
+
+  // 검색어 없을 때 — 화면에 보이는 노드를 파일 단위로 접어서 훑어보기 목록 구성 (대형 레포 평면 나열 방지)
+  const visibleNonSectionNodes = nodes.filter(n => n.type !== 'sectionNode' && n.type !== 'groupNode' && !n.hidden)
+  const browseFileEntries = visibleNonSectionNodes
+    .filter(n => n.type === 'fileNode')
+    .map(file => ({
+      id: file.id,
+      label: String(file.data?.name ?? file.id),
+      funcs: visibleNonSectionNodes
+        .filter(n => n.type !== 'fileNode' && n.parentId === file.id)
+        .map(fn => ({ id: fn.id, icon: 'ƒ', label: String(fn.data?.name ?? fn.id) })),
+    }))
+  const browseFlatEntries = visibleNonSectionNodes
+    .filter(n => n.type !== 'fileNode' && !n.parentId)
+    .map(n => ({ id: n.id, icon: n.type === 'DB_TABLE' ? '🗄' : 'ƒ', label: String(n.data?.name ?? n.id) }))
+
+  const toggleFileExpanded = (fileId: string) => {
+    setExpandedFiles(prev => {
+      const next = new Set(prev)
+      if (next.has(fileId)) next.delete(fileId)
+      else next.add(fileId)
+      return next
+    })
+  }
 
   if (loading) {
     return (
@@ -471,20 +490,67 @@ function ShareGraphInner() {
               className="w-full text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500"
             />
             <div className="flex flex-col gap-0.5 max-h-64 overflow-y-auto">
-              {indexItems.length === 0 ? (
-                <p className="text-[10px] text-gray-600 px-1">결과 없음</p>
+              {nodeSearch.trim() ? (
+                indexItems.length === 0 ? (
+                  <p className="text-[10px] text-gray-600 px-1">결과 없음</p>
+                ) : (
+                  indexItems.map(n => (
+                    <button
+                      key={n.id}
+                      onClick={() => handleFocusNode(n.id)}
+                      className={`w-full text-left text-[11px] px-2 py-1 rounded hover:bg-gray-700 truncate transition-colors ${selectedNode?.id === n.id ? 'bg-gray-700 text-white' : 'text-gray-300'}`}
+                      title={n.label}
+                    >
+                      <span className="text-gray-600 mr-1">{n.icon}</span>
+                      {n.label}
+                    </button>
+                  ))
+                )
               ) : (
-                indexItems.map(n => (
-                  <button
-                    key={n.id}
-                    onClick={() => handleFocusNode(n.id)}
-                    className={`w-full text-left text-[11px] px-2 py-1 rounded hover:bg-gray-700 truncate transition-colors ${selectedNode?.id === n.id ? 'bg-gray-700 text-white' : 'text-gray-300'}`}
-                    title={n.label}
-                  >
-                    <span className="text-gray-600 mr-1">{n.icon}</span>
-                    {n.label}
-                  </button>
-                ))
+                <>
+                  {browseFileEntries.map(file => (
+                    <div key={file.id}>
+                      <div className={`w-full flex items-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-gray-700 transition-colors ${selectedNode?.id === file.id ? 'bg-gray-700 text-white' : 'text-gray-300'}`}>
+                        <button
+                          onClick={() => toggleFileExpanded(file.id)}
+                          className="text-gray-600 hover:text-gray-300 w-3 shrink-0"
+                          title={expandedFiles.has(file.id) ? '접기' : `함수 ${file.funcs.length}개 펼치기`}
+                        >
+                          {file.funcs.length > 0 ? (expandedFiles.has(file.id) ? '▾' : '▸') : ' '}
+                        </button>
+                        <button onClick={() => handleFocusNode(file.id)} className="flex-1 min-w-0 text-left truncate" title={file.label}>
+                          <span className="text-gray-600 mr-1">📄</span>
+                          {file.label}
+                        </button>
+                        {file.funcs.length > 0 && (
+                          <span className="text-gray-600 shrink-0">{file.funcs.length}</span>
+                        )}
+                      </div>
+                      {expandedFiles.has(file.id) && file.funcs.map(fn => (
+                        <button
+                          key={fn.id}
+                          onClick={() => handleFocusNode(fn.id)}
+                          className={`w-full text-left text-[11px] pl-7 pr-2 py-1 rounded hover:bg-gray-700 truncate transition-colors ${selectedNode?.id === fn.id ? 'bg-gray-700 text-white' : 'text-gray-400'}`}
+                          title={fn.label}
+                        >
+                          <span className="text-gray-600 mr-1">{fn.icon}</span>
+                          {fn.label}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                  {browseFlatEntries.map(n => (
+                    <button
+                      key={n.id}
+                      onClick={() => handleFocusNode(n.id)}
+                      className={`w-full text-left text-[11px] px-2 py-1 rounded hover:bg-gray-700 truncate transition-colors ${selectedNode?.id === n.id ? 'bg-gray-700 text-white' : 'text-gray-300'}`}
+                      title={n.label}
+                    >
+                      <span className="text-gray-600 mr-1">{n.icon}</span>
+                      {n.label}
+                    </button>
+                  ))}
+                </>
               )}
             </div>
           </div>
@@ -580,6 +646,7 @@ function ShareGraphInner() {
             fitView
             minZoom={GRAPH_MIN_ZOOM}
             maxZoom={GRAPH_MAX_ZOOM}
+            ariaLabelConfig={GRAPH_ARIA_LABELS}
             onlyRenderVisibleElements
             nodesDraggable={false}
             nodesConnectable={false}
@@ -684,7 +751,10 @@ function ShareGraphInner() {
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-gray-500 w-10 shrink-0">타입</span>
                     <span className="text-xs font-mono bg-gray-800 text-blue-300 px-1.5 py-0.5 rounded">
-                      {NODE_TYPE_LABEL[selectedNode.type ?? ''] ?? selectedNode.type ?? '-'}
+                      {(() => {
+                        const rawType = rawNodesCache.find(n => n.id === selectedNode.id)?.type ?? selectedNode.type
+                        return NODE_TYPE_LABEL[rawType ?? ''] ?? rawType ?? '-'
+                      })()}
                     </span>
                   </div>
                   {!!selectedNode.data?.domain && String(selectedNode.data.domain) !== 'common' && (

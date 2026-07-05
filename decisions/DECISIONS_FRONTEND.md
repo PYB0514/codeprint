@@ -755,3 +755,18 @@ const fetchGraph = useCallback(async () => {
 **결정.** GraphPage·ShareGraphPage 헤더에 "내 레포"/"외부 레포 분석" 뱃지 추가(`ownRepo`가 `null`이면 렌더 안 함 — 구버전 응답 하위 호환). CommunityPage 피드 카드·UserProfilePage 글 목록은 `hasGraph`(PR #442) 때 확립한 패턴 그대로 `Post`/`PostSummary` 인터페이스에 `ownRepo: boolean` 추가 후 배지 렌더. 두 곳 다 `post.repoUrl`/`post.hasGraph`가 있을 때만 배지를 보여줘 텍스트만 있는 글에는 무의미한 배지가 뜨지 않게 함.
 
 **결과.** `tsc -b` 통과. claude-in-chrome 실 로그인 세션(codeprint 자기분석 프로젝트)으로 GraphPage "내 레포" 뱃지, 공개 gin ShareGraphPage "외부 레포 분석" 뱃지 렌더 확인(둘 다 실제 소유 관계와 일치). 커뮤니티 피드는 `/api/community/posts` 응답에 `ownRepo` 필드가 정확히 포함되는 것 확인(기존 테스트 게시글은 `repoUrl`이 없어 항상 false — 배지 자체가 안 뜨는 것도 의도대로 확인). 스냅샷 뷰어(`CommunityPostGraphPage`)는 이번 스코프 제외(백엔드 결정 참조) — 후속 작업.
+
+## v1.0 UX 갭 리뷰 7번 — 소소한 다듬기 7건 (#4·#11·#12·#13·#14·#15·#16, 2026-07-05)
+
+**문제.** V1_UX_GAP_REVIEW.md §1 표에 남아있던 마지막 항목 7건. 항목당 규모는 작지만 #12는 조사 중 실제 버그로 확인됨.
+
+**결정 및 발견.**
+1. **#4 빈 URL 검증** — `LandingPage.tsx` `handleTryUrl`에 `urlError` state 추가, 빈 값 제출 시 입력창 빨간 테두리 + "레포 URL을 입력해주세요." 안내로 교체(기존은 조용한 early return).
+2. **#14 전문용어 순화** — 기능 카드 "노드-엣지 그래프"→"한눈에 보이는 다이어그램", "전체 흐름 추적 (DFS)"→"전체 흐름 추적"(제목에서 DFS 제거), "upstream·downstream 경로"→"어디서 시작해 어디로 이어지는지".
+3. **#15 메뉴명** — `AppHeader.tsx`의 서비스 드롭다운 "도그푸딩"→"자체 사용 사례"(페이지 자체 제목·URL은 유지, 진입점 라벨만 변경).
+4. **#11 React Flow 컨트롤 영어 노출** — `@xyflow/react` v12의 `ariaLabelConfig` prop(공식 API, 커스텀 버튼 재구현 불필요)으로 `controls.zoomIn/zoomOut/fitView/interactive.ariaLabel` 4개를 한국어로 오버라이드. `graphLayout.ts`에 `GRAPH_ARIA_LABELS` 상수로 공유해 그래프 5개 `<ReactFlow>` 인스턴스(GraphPage·ShareGraphPage·CommunityPostGraphPage 2곳·DiffPage) 전부에 배선.
+5. **#12 노드 정보 패널 "타입 -" — 진짜 버그였음.** `ShareGraphPage`/`CommunityPostGraphPage`가 `selectedNode.type ?? ''`로 조회했는데, `graphLayout.ts`의 `buildLayout`이 파일 노드에만 React Flow `type: 'fileNode'`를 명시하고 **함수·DB_TABLE 노드는 `type` 자체를 아예 설정하지 않음**(React Flow 기본값으로 `undefined`) — 그래서 함수를 클릭하면 항상 매핑 실패로 "-"가 뜬 것(DB_TABLE도 같은 결함이었으나 목록에 자주 없어 미보고). 해결은 React Flow `type`을 억지로 채우는 대신(존재하지 않는 nodeTypes 키를 넣으면 콘솔 경고 위험) `rawNodesCache`(백엔드 원본 `NodeType`: FILE/FUNCTION/DB_TABLE/API_ENDPOINT 보유)에서 `selectedNode.id`로 실제 타입을 역조회하도록 변경.
+6. **#13 AI 키 사전 안내** — `AiAnalysisSection.tsx`에 `GET /api/ai/keys`(기존 SettingsPage가 쓰던 엔드포인트 재사용) 마운트 시 조회 추가, 등록된 키가 하나도 없으면 분석 버튼 비활성화 + "/settings로 키 등록하기" 링크 안내. 401(비로그인)이면 `hasApiKey=null`로 폴백(기존 동작과 동일, 버튼 활성 상태 유지 — 회귀 없음).
+7. **#16 사이드바 1,400개 평면 나열** — 검색어가 없을 때는 파일 단위로 접어서 표시(기본 전부 접힘, `expandedFiles` Set state), 파일 행에 함수 개수 배지 + 펼치기 토글(▸/▾) 추가. 함수 노드의 `parentId`가 항상 소속 파일의 id로 설정돼 있는 걸 이용해 그룹핑(신규 백엔드/레이아웃 변경 없음). 검색 중일 때는 기존 평면 검색 결과 그대로 유지(회귀 없음).
+
+**결과.** `tsc -b` 통과. Claude Preview(비로그인)로 확인 — ①빈 URL 제출 시 에러 문구·빨간 테두리 렌더 ②"자체 사용 사례" 메뉴 정상 표시 ③gin ShareGraphPage에서 컨트롤 4개 버튼 title이 "확대/축소/화면에 맞추기/편집 잠금 전환"으로 렌더 ④사이드바가 파일 단위로 접힌 상태로 시작, `gin.go` 펼치면 함수 목록 노출, `New` 함수 클릭 시 노드 정보 패널에 "FUNCTION" 정상 표시(수정 전 "-" 재현 확인 후 대조) ⑤랜딩 기능 카드 문구 반영 확인. #13(AI 키 안내)은 `AiAnalysisSection`이 GraphPage 전용(로그인 필수)이라 이번 세션에서 실사용 확인 불가 — 로그인 후 키 미등록 상태에서 버튼 비활성화·안내 문구가 뜨는지 사용자 확인 필요(§4 OAuth 예외 규칙).
