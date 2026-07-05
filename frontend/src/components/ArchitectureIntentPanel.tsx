@@ -1,11 +1,14 @@
 // 프로젝트 의도 아키텍처 선언 편집 패널 — 모듈(경로 글로브) + FORBID 규칙
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { getGroupKey, findCommonPrefix } from '../utils/graphLayout'
+import { globMatch } from '../utils/ignoreRules'
 
 interface IntentModule { name: string; glob: string }
 interface IntentRule { from: string; to: string }
 
 interface Props {
   projectId: string
+  filePaths: string[]  // 감지된 구조 가져오기(A2)·글로브 매치 미리보기(A3)에 사용
   onSaved?: () => void  // 저장 후 경고 캐시 갱신용 콜백
 }
 
@@ -14,7 +17,29 @@ function moduleNames(modules: IntentModule[]) {
   return modules.map(m => m.name.trim()).filter(Boolean)
 }
 
-export default function ArchitectureIntentPanel({ projectId, onSaved }: Props) {
+// 모듈의 콤마 구분 글로브 중 하나라도 매치하는 파일 수
+function matchCount(glob: string, filePaths: string[]): number {
+  const globs = glob.split(',').map(g => g.trim()).filter(Boolean)
+  if (globs.length === 0) return 0
+  return filePaths.filter(p => globs.some(g => globMatch(g, p))).length
+}
+
+// 실제 폴더 구조에서 그룹(도메인/레이어)을 감지 — 흐름재생 뱃지·범례와 동일한 getGroupKey 사용
+function detectGroups(filePaths: string[]): { name: string; glob: string; fileCount: number }[] {
+  const commonPrefix = findCommonPrefix(filePaths)
+  const counts = new Map<string, number>()
+  filePaths.forEach(p => {
+    const key = getGroupKey(p, commonPrefix)
+    if (key === 'root') return
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  })
+  return [...counts.entries()]
+    .map(([name, fileCount]) => ({ name, glob: `**/${name}/**`, fileCount }))
+    .sort((a, b) => b.fileCount - a.fileCount)
+    .slice(0, 8)
+}
+
+export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved }: Props) {
   const [modules, setModules] = useState<IntentModule[]>([])
   const [rules, setRules] = useState<IntentRule[]>([])
   // 경고 패널에서 관리하는 예외 규칙 — 이 패널은 편집하지 않지만 저장 시 보존(라운드트립)해 덮어쓰기를 막는다
@@ -108,6 +133,20 @@ export default function ArchitectureIntentPanel({ projectId, onSaved }: Props) {
     }
   }, [projectId, ignore, onSaved])
 
+  // DDD 기본 프리셋 — domain → infrastructure 금지 규칙 예시를 원클릭으로 채움
+  const applyDddPreset = () => {
+    setModules(prev => [...prev, { name: 'domain', glob: '**/domain/**' }, { name: 'infrastructure', glob: '**/infrastructure/**' }])
+    setRules(prev => [...prev, { from: 'domain', to: 'infrastructure' }])
+  }
+
+  // 감지된 그룹(도메인/레이어)으로 모듈 목록 채우기 — 이미 있는 이름은 건너뜀
+  const detected = useMemo(() => detectGroups(filePaths), [filePaths])
+  const importDetected = () => {
+    const existing = new Set(moduleNames(modules))
+    const fresh = detected.filter(d => !existing.has(d.name))
+    setModules(prev => [...prev, ...fresh.map(d => ({ name: d.name, glob: d.glob }))])
+  }
+
   const addModule = () => setModules(prev => [...prev, { name: '', glob: '' }])
   const removeModule = (i: number) => setModules(prev => prev.filter((_, idx) => idx !== i))
   const updateModule = (i: number, field: keyof IntentModule, value: string) =>
@@ -126,19 +165,48 @@ export default function ArchitectureIntentPanel({ projectId, onSaved }: Props) {
 
   return (
     <div className="flex flex-col gap-2">
+      {/* 인트로 — 이 기능이 뭘 해주는지 + 예시 (A1) */}
+      <p className="text-[11px] text-gray-500 leading-relaxed px-1">
+        폴더 구조를 "모듈"로 이름 붙이고, 모듈 사이 금지 의존 규칙(예: A → B import 금지)을 정하면 어기는 코드에 경고가 뜹니다.
+      </p>
+      {modules.length === 0 && rules.length === 0 && (
+        <div className="flex gap-1.5 px-1">
+          <button onClick={applyDddPreset}
+            className="text-[10px] px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300">
+            예시로 채워보기 (domain ↛ infrastructure)
+          </button>
+          {detected.length > 0 && (
+            <button onClick={importDetected}
+              className="text-[10px] px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300">
+              감지된 구조에서 가져오기 ({detected.length}개)
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 모듈 목록 */}
       <div>
         <div className="flex items-center justify-between mb-1">
           <span className="text-[11px] text-gray-400 font-medium">모듈</span>
-          <button onClick={addModule}
-            className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-800/50 hover:bg-indigo-700/60 text-indigo-300">
-            + 추가
-          </button>
+          <div className="flex gap-1">
+            {(modules.length > 0 || rules.length > 0) && detected.length > 0 && (
+              <button onClick={importDetected}
+                className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800/70 hover:bg-gray-700 text-gray-400">
+                감지된 구조에서 추가
+              </button>
+            )}
+            <button onClick={addModule}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-800/50 hover:bg-indigo-700/60 text-indigo-300">
+              + 추가
+            </button>
+          </div>
         </div>
         {modules.length === 0 && (
           <p className="text-[11px] text-gray-600 px-1">모듈이 없습니다. + 추가를 눌러 선언하세요.</p>
         )}
-        {modules.map((m, i) => (
+        {modules.map((m, i) => {
+          const count = m.glob.trim() ? matchCount(m.glob, filePaths) : null
+          return (
           <div key={i} className="flex gap-1 mb-1 items-start">
             <div className="flex-1 flex flex-col gap-0.5">
               <input
@@ -153,11 +221,18 @@ export default function ArchitectureIntentPanel({ projectId, onSaved }: Props) {
                 placeholder="글로브 (예: **/domain/**)"
                 className="w-full text-[11px] bg-gray-800/80 border border-gray-700 rounded px-1.5 py-0.5 text-gray-400 placeholder-gray-600 focus:outline-none focus:border-indigo-600 font-mono"
               />
+              {/* A3: 글로브 매치 파일 수 실시간 미리보기 — 오타 글로브는 0개로 바로 드러남 */}
+              {count !== null && (
+                <span className={`text-[10px] px-1 ${count === 0 ? 'text-red-500/80' : 'text-gray-600'}`}>
+                  {count === 0 ? '매치되는 파일 없음 — 글로브를 확인하세요' : `${count}개 파일 매치`}
+                </span>
+              )}
             </div>
             <button onClick={() => removeModule(i)}
               className="mt-0.5 text-gray-600 hover:text-red-400 text-xs leading-none">✕</button>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* 규칙 목록 */}
@@ -222,7 +297,7 @@ export default function ArchitectureIntentPanel({ projectId, onSaved }: Props) {
       )}
 
       <p className="text-[11px] text-gray-600 leading-relaxed">
-        모듈별 경로 글로브와 금지 의존 규칙을 선언하면 실제 IMPORT가 규칙에 위반할 때 <span className="text-amber-400">INTENT_DRIFT</span> 경고가 발생합니다.
+        모듈별 경로 글로브와 금지 의존 규칙을 선언하면 실제 IMPORT가 규칙에 위반할 때 <span className="text-amber-400">INTENT_DRIFT</span> 경고가 발생합니다. 특정 위반을 예외로 두려면(정말 의도된 경우) 우측 하단 경고 패널에서 관리합니다.
       </p>
     </div>
   )
