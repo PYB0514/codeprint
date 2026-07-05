@@ -45,7 +45,7 @@ export default function TermsPage() {
         <Section title="제4조 (서비스 내용)">
           <ul className="list-disc list-inside space-y-1 text-gray-400">
             <li><strong className="text-white">무료 플랜:</strong> 비공개 프로젝트 무제한, 팀 협업 최대 5명</li>
-            <li><strong className="text-white">Desktop 라이센스:</strong> AI 기능, 그래프 버전 히스토리 (개인 1석 또는 팀 N석, 좌석당 월정액)</li>
+            <li><strong className="text-white">Pro · Desktop:</strong> 협업 세션 인원 제한 해제, 정식 팀 생성·좌석 관리 (개인 1석 또는 팀 N석, 좌석당 월정액. 데스크탑 앱은 출시 예정)</li>
           </ul>
           <p className="mt-3 text-gray-400">
             서비스는 사전 고지 없이 기능을 추가·변경·중단할 수 있으며, 서비스 안정성을 위한 일시적 중단이
@@ -88,7 +88,7 @@ export default function TermsPage() {
         </Section>
 
         <Section title="제9조 (서비스 중단 및 종료)">
-          서비스가 영구 종료되는 경우, 이용자에게 30일 이전 공지합니다. Desktop 라이센스 유료 이용자에게는
+          서비스가 영구 종료되는 경우, 이용자에게 30일 이전 공지합니다. Pro · Desktop 유료 이용자에게는
           잔여 기간에 대한 환불 정책을 별도로 안내합니다.
         </Section>
 

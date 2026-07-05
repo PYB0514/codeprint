@@ -2,7 +2,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
 import CreateProjectModal from '../components/CreateProjectModal'
 import ProjectCard from '../components/ProjectCard'
 import AppHeader from '../components/AppHeader'
@@ -118,31 +117,6 @@ export default function MyPage() {
     ))
   }
 
-  // 토스페이먼츠 결제창 호출하여 Desktop 라이센스 업그레이드
-  const handleUpgrade = async () => {
-    try {
-      const res = await axios.post<{
-        orderId: string; amount: number; orderName: string
-        customerName: string; customerKey: string; clientKey: string
-      }>('/api/payments/toss/prepare', {})
-
-      const { orderId, amount, orderName, customerName, customerKey, clientKey } = res.data
-      const tossPayments = await loadTossPayments(clientKey)
-      const payment = tossPayments.payment({ customerKey })
-      await payment.requestPayment({
-        method: 'CARD',
-        amount: { currency: 'KRW', value: amount },
-        orderId,
-        orderName,
-        customerName,
-        successUrl: window.location.origin + '/payment/success',
-        failUrl: window.location.origin + '/payment/fail',
-      })
-    } catch {
-      alert('결제 페이지 연결에 실패했습니다. 잠시 후 다시 시도해주세요.')
-    }
-  }
-
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -172,22 +146,6 @@ export default function MyPage() {
               className="bg-yellow-400 text-black text-sm font-medium px-4 py-2 rounded-lg hover:bg-yellow-300 shrink-0"
             >
               GitHub 재연결
-            </button>
-          </div>
-        )}
-
-        {/* Free 플랜 업그레이드 배너 */}
-        {user.plan === 'FREE' && (
-          <div className="flex items-center justify-between bg-gradient-to-r from-gray-900 to-gray-800 border border-gray-700 rounded-xl px-5 py-4 mb-6">
-            <div>
-              <p className="text-sm font-medium text-white">Desktop 라이센스로 업그레이드</p>
-              <p className="text-xs text-gray-400 mt-0.5">AI 기능 + 그래프 버전 히스토리 사용 가능</p>
-            </div>
-            <button
-              onClick={handleUpgrade}
-              className="bg-white text-black text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-200 shrink-0"
-            >
-              업그레이드
             </button>
           </div>
         )}
