@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.117.0',
+    date: '2026-07-05',
+    title: '내 레포 / 외부 레포 분석 뱃지 추가',
+    type: 'feature',
+    items: [
+      { category: '그래프', desc: '분석한 레포가 내 GitHub 계정 소유인지, 남의 공개 레포를 분석한 것인지 그래프 화면(내 프로젝트·공유 그래프)과 커뮤니티 게시글 카드에 뱃지로 표시합니다.' },
+    ],
+  },
+  {
     version: 'v0.116.1',
     date: '2026-07-05',
     title: '아키텍처 의도 저장 시 위반 건수 즉시 확인',

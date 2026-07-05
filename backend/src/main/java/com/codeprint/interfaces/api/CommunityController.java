@@ -374,7 +374,8 @@ public class CommunityController {
                 p.getViewCount(),
                 commentCounts.getOrDefault(p.getId(), 0L),
                 p.getRepoUrl(),
-                p.getGraphId() != null || postsWithSnapshots.contains(p.getId())
+                p.getGraphId() != null || postsWithSnapshots.contains(p.getId()),
+                com.codeprint.shared.GithubRepoOwner.matches(p.getRepoUrl(), usernames.get(p.getUserId()))
         )).toList();
     }
 
@@ -410,7 +411,8 @@ public class CommunityController {
                 post.getViewCount(),
                 commentCount,
                 post.getRepoUrl(),
-                hasGraph
+                hasGraph,
+                com.codeprint.shared.GithubRepoOwner.matches(post.getRepoUrl(), username)
         );
     }
 
@@ -471,7 +473,7 @@ public class CommunityController {
             UUID graphId, UUID userId, String authorUsername, Instant createdAt,
             long bookmarkCount, boolean bookmarkedByMe,
             long likeCount, boolean likedByMe,
-            long viewCount, long commentCount, String repoUrl, boolean hasGraph) {}
+            long viewCount, long commentCount, String repoUrl, boolean hasGraph, boolean ownRepo) {}
 
     // 댓글 응답 DTO
     public record CommentResponse(

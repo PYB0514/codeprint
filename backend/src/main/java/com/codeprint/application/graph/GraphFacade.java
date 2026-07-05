@@ -25,6 +25,11 @@ public class GraphFacade {
         projectQueryService.getProject(projectId, userId);
     }
 
+    // 프로젝트 소유권 확인 + Project 반환 (소유자 아니면 예외) — 레포 소유 뱃지 판정 등 Project 데이터가 필요한 호출용
+    public com.codeprint.domain.project.Project getOwnedProject(UUID projectId, UUID userId) {
+        return projectQueryService.getProject(projectId, userId);
+    }
+
     // 그래프 → 프로젝트 소유권 확인
     public void verifyGraphOwnership(UUID graphId, UUID userId) {
         graphQueryService.findById(graphId)

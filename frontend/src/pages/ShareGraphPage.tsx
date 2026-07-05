@@ -119,6 +119,7 @@ function ShareGraphInner() {
   const { width: rightWidth, startResize: startRightResize } = useSidebarResize(256, 240, 520, 'right')
   const [activeDomainTab, setActiveDomainTab] = useState<string>('전체')
   const [ownerBgUrl, setOwnerBgUrl] = useState<string | null>(null)
+  const [ownRepo, setOwnRepo] = useState<boolean | null>(null)
   const [bgEnabled, setBgEnabled] = useState(false)
   const [rawNodesCache, setRawNodesCache] = useState<RawNode[]>([])
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
@@ -179,9 +180,10 @@ function ShareGraphInner() {
 
     Promise.all([graphPromise, presetPromise])
       .then(([graphRes, presetRes]) => {
-        const raw = graphRes.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; message: string }[]; ownerBgUrl?: string | null; analyzedFileCount?: number; totalFileCount?: number }
+        const raw = graphRes.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: { type: string; nodeIds: string[]; message: string }[]; ownerBgUrl?: string | null; ownRepo?: boolean; analyzedFileCount?: number; totalFileCount?: number }
         if (raw.warnings) setWarnings(raw.warnings)
         if (raw.ownerBgUrl) setOwnerBgUrl(raw.ownerBgUrl)
+        setOwnRepo(raw.ownRepo ?? null)
         // 500개 초과 절단 시에만 안내 (기존 그래프는 카운트 없음)
         if (raw.totalFileCount != null && raw.analyzedFileCount != null && raw.totalFileCount > raw.analyzedFileCount) {
           setTruncation({ analyzed: raw.analyzedFileCount, total: raw.totalFileCount })
@@ -389,6 +391,16 @@ function ShareGraphInner() {
         <div className="flex items-center gap-3">
           <span className="font-bold text-white text-sm">Codeprint</span>
           <span className="text-gray-500 text-xs">읽기 전용</span>
+          {ownRepo !== null && (
+            <span
+              title={ownRepo ? '레포 소유자가 자신의 GitHub 계정으로 분석했습니다' : '레포 소유자가 아닌 사람이 공개 레포를 분석했습니다'}
+              className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                ownRepo ? 'bg-blue-900/40 border-blue-700/50 text-blue-300' : 'bg-gray-800 border-gray-700 text-gray-400'
+              }`}
+            >
+              {ownRepo ? '내 레포' : '외부 레포 분석'}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <LayoutPresetToggle layoutPreset={layoutPreset} onToggle={toggleLayoutPreset} />
