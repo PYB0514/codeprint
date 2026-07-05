@@ -28,6 +28,41 @@ import { GraphLegend } from '../components/GraphLegend'
 import { CornerPanel } from '../components/CornerPanel'
 import { FlowPlaybackPanel } from '../components/FlowPlaybackPanel'
 import { useFlowPlayback } from '../hooks/useFlowPlayback'
+import OnboardingTour, { isTourDone } from '../components/OnboardingTour'
+import type { Step } from 'react-joyride'
+
+const SHARE_TOUR_STORAGE_KEY = 'onboarding_tour_share_done'
+
+const SHARE_TOUR_STEPS: Step[] = [
+  {
+    target: 'body',
+    placement: 'center',
+    title: '👋 공유된 그래프입니다',
+    content: '다른 사람이 GitHub 레포를 분석해 공유한 화면입니다. 파일 구조와 함수 호출 흐름을 그대로 둘러볼 수 있어요.',
+    skipBeacon: true,
+  },
+  {
+    target: 'body',
+    placement: 'center',
+    title: '함수 노드를 클릭해보세요',
+    content: '함수나 DB 노드를 클릭하면 호출 흐름이 단계별로 재생됩니다. 분기가 있으면 경로를 선택할 수도 있어요.',
+    skipBeacon: true,
+  },
+  {
+    target: '#tour-share-warning',
+    placement: 'left',
+    title: '구조 경고',
+    content: '순환 의존, 레이어 위반 등 15종의 구조 경고를 여기서 확인할 수 있습니다.',
+    skipBeacon: true,
+  },
+  {
+    target: '#tour-share-login',
+    placement: 'bottom',
+    title: '내 레포도 분석해보세요',
+    content: 'GitHub으로 로그인하면 내 레포를 똑같이 분석하고, 이렇게 그래프를 공유할 수 있습니다.',
+    skipBeacon: true,
+  },
+]
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -77,6 +112,7 @@ function ShareGraphInner() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [nodeSearch, setNodeSearch] = useState('')
   const [warningPanelOpen, setWarningPanelOpen] = useState(false)
+  const [tourRunning, setTourRunning] = useState(false)
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
   const { width: leftWidth, startResize: startLeftResize } = useSidebarResize(224, 160, 420, 'left')
@@ -178,6 +214,7 @@ function ShareGraphInner() {
         setNodes(finalNodes)
         setEdges(applyEdgeVisibility(builtEdges, se, sc, si, sb, sdb, sapi))
         setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
+        if (!isTourDone(SHARE_TOUR_STORAGE_KEY)) setTimeout(() => setTourRunning(true), 800)
       })
       .catch(() => setError('프로젝트를 찾을 수 없거나 비공개 상태입니다.'))
       .finally(() => setLoading(false))
@@ -346,6 +383,7 @@ function ShareGraphInner() {
 
   return (
     <div className="app-page w-screen h-screen bg-gray-950 flex flex-col">
+      <OnboardingTour run={tourRunning} onFinish={() => setTourRunning(false)} steps={SHARE_TOUR_STEPS} storageKey={SHARE_TOUR_STORAGE_KEY} />
       {/* 상단 배너 */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 shrink-0">
         <div className="flex items-center gap-3">
@@ -357,6 +395,7 @@ function ShareGraphInner() {
           <LabelModeToggle labelMode={labelMode} onToggle={toggleLabelMode} />
           <span className="text-gray-400 text-xs">공유된 그래프</span>
           <button
+            id="tour-share-login"
             onClick={() => navigate('/')}
             className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200"
           >
@@ -551,6 +590,7 @@ function ShareGraphInner() {
             count={warnings.length}
             panelClassName="w-72 max-h-[60vh]"
             style={{ right: '16px' }}
+            triggerId="tour-share-warning"
             headerExtra={warnings.length > 0 ? (
               <button onClick={() => downloadWarningsMd(warnings)} title="경고 마크다운 내보내기" className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
             ) : undefined}

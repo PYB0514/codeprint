@@ -12,6 +12,7 @@ export function CornerPanel({
   panelClassName = 'w-72 max-h-[60vh]',
   style,
   children,
+  triggerId,
 }: {
   open: boolean
   onOpen: () => void
@@ -23,6 +24,7 @@ export function CornerPanel({
   panelClassName?: string
   style?: React.CSSProperties
   children: ReactNode
+  triggerId?: string
 }) {
   return (
     <div className="absolute z-30 bottom-4" style={style}>
@@ -43,7 +45,7 @@ export function CornerPanel({
           </div>
         </div>
       ) : (
-        <button onClick={onOpen} className="flex items-center gap-2 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-200 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-sm">
+        <button id={triggerId} onClick={onOpen} className="flex items-center gap-2 bg-gray-900/90 hover:bg-gray-800 border border-gray-700 text-gray-200 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-sm">
           <span className="text-base">{icon}</span> {title}
           {!!count && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/60 text-yellow-300 border border-yellow-700/50">{count}</span>}
           <span className="text-gray-500 text-xs">▴</span>

@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.115.0',
+    date: '2026-07-05',
+    title: '공유 그래프에도 안내 투어 추가',
+    type: 'feature',
+    items: [
+      { category: '공유 그래프', desc: '처음 방문한 공유 그래프 화면에 안내 투어를 추가했습니다. 이 화면이 무엇인지, 함수를 클릭하면 흐름 재생이 시작된다는 것, 구조 경고를 확인하는 방법, 내 레포도 분석하려면 어떻게 시작하는지를 4단계로 보여줍니다.' },
+    ],
+  },
+  {
     version: 'v0.114.4',
     date: '2026-07-05',
     title: '흐름 재생 정확성 개선 — 도메인 뱃지·생성자 판정이 남의 레포에서도 정확하게',

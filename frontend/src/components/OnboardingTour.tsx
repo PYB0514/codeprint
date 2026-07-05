@@ -1,10 +1,10 @@
-// 그래프 페이지 최초 방문 사용자 대상 온보딩 투어
+// 최초 방문 사용자 대상 온보딩 투어 — 페이지별 steps/storageKey를 props로 받는 범용 컴포넌트
 import { Joyride, STATUS } from 'react-joyride'
 import type { Step, EventData } from 'react-joyride'
 
-const STORAGE_KEY = 'onboarding_tour_done'
+export const GRAPH_TOUR_STORAGE_KEY = 'onboarding_tour_done'
 
-const STEPS: Step[] = [
+export const GRAPH_TOUR_STEPS: Step[] = [
   {
     target: 'body',
     placement: 'center',
@@ -45,21 +45,23 @@ const STEPS: Step[] = [
 interface OnboardingTourProps {
   run: boolean
   onFinish: () => void
+  steps: Step[]
+  storageKey: string
 }
 
 // 온보딩 투어 컴포넌트 — run=true 시 투어 시작, 완료/종료 시 onFinish 호출
-export default function OnboardingTour({ run, onFinish }: OnboardingTourProps) {
+export default function OnboardingTour({ run, onFinish, steps, storageKey }: OnboardingTourProps) {
   // 투어 완료/종료 이벤트 처리
   const handleEvent = (data: EventData) => {
     if (data.status === STATUS.FINISHED || data.status === STATUS.SKIPPED) {
-      localStorage.setItem(STORAGE_KEY, '1')
+      localStorage.setItem(storageKey, '1')
       onFinish()
     }
   }
 
   return (
     <Joyride
-      steps={STEPS}
+      steps={steps}
       run={run}
       onEvent={handleEvent}
       continuous
@@ -87,6 +89,6 @@ export default function OnboardingTour({ run, onFinish }: OnboardingTourProps) {
 }
 
 // 투어를 이미 완료했는지 확인
-export function isTourDone(): boolean {
-  return localStorage.getItem(STORAGE_KEY) === '1'
+export function isTourDone(storageKey: string): boolean {
+  return localStorage.getItem(storageKey) === '1'
 }
