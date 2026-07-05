@@ -1169,3 +1169,11 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 5. **TDD** — `assemble`/`assembleSummaries`는 이미 배치 조립 순수 함수로 테스트되고 있어(§4 대상), `CommunityControllerAssembleTest`·`UserControllerAssembleTest`에 `hasGraph`(레거시 graphId만/스냅샷만/둘 다 없음 3분기) 검증 케이스 추가.
 
 **결과.** 백엔드 컴파일+전체 테스트 통과(회귀 없음). ★런타임 검증: 스냅샷만 있고 `graphId=null`인 실제 게시글로 ①갤러리 탭(`?graphOnly=true`) 응답에 포함되는지 ②전체 피드 응답의 `hasGraph:true` ③MCP `search_public_projects` 결과에 프로젝트 정보 정상 포함(이전엔 목록 자체에서 빠졌음) 전부 확인, `graphId`/스냅샷 둘 다 없는 게시글은 `hasGraph:false`로 대조 확인. claude-in-chrome으로 커뮤니티 피드·갤러리 탭·유저 프로필 페이지 3곳 모두 배지 정상 노출 확인. 검증 후 테스트 데이터 정리. 프론트 변경은 `decisions/DECISIONS_FRONTEND.md` 참조.
+
+## 아키텍처 의도 저장 응답에 위반 건수 포함 (A4, 2026-07-05)
+
+**문제.** V1_UX_GAP_REVIEW.md §4 A4 — `PUT /api/projects/{projectId}/architecture-intent`가 저장 후 빈 응답(`ResponseEntity.ok().build()`)만 반환해, 프론트가 "다음 그래프 조회 시 INTENT_DRIFT 경고가 업데이트됩니다"라는 막연한 메시지만 보여주고 있었음. 저장 즉시 실제 위반 수를 알려주려면 서버가 계산해 내려줘야 함.
+
+**결정.** 새 엔드포인트나 별도 경고 계산 로직을 만들지 않고, `ArchitectureIntentController.saveIntent()`가 저장 직후 `GraphQueryService.findLatestByProject(projectId)`로 최신 그래프를 찾아 `GraphWarningService.detect(nodes, edges, intent)`(기존 경고 감지 파이프라인, INTENT_DRIFT 포함)를 그대로 호출하고 `type == "INTENT_DRIFT"`만 카운트해 `{ violationCount: N }`으로 응답. 그래프가 아직 없는 프로젝트(분석 전)는 0 반환(그래프 부재 == "아직 위반이 있을 수 없음"으로 처리, 별도 에러 아님). `ArchitectureIntentController`가 같은 `graph` 애플리케이션 컨텍스트의 `GraphQueryService`/`GraphWarningService`를 주입받는 것은 기존 `GraphFacade` 의존과 동일 컨텍스트라 DDD 규칙 위반 아님.
+
+**결과.** 백엔드 컴파일+전체 테스트 통과(회귀 없음, 응답 타입이 `Void`→`Map<String,Object>`로 바뀌었지만 이 엔드포인트를 검증하는 기존 테스트 없었음). **실 로그인 세션(claude-in-chrome)으로 codeprint 자기분석 프로젝트에서 라이브 검증** — DDD 프리셋(domain↛infrastructure) 저장 시 "현재 위반 0건" 응답을 확인하고, 우측 경고 패널(13건, HIGH_FAN_OUT만 존재)에 INTENT_DRIFT 카테고리가 실제로 없는 것과 대조해 정확성 확인. 프론트 변경은 `decisions/DECISIONS_FRONTEND.md` 참조.

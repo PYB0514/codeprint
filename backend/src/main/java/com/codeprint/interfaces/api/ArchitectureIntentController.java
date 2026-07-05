@@ -3,7 +3,11 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.application.graph.ArchitectureIntentService;
 import com.codeprint.application.graph.GraphFacade;
+import com.codeprint.application.graph.GraphQueryService;
+import com.codeprint.application.graph.GraphWarningService;
 import com.codeprint.domain.graph.ArchitectureIntent;
+import com.codeprint.domain.graph.Edge;
+import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.user.User;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -23,6 +27,8 @@ public class ArchitectureIntentController {
 
     private final ArchitectureIntentService intentService;
     private final GraphFacade graphFacade;
+    private final GraphQueryService graphQueryService;
+    private final GraphWarningService graphWarningService;
 
     // 프로젝트의 의도 아키텍처 조회 — 소유자만
     @GetMapping("/api/projects/{projectId}/architecture-intent")
@@ -35,9 +41,9 @@ public class ArchitectureIntentController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // 프로젝트의 의도 아키텍처 저장 — 소유자만
+    // 프로젝트의 의도 아키텍처 저장 — 소유자만. 저장 직후 현재 위반 수를 함께 반환(A4)
     @PutMapping("/api/projects/{projectId}/architecture-intent")
-    public ResponseEntity<Void> saveIntent(
+    public ResponseEntity<Map<String, Object>> saveIntent(
             @PathVariable UUID projectId,
             @Valid @RequestBody IntentRequest request,
             @AuthenticationPrincipal User user) {
@@ -55,7 +61,20 @@ public class ArchitectureIntentController {
                         .toList()
         );
         intentService.save(projectId, intent);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(Map.of("violationCount", countIntentDriftViolations(projectId, intent)));
+    }
+
+    // 방금 저장한 의도 규칙 기준으로 최신 그래프의 INTENT_DRIFT 위반 수를 계산 — 그래프가 없으면 0
+    private long countIntentDriftViolations(UUID projectId, ArchitectureIntent intent) {
+        return graphQueryService.findLatestByProject(projectId)
+                .map(graph -> {
+                    List<Node> nodes = graphQueryService.getNodes(graph.getId());
+                    List<Edge> edges = graphQueryService.getEdges(graph.getId());
+                    return graphWarningService.detect(nodes, edges, intent).stream()
+                            .filter(w -> "INTENT_DRIFT".equals(w.get("type")))
+                            .count();
+                })
+                .orElse(0L);
     }
 
     // 프로젝트의 의도 아키텍처 삭제 — 소유자만
