@@ -16,7 +16,7 @@ const STEPS: Step[] = [
     target: '#tour-layout',
     placement: 'bottom',
     title: '레이아웃 전환',
-    content: '계층 모드는 DDD 레이어(interfaces → application → domain → infrastructure)를 기준으로 정렬합니다. 허브 모드는 핵심 노드 중심으로 방사형 배치합니다.',
+    content: '계층형 모드는 DDD 레이어(interfaces → application → domain → infrastructure)를 기준으로 정렬합니다. 도메인 모드는 같은 도메인(프로젝트·결제 등)끼리 묶어 배치합니다.',
     skipBeacon: true,
   },
   {
