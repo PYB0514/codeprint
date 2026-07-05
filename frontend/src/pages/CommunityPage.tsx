@@ -32,6 +32,7 @@ interface Post {
   commentCount: number
   repoUrl?: string | null
   hasGraph: boolean
+  ownRepo: boolean
 }
 
 interface Comment {
@@ -598,6 +599,14 @@ export default function CommunityPage() {
                         {post.hasGraph && (
                           <span className="text-xs text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded">
                             📊 그래프
+                          </span>
+                        )}
+                        {post.repoUrl && (
+                          <span
+                            title={post.ownRepo ? '작성자 본인 소유 레포' : '작성자 소유가 아닌 공개 레포 분석'}
+                            className={`text-xs px-2 py-0.5 rounded ${post.ownRepo ? 'text-blue-400 bg-blue-500/10' : 'text-gray-500 bg-gray-800'}`}
+                          >
+                            {post.ownRepo ? '내 레포' : '외부 레포'}
                           </span>
                         )}
                         {post.repoUrl && (

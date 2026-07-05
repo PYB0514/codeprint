@@ -747,3 +747,11 @@ const fetchGraph = useCallback(async () => {
 **결정.** 백엔드가 새로 내려주는 `violationCount`(응답 JSON, 상세는 `decisions/DECISIONS_BACKEND.md` "A4" 참조)를 파싱해 "저장됨 — 현재 위반 N건이 경고 패널에 표시됩니다"로 교체. 구버전 백엔드/네트워크 오류로 `violationCount`가 없는 응답이면 "저장됨 — 경고 패널에서 확인하세요"로 폴백(하위 호환).
 
 **결과.** 실 로그인 세션(claude-in-chrome)으로 codeprint 자기분석 프로젝트에서 확인 — DDD 프리셋 저장 시 "현재 위반 0건이 경고 패널에 표시됩니다" 정상 렌더, 우측 경고 패널에 INTENT_DRIFT 항목이 실제로 없는 것과 일치함을 대조 확인. 테스트 데이터는 검증 후 빈 상태로 재저장해 원상 복구.
+
+## 레포 소유 뱃지 프론트 반영 (6-b, 2026-07-05)
+
+**문제.** 백엔드가 새로 내려주는 `ownRepo`(상세는 `decisions/DECISIONS_BACKEND.md` "레포 소유 뱃지" 참조)를 화면에 반영.
+
+**결정.** GraphPage·ShareGraphPage 헤더에 "내 레포"/"외부 레포 분석" 뱃지 추가(`ownRepo`가 `null`이면 렌더 안 함 — 구버전 응답 하위 호환). CommunityPage 피드 카드·UserProfilePage 글 목록은 `hasGraph`(PR #442) 때 확립한 패턴 그대로 `Post`/`PostSummary` 인터페이스에 `ownRepo: boolean` 추가 후 배지 렌더. 두 곳 다 `post.repoUrl`/`post.hasGraph`가 있을 때만 배지를 보여줘 텍스트만 있는 글에는 무의미한 배지가 뜨지 않게 함.
+
+**결과.** `tsc -b` 통과. claude-in-chrome 실 로그인 세션(codeprint 자기분석 프로젝트)으로 GraphPage "내 레포" 뱃지, 공개 gin ShareGraphPage "외부 레포 분석" 뱃지 렌더 확인(둘 다 실제 소유 관계와 일치). 커뮤니티 피드는 `/api/community/posts` 응답에 `ownRepo` 필드가 정확히 포함되는 것 확인(기존 테스트 게시글은 `repoUrl`이 없어 항상 false — 배지 자체가 안 뜨는 것도 의도대로 확인). 스냅샷 뷰어(`CommunityPostGraphPage`)는 이번 스코프 제외(백엔드 결정 참조) — 후속 작업.

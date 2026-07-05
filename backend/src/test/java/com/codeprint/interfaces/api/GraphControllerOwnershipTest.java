@@ -62,7 +62,7 @@ class GraphControllerOwnershipTest {
     @DisplayName("getGraph — 비소유자는 차단되고 노드/엣지를 조회하지 않는다")
     void getGraph_nonOwner_deniedAndNoDataFetched() {
         doThrow(new IllegalStateException("Not authorized to access this project"))
-                .when(graphFacade).verifyProjectOwnership(projectId, userId);
+                .when(graphFacade).getOwnedProject(projectId, userId);
 
         assertThatThrownBy(() -> controller.getGraph(projectId, null, user))
                 .isInstanceOf(IllegalStateException.class);
@@ -79,7 +79,7 @@ class GraphControllerOwnershipTest {
 
         var response = controller.getGraph(projectId, null, user);
 
-        verify(graphFacade).verifyProjectOwnership(projectId, userId);
+        verify(graphFacade).getOwnedProject(projectId, userId);
         assertThat(response.getStatusCode().value()).isEqualTo(404);
     }
 

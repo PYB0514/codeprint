@@ -18,6 +18,10 @@ class UserControllerAssembleTest {
         return Post.create(userId, null, "제목", "내용", "GENERAL", null, null, null, null);
     }
 
+    private Post newPostWithRepo(UUID userId, String repoUrl) {
+        return Post.create(userId, null, "제목", "내용", "GENERAL", null, null, null, repoUrl);
+    }
+
     @Test
     @DisplayName("assembleSummaries — 북마크 수와 내 북마크 여부를 정확히 매핑")
     void assembleSummaries_mapsBookmarkMeta() {
@@ -25,7 +29,7 @@ class UserControllerAssembleTest {
         UUID pid = post.getId();
 
         List<UserController.PostSummaryResponse> result = UserController.assembleSummaries(
-                List.of(post), Map.of(pid, 5L), Set.of(pid), Set.of());
+                List.of(post), Map.of(pid, 5L), Set.of(pid), Set.of(), null);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).bookmarkCount()).isEqualTo(5L);
@@ -38,7 +42,7 @@ class UserControllerAssembleTest {
         Post post = newPost(UUID.randomUUID());
 
         List<UserController.PostSummaryResponse> result = UserController.assembleSummaries(
-                List.of(post), Map.of(), Set.of(), Set.of());
+                List.of(post), Map.of(), Set.of(), Set.of(), null);
 
         assertThat(result.get(0).bookmarkCount()).isZero();
         assertThat(result.get(0).bookmarkedByMe()).isFalse();
@@ -53,10 +57,26 @@ class UserControllerAssembleTest {
         Post noGraphPost = newPost(userId);
 
         List<UserController.PostSummaryResponse> result = UserController.assembleSummaries(
-                List.of(legacyGraphPost, snapshotPost, noGraphPost), Map.of(), Set.of(), Set.of(snapshotPost.getId()));
+                List.of(legacyGraphPost, snapshotPost, noGraphPost), Map.of(), Set.of(), Set.of(snapshotPost.getId()), null);
 
         assertThat(result.stream().filter(r -> r.id().equals(legacyGraphPost.getId())).findFirst().orElseThrow().hasGraph()).isTrue();
         assertThat(result.stream().filter(r -> r.id().equals(snapshotPost.getId())).findFirst().orElseThrow().hasGraph()).isTrue();
         assertThat(result.stream().filter(r -> r.id().equals(noGraphPost.getId())).findFirst().orElseThrow().hasGraph()).isFalse();
+    }
+
+    @Test
+    @DisplayName("assembleSummaries — ownRepo: 레포 owner와 프로필 사용자명이 일치할 때만 true")
+    void assembleSummaries_ownRepo() {
+        UUID userId = UUID.randomUUID();
+        Post ownPost = newPostWithRepo(userId, "https://github.com/alice/myrepo");
+        Post externalPost = newPostWithRepo(userId, "https://github.com/bob/otherrepo");
+        Post noRepoPost = newPost(userId);
+
+        List<UserController.PostSummaryResponse> result = UserController.assembleSummaries(
+                List.of(ownPost, externalPost, noRepoPost), Map.of(), Set.of(), Set.of(), "alice");
+
+        assertThat(result.stream().filter(r -> r.id().equals(ownPost.getId())).findFirst().orElseThrow().ownRepo()).isTrue();
+        assertThat(result.stream().filter(r -> r.id().equals(externalPost.getId())).findFirst().orElseThrow().ownRepo()).isFalse();
+        assertThat(result.stream().filter(r -> r.id().equals(noRepoPost.getId())).findFirst().orElseThrow().ownRepo()).isFalse();
     }
 }

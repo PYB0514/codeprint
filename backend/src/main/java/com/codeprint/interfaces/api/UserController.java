@@ -61,7 +61,8 @@ public class UserController {
                 .filter(p -> p.isPublic() || (currentUser != null && currentUser.getId().equals(userId)))
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                 .toList();
-        return ResponseEntity.ok(toPostSummaries(posts, currentUser));
+        String profileUsername = userRepository.findById(userId).map(User::getUsername).orElse(null);
+        return ResponseEntity.ok(toPostSummaries(posts, currentUser, profileUsername));
     }
 
     // 유저의 공개 프로젝트 목록 조회
@@ -80,7 +81,7 @@ public class UserController {
     }
 
     // 게시글 목록을 요약 DTO 목록으로 일괄 변환 — 북마크 수/내 여부를 페이지 단위 배치 조회해 N+1 제거
-    private List<PostSummaryResponse> toPostSummaries(List<Post> posts, User currentUser) {
+    private List<PostSummaryResponse> toPostSummaries(List<Post> posts, User currentUser, String profileUsername) {
         if (posts.isEmpty()) return List.of();
         List<UUID> postIds = posts.stream().map(Post::getId).toList();
 
@@ -93,20 +94,23 @@ public class UserController {
                         .map(PostBookmark::getPostId).collect(Collectors.toSet());
         Set<UUID> postsWithSnapshots = new HashSet<>(postRepository.findPostIdsWithSnapshots(postIds));
 
-        return assembleSummaries(posts, bookmarkCounts, myBookmarks, postsWithSnapshots);
+        return assembleSummaries(posts, bookmarkCounts, myBookmarks, postsWithSnapshots, profileUsername);
     }
 
     // 배치 조회한 북마크 메타로 요약 DTO 목록 조립 (순수 함수 — 카운트 없는 글은 0)
+    // profileUsername: 이 목록의 작성자(프로필 주인)는 전부 동일 인물이라 배치 조회 불필요, 단일 값 비교로 충분
     static List<PostSummaryResponse> assembleSummaries(List<Post> posts,
                                                        Map<UUID, Long> bookmarkCounts,
                                                        Set<UUID> myBookmarks,
-                                                       Set<UUID> postsWithSnapshots) {
+                                                       Set<UUID> postsWithSnapshots,
+                                                       String profileUsername) {
         return posts.stream().map(p -> new PostSummaryResponse(
                 p.getId(), p.getTitle(), p.getFeedbackType(),
                 p.getGraphId(), p.getCreatedAt(),
                 bookmarkCounts.getOrDefault(p.getId(), 0L),
                 myBookmarks.contains(p.getId()),
-                p.getGraphId() != null || postsWithSnapshots.contains(p.getId())
+                p.getGraphId() != null || postsWithSnapshots.contains(p.getId()),
+                com.codeprint.shared.GithubRepoOwner.matches(p.getRepoUrl(), profileUsername)
         )).toList();
     }
 
@@ -119,5 +123,5 @@ public class UserController {
     // 게시글 요약 응답 DTO
     public record PostSummaryResponse(
             UUID id, String title, String feedbackType, UUID graphId,
-            Instant createdAt, long bookmarkCount, boolean bookmarkedByMe, boolean hasGraph) {}
+            Instant createdAt, long bookmarkCount, boolean bookmarkedByMe, boolean hasGraph, boolean ownRepo) {}
 }

@@ -91,4 +91,15 @@ class ProjectTest {
 
         assertThat(p.getProjectId()).isEqualTo(ProjectId.of(p.getId()));
     }
+
+    @Test
+    @DisplayName("isOwnRepo — 레포 owner('o')와 사용자명이 대소문자 무시하고 일치하면 true")
+    void isOwnRepo_matchesCaseInsensitive() {
+        Project p = newProject();
+
+        assertThat(p.isOwnRepo("o")).isTrue();
+        assertThat(p.isOwnRepo("O")).isTrue();
+        assertThat(p.isOwnRepo("other")).isFalse();
+        assertThat(p.isOwnRepo(null)).isFalse();
+    }
 }

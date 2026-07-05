@@ -1177,3 +1177,17 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결정.** 새 엔드포인트나 별도 경고 계산 로직을 만들지 않고, `ArchitectureIntentController.saveIntent()`가 저장 직후 `GraphQueryService.findLatestByProject(projectId)`로 최신 그래프를 찾아 `GraphWarningService.detect(nodes, edges, intent)`(기존 경고 감지 파이프라인, INTENT_DRIFT 포함)를 그대로 호출하고 `type == "INTENT_DRIFT"`만 카운트해 `{ violationCount: N }`으로 응답. 그래프가 아직 없는 프로젝트(분석 전)는 0 반환(그래프 부재 == "아직 위반이 있을 수 없음"으로 처리, 별도 에러 아님). `ArchitectureIntentController`가 같은 `graph` 애플리케이션 컨텍스트의 `GraphQueryService`/`GraphWarningService`를 주입받는 것은 기존 `GraphFacade` 의존과 동일 컨텍스트라 DDD 규칙 위반 아님.
 
 **결과.** 백엔드 컴파일+전체 테스트 통과(회귀 없음, 응답 타입이 `Void`→`Map<String,Object>`로 바뀌었지만 이 엔드포인트를 검증하는 기존 테스트 없었음). **실 로그인 세션(claude-in-chrome)으로 codeprint 자기분석 프로젝트에서 라이브 검증** — DDD 프리셋(domain↛infrastructure) 저장 시 "현재 위반 0건" 응답을 확인하고, 우측 경고 패널(13건, HIGH_FAN_OUT만 존재)에 INTENT_DRIFT 카테고리가 실제로 없는 것과 대조해 정확성 확인. 프론트 변경은 `decisions/DECISIONS_FRONTEND.md` 참조.
+
+## 레포 소유 뱃지 (6-b, 2026-07-05)
+
+**문제.** V1_UX_GAP_REVIEW.md §9 신규 작업 6-b — 분석 결과가 "내(소유자) 레포"인지 "외부 공개 레포 분석"인지 구분할 방법이 화면 어디에도 없었음.
+
+**결정.**
+1. **판정 로직 위치 — `shared/GithubRepoOwner`(신규, 순수 유틸)** — GitHub URL에서 owner를 정규식으로 추출해 사용자명과 비교(대소문자 무시). `project`/`community` 두 컨텍스트가 똑같이 필요로 해서 어느 한쪽 도메인에 종속시키지 않고 최상위 `shared` 패키지에 배치(기존에도 `domain/user`·`domain/team` 등이 `shared`를 이미 import하는 선례 확인 후 따름).
+2. **`Project.isOwnRepo(String username)`** — Project 자신의 `githubRepoUrl` 필드로 판정하는 도메인 메서드. User 도메인 클래스를 직접 참조하지 않고 문자열만 받아 컨텍스트 결합 없음.
+3. **`GraphFacade.getOwnedProject(projectId, userId)` 신규** — 기존 `verifyProjectOwnership`(void)은 그대로 두고, Project 데이터가 필요한 호출부(뱃지 판정)를 위해 반환값 있는 버전을 추가. `GraphController.getGraph()`가 이걸로 교체 — 조회한 사용자가 이미 소유자로 검증됐으므로 `user.getUsername()`을 그대로 비교에 사용(별도 오너 조회 불필요).
+4. **`/api/share/{projectId}/graph`(비인증 공개 조회)** — 이미 `ownerBgUrl`을 위해 소유자 User를 조회하고 있던 걸 재사용해 `ownRepo`도 같은 조회에서 계산(추가 쿼리 없음).
+5. **커뮤니티 게시글(`PostResponse`/`PostSummaryResponse`)** — `Post.repoUrl`(작성 시점에 이미 저장돼 있던 필드, hasGraph 도입 때와 동일한 데이터 소스)과 작성자 사용자명을 비교. `CommunityController.assemble`은 이미 배치 조회한 `usernames` Map을 그대로 재사용(추가 쿼리 없음), `UserController.assembleSummaries`는 프로필 글 목록이 전부 같은 프로필 주인 글이라 사용자명 배치 조회 자체가 불필요 — 단일 값(`profileUsername`) 비교로 충분(N+1 없음, `usernames` Map 불필요).
+6. **알려진 한계(1차 구현) — 문서화만, 코드로 회피 안 함**: 조직(org) 레포는 실제로 본인이 관리해도 URL owner가 조직명이라 "외부 레포"로 뜸. 커뮤니티 게시글의 다중 스냅샷(한 게시글에 여러 프로젝트가 첨부 가능)은 게시글 단위 `repoUrl` 하나만 비교하므로 스냅샷별로 다른 프로젝트를 가리키면 부정확할 수 있음 — 이번 스코프에서는 게시글 카드·프로필 목록까지만 반영, 스냅샷 뷰어(`CommunityPostGraphPage`) 단위 표시는 스냅샷별 프로젝트 owner 조회를 위한 새 cross-context 포트가 필요해 후속 작업으로 미룸.
+
+**결과.** 백엔드 컴파일+전체 테스트 통과. 신규 단위 테스트 — `ProjectTest.isOwnRepo_matchesCaseInsensitive`(대소문자 무시·null 안전), `CommunityControllerAssembleTest.assemble_ownRepo`(본인/타인 레포), `UserControllerAssembleTest.assembleSummaries_ownRepo`(본인/타인/레포없음 3분기). `GraphControllerOwnershipTest`의 기존 두 테스트는 `verifyProjectOwnership`→`getOwnedProject` 시그니처 변경에 맞춰 목 대상만 교체(동작 검증 내용은 동일). ★런타임 검증: claude-in-chrome 실 로그인 세션으로 codeprint 자기분석 프로젝트 GraphPage에서 "내 레포" 뱃지 확인, 공개 gin(gin-gonic) ShareGraphPage에서 "외부 레포 분석" 뱃지 확인(둘 다 실제 소유 관계와 일치). 커뮤니티 피드는 API 응답에 `ownRepo` 필드가 정확히 내려오는 것 확인(기존 테스트 게시글은 `repoUrl` 자체가 null이라 항상 false — 정상 동작). 프론트 변경은 `decisions/DECISIONS_FRONTEND.md` 참조.

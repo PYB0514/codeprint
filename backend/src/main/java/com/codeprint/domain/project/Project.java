@@ -75,6 +75,11 @@ public class Project {
         this.updatedAt = Instant.now();
     }
 
+    // 레포 owner가 프로젝트 소유자의 GitHub 계정과 일치하는지 (내 레포 vs 외부 레포 분석 판정)
+    public boolean isOwnRepo(String ownerUsername) {
+        return com.codeprint.shared.GithubRepoOwner.matches(githubRepoUrl, ownerUsername);
+    }
+
     // UUID를 ProjectId Value Object로 변환하여 반환
     public ProjectId getProjectId() {
         return ProjectId.of(id);

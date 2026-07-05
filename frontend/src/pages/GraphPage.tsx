@@ -325,6 +325,8 @@ function GraphPageInner() {
   } | null>(null)
   // 대형 레포 절단 안내 — 전체 대상 파일 수 > 분석된 파일 수일 때 배너 표시
   const [truncation, setTruncation] = useState<{ analyzed: number; total: number } | null>(null)
+  // 내 레포 분석 vs 외부 공개 레포 분석 판정 (1차: owner 문자열 비교, org 레포는 예외적으로 "외부"로 뜰 수 있음)
+  const [ownRepo, setOwnRepo] = useState<boolean | null>(null)
   const [showDomainBoxes, setShowDomainBoxes] = useState(true)
   // 탭 분리: null = 전체 보기, 문자열 = 해당 도메인/레이어만 표시
   const [activeDomainTab, setActiveDomainTab] = useState<string | null>(null)
@@ -691,8 +693,9 @@ function GraphPageInner() {
     try {
       const res = await axios.get(`/api/projects/${projectId}/graph`)
       type WarningItem = { type: string; severity?: 'HIGH' | 'MEDIUM' | 'LOW'; nodeIds: string[]; edgeIds?: string[]; message: string; fingerprint?: string }
-      const { graphId: gid, nodes: rn, edges: re, warnings: w, suppressedWarnings: sw, analyzedFileCount, totalFileCount } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: WarningItem[]; suppressedWarnings?: WarningItem[]; analyzedFileCount?: number; totalFileCount?: number }
+      const { graphId: gid, nodes: rn, edges: re, warnings: w, suppressedWarnings: sw, analyzedFileCount, totalFileCount, ownRepo: or } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: WarningItem[]; suppressedWarnings?: WarningItem[]; analyzedFileCount?: number; totalFileCount?: number; ownRepo?: boolean }
       setGraphId(gid)
+      setOwnRepo(or ?? null)
       // 500개 초과 절단 시에만 안내 배너 (기존 그래프는 카운트 없음)
       setTruncation(
         totalFileCount != null && analyzedFileCount != null && totalFileCount > analyzedFileCount
@@ -1901,6 +1904,16 @@ function GraphPageInner() {
         <span className="text-gray-500 text-sm">
           파일 {counts.files} · 함수 {counts.funcs} · 엣지 {counts.edges}
         </span>
+        {ownRepo !== null && (
+          <span
+            title={ownRepo ? '내 GitHub 계정 소유 레포입니다' : '내 소유가 아닌 공개 레포를 분석했습니다'}
+            className={`text-[11px] px-2 py-0.5 rounded-full border ${
+              ownRepo ? 'bg-blue-900/40 border-blue-700/50 text-blue-300' : 'bg-gray-800 border-gray-700 text-gray-400'
+            }`}
+          >
+            {ownRepo ? '내 레포' : '외부 레포 분석'}
+          </span>
+        )}
 
         {/* 전역 뷰 컨트롤 — 레이아웃·라벨 토글 + 프리셋·내보내기 팝업 */}
         <span className="w-px h-5 bg-gray-700" />

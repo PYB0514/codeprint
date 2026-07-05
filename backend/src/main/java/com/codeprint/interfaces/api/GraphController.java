@@ -89,7 +89,7 @@ public class GraphController {
             @RequestParam(required = false) UUID graphId,
             @AuthenticationPrincipal User user) {
 
-        graphFacade.verifyProjectOwnership(projectId, user.getId());
+        var project = graphFacade.getOwnedProject(projectId, user.getId());
 
         // graphId 지정 시 해당 그래프가 이 프로젝트 소속일 때만 반환(타 프로젝트 그래프 차단)
         Optional<Graph> graphOpt = graphId != null
@@ -128,6 +128,7 @@ public class GraphController {
                     body.put("edges", edgeData);
                     body.put("warnings", partitioned.get(false));
                     body.put("suppressedWarnings", partitioned.get(true));
+                    body.put("ownRepo", project.isOwnRepo(user.getUsername()));
                     // 대형 레포 절단 안내 — 기존 그래프(NULL)는 미포함
                     if (graph.getTotalFileCount() != null) {
                         body.put("analyzedFileCount", graph.getAnalyzedFileCount());
@@ -144,9 +145,11 @@ public class GraphController {
     @GetMapping("/api/share/{projectId}/graph")
     public ResponseEntity<?> getPublicGraph(@PathVariable UUID projectId) {
         var project = graphFacade.getPublicProject(projectId);
-        String ownerBgUrl = userRepository.findById(project.getUserId())
+        Optional<User> owner = userRepository.findById(project.getUserId());
+        String ownerBgUrl = owner
                 .map(u -> s3Service.toPresignedUrl(u.getGraphBgUrl()))
                 .orElse(null);
+        boolean ownRepo = owner.map(u -> project.isOwnRepo(u.getUsername())).orElse(false);
         return graphQueryService.findLatestByProject(projectId)
                 .map(graph -> {
                     List<Node> nodes = graphQueryService.getNodes(graph.getId());
@@ -172,6 +175,7 @@ public class GraphController {
                     body.put("edges", edgeData);
                     body.put("warnings", warnings);
                     body.put("ownerBgUrl", ownerBgUrl);
+                    body.put("ownRepo", ownRepo);
                     // 대형 레포 절단 안내 — 기존 그래프(NULL)는 미포함
                     if (graph.getTotalFileCount() != null) {
                         body.put("analyzedFileCount", graph.getAnalyzedFileCount());

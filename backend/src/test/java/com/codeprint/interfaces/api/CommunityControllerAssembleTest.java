@@ -19,6 +19,10 @@ class CommunityControllerAssembleTest {
         return Post.create(userId, null, "제목", "내용", "GENERAL", null, null, null, null);
     }
 
+    private Post newPostWithRepo(UUID userId, String repoUrl) {
+        return Post.create(userId, null, "제목", "내용", "GENERAL", null, null, null, repoUrl);
+    }
+
     @Test
     @DisplayName("toCountMap — [postId, count] 행을 Map으로 변환 (Integer/Long 모두 long으로)")
     void toCountMap_convertsRows() {
@@ -110,6 +114,25 @@ class CommunityControllerAssembleTest {
         assertThat(r.bookmarkedByMe()).isFalse();
         assertThat(r.likedByMe()).isFalse();
         assertThat(r.hasGraph()).isFalse();
+    }
+
+    @Test
+    @DisplayName("assemble — ownRepo: 레포 owner와 작성자명이 일치할 때만 true")
+    void assemble_ownRepo() {
+        UUID alice = UUID.randomUUID();
+        UUID bob = UUID.randomUUID();
+        Post ownPost = newPostWithRepo(alice, "https://github.com/alice/myrepo");
+        Post externalPost = newPostWithRepo(bob, "https://github.com/someone-else/theirrepo");
+
+        List<CommunityController.PostResponse> result = CommunityController.assemble(
+                List.of(ownPost, externalPost),
+                Map.of(alice, "alice", bob, "bob"),
+                Map.of(), Map.of(), Map.of(),
+                Set.of(), Set.of(),
+                Set.of());
+
+        assertThat(result.stream().filter(r -> r.id().equals(ownPost.getId())).findFirst().orElseThrow().ownRepo()).isTrue();
+        assertThat(result.stream().filter(r -> r.id().equals(externalPost.getId())).findFirst().orElseThrow().ownRepo()).isFalse();
     }
 
     @Test
