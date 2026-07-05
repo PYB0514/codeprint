@@ -98,7 +98,13 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
         credentials: 'include'
       })
       if (res.ok) {
-        setStatusMsg('저장됨 — 다음 그래프 조회 시 INTENT_DRIFT 경고가 업데이트됩니다.')
+        const data = await res.json().catch(() => null)
+        const count = data?.violationCount
+        setStatusMsg(
+          typeof count === 'number'
+            ? `저장됨 — 현재 위반 ${count}건이 경고 패널에 표시됩니다.`
+            : '저장됨 — 경고 패널에서 확인하세요.'
+        )
         onSaved?.()
       } else {
         setStatusMsg('저장 실패')

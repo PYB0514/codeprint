@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.116.1',
+    date: '2026-07-05',
+    title: '아키텍처 의도 저장 시 위반 건수 즉시 확인',
+    type: 'fix',
+    items: [
+      { category: '아키텍처 의도', desc: '저장 메시지가 "다음 그래프 조회 시 업데이트됩니다"라는 막연한 안내였던 것을 "현재 위반 N건이 경고 패널에 표시됩니다"로 바꿔 저장 즉시 실제 위반 수를 알 수 있게 했습니다.' },
+    ],
+  },
+  {
     version: 'v0.116.0',
     date: '2026-07-05',
     title: '아키텍처 의도 패널 — 인트로·자동 감지·실시간 글로브 미리보기',

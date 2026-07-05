@@ -739,3 +739,11 @@ const fetchGraph = useCallback(async () => {
 **결정.** `ArchitectureIntentPanel`에 `filePaths: string[]` prop 추가(GraphPage가 `rawNodes`의 FILE 경로를 전달) — 3가지 모두 이 하나의 배선으로 해결되므로 별도 PR로 안 쪼갬. A1: 상단 인트로 문구 + "예시로 채워보기(domain ↛ infrastructure)" 프리셋 버튼(모듈·규칙이 비어있을 때만 노출). A2: "감지된 구조에서 가져오기" 버튼 — `getGroupKey`+`findCommonPrefix`(둘 다 `graphLayout.ts` 기존 export, 흐름재생 도메인 뱃지 수정 때 확립한 것과 동일한 "범례와 같은 소스" 원칙 재사용)로 실제 폴더 구조를 감지해 파일 수 많은 순 상위 8개를 모듈 후보로 제시, 이미 있는 이름은 건너뜀. A3: 모듈 글로브 입력창 아래 매치 파일 수를 실시간 표시 — 신규 글로브 매칭 로직을 만들지 않고 기존 `ignoreRules.ts`의 `globMatch`(경고 예외 규칙 UI가 이미 쓰던 것)를 그대로 재사용, 서버 왕복 없음. A5(예외 규칙은 경고 패널에서 관리)도 한 줄 안내 문구로 함께 보완.
 
 **결과.** `tsc -b` 통과. **실 로그인 세션(claude-in-chrome, 사용자 Chrome 프로필의 기존 GitHub OAuth 쿠키 재사용)으로 codeprint 자기분석 프로젝트에서 라이브 검증** — ①빈 상태에서 "예시로 채워보기" 클릭 시 domain(120개 파일 매치)·infrastructure(130개 파일 매치) 모듈 + FORBID 규칙(domain→infrastructure) 자동 생성 확인 ②"감지된 구조에서 가져오기" 클릭 시 실제 codeprint 폴더 구조 기반 8개 모듈(infrastructure/persistence 64개, interfaces/api 43개, domain/graph 28개 등) 자동 채움 + 각 매치 수 정확히 표시 확인 ③글로브를 존재하지 않는 값으로 바꾸면 "매치되는 파일 없음 — 글로브를 확인하세요" 빨간 경고로 즉시 전환 확인 ④저장 시 기존 동작(상태 메시지+`onSaved`로 그래프 즉시 재조회, INTENT_DRIFT 하이라이트 반영) 회귀 없음 확인. 테스트 데이터는 검증 후 전부 제거해 원상 복구.
+
+## 아키텍처 의도 저장 메시지에 실제 위반 수 표시 (A4, 2026-07-05)
+
+**문제.** V1_UX_GAP_REVIEW.md §4 A4 — 저장 버튼을 눌러도 "다음 그래프 조회 시 INTENT_DRIFT 경고가 업데이트됩니다"라는 결과를 알 수 없는 막연한 메시지뿐이었음.
+
+**결정.** 백엔드가 새로 내려주는 `violationCount`(응답 JSON, 상세는 `decisions/DECISIONS_BACKEND.md` "A4" 참조)를 파싱해 "저장됨 — 현재 위반 N건이 경고 패널에 표시됩니다"로 교체. 구버전 백엔드/네트워크 오류로 `violationCount`가 없는 응답이면 "저장됨 — 경고 패널에서 확인하세요"로 폴백(하위 호환).
+
+**결과.** 실 로그인 세션(claude-in-chrome)으로 codeprint 자기분석 프로젝트에서 확인 — DDD 프리셋 저장 시 "현재 위반 0건이 경고 패널에 표시됩니다" 정상 렌더, 우측 경고 패널에 INTENT_DRIFT 항목이 실제로 없는 것과 일치함을 대조 확인. 테스트 데이터는 검증 후 빈 상태로 재저장해 원상 복구.
