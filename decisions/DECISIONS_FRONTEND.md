@@ -711,3 +711,13 @@ const fetchGraph = useCallback(async () => {
 **결정.** `CommunityPage.tsx`·`UserProfilePage.tsx`의 `Post`/`PostSummary` 인터페이스에 `hasGraph: boolean` 추가, 피드 카드·프로필 카드의 "📊 그래프" 배지 조건을 `post.graphId &&` → `post.hasGraph &&`로 교체. `CommunityPage.tsx`의 게시글 상세 패널 안 레거시 "그래프 보기 →" 버튼(`selectedPost.graphId &&`)은 건드리지 않음 — 이건 스냅샷이 하나도 없을 때만 보이는 레거시 단일 첨부 전용 폴백이라 `graphId` 자체를 확인하는 게 맞음(§3, 의도 다른 조건을 억지로 통일 안 함).
 
 **결과.** `tsc -b` 통과. claude-in-chrome 비로그인 세션 E2E — 스냅샷만 있고 `graphId=null`인 게시글에 대해 ①커뮤니티 피드 카드에 "📊 그래프" 배지 노출 ②"갤러리" 탭 클릭 시 목록에 포함 ③유저 프로필 페이지 글목록에도 배지 노출, 전부 확인. 검증 후 테스트 데이터 정리.
+
+## 흐름 재생 정확성 — 도메인 뱃지 하드코딩·PascalCase=생성자 오판 수정 (2026-07-05)
+
+**문제.** V1_UX_GAP_REVIEW.md §2 G2·G3 — `FlowPlaybackPanel.tsx`의 도메인 뱃지가 `/\/(project|user|graph|analysis|community|auth|payment|admin)[/.]?/i` 정규식으로 **Codeprint 자기 자신의 도메인명**을 하드코딩하고 있어 남의 레포(gin 등)에서는 항상 뱃지가 안 뜨거나 우연히 오매칭될 수 있었음(G2). 또 마지막 스텝에서 `/^[A-Z]/.test(name)`(PascalCase)이면 무조건 "객체가 반환됩니다"로 표시하는데, Go·C#은 공개(exported) 함수 전체가 관례상 PascalCase라 일반 함수도 전부 생성자로 오판(G3).
+
+**1차 시도 — 잘못 판단, 런타임 검증에서 반증됨.** 처음엔 `graphLayout.ts`의 `extractDomain`(도메인형 레이아웃에서 노드 색상 분류에 쓰는 함수)이 "그래프가 이미 갖고 있는 도메인 분류(범례와 동일 소스)"에 해당한다고 판단해 이를 재사용하도록 고쳤음. gin 실그래프로 검증한 결과 **항상 뱃지가 안 뜨는 회귀**를 발견 — 원인 조사 결과 `extractDomain`은 DDD 레이어 키워드(`domain`/`application`/`infrastructure`/`interfaces`/`pages`/`components`/`hooks` 등) 하위 서브폴더를 찾는 함수라 gin처럼 그런 레이어 폴더가 없는 레포에서는 전부 `'common'`을 반환함. 실제로 화면에 보이는 범례 탭("Root/Binding/Codec/Internal/Render/Testdata")은 `extractDomain`이 아니라 **섹션/그룹 박스를 만드는 `getGroupKey`**(레이어 키워드가 없으면 실제 최상위 폴더명을 그대로 쓰고, 그마저 없으면 `'root'`)가 만든 값이었음 — 두 함수 중 진짜 "범례와 동일 소스"는 `getGroupKey` 쪽.
+
+**최종 결정.** `getGroupKey` + `findCommonPrefix`(둘 다 `graphLayout.ts` 기존 export, 신규 함수 추가 없음)로 교체. 루트 노드의 `filePath`로 그룹 키를 구해 `'root'`(레포 최상위 파일)면 뱃지를 숨기고, 그 외에는 첫 글자만 대문자화해 표시(범례 라벨 표기와 통일). G3는 언어 인지로 완화 — `rawNode.language`가 `'Go'`/`'C#'`이면 PascalCase여도 생성자 메시지를 표시하지 않음(백엔드 `LanguageDetector`가 내려주는 언어 표시명 그대로 사용, 별도 매핑 불필요).
+
+**결과.** `tsc -b` 통과. claude-in-chrome으로 실그래프 3종 검증 — ①gin(Go): `binding/binding.go`의 `Default` 함수 흐름 재생 시 뱃지 "Binding" 정상 표시(수정 전 1차 시도에서는 뱃지 없음을 직접 확인해 반증), 재생 마지막 스텝에서 "객체가 반환됩니다" 오표시 없음 확인 ②gin 루트 파일(`gin.go`)의 `Default` 함수는 뱃지 없음(의도된 동작 — `getGroupKey`가 `'root'` 반환) ③Newtonsoft.Json(C#): `Parse` 흐름 재생 9단계 전부 진행, 마지막 단계에서도 생성자 오표시 없음, 콘솔 에러 없음. 도메인 뱃지 하드코딩·PascalCase 오판 둘 다 실제 데이터로 반증 가능한 형태였고, 1차 시도(`extractDomain`)도 코드만 보고는 그럴듯했으나 실행 후에야 오류가 드러난 사례 — §11 "읽어라, 추측 말고" 원칙 재확인.
