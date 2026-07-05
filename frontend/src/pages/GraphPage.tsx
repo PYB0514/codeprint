@@ -2388,7 +2388,11 @@ function GraphPageInner() {
           panelClassName="w-72 max-h-[55vh]"
           style={{ left: leftOpen ? `${leftWidth + 16}px` : '20px' }}
         >
-          <ArchitectureIntentPanel projectId={projectId} onSaved={() => fetchGraph()} />
+          <ArchitectureIntentPanel
+            projectId={projectId}
+            filePaths={rawNodes.filter(n => n.type === 'FILE').map(n => n.filePath)}
+            onSaved={() => fetchGraph()}
+          />
         </CornerPanel>
       )}
 
