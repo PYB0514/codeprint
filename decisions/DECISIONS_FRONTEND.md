@@ -721,3 +721,13 @@ const fetchGraph = useCallback(async () => {
 **최종 결정.** `getGroupKey` + `findCommonPrefix`(둘 다 `graphLayout.ts` 기존 export, 신규 함수 추가 없음)로 교체. 루트 노드의 `filePath`로 그룹 키를 구해 `'root'`(레포 최상위 파일)면 뱃지를 숨기고, 그 외에는 첫 글자만 대문자화해 표시(범례 라벨 표기와 통일). G3는 언어 인지로 완화 — `rawNode.language`가 `'Go'`/`'C#'`이면 PascalCase여도 생성자 메시지를 표시하지 않음(백엔드 `LanguageDetector`가 내려주는 언어 표시명 그대로 사용, 별도 매핑 불필요).
 
 **결과.** `tsc -b` 통과. claude-in-chrome으로 실그래프 3종 검증 — ①gin(Go): `binding/binding.go`의 `Default` 함수 흐름 재생 시 뱃지 "Binding" 정상 표시(수정 전 1차 시도에서는 뱃지 없음을 직접 확인해 반증), 재생 마지막 스텝에서 "객체가 반환됩니다" 오표시 없음 확인 ②gin 루트 파일(`gin.go`)의 `Default` 함수는 뱃지 없음(의도된 동작 — `getGroupKey`가 `'root'` 반환) ③Newtonsoft.Json(C#): `Parse` 흐름 재생 9단계 전부 진행, 마지막 단계에서도 생성자 오표시 없음, 콘솔 에러 없음. 도메인 뱃지 하드코딩·PascalCase 오판 둘 다 실제 데이터로 반증 가능한 형태였고, 1차 시도(`extractDomain`)도 코드만 보고는 그럴듯했으나 실행 후에야 오류가 드러난 사례 — §11 "읽어라, 추측 말고" 원칙 재확인.
+
+## 첫 사용자 튜토리얼 — OnboardingTour 범용화 + ShareGraphPage 투어 신설 (2026-07-05)
+
+**문제.** V1_UX_GAP_REVIEW.md §3·§4 — `OnboardingTour`가 `STEPS`/`STORAGE_KEY`를 컴포넌트 안에 하드코딩하고 있어 GraphPage 전용이었음. 신규 유입 경로인 ShareGraphPage(공유 그래프)에는 투어가 전혀 없었음.
+
+**결정.** `OnboardingTour.tsx`를 `steps`/`storageKey` props를 받는 범용 컴포넌트로 변경(`isTourDone`도 storageKey 파라미터 추가). GraphPage는 기존 5스텝·기존 storageKey(`onboarding_tour_done`)를 그대로 named export(`GRAPH_TOUR_STEPS`/`GRAPH_TOUR_STORAGE_KEY`)로 옮겨 값 변경 없이 props로 전달(순수 추출, 기존 사용자의 "이미 봄" localStorage 상태 보존). ShareGraphPage에는 신규 4스텝 투어(별도 storageKey `onboarding_tour_share_done`) 추가 — ①인트로 ②함수 클릭→흐름재생 안내 ③구조 경고 버튼(CornerPanel) ④"로그인하기" CTA(내 레포 분석 유도). `CornerPanel.tsx`에 선택적 `triggerId` prop을 추가해 접힘 트리거 버튼을 투어 타겟으로 지정할 수 있게 함(GraphPage 쪽은 미전달이라 영향 없음).
+
+**★런타임 검증 중 발견한 버그 — 대형 그래프에서 캔버스 노드를 타겟으로 하면 스텝이 조용히 건너뛰어짐.** 처음엔 GraphPage의 4번째 스텝과 동일하게 2번째 스텝의 target을 `.react-flow__node`(범용 클래스 셀렉터)로 만들었음. gin(노드 1398개) 실그래프로 검증한 결과 이 스텝이 앞뒤 어느 방향으로 이동해도 항상 건너뛰어짐(다음 클릭 시 바로 3번째 스텝으로, 이전 클릭 시 바로 1번째 스텝으로) — DOM에 매칭 요소가 1398개나 있어도, react-joyride가 첫 매칭 요소의 위치를 계산하지 못하면(대형 그래프가 fitView로 축소된 뒤 첫 DOM 순서 노드가 뷰포트 밖/극소 크기일 가능성) 자동으로 스텝을 스킵하는 것으로 추정. **해결:** 2번째 스텝의 target을 특정 캔버스 노드에 의존하지 않는 `'body'`/`placement: 'center'`(1번째 스텝과 동일 패턴)로 변경 — 안내 문구 자체가 "함수 노드를 클릭하면 ~"이므로 특정 노드를 직접 가리킬 필요가 없었음. GraphPage의 기존 4번째 스텝(`.react-flow__node`)은 이번 세션에서 건드리지 않아 동일 리스크가 남아있을 수 있음(GraphPage는 통상 노드 수가 더 적고, 이번 세션에서 발견된 것과 정확히 같은 조건인지는 별도 확인 필요 — 후속 판단 대상으로 기록만).
+
+**결과.** `tsc -b` 통과. claude-in-chrome으로 gin(Go, 노드 1398개) 실그래프에서 신규 4스텝 투어 전부 순서대로 진행 확인(각 스텝 타이틀 텍스트 렌더 확인) + "완료" 클릭 시 `localStorage['onboarding_tour_share_done']` = '1' 저장 확인(재방문 시 재생 안 됨). 콘솔 에러 없음. GraphPage 쪽 변경은 순수 값 추출(동일 STEPS 배열·동일 storageKey 문자열)이라 OAuth 로그인 필요한 실사용 확인 대신 코드 대조로 동등성 검증(값 변경 없음).
