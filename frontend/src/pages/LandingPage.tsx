@@ -14,7 +14,7 @@ const FEATURES = [
       </svg>
     ),
     title: '파일·함수 구조 시각화',
-    desc: 'import 관계와 함수 호출 흐름을 노드-엣지 그래프로 렌더링한다.',
+    desc: 'import 관계와 함수 호출 흐름을 한눈에 보이는 다이어그램으로 그려준다.',
     color: 'text-blue-400',
     bg: 'bg-blue-500/10 border-blue-500/20',
   },
@@ -24,8 +24,8 @@ const FEATURES = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
       </svg>
     ),
-    title: '전체 흐름 추적 (DFS)',
-    desc: 'API 엔드포인트 클릭 한 번으로 콜체인을 자동 추적한다. upstream·downstream 경로를 사이드바에서 확인하고 흐름을 재생한다.',
+    title: '전체 흐름 추적',
+    desc: 'API 엔드포인트 클릭 한 번으로 호출 흐름을 자동 추적한다. 어디서 시작해 어디로 이어지는지 사이드바에서 확인하고 흐름을 재생한다.',
     color: 'text-emerald-400',
     bg: 'bg-emerald-500/10 border-emerald-500/20',
   },
@@ -87,6 +87,7 @@ export default function LandingPage() {
   const navigate = useNavigate()
   const [loggedIn, setLoggedIn] = useState(false)
   const [urlInput, setUrlInput] = useState('')
+  const [urlError, setUrlError] = useState(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // 쿠키 기반 인증 상태 확인 + 청크 프리페치
@@ -105,7 +106,11 @@ export default function LandingPage() {
   // URL 입력 후 분석 시작 — 로그인 상태면 마이페이지로, 아니면 OAuth 후 자동 팝업
   const handleTryUrl = () => {
     const trimmed = urlInput.trim()
-    if (!trimmed) return
+    if (!trimmed) {
+      setUrlError(true)
+      return
+    }
+    setUrlError(false)
     localStorage.setItem('pendingAnalysisUrl', trimmed)
     if (loggedIn) {
       navigate('/mypage')
@@ -151,9 +156,9 @@ export default function LandingPage() {
             <input
               type="text"
               value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
+              onChange={(e) => { setUrlInput(e.target.value); if (urlError) setUrlError(false) }}
               placeholder="github.com/owner/repo"
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none focus:ring-2 focus:ring-white/20"
+              className={`flex-1 bg-gray-800 border rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none focus:ring-2 ${urlError ? 'border-red-500 focus:ring-red-500/30' : 'border-gray-700 focus:ring-white/20'}`}
             />
             <button
               type="submit"
@@ -162,9 +167,13 @@ export default function LandingPage() {
               분석 시작
             </button>
           </form>
-          <p className="text-xs text-gray-500 -mt-2">
-            내 레포가 아니어도 됩니다 — 공개 레포라면 무엇이든 분석할 수 있어요.
-            {!loggedIn && ' GitHub 로그인 후 분석이 자동 시작됩니다.'}
+          <p className={`text-xs -mt-2 ${urlError ? 'text-red-400' : 'text-gray-500'}`}>
+            {urlError
+              ? '레포 URL을 입력해주세요.'
+              : (<>
+                  내 레포가 아니어도 됩니다 — 공개 레포라면 무엇이든 분석할 수 있어요.
+                  {!loggedIn && ' GitHub 로그인 후 분석이 자동 시작됩니다.'}
+                </>)}
           </p>
 
           <div className="flex items-center gap-3 mt-1">

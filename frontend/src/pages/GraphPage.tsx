@@ -19,7 +19,7 @@ import { toPng } from 'html-to-image'
 import { buildLayout, downloadTreeText, downloadWarningsMd } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry, ColumnInfo } from '../utils/graphLayout'
 import { extractDomain, buildDomainColorMap, buildKnownDomains } from '../utils/graphLayout'
-import { isDbEdgeType, applyEdgeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, searchNodes } from '../utils/graphLayout'
+import { isDbEdgeType, applyEdgeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS, searchNodes } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
@@ -2357,6 +2357,7 @@ function GraphPageInner() {
         fitViewOptions={{ padding: 0.1 }}
         minZoom={GRAPH_MIN_ZOOM}
         maxZoom={GRAPH_MAX_ZOOM}
+        ariaLabelConfig={GRAPH_ARIA_LABELS}
         onlyRenderVisibleElements
       >
         <Background color="#1f2937" gap={20} />

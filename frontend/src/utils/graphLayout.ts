@@ -1,7 +1,7 @@
 // 그래프 노드/엣지 레이아웃 계산 — 계층형(DDD 레이어 컬럼) / 도메인형(바운디드 컨텍스트 박스) 이중 레이아웃
 import React from 'react'
 
-import type { Node, Edge } from '@xyflow/react'
+import type { Node, Edge, AriaLabelConfig } from '@xyflow/react'
 import { MarkerType } from '@xyflow/react'
 import { WARNING_META } from '../components/WarningPanel'
 
@@ -1049,6 +1049,14 @@ export function buildLayout(
 // 그래프 뷰 줌 한계 — GraphPage/ShareGraphPage 공통
 export const GRAPH_MIN_ZOOM = 0.05
 export const GRAPH_MAX_ZOOM = 2
+
+// React Flow 기본 컨트롤 버튼 한국어 title — 그래프 3종 페이지 공통
+export const GRAPH_ARIA_LABELS: Partial<AriaLabelConfig> = {
+  'controls.zoomIn.ariaLabel': '확대',
+  'controls.zoomOut.ariaLabel': '축소',
+  'controls.fitView.ariaLabel': '화면에 맞추기',
+  'controls.interactive.ariaLabel': '편집 잠금 전환',
+}
 
 // 노드 이름/주석 검색 — 파일명 · 함수명 · 주석 매치, 최대 limit개
 export function searchNodes(rawNodes: RawNode[], query: string, limit = 10): RawNode[] {

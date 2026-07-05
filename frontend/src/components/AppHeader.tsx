@@ -33,7 +33,7 @@ const SERVICE_LINKS = [
   { label: '작동 방식', path: '/how-it-works' },
   { label: '패치노트', path: '/changelog' },
   { label: '발전사', path: '/evolution' },
-  { label: '도그푸딩', path: '/dogfooding' },
+  { label: '자체 사용 사례', path: '/dogfooding' },
 ]
 
 // 공통 앱 헤더 — 어느 페이지에서든 <AppHeader /> 한 줄로 동작
