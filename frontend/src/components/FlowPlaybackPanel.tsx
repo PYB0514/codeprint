@@ -1,6 +1,10 @@
 // 흐름 재생 패널 UI — GraphPage/ShareGraphPage/CommunityPostGraphPage 공유
-import type { RawNode } from '../utils/graphLayout'
+import { useMemo } from 'react'
+import { type RawNode, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
 import { type CallTreeNode, type PlaybackItem, findTreeNode, findPathInTree, extendToDefaultLeaf } from '../utils/flowPlayback'
+
+// PascalCase 함수명이 생성자를 뜻하지 않는 언어 — Go·C#은 공개(exported) 함수 전체가 관례상 PascalCase
+const PASCAL_CASE_IS_NOT_CONSTRUCTOR = new Set(['Go', 'C#'])
 
 interface FlowPlaybackPanelProps {
   callTree: CallTreeNode | null
@@ -33,10 +37,14 @@ export function FlowPlaybackPanel({
   const rootRaw = rawNodes.find((n) => n.id === callTree.nodeId)
   const flowTitle = rootRaw?.comment || rootRaw?.name || '흐름 재생'
 
-  // 도메인: 루트 파일 경로에서 컨텍스트 추출
+  // 도메인 뱃지: 파일 경로 구조에서 그룹 키 추출 (그래프 범례·섹션과 동일한 getGroupKey 사용 — 특정 프로젝트 도메인명에 고정되지 않음)
+  const commonPrefix = useMemo(
+    () => findCommonPrefix(rawNodes.filter((n) => n.type === 'FILE').map((n) => n.filePath)),
+    [rawNodes]
+  )
   const rootPath = rootRaw?.filePath ?? ''
-  const domainMatch = rootPath.match(/\/(project|user|graph|analysis|community|auth|payment|admin)[/.]?/i)
-  const domainLabel = domainMatch ? domainMatch[1] : null
+  const rootGroupKey = rootPath ? getGroupKey(rootPath, commonPrefix) : null
+  const domainLabel = rootGroupKey && rootGroupKey !== 'root' ? rootGroupKey.charAt(0).toUpperCase() + rootGroupKey.slice(1) : null
 
   // 분기점 감지
   const curTreeNode = cur ? findTreeNode(callTree, cur.id) : null
@@ -113,8 +121,8 @@ export function FlowPlaybackPanel({
         const comment = rawNode?.comment || ''
         let msg: string | null = null
         let clr = '#4ade80'
-        if (cur.nodeType === 'FUNCTION' && /^[A-Z]/.test(name)) {
-          // PascalCase 함수 = 생성자로 판단
+        if (cur.nodeType === 'FUNCTION' && /^[A-Z]/.test(name) && !PASCAL_CASE_IS_NOT_CONSTRUCTOR.has(rawNode?.language ?? '')) {
+          // PascalCase 함수 = 생성자로 판단 (Go·C#은 공개 함수 전부가 PascalCase라 제외)
           msg = `${comment || name} 객체가 반환됩니다`
         } else if (cur.nodeType === 'DB_TABLE') {
           const et = cur.incomingEdgeType
