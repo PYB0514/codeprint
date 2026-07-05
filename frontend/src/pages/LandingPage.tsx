@@ -35,7 +35,7 @@ const FEATURES = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
       </svg>
     ),
-    title: '런타임 경고 감지',
+    title: '구조 경고 감지',
     desc: '순환 의존, DDD 경계 위반, DB 레이어 우회 등 15종의 위험 패턴을 정적 분석으로 사전 감지한다.',
     color: 'text-amber-400',
     bg: 'bg-amber-500/10 border-amber-500/20',
@@ -140,7 +140,7 @@ export default function LandingPage() {
 
           <p className="text-gray-400 text-base max-w-md leading-relaxed">
             URL 하나로 파일 구조, 함수 호출 흐름, DB 연결 관계를 시각화한다.
-            런타임 경고 감지와 AI 분석까지 — 전부 무료.
+            구조 경고 감지와 AI 분석까지 — 전부 무료.
           </p>
 
           {/* URL 입력 — 바로 분석 시작 */}
