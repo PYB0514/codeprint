@@ -1190,4 +1190,25 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 5. **커뮤니티 게시글(`PostResponse`/`PostSummaryResponse`)** — `Post.repoUrl`(작성 시점에 이미 저장돼 있던 필드, hasGraph 도입 때와 동일한 데이터 소스)과 작성자 사용자명을 비교. `CommunityController.assemble`은 이미 배치 조회한 `usernames` Map을 그대로 재사용(추가 쿼리 없음), `UserController.assembleSummaries`는 프로필 글 목록이 전부 같은 프로필 주인 글이라 사용자명 배치 조회 자체가 불필요 — 단일 값(`profileUsername`) 비교로 충분(N+1 없음, `usernames` Map 불필요).
 6. **알려진 한계(1차 구현) — 문서화만, 코드로 회피 안 함**: 조직(org) 레포는 실제로 본인이 관리해도 URL owner가 조직명이라 "외부 레포"로 뜸. 커뮤니티 게시글의 다중 스냅샷(한 게시글에 여러 프로젝트가 첨부 가능)은 게시글 단위 `repoUrl` 하나만 비교하므로 스냅샷별로 다른 프로젝트를 가리키면 부정확할 수 있음 — 이번 스코프에서는 게시글 카드·프로필 목록까지만 반영, 스냅샷 뷰어(`CommunityPostGraphPage`) 단위 표시는 스냅샷별 프로젝트 owner 조회를 위한 새 cross-context 포트가 필요해 후속 작업으로 미룸.
 
+## AI 그래프 분석("누락 패턴 감지") 삭제 + HIGH_FAN_OUT 조율자 오탐 완화 (2026-07-06)
+
+**문제 1 — AI 분석 기능의 실효성.** 사용자와 적대적 검증 세션 진행 — `/api/ai/graphs/{graphId}/analyze`(`AiAnalysisSection` UI)가 실제로 쓸모 있는지 코드 근거로 뜯어본 결과, 심각한 결함이 다수 확인됨.
+1. **거짓 "문제 없음"** — `AiGraphAnalysisService.parseIssues()`가 JSON 파싱 실패 시 예외를 잡고 조용히 빈 리스트를 반환. 프론트는 빈 배열을 "감지된 누락 패턴 없음"(초록, 안심 메시지)으로 표시 — AI 응답 실패와 실제 무결과가 구분 불가능. `max_tokens: 1024`(`ClaudeAiService`)로 응답이 길수록(=이슈가 많을수록) 잘릴 위험이 커져, 하필 가장 필요한 순간에 가장 잘못된 안심 메시지를 준다.
+2. **소스 코드 미전송** — 프롬프트에 함수명·타입·주석·호출관계만 포함, 실제 함수 본문은 전혀 안 보냄. "에러 처리 누락" 같은 판정은 본문을 봐야 확인 가능한데 이름만 보고 추측.
+3. **이름 중복 오귀속** — `nameToId`가 `Map<String, UUID>`라 동명 함수가 여러 파일에 있으면 나중 순회된 노드가 앞선 걸 덮어써, Claude가 지목한 문제가 엉뚱한 동명 함수로 연결될 수 있음.
+4. **하드컷 200/300개** — 우선순위 없이 리스트 순서대로 잘라, 대형 레포는 임의의 부분집합만 검사.
+5. **제품 핵심 가치와 중복** — 이미 정확도 검증된 tree-sitter 정적 분석(`DOMAIN_IMPORTS_INFRA` 등)이 하는 걸 이름만 보고 더 부정확하게 재현.
+
+대안(CLAUDE.md/AGENTS.md 자동 생성, MD 일괄 등록+AI 생성)도 검토했으나 전부 "코드에 없는 사람의 의사결정을 AI가 추측"해야 하는 동일 계열 문제로 기각(상세는 세션 대화 참조, 별도 파일 기록 없음).
+
+**결정 1.** 기능 전체 삭제. `AiGraphAnalysisService`·`GraphNodeDto`·`GraphEdgeDto`·`AiGraphAnalysisServiceTest`·`AiAnalysisSection.tsx` 삭제, `AiController.analyzeGraph()`/`/graphs/{graphId}/analyze` 엔드포인트 제거. `/api/ai/keys`·`/explain`(노드 설명)·`/generate-code`(코드 스텁 생성)는 무관하므로 그대로 유지 — 이 둘은 단일 노드 컨텍스트만 다루고 소스가 아닌 이름 기반 설명 요청이라 이번 삭제 사유(그래프 전체를 이름만 보고 광범위하게 추측)와 무관.
+
+**문제 2 — HIGH_FAN_OUT 판정 기준의 애매함.** 같은 세션에서 자기 프로젝트를 재분석하니 `HIGH_FAN_OUT`(함수 호출 7개 초과)이 15건 발견됨 — CLAUDE.md는 이 경고가 자기 프로젝트에 0개여야 한다고 명시하고 있었는데 위반 상태. 발견된 항목 이름(`getGraph`/`getPublicGraph`=Controller, `GraphPageInner`/`ShareGraphInner`=프론트 페이지 합성 루트, `confirm`/`analyzeBranch`=ApplicationService)을 확인해보니 전부 "여러 협력자를 모아 조립하는" 조율자 패턴이지 이질적 책임이 뒤섞인 진짜 god-function이 아니었음. 기존 로직은 `main`만 조율자 예외로 처리해 반쪽짜리였음.
+
+**결정 2.** `main` 예외와 동일 원리를 확장 — `isOrchestratorArtifact(filePath, name)` 추가: 파일명이 `Controller.java`로 끝나거나, `application/` 경로 아래 `ApplicationService.java`/`Facade.java`로 끝나거나, 함수명이 `Inner`로 끝나면(프론트 페이지 합성 루트 관례, `GraphPageInner` 등 5개 확인) HIGH_FAN_OUT 제외. 회귀 테스트 3건 추가(`GraphWarningServiceTest`).
+
+재분석 결과 15건 → 5건(`run`/`AnalysisRunner`, `analyzeBranch`/`PrReviewService`, `from`/여러 Response 팩토리, `onAuthenticationSuccess`/`OAuth2SuccessHandler`, `analyze`/`StaticCodeAnalyzer`)으로 감소, 남은 5건도 확인해보니 전부 조율자 계열(파일명 컨벤션만 다름: `*Runner`, `*Handler`, `*Analyzer`, DTO 팩토리 `from()`)이지 진짜 SRP 위반은 아니었음. **여기서 예외 패턴을 더 넓히지 않기로 결정** — 모든 조율자 명명 관례를 다 쫓아가는 건 두더지 잡기라 끝이 없고, 애초에 이 지표는 판단이 개입되는 연속값이라 완벽한 0을 규칙만으로 강제하는 게 잘못된 목표라고 판단(CLAUDE.md §10에도 이 취지로 문구 수정). 대신 CLAUDE.md의 "HIGH_FAN_OUT도 0개여야 한다" 문구를 "예외 적용 후 신규 항목은 조율자인지 진짜 위반인지 검토"로 완화.
+
+**결과.** `tsc -b`·`gradlew compileJava/test` 전체 통과. 실 로그인 세션(claude-in-chrome)으로 codeprint 자기분석 프로젝트 재분석 — HIGH_FAN_OUT 13→5건 감소 확인(세션 중 일부 항목은 이전 회차 정리로 이미 13건이었음). 프론트 변경(`ArchitectureIntentPanel.tsx` A1 예시 교체)은 `decisions/DECISIONS_FRONTEND.md` 참조.
+
 **결과.** 백엔드 컴파일+전체 테스트 통과. 신규 단위 테스트 — `ProjectTest.isOwnRepo_matchesCaseInsensitive`(대소문자 무시·null 안전), `CommunityControllerAssembleTest.assemble_ownRepo`(본인/타인 레포), `UserControllerAssembleTest.assembleSummaries_ownRepo`(본인/타인/레포없음 3분기). `GraphControllerOwnershipTest`의 기존 두 테스트는 `verifyProjectOwnership`→`getOwnedProject` 시그니처 변경에 맞춰 목 대상만 교체(동작 검증 내용은 동일). ★런타임 검증: claude-in-chrome 실 로그인 세션으로 codeprint 자기분석 프로젝트 GraphPage에서 "내 레포" 뱃지 확인, 공개 gin(gin-gonic) ShareGraphPage에서 "외부 레포 분석" 뱃지 확인(둘 다 실제 소유 관계와 일치). 커뮤니티 피드는 API 응답에 `ownRepo` 필드가 정확히 내려오는 것 확인(기존 테스트 게시글은 `repoUrl` 자체가 null이라 항상 false — 정상 동작). 프론트 변경은 `decisions/DECISIONS_FRONTEND.md` 참조.

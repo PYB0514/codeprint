@@ -770,3 +770,12 @@ const fetchGraph = useCallback(async () => {
 7. **#16 사이드바 1,400개 평면 나열** — 검색어가 없을 때는 파일 단위로 접어서 표시(기본 전부 접힘, `expandedFiles` Set state), 파일 행에 함수 개수 배지 + 펼치기 토글(▸/▾) 추가. 함수 노드의 `parentId`가 항상 소속 파일의 id로 설정돼 있는 걸 이용해 그룹핑(신규 백엔드/레이아웃 변경 없음). 검색 중일 때는 기존 평면 검색 결과 그대로 유지(회귀 없음).
 
 **결과.** `tsc -b` 통과. Claude Preview(비로그인)로 확인 — ①빈 URL 제출 시 에러 문구·빨간 테두리 렌더 ②"자체 사용 사례" 메뉴 정상 표시 ③gin ShareGraphPage에서 컨트롤 4개 버튼 title이 "확대/축소/화면에 맞추기/편집 잠금 전환"으로 렌더 ④사이드바가 파일 단위로 접힌 상태로 시작, `gin.go` 펼치면 함수 목록 노출, `New` 함수 클릭 시 노드 정보 패널에 "FUNCTION" 정상 표시(수정 전 "-" 재현 확인 후 대조) ⑤랜딩 기능 카드 문구 반영 확인. #13(AI 키 안내)은 `AiAnalysisSection`이 GraphPage 전용(로그인 필수)이라 이번 세션에서 실사용 확인 불가 — 로그인 후 키 미등록 상태에서 버튼 비활성화·안내 문구가 뜨는지 사용자 확인 필요(§4 OAuth 예외 규칙).
+## AI 분석 삭제 + 아키텍처 의도 A1 예시 교체 (2026-07-06)
+
+**문제.** 백엔드 AI 그래프 분석 기능 삭제(사유는 `decisions/DECISIONS_BACKEND.md` "AI 그래프 분석 삭제" 참조)에 따라 프론트 UI도 제거. 겸사겸사 아키텍처 의도 패널의 A1 데모 예시("domain ↛ infrastructure")가 DDD 컨벤션 프로젝트에서 이미 자동으로 잡히는 `DOMAIN_IMPORTS_INFRA` 경고와 겹쳐, "이미 자동으로 잡히는 걸 왜 또 선언하지?"라는 혼란을 준다는 게 사용자 검토로 드러남.
+
+**결정.**
+1. `AiAnalysisSection.tsx` 삭제, `GraphPage.tsx`에서 사용처·import 제거. `/api/ai/keys`·`/explain`·`/generate-code`를 쓰는 SettingsPage·노드 설명/코드생성 UI는 무관하므로 그대로 유지.
+2. `ArchitectureIntentPanel.tsx`의 `applyDddPreset` 예시를 domain↛infrastructure(자동 게이트와 겹침) → `app↛legacy`(마이그레이션 경계, 자동 게이트가 못 잡는 케이스)로 교체. 인트로 문구에 "domain/infrastructure나 Controller/Service/Repository 같은 흔한 구조는 이미 자동으로 검사되니, 여기서는 그 외 규칙을 선언하라"는 안내 한 줄 추가 — 실제 프로젝트별 자동 감지 여부를 조건부로 보여주려면 백엔드 필드 추가가 필요해 이번 스코프에서는 제외(범용 안내 문구로만 처리).
+
+**결과.** `tsc -b` 통과. AI 분석 관련 UI 완전 제거 확인, 아키텍처 의도 패널 인트로·A1 버튼 문구 변경 확인.

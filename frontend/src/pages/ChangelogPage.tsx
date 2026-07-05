@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.117.2',
+    date: '2026-07-06',
+    title: 'AI 분석(누락 패턴 감지) 기능 제거',
+    type: 'fix',
+    items: [
+      { category: 'AI', desc: '그래프 사이드바의 "AI 분석 — 누락 패턴 감지" 기능을 제거했습니다. 함수 이름만 보고 추측하는 방식이라 정확도가 낮고, 실패 시에도 "문제 없음"으로 잘못 표시되는 결함이 있었습니다. 노드 설명·코드 생성 기능은 그대로 유지됩니다.' },
+    ],
+  },
+  {
     version: 'v0.117.1',
     date: '2026-07-05',
     title: '자잘한 사용성 다듬기 7건',

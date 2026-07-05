@@ -439,8 +439,8 @@ Interfaces → Application → Domain
 #### 감지 기준 (Codeprint 분석 엔진이 경고하는 것들)
 - `CROSS_DOMAIN_CALL` — FUNCTION_CALL 엣지가 도메인 경계를 넘을 때
 - `DOMAIN_IMPORTS_INFRA` — domain/ 파일이 infrastructure/ import 시
-- `HIGH_FAN_OUT` — 함수 호출 수 7개 이상
-- 위 경고들은 Codeprint 자체 프로젝트에 적용 시 0개여야 한다.
+- `CROSS_DOMAIN_CALL`·`DOMAIN_IMPORTS_INFRA`는 "있다/없다"가 명확한 구조적 사실이라, Codeprint 자체 프로젝트에 적용 시 0개여야 한다.
+- `HIGH_FAN_OUT` — 함수 호출 수 7개 이상(Controller/ApplicationService/Facade·프론트 페이지 합성 루트 `*Inner`는 조율자 역할이라 예외). 이 지표는 판단이 개입되는 연속값이라 0개를 목표로 강제하지 않는다 — 새로 잡힌 항목이 예외 패턴(조율자)인지, 진짜 이질적 책임이 뒤섞인 함수인지 검토 후 후자만 리팩토링 대상으로 삼는다.
 
 ### 11. Read Errors, Don't Guess
 Read the actual error/log line. Don't pattern-match from memory.

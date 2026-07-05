@@ -139,10 +139,11 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
     }
   }, [projectId, ignore, onSaved])
 
-  // DDD 기본 프리셋 — domain → infrastructure 금지 규칙 예시를 원클릭으로 채움
+  // 마이그레이션 경계 프리셋 — domain↛infrastructure는 DDD 컨벤션 프로젝트에서 이미 자동 게이트가 잡아주므로
+  // 자동 게이트가 커버 못 하는 케이스(신규 코드가 폐기 예정 모듈을 참조하는 것 금지)를 예시로 보여준다
   const applyDddPreset = () => {
-    setModules(prev => [...prev, { name: 'domain', glob: '**/domain/**' }, { name: 'infrastructure', glob: '**/infrastructure/**' }])
-    setRules(prev => [...prev, { from: 'domain', to: 'infrastructure' }])
+    setModules(prev => [...prev, { name: 'app', glob: '**/app/**' }, { name: 'legacy', glob: '**/legacy/**' }])
+    setRules(prev => [...prev, { from: 'app', to: 'legacy' }])
   }
 
   // 감지된 그룹(도메인/레이어)으로 모듈 목록 채우기 — 이미 있는 이름은 건너뜀
@@ -174,12 +175,13 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
       {/* 인트로 — 이 기능이 뭘 해주는지 + 예시 (A1) */}
       <p className="text-[11px] text-gray-500 leading-relaxed px-1">
         폴더 구조를 "모듈"로 이름 붙이고, 모듈 사이 금지 의존 규칙(예: A → B import 금지)을 정하면 어기는 코드에 경고가 뜹니다.
+        domain/infrastructure나 Controller/Service/Repository 같은 흔한 구조는 이미 자동으로 검사되니, 여기서는 그 외에 팀이 직접 정한 규칙(레거시 모듈 참조 금지 등)을 선언하세요.
       </p>
       {modules.length === 0 && rules.length === 0 && (
         <div className="flex gap-1.5 px-1">
           <button onClick={applyDddPreset}
             className="text-[10px] px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300">
-            예시로 채워보기 (domain ↛ infrastructure)
+            예시로 채워보기 (app ↛ legacy, 마이그레이션 경계)
           </button>
           {detected.length > 0 && (
             <button onClick={importDetected}

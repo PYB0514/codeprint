@@ -1312,6 +1312,54 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("Controller 파일의 호출 8개는 HIGH_FAN_OUT 제외 — 엔드포인트 조율자는 협력자를 모아 조립하는 게 본연의 역할")
+    void highFanOut_controllerFile_excluded() {
+        Node handler = funcNodeWithPath("getGraph", "/com/codeprint/interfaces/api/GraphController.java");
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        nodes.add(handler);
+        java.util.List<Edge> edges = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            Node callee = funcNodeWithPath("step" + i, "/com/codeprint/application/graph/dep" + i + ".java");
+            nodes.add(callee);
+            edges.add(callEdge(handler.getId(), callee.getId(), false));
+        }
+        List<Map<String, Object>> warnings = service.detect(nodes, edges);
+        assertThat(highFanOut(warnings)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("application/ 아래 ApplicationService 파일의 호출 8개는 HIGH_FAN_OUT 제외 — 유스케이스 오케스트레이션")
+    void highFanOut_applicationServiceFile_excluded() {
+        Node useCase = funcNodeWithPath("confirm", "/com/codeprint/application/payment/PaymentApplicationService.java");
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        nodes.add(useCase);
+        java.util.List<Edge> edges = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            Node callee = funcNodeWithPath("step" + i, "/com/codeprint/domain/payment/dep" + i + ".java");
+            nodes.add(callee);
+            edges.add(callEdge(useCase.getId(), callee.getId(), false));
+        }
+        List<Map<String, Object>> warnings = service.detect(nodes, edges);
+        assertThat(highFanOut(warnings)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("이름이 *Inner로 끝나는 함수의 호출 8개는 HIGH_FAN_OUT 제외 — 프론트 페이지 합성 루트 관례")
+    void highFanOut_frontendInnerComponent_excluded() {
+        Node pageRoot = funcNodeWithPath("GraphPageInner", "/frontend/src/pages/GraphPage.tsx");
+        java.util.List<Node> nodes = new java.util.ArrayList<>();
+        nodes.add(pageRoot);
+        java.util.List<Edge> edges = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            Node callee = funcNodeWithPath("handler" + i, "/frontend/src/pages/GraphPage.tsx");
+            nodes.add(callee);
+            edges.add(callEdge(pageRoot.getId(), callee.getId(), false));
+        }
+        List<Map<String, Object>> warnings = service.detect(nodes, edges);
+        assertThat(highFanOut(warnings)).isEmpty();
+    }
+
+    @Test
     @DisplayName("테스트 함수(_test.go)의 호출 8개는 HIGH_FAN_OUT 제외 — 테스트는 setup+assert로 자연히 다호출 (Phase 1 #3)")
     void highFanOut_testFunction_excluded() {
         // gin TestLoggerWithConfig 등 *_test.go의 Test 함수가 단일 책임 위반으로 오탐되던 노이즈 제거

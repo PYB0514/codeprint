@@ -32,7 +32,6 @@ import CollaborationPanel from '../components/CollaborationPanel'
 import CursorOverlay from '../components/CursorOverlay'
 import WarningPanel from '../components/WarningPanel'
 import TeamChatPanel from '../components/TeamChatPanel'
-import AiAnalysisSection from '../components/AiAnalysisSection'
 import ArchitectureIntentPanel from '../components/ArchitectureIntentPanel'
 import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewToggles'
 import { GraphLegend } from '../components/GraphLegend'
@@ -2424,7 +2423,6 @@ function GraphPageInner() {
           <button onClick={() => downloadWarningsMd(warnings)} title="경고 마크다운 내보내기" className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
         ) : undefined}
       >
-        <AiAnalysisSection graphId={graphId} />
         {(warnings.length > 0 || suppressedWarnings.length > 0) ? (
           <WarningPanel
             warnings={warnings}

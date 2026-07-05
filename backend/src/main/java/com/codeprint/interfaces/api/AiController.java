@@ -1,13 +1,9 @@
-// AI 키 관리 + 노드/엣지 설명 + 그래프 누락 패턴 감지 API
+// AI 키 관리 + 노드/엣지 설명 + 코드 생성 API
 package com.codeprint.interfaces.api;
 
-import com.codeprint.application.ai.AiGraphAnalysisService;
-import com.codeprint.application.ai.GraphEdgeDto;
-import com.codeprint.application.ai.GraphNodeDto;
 import com.codeprint.domain.ai.AiProvider;
 import com.codeprint.domain.ai.UserAiKey;
 import com.codeprint.domain.ai.UserAiKeyRepository;
-import com.codeprint.domain.graph.GraphRepository;
 import com.codeprint.infrastructure.ai.AiService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -28,8 +24,6 @@ public class AiController {
 
     private final UserAiKeyRepository aiKeyRepository;
     private final List<AiService> aiServices;
-    private final AiGraphAnalysisService aiGraphAnalysisService;
-    private final GraphRepository graphRepository;
 
     record SaveKeyRequest(@NotBlank String apiKey) {}
     record ExplainRequest(@NotBlank String provider, @NotBlank String nodeId,
@@ -120,24 +114,6 @@ public class AiController {
         String prompt = buildCodeGenPrompt(req, lang);
         String code = service.explain(key.getApiKey(), prompt);
         return ResponseEntity.ok(new GenerateCodeResponse(code, lang));
-    }
-
-    // 그래프 전체를 Claude AI로 분석하여 누락 패턴 감지
-    @PostMapping("/graphs/{graphId}/analyze")
-    public ResponseEntity<List<AiGraphAnalysisService.DetectedIssue>> analyzeGraph(
-            @PathVariable UUID graphId,
-            @AuthenticationPrincipal User user) {
-        UUID userId = user.getId();
-        var rawNodes = graphRepository.findNodesByGraphId(graphId);
-        var rawEdges = graphRepository.findEdgesByGraphId(graphId);
-        var nodes = rawNodes.stream()
-                .map(n -> new GraphNodeDto(n.getId(), n.getType().name(), n.getName(), n.getMetadata()))
-                .toList();
-        var edges = rawEdges.stream()
-                .map(e -> new GraphEdgeDto(e.getId(), e.getType().name(), e.getSourceNodeId(), e.getTargetNodeId()))
-                .toList();
-        List<AiGraphAnalysisService.DetectedIssue> issues = aiGraphAnalysisService.analyze(userId, nodes, edges);
-        return ResponseEntity.ok(issues);
     }
 
     // 코드 생성 프롬프트 구성
