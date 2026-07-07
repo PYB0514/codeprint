@@ -48,7 +48,7 @@
 - `FILE` — 소스 파일
 - `FUNCTION` — 파일 내 함수/메서드
 - `DB_TABLE` — 데이터베이스 테이블
-- `API_ENDPOINT` — REST API 엔드포인트
+- `API_ENDPOINT` — REST API 엔드포인트 **(예약 타입 — 현재 엔진이 생성하지 않음, 2026-07-08 실측 확인.** 프론트→백엔드 API 호출은 `API_CALL` 엣지가 컨트롤러 FILE 노드로 직결되는 방식으로 표현된다. 엔드포인트 노드 생성은 백로그 — MCP `get_repo_map`과 세트 후보)
 
 ### 엣지 타입
 - `IMPORT` — 파일 간 import 관계
