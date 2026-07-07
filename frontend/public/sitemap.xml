@@ -1,32 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://codeprint.dev/</loc>
+    <loc>https://codeprint-iota.vercel.app/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://codeprint.dev/community</loc>
+    <loc>https://codeprint-iota.vercel.app/community</loc>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://codeprint.dev/changelog</loc>
+    <loc>https://codeprint-iota.vercel.app/changelog</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://codeprint.dev/terms</loc>
+    <loc>https://codeprint-iota.vercel.app/terms</loc>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
-    <loc>https://codeprint.dev/privacy</loc>
+    <loc>https://codeprint-iota.vercel.app/privacy</loc>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
-    <loc>https://codeprint.dev/contact</loc>
+    <loc>https://codeprint-iota.vercel.app/contact</loc>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
