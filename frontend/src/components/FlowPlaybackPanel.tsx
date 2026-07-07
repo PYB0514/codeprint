@@ -1,4 +1,4 @@
-// 흐름 재생 패널 UI — GraphPage/ShareGraphPage/CommunityPostGraphPage 공유
+// 흐름 재생 패널 UI — GraphPage/GraphViewerPage/CommunityPostGraphPage 공유
 import { useMemo } from 'react'
 import { type RawNode, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
 import { type CallTreeNode, type PlaybackItem, findTreeNode, findPathInTree, extendToDefaultLeaf } from '../utils/flowPlayback'

@@ -52,7 +52,7 @@ public class Post {
     @Column(name = "view_count", nullable = false)
     private long viewCount = 0;
 
-    // PUBLIC(기본) 또는 PRIVATE — PRIVATE는 커뮤니티 피드 목록엔 안 뜨지만 직접 링크로는 접근 가능
+    // PUBLIC(기본) 또는 PRIVATE — PRIVATE는 커뮤니티 피드 목록엔 안 뜨지만 직접 링크로는 접근 가능 (UI 라벨: "링크 공유", 2026-07-07 개명)
     @Column(nullable = false, length = 20)
     private String visibility = "PUBLIC";
 

@@ -1,4 +1,4 @@
-// 계층형/도메인 레이아웃 전환 + 이름/주석 라벨 전환 버튼 (GraphPage·ShareGraphPage 공유)
+// 계층형/도메인 레이아웃 전환 + 이름/주석 라벨 전환 버튼 (GraphPage·GraphViewerPage 공유)
 import type { LabelMode, LayoutPreset } from '../utils/graphLayout'
 
 const TOGGLE_BTN_CLASS = 'flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-xs px-2.5 py-1.5 rounded-lg border border-gray-700'

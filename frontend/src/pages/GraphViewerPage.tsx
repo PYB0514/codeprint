@@ -1,5 +1,5 @@
 ﻿// 공개 프로젝트 읽기 전용 그래프 뷰어 (비인증 접근 허용)
-// ⚠️ GraphPage.tsx에 새 "보기"(필터·조회·전환) 기능이 추가되면 여기도 반영 검토 — 저장/수정 액션(프리셋 저장·코멘트·suppress 등)만 GraphPage 전용, 보기는 동등해야 함(2026-07-02 결정, 백로그: PROGRESS.md "ShareGraphPage 뷰어 기능 확장")
+// ⚠️ GraphPage.tsx에 새 "보기"(필터·조회·전환) 기능이 추가되면 여기도 반영 검토 — 저장/수정 액션(프리셋 저장·코멘트·suppress 등)만 GraphPage 전용, 보기는 동등해야 함(2026-07-02 결정, 백로그: PROGRESS.md "GraphViewerPage 뷰어 기능 확장")
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
@@ -37,7 +37,7 @@ const SHARE_TOUR_STEPS: Step[] = [
   {
     target: 'body',
     placement: 'center',
-    title: '👋 공유된 그래프입니다',
+    title: '👋 그래프 뷰어입니다',
     content: '다른 사람이 GitHub 레포를 분석해 공유한 화면입니다. 파일 구조와 함수 호출 흐름을 그대로 둘러볼 수 있어요.',
     skipBeacon: true,
   },
@@ -97,7 +97,7 @@ const NODE_TYPE_LABEL: Record<string, string> = {
 }
 
 // 공개 프로젝트 그래프를 읽기 전용으로 표시하는 페이지
-function ShareGraphInner() {
+function GraphViewerInner() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -424,7 +424,7 @@ function ShareGraphInner() {
         <div className="flex items-center gap-3">
           <LayoutPresetToggle layoutPreset={layoutPreset} onToggle={toggleLayoutPreset} />
           <LabelModeToggle labelMode={labelMode} onToggle={toggleLabelMode} />
-          <span className="text-gray-400 text-xs">공유된 그래프</span>
+          <span className="text-gray-400 text-xs">그래프 뷰어</span>
           <button
             id="tour-share-login"
             onClick={() => navigate('/')}
@@ -792,11 +792,11 @@ function ShareGraphInner() {
   )
 }
 
-// ReactFlowProvider로 감싼 공유 그래프 페이지
-export default function ShareGraphPage() {
+// ReactFlowProvider로 감싼 그래프 뷰어 페이지
+export default function GraphViewerPage() {
   return (
     <ReactFlowProvider>
-      <ShareGraphInner />
+      <GraphViewerInner />
     </ReactFlowProvider>
   )
 }

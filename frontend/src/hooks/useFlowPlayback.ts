@@ -1,4 +1,4 @@
-// 흐름 재생(flow replay) 상태·이펙트·핸들러 — GraphPage/ShareGraphPage/CommunityPostGraphPage 공유
+// 흐름 재생(flow replay) 상태·이펙트·핸들러 — GraphPage/GraphViewerPage/CommunityPostGraphPage 공유
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import type { RawEdge, RawNode } from '../utils/graphLayout'

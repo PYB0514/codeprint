@@ -1,5 +1,5 @@
 ﻿// 프로젝트 코드 구조를 React Flow로 시각화하는 그래프 페이지
-// ⚠️ 새 "보기"(필터·조회·전환) 기능 추가 시 ShareGraphPage.tsx도 반영 검토 — 저장/수정 액션만 여기 전용, 보기는 비로그인도 동등해야 함(2026-07-02 결정)
+// ⚠️ 새 "보기"(필터·조회·전환) 기능 추가 시 GraphViewerPage.tsx도 반영 검토 — 저장/수정 액션만 여기 전용, 보기는 비로그인도 동등해야 함(2026-07-02 결정)
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
@@ -3185,6 +3185,9 @@ function GraphPageInner() {
                   <option key={p.slot} value={p.slot}>{p.name}</option>
                 ))}
               </select>
+              <p className="text-[11px] text-gray-500 mt-1.5">
+                선택한 프리셋이 이 시점의 그래프 전체를 담은 스냅샷으로 첨부됩니다. 보는 사람은 확대·검색·흐름 재생까지 자유롭고, 수정만 할 수 없습니다.
+              </p>
             </div>
 
             {/* 공개범위 */}
@@ -3209,9 +3212,14 @@ function GraphPageInner() {
                       : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
                   }`}
                 >
-                  비공개 — 링크로만 접근
+                  링크 공유
                 </button>
               </div>
+              {shareVisibility === 'PRIVATE' && (
+                <p className="text-[11px] text-gray-500 mt-1.5">
+                  피드에 표시되지 않으며, 링크가 있는 사람은 누구나 볼 수 있습니다.
+                </p>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-gray-800">

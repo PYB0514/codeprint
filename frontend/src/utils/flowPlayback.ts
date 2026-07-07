@@ -1,4 +1,4 @@
-// 흐름 재생(flow replay) 호출 트리 빌드 — GraphPage/ShareGraphPage/CommunityPostGraphPage 공유
+// 흐름 재생(flow replay) 호출 트리 빌드 — GraphPage/GraphViewerPage/CommunityPostGraphPage 공유
 import type { RawEdge, RawNode } from './graphLayout'
 
 export interface CallTreeNode {
