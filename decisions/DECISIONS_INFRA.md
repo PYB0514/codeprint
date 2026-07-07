@@ -2,6 +2,16 @@
 
 ---
 
+## codeprint.dev 도메인 참조 일괄 제거 — 실서비스 주소로 교체 (2026-07-07)
+
+**문제.** README 대문·프론트 SEO 메타(canonical·og:url·og:image)·robots.txt·sitemap.xml이 전부 codeprint.dev를 가리켰는데, 2026-07-06 실측(HttpWebRequest, AllowAutoRedirect=false)으로 이 도메인이 무관한 외부 사이트(taig.io, openresty)로 302 리다이렉트됨을 확인. 방문자(면접관 포함)가 남의 사이트로 가고, canonical이 외부 도메인을 가리켜 SEO도 훼손되는 상태.
+
+**선택지.** ①도메인 복구 + CORS 추가 — 소유·만료 상태 확인이 선행돼야 하고(등록기관 확인 = 사용자 작업), 확인 전까지 허위 링크가 계속 노출됨. 탈락(즉시 해결 불가). ②실서비스 주소(codeprint-iota.vercel.app)로 링크 일괄 교체 — 소유권 문제와 무관하게 바로 해결. **채택(2026-07-07 사용자 승인)**. 추후 도메인을 복구하면 이 커밋 역방향으로 재교체하면 됨.
+
+**결과.** README(뱃지·본문·푸터 3곳), frontend/index.html(og:url·og:image×2·canonical), robots.txt(Sitemap), sitemap.xml(전체 loc) 교체. V18 마이그레이션의 testuser@codeprint.dev는 Flyway 체크섬 때문에, DevController의 동일 문자열은 로컬 전용(@Profile("local")) 무해라 의도적으로 미변경. 백그라운드 칩 task_43f0f957 해소.
+
+---
+
 ## 파일 저장소: AWS S3 vs Supabase Storage
 
 ### 고민 배경
