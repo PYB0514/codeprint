@@ -141,7 +141,7 @@ const NON_DOMAIN_FOLDERS = new Set([
   'endpoint', 'endpoints', 'graphql', 'v1', 'v2', 'handler', 'handlers',
 ])
 
-// 도메인 판별 시 제거할 기술 접미사 (예: GraphController → Graph, ShareGraphPage → ShareGraph)
+// 도메인 판별 시 제거할 기술 접미사 (예: GraphController → Graph, GraphViewerPage → GraphViewer)
 // 백엔드 클래스 접미사 + 프론트 UI 래퍼 접미사 모두 포함
 const CLASS_SUFFIXES = [
   'RestController', 'Controller', 'ServiceImpl', 'Service', 'RepositoryImpl',
@@ -188,7 +188,7 @@ function domainFromFilename(filePath: string, knownDomains: Set<string>): string
   }
   if (best) return best
 
-  // 2. 선두 매칭 실패 시 개별 토큰에서 도메인 탐색 (예: ShareGraphPage → graph, CreateProjectModal → project)
+  // 2. 선두 매칭 실패 시 개별 토큰에서 도메인 탐색 (예: GraphViewerPage → graph, CreateProjectModal → project)
   for (const t of tokens) {
     const m = resolveDomain(t, knownDomains)
     if (m) return m
@@ -1046,7 +1046,7 @@ export function buildLayout(
   return { nodes: result, edges: [...importEdges, ...callEdges, ...instEdges, ...dbReadEdges, ...dbWriteEdges, ...dbCrudEdges, ...apiCallEdges] }
 }
 
-// 그래프 뷰 줌 한계 — GraphPage/ShareGraphPage 공통
+// 그래프 뷰 줌 한계 — GraphPage/GraphViewerPage 공통
 export const GRAPH_MIN_ZOOM = 0.05
 export const GRAPH_MAX_ZOOM = 2
 

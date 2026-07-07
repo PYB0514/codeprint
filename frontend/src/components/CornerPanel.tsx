@@ -1,4 +1,4 @@
-// 우측/좌측 하단 코너 플로팅 패널 셸 — 칩(접힘) + 헤더+내용(펼침) 공통 구조 (GraphPage·ShareGraphPage 공유)
+// 우측/좌측 하단 코너 플로팅 패널 셸 — 칩(접힘) + 헤더+내용(펼침) 공통 구조 (GraphPage·GraphViewerPage 공유)
 import type { ReactNode } from 'react'
 
 export function CornerPanel({

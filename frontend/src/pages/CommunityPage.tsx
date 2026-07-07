@@ -505,9 +505,14 @@ export default function CommunityPage() {
                         : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
                     }`}
                   >
-                    비공개 — 링크로만 접근
+                    링크 공유
                   </button>
                 </div>
+                {postVisibility === 'PRIVATE' && (
+                  <p className="text-[11px] text-gray-500">
+                    피드에 표시되지 않으며, 링크가 있는 사람은 누구나 볼 수 있습니다.
+                  </p>
+                )}
               </div>
 
               {/* 파일 첨부 */}

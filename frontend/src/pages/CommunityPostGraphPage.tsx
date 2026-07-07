@@ -61,7 +61,7 @@ function applyHiddenFilter(
   })
 }
 
-// layer 모드에서 opaque 섹션의 자손 노드 hidden 처리 (ShareGraphPage와 동일 로직)
+// layer 모드에서 opaque 섹션의 자손 노드 hidden 처리 (GraphViewerPage와 동일 로직)
 function applyOpaqueLayerSet(nodes: Node[], opaqueLayerSet: Set<string>): Node[] {
   const opaqueSectionIds = new Set(
     nodes
@@ -163,7 +163,7 @@ function CommunityPostGraphInner() {
           <button onClick={() => navigate('/community')} className="font-bold text-white text-sm hover:text-gray-300">
             Codeprint
           </button>
-          <span className="text-gray-500 text-xs">커뮤니티 공유 그래프</span>
+          <span className="text-gray-500 text-xs">커뮤니티 그래프 뷰어</span>
         </div>
         {hiddenSummary.length > 0 && (
           <div className="flex items-center gap-2">
@@ -522,7 +522,7 @@ function CommunityPostSnapshotInner() {
           <button onClick={() => navigate('/community')} className="font-bold text-white text-sm hover:text-gray-300">
             Codeprint
           </button>
-          <span className="text-gray-500 text-xs">커뮤니티 공유 그래프</span>
+          <span className="text-gray-500 text-xs">커뮤니티 그래프 뷰어</span>
         </div>
         <div className="flex items-center gap-3">
           <LayoutPresetToggle layoutPreset={layoutPreset} onToggle={toggleLayoutPreset} />

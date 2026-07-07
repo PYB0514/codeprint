@@ -1,4 +1,4 @@
-// 도메인/레이어 범례 — opaque 토글 + (옵션) 라벨 클릭 필터 + (옵션) 전체보기 리셋 (GraphPage·ShareGraphPage 공유)
+// 도메인/레이어 범례 — opaque 토글 + (옵션) 라벨 클릭 필터 + (옵션) 전체보기 리셋 (GraphPage·GraphViewerPage 공유)
 export interface LegendEntry {
   key: string
   label: string

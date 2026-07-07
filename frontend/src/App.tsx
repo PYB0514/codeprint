@@ -10,7 +10,7 @@ import AuthCallbackPage from './pages/AuthCallbackPage'
 // React Flow, 커뮤니티 에디터 등 무거운 페이지는 지연 로드
 const MyPage = lazy(() => import('./pages/MyPage'))
 const GraphPage = lazy(() => import('./pages/GraphPage'))
-const ShareGraphPage = lazy(() => import('./pages/ShareGraphPage'))
+const GraphViewerPage = lazy(() => import('./pages/GraphViewerPage'))
 const CommunityPage = lazy(() => import('./pages/CommunityPage'))
 const MessagesPage = lazy(() => import('./pages/MessagesPage'))
 const CommunityPostGraphPage = lazy(() => import('./pages/CommunityPostGraphPage'))
@@ -52,7 +52,7 @@ export default function App() {
           <Route path="/mypage" element={<MyPage />} />
           <Route path="/dashboard" element={<Navigate to="/mypage" replace />} />
           <Route path="/projects/:projectId/graph" element={<GraphPage />} />
-          <Route path="/share/:projectId" element={<ShareGraphPage />} />
+          <Route path="/share/:projectId" element={<GraphViewerPage />} />
           <Route path="/community" element={<CommunityPage />} />
           <Route path="/community/posts/:postId/graph" element={<CommunityPostGraphPage />} />
           <Route path="/community/posts/:postId/graph/:position" element={<CommunityPostGraphPage />} />
