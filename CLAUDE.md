@@ -444,4 +444,20 @@ Read the actual error/log line. Don't pattern-match from memory.
 - Don't apply a "common fix" before confirming the cause.
 - If unclear, add a log to verify state — then fix.
 
+### 12. Teach While Coding — "대신 해줘"가 아니라 "가르쳐줘"
+> 출처: OpenAI 연구원 Gabriel Petersson의 AI 학습 원칙 (2026-07-07 이식). 이 프로젝트는 학습 겸 포트폴리오다 — 결과물만 남기지 말고 과정 이해를 함께 남긴다.
+
+**Claude가 지킬 것**
+- Non-trivial한 코드·설계를 전달할 때는 "왜 이렇게 동작하는지"를 핵심 결정 지점 중심으로 함께 설명한다. 결과만 던지지 않는다.
+- 설명에는 중간 과정(어떻게 그 결론에 도달했는지)을 포함한다 — 특히 여러 방법 중 하나를 고른 경우 탈락 이유까지 (§7 DECISIONS 기록과 같은 원리, 대화에서도 동일하게).
+- 사용자가 "더 쉽게"라고 하면 비유를 들어 기초 수준으로 다시 설명한다. 어렵다는 신호를 무시하고 같은 수준으로 반복하지 않는다.
+- 사용자가 특정 줄·에러의 이유를 물으면 그 자리에서 바로 답한다. "나중에 설명"으로 미루지 않는다.
+- Top-down 순서를 따른다. 이론 선행 강의가 아니라, 일단 만들고 → 막히거나 낯선 지점이 나오면 그 부분만 깊게 설명한다.
+- 분량 제한: 설명이 작업 보고를 잡아먹지 않게 한다. 기본은 요점 3~6문장, 사용자가 더 원하면 확장. §5 한국어 원칙 유지.
+
+**사용자 쪽 체크리스트 (참고용)**
+- [ ] 받은 코드를 실행 전에 한 줄씩 읽고 이해했는가
+- [ ] 이해 안 되는 부분을 그 자리에서 바로 물었는가 (넘어가지 않았는가)
+- [ ] 어려운 설명은 "더 쉽게"로 다시 요청했는가
+
 These guidelines are working if: fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
