@@ -1470,3 +1470,22 @@ public User findById(...) {  ← 여기서 위로 탐색 시 @Override에서 멈
 **검증(A/B, 실제 레포 직접 파싱).** 임시 테스트 하네스로 실제 클론된 `XmlNodeConverterTest.cs`(3443줄, BOM 스트립 후)를 `TreeSitterCSharpAnalyzer`에 직접 통과 — 수정 전 이 파일 하나에서만 30개 이상의 손상된(공백 포함) 이름이 `functions`에 섞여 있었던 것과 달리, 수정 후 **79개 함수 전부 정상 식별자, 손상 이름 0개** 확인. `./gradlew compileJava` 통과(서버 정지 후 실행). 임시 검증 테스트는 로컬 스크래치패드 절대경로를 참조해 커밋하지 않고 삭제(다른 환경에서 재현 불가한 하네스).
 
 **추가 발견(미수정, 별도 판단 필요) — HIGH_FAN_OUT 빌더 패턴 정밀도.** ripgrep `printer_standard`(hiargs.rs) 25개 호출 경고를 소스 대조 — 전부 **하나의 `StandardBuilder` 객체**에 대한 `.byte_offset().color_specs()...` 플루언트 체이닝(빌더 패턴 설정)으로, 서로 다른 25개 책임이 아니었음. 현재 `detectHighFanOut`은 호출 대상의 다양성과 무관하게 엣지 개수만 세어(같은 파일 내 호출만 제외) 빌더 체이닝과 진짜 SRP 위반을 구분 못 함 — 카운팅 알고리즘 변경이 필요한 더 큰 작업이라 이번엔 미수정, 사용자 판단 대기(고칠 경우 여러 벤치마크 A/B 필요).
+
+## 엣지 정확도 1차 표본 감사 — FUNCTION_CALL phantom 23%(표본)·중복 계상 3.8%(전수 확정) (2026-07-07, 측정만·미수정)
+
+**문제.** "경고 정확도 ≠ 그래프 정확도 — 엣지 레벨 phantom은 별도 측정 필요"가 미해결 항목으로 남아 있었다(도그푸딩 '경계위반 0'은 경고 기준일 뿐). 자기 그래프(2,817노드/7,943엣지, 분석본 2026-07-04)로 1차 측정.
+
+**방법.** 공개 그래프 API(`/api/share/{projectId}/graph`)에서 그래프 확보 → 고정 시드(seed=42) 무작위 표본 FUNCTION_CALL 30·IMPORT 15 → 1차 기계 필터(호출자 파일에 호출 토큰 존재 + 대상 파일 참조 존재) → 플래그 9건을 소스 대조로 수동 판정. 재현 스크립트는 세션 스크래치(verify_edges.py·count_dup.py, seed 고정).
+
+**결과.**
+- **IMPORT: 15/15 정탐** — import 추출은 견고.
+- **FUNCTION_CALL: 30건 중 phantom 7건(23.3%, Wilson 95% CI 11.8~40.9%).** 설계 의도 엣지 2건(인터페이스→구현 디스패치 `-impl-`, JSX 컴포넌트 사용)은 정탐으로 분류.
+- **패턴 A — selfcall+cross 중복 계상 (표본 3건 → 전수 164쌍 = 전체의 3.8% 확정).** 자기 파일 정의로 가는 selfcall 엣지가 정확히 존재하는데, 같은 호출이 타 파일 동명 함수로도 엣지를 추가 생성. 예: `McpRpcController.handleToolCall` → 자기 `toJson`(✓ selfcalls) + `ArchitectureIntentService.toJson`(✗ cross). Java 의미론상 자기 클래스 메서드가 확정 우선이므로 cross 쪽은 무조건 phantom — **자기 정의 매치 시 cross-file 동명 후보 제외가 안전·확정적 수정**(전수 스크립트로 제거 가능량 164개 확인).
+- **패턴 A' — 상속 메서드 미인지 (표본 1건).** 부모(`AbstractTreeSitterAnalyzer`)의 `text()` 호출이 selfcall 없이 무관 파일(`GitHubWebhookService.text`)로만 귀속.
+- **패턴 B — 외부 심볼 동명 오귀속 (표본 3건).** JDK 스트림 `collect`·`HttpResponse.body`·Mockito `verify`(static import)가 레포 내 동명 실정의(`AdminMetricsQuery.collect` 등)로 매칭. 기존 JDK 차단(#351)은 "정의 부재 시 cross-dir 폴백"만 막았고, **동명 실정의가 존재하면 매칭이 살아 있다** — 사각.
+
+**영향.** HIGH_FAN_OUT 카운트 인플레이션(외부 심볼 오귀속이 조율자 판정에 노이즈), 흐름 재생 오경로(존재하지 않는 호출 단계 재생), CROSS_DOMAIN_CALL 후보 노이즈(기존 가드가 억제해 경고 표면엔 미노출 — "경고 0 ≠ 엣지 정확" 가설이 수치로 확정됨).
+
+**다음(수정 트랙 후보, 우선순위순).** ①패턴 A: GraphBuilder 해소에서 동일 파일 정의 매치 시 cross-file 동명 후보 제외 — 저위험·자기 그래프 −164 phantom ②패턴 B: 알려진 정적 임포트(verify·assertThat 등) 인지 + 한정 호출의 수신자 타입 불일치 제외 — 정밀 설계 필요 ③패턴 A': 상속 체인 인지 해소. 각 수정 후 동일 시드 표본 재측정 + 언어별 벤치 A/B 필수.
+
+**한계.** 자기 레포(Java 위주+TS 일부) 표본 n=30이라 신뢰구간 넓음. Go·Python·Rust 등 언어별 측정 미실시 — 벤치 레포 확장 필요.
