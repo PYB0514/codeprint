@@ -47,7 +47,7 @@ public class TeamController {
     public ResponseEntity<List<MemberResponse>> getMembers(
             @PathVariable UUID teamId,
             @AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(teamService.getMembers(teamId).stream()
+        return ResponseEntity.ok(teamService.getMembers(teamId, user.getId()).stream()
                 .map(m -> new MemberResponse(m.getId(), m.getUserId(), m.getRole().name(), m.getJoinedAt()))
                 .toList());
     }
@@ -78,7 +78,7 @@ public class TeamController {
     public ResponseEntity<List<AllocationResponse>> getAllocations(
             @PathVariable UUID teamId,
             @AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(teamService.getAllocations(teamId).stream()
+        return ResponseEntity.ok(teamService.getAllocations(teamId, user.getId()).stream()
                 .map(a -> new AllocationResponse(a.getProjectId(), a.getAllocatedSeats()))
                 .toList());
     }
@@ -93,7 +93,7 @@ public class TeamController {
         teamService.allocateSeats(teamId, user.getId(), projectId, req.seats());
         int remaining = teamService.getMyTeams(user.getId()).stream()
                 .filter(t -> t.getId().equals(teamId)).findFirst()
-                .map(t -> t.getTotalSeats() - teamService.getAllocations(teamId).stream()
+                .map(t -> t.getTotalSeats() - teamService.getAllocations(teamId, user.getId()).stream()
                         .mapToInt(TeamProjectAllocation::getAllocatedSeats).sum())
                 .orElse(0);
         return ResponseEntity.ok(Map.of("allocatedSeats", req.seats(), "remainingSeats", remaining));
@@ -110,7 +110,8 @@ public class TeamController {
     }
 
     private TeamResponse toResponse(Team t) {
-        int used = teamService.getAllocations(t.getId()).stream()
+        // getMyTeams로 조회된 팀은 항상 소유자 본인 팀이므로 소유자 ID로 검증 통과
+        int used = teamService.getAllocations(t.getId(), t.getOwnerUserId()).stream()
                 .mapToInt(TeamProjectAllocation::getAllocatedSeats).sum();
         return new TeamResponse(t.getId(), t.getName(), t.getPlan().name(),
                 t.getTotalSeats(), used, t.getCreatedAt());

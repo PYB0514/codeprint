@@ -307,6 +307,56 @@ class TeamApplicationServiceTest {
         verify(allocationRepository, never()).save(any());
     }
 
+    // --- getMembers/getAllocations: 소유권 검증 (IDOR 방지) ---
+
+    @Test
+    @DisplayName("getMembers — 소유자면 멤버 목록 반환")
+    void getMembers_owner_returnsMembers() {
+        UUID owner = UUID.randomUUID();
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
+        TeamMember member = TeamMember.add(team.getId(), UUID.randomUUID(), TeamRole.MEMBER);
+        when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
+        when(memberRepository.findByTeamId(team.getId())).thenReturn(java.util.List.of(member));
+
+        assertThat(service().getMembers(team.getId(), owner)).containsExactly(member);
+    }
+
+    @Test
+    @DisplayName("getMembers — 소유자가 아니면 SecurityException, 조회 안 함(타 팀 멤버 열람 IDOR 차단)")
+    void getMembers_notOwner_rejected() {
+        UUID owner = UUID.randomUUID();
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
+        when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
+
+        assertThatThrownBy(() -> service().getMembers(team.getId(), UUID.randomUUID()))
+                .isInstanceOf(SecurityException.class);
+        verify(memberRepository, never()).findByTeamId(any());
+    }
+
+    @Test
+    @DisplayName("getAllocations — 소유자면 배분 현황 반환")
+    void getAllocations_owner_returnsAllocations() {
+        UUID owner = UUID.randomUUID();
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
+        TeamProjectAllocation allocation = TeamProjectAllocation.allocate(team.getId(), UUID.randomUUID(), 5);
+        when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
+        when(allocationRepository.findByTeamId(team.getId())).thenReturn(java.util.List.of(allocation));
+
+        assertThat(service().getAllocations(team.getId(), owner)).containsExactly(allocation);
+    }
+
+    @Test
+    @DisplayName("getAllocations — 소유자가 아니면 SecurityException, 조회 안 함(타 팀 좌석배분 열람 IDOR 차단)")
+    void getAllocations_notOwner_rejected() {
+        UUID owner = UUID.randomUUID();
+        Team team = Team.create(owner, "t", UserPlan.DESKTOP, 15);
+        when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
+
+        assertThatThrownBy(() -> service().getAllocations(team.getId(), UUID.randomUUID()))
+                .isInstanceOf(SecurityException.class);
+        verify(allocationRepository, never()).findByTeamId(any());
+    }
+
     // --- decreaseSeats: 소유권 검증 + 증가 거부 ---
 
     @Test
