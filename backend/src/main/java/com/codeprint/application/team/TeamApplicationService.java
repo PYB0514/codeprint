@@ -97,13 +97,17 @@ public class TeamApplicationService {
         return teamRepository.findByOwnerUserId(userId);
     }
 
-    // 팀 멤버 목록 조회
-    public List<TeamMember> getMembers(UUID teamId) {
+    // 팀 멤버 목록 조회 — 팀장만 가능(IDOR 방지)
+    public List<TeamMember> getMembers(UUID teamId, UUID requesterId) {
+        Team team = getTeamOrThrow(teamId);
+        verifyOwner(team, requesterId);
         return memberRepository.findByTeamId(teamId);
     }
 
-    // 팀 석수 배분 현황 조회
-    public List<TeamProjectAllocation> getAllocations(UUID teamId) {
+    // 팀 석수 배분 현황 조회 — 팀장만 가능(IDOR 방지)
+    public List<TeamProjectAllocation> getAllocations(UUID teamId, UUID requesterId) {
+        Team team = getTeamOrThrow(teamId);
+        verifyOwner(team, requesterId);
         return allocationRepository.findByTeamId(teamId);
     }
 

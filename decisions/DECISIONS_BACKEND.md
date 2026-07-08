@@ -20,6 +20,16 @@
 
 **결과.** `./gradlew compileJava compileTestJava` 통과, `analyzeLocal` HIGH_FAN_OUT 5건(베이스라인 유지). 이 엔드포인트는 비인증 접근용이라 OAuth 없이 curl로 직접 런타임 검증 가능 — 실제 DB의 비공개 프로젝트(`is_public=false`)로 요청 시 **409**(차단 확인), 공개 프로젝트로 요청 시 **404**(프리셋 없음, 정상 동작 유지)를 실서버로 확인.
 
+## 팀 멤버·좌석배분 조회 IDOR 수정 — TeamApplicationService (2026-07-08, 보안수정)
+
+**문제.** `TeamController.getMembers`/`getAllocations`가 `teamId` 하나만 받아 `TeamApplicationService.getMembers`/`getAllocations`를 호출했는데, 이 두 조회 메서드는 요청자 검증이 전무했다. 인증만 된 사용자면 자기 팀이 아니어도 `teamId`를 알아내는 즉시 타 팀의 멤버 userId·역할·프로젝트별 좌석 배분을 열람할 수 있었다(Context105 감사 발견, task_0f05263a). 같은 서비스의 나머지 쓰기 메서드(`deleteTeam`/`addMember`/`removeMember`/`allocateSeats`/`decreaseSeats`)는 전부 `verifyOwner`를 거치는데 조회 두 곳만 빠져 있었다.
+
+**결정.** `getMembers`/`getAllocations`에 `requesterId` 파라미터를 추가하고 `getTeamOrThrow`+`verifyOwner`로 나머지 메서드와 동일하게 검증. 프론트가 `getMyTeams`(소유자 팀만 반환)로만 팀 목록을 가져오고 멤버가 자기 팀을 보는 화면 자체가 없어, "소유자만" 검증이 기존 제품 설계와 정확히 일치함을 프론트 코드로 먼저 확인한 뒤 진행(팀원용 읽기 전용 뷰가 있었다면 verifyOwner 대신 "소유자 또는 멤버" 검증이 필요했을 것).
+
+**검토한 대안.** 멤버도 자기 팀 정보를 볼 수 있게 "소유자 or 멤버" 검증으로 넓히는 안 — 기각(현재 프론트에 그 화면이 없어 범위 밖 기능 추가가 되고, §2 단순성 원칙 위반).
+
+**결과.** `TeamController`의 4개 호출부(`getMembers`·`getAllocations`·`allocateSeats` 내부 재조회·`toResponse`)를 전부 `requesterId` 전달로 갱신(`toResponse`는 `getMyTeams`로 조회된 팀이 항상 본인 소유임이 보장되므로 `team.getOwnerUserId()`를 그대로 전달). `./gradlew compileJava compileTestJava` 통과, `TeamApplicationServiceTest`에 IDOR 회귀 테스트 4건 추가(소유자 성공 2 + 비소유자 차단 2) 전체 26건 green.
+
 ---
 
 ## 오늘의 공개레포 — 시스템 큐레이션 로테이션 + 시스템 계정 + facebook/react Windows clone 실패 (2026-07-02, 기능)
