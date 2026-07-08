@@ -12,6 +12,14 @@
 
 **결과.** `./gradlew compileJava compileTestJava` 통과. `GraphCommandServiceTest`에 다른 그래프 소속 노드로 위치/주석 갱신 시도 시 예외+저장 안 함을 확인하는 회귀 테스트 2건 추가, 전체 12건 green. `NodeStyleService`/`NodeCommentService`는 `(graphId, nodeId)` 복합키로 스코프돼 있어 별도 취약점 없음을 코드로 확인(추가 수정 불요).
 
+## 공개 프리셋 조회 IDOR 수정 — GraphViewPresetController (2026-07-08, 보안수정)
+
+**문제.** `GraphViewPresetController.getPublicPreset`(`/api/share/{projectId}/presets/{slot}`)이 비인증 접근을 허용하면서 프로젝트가 공개인지 검증하지 않았다. `projectId`+`userId`+`slot` 조합만 알면 비공개 프로젝트의 프리셋 name·config를 조회할 수 있었다(Context105 감사 발견, task_e2203f48).
+
+**결정.** 같은 컨트롤러의 `getPublicGraph`(`GraphController`)가 이미 쓰는 `graphFacade.getPublicProject(projectId)` 가드를 그대로 재사용 — 비공개면 `IllegalStateException`을 던지고 `GlobalExceptionHandler`가 이를 409로 변환하는 기존 경로를 그대로 탄다(별도 예외 처리 불필요).
+
+**결과.** `./gradlew compileJava compileTestJava` 통과, `analyzeLocal` HIGH_FAN_OUT 5건(베이스라인 유지). 이 엔드포인트는 비인증 접근용이라 OAuth 없이 curl로 직접 런타임 검증 가능 — 실제 DB의 비공개 프로젝트(`is_public=false`)로 요청 시 **409**(차단 확인), 공개 프로젝트로 요청 시 **404**(프리셋 없음, 정상 동작 유지)를 실서버로 확인.
+
 ---
 
 ## 오늘의 공개레포 — 시스템 큐레이션 로테이션 + 시스템 계정 + facebook/react Windows clone 실패 (2026-07-02, 기능)

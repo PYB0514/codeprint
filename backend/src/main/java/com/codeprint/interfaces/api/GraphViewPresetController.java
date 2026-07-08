@@ -87,12 +87,15 @@ public class GraphViewPresetController {
         return ResponseEntity.ok().build();
     }
 
-    // 공유 뷰용 — 특정 사용자의 슬롯 조회 (비인증 접근 허용)
+    // 공유 뷰용 — 특정 사용자의 슬롯 조회 (비인증 접근 허용, 공개 프로젝트만)
     @GetMapping("/api/share/{projectId}/presets/{slot}")
     public ResponseEntity<Map<String, Object>> getPublicPreset(
             @PathVariable UUID projectId,
             @PathVariable @Min(1) @Max(4) int slot,
             @RequestParam UUID userId) {
+
+        // 프로젝트가 공개가 아니면 차단 (비공개 프로젝트 프리셋 누출 방지)
+        graphFacade.getPublicProject(projectId);
 
         // 해당 프로젝트의 최신 그래프 찾기
         return graphQueryService.findLatestByProject(projectId)
