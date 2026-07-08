@@ -50,6 +50,16 @@
 
 **결과.** `./gradlew compileJava compileTestJava` 통과, `analyzeLocal` HIGH_FAN_OUT 5건(베이스라인 유지). 신규 `RateLimitFilterTest` 4건 green — 그중 XFF 스푸핑 재현 테스트(매 요청 다른 위조 첫 hop, 동일 마지막 hop)로 수정 전 코드였다면 통과하지 못했을 시나리오를 검증. 실서버 curl로는 `/api/attachments/presign`·`/api/feedback` 등 레이트리밋 대상이 전부 인증 필요 엔드포인트라 Spring Security가 필터 순서상 먼저 302로 막아, 비인증 curl로는 이 필터까지 도달하지 않음을 확인(기존부터 동일한 필터 순서 — 회귀 아님). 그 사실 자체가 검증 범위를 결정: 인증 뒤 로직은 OAuth 전체 플로우 없이는 curl로 재현 불가라, 취약 코드 경로를 직접 실행하는 단위 테스트를 런타임 검증의 동급 대체로 채택.
 
+## CSRF 커스텀 헤더 심층방어 도입 (2026-07-08, 보안수정)
+
+**문제.** JWT를 `SameSite=None` 쿠키로 저장(`OAuth2SuccessHandler`, cross-origin 프론트-백엔드 배포 때문에 필요)하는데 `SecurityConfig`가 `csrf.disable()` 상태였다. `SameSite=None` 쿠키는 cross-site 요청에도 브라우저가 자동 첨부하므로, CORS(`allowedOriginPatterns` 화이트리스트)만으로는 방어가 불완전하다 — CORS는 "다른 사이트의 JS가 응답을 읽는 것"은 막아도 "브라우저가 상태변경 요청 자체를 보내고 서버가 실행하는 것"까지는 막지 못하는 경우가 있다(단순 요청/폼 기반 CSRF).
+
+**결정.** `CsrfHeaderFilter`(신규, `infrastructure/config`) 도입 — POST/PUT/DELETE/PATCH 요청에 `X-Requested-With: XMLHttpRequest` 커스텀 헤더를 요구하고 없으면 403. 이 헤더는 브라우저가 cross-site로 보내려면 반드시 CORS preflight를 거쳐야 하므로, 결과적으로 기존 `allowedOriginPatterns` 화이트리스트 강제가 상태변경 요청에도 적용된다(정공법인 `SynchronizerToken` 대신 헤더 방식을 택한 이유 — SPA+쿠키 조합에서 훨씬 적은 배관으로 동일 효과, Spring 공식 문서도 SPA에는 커스텀 헤더 방식을 권장). 프론트는 `main.tsx`의 전역 axios 인스턴스 한 곳에 헤더를 추가하는 것으로 전체 API 호출에 적용(별도 axios 인스턴스 없음을 확인). 브라우저 XHR/fetch가 아닌 서버-투-서버·리다이렉트 플로우(`/api/payments/webhook`·`/api/webhooks/github`·`/oauth2/**`·`/login/**`·`/mcp/**`·`/api/dev/**`)는 커스텀 헤더를 보낼 수 없거나 쿠키 인증 대상이 아니므로 예외 처리.
+
+**검토한 대안.** Spring Security 기본 CSRF 토큰(`CookieCsrfTokenRepository`) 활성화 — 기각(SPA가 매 마운트 시 토큰을 별도로 가져와 헤더에 실어야 하는 배관이 더 크고, 이 앱은 세션이 아니라 JWT+Bearer/쿠키 혼합이라 궁합이 덜 맞음. 커스텀 헤더 방식이 동일한 방어 효과를 더 적은 변경으로 달성).
+
+**결과.** `./gradlew compileJava compileTestJava` 통과, `npx tsc -b` 통과. 신규 `CsrfHeaderFilterTest` 8건 green. 실서버 curl 검증: `GET /api/community/posts`(헤더 없음) 200 유지 / `POST`(헤더 없음) **403** / `POST`(헤더 있음) CSRF 통과 후 하위 검증(400, 무관) / `POST /api/webhooks/github`(헤더 없음, 예외 경로) CSRF 필터 미차단(401, 정상 웹훅 인증 경로로 진행). `analyzeLocal` HIGH_FAN_OUT 5건(베이스라인 유지). 프론트 Preview 브라우저 패널은 기존에 알려진 네트워크 제약(백엔드 8080 미도달, ECONNREFUSED)으로 실연동 확인 불가 — curl 직접 검증으로 대체.
+
 ---
 
 ## 오늘의 공개레포 — 시스템 큐레이션 로테이션 + 시스템 계정 + facebook/react Windows clone 실패 (2026-07-02, 기능)

@@ -17,6 +17,8 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 
 axios.defaults.baseURL = import.meta.env.VITE_API_URL ?? ''
 axios.defaults.withCredentials = true
+// CSRF 심층방어 — 백엔드가 상태변경 요청에 이 헤더를 요구(CsrfHeaderFilter)
+axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
 
 // 401 응답 시 Refresh Token으로 Access Token 재발급 후 원래 요청 재시도
 let isRefreshing = false
