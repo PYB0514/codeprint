@@ -30,6 +30,14 @@
 
 **결과.** `TeamController`의 4개 호출부(`getMembers`·`getAllocations`·`allocateSeats` 내부 재조회·`toResponse`)를 전부 `requesterId` 전달로 갱신(`toResponse`는 `getMyTeams`로 조회된 팀이 항상 본인 소유임이 보장되므로 `team.getOwnerUserId()`를 그대로 전달). `./gradlew compileJava compileTestJava` 통과, `TeamApplicationServiceTest`에 IDOR 회귀 테스트 4건 추가(소유자 성공 2 + 비소유자 차단 2) 전체 26건 green.
 
+## createPost permitAll 좁히기 — SecurityConfig (2026-07-08, 보안수정)
+
+**문제.** `SecurityConfig`의 permitAll 목록에 `/api/community/posts`(exact, 메서드 미지정)가 들어 있어 `GET`뿐 아니라 게시글 생성 `POST`까지 비인증으로 컨트롤러에 도달했다. `CommunityController.createPost`는 `@AuthenticationPrincipal User user`를 바로 `user.getId()`로 역참조하므로, 비인증 요청은 Spring Security가 401/403으로 막아주는 대신 컨트롤러까지 들어가 NPE(500)로 이어질 여지가 있었다(Context103 발견, task_4c4d13e7).
+
+**결정.** 이미 위쪽에 있는 `GET /api/community/posts/*`처럼 `GET /api/community/posts`를 메서드 한정 permitAll로 명시 추가하고, exact-path 항목은 일반 permitAll 목록에서 제거. Spring Security 매처는 선언 순서대로 첫 매치가 적용되므로 POST는 더 이상 어떤 permitAll에도 안 걸리고 마지막 `anyRequest().authenticated()`로 떨어진다.
+
+**결과.** `./gradlew compileJava compileTestJava` 통과, `analyzeLocal` HIGH_FAN_OUT 5건(베이스라인 유지). 실서버로 확인: `GET /api/community/posts` 200(정상 유지) / `POST /api/community/posts`(비인증) **302**(로그인 리다이렉트) — 이 앱의 다른 인증 필요 엔드포인트(`POST /api/users/{id}/follow`)와 동일한 응답으로, 별도 예외 없이 일관된 인증 처리 경로에 편입됐음을 확인.
+
 ---
 
 ## 오늘의 공개레포 — 시스템 큐레이션 로테이션 + 시스템 계정 + facebook/react Windows clone 실패 (2026-07-02, 기능)
