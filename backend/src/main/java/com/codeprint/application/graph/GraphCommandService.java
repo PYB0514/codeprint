@@ -51,20 +51,28 @@ public class GraphCommandService {
         return graphRepository.findEdgesByGraphId(graphId);
     }
 
-    // 노드 드래그 후 저장된 위치를 업데이트
-    public void updateNodePosition(UUID nodeId, double x, double y) {
-        Node node = graphRepository.findNodeById(nodeId)
-                .orElseThrow(() -> new IllegalArgumentException("Node not found: " + nodeId));
+    // 노드 드래그 후 저장된 위치를 업데이트 — 노드가 그래프 소속인지 검증(IDOR 방지)
+    public void updateNodePosition(UUID graphId, UUID nodeId, double x, double y) {
+        Node node = requireNodeInGraph(graphId, nodeId);
         node.updatePosition(x, y);
         graphRepository.saveNode(node);
     }
 
-    // 노드 사용자 정의 레이블과 메모를 업데이트
-    public void updateNodeAnnotation(UUID nodeId, String userLabel, String userNote) {
-        Node node = graphRepository.findNodeById(nodeId)
-                .orElseThrow(() -> new IllegalArgumentException("Node not found: " + nodeId));
+    // 노드 사용자 정의 레이블과 메모를 업데이트 — 노드가 그래프 소속인지 검증(IDOR 방지)
+    public void updateNodeAnnotation(UUID graphId, UUID nodeId, String userLabel, String userNote) {
+        Node node = requireNodeInGraph(graphId, nodeId);
         node.updateAnnotation(userLabel, userNote);
         graphRepository.saveNode(node);
+    }
+
+    // 노드 조회 + 그래프 소속 검증 (IDOR 방지) — 자기 그래프 ID + 남의 nodeId 조합 차단
+    private Node requireNodeInGraph(UUID graphId, UUID nodeId) {
+        Node node = graphRepository.findNodeById(nodeId)
+                .orElseThrow(() -> new IllegalArgumentException("Node not found: " + nodeId));
+        if (!node.getGraphId().equals(graphId)) {
+            throw new IllegalArgumentException("노드가 그래프에 속하지 않습니다: " + nodeId);
+        }
+        return node;
     }
 
     // 그래프 버전을 고정 슬롯에 고정 — 같은 슬롯 기존 점유분은 해제(덮어쓰기). 그래프가 프로젝트 소속인지 검증

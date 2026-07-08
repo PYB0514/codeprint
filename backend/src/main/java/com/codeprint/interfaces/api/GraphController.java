@@ -257,7 +257,7 @@ public class GraphController {
 
         graphFacade.verifyGraphOwnership(graphId, user.getId());
 
-        graphCommandService.updateNodeAnnotation(nodeId, body.get("userLabel"), body.get("userNote"));
+        graphCommandService.updateNodeAnnotation(graphId, nodeId, body.get("userLabel"), body.get("userNote"));
         return ResponseEntity.ok().build();
     }
 
@@ -273,7 +273,7 @@ public class GraphController {
 
         double x = body.getOrDefault("x", 0.0);
         double y = body.getOrDefault("y", 0.0);
-        graphCommandService.updateNodePosition(nodeId, x, y);
+        graphCommandService.updateNodePosition(graphId, nodeId, x, y);
         return ResponseEntity.ok().build();
     }
 
