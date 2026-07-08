@@ -39,6 +39,7 @@ class GraphCommandServiceTest {
     private final UUID otherProjectId = UUID.randomUUID();
     private final UUID analysisId = UUID.randomUUID();
     private final UUID graphId = UUID.randomUUID();
+    private final UUID otherGraphId = UUID.randomUUID();
     private final UUID nodeId = UUID.randomUUID();
 
     @Test
@@ -79,7 +80,7 @@ class GraphCommandServiceTest {
     void updateNodePosition_nodeNotFound_throws() {
         when(repository.findNodeById(nodeId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.updateNodePosition(nodeId, 10, 20))
+        assertThatThrownBy(() -> service.updateNodePosition(graphId, nodeId, 10, 20))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(repository, never()).saveNode(any());
     }
@@ -90,7 +91,7 @@ class GraphCommandServiceTest {
         Node node = Node.create(graphId, NodeType.FUNCTION, "foo", "/S.java", "java");
         when(repository.findNodeById(node.getId())).thenReturn(Optional.of(node));
 
-        service.updateNodePosition(node.getId(), 12.5, 34.5);
+        service.updateNodePosition(graphId, node.getId(), 12.5, 34.5);
 
         ArgumentCaptor<Node> captor = ArgumentCaptor.forClass(Node.class);
         verify(repository).saveNode(captor.capture());
@@ -99,17 +100,39 @@ class GraphCommandServiceTest {
     }
 
     @Test
+    @DisplayName("노드 위치 갱신 — 다른 그래프 소속 노드면 IDOR 차단(저장 안 함)")
+    void updateNodePosition_nodeInOtherGraph_throwsBeforeMutation() {
+        Node node = Node.create(otherGraphId, NodeType.FUNCTION, "foo", "/S.java", "java");
+        when(repository.findNodeById(node.getId())).thenReturn(Optional.of(node));
+
+        assertThatThrownBy(() -> service.updateNodePosition(graphId, node.getId(), 12.5, 34.5))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(repository, never()).saveNode(any());
+    }
+
+    @Test
     @DisplayName("노드 주석 갱신 — 공백 레이블/메모는 null로 정규화")
     void updateNodeAnnotation_blankBecomesNull() {
         Node node = Node.create(graphId, NodeType.FUNCTION, "foo", "/S.java", "java");
         when(repository.findNodeById(node.getId())).thenReturn(Optional.of(node));
 
-        service.updateNodeAnnotation(node.getId(), "  ", "메모");
+        service.updateNodeAnnotation(graphId, node.getId(), "  ", "메모");
 
         ArgumentCaptor<Node> captor = ArgumentCaptor.forClass(Node.class);
         verify(repository).saveNode(captor.capture());
         assertThat(captor.getValue().getUserLabel()).isNull();
         assertThat(captor.getValue().getUserNote()).isEqualTo("메모");
+    }
+
+    @Test
+    @DisplayName("노드 주석 갱신 — 다른 그래프 소속 노드면 IDOR 차단(저장 안 함)")
+    void updateNodeAnnotation_nodeInOtherGraph_throwsBeforeMutation() {
+        Node node = Node.create(otherGraphId, NodeType.FUNCTION, "foo", "/S.java", "java");
+        when(repository.findNodeById(node.getId())).thenReturn(Optional.of(node));
+
+        assertThatThrownBy(() -> service.updateNodeAnnotation(graphId, node.getId(), "label", "메모"))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(repository, never()).saveNode(any());
     }
 
     @Test

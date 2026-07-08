@@ -2,6 +2,18 @@
 
 ---
 
+## 노드 쓰기 IDOR 수정 — GraphCommandService (2026-07-08, 보안수정)
+
+**문제.** `GraphController.updateNodeAnnotation`/`updateNodePosition`이 `graphFacade.verifyGraphOwnership(graphId, userId)`로 그래프 소유권만 검증하고, `GraphCommandService.updateNodeAnnotation`/`updateNodePosition`은 `nodeId`로 곧장 노드를 조회·수정해 `node.getGraphId()`가 요청 경로의 `graphId`와 같은지 확인하지 않았다. 자기 소유 그래프 ID + 남의 그래프에 속한 nodeId를 조합하면 타인 노드의 주석·위치를 변조할 수 있었다(공개 그래프 nodeId는 `/api/share/{projectId}/graph` 응답에 그대로 노출돼 실제 공격 표면 존재 — Context105 MCP 도그푸딩 세션에서 발견, task_3f69223f).
+
+**결정.** `pinGraph`/`unpinGraph`가 이미 쓰던 `requireGraphInProject` 패턴(그래프→프로젝트 소속 검증)을 노드→그래프 방향으로 동형 적용. `GraphCommandService`에 `requireNodeInGraph(graphId, nodeId)` private 메서드를 추가해 `node.getGraphId().equals(graphId)`를 확인 후 아니면 `IllegalArgumentException`. 두 public 메서드 시그니처에 `graphId`를 추가하고 컨트롤러가 경로 변수를 그대로 전달하도록 변경(별도 검증 계층을 만들지 않고 기존 조회 지점에 바로 끼워 넣음 — 최소 변경).
+
+**검토한 대안.** ①컨트롤러 레벨에서 `graphQueryService.findNodeById`로 사전 검증 후 서비스 호출 — 기각(서비스가 어차피 같은 노드를 다시 조회해야 해 쿼리 중복, 검증 로직이 컨트롤러/서비스 두 곳에 분산). ②`GraphFacade`에 `verifyNodeOwnership` 신설 — 기각(Facade는 프로젝트/그래프 단위 검증이 관례이고, 노드 조회 자체가 이미 `GraphRepository` 위임이라 Command 서비스 내부에 두는 게 계층 일관성 유지).
+
+**결과.** `./gradlew compileJava compileTestJava` 통과. `GraphCommandServiceTest`에 다른 그래프 소속 노드로 위치/주석 갱신 시도 시 예외+저장 안 함을 확인하는 회귀 테스트 2건 추가, 전체 12건 green. `NodeStyleService`/`NodeCommentService`는 `(graphId, nodeId)` 복합키로 스코프돼 있어 별도 취약점 없음을 코드로 확인(추가 수정 불요).
+
+---
+
 ## 오늘의 공개레포 — 시스템 큐레이션 로테이션 + 시스템 계정 + facebook/react Windows clone 실패 (2026-07-02, 기능)
 
 **문제.** 랜딩페이지에 매일 공개 오픈소스 5개를 시스템이 자동 분석해 노출하는 기능. 두 가지 설계 갭이 있었다: ①레포 선정 방식(백로그에 "GitHub Search API 자동" vs "큐레이션 리스트 로테이션" 두 안이 미결정 상태) ②노출용 프로젝트를 누가 소유하는가(기존 `Project.userId`는 `nullable=false`).
