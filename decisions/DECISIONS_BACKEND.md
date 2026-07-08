@@ -38,6 +38,18 @@
 
 **결과.** `./gradlew compileJava compileTestJava` 통과, `analyzeLocal` HIGH_FAN_OUT 5건(베이스라인 유지). 실서버로 확인: `GET /api/community/posts` 200(정상 유지) / `POST /api/community/posts`(비인증) **302**(로그인 리다이렉트) — 이 앱의 다른 인증 필요 엔드포인트(`POST /api/users/{id}/follow`)와 동일한 응답으로, 별도 예외 없이 일관된 인증 처리 경로에 편입됐음을 확인.
 
+## XFF 스푸핑 우회 수정 + 쓰기 레이트리밋 버킷 일반화 (2026-07-08, 보안수정)
+
+**문제.** 두 가지가 겹쳐 있었다. ①`RateLimitFilter.extractIp`가 `X-Forwarded-For`의 **첫 번째** 값을 신뢰 IP로 사용했는데, 이 값은 클라이언트가 직접 헤더에 넣어 보내는 값이라 임의로 위조 가능했다 — 매 요청마다 다른 위조 IP를 헤더 맨 앞에 붙이면 IP별 버킷이 매번 새로 생겨 레이트리밋이 사실상 무력화됐다(task_d929446c). ②레이트리밋이 `POST /api/analyses`·`POST /api/attachments/presign` 두 엔드포인트에만 하드코딩돼 있어 피드백 제출·게시글/댓글 작성·DM 발송·팔로우·좋아요·푸시 구독·`/mcp/rpc`는 전부 무제한이었다.
+
+**결정.**
+1. **XFF 신뢰 위치 반전** — Railway가 프록시로서 실제 접속 IP를 `X-Forwarded-For` 헤더의 **맨 끝**에 추가하는 표준 동작을 근거로, `split(",")`의 첫 값이 아니라 **마지막 값**을 사용하도록 변경. 클라이언트가 헤더 앞부분에 아무리 위조 IP를 붙여도 Railway가 붙인 마지막 hop은 조작할 수 없다.
+2. **버킷 일반화** — `analysisBuckets`/`attachBuckets` 개별 맵 두 개를 `Map<String, Bucket>` 하나(`ip:category` 키)로 통합하고, `(method, pathPattern, category, limitPerMinute)` 규칙 리스트로 대상을 선언적으로 관리(`AntPathMatcher`로 와일드카드 경로 매칭). 신규 카테고리는 리스트에 한 줄 추가만 하면 됨. 이번에 추가한 카테고리: `post-create`(5/분)·`post-like`(60/분)·`comment-create`(20/분)·`feedback`(5/분)·`message-send`(30/분)·`follow`(30/분)·`push-subscribe`(10/분)·`mcp-rpc`(30/분). 좋아요 취소(DELETE)·댓글 삭제 등 파괴적이지 않은 idempotent 작업은 스코프 밖(비용·남용 위험이 낮음).
+
+**검토한 대안.** 엔드포인트별 전용 필터/인터셉터를 각각 추가 — 기각(§2 단순성 위반, 규칙 리스트 한 곳에 모으는 것이 유지보수 용이).
+
+**결과.** `./gradlew compileJava compileTestJava` 통과, `analyzeLocal` HIGH_FAN_OUT 5건(베이스라인 유지). 신규 `RateLimitFilterTest` 4건 green — 그중 XFF 스푸핑 재현 테스트(매 요청 다른 위조 첫 hop, 동일 마지막 hop)로 수정 전 코드였다면 통과하지 못했을 시나리오를 검증. 실서버 curl로는 `/api/attachments/presign`·`/api/feedback` 등 레이트리밋 대상이 전부 인증 필요 엔드포인트라 Spring Security가 필터 순서상 먼저 302로 막아, 비인증 curl로는 이 필터까지 도달하지 않음을 확인(기존부터 동일한 필터 순서 — 회귀 아님). 그 사실 자체가 검증 범위를 결정: 인증 뒤 로직은 OAuth 전체 플로우 없이는 curl로 재현 불가라, 취약 코드 경로를 직접 실행하는 단위 테스트를 런타임 검증의 동급 대체로 채택.
+
 ---
 
 ## 오늘의 공개레포 — 시스템 큐레이션 로테이션 + 시스템 계정 + facebook/react Windows clone 실패 (2026-07-02, 기능)
