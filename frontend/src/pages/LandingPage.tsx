@@ -281,8 +281,8 @@ export default function LandingPage() {
               <span className="absolute top-3 right-3 text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">추천</span>
               <div>
                 <p className="text-sm font-semibold text-blue-400">Pro · Desktop</p>
-                <p className="text-2xl font-bold mt-1">₩9,900<span className="text-sm font-normal text-gray-500">/월</span></p>
-                <p className="text-xs text-gray-500 mt-0.5">팀은 좌석당 ₩4,900/월</p>
+                <p className="text-2xl font-bold mt-1">₩9,900</p>
+                <p className="text-xs text-gray-500 mt-0.5">1회 결제 · 팀은 좌석당 ₩4,900</p>
               </div>
               <ul className="flex flex-col gap-1.5 text-xs text-gray-400">
                 <li>✓ 협업 세션 인원 제한 해제</li>
