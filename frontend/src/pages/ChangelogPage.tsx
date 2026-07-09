@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.121.0',
+    date: '2026-07-09',
+    title: 'API 엔드포인트 노드 추가 — 그래프에서 API 표면을 확인',
+    type: 'feature',
+    items: [
+      { category: '그래프', desc: '컨트롤러가 노출하는 API 경로가 그래프에 노드로 표시됩니다. 사이드바 필터·검색에서 "API"로 확인할 수 있습니다.' },
+    ],
+  },
+  {
     version: 'v0.120.0',
     date: '2026-07-09',
     title: 'MCP get_repo_map 툴 추가 — AI 에이전트가 1콜로 레포 구조 조회',
