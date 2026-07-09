@@ -64,7 +64,18 @@ public class SecurityConfig {
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
 
+        // /mcp/** — 브라우저 쿠키 인증이 아니라 AI 에이전트(Claude Code 등)가 로컬/원격에서 직접 호출하는
+        // stateless JSON-RPC 엔드포인트. 호출자가 보내는 Origin이 프론트 도메인일 이유가 없어(CLI는 Origin이
+        // 아예 없거나 임의 값) 위 브라우저용 화이트리스트를 적용하면 매번 403으로 막힘. 쿠키를 안 쓰므로
+        // allowCredentials=false로 두고 모든 Origin 허용 — CsrfHeaderFilter의 /mcp/** 예외 처리와 동일한 이유.
+        CorsConfiguration mcpConfig = new CorsConfiguration();
+        mcpConfig.setAllowedOriginPatterns(List.of("*"));
+        mcpConfig.setAllowedMethods(List.of("POST", "OPTIONS"));
+        mcpConfig.setAllowedHeaders(List.of("*"));
+        mcpConfig.setAllowCredentials(false);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/mcp/**", mcpConfig);
         source.registerCorsConfiguration("/**", config);
         return source;
     }
