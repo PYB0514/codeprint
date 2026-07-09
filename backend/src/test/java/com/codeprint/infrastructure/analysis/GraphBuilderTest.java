@@ -725,6 +725,179 @@ class GraphBuilderTest {
         assertThat(hasEdge).isTrue();
     }
 
+    // ── 외부 심볼(JDK/테스트 프레임워크) 동명 오귀속 차단 (엣지 정확도 패턴 B) ──
+
+    @Test
+    @DisplayName("Mockito verify(정적 임포트) bare 호출은 레포 내 동명 정의로 phantom 연결되지 않는다 (패턴 B)")
+    void Mockito_verify_정적임포트_phantom_엣지_미생성() {
+        // GitHubWebhookServiceTest 등 테스트 파일이 Mockito.verify(...)를 호출 — 자기 정의도 없고
+        // import도 org.mockito.Mockito.verify(정적 임포트)라 도메인 파일 매칭이 안 되므로 전역 폴백에 빠짐.
+        // 그런데 레포에 실제로 verify()란 이름의 도메인 메서드(WebhookSignatureVerifier.verify)가 있어
+        // 무관한 테스트 호출이 거기로 phantom 연결되던 사각(자기 레포 실측으로 확인된 버그).
+        ParsedFile testFile = parsedFileWithCallsAndImports("src/test/GitHubWebhookServiceTest.java", "Java",
+                List.of("호출_검증"), Map.of("호출_검증", List.of("verify")),
+                List.of("org.mockito.Mockito.verify"));
+        ParsedFile decoy = parsedFile("src/domain/analysis/WebhookSignatureVerifier.java", "Java",
+                List.of("verify"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(testFile, decoy));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasPhantomVerifyEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("호출_검증") && e.getEdgeIdentifier().contains("verify"));
+
+        assertThat(hasPhantomVerifyEdge).isFalse();
+    }
+
+    @Test
+    @DisplayName("JDK Stream collect 폴백 호출은 레포 내 동명 정의로 phantom 연결되지 않는다 (패턴 B)")
+    void JDK_Stream_collect_폴백_phantom_엣지_미생성() {
+        // list.stream().collect(...) — 실제 타깃은 JDK Collectors(노드 없음). 레포에 우연히 collect()란
+        // 이름의 도메인 메서드(AdminMetricsQuery.collect)가 있어 무관한 호출이 거기로 phantom 연결되던 사각
+        // (자기 레포 실측: AnalysisApplicationService·GraphDiffService 등 다수 파일의 .collect(Collectors.x())).
+        ParsedFile caller = parsedFileWithCallsAndImports("src/graph/GraphDiffService.java", "Java",
+                List.of("diff"), Map.of("diff", List.of("collect")),
+                List.of());
+        ParsedFile decoy = parsedFile("src/infra/admin/AdminMetricsQuery.java", "Java",
+                List.of("collect"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, decoy));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasPhantomCollectEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("diff") && e.getEdgeIdentifier().contains("collect"));
+
+        assertThat(hasPhantomCollectEdge).isFalse();
+    }
+
+    @Test
+    @DisplayName("collect 호출도 caller가 실제 import한 파일이면 정상 연결된다 (AdminDigestService→AdminMetricsQuery.collect 실사례 보존)")
+    void collect_실제_import된_경우엔_엣지_보존() {
+        // 차단은 "미해소 시 폴백"에만 적용 — caller가 명시적으로 import한 실제 도메인 메서드 호출까지
+        // 막으면 안 된다 (AdminDigestService.metricsQuery.collect(...) 자기 레포 실사례).
+        ParsedFile caller = parsedFileWithCallsAndImports("src/app/AdminDigestService.java", "Java",
+                List.of("sendDigest"), Map.of("sendDigest", List.of("collect")),
+                List.of("infra.admin.AdminMetricsQuery"));
+        ParsedFile metricsQuery = parsedFile("src/infra/admin/AdminMetricsQuery.java", "Java",
+                List.of("collect"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, metricsQuery));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasImportedCollectEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("sendDigest") && e.getEdgeIdentifier().contains("collect")
+                        && e.getMetadata().get("calleeFile").toString().contains("AdminMetricsQuery"));
+
+        assertThat(hasImportedCollectEdge).isTrue();
+    }
+
+    @Test
+    @DisplayName("한정 호출(Type::method)의 targetClass가 JDK 흔한 클래스명이면 레포 내 동명 클래스로 해소하지 않는다 (패턴 B, qualified)")
+    void 한정호출_JDK_클래스명_동명클래스_phantom_엣지_미생성() {
+        // java.net.http.HttpResponse<String>.body() 호출 — 레포가 별개로 "HttpResponse"란 이름의
+        // 자체 DTO 클래스를 두고 거기에도 body()가 있으면, 한정 호출 해소가 import 스코프 없이 파일명만
+        // 보고 매칭해 무관한 로컬 클래스로 phantom 연결된다.
+        ParsedFile caller = parsedFileWithCalls("src/client/ApiClient.java", "Java",
+                List.of("send"), Map.of("send", List.of("HttpResponse::body")));
+        ParsedFile decoy = parsedFile("src/dto/HttpResponse.java", "Java",
+                List.of("body"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, decoy));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasPhantomBodyEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("send") && e.getEdgeIdentifier().contains("body"));
+
+        assertThat(hasPhantomBodyEdge).isFalse();
+    }
+
+    // ── 상속 메서드 호출 해소 (엣지 정확도 패턴 A') ──────────────────────────
+
+    @Test
+    @DisplayName("자식이 호출하는 상속 메서드는 부모 정의로 연결된다 — 무관한 동명 함수(decoy)로 phantom 연결되지 않는다 (패턴 A')")
+    void 상속_메서드_호출_부모로_해소() {
+        // DECISIONS_ANALYSIS.md 표본: AbstractTreeSitterAnalyzer.text()를 자식이 상속받아 호출하는데
+        // 자기 파일엔 정의가 없어(상속) bare 해소가 전역 폴백에 빠지고, 무관한 GitHubWebhookService.text로
+        // phantom 연결되던 사각.
+        ParsedFile parent = parsedFile("src/analysis/AbstractTreeSitterAnalyzer.java", "Java",
+                List.of("text"), Map.of());
+        ParsedFile child = parsedFileWithExtends("src/analysis/JavaTreeSitterAnalyzer.java", "Java",
+                List.of("walk"), Map.of("walk", List.of("text")), "AbstractTreeSitterAnalyzer");
+        ParsedFile decoy = parsedFile("src/webhook/GitHubWebhookService.java", "Java",
+                List.of("text"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(parent, child, decoy));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        List<Edge> textCallEdges = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .filter(e -> e.getEdgeIdentifier().contains("walk") && e.getEdgeIdentifier().contains("text"))
+                .toList();
+
+        assertThat(textCallEdges).hasSize(1);
+        assertThat(textCallEdges.get(0).getMetadata().get("calleeFile")).isEqualTo("src/analysis/AbstractTreeSitterAnalyzer.java");
+    }
+
+    @Test
+    @DisplayName("2단계 상속(조부모) 메서드 호출도 체인을 타고 올라가 해소된다")
+    void 다단계_상속_메서드_호출_해소() {
+        ParsedFile grandparent = parsedFile("src/analysis/BaseAnalyzer.java", "Java", List.of("log"), Map.of());
+        ParsedFile parent = parsedFileWithExtends("src/analysis/AbstractTreeSitterAnalyzer.java", "Java",
+                List.of("text"), Map.of(), "BaseAnalyzer");
+        ParsedFile child = parsedFileWithExtends("src/analysis/JavaTreeSitterAnalyzer.java", "Java",
+                List.of("walk"), Map.of("walk", List.of("log")), "AbstractTreeSitterAnalyzer");
+
+        graphBuilder.build(projectId, analysisId, List.of(grandparent, parent, child));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean resolvedToGrandparent = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .filter(e -> e.getEdgeIdentifier().contains("walk") && e.getEdgeIdentifier().contains("log"))
+                .anyMatch(e -> "src/analysis/BaseAnalyzer.java".equals(e.getMetadata().get("calleeFile")));
+
+        assertThat(resolvedToGrandparent).isTrue();
+    }
+
+    @Test
+    @DisplayName("상속 체인 어디에도 정의가 없으면 기존 bare 폴백 해소로 정상 동작한다 (recall 보존)")
+    void 상속체인에_정의없으면_기존_폴백_유지() {
+        // extendedClass가 있어도 체인 전체에 calleeFunc가 없으면 일반 bare 호출 해소로 폴백해야 한다
+        ParsedFile parent = parsedFile("src/analysis/AbstractTreeSitterAnalyzer.java", "Java",
+                List.of("text"), Map.of());
+        ParsedFile child = parsedFileWithCallsAndImportsAndExtends("src/analysis/JavaTreeSitterAnalyzer.java", "Java",
+                List.of("walk"), Map.of("walk", List.of("computeDigest")),
+                List.of("util.Digest"), "AbstractTreeSitterAnalyzer");
+        ParsedFile util = parsedFile("src/util/Digest.java", "Java", List.of("computeDigest"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(parent, child, util));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("walk") && e.getEdgeIdentifier().contains("computeDigest")
+                        && "src/util/Digest.java".equals(e.getMetadata().get("calleeFile")));
+
+        assertThat(hasEdge).isTrue();
+    }
+
     // ── 파일 수 카운트 기록 (대형 레포 절단 안내) ───────────────────────────
 
     @Test
@@ -964,6 +1137,23 @@ class GraphBuilderTest {
                                                      Map<String, List<String>> calls, List<String> imports) {
         return new ParsedFile(path, lang, functions, imports, null, Map.of(),
                 calls, List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
+    }
+
+    // 호출 + 상위 클래스명(extends)을 지정하는 헬퍼 — 상속 메서드 해소 테스트용
+    private ParsedFile parsedFileWithExtends(String path, String lang, List<String> functions,
+                                             Map<String, List<String>> calls, String extendedClass) {
+        return new ParsedFile(path, lang, functions, List.of(), null, Map.of(),
+                calls, List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                List.of(), List.of(), List.of(), extendedClass);
+    }
+
+    // 호출 + import + 상위 클래스명을 모두 지정하는 헬퍼 — 상속 체인 미해소 시 기존 폴백 검증용
+    private ParsedFile parsedFileWithCallsAndImportsAndExtends(String path, String lang, List<String> functions,
+                                                               Map<String, List<String>> calls, List<String> imports,
+                                                               String extendedClass) {
+        return new ParsedFile(path, lang, functions, imports, null, Map.of(),
+                calls, List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                List.of(), List.of(), List.of(), extendedClass);
     }
 
     private ParsedFile parsedFileWithImports(String path, String lang, List<String> imports) {
