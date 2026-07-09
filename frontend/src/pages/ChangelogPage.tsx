@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.117.6',
+    date: '2026-07-09',
+    title: '404 페이지 추가 + 링크 공유 카드 이미지 수정',
+    type: 'fix',
+    items: [
+      { category: '전체', desc: '존재하지 않는 주소로 접속하면 빈 화면 대신 안내 페이지가 표시됩니다.' },
+      { category: '공유', desc: '카카오톡·슬랙 등에 링크를 공유할 때 미리보기 이미지가 깨져 있던 문제를 수정했습니다.' },
+    ],
+  },
+  {
     version: 'v0.117.5',
     date: '2026-07-09',
     title: '요금제 "/월" 표기 정정',

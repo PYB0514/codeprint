@@ -803,3 +803,13 @@ const fetchGraph = useCallback(async () => {
 **★런타임 검증 중 발견한 기존 버그(이번 스코프와 무관, 수정 안 함) — `TeamsPage` 비로그인 접근 시 블랙 화면.** 비로그인 상태로 `/teams` 진입 시 `GET /api/teams/mine`이 401 JSON이 아닌 302(`/oauth2/authorization/github`)를 반환(curl로 확인) → axios가 리다이렉트를 투명하게 따라가 OAuth 페이지 HTML을 `res.data`로 받음 → `setTeams(문자열)` → `.map` 호출 시 `TypeError: teams.map is not a function`으로 전체 렌더 크래시. `ERROR_TRACKER.md` FE-22로 기록, 백로그 등재만 하고 이번 세션은 미수정(스코프 외).
 
 **결과.** `tsc -b` 통과. claude-in-chrome 실 로그인 세션(사용자 GitHub OAuth)으로 확인 — 좌석 증가 섹션 "좌석당 4,900원 · 1회 결제 · 현재 5석" + 안내 문구 정상 렌더, "새 팀 만들기" 모달 "Pro · Desktop · 좌석당 4,900원 · 총 24,500원 (1회 결제)" + 동일 안내 문구 정상 렌더, 콘솔 에러 없음. 랜딩 요금제 카드는 Claude Preview DOM 조회로 "₩9,900"·"1회 결제 · 팀은 좌석당 ₩4,900" 렌더 확인.
+
+## 런칭 갭 A2·A3 — OG 이미지 + 404 페이지 (2026-07-09)
+
+**문제.** PRODUCT_STRATEGY.md §15.3 A2·A3 — ①`index.html`이 `og-image.png`를 참조하나 `public/`에 실파일이 없어 카톡·슬랙·트위터 링크 공유 카드가 전부 깨진 이미지로 노출(링크 공유가 핵심 기능인 서비스에 치명). ②`App.tsx`에 catch-all 라우트가 없어 잘못된/깨진 링크(스냅샷 링크 오타 포함)가 빈 화면으로 떨어짐.
+
+**결정.**
+1. **404(A3)** — `NotFoundPage.tsx` 신규(기존 `ContactPage` 스타일 그대로 재사용: `AppHeader`+`Footer`+`bg-gray-950`), `App.tsx`에 `<Route path="*" element={<NotFoundPage />} />`를 라우트 목록 맨 끝에 추가. "홈으로 이동"·"문의하기" 링크 제공. `frontend/vercel.json`이 이미 전체 경로를 `index.html`로 리라이트하므로 새로고침 시에도 클라이언트 라우팅이 정상 처리됨(별도 서버 설정 불필요, 확인만 함).
+2. **OG 이미지(A2)** — 랜딩 히어로와 동일한 브랜드 톤(`bg-gray-950` 배경, favicon.svg의 보라·파랑 그라디언트, "GitHub 레포를 인터랙티브 회로도로" 카피)으로 1200×630 카드 제작. **제작 방식 — 브라우저 스크린샷 대신 Node `@napi-rs/canvas`로 직접 픽셀 렌더링**: 처음엔 정적 HTML(`_og-draft.html`)을 만들어 claude-in-chrome의 `zoom(save_to_disk)`으로 캡처하려 했으나, 저장된 파일의 실제 디스크 경로를 Bash/PowerShell 양쪽에서 찾지 못함(브라우저 확장 호스트가 로컬 파일시스템 밖에 저장하는 것으로 추정) — 세션 스크래치 디렉터리에 `@napi-rs/canvas`(Node 네이티브 캔버스, 프로젝트 `package.json`에는 추가하지 않음)를 임시 설치해 시스템 폰트(`malgun.ttf`/`malgunbd.ttf`)로 직접 그려 `frontend/public/og-image.png`에 저장. **탈락**: `pip install pillow`(사내망 SSL 인증서 검증 실패로 설치 자체 불가) — `npm`은 같은 환경에서 정상 동작해 npm 생태계 경로로 전환.
+
+**결과.** `tsc -b` 통과. `file` 명령으로 PNG 실제 픽셀 크기 1200×630(8-bit RGBA) 확인. claude-in-chrome으로 `/some-nonexistent-page` 접속 시 404 페이지 렌더 + "홈으로 이동" 클릭 시 `/`로 정상 이동 확인. `/og-image.png` 직접 접속으로 Vite 정적 서빙 확인(브라우저 탭 제목에 "(1200×630)" 표시로 실제 렌더 크기까지 확인). 배포 후 실제 OG 카드는 카카오톡·슬랙 등 외부 크롤러 캐시 특성상 이번 세션에서 직접 확인 불가 — 배포 후 Facebook Sharing Debugger 등으로 재확인 권장(후속 확인 항목, 코드는 정상).
