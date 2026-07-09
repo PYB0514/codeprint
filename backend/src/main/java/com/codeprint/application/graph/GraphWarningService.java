@@ -67,6 +67,12 @@ public class GraphWarningService {
             // 경고 발생 위치 파일 — primary 노드(첫 nodeId)의 경로. 그래프 없는 PR 코멘트에서 위치 표시용
             attachPrimaryFile(w, idToFilePath);
         }
+        // 타입→파일→메시지 안정 정렬 — parallelStream 파싱(#363) 이후 실행마다 경고 집계 순회 순서가 달라져
+        // PR 코멘트 diff 노이즈·UI 목록이 재분석마다 튀던 문제 해소(내용은 이미 결정적, 순서만 비결정적이었음)
+        warnings.sort(Comparator
+                .comparing((Map<String, Object> w) -> String.valueOf(w.get("type")))
+                .thenComparing(w -> String.valueOf(w.getOrDefault("file", "")))
+                .thenComparing(w -> String.valueOf(w.get("message"))));
         return warnings;
     }
 

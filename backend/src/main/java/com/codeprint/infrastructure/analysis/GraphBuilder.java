@@ -191,6 +191,11 @@ public class GraphBuilder {
                     ParsedFile bestMatch;
                     if (targetClass != null) {
                         bestMatch = resolveQualifiedCall(callerFile, calleeFunc, targetClass, parsedFiles);
+                    } else if ("Java".equals(callerFile.language()) && callerFile.functions().contains(calleeFunc)) {
+                        // 자기 파일에 이미 동명 정의가 있으면 Java 의미론상 그게 확정 우선 — cross-file 동명 후보는
+                        // 아예 보지 않음(위 sameFile 마커 엣지로 이미 정확히 기록됨). 안 그러면 resolveBareCall이
+                        // 전역 폴백으로 엉뚱한 동명 함수를 골라 phantom cross-file 엣지가 중복 생성됨(패턴 A).
+                        continue;
                     } else {
                         bestMatch = resolveBareCall(callerFile, calleeFunc, parsedFiles, interfaceToImplFiles, true);
                         if (bestMatch == null) {

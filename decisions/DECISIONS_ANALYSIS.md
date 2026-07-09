@@ -1541,3 +1541,15 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **다음(수정 트랙 소항목).** 경고 방출 직전 안정 정렬(타입→파일→메시지) 1줄 — 저위험. 수정 후 동일 2회 실행 diff=0으로 검증.
 
 **한계.** 1회 쌍 비교, analyzeLocal(백엔드 Java 309파일) 스코프 — 전 언어 파이프라인은 미검증.
+
+## 엣지 정확도 수정 — phantom 패턴 A(Java 자기정의 우선) + 경고 안정 정렬 (2026-07-09)
+
+**문제.** 1차 감사(2026-07-07)에서 확정한 두 항목을 실제로 고침. ①**패턴 A** — Java bare 호출 해소에서 caller 자기 파일에 이미 동명 함수가 있어도(예: `McpRpcController.handleToolCall`→`toJson`) `resolveBareCall`이 별도로 전역 폴백을 계속 시도해, 자기 파일 정의로 가는 정확한 `selfcalls` 마커 엣지와 별개로 무관한 파일의 동명 함수(`ArchitectureIntentService.toJson`)로도 phantom cross-file 엣지가 생김(전수 164쌍 확정, DECISIONS_ANALYSIS 1차 감사). ②**경고 순서 비결정성** — 결정론 측정(직전 항목)에서 확인된 "내용은 결정적, 출력 순서만 비결정적"(parallelStream 파싱 이후 경고 집계 순회 순서 미보장) 문제.
+
+**결정.**
+1. `GraphBuilder.build()`의 FUNCTION_CALL 해소 루프에서, bare 호출(`targetClass == null`)이면서 **caller 파일이 Java이고 자기 파일에 동명 함수 정의가 있는 경우** `resolveBareCall` 자체를 호출하지 않고 `continue`(cross-file 후보를 아예 안 봄). 자기 정의로의 정확한 엣지는 바로 위 `sameFile` 마커 블록에서 이미 생성돼 있으므로 정보 손실 없음. **Java 한정** — 2차 언어별 감사(2026-07-07)에서 비Java(특히 Rust `new()` 류)는 self-call도 오귀속될 수 있는 복합형이라 과대 추정 위험이 확인됐기 때문에, `callerFile.language().equals("Java")` 가드로 명시적으로 한정.
+2. `GraphWarningService.detect()`가 경고를 반환하기 직전 `type→file→message` 3단 `Comparator`로 안정 정렬 1줄 추가. gateState(집합 기반)엔 원래도 영향 없었지만, PR 코멘트 diff 노이즈·UI 경고 목록 재분석마다 튀는 문제를 해소.
+
+**결과.** 신규 단위 테스트 2종(`GraphBuilderTest`) — Java에서 자기정의 있으면 cross-file phantom 미생성(sameFile 엣지 1개만 존재 확인) / 비Java(Go)는 기존 동작(cross-file 폴백) 유지 확인. 전체 백엔드 테스트 green. **자가검사(`analyzeLocal`) 결정론 재검증** — 동일 소스 2회 연속 실행 stdout diff = 0(타임스탬프 로그 1줄 제외 완전 일치, 이전 항목에서 발견된 "analyzeBranch↔onAuthenticationSuccess 자리 교환" 비결정성 재현 안 됨 — 안정 정렬로 해소 확인). HIGH_FAN_OUT 5건(run·analyzeBranch·analyze·from·onAuthenticationSuccess) — 기존 베이스라인과 동일, 패턴 A 수정으로 인한 카운트 변화 없음(예상대로 — `toJson`은 fan-out 임계 근처 함수가 아님).
+
+**★부수 발견 — 이번 자가검사에서 CROSS_DOMAIN_CALL 1건 신규 노출(패턴 A 수정과 무관, 이번 세션 이전 PR #477의 회귀).** `graph/searchPublicProjects → project/searchPublic`(`GraphFacade.searchPublicProjects`가 `ProjectQueryService.searchPublic`을 직접 호출) — MCP 진입점 수정(PR #477) 당시 코드 리뷰는 했으나 `codeprint` MCP 커넥터 미연결로 `analyzeLocal` 자가검사를 생략했던 게 원인. CLAUDE.md §10 원칙(CROSS_DOMAIN_CALL은 자기 프로젝트 0개 확정)에 따라 별도 PR로 즉시 수정 예정(port/adapter 역전) — 상세는 다음 항목.
