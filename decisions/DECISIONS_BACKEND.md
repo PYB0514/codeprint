@@ -1339,3 +1339,13 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** 신규 백엔드 테스트 — `RepoMapServiceTest` 7종(루트명 산출·주석 유무 표시·함수 알파벳 정렬·다중 디렉터리 분기 표시·DB_TABLE 등 비FILE/FUNCTION 노드 제외·파일 없을 때 "project" 폴백), `McpRpcControllerTest`에 `get_repo_map` 1종 추가(6개 툴 카운트 갱신), `GraphControllerOwnershipTest`에 `getContextMd` 소유권 검증 2종(비소유자 차단·타 프로젝트 graphId 차단) 추가. `gradlew test` 전체 통과. `npx tsc -b` 통과. **런타임 검증** — ① `get_repo_map`을 `codeprint` MCP 미접속 상태에서(하네스 세션 시작 후 신규 등록이라 재접속 불가) `curl -X POST /mcp/rpc`로 직접 호출, 자기 프로젝트(1,673+ 노드) 실 데이터로 중첩 트리+한국어 함수 주석이 정확히 포함된 마크다운 확인. ② claude-in-chrome 실 로그인 세션에서 GraphPage "AI 컨텍스트" 버튼과 동일한 `fetch('/api/projects/{id}/graph/context-md')` 호출 → 200, 235KB 콘텐츠, 첫 줄 `# project — 프로젝트 구조` 확인(소유자 인증 경로 정상). 콘솔 에러 없음.
 
 **한계.** §16.3 포맷 강화(도메인 구조·API 표면·DB 테이블·경고 요약 통합, API_ENDPOINT 노드 실체화 선행 필요)는 이번 스코프 밖 — 사용자 지시대로 2차 작업으로 분리, 다음 착수 시 "이중작업 방지" 기준으로 어떤 섹션이 실제로 유효한지부터 재확인.
+
+## FE-22 근본 수정 — 미인증 API 요청이 401 대신 OAuth 302로 응답하던 문제 (2026-07-09, codeprint_108)
+
+**문제.** `ERROR_TRACKER.md` FE-22(2026-07-09 codeprint_107에서 발견·미수정 등록) — 비로그인 상태로 `/teams` 접근 시 블랙 화면(`teams.map is not a function`). 원인은 `SecurityConfig`가 `.oauth2Login()`만 설정하고 별도 `authenticationEntryPoint`를 지정하지 않아, Spring Security 기본값(`LoginUrlAuthenticationEntryPoint`)이 미인증 요청 전부에 `302 Location: /oauth2/authorization/github`를 반환 — axios가 이를 투명하게 따라가 OAuth 인가 페이지(HTML)를 받고 `res.data`가 배열 대신 HTML 문자열이 되어 `.map()` 호출에서 크래시. FE-22 기록 당시 "다른 보호된 페이지도 동일 패턴일 가능성 — 전수 조사는 안 함"이라 남겨뒀던 항목.
+
+**결정.** 프론트가 이 백엔드 API를 fetch/axios로만 호출하고(뷰를 직접 렌더링하지 않는 순수 API 서버, 로그인 시작은 permitAll된 `/oauth2/**`로 직접 이동하므로 이 인증 실패 경로에 걸리지 않음) 확인한 뒤, `SecurityConfig`에 `.exceptionHandling(ex -> ex.authenticationEntryPoint(...))`를 추가해 **모든** 미인증 요청에 302 대신 401 JSON(`{"error":"Unauthorized"}`)을 반환하도록 통일 — 경로별 분기(API vs 페이지) 없이 하나로 고정. 프론트는 이미 `main.tsx`의 axios 전역 인터셉터가 401을 리프레시 토큰 재시도로 처리하고 있어서(리프레시도 실패하면 `/`로 이동) 프론트 변경이 전혀 필요 없었다 — 백엔드 응답 형식만 API 계약대로 맞추면 기존 인프라가 그대로 흡수. 페이지별로 302→HTML 오염을 개별 방어하는 대신 진입점 하나에서 근본 차단해, FE-22가 우려했던 "다른 보호된 페이지도 동일 패턴" 전체를 한 번에 해소.
+
+**결과.** `gradlew compileJava test` 전체 통과(기존 SecurityConfig 대상 테스트 없어 신규 회귀 없음). **런타임 검증** — 백엔드 재기동 후 `curl -i`로 `/api/teams/mine`·`/api/users/me`를 쿠키 없이 호출 → 응답이 `302`에서 `401`(`Content-Type: application/json`, 24바이트 본문)로 전환됨을 확인. `codeprint` MCP `get_warnings` 자가검사 — HIGH_FAN_OUT 5건 베이스라인 유지.
+
+**한계.** 실제 로그아웃 브라우저 세션에서 `/teams` 페이지 렌더링까지의 전체 E2E는 미검증(현재 세션이 로그인 상태 유지 중이라 로그아웃 시 다른 검증 작업에 지장) — curl로 근본 원인(HTTP 응답 형식)이 해소됐음은 프로토콜 레벨로 확정했으나, 다음 세션에서 로그아웃 브라우저로 최종 확인 권장. `ERROR_TRACKER.md` FE-22 항목은 [해결]로 갱신.
