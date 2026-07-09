@@ -29,7 +29,27 @@ public class GraphBuilder {
         "ifPresent", "getOrDefault", "computeIfAbsent", "anyMatch", "allMatch",
         "noneMatch", "findFirst", "toList",
         // String/Pattern 정규식 메서드 — Matcher.matches()·str.matches()·Pattern.matcher() 의 전역 폴백 phantom 엣지 차단
-        "matches", "matcher"
+        "matches", "matcher",
+        // Stream 최종 연산 — .collect(...)가 레포 내 동명 도메인 메서드(예: AdminMetricsQuery.collect)로
+        // 오귀속되던 사각(엣지 정확도 패턴 B, 자기 레포 실측)
+        "collect", "reduce",
+        // Mockito/JUnit/AssertJ 정적 임포트 — 테스트 파일 전역에서 쓰이는 이름이라 폴백 시 레포 내 동명
+        // 도메인 메서드(예: WebhookSignatureVerifier.verify)로 오귀속되기 가장 쉬운 이름들
+        "verify", "verifyNoMoreInteractions", "verifyNoInteractions",
+        "when", "thenReturn", "thenThrow", "doReturn", "doThrow", "doNothing",
+        "given", "willReturn", "willThrow", "reset",
+        "assertThat", "assertEquals", "assertTrue", "assertFalse",
+        "assertNull", "assertNotNull", "assertThrows"
+    );
+
+    // 한정 호출(targetClass::method)의 targetClass가 이 목록에 있으면 해소를 아예 시도하지 않는다(엣지 정확도
+    // 패턴 B, qualified 호출용). 한정 호출은 bare 호출과 달리 import 스코프 없이 파일명/declaredTypes만으로
+    // 매칭하므로, 레포가 JDK/테스트 프레임워크와 우연히 동명인 클래스를 따로 정의하면(예: 자체 DTO
+    // "HttpResponse") 그쪽 메서드로 잘못 연결된다 — 실제 타깃은 JDK/외부 타입(그래프에 노드 없음).
+    private static final Set<String> EXTERNAL_QUALIFYING_CLASS_NAMES = Set.of(
+        "HttpResponse", "HttpRequest", "Optional", "Stream", "Collectors",
+        "Arrays", "Collections", "Objects", "Matcher", "Pattern",
+        "Files", "Paths", "Mockito", "Assertions", "Assert"
     );
 
     // 분석된 파일 목록으로 그래프와 노드/엣지를 생성하여 저장
@@ -141,6 +161,14 @@ public class GraphBuilder {
             }
         }
 
+        // Java 클래스명 → ParsedFile 인덱스 — 상속 체인(extends) 조상 조회용(엣지 정확도 패턴 A')
+        Map<String, ParsedFile> javaClassNameToFile = new HashMap<>();
+        for (ParsedFile pf : parsedFiles) {
+            if ("Java".equals(pf.language())) {
+                javaClassNameToFile.put(extractFileNameWithoutExt(pf.filePath()), pf);
+            }
+        }
+
         // 파일 간 FUNCTION_CALL 엣지 생성 — 구현체가 있으면 인터페이스보다 구현체로 연결
         Set<String> usedEdgeIds = new HashSet<>();
         for (ParsedFile callerFile : parsedFiles) {
@@ -188,14 +216,24 @@ public class GraphBuilder {
 
                     // callee 파일 해소: 클래스명 명시 호출은 클래스명으로 정확 매칭,
                     // bare-name 호출은 caller가 실제 import한 파일로 한정(정확도) 후 없으면 전역 폴백(recall 보존)
+                    boolean isJava = "Java".equals(callerFile.language());
+                    // 자기 파일엔 정의가 없지만 상속 체인의 조상이 실제로 정의하는 경우(예: 자식이 호출하는
+                    // text()가 부모 AbstractTreeSitterAnalyzer에 있음) 미리 조회 — 일반 resolveBareCall(전역
+                    // 동명 탐색)에 맡기면 무관한 동명 함수로 phantom 연결될 수 있다(엣지 정확도 패턴 A').
+                    ParsedFile inheritedMatch = (isJava && targetClass == null)
+                            ? resolveInheritedCall(callerFile, calleeFunc, javaClassNameToFile) : null;
+
                     ParsedFile bestMatch;
                     if (targetClass != null) {
+                        if (EXTERNAL_QUALIFYING_CLASS_NAMES.contains(targetClass)) continue;
                         bestMatch = resolveQualifiedCall(callerFile, calleeFunc, targetClass, parsedFiles);
-                    } else if ("Java".equals(callerFile.language()) && callerFile.functions().contains(calleeFunc)) {
+                    } else if (isJava && callerFile.functions().contains(calleeFunc)) {
                         // 자기 파일에 이미 동명 정의가 있으면 Java 의미론상 그게 확정 우선 — cross-file 동명 후보는
                         // 아예 보지 않음(위 sameFile 마커 엣지로 이미 정확히 기록됨). 안 그러면 resolveBareCall이
                         // 전역 폴백으로 엉뚱한 동명 함수를 골라 phantom cross-file 엣지가 중복 생성됨(패턴 A).
                         continue;
+                    } else if (inheritedMatch != null) {
+                        bestMatch = inheritedMatch;
                     } else {
                         bestMatch = resolveBareCall(callerFile, calleeFunc, parsedFiles, interfaceToImplFiles, true);
                         if (bestMatch == null) {
@@ -621,6 +659,23 @@ public class GraphBuilder {
             }
         }
         return bestMatch;
+    }
+
+    // Java 상속 체인(extends)을 타고 올라가 calleeFunc를 정의한 가장 가까운 조상 파일을 찾는다(엣지 정확도 패턴 A').
+    // 순환 상속(잘못된 소스나 분석 오류) 방어를 위해 방문한 클래스명을 추적해 무한루프를 막는다.
+    private ParsedFile resolveInheritedCall(ParsedFile callerFile, String calleeFunc,
+                                            Map<String, ParsedFile> javaClassNameToFile) {
+        Set<String> visited = new HashSet<>();
+        visited.add(extractFileNameWithoutExt(callerFile.filePath()));
+        ParsedFile current = callerFile;
+        while (true) {
+            String parentName = current.extendedClass();
+            if (parentName == null || !visited.add(parentName)) return null;
+            ParsedFile parent = javaClassNameToFile.get(parentName);
+            if (parent == null) return null;
+            if (parent.functions().contains(calleeFunc)) return parent;
+            current = parent;
+        }
     }
 
     // 두 파일 경로가 같은 디렉터리(패키지)에 있는지

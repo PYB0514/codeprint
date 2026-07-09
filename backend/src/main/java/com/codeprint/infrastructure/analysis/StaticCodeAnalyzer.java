@@ -147,8 +147,9 @@ public class StaticCodeAnalyzer {
         List<RawSqlAccess> rawSqlAccesses = extractRawSqlAccesses(content);
         List<String> frameworkAnnotatedMethods = extractFrameworkAnnotatedMethods(masked, language);
         List<DbAccess> dbAccesses = extractDbAccesses(masked, language);
+        String extendedClass = extractExtendedClass(masked, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함
@@ -698,6 +699,16 @@ public class StaticCodeAnalyzer {
             if (!name.isEmpty()) result.add(name);
         }
         return result;
+    }
+
+    // "class Foo extends Bar"에서 상위 클래스명 추출 — 상속 메서드 호출 해소용(엣지 정확도 패턴 A', Java 한정).
+    // 제네릭 타입 파라미터 경계(class Foo<T extends Bound>)와 실제 상속을 구분하려고 "class 이름(<...>)? extends"
+    // 형태만 매칭한다 — extends 직후 리터럴이 없으면(제네릭 바운드뿐이면) 매치 자체가 실패해 null을 반환한다.
+    // Repository 인터페이스 상속(extractRepositoryEntityClass)은 "interface"가 아닌 "class" 키워드 요구로 무충돌.
+    private String extractExtendedClass(String content, String language) {
+        if (!language.equals("Java")) return null;
+        Matcher m = Pattern.compile("\\bclass\\s+\\w+(?:<[^{]*?>)?\\s+extends\\s+(\\w+)").matcher(content);
+        return m.find() ? m.group(1) : null;
     }
 
     // @Entity 클래스에서 private 필드를 칼럼 정보로 추출 — @Column(name=) 우선, 없으면 snake_case 변환
