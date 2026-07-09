@@ -1287,3 +1287,16 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 7. `/mcp/rpc` 레이트리밋은 이미 PR #472(`RateLimitFilter` 버킷 일반화)에서 커버돼 있어 이번 수정 불필요(확인만 함).
 
 **결과.** `gradlew compileJava compileTestJava test` 전체 통과. 신규 단위 테스트 — `McpRpcControllerTest`(이름 매칭+최신 그래프 반환, 그래프 없는 프로젝트 제외), `ProjectQueryServiceTest.searchPublic_*`(이름/URL 필터, query null 시 전체 반환), `GraphFacadeTest.searchPublicProjects_delegates`. 실서버 curl 검증(백엔드 로컬 기동) — `initialize`에서 `serverInfo.version`="0.117.5" 확인, `tools/list`에서 5개 설명 전부 영문 확인, `search_public_projects{query:"codeprint"}`로 게시글 없는 codeprint 자기 프로젝트가 정상 발견되고(수정 전 실패 사례) `latestGraphId`가 실제 최신 그래프 UUID인 것을 confirm, query 없이 호출 시 gin·sinatra·Newtonsoft.Json 등 공개 프로젝트 10건 전체 목록 확인.
+
+## 런칭 갭 A1 — 신고 버튼(게시글·댓글) → 관리자 큐 (2026-07-09)
+
+**문제.** PRODUCT_STRATEGY.md §15.3 A1 — 공개 UGC(게시글·댓글)에 신고 수단이 전무해 관리자가 부적절한 콘텐츠를 수동으로만 인지할 수 있었음(2026-07-08 사용자 확정: 런칭 전 필수 최소 안전장치).
+
+**결정.** `domain/community`에 이미 있는 `Feedback`(사용자 문의) 기능과 **완전히 동일한 패턴**으로 구현 — 이 코드베이스의 "단순 관리자 큐" 표준 구조라 별도 Application Service 계층 없이 Controller가 Repository를 직접 사용(`FeedbackController`와 동일, Repository는 `JpaRepository` 직접 상속으로 domain/infra 분리도 생략 — Feedback도 그렇게 돼 있음).
+1. `Report` 엔티티 신규(`reporterId`, `targetType`(POST/COMMENT), `targetId`, `reason`, `status`(OPEN/RESOLVED)) + `ReportRepository`(`JpaRepository` 직접 상속) + `V52__add_reports.sql`.
+2. `ReportController` — `POST /api/reports`(제출, 인증 필요, targetType 화이트리스트+targetId UUID 검증) · `GET /api/reports/admin`(관리자 전체 조회) · `PATCH /api/reports/admin/{id}/status`(OPEN↔RESOLVED). `SecurityConfig` 변경 불필요(`anyRequest().authenticated()` 기본값 + `@PreAuthorize("hasRole('ADMIN')")`로 충분 — Feedback과 동일).
+3. `RateLimitFilter`에 `POST /api/reports` 5회/분 규칙 추가(feedback과 동일 한도 — 남용 방지, "신규 추가 시 이 목록에만 추가하면 됨" 기존 관례 그대로 따름).
+4. 신고 대상 존재 여부(실제 게시글/댓글 UUID인지) 검증은 생략 — 프론트가 항상 실제 렌더된 게시글/댓글에서만 신고 버튼을 노출하므로 정상 사용 경로에서 발생 불가, API를 직접 호출한 악의적 요청이 있어도 관리자 큐에 노이즈가 늘 뿐 권한 상승 등 보안 영향 없음(Feedback도 내용 검증 없이 동일 수준).
+5. `AdminDigestService`(일일 다이제스트) 연동은 스코프 제외 — `DailyStats`·`AdminMetricsQuery` 등 여러 파일을 건드리는 확장 작업이라 A1 요구사항("신고 버튼 → 관리자 큐") 자체와 무관, 큐 화면 자체의 미처리 건수 배지(`reports.filter(status==='OPEN').length`)로 충분.
+
+**결과.** `gradlew compileJava compileTestJava test` 전체 통과(신규 테스트 없음 — `FeedbackController`도 전용 테스트가 없어 동일 선례 유지, CLAUDE.md §4 "Controller는 TDD 불필요, 런타임 검증으로 대체" 원칙과 일치). Flyway `V52` 마이그레이션 앱 기동 시 정상 적용 확인. 실 로그인 세션(claude-in-chrome)으로 E2E 검증 — 본인 게시글에는 "신고" 버튼이 정상적으로 숨겨짐(수정 버튼만 노출, `user.username !== authorUsername` 조건 확인) 확인 후, 신고 대상이 될 타인 콘텐츠가 로컬 DB에 없어 브라우저 콘솔 `fetch`로 `POST /api/reports` 직접 호출 → 201 확인 → `GET /api/reports/admin` 200 + 데이터 정확 확인 → AdminPage에서 "신고 · 미처리 1건" 렌더 확인 → "처리 완료" 클릭 → "미처리 0건"으로 즉시 반영 확인. 콘솔 에러 없음. 테스트 레코드는 검증 후 `docker exec psql`로 직접 제거해 로컬 DB 원상 복구.

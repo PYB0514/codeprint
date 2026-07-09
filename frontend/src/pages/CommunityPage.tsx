@@ -98,6 +98,9 @@ export default function CommunityPage() {
   const [linkingGraph, setLinkingGraph] = useState(false)
   const [presetOptions, setPresetOptions] = useState<{ slot: number; name: string }[]>([])
   const [selectedPresetSlot, setSelectedPresetSlot] = useState(1)
+  const [reportTarget, setReportTarget] = useState<{ type: 'POST' | 'COMMENT'; id: string } | null>(null)
+  const [reportReason, setReportReason] = useState('')
+  const [reportSubmitting, setReportSubmitting] = useState(false)
   const [postVisibility, setPostVisibility] = useState<'PUBLIC' | 'PRIVATE'>('PUBLIC')
   const [postPage, setPostPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
@@ -324,6 +327,26 @@ export default function CommunityPage() {
     await axios.delete(`/api/community/posts/${postId}`)
     setPosts((prev) => prev.filter((p) => p.id !== postId))
     if (selectedPost?.id === postId) setSelectedPost(null)
+  }
+
+  // 신고 제출 — 게시글·댓글 공용
+  const handleSubmitReport = async () => {
+    if (!reportTarget || !reportReason.trim()) return
+    setReportSubmitting(true)
+    try {
+      await axios.post('/api/reports', {
+        targetType: reportTarget.type,
+        targetId: reportTarget.id,
+        reason: reportReason.trim(),
+      })
+      alert('신고가 접수됐습니다.')
+      setReportTarget(null)
+      setReportReason('')
+    } catch {
+      alert('신고 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+    } finally {
+      setReportSubmitting(false)
+    }
   }
 
   return (
@@ -765,6 +788,14 @@ export default function CommunityPage() {
                       수정
                     </button>
                   )}
+                  {user && user.username !== selectedPost.authorUsername && (
+                    <button
+                      onClick={() => setReportTarget({ type: 'POST', id: selectedPost.id })}
+                      className="text-xs text-gray-600 hover:text-red-400 transition-colors"
+                    >
+                      신고
+                    </button>
+                  )}
                 </div>
               </div>
               {!editingPost && (
@@ -841,6 +872,15 @@ export default function CommunityPage() {
                       ✕
                     </button>
                   )}
+                  {user && user.username !== c.authorUsername && (
+                    <button
+                      onClick={() => setReportTarget({ type: 'COMMENT', id: c.id })}
+                      className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                      title="댓글 신고"
+                    >
+                      🚩
+                    </button>
+                  )}
                 </div>
               ))}
               {user && (
@@ -864,6 +904,39 @@ export default function CommunityPage() {
           </div>
         )}
       </main>
+
+      {/* 신고 모달 */}
+      {reportTarget && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-lg font-bold mb-4">{reportTarget.type === 'POST' ? '게시글 신고' : '댓글 신고'}</h2>
+            <textarea
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              placeholder="신고 사유를 입력해주세요"
+              maxLength={500}
+              rows={4}
+              autoFocus
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+            />
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={() => { setReportTarget(null); setReportReason('') }}
+                className="text-sm text-gray-400 hover:text-white px-4 py-2 transition"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSubmitReport}
+                disabled={reportSubmitting || !reportReason.trim()}
+                className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition"
+              >
+                {reportSubmitting ? '제출 중…' : '신고하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
