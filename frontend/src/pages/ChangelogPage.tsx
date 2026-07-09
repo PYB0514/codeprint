@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.117.5',
+    date: '2026-07-09',
+    title: '요금제 "/월" 표기 정정',
+    type: 'fix',
+    items: [
+      { category: '요금제', desc: '결제는 정기결제가 아닌 1회 결제인데 화면에는 "/월"로 표시되던 문제를 정정했습니다. 랜딩·팀 관리 화면 모두 "1회 결제"로 명확히 표기하고, 정기결제(자동갱신)는 아직 지원되지 않는다는 안내를 추가했습니다.' },
+    ],
+  },
+  {
     version: 'v0.117.3',
     date: '2026-07-07',
     title: '이름 정리 — 그래프 뷰어 · 스냅샷 · 링크 공유',
