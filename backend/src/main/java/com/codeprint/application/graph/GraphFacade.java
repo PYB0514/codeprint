@@ -4,6 +4,7 @@ package com.codeprint.application.graph;
 import com.codeprint.application.analysis.AnalysisApplicationService;
 import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.graph.Graph;
+import com.codeprint.domain.graph.port.ProjectSearchPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +20,7 @@ public class GraphFacade {
     private final GraphQueryService graphQueryService;
     private final ProjectQueryService projectQueryService;
     private final AnalysisApplicationService analysisApplicationService;
+    private final ProjectSearchPort projectSearchPort;
 
     // 프로젝트 소유권 확인 — 소유자 아니면 예외
     public void verifyProjectOwnership(UUID projectId, UUID userId) {
@@ -56,7 +58,7 @@ public class GraphFacade {
 
     // 공개 프로젝트 검색 — MCP search_public_projects용
     public List<com.codeprint.domain.project.Project> searchPublicProjects(String query) {
-        return projectQueryService.searchPublic(query);
+        return projectSearchPort.searchPublic(query);
     }
 
     // 그래프 버전 목록에 브랜치명을 포함하여 반환
