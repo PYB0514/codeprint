@@ -25,6 +25,9 @@ public interface ProjectRepository {
     // 특정 유저의 공개 프로젝트 목록 조회
     List<Project> findPublicByUserId(UUID userId);
 
+    // 전체 공개 프로젝트 목록 조회 (최신순) — MCP search_public_projects가 게시글 없이도 발견 가능하도록 사용
+    List<Project> findAllPublic(org.springframework.data.domain.Pageable pageable);
+
     // ID로 프로젝트 삭제
     void deleteById(UUID id);
 

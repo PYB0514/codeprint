@@ -4,6 +4,7 @@ package com.codeprint.application.project;
 import com.codeprint.domain.project.Project;
 import com.codeprint.domain.project.ProjectRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,5 +46,16 @@ public class ProjectQueryService {
             throw new IllegalStateException("Project is not public");
         }
         return project;
+    }
+
+    // 공개 프로젝트 검색 — 이름·레포 URL로 필터 (query 없으면 전체 반환, MCP search_public_projects용)
+    public List<Project> searchPublic(String query) {
+        List<Project> projects = projectRepository.findAllPublic(PageRequest.of(0, 50));
+        if (query == null || query.isBlank()) return projects;
+
+        String q = query.toLowerCase();
+        return projects.stream()
+                .filter(p -> p.getName().toLowerCase().contains(q) || p.getGithubRepoUrl().toLowerCase().contains(q))
+                .toList();
     }
 }

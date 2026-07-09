@@ -1272,3 +1272,18 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `tsc -b`·`gradlew compileJava/test` 전체 통과. 실 로그인 세션(claude-in-chrome)으로 codeprint 자기분석 프로젝트 재분석 — HIGH_FAN_OUT 13→5건 감소 확인(세션 중 일부 항목은 이전 회차 정리로 이미 13건이었음). 프론트 변경(`ArchitectureIntentPanel.tsx` A1 예시 교체)은 `decisions/DECISIONS_FRONTEND.md` 참조.
 
 **결과.** 백엔드 컴파일+전체 테스트 통과. 신규 단위 테스트 — `ProjectTest.isOwnRepo_matchesCaseInsensitive`(대소문자 무시·null 안전), `CommunityControllerAssembleTest.assemble_ownRepo`(본인/타인 레포), `UserControllerAssembleTest.assembleSummaries_ownRepo`(본인/타인/레포없음 3분기). `GraphControllerOwnershipTest`의 기존 두 테스트는 `verifyProjectOwnership`→`getOwnedProject` 시그니처 변경에 맞춰 목 대상만 교체(동작 검증 내용은 동일). ★런타임 검증: claude-in-chrome 실 로그인 세션으로 codeprint 자기분석 프로젝트 GraphPage에서 "내 레포" 뱃지 확인, 공개 gin(gin-gonic) ShareGraphPage에서 "외부 레포 분석" 뱃지 확인(둘 다 실제 소유 관계와 일치). 커뮤니티 피드는 API 응답에 `ownRepo` 필드가 정확히 내려오는 것 확인(기존 테스트 게시글은 `repoUrl` 자체가 null이라 항상 false — 정상 동작). 프론트 변경은 `decisions/DECISIONS_FRONTEND.md` 참조.
+
+## MCP 진입점 3결함 수정 + 툴 설명 영문화 + 버전 현행화 (2026-07-09)
+
+**문제.** PRODUCT_STRATEGY.md §14.5 — 2026-07-08 파일을 안 열고 MCP 툴만으로 자기 레포를 분석하는 도그푸딩 감사에서 발견된 3결함이 채널(MCP 레지스트리) 등재 전 필수 수정으로 등재돼 있었음. ①`search_public_projects`가 게시글(Post) 첨부 그래프 기반이라 **게시글 없는 공개 프로젝트를 발견할 수 없었음**(신규 사용자 진입점 차단 — 예: codeprint 자기 프로젝트 자체가 게시글이 없어 검색 불가). ②검색 필터가 게시글 제목·repoUrl만 보고 **프로젝트명(project.name)은 비교 대상이 아니었음** — "codeprint" 검색이 실패. ③`latestGraphId` 필드가 이름과 달리 실제 최신 그래프가 아니라 **게시글 첨부 시점의 그래프**를 반환. 부수로 툴 설명 5개·파라미터 설명이 한국어(비영문권 에이전트 사용성 저하)였고 `serverInfo.version`이 "0.86.17"로 스테일이었음(§14.5 항목 4).
+
+**결정.** `McpRpcController.toolSearchPublicProjects`를 게시글(Post) 기반에서 **공개 프로젝트(Project.isPublic) 직접 검색**으로 전환.
+1. `ProjectRepository`에 `findAllPublic(Pageable)` 신설(JPA: `findByIsPublicTrueOrderByCreatedAtDesc`) — 도메인 인터페이스가 이미 `Pageable`을 쓰는 기존 관례(`PostRepository`·`DirectMessageRepository`·`UserRepository`) 그대로 따름.
+2. **Controller가 `ProjectRepository`를 직접 주입받지 않고 `GraphFacade`를 거치도록 설계** — `GraphFacade`는 이미 "그래프 컨트롤러가 analysis·project 컨텍스트를 직접 주입하지 않도록 조율하는 Facade"(파일 상단 주석)로 존재해 `getPublicProject` 등을 제공 중이라, 신규 `ProjectQueryService.searchPublic(query)` → `GraphFacade.searchPublicProjects(query)` → Controller 순으로 위임 체인을 맞춤. (1차 구현에서는 `ProjectRepository`를 Controller에 직접 주입했다가, 기존 파일에 `PostRepository` 직접 주입 선례가 있어도 Facade가 이미 존재하는 이상 새 위반을 추가할 이유가 없다고 판단해 즉시 이 구조로 교체.)
+3. **latestGraphId**는 게시글 그래프 대신 `GraphQueryService.findLatestByProject(project.getId())`로 조회한 실제 최신 그래프. 그래프가 없는 공개 프로젝트(분석 이력 없음)는 다른 툴에 넘길 graphId가 없어 결과에서 제외.
+4. **검색 필터**는 `project.getName()`·`project.getGithubRepoUrl()` 둘 다 비교(대소문자 무시) — 프로젝트명 검색 결손 해소.
+5. `postTitle` 필드는 삭제(게시글 앵커 개념 자체가 없어짐, 게시글 유무와 무관하게 발견 가능해진 게 이번 수정의 요지이므로 굳이 유지할 이유 없음 — MCP 미등재라 하위 호환 대상 소비자 없음).
+6. 툴 설명 5개(search_public_projects/get_graph_overview/get_warnings/find_nodes/get_node_neighbors) + 전체 파라미터 설명을 영문으로 번역. `serverInfo.version` "0.86.17" → "0.117.5"(현재 태그, 자동 배선 없는 스냅샷 값이라 다음 릴리스 시 다시 스테일해질 수 있음 — 알려진 한계로 남김, 라이브 버전 주입 시스템은 이번 스코프 밖).
+7. `/mcp/rpc` 레이트리밋은 이미 PR #472(`RateLimitFilter` 버킷 일반화)에서 커버돼 있어 이번 수정 불필요(확인만 함).
+
+**결과.** `gradlew compileJava compileTestJava test` 전체 통과. 신규 단위 테스트 — `McpRpcControllerTest`(이름 매칭+최신 그래프 반환, 그래프 없는 프로젝트 제외), `ProjectQueryServiceTest.searchPublic_*`(이름/URL 필터, query null 시 전체 반환), `GraphFacadeTest.searchPublicProjects_delegates`. 실서버 curl 검증(백엔드 로컬 기동) — `initialize`에서 `serverInfo.version`="0.117.5" 확인, `tools/list`에서 5개 설명 전부 영문 확인, `search_public_projects{query:"codeprint"}`로 게시글 없는 codeprint 자기 프로젝트가 정상 발견되고(수정 전 실패 사례) `latestGraphId`가 실제 최신 그래프 UUID인 것을 confirm, query 없이 호출 시 gin·sinatra·Newtonsoft.Json 등 공개 프로젝트 10건 전체 목록 확인.

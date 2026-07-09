@@ -54,6 +54,11 @@ public class GraphFacade {
         return projectQueryService.getPublicProject(projectId);
     }
 
+    // 공개 프로젝트 검색 — MCP search_public_projects용
+    public List<com.codeprint.domain.project.Project> searchPublicProjects(String query) {
+        return projectQueryService.searchPublic(query);
+    }
+
     // 그래프 버전 목록에 브랜치명을 포함하여 반환
     public List<Map<String, Object>> getGraphVersionsWithBranch(UUID projectId, UUID userId) {
         projectQueryService.getProject(projectId, userId);

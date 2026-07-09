@@ -4,6 +4,7 @@ package com.codeprint.infrastructure.persistence.project;
 import com.codeprint.domain.project.Project;
 import com.codeprint.domain.project.ProjectRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -62,5 +63,11 @@ public class ProjectRepositoryImpl implements ProjectRepository {
     @Override
     public List<Project> findPublicByUserId(UUID userId) {
         return jpa.findByUserIdAndIsPublicTrue(userId);
+    }
+
+    // 전체 공개 프로젝트 목록 조회 (최신순)
+    @Override
+    public List<Project> findAllPublic(Pageable pageable) {
+        return jpa.findByIsPublicTrueOrderByCreatedAtDesc(pageable);
     }
 }
