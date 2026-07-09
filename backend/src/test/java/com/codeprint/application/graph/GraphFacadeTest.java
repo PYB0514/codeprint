@@ -4,6 +4,7 @@ package com.codeprint.application.graph;
 import com.codeprint.application.analysis.AnalysisApplicationService;
 import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.graph.Graph;
+import com.codeprint.domain.graph.port.ProjectSearchPort;
 import com.codeprint.domain.project.Project;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,8 @@ class GraphFacadeTest {
     private ProjectQueryService projectQueryService;
     @Mock
     private AnalysisApplicationService analysisApplicationService;
+    @Mock
+    private ProjectSearchPort projectSearchPort;
 
     @InjectMocks
     private GraphFacade facade;
@@ -102,10 +105,10 @@ class GraphFacadeTest {
     }
 
     @Test
-    @DisplayName("searchPublicProjects — projectQueryService에 위임")
+    @DisplayName("searchPublicProjects — projectSearchPort(어댑터 경유)에 위임")
     void searchPublicProjects_delegates() {
         Project p = Project.create(ownerId, "url", "n", null);
-        when(projectQueryService.searchPublic("codeprint")).thenReturn(List.of(p));
+        when(projectSearchPort.searchPublic("codeprint")).thenReturn(List.of(p));
 
         assertThat(facade.searchPublicProjects("codeprint")).containsExactly(p);
     }
