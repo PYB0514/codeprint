@@ -1355,3 +1355,13 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** 신규 백엔드 테스트(`GraphBuilderTest`) 3종 — controllerMappings 있으면 경로마다 노드+CONTAINS 엣지 생성, 없으면 미생성, 같은 파일 내 중복 매핑 문자열은 노드 하나만 생성. `gradlew test` 전체 통과. `npx tsc -b` 통과. **런타임 검증(claude-in-chrome 실 로그인 세션)** — codeprint 자기 프로젝트를 "지금 재분석"으로 실제 재분석 트리거(이번 세션 최초로 새 코드가 반영된 라이브 그래프 생성, 이전 검증들은 전부 과거 분석 그래프 기준이었음) → `fetch`로 확인 시 API_ENDPOINT 노드 115개 생성 확인 → 페이지 새로고침 후 캔버스 DOM 직접 조회(`document.querySelectorAll('.react-flow__node')`)로 `/api/graphs/{graphId}/nodes/{nodeId}/annotation` 등 실제 경로 라벨을 가진 노드 112개가 화면에 정상 렌더링됨을 확인(그래프 렌더러가 숨기는 노드 소수 차이는 정상 범위). 콘솔 에러 없음. `codeprint` MCP `get_warnings`를 **이번에 방금 재분석된 최신 그래프**로 자가검사(이번 세션 최초로 "진짜 최신 코드가 반영된 그래프" 기준 검사) — HIGH_FAN_OUT 5건 베이스라인 그대로, CROSS_DOMAIN_CALL·DOMAIN_IMPORTS_INFRA 0건.
 
 **한계.** 함수 단위 엣지(API_ENDPOINT→처리 FUNCTION)는 다음 세션 과제로 이월. HTTP 메서드 정보 손실(기존 `extractControllerMappings`가 Spring `@GetMapping`/`@PostMapping` 등에서 경로만 캡처하고 메서드 종류는 버림 — 기존 API_CALL 매칭도 동일한 사전 존재 한계라 이번에 새로 만든 문제 아님)도 그대로 남음 — GET/POST가 같은 경로를 쓰면 같은 API_ENDPOINT 노드로 합쳐짐.
+
+## FE-22 근본 수정 — 미인증 API 요청이 401 대신 OAuth 302로 응답하던 문제 (2026-07-09, codeprint_108)
+
+**문제.** `ERROR_TRACKER.md` FE-22(2026-07-09 codeprint_107에서 발견·미수정 등록) — 비로그인 상태로 `/teams` 접근 시 블랙 화면(`teams.map is not a function`). 원인은 `SecurityConfig`가 `.oauth2Login()`만 설정하고 별도 `authenticationEntryPoint`를 지정하지 않아, Spring Security 기본값(`LoginUrlAuthenticationEntryPoint`)이 미인증 요청 전부에 `302 Location: /oauth2/authorization/github`를 반환 — axios가 이를 투명하게 따라가 OAuth 인가 페이지(HTML)를 받고 `res.data`가 배열 대신 HTML 문자열이 되어 `.map()` 호출에서 크래시. FE-22 기록 당시 "다른 보호된 페이지도 동일 패턴일 가능성 — 전수 조사는 안 함"이라 남겨뒀던 항목.
+
+**결정.** 프론트가 이 백엔드 API를 fetch/axios로만 호출하고(뷰를 직접 렌더링하지 않는 순수 API 서버, 로그인 시작은 permitAll된 `/oauth2/**`로 직접 이동하므로 이 인증 실패 경로에 걸리지 않음) 확인한 뒤, `SecurityConfig`에 `.exceptionHandling(ex -> ex.authenticationEntryPoint(...))`를 추가해 **모든** 미인증 요청에 302 대신 401 JSON(`{"error":"Unauthorized"}`)을 반환하도록 통일 — 경로별 분기(API vs 페이지) 없이 하나로 고정. 프론트는 이미 `main.tsx`의 axios 전역 인터셉터가 401을 리프레시 토큰 재시도로 처리하고 있어서(리프레시도 실패하면 `/`로 이동) 프론트 변경이 전혀 필요 없었다 — 백엔드 응답 형식만 API 계약대로 맞추면 기존 인프라가 그대로 흡수. 페이지별로 302→HTML 오염을 개별 방어하는 대신 진입점 하나에서 근본 차단해, FE-22가 우려했던 "다른 보호된 페이지도 동일 패턴" 전체를 한 번에 해소.
+
+**결과.** `gradlew compileJava test` 전체 통과(기존 SecurityConfig 대상 테스트 없어 신규 회귀 없음). **런타임 검증** — 백엔드 재기동 후 `curl -i`로 `/api/teams/mine`·`/api/users/me`를 쿠키 없이 호출 → 응답이 `302`에서 `401`(`Content-Type: application/json`, 24바이트 본문)로 전환됨을 확인. `codeprint` MCP `get_warnings` 자가검사 — HIGH_FAN_OUT 5건 베이스라인 유지.
+
+**한계.** 실제 로그아웃 브라우저 세션에서 `/teams` 페이지 렌더링까지의 전체 E2E는 미검증(현재 세션이 로그인 상태 유지 중이라 로그아웃 시 다른 검증 작업에 지장) — curl로 근본 원인(HTTP 응답 형식)이 해소됐음은 프로토콜 레벨로 확정했으나, 다음 세션에서 로그아웃 브라우저로 최종 확인 권장. `ERROR_TRACKER.md` FE-22 항목은 [해결]로 갱신.

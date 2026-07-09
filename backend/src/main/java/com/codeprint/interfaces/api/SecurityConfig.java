@@ -3,6 +3,7 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.infrastructure.security.JwtAuthenticationFilter;
 import com.codeprint.infrastructure.security.OAuth2SuccessHandler;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,6 +48,17 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
+            // 이 백엔드는 뷰를 렌더링하지 않는 순수 API 서버라 인증 실패 응답을 받는 쪽은 항상 프론트 axios
+            // 호출뿐이다(로그인 시작은 permitAll된 /oauth2/**로 직접 이동하므로 이 지점에 안 걸림). 그런데
+            // oauth2Login()의 기본 AuthenticationEntryPoint는 302로 OAuth 인가 페이지(HTML)를 반환해,
+            // axios가 이를 투명하게 따라가 res.data가 배열 대신 HTML 문자열이 되면서 .map() 호출 시 크래시로
+            // 이어졌다(FE-22, TeamsPage 등 보호된 페이지 비로그인 접근 시 블랙 화면). 401 JSON으로 고정한다
+            // — 프론트 axios 인터셉터(main.tsx)가 이미 401을 리프레시 토큰 재시도로 정상 처리하고 있었다.
+            .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, authException) -> {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"error\":\"Unauthorized\"}");
+            }))
             .oauth2Login(oauth2 -> oauth2
                 .successHandler(oAuth2SuccessHandler)
             )

@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.121.1',
+    date: '2026-07-09',
+    title: '로그인 세션 만료 시 빈 화면 대신 정상 처리',
+    type: 'fix',
+    items: [
+      { category: '인증', desc: '로그인 세션이 만료된 상태로 팀 관리 등 보호된 페이지에 접근할 때 빈 화면이 뜨던 문제를 수정했습니다.' },
+    ],
+  },
+  {
     version: 'v0.121.0',
     date: '2026-07-09',
     title: 'API 엔드포인트 노드 추가 — 그래프에서 API 표면을 확인',
