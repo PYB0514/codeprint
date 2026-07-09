@@ -926,6 +926,70 @@ export function buildLayout(
     }
   }
 
+  // API_ENDPOINT 노드 배치 — DB_TABLE과 동일한 방식(전체 그룹 우측 세로 열),
+  // DB_TABLE 섹션이 있으면 그보다 더 오른쪽에 배치해 겹치지 않게 한다
+  const apiEndpointNodes = rawNodes.filter((n) => n.type === 'API_ENDPOINT')
+  if (apiEndpointNodes.length > 0) {
+    const API_W = 160
+    const API_H = 40
+    const API_GAP = 12
+    const API_SECTION_LABEL_H = 28
+    const apiEndpointStyle = {
+      background: '#0a1f3b',
+      border: '1.5px solid #3b82f6',
+      borderRadius: 8,
+      color: '#93c5fd',
+      fontSize: 11,
+      fontWeight: 700,
+      width: API_W,
+      height: API_H,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0 8px',
+      textAlign: 'center' as const,
+    }
+
+    let allGroupsMaxX = 0, allMinY = Infinity, allMaxY = -Infinity
+    groupPositions.forEach((pos, key) => {
+      const l = effectiveGroupLayouts.get(key)
+      if (!l) return
+      allGroupsMaxX = Math.max(allGroupsMaxX, pos.x + l.w)
+      allMinY = Math.min(allMinY, pos.y)
+      allMaxY = Math.max(allMaxY, pos.y + l.h)
+    })
+    const allCenterY = allMinY !== Infinity ? (allMinY + allMaxY) / 2 : 0
+    const dbSectionReserve = dbTableNodes.length > 0 ? (160 + 40 + 80) : 0
+    const apiSectionX = allGroupsMaxX + 80 + dbSectionReserve
+    const apiSectionY = allCenterY - (apiEndpointNodes.length * (API_H + API_GAP)) / 2
+
+    const sectionW = API_W + 40
+    const sectionH = API_SECTION_LABEL_H + apiEndpointNodes.length * (API_H + API_GAP) + API_GAP
+    result.push({
+      id: 'layer-section-api',
+      type: 'sectionNode',
+      position: { x: apiSectionX - 20, y: apiSectionY - API_SECTION_LABEL_H - 20 },
+      data: { label: 'API', color: '#3b82f6', opaqueColor: 'rgba(5,15,40,0.98)', layer: 'api', origW: sectionW, origH: sectionH + 20 },
+      width: sectionW,
+      height: sectionH + 20,
+      style: { width: sectionW, height: sectionH + 20 },
+      draggable: false,
+      selectable: false,
+      zIndex: -20,
+    } as Node)
+
+    apiEndpointNodes.forEach((apiNode, i) => {
+      result.push({
+        id: apiNode.id,
+        position: { x: apiSectionX, y: apiSectionY + i * (API_H + API_GAP) },
+        data: { label: apiNode.name },
+        width: API_W,
+        height: API_H,
+        style: apiEndpointStyle,
+      })
+    })
+  }
+
   // 엣지 — 파일 간 IMPORT 엣지, 끊긴 연결 빨간색
   const allNodeIds = new Set(result.map((n) => n.id))
   const funcIdSet = new Set(funcNodes.map((f) => f.id))

@@ -2104,7 +2104,7 @@ function GraphPageInner() {
                         title={n.comment ? `${n.name} — ${n.comment}` : n.name}
                       >
                         <span className="text-gray-600 mr-1">
-                          {n.type === 'FILE' ? '📄' : n.type === 'FUNCTION' ? 'ƒ' : n.type === 'DB_TABLE' ? '🗄' : '◎'}
+                          {n.type === 'FILE' ? '📄' : n.type === 'FUNCTION' ? 'ƒ' : n.type === 'DB_TABLE' ? '🗄' : n.type === 'API_ENDPOINT' ? '🔌' : '◎'}
                         </span>
                         {n.comment || n.name}
                       </button>
