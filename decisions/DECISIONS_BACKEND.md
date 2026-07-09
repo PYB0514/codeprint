@@ -1365,3 +1365,18 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `gradlew compileJava test` 전체 통과(기존 SecurityConfig 대상 테스트 없어 신규 회귀 없음). **런타임 검증** — 백엔드 재기동 후 `curl -i`로 `/api/teams/mine`·`/api/users/me`를 쿠키 없이 호출 → 응답이 `302`에서 `401`(`Content-Type: application/json`, 24바이트 본문)로 전환됨을 확인. `codeprint` MCP `get_warnings` 자가검사 — HIGH_FAN_OUT 5건 베이스라인 유지.
 
 **한계.** 실제 로그아웃 브라우저 세션에서 `/teams` 페이지 렌더링까지의 전체 E2E는 미검증(현재 세션이 로그인 상태 유지 중이라 로그아웃 시 다른 검증 작업에 지장) — curl로 근본 원인(HTTP 응답 형식)이 해소됐음은 프로토콜 레벨로 확정했으나, 다음 세션에서 로그아웃 브라우저로 최종 확인 권장. `ERROR_TRACKER.md` FE-22 항목은 [해결]로 갱신.
+
+## MCP 배포 채널 §14.5 — 원격 연결 검증 + version 현행화 + User-Agent 로그 (2026-07-10, codeprint_109)
+
+**문제.** `PRODUCT_STRATEGY.md` §14.5 구현 스펙 5항목 중 미착수 3건 — ①Railway 배포된 실제 원격 URL로 `claude mcp add` 접속이 실제로 성사되는지(로컬 `.mcp.json`은 `localhost:8080`만 검증된 상태, 원격 프로덕션 경로는 한 번도 실측 안 됨) ②`serverInfo.version`이 "0.117.5"로 하드코딩된 채 태그가 이미 v0.121.1까지 3단계 앞서감 ③연결 유입을 관측할 로그 수준 계측이 전무.
+
+**결정.**
+1. **원격 연결 실전 테스트** — `claude mcp add --transport http codeprint-remote-test https://codeprint.up.railway.app/mcp/rpc --scope user`로 등록 후 `claude mcp get`으로 헬스체크. 결과 `Status: ✓ Connected` 확인 — Streamable HTTP 단일 POST-JSON 응답 방식이 Claude Code 클라이언트와 실제로 호환됨을 확정(§14.5 스펙이 우려했던 "Accept 헤더 협상·초기화 시퀀스 실호환" 리스크 해소). 검증 목적 임시 등록이라 확인 직후 `claude mcp remove`로 정리 — 세션이 원래 쓰던 프로젝트 스코프 `codeprint`(localhost) 엔트리와 무관.
+2. **serverInfo.version 현행화** — `McpRpcController.buildInitializeResult()`의 하드코딩 값을 `0.121.1`(현재 최신 태그)로 갱신. §14.5가 이미 "라이브 자동 배선은 아님, 다음 릴리스 시 재스테일 가능"을 알려진 한계로 명시해뒀던 항목 — 이번엔 수동 재현행화만, 자동 배선(빌드 시점 버전 주입)은 여전히 스코프 밖(과설계 방지, 릴리스 빈도가 낮아 수동 갱신 비용이 낫다고 판단).
+3. **User-Agent 로그** — `initialize` 메서드 처리 시 `log.info("[MCP] initialize from User-Agent: {}", userAgent)` 1줄 추가. §14.5 "측정(과설계 금지): 로그 수준만, 별도 분석 인프라 없음" 원칙 그대로 — 커넥터가 접속할 때 어떤 클라이언트(Claude Code/다른 MCP 클라이언트)인지 서버 로그로만 확인 가능하게, 집계·대시보드는 만들지 않음.
+4. **README 설치 가이드 + 경계 문구** — "🔌 AI 에이전트 연동 (MCP)" 섹션 신규(연결 명령어 1줄 + 툴 6종 목록 + "대화형 조회 전용, CI/git hook 자동화 미지원" 경계 문구). 로드맵 항목도 `[ ]`→`[x]`로 갱신(레지스트리 등재만 잔여로 명시).
+5. **MCP 레지스트리 등재처 조사(착수는 보류, 조사만)** — 공식 레지스트리는 `registry.modelcontextprotocol.io`(Anthropic·GitHub·PulseMCP·Microsoft 공동 운영, `server.json`+CLI로 게시, 신원 인증은 GitHub OAuth/OIDC 또는 DNS 도메인 소유 확인, 현재 v0.1 API freeze·preview 단계). 대안 4곳: mcp.so(2만+ 등재)·smithery.ai·glama.ai/mcp·GitHub `punkpeye/awesome-mcp-servers` 목록. **실제 등재(계정 연동·공개 게시)는 외부 서비스에 프로젝트를 노출하는 행위라 이번 세션에서 실행하지 않고 조사만 — 착수는 사용자 확인 후.**
+
+**결과.** `gradlew compileJava` 통과(백엔드를 먼저 내리고 컴파일 후 `preview_start`로 재기동 — `feedback_no_gradle_while_backend_running` 준수). **런타임 검증** — 재기동 후 `curl -X POST /mcp/rpc -H "User-Agent: verify-script/1.0"`로 `initialize` 호출 → 응답 `serverInfo.version`이 `0.121.1`로 확인, 백엔드 로그에 `[MCP] initialize from User-Agent: verify-script/1.0` 라인 실제 기록 확인. 원격 연결은 위 1번 항목대로 `claude mcp get`이 "✓ Connected" 반환.
+
+**한계.** 레지스트리 실등재는 미착수(조사만, 위 5번 참조). §14.5의 나머지 항목("실사용 감사 추가 요건" 4건, 진입점 3결함, 툴 영문화)은 2026-07-09 세션에서 이미 완료 처리됨(이번 세션은 잔여 3건만 다룸).

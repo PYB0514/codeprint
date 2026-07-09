@@ -8,13 +8,16 @@ import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.graph.NodeType;
 import com.codeprint.domain.project.Project;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 public class McpRpcController {
@@ -32,13 +35,13 @@ public class McpRpcController {
 
     // MCP JSON-RPC 2.0 단일 엔드포인트 — stateless, 세션 없음
     @PostMapping("/mcp/rpc")
-    public ResponseEntity<Map<String, Object>> handle(@RequestBody Map<String, Object> req) {
+    public ResponseEntity<Map<String, Object>> handle(@RequestBody Map<String, Object> req, HttpServletRequest httpReq) {
         Object id = req.get("id");
         String method = req.get("method") instanceof String s ? s : "";
 
         try {
             Object result = switch (method) {
-                case "initialize"               -> buildInitializeResult();
+                case "initialize"               -> buildInitializeResult(httpReq.getHeader("User-Agent"));
                 case "notifications/initialized" -> Map.of();
                 case "tools/list"               -> buildToolsList();
                 case "tools/call"               -> handleToolCall(req);
@@ -53,11 +56,12 @@ public class McpRpcController {
     }
 
     // initialize 응답 — 클라이언트가 처음 연결할 때 서버 정보를 반환
-    private Map<String, Object> buildInitializeResult() {
+    private Map<String, Object> buildInitializeResult(String userAgent) {
+        log.info("[MCP] initialize from User-Agent: {}", userAgent);
         return Map.of(
                 "protocolVersion", MCP_VERSION,
                 "capabilities", Map.of("tools", Map.of()),
-                "serverInfo", Map.of("name", "codeprint", "version", "0.117.5")
+                "serverInfo", Map.of("name", "codeprint", "version", "0.121.1")
         );
     }
 

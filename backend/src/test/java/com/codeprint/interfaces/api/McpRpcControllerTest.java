@@ -10,6 +10,7 @@ import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.graph.NodeType;
 import com.codeprint.domain.project.Project;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,7 @@ class McpRpcControllerTest {
 
     @Mock private GraphFacade graphFacade;
     @Mock private GraphQueryService graphQueryService;
+    @Mock private HttpServletRequest httpRequest;
 
     private McpRpcController controller;
 
@@ -42,13 +44,14 @@ class McpRpcControllerTest {
     @BeforeEach
     void setUp() {
         controller = new McpRpcController(graphFacade, graphQueryService, new RepoMapService());
+        lenient().when(httpRequest.getHeader("User-Agent")).thenReturn("test-agent");
     }
 
     @Test
     @DisplayName("initialize — protocolVersion·serverInfo 반환")
     void initialize_returnsServerInfo() {
         var req = Map.<String, Object>of("jsonrpc", "2.0", "id", 1, "method", "initialize");
-        ResponseEntity<Map<String, Object>> resp = controller.handle(req);
+        ResponseEntity<Map<String, Object>> resp = controller.handle(req, httpRequest);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         Map<?,?> result = (Map<?,?>) resp.getBody().get("result");
@@ -61,7 +64,7 @@ class McpRpcControllerTest {
     @DisplayName("tools/list — 6개 툴과 inputSchema 반환")
     void toolsList_returnsSixTools() {
         var req = Map.<String, Object>of("jsonrpc", "2.0", "id", 2, "method", "tools/list");
-        ResponseEntity<Map<String, Object>> resp = controller.handle(req);
+        ResponseEntity<Map<String, Object>> resp = controller.handle(req, httpRequest);
 
         Map<?,?> result = (Map<?,?>) resp.getBody().get("result");
         List<?> tools = (List<?>) result.get("tools");
@@ -88,7 +91,7 @@ class McpRpcControllerTest {
         when(graphQueryService.getNodes(graphId)).thenReturn(List.of(file, func));
 
         var req = toolCallRequest("get_repo_map", Map.of("graphId", graphId.toString()));
-        ResponseEntity<Map<String, Object>> resp = controller.handle(req);
+        ResponseEntity<Map<String, Object>> resp = controller.handle(req, httpRequest);
 
         Map<?,?> toolResult = parseToolResult(resp);
         String text = (String) ((List<?>) toolResult.get("content")).stream()
@@ -114,7 +117,7 @@ class McpRpcControllerTest {
         when(graphQueryService.findLatestByProject(pid)).thenReturn(Optional.of(latestGraph));
 
         var req = toolCallRequest("search_public_projects", Map.of("query", "codeprint"));
-        ResponseEntity<Map<String, Object>> resp = controller.handle(req);
+        ResponseEntity<Map<String, Object>> resp = controller.handle(req, httpRequest);
 
         Map<?,?> toolResult = parseToolResult(resp);
         String text = (String) ((List<?>) toolResult.get("content")).stream()
@@ -136,7 +139,7 @@ class McpRpcControllerTest {
         when(graphQueryService.findLatestByProject(pid)).thenReturn(Optional.empty());
 
         var req = toolCallRequest("search_public_projects", Map.of());
-        ResponseEntity<Map<String, Object>> resp = controller.handle(req);
+        ResponseEntity<Map<String, Object>> resp = controller.handle(req, httpRequest);
 
         Map<?,?> toolResult = parseToolResult(resp);
         String text = (String) ((List<?>) toolResult.get("content")).stream()
@@ -158,7 +161,7 @@ class McpRpcControllerTest {
         var req = toolCallRequest("get_warnings", Map.of(
                 "graphId",  graphId.toString(),
                 "severity", "HIGH"));
-        ResponseEntity<Map<String, Object>> resp = controller.handle(req);
+        ResponseEntity<Map<String, Object>> resp = controller.handle(req, httpRequest);
 
         Map<?,?> toolResult = parseToolResult(resp);
         List<?> warnings = (List<?>) toolResult.get("content");
@@ -178,7 +181,7 @@ class McpRpcControllerTest {
         var req = toolCallRequest("find_nodes", Map.of(
                 "graphId", graphId.toString(),
                 "query",   "user"));
-        ResponseEntity<Map<String, Object>> resp = controller.handle(req);
+        ResponseEntity<Map<String, Object>> resp = controller.handle(req, httpRequest);
 
         Map<?,?> toolResult = parseToolResult(resp);
         String text = (String) ((List<?>) toolResult.get("content")).stream()
@@ -197,7 +200,7 @@ class McpRpcControllerTest {
                 .thenThrow(new IllegalStateException("Project is not public"));
 
         var req = toolCallRequest("get_warnings", Map.of("graphId", graphId.toString()));
-        ResponseEntity<Map<String, Object>> resp = controller.handle(req);
+        ResponseEntity<Map<String, Object>> resp = controller.handle(req, httpRequest);
 
         assertThat(resp.getBody().containsKey("error")).isTrue();
         Map<?,?> error = (Map<?,?>) resp.getBody().get("error");
@@ -208,7 +211,7 @@ class McpRpcControllerTest {
     @DisplayName("알 수 없는 method — method not found 오류")
     void unknownMethod_returnsMethodNotFound() {
         var req = Map.<String, Object>of("jsonrpc", "2.0", "id", 9, "method", "unknown/method");
-        ResponseEntity<Map<String, Object>> resp = controller.handle(req);
+        ResponseEntity<Map<String, Object>> resp = controller.handle(req, httpRequest);
 
         Map<?,?> error = (Map<?,?>) resp.getBody().get("error");
         assertThat(error).isNotNull();
