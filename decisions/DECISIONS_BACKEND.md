@@ -1380,3 +1380,16 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `gradlew compileJava` 통과(백엔드를 먼저 내리고 컴파일 후 `preview_start`로 재기동 — `feedback_no_gradle_while_backend_running` 준수). **런타임 검증** — 재기동 후 `curl -X POST /mcp/rpc -H "User-Agent: verify-script/1.0"`로 `initialize` 호출 → 응답 `serverInfo.version`이 `0.121.1`로 확인, 백엔드 로그에 `[MCP] initialize from User-Agent: verify-script/1.0` 라인 실제 기록 확인. 원격 연결은 위 1번 항목대로 `claude mcp get`이 "✓ Connected" 반환.
 
 **한계.** 레지스트리 실등재는 미착수(조사만, 위 5번 참조). §14.5의 나머지 항목("실사용 감사 추가 요건" 4건, 진입점 3결함, 툴 영문화)은 2026-07-09 세션에서 이미 완료 처리됨(이번 세션은 잔여 3건만 다룸).
+
+## §16.2 웹 버튼 레벨 옵션(summary/full) — 도메인 스코프는 후속으로 분리 (2026-07-10, codeprint_109)
+
+**문제.** PRODUCT_STRATEGY.md §16.2 "배포 형태 확장" ①웹 버튼에 스코프(전체/도메인)·레벨(summary/full) 옵션을 추가하는 항목. "AI 컨텍스트 (.md)" 다운로드가 지금까지 옵션 없이 항상 전체(파일+함수) 트리만 생성 — 대형 레포에서 불필요하게 큰 MD가 나옴.
+
+**결정.** 사용자 확인(AskUserQuestion) 결과 **레벨 옵션만 이번에, 도메인 스코프는 후속 작업으로 분리** — 도메인 스코프는 `extractDomain` 로직이 현재 프론트(`graphLayout.ts`)에만 있어, 넣으려면 이 로직을 백엔드로 이식하거나 중복 구현해야 함(§16.1이 "생성기 단일 소스화"로 막 정리한 프론트-백엔드 로직 중복 문제를 다시 만드는 셈이라 별도 작업으로 신중히 분리).
+1. `RepoMapService.generate(nodes)`는 기존 시그니처 유지(내부적으로 `generate(nodes, "full")` 위임, MCP `get_repo_map` 등 기존 호출부 무변경) + `generate(nodes, level)` 오버로드 신규 — `level="summary"`면 `funcNodes`를 빈 리스트로 만들어 함수 목록 생략, 트리 렌더링 로직은 재사용(분기 최소화).
+2. `GraphController.getContextMd`에 `@RequestParam(defaultValue = "full") String level` 추가, `repoMapService.generate(nodes, level)`로 전달.
+3. 프론트는 "내보내기" 드롭다운의 기존 "AI 컨텍스트 (.md)" 버튼 1개를 "전체"·"요약" 2개 버튼으로 분리(토글 UI 대신 기존 "내보내기 옵션 목록" 패턴 재사용 — 새 UI 패러다임 도입 안 함), 다운로드 파일명에 `-summary` 접미사로 구분.
+
+**결과.** 신규 백엔드 테스트(`RepoMapServiceTest`) 2종 — summary는 함수 생략, full(기본값 포함)은 함수 포함. `GraphControllerOwnershipTest`의 `getContextMd` 관련 2종을 새 4-arg 시그니처로 갱신(레벨 인자 미반영 시 컴파일 실패 — B-15와 동일 패턴, 이번엔 push 전 로컬 `gradlew test`로 미리 잡음). `gradlew test` 전체 통과, `npx tsc -b` 통과. **런타임 검증(claude-in-chrome 실 로그인 세션, codeprint 자기 프로젝트)** — "내보내기" 드롭다운에 "AI 컨텍스트 - 전체"·"AI 컨텍스트 - 요약" 2개 버튼 정상 렌더링 확인. "요약" 클릭 시 실제 네트워크 요청이 `?level=summary&graphId=...`로 나가고 200 응답 확인. `fetch`로 두 레벨 응답을 직접 비교 — summary 50,673자 vs full 237,900자(약 79% 축소), 함수 목록이 실제로 빠짐을 확인.
+
+**한계.** 도메인 스코프 옵션은 미착수 — 다음 착수 시 `extractDomain`을 백엔드로 이식할지, MD 생성에 한해 별도 경량 규칙으로 근사할지 설계 결정 필요.

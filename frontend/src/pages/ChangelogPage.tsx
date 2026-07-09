@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.122.0',
+    date: '2026-07-10',
+    title: 'AI 컨텍스트 다운로드에 요약 옵션 추가',
+    type: 'feature',
+    items: [
+      { category: '그래프', desc: '"AI 컨텍스트 (.md)" 다운로드에서 전체(파일+함수)와 요약(파일만) 중 선택할 수 있습니다. 대형 레포에서 더 짧은 컨텍스트가 필요할 때 유용합니다.' },
+    ],
+  },
+  {
     version: 'v0.121.1',
     date: '2026-07-09',
     title: '로그인 세션 만료 시 빈 화면 대신 정상 처리',
