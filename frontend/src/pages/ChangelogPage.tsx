@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.122.1',
+    date: '2026-07-10',
+    title: 'API 엔드포인트 흐름재생이 처리 함수까지 이어짐 (Java/Kotlin)',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: 'Java/Kotlin 컨트롤러의 API 엔드포인트에서 흐름재생을 시작하면 실제 처리 함수부터 호출 체인까지 이어서 볼 수 있습니다. 이전에는 엔드포인트에서 더 진행되지 않았습니다.' },
+    ],
+  },
+  {
     version: 'v0.122.0',
     date: '2026-07-10',
     title: 'AI 컨텍스트 다운로드에 요약 옵션 추가',

@@ -956,6 +956,55 @@ class GraphBuilderTest {
         assertThat(endpointNodeCount).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("controllerMappingFunctions로 해소된 매핑은 API_ENDPOINT → FUNCTION을 FUNCTION_CALL 엣지로 연결한다")
+    void controllerMappingFunctions_있으면_처리함수로_FUNCTION_CALL_엣지_생성() {
+        ParsedFile controller = parsedFileWithMappingsAndFunctions("src/UserController.java", "Java",
+                List.of("list", "delete"),
+                List.of("/api/users", "/api/users/{id}"),
+                Map.of("/api/users", "list", "/api/users/{id}", "delete"));
+
+        graphBuilder.build(projectId, analysisId, List.of(controller));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+        Node listEndpoint = nodeCaptor.getAllValues().stream()
+                .filter(n -> n.getType() == NodeType.API_ENDPOINT && "/api/users".equals(n.getName()))
+                .findFirst().orElseThrow();
+        Node listFunc = nodeCaptor.getAllValues().stream()
+                .filter(n -> n.getType() == NodeType.FUNCTION && "list".equals(n.getName()))
+                .findFirst().orElseThrow();
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+        boolean hasHandlerEdge = edgeCaptor.getAllValues().stream()
+                .anyMatch(e -> e.getType() == EdgeType.FUNCTION_CALL
+                        && e.getSourceNodeId().equals(listEndpoint.getId())
+                        && e.getTargetNodeId().equals(listFunc.getId()));
+        assertThat(hasHandlerEdge).isTrue();
+    }
+
+    @Test
+    @DisplayName("controllerMappingFunctions가 없으면 API_ENDPOINT에서 나가는 FUNCTION_CALL 엣지를 생성하지 않는다")
+    void controllerMappingFunctions_없으면_핸들러_엣지_미생성() {
+        ParsedFile controller = parsedFileWithMappings("src/UserController.java", "Java",
+                List.of("/api/users"));
+
+        graphBuilder.build(projectId, analysisId, List.of(controller));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+        Node endpoint = nodeCaptor.getAllValues().stream()
+                .filter(n -> n.getType() == NodeType.API_ENDPOINT)
+                .findFirst().orElseThrow();
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+        boolean hasOutgoingFunctionCall = edgeCaptor.getAllValues().stream()
+                .anyMatch(e -> e.getType() == EdgeType.FUNCTION_CALL && e.getSourceNodeId().equals(endpoint.getId()));
+        assertThat(hasOutgoingFunctionCall).isFalse();
+    }
+
     // ── 파일 수 카운트 기록 (대형 레포 절단 안내) ───────────────────────────
 
     @Test
@@ -1242,5 +1291,13 @@ class GraphBuilderTest {
     private ParsedFile parsedFileWithMappings(String path, String lang, List<String> mappings) {
         return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), mappings, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
+    }
+
+    // 컨트롤러 매핑 + 처리 함수 해소 파일 생성 헬퍼 — controllerMappingFunctions 포함(API_ENDPOINT→FUNCTION 엣지 테스트용)
+    private ParsedFile parsedFileWithMappingsAndFunctions(String path, String lang, List<String> functions,
+                                                            List<String> mappings, Map<String, String> mappingFunctions) {
+        return new ParsedFile(path, lang, functions, List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), mappings, List.of(), List.of(), List.of(), List.of(), List.of(),
+                List.of(), Map.of(), List.of(), List.of(), List.of(), null, mappingFunctions);
     }
 }

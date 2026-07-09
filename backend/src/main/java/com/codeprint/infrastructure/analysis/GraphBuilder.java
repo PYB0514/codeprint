@@ -508,8 +508,10 @@ public class GraphBuilder {
             }
         }
 
-        // API_ENDPOINT 노드 생성 + FILE → API_ENDPOINT 엣지 (컨트롤러 경로 표면 시각화 — 파일 단위 1차,
-        // 처리 함수까지 연결하는 함수 단위 엣지는 controllerMappings가 함수명을 담지 않아 후속 작업으로 분리)
+        // API_ENDPOINT 노드 생성 + FILE → API_ENDPOINT 엣지 (컨트롤러 경로 표면 시각화 — 파일 단위 1차 완료).
+        // 처리 함수까지 연결하는 함수 단위 엣지(2차, Java/Kotlin만) — controllerMappingFunctions로 해소된
+        // 매핑은 API_ENDPOINT → FUNCTION을 FUNCTION_CALL 타입으로 생성(프론트 흐름재생이 API_ENDPOINT를
+        // FUNCTION과 동일하게 FUNCTION_CALL 엣지 소스/타깃으로 취급하도록 이미 준비돼 있어 신규 타입 불필요).
         Set<String> usedApiEndpointEdgeIds = new HashSet<>();
         for (ParsedFile pf : parsedFiles) {
             if (pf.controllerMappings().isEmpty()) continue;
@@ -525,6 +527,15 @@ public class GraphBuilder {
                     usedApiEndpointEdgeIds.add(edgeId);
                     Edge endpointEdge = Edge.create(graphId, edgeId, EdgeType.CONTAINS, controllerFileId, endpointNode.getId());
                     graphRepository.saveEdge(endpointEdge);
+                }
+
+                String handlerFunc = pf.controllerMappingFunctions().get(mapping);
+                if (handlerFunc != null) {
+                    UUID handlerFuncId = funcNodeIds.get(pf.filePath() + "::" + handlerFunc);
+                    if (handlerFuncId != null) {
+                        String handlerEdgeId = extractFileName(pf.filePath()) + "-handles-" + mapping;
+                        graphRepository.saveEdge(Edge.create(graphId, handlerEdgeId, EdgeType.FUNCTION_CALL, endpointNode.getId(), handlerFuncId));
+                    }
                 }
             }
         }

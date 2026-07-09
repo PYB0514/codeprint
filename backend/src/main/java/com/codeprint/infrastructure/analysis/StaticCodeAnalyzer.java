@@ -141,6 +141,7 @@ public class StaticCodeAnalyzer {
         List<ColumnInfo> entityColumns = extractEntityColumns(masked, language);
         List<String> apiCalls = extractApiCalls(content, language);
         List<String> controllerMappings = extractControllerMappings(content, language);
+        Map<String, String> controllerMappingFunctions = extractControllerMappingFunctions(content, language);
         List<String> implementedInterfaces = extractImplementedInterfaces(masked, language);
         List<String> asyncMethods = extractAsyncMethods(masked, language);
         List<String> jsxComponents = extractJsxComponents(masked, relativePath);
@@ -149,7 +150,7 @@ public class StaticCodeAnalyzer {
         List<DbAccess> dbAccesses = extractDbAccesses(masked, language);
         String extendedClass = extractExtendedClass(masked, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함
@@ -969,6 +970,46 @@ public class StaticCodeAnalyzer {
         }
 
         return result;
+    }
+
+    // Java/Kotlin(Spring) 컨트롤러 매핑 → 실제 처리 함수명 (1차 함수 단위 확장, 다른 언어는 후속 작업)
+    // 어노테이션 위치 바로 다음에 나오는 함수 선언을 핸들러로 간주 — extractControllerMappings와 동일한
+    // prefix 합성 규칙을 반복해 키 문자열을 일치시킨다(둘이 서로 다른 메서드라 상태 공유는 안 함).
+    private Map<String, String> extractControllerMappingFunctions(String content, String language) {
+        if (!language.equals("Java") && !language.equals("Kotlin")) return Map.of();
+        Map<String, String> result = new LinkedHashMap<>();
+
+        String classPrefix = "";
+        Matcher cm = Pattern.compile(
+            "@RequestMapping\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']+)[\"']"
+        ).matcher(content);
+        if (cm.find()) classPrefix = cm.group(1);
+
+        Matcher mm = Pattern.compile(
+            "@(?:Get|Post|Put|Delete|Patch)Mapping(?:\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']*)[\"']\\s*\\))?",
+            Pattern.CASE_INSENSITIVE
+        ).matcher(content);
+        while (mm.find()) {
+            String methodPath = mm.group(1);
+            String key = methodPath == null ? classPrefix : classPrefix + methodPath;
+            if (key.isEmpty()) continue;
+            String funcName = findEnclosingFunction(content, language, mm.end());
+            if (funcName != null) result.put(key, funcName);
+        }
+        return result;
+    }
+
+    // 지정 위치 이후 처음 나오는 함수 선언명 반환 — 어노테이션을 다음 함수 선언에 매칭할 때 사용, 못 찾으면 null
+    private String findEnclosingFunction(String content, String language, int fromPosition) {
+        Pattern pattern = getFunctionPattern(language);
+        if (pattern == null) return null;
+        Matcher m = pattern.matcher(content);
+        while (m.find()) {
+            if (m.start() < fromPosition) continue;
+            String name = extractFirstGroup(m);
+            if (name != null && !isKeyword(name)) return name;
+        }
+        return null;
     }
 
     // 식별자가 언어 예약어인지 확인
