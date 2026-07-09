@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 
 @Component
 @RequiredArgsConstructor
@@ -504,6 +505,27 @@ public class GraphBuilder {
                 Edge instEdge = Edge.create(graphId, edgeIdentifier, EdgeType.INSTANTIATION,
                         sourceFileId, targetFileId);
                 graphRepository.saveEdge(instEdge);
+            }
+        }
+
+        // API_ENDPOINT 노드 생성 + FILE → API_ENDPOINT 엣지 (컨트롤러 경로 표면 시각화 — 파일 단위 1차,
+        // 처리 함수까지 연결하는 함수 단위 엣지는 controllerMappings가 함수명을 담지 않아 후속 작업으로 분리)
+        Set<String> usedApiEndpointEdgeIds = new HashSet<>();
+        for (ParsedFile pf : parsedFiles) {
+            if (pf.controllerMappings().isEmpty()) continue;
+            UUID controllerFileId = fileNodeIds.get(pf.filePath());
+            if (controllerFileId == null) continue;
+
+            for (String mapping : new LinkedHashSet<>(pf.controllerMappings())) {
+                Node endpointNode = Node.create(graphId, NodeType.API_ENDPOINT, mapping, pf.filePath(), pf.language());
+                graphRepository.saveNode(endpointNode);
+
+                String edgeId = extractFileName(pf.filePath()) + "-endpoint-" + mapping;
+                if (!usedApiEndpointEdgeIds.contains(edgeId)) {
+                    usedApiEndpointEdgeIds.add(edgeId);
+                    Edge endpointEdge = Edge.create(graphId, edgeId, EdgeType.CONTAINS, controllerFileId, endpointNode.getId());
+                    graphRepository.saveEdge(endpointEdge);
+                }
             }
         }
 

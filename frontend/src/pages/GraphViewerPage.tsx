@@ -356,7 +356,7 @@ function GraphViewerInner() {
   const indexItems = nodeSearch.trim()
     ? searchNodes(rawNodesCache, nodeSearch).map(n => ({
         id: n.id,
-        icon: n.type === 'FILE' ? '📄' : n.type === 'FUNCTION' ? 'ƒ' : n.type === 'DB_TABLE' ? '🗄' : '◎',
+        icon: n.type === 'FILE' ? '📄' : n.type === 'FUNCTION' ? 'ƒ' : n.type === 'DB_TABLE' ? '🗄' : n.type === 'API_ENDPOINT' ? '🔌' : '◎',
         label: n.name,
       }))
     : []

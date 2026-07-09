@@ -1339,3 +1339,19 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** 신규 백엔드 테스트 — `RepoMapServiceTest` 7종(루트명 산출·주석 유무 표시·함수 알파벳 정렬·다중 디렉터리 분기 표시·DB_TABLE 등 비FILE/FUNCTION 노드 제외·파일 없을 때 "project" 폴백), `McpRpcControllerTest`에 `get_repo_map` 1종 추가(6개 툴 카운트 갱신), `GraphControllerOwnershipTest`에 `getContextMd` 소유권 검증 2종(비소유자 차단·타 프로젝트 graphId 차단) 추가. `gradlew test` 전체 통과. `npx tsc -b` 통과. **런타임 검증** — ① `get_repo_map`을 `codeprint` MCP 미접속 상태에서(하네스 세션 시작 후 신규 등록이라 재접속 불가) `curl -X POST /mcp/rpc`로 직접 호출, 자기 프로젝트(1,673+ 노드) 실 데이터로 중첩 트리+한국어 함수 주석이 정확히 포함된 마크다운 확인. ② claude-in-chrome 실 로그인 세션에서 GraphPage "AI 컨텍스트" 버튼과 동일한 `fetch('/api/projects/{id}/graph/context-md')` 호출 → 200, 235KB 콘텐츠, 첫 줄 `# project — 프로젝트 구조` 확인(소유자 인증 경로 정상). 콘솔 에러 없음.
 
 **한계.** §16.3 포맷 강화(도메인 구조·API 표면·DB 테이블·경고 요약 통합, API_ENDPOINT 노드 실체화 선행 필요)는 이번 스코프 밖 — 사용자 지시대로 2차 작업으로 분리, 다음 착수 시 "이중작업 방지" 기준으로 어떤 섹션이 실제로 유효한지부터 재확인.
+
+## API_ENDPOINT 노드 실체화 — 파일 단위 1차 (2026-07-09, codeprint_108)
+
+**문제.** `NodeType.API_ENDPOINT`가 enum·여러 읽기 경로(통계 카운트 등)에 이미 존재했지만, 어떤 레포를 분석해도 이 타입의 노드가 실제로 생성된 적이 없었음(2026-07-08 세션에서 "죽은(예약) 타입"으로 판정·백로그 등재된 항목, PROGRESS.md §16.4 P1). §16.3 포맷 강화(API 표면 섹션)의 선행 조건이라 이번에 착수.
+
+**사전 조사(구현 전 필수로 확인).** 코드 수정 전에 프론트가 이미 API_ENDPOINT를 얼마나 전제하고 있는지 조사 — ①`GraphPage.tsx`의 노드 필터 UI·도메인 흐름 진입점(`openDomainFlows`)·사이드바 클릭 핸들러가 이미 `FUNCTION || API_ENDPOINT`를 대칭적으로 처리하도록 짜여 있었음(값이 항상 0이라 죽어 있던 로직) — 프론트는 이 기능을 미리 준비해둔 상태였음. ②**결정적 발견** — `graphLayout.ts`의 `buildLayout()`이 `fileNodes`·`funcNodes`·`dbTableNodes` 3종만 좌표를 배치하고 API_ENDPOINT용 배치 블록이 전혀 없어서, 백엔드만 고치면 노드는 생성되는데 캔버스에 좌표가 없어 **조용히 렌더링만 안 되는** 상태가 될 뻔했음 — 이걸 미리 잡아 같은 PR에서 함께 고침.
+
+**결정.**
+1. `GraphBuilder`에 API_ENDPOINT 노드 생성 블록 신규 — `controllerMappings`가 있는 파일마다 경로 문자열당 노드 1개 생성(파일 내 중복 매핑은 `LinkedHashSet`으로 dedup), `FILE → API_ENDPOINT`는 기존 `CONTAINS` 타입 재사용(새 EdgeType 도입 없음 — FILE→FUNCTION도 같은 타입이라 의미상 일관).
+2. **범위를 파일 단위로 한정 — 함수 단위는 이번 스코프 제외(사용자 확정).** `controllerMappings`는 현재 파일 단위 집계(`List<String>`)라 "어떤 함수가 이 경로를 처리하는지" 정보가 없음. 이를 함수 단위로 바꾸려면 Java/Kotlin·JS/TS·Python·Go·Ruby 5개 언어 분기의 추출 로직을 전부 변경해야 해서 범위가 커짐 — 사용자에게 "1차(파일 단위)만 이번에, 2차(함수 단위)는 다음 세션"으로 명시적 확인 받고 진행. **알려진 트레이드오프**: 프론트의 흐름 재생(flow playback)이 API_ENDPOINT를 진입점으로 이미 지원하지만, API_ENDPOINT→처리 FUNCTION 엣지가 없어 이번 1차 결과로는 흐름 재생 시 API_ENDPOINT 노드에서 더 이어지지 않는 막다른 지점이 됨(크래시는 아님, 프론트가 빈 흐름을 이미 허용).
+3. `graphLayout.ts`에 `dbTableNodes` 배치 블록과 동일한 패턴으로 `apiEndpointNodes` 배치 블록 추가 — 전체 그룹 우측에 별도 "API" 섹션(파란색)으로 세로 배치, DB_TABLE 섹션이 있으면 그보다 더 오른쪽에 배치해 겹침 방지.
+4. 아이콘 매핑 3곳(`GraphPage.tsx`·`CommunityPostGraphPage.tsx`·`GraphViewerPage.tsx`)이 API_ENDPOINT를 전용 아이콘 없이 범용 폴백(`◎`)으로 처리하던 것을 발견 — `🔌`로 전용 아이콘 추가(사이드바·검색 결과에서 다른 DB_TABLE(`🗄`)·FUNCTION(`ƒ`)과 시각적으로 구분되도록, 낮은 리스크의 부수 수정).
+
+**결과.** 신규 백엔드 테스트(`GraphBuilderTest`) 3종 — controllerMappings 있으면 경로마다 노드+CONTAINS 엣지 생성, 없으면 미생성, 같은 파일 내 중복 매핑 문자열은 노드 하나만 생성. `gradlew test` 전체 통과. `npx tsc -b` 통과. **런타임 검증(claude-in-chrome 실 로그인 세션)** — codeprint 자기 프로젝트를 "지금 재분석"으로 실제 재분석 트리거(이번 세션 최초로 새 코드가 반영된 라이브 그래프 생성, 이전 검증들은 전부 과거 분석 그래프 기준이었음) → `fetch`로 확인 시 API_ENDPOINT 노드 115개 생성 확인 → 페이지 새로고침 후 캔버스 DOM 직접 조회(`document.querySelectorAll('.react-flow__node')`)로 `/api/graphs/{graphId}/nodes/{nodeId}/annotation` 등 실제 경로 라벨을 가진 노드 112개가 화면에 정상 렌더링됨을 확인(그래프 렌더러가 숨기는 노드 소수 차이는 정상 범위). 콘솔 에러 없음. `codeprint` MCP `get_warnings`를 **이번에 방금 재분석된 최신 그래프**로 자가검사(이번 세션 최초로 "진짜 최신 코드가 반영된 그래프" 기준 검사) — HIGH_FAN_OUT 5건 베이스라인 그대로, CROSS_DOMAIN_CALL·DOMAIN_IMPORTS_INFRA 0건.
+
+**한계.** 함수 단위 엣지(API_ENDPOINT→처리 FUNCTION)는 다음 세션 과제로 이월. HTTP 메서드 정보 손실(기존 `extractControllerMappings`가 Spring `@GetMapping`/`@PostMapping` 등에서 경로만 캡처하고 메서드 종류는 버림 — 기존 API_CALL 매칭도 동일한 사전 존재 한계라 이번에 새로 만든 문제 아님)도 그대로 남음 — GET/POST가 같은 경로를 쓰면 같은 API_ENDPOINT 노드로 합쳐짐.

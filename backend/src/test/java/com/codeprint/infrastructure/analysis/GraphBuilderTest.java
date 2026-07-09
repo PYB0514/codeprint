@@ -898,6 +898,64 @@ class GraphBuilderTest {
         assertThat(hasEdge).isTrue();
     }
 
+    // ── API_ENDPOINT 노드 실체화 (§16 로드맵, 파일 단위 1차) ────────────────
+
+    @Test
+    @DisplayName("controllerMappings가 있는 파일은 경로마다 API_ENDPOINT 노드 + FILE→API_ENDPOINT CONTAINS 엣지를 생성한다")
+    void controllerMappings_있으면_API_ENDPOINT_노드_생성() {
+        ParsedFile controller = parsedFileWithMappings("src/UserController.java", "Java",
+                List.of("/api/users", "/api/users/{id}"));
+
+        graphBuilder.build(projectId, analysisId, List.of(controller));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+        List<Node> endpointNodes = nodeCaptor.getAllValues().stream()
+                .filter(n -> n.getType() == NodeType.API_ENDPOINT)
+                .toList();
+        assertThat(endpointNodes).hasSize(2);
+        assertThat(endpointNodes).extracting(Node::getName)
+                .containsExactlyInAnyOrder("/api/users", "/api/users/{id}");
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+        long endpointEdges = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.CONTAINS)
+                .filter(e -> e.getEdgeIdentifier().contains("endpoint"))
+                .count();
+        assertThat(endpointEdges).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("controllerMappings가 없는 파일은 API_ENDPOINT 노드를 생성하지 않는다")
+    void controllerMappings_없으면_API_ENDPOINT_노드_미생성() {
+        ParsedFile plain = parsedFile("src/UserService.java", "Java", List.of("save"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(plain));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+        boolean hasEndpointNode = nodeCaptor.getAllValues().stream()
+                .anyMatch(n -> n.getType() == NodeType.API_ENDPOINT);
+        assertThat(hasEndpointNode).isFalse();
+    }
+
+    @Test
+    @DisplayName("같은 파일에 동일 경로 매핑이 중복 추출돼도 API_ENDPOINT 노드는 하나만 생성된다")
+    void 중복_매핑_문자열은_노드_하나만_생성() {
+        ParsedFile controller = parsedFileWithMappings("src/UserController.java", "Java",
+                List.of("/api/users", "/api/users"));
+
+        graphBuilder.build(projectId, analysisId, List.of(controller));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+        long endpointNodeCount = nodeCaptor.getAllValues().stream()
+                .filter(n -> n.getType() == NodeType.API_ENDPOINT)
+                .count();
+        assertThat(endpointNodeCount).isEqualTo(1);
+    }
+
     // ── 파일 수 카운트 기록 (대형 레포 절단 안내) ───────────────────────────
 
     @Test
