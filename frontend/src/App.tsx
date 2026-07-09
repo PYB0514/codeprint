@@ -34,6 +34,7 @@ const DonateFailPage = lazy(() => import('./pages/DonateFailPage'))
 const JoinCollaborationPage = lazy(() => import('./pages/JoinCollaborationPage'))
 const TeamsPage = lazy(() => import('./pages/TeamsPage'))
 const TeamPaymentSuccessPage = lazy(() => import('./pages/TeamPaymentSuccessPage'))
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 
 import CookieBanner from './components/CookieBanner'
 import NoticeBanner from './components/NoticeBanner'
@@ -79,6 +80,7 @@ export default function App() {
           <Route path="/collab/:inviteCode" element={<JoinCollaborationPage />} />
           <Route path="/messages" element={<MessagesPage />} />
           <Route path="/teams" element={<TeamsPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
       <NoticeBanner />
