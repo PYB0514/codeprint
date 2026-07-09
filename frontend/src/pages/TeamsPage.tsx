@@ -350,7 +350,7 @@ export default function TeamsPage() {
                 <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
                   <h3 className="font-semibold mb-3">좌석 증가</h3>
                   <p className="text-sm text-gray-400 mb-3">
-                    좌석당 {PRICE_PER_SEAT.toLocaleString('ko-KR')}원/월 · 현재 {selectedTeam.totalSeats}석
+                    좌석당 {PRICE_PER_SEAT.toLocaleString('ko-KR')}원 · 1회 결제 · 현재 {selectedTeam.totalSeats}석
                   </p>
                   <div className="flex items-center gap-2">
                     <input
@@ -370,6 +370,7 @@ export default function TeamsPage() {
                     </button>
                   </div>
                   <p className="text-xs text-gray-500 mt-3">좌석 감소는 고객센터를 통해 요청해주세요.</p>
+                  <p className="text-xs text-gray-500 mt-1">월 자동갱신(정기결제)은 아직 지원되지 않습니다. 도입 시 기존 구매는 그대로 유지됩니다.</p>
                 </div>
 
                 {/* 위험 구역 — 팀 삭제 */}
@@ -419,9 +420,10 @@ export default function TeamsPage() {
                   className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Pro · Desktop · 좌석당 {PRICE_PER_SEAT.toLocaleString('ko-KR')}원/월 · 총{' '}
-                  {(newTeamSeats * PRICE_PER_SEAT).toLocaleString('ko-KR')}원/월
+                  Pro · Desktop · 좌석당 {PRICE_PER_SEAT.toLocaleString('ko-KR')}원 · 총{' '}
+                  {(newTeamSeats * PRICE_PER_SEAT).toLocaleString('ko-KR')}원 (1회 결제)
                 </p>
+                <p className="text-xs text-gray-500 mt-1">월 자동갱신(정기결제)은 아직 지원되지 않습니다. 도입 시 기존 구매는 그대로 유지됩니다.</p>
               </div>
             </div>
 

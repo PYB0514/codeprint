@@ -793,3 +793,13 @@ const fetchGraph = useCallback(async () => {
 2. `ArchitectureIntentPanel.tsx`의 `applyDddPreset` 예시를 domain↛infrastructure(자동 게이트와 겹침) → `app↛legacy`(마이그레이션 경계, 자동 게이트가 못 잡는 케이스)로 교체. 인트로 문구에 "domain/infrastructure나 Controller/Service/Repository 같은 흔한 구조는 이미 자동으로 검사되니, 여기서는 그 외 규칙을 선언하라"는 안내 한 줄 추가 — 실제 프로젝트별 자동 감지 여부를 조건부로 보여주려면 백엔드 필드 추가가 필요해 이번 스코프에서는 제외(범용 안내 문구로만 처리).
 
 **결과.** `tsc -b` 통과. AI 분석 관련 UI 완전 제거 확인, 아키텍처 의도 패널 인트로·A1 버튼 문구 변경 확인.
+
+## "/월" 표기 정정 — 1회 결제 명시 (V2-2, 2026-07-09)
+
+**문제.** V1_UX_GAP_REVIEW.md V2-2 — 실결제 화면(TeamsPage)과 랜딩 요금제 카드가 "₩9,900/월"·"좌석당 4,900원/월" 표기를 쓰지만 실제 결제는 Toss 1회 결제(정기결제 미구현)라 표기와 실동작이 어긋남. #447에서 개인 결제는 중단했지만 "/월" 표기 자체는 남아있었음.
+
+**결정.** `LandingPage.tsx`(요금제 카드)·`TeamsPage.tsx`(좌석 증가 섹션·새 팀 만들기 모달) 전부 "/월" 제거하고 "1회 결제" 명시로 교체. 실제 결제 트리거가 있는 두 지점(좌석 증가·새 팀 만들기)에는 "월 자동갱신(정기결제)은 아직 지원되지 않습니다. 도입 시 기존 구매는 그대로 유지됩니다." 1줄을 결제 버튼 근처에 추가. 랜딩 카드는 개인 결제 버튼이 `disabled`(결제 트리거 없음)라 안내 문구는 생략 — 표기 정정만 적용.
+
+**★런타임 검증 중 발견한 기존 버그(이번 스코프와 무관, 수정 안 함) — `TeamsPage` 비로그인 접근 시 블랙 화면.** 비로그인 상태로 `/teams` 진입 시 `GET /api/teams/mine`이 401 JSON이 아닌 302(`/oauth2/authorization/github`)를 반환(curl로 확인) → axios가 리다이렉트를 투명하게 따라가 OAuth 페이지 HTML을 `res.data`로 받음 → `setTeams(문자열)` → `.map` 호출 시 `TypeError: teams.map is not a function`으로 전체 렌더 크래시. `ERROR_TRACKER.md` FE-22로 기록, 백로그 등재만 하고 이번 세션은 미수정(스코프 외).
+
+**결과.** `tsc -b` 통과. claude-in-chrome 실 로그인 세션(사용자 GitHub OAuth)으로 확인 — 좌석 증가 섹션 "좌석당 4,900원 · 1회 결제 · 현재 5석" + 안내 문구 정상 렌더, "새 팀 만들기" 모달 "Pro · Desktop · 좌석당 4,900원 · 총 24,500원 (1회 결제)" + 동일 안내 문구 정상 렌더, 콘솔 에러 없음. 랜딩 요금제 카드는 Claude Preview DOM 조회로 "₩9,900"·"1회 결제 · 팀은 좌석당 ₩4,900" 렌더 확인.
