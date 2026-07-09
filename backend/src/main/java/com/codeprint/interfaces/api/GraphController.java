@@ -149,6 +149,7 @@ public class GraphController {
     public ResponseEntity<Map<String, String>> getContextMd(
             @PathVariable UUID projectId,
             @RequestParam(required = false) UUID graphId,
+            @RequestParam(defaultValue = "full") String level,
             @AuthenticationPrincipal User user) {
 
         graphFacade.getOwnedProject(projectId, user.getId());
@@ -160,7 +161,7 @@ public class GraphController {
         return graphOpt.map(graph -> {
                     List<Node> nodes = graphQueryService.getNodes(graph.getId()).stream()
                             .filter(n -> !n.isHidden()).toList();
-                    return ResponseEntity.ok(Map.of("content", repoMapService.generate(nodes)));
+                    return ResponseEntity.ok(Map.of("content", repoMapService.generate(nodes, level)));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

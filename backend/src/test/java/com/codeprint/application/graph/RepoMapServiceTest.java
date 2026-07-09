@@ -131,4 +131,30 @@ class RepoMapServiceTest {
 
         assertThat(md).startsWith("# project — 프로젝트 구조");
     }
+
+    @Test
+    @DisplayName("level=summary면 파일까지만 표시하고 함수는 생략한다")
+    void level_summary_함수생략() {
+        List<Node> nodes = List.of(
+                fileNode("src/UserService.java", null),
+                funcNode("src/UserService.java", "findById", null)
+        );
+
+        String md = service.generate(nodes, "summary");
+
+        assertThat(md).contains("UserService.java");
+        assertThat(md).doesNotContain("findById");
+    }
+
+    @Test
+    @DisplayName("level=full(기본값)이면 기존과 동일하게 함수까지 표시한다")
+    void level_full_함수포함() {
+        List<Node> nodes = List.of(
+                fileNode("src/UserService.java", null),
+                funcNode("src/UserService.java", "findById", null)
+        );
+
+        assertThat(service.generate(nodes, "full")).contains("findById");
+        assertThat(service.generate(nodes)).contains("findById");
+    }
 }

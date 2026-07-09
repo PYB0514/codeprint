@@ -12,10 +12,16 @@ import java.util.*;
 @Service
 public class RepoMapService {
 
-    // 노드 목록으로 "파일/함수 트리 + 한국어 주석" 마크다운 생성
+    // 노드 목록으로 "파일/함수 트리 + 한국어 주석" 마크다운 생성 (기본 level=full)
     public String generate(List<Node> nodes) {
+        return generate(nodes, "full");
+    }
+
+    // level: "summary"(파일까지만, 함수 생략 — 대형 레포 토큰 절감용) | "full"(기존 — 함수까지 포함)
+    public String generate(List<Node> nodes, String level) {
+        boolean summary = "summary".equals(level);
         List<Node> fileNodes = nodes.stream().filter(n -> n.getType() == NodeType.FILE).toList();
-        List<Node> funcNodes = nodes.stream().filter(n -> n.getType() == NodeType.FUNCTION).toList();
+        List<Node> funcNodes = summary ? List.of() : nodes.stream().filter(n -> n.getType() == NodeType.FUNCTION).toList();
 
         // 디렉터리 경로 → 그 디렉터리에 직접 속한 파일 경로 목록 (조상 디렉터리도 빈 목록으로 미리 등록해
         // 파일이 하나도 직속하지 않는 중간 디렉터리도 트리 순회 대상에 포함되게 한다)

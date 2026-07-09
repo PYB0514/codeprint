@@ -1227,11 +1227,13 @@ function GraphPageInner() {
 
   // 전체 그래프를 원본 크기 PNG로 다운로드
   // "AI 컨텍스트 (.md)" 다운로드 — 생성은 백엔드(RepoMapService)가 담당, 프론트는 결과를 받아 파일로 저장만 한다
-  const handleDownloadContextMd = useCallback(async () => {
+  const handleDownloadContextMd = useCallback(async (level: 'full' | 'summary' = 'full') => {
     if (!projectId) return
     setExportingContextMd(true)
     try {
-      const url = `/api/projects/${projectId}/graph/context-md${graphId ? `?graphId=${graphId}` : ''}`
+      const params = new URLSearchParams({ level })
+      if (graphId) params.set('graphId', graphId)
+      const url = `/api/projects/${projectId}/graph/context-md?${params.toString()}`
       const res = await axios.get<{ content: string }>(url)
       const md = res.data.content
       const rootName = md.match(/^# (.+?) — /)?.[1] ?? 'codeprint'
@@ -1239,7 +1241,7 @@ function GraphPageInner() {
       const dlUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = dlUrl
-      a.download = `${rootName}-structure.md`
+      a.download = `${rootName}-structure${level === 'summary' ? '-summary' : ''}.md`
       a.click()
       URL.revokeObjectURL(dlUrl)
     } finally {
@@ -1984,11 +1986,18 @@ function GraphPageInner() {
           {openToolbarMenu === 'export' && (
             <div className="absolute left-0 top-9 z-50 w-48 bg-gray-900 border border-gray-700 rounded-lg p-2 shadow-xl flex flex-col gap-1">
               <button
-                onClick={() => { handleDownloadContextMd(); setOpenToolbarMenu(null) }}
+                onClick={() => { handleDownloadContextMd('full'); setOpenToolbarMenu(null) }}
                 disabled={exportingContextMd || rawNodes.length === 0}
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {exportingContextMd ? '생성 중...' : '↓ AI 컨텍스트 (.md)'}
+                {exportingContextMd ? '생성 중...' : '↓ AI 컨텍스트 - 전체 (.md)'}
+              </button>
+              <button
+                onClick={() => { handleDownloadContextMd('summary'); setOpenToolbarMenu(null) }}
+                disabled={exportingContextMd || rawNodes.length === 0}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {exportingContextMd ? '생성 중...' : '↓ AI 컨텍스트 - 요약 (.md)'}
               </button>
               <button
                 onClick={() => { handleExportImage(); setOpenToolbarMenu(null) }}
