@@ -38,6 +38,7 @@ public class RateLimitFilter implements Filter {
             new RateLimitRule("POST", "/api/community/posts/*/like", "post-like", 60),
             new RateLimitRule("POST", "/api/graphs/*/nodes/*/comments", "comment-create", 20),
             new RateLimitRule("POST", "/api/feedback", "feedback", 5),
+            new RateLimitRule("POST", "/api/reports", "report", 5),
             new RateLimitRule("POST", "/api/messages/*", "message-send", 30),
             new RateLimitRule("POST", "/api/users/*/follow", "follow", 30),
             new RateLimitRule("POST", "/api/push/subscribe", "push-subscribe", 10),

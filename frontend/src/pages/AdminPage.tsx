@@ -70,6 +70,16 @@ interface FeedbackItem {
   status: string
 }
 
+interface ReportItem {
+  id: string
+  reporterId: string
+  targetType: string
+  targetId: string
+  reason: string
+  createdAt: string
+  status: string
+}
+
 // 관리자 대시보드 페이지
 export default function AdminPage() {
   const [stats, setStats] = useState<Stats | null>(null)
@@ -90,6 +100,8 @@ export default function AdminPage() {
   const [digestRunning, setDigestRunning] = useState(false)
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([])
   const [showResolvedFeedback, setShowResolvedFeedback] = useState(false)
+  const [reports, setReports] = useState<ReportItem[]>([])
+  const [showResolvedReports, setShowResolvedReports] = useState(false)
 
   // 통계 및 사용자 목록 로드
   useEffect(() => {
@@ -176,6 +188,25 @@ export default function AdminPage() {
       await axios.patch(`/api/feedback/admin/${item.id}/status`, { status })
       setFeedbacks((prev) => prev.map((f) => f.id === item.id ? { ...f, status } : f))
       loadDigest()
+    } catch {
+      alert('상태 변경에 실패했습니다.')
+    }
+  }
+
+  // 관리자 신고 목록 로드 (최신순)
+  const loadReports = () => {
+    axios.get('/api/reports/admin')
+      .then((res) => setReports(res.data))
+      .catch(() => {})
+  }
+
+  useEffect(() => { loadReports() }, [])
+
+  // 신고 처리 상태 변경 (처리 완료 ↔ 미처리)
+  const updateReportStatus = async (item: ReportItem, status: string) => {
+    try {
+      await axios.patch(`/api/reports/admin/${item.id}/status`, { status })
+      setReports((prev) => prev.map((r) => r.id === item.id ? { ...r, status } : r))
     } catch {
       alert('상태 변경에 실패했습니다.')
     }
@@ -598,6 +629,65 @@ export default function AdminPage() {
                         className={`shrink-0 text-xs px-3 py-1 rounded ${f.status === 'OPEN' ? 'bg-green-600 hover:bg-green-500' : 'bg-gray-700 hover:bg-gray-600'}`}
                       >
                         {f.status === 'OPEN' ? '처리 완료' : '미처리로'}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )
+          })()}
+        </div>
+
+        {/* 신고 큐 */}
+        <div className="bg-gray-900 rounded-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">
+              신고
+              <span className="ml-2 text-sm text-gray-400">미처리 {reports.filter((r) => r.status === 'OPEN').length}건</span>
+            </h2>
+            <label className="text-xs text-gray-400 flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showResolvedReports}
+                onChange={(e) => setShowResolvedReports(e.target.checked)}
+              />
+              처리 완료 포함
+            </label>
+          </div>
+          {(() => {
+            const visible = reports.filter((r) => showResolvedReports || r.status === 'OPEN')
+            if (visible.length === 0) {
+              return (
+                <p className="px-6 py-4 text-sm text-gray-500">
+                  {showResolvedReports ? '신고가 없습니다.' : '미처리 신고가 없습니다.'}
+                </p>
+              )
+            }
+            return (
+              <ul className="divide-y divide-gray-800">
+                {visible.map((r) => (
+                  <li key={r.id} className="px-6 py-4 text-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300">{r.targetType === 'POST' ? '게시글' : '댓글'}</span>
+                          {r.status === 'RESOLVED' ? (
+                            <span className="text-xs px-2 py-0.5 rounded bg-green-900/40 text-green-300">처리 완료</span>
+                          ) : (
+                            <span className="text-xs px-2 py-0.5 rounded bg-amber-900/40 text-amber-300">미처리</span>
+                          )}
+                          <span className="font-mono text-xs text-gray-500">{r.targetId}</span>
+                        </div>
+                        <p className="text-gray-400 mt-1 whitespace-pre-wrap break-words">{r.reason}</p>
+                        <div className="text-xs text-gray-600 mt-1">
+                          신고자 {r.reporterId} · {new Date(r.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => updateReportStatus(r, r.status === 'OPEN' ? 'RESOLVED' : 'OPEN')}
+                        className={`shrink-0 text-xs px-3 py-1 rounded ${r.status === 'OPEN' ? 'bg-green-600 hover:bg-green-500' : 'bg-gray-700 hover:bg-gray-600'}`}
+                      >
+                        {r.status === 'OPEN' ? '처리 완료' : '미처리로'}
                       </button>
                     </div>
                   </li>

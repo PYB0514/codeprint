@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.118.0',
+    date: '2026-07-09',
+    title: '게시글·댓글 신고 기능 추가',
+    type: 'feature',
+    items: [
+      { category: '커뮤니티', desc: '본인이 작성하지 않은 게시글·댓글에 신고 버튼이 표시됩니다. 사유를 입력해 제출하면 관리자가 검토합니다.' },
+    ],
+  },
+  {
     version: 'v0.117.6',
     date: '2026-07-09',
     title: '404 페이지 추가 + 링크 공유 카드 이미지 수정',
