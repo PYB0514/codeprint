@@ -7,6 +7,7 @@ import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.application.graph.GraphWarningService;
 import com.codeprint.application.graph.NodeStyleService;
+import com.codeprint.application.graph.RepoMapService;
 import com.codeprint.application.graph.WarningSuppressionService;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
@@ -47,6 +48,7 @@ public class GraphController {
     private final UserRepository userRepository;
     private final S3Service s3Service;
     private final GraphResponseAssembler graphResponseAssembler;
+    private final RepoMapService repoMapService;
 
     // 프로젝트의 그래프 버전 목록을 최신순으로 조회
     @GetMapping("/api/projects/{projectId}/graphs")
@@ -137,6 +139,28 @@ public class GraphController {
                     return ResponseEntity.ok()
                             .cacheControl(CacheControl.noStore())
                             .body(body);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    // "AI 컨텍스트" 파일/함수 트리 마크다운 — 웹 다운로드 버튼이 호출 (§16.1 생성기 백엔드 승격,
+    // 프론트 downloadTreeText 클라이언트 로직을 대체 — MCP get_repo_map과 동일 생성기 사용)
+    @GetMapping("/api/projects/{projectId}/graph/context-md")
+    public ResponseEntity<Map<String, String>> getContextMd(
+            @PathVariable UUID projectId,
+            @RequestParam(required = false) UUID graphId,
+            @AuthenticationPrincipal User user) {
+
+        graphFacade.getOwnedProject(projectId, user.getId());
+
+        Optional<Graph> graphOpt = graphId != null
+                ? graphQueryService.findById(graphId).filter(g -> g.getProjectId().equals(projectId))
+                : graphQueryService.findLatestByProject(projectId);
+
+        return graphOpt.map(graph -> {
+                    List<Node> nodes = graphQueryService.getNodes(graph.getId()).stream()
+                            .filter(n -> !n.isHidden()).toList();
+                    return ResponseEntity.ok(Map.of("content", repoMapService.generate(nodes)));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

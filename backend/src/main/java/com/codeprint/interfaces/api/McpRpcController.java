@@ -3,6 +3,7 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.application.graph.GraphQueryService;
+import com.codeprint.application.graph.RepoMapService;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.graph.NodeType;
@@ -27,6 +28,7 @@ public class McpRpcController {
 
     private final GraphFacade graphFacade;
     private final GraphQueryService graphQueryService;
+    private final RepoMapService repoMapService;
 
     // MCP JSON-RPC 2.0 단일 엔드포인트 — stateless, 세션 없음
     @PostMapping("/mcp/rpc")
@@ -59,7 +61,7 @@ public class McpRpcController {
         );
     }
 
-    // tools/list 응답 — 제공하는 5개 툴의 스키마를 반환
+    // tools/list 응답 — 제공하는 6개 툴의 스키마를 반환
     private Map<String, Object> buildToolsList() {
         List<Map<String, Object>> tools = List.of(
                 buildTool("search_public_projects",
@@ -92,7 +94,12 @@ public class McpRpcController {
                         Map.of(
                                 "graphId", prop("string", "Graph UUID"),
                                 "nodeId",  prop("string", "Node UUID")),
-                        List.of("graphId", "nodeId"))
+                        List.of("graphId", "nodeId")),
+
+                buildTool("get_repo_map",
+                        "One-call repo map — a file/function tree in Markdown with role comments, in a single response instead of many file reads.",
+                        Map.of("graphId", prop("string", "Graph UUID to query")),
+                        List.of("graphId"))
         );
         return Map.of("tools", tools);
     }
@@ -112,6 +119,7 @@ public class McpRpcController {
             case "get_warnings"           -> toolGetWarnings(args);
             case "find_nodes"             -> toolFindNodes(args);
             case "get_node_neighbors"     -> toolGetNodeNeighbors(args);
+            case "get_repo_map"           -> toolGetRepoMap(args);
             default -> throw new McpException(ERR_METHOD_NOT_FOUND, "Unknown tool: " + toolName);
         };
 
@@ -285,6 +293,16 @@ public class McpRpcController {
         result.put("inbound", inbound);
         result.put("outbound", outbound);
         return result;
+    }
+
+    // 파일/함수 트리 마크다운 1콜 반환 — 웹 다운로드("AI 컨텍스트")와 동일 생성기(RepoMapService) 사용
+    private String toolGetRepoMap(Map<String, Object> args) {
+        UUID graphId = requireGraphId(args);
+        verifyPublicGraph(graphId);
+
+        List<Node> nodes = graphQueryService.getNodes(graphId).stream()
+                .filter(n -> !n.isHidden()).toList();
+        return repoMapService.generate(nodes);
     }
 
     // graphId args 파싱 + 공개 검증을 묶은 헬퍼

@@ -78,7 +78,7 @@
 - `CollaborationController` — 세션 생성/참여(실시간 커서·팀챗)
 - `AiController` — API 키 등록(BYO-key)·AI 설명/코드생성/누락패턴 분석
 - `AdminController` — 통계·유저관리·플랜변경(감사로그)·공지·다이제스트
-- `McpController`/`McpRpcController` — Claude 등 AI 에이전트용 그래프 컨텍스트(JSON-RPC 2.0, `search_public_projects`/`get_graph_overview`/`get_warnings`/`find_nodes`/`get_node_neighbors`)
+- `McpController`/`McpRpcController` — Claude 등 AI 에이전트용 그래프 컨텍스트(JSON-RPC 2.0, `search_public_projects`/`get_graph_overview`/`get_warnings`/`find_nodes`/`get_node_neighbors`/`get_repo_map`)
 - `GitHubWebhookController`/`PrReviewController` — PR 자동 구조 리뷰(`codeprint/structure` commit status 게이트)
 
 ---
