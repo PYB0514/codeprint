@@ -3,6 +3,7 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.application.graph.GraphQueryService;
+import com.codeprint.application.graph.RepoMapService;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.EdgeType;
 import com.codeprint.domain.graph.Graph;
@@ -40,7 +41,7 @@ class McpRpcControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new McpRpcController(graphFacade, graphQueryService);
+        controller = new McpRpcController(graphFacade, graphQueryService, new RepoMapService());
     }
 
     @Test
@@ -57,24 +58,43 @@ class McpRpcControllerTest {
     }
 
     @Test
-    @DisplayName("tools/list — 5개 툴과 inputSchema 반환")
-    void toolsList_returnsFiveTools() {
+    @DisplayName("tools/list — 6개 툴과 inputSchema 반환")
+    void toolsList_returnsSixTools() {
         var req = Map.<String, Object>of("jsonrpc", "2.0", "id", 2, "method", "tools/list");
         ResponseEntity<Map<String, Object>> resp = controller.handle(req);
 
         Map<?,?> result = (Map<?,?>) resp.getBody().get("result");
         List<?> tools = (List<?>) result.get("tools");
-        assertThat(tools).hasSize(5);
+        assertThat(tools).hasSize(6);
 
         List<String> names = tools.stream()
                 .map(t -> (String) ((Map<?,?>) t).get("name"))
                 .toList();
         assertThat(names).contains(
                 "search_public_projects", "get_graph_overview",
-                "get_warnings", "find_nodes", "get_node_neighbors");
+                "get_warnings", "find_nodes", "get_node_neighbors", "get_repo_map");
 
         // 각 툴에 inputSchema가 있는지 확인
         tools.forEach(t -> assertThat(((Map<?,?>) t).get("inputSchema")).isNotNull());
+    }
+
+    @Test
+    @DisplayName("get_repo_map — 파일/함수 트리 마크다운을 1콜로 반환")
+    void getRepoMap_returnsTreeMarkdown() {
+        stubPublicGraph();
+        Node file = Node.create(graphId, NodeType.FILE, "UserService.java", "src/UserService.java", "java");
+        file.updateMetadata(Map.of("comment", "사용자 조회 서비스"));
+        Node func = Node.create(graphId, NodeType.FUNCTION, "findById", "src/UserService.java", "java");
+        when(graphQueryService.getNodes(graphId)).thenReturn(List.of(file, func));
+
+        var req = toolCallRequest("get_repo_map", Map.of("graphId", graphId.toString()));
+        ResponseEntity<Map<String, Object>> resp = controller.handle(req);
+
+        Map<?,?> toolResult = parseToolResult(resp);
+        String text = (String) ((List<?>) toolResult.get("content")).stream()
+                .map(c -> (String) ((Map<?,?>) c).get("text"))
+                .findFirst().orElse("");
+        assertThat(text).contains("UserService.java").contains("사용자 조회 서비스").contains("findById");
     }
 
     @Test

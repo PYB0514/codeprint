@@ -7,6 +7,7 @@ import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.application.graph.GraphWarningService;
 import com.codeprint.application.graph.NodeStyleService;
+import com.codeprint.application.graph.RepoMapService;
 import com.codeprint.application.graph.WarningSuppressionService;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.user.User;
@@ -40,6 +41,7 @@ class GraphControllerOwnershipTest {
     @Mock private UserRepository userRepository;
     @Mock private S3Service s3Service;
     @Mock private GraphResponseAssembler graphResponseAssembler;
+    @Mock private RepoMapService repoMapService;
 
     private GraphController controller;
 
@@ -52,7 +54,7 @@ class GraphControllerOwnershipTest {
         controller = new GraphController(
                 graphQueryService, graphCommandService, graphFacade, graphDiffService,
                 graphWarningService, warningSuppressionService, nodeStyleService,
-                userRepository, s3Service, graphResponseAssembler);
+                userRepository, s3Service, graphResponseAssembler, repoMapService);
         user = mock(User.class);
         lenient().when(user.getId()).thenReturn(userId);
     }
@@ -96,6 +98,35 @@ class GraphControllerOwnershipTest {
 
         assertThat(response.getStatusCode().value()).isEqualTo(404);
         verify(graphQueryService, never()).getNodes(any());
+    }
+
+    // 비소유자가 getContextMd 호출 시 차단되고 노드를 조회하지 않아야 한다
+    @Test
+    @DisplayName("getContextMd — 비소유자는 차단되고 마크다운을 생성하지 않는다")
+    void getContextMd_nonOwner_deniedAndNoDataFetched() {
+        doThrow(new IllegalStateException("Not authorized to access this project"))
+                .when(graphFacade).getOwnedProject(projectId, userId);
+
+        assertThatThrownBy(() -> controller.getContextMd(projectId, null, user))
+                .isInstanceOf(IllegalStateException.class);
+
+        verify(graphQueryService, never()).findLatestByProject(any());
+        verify(repoMapService, never()).generate(any());
+    }
+
+    // 다른 프로젝트 소속 graphId를 넘기면 404로 차단되고 마크다운을 생성하지 않아야 한다
+    @Test
+    @DisplayName("getContextMd — 타 프로젝트 graphId는 404로 차단")
+    void getContextMd_foreignGraphId_blocked() {
+        UUID foreignGraphId = UUID.randomUUID();
+        Graph foreignGraph = mock(Graph.class);
+        when(foreignGraph.getProjectId()).thenReturn(UUID.randomUUID()); // 다른 프로젝트
+        when(graphQueryService.findById(foreignGraphId)).thenReturn(Optional.of(foreignGraph));
+
+        var response = controller.getContextMd(projectId, foreignGraphId, user);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(404);
+        verify(repoMapService, never()).generate(any());
     }
 
     // 비소유자가 diff 호출 시 차단되고 diff 연산을 수행하지 않아야 한다

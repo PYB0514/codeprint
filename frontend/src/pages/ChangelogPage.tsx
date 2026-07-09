@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.120.0',
+    date: '2026-07-09',
+    title: 'MCP get_repo_map 툴 추가 — AI 에이전트가 1콜로 레포 구조 조회',
+    type: 'feature',
+    items: [
+      { category: 'MCP', desc: 'Claude 등 AI 에이전트가 파일·함수 구조를 한 번의 호출로 조회할 수 있는 get_repo_map 툴을 추가했습니다. "AI 컨텍스트 (.md)" 다운로드도 같은 생성 로직을 공유합니다.' },
+    ],
+  },
+  {
     version: 'v0.119.0',
     date: '2026-07-09',
     title: '쪽지 차단 기능 추가',

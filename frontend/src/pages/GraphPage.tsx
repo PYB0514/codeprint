@@ -16,7 +16,7 @@ import {
 import type { Edge, EdgeMouseHandler, Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
-import { buildLayout, downloadTreeText, downloadWarningsMd } from '../utils/graphLayout'
+import { buildLayout, downloadWarningsMd } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry, ColumnInfo } from '../utils/graphLayout'
 import { extractDomain, buildDomainColorMap, buildKnownDomains } from '../utils/graphLayout'
 import { isDbEdgeType, applyEdgeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS, searchNodes } from '../utils/graphLayout'
@@ -302,6 +302,7 @@ function GraphPageInner() {
   const [graphId, setGraphId] = useState<string | null>(null)
   const [showTeamChat, setShowTeamChat] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [exportingContextMd, setExportingContextMd] = useState(false)
   const [showVersions, setShowVersions] = useState(false)
   const [versions, setVersions] = useState<{ graphId: string; createdAt: string; branch: string; pinnedSlot: number | null }[]>([])
   const [showRetentionInfo, setShowRetentionInfo] = useState(false)
@@ -1225,6 +1226,27 @@ function GraphPageInner() {
   }, [nodeSearchQuery, rawNodes, setNodes])
 
   // 전체 그래프를 원본 크기 PNG로 다운로드
+  // "AI 컨텍스트 (.md)" 다운로드 — 생성은 백엔드(RepoMapService)가 담당, 프론트는 결과를 받아 파일로 저장만 한다
+  const handleDownloadContextMd = useCallback(async () => {
+    if (!projectId) return
+    setExportingContextMd(true)
+    try {
+      const url = `/api/projects/${projectId}/graph/context-md${graphId ? `?graphId=${graphId}` : ''}`
+      const res = await axios.get<{ content: string }>(url)
+      const md = res.data.content
+      const rootName = md.match(/^# (.+?) — /)?.[1] ?? 'codeprint'
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+      const dlUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = dlUrl
+      a.download = `${rootName}-structure.md`
+      a.click()
+      URL.revokeObjectURL(dlUrl)
+    } finally {
+      setExportingContextMd(false)
+    }
+  }, [projectId, graphId])
+
   const handleExportImage = useCallback(async () => {
     const flowEl = flowRef.current?.querySelector('.react-flow__viewport') as HTMLElement | null
     if (!flowEl) return
@@ -1962,11 +1984,11 @@ function GraphPageInner() {
           {openToolbarMenu === 'export' && (
             <div className="absolute left-0 top-9 z-50 w-48 bg-gray-900 border border-gray-700 rounded-lg p-2 shadow-xl flex flex-col gap-1">
               <button
-                onClick={() => { downloadTreeText(rawNodes); setOpenToolbarMenu(null) }}
-                disabled={rawNodes.length === 0}
+                onClick={() => { handleDownloadContextMd(); setOpenToolbarMenu(null) }}
+                disabled={exportingContextMd || rawNodes.length === 0}
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                ↓ AI 컨텍스트 (.md)
+                {exportingContextMd ? '생성 중...' : '↓ AI 컨텍스트 (.md)'}
               </button>
               <button
                 onClick={() => { handleExportImage(); setOpenToolbarMenu(null) }}

@@ -1323,3 +1323,19 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결정.** `ProjectReadAdapter`(`domain/community/port/ProjectReadPort`, community 컨텍스트의 기존 선례)와 동일한 패턴으로, `domain/graph/port/ProjectSearchPort` 인터페이스 신설 + `infrastructure/adapter/ProjectSearchAdapter`(내부적으로 `ProjectQueryService.searchPublic` 위임) 구현. `GraphFacade`는 `searchPublicProjects` 메서드에서만 새 `ProjectSearchPort`를 주입받아 사용 — 기존 `projectQueryService` 필드·다른 메서드는 그대로 유지(스코프를 이번에 실제로 걸린 호출 1건으로 한정, 위 사각지대로 언급한 나머지는 백로그).
 
 **결과.** `gradlew compileJava compileTestJava test` 전체 통과. `GraphFacadeTest.searchPublicProjects_delegates`를 `projectSearchPort` 목으로 갱신. `ProjectSearchAdapter`는 단순 위임(분기 없음)이라 전용 테스트 생략(`ProjectReadAdapter` 선례와 동일, CLAUDE.md §4). `analyzeLocal` 재실행으로 `CROSS_DOMAIN_CALL` 0건 복귀 확인, `HIGH_FAN_OUT` 5건 베이스라인 불변.
+
+## §16.1 MD 컨텍스트 생성기 백엔드 승격 — RepoMapService 신설 + get_repo_map MCP 툴 (2026-07-09, codeprint_108)
+
+**문제.** PRODUCT_STRATEGY.md §16.1 — "AI 컨텍스트 (.md)" 파일/함수 트리 생성 로직이 프론트(`graphLayout.ts` `downloadTreeText`) 클라이언트 코드로만 존재해, MCP `get_repo_map`(§16.2 ②, 토큰 절감 채널의 본체)을 만들려면 같은 로직을 TS→Java로 또 베껴야 하는 상황이었음("같은 지도를 두 번 그리게 하지 않는다" 원칙 위반 후보). 생성기를 백엔드로 승격해 웹 다운로드·MCP가 하나의 소스를 공유하도록 하는 것이 목표.
+
+**결정.**
+1. `application/graph/RepoMapService.java` 신설 — `List<Node> nodes → String(마크다운)`. 프론트 `downloadTreeText`의 알고리즘(디렉터리 트리 구성 → 공통 조상 접두사로 루트명 결정 → 재귀 렌더링, 파일은 "이름 — 주석" 라벨·함수는 파일 아래 알파벳순 나열)을 **사양으로 그대로 이식**(사용자 확정: "포맷은 기존 그대로, 강화는 2차 — 이중작업 방지가 기준").
+2. **이식 중 발견한 프론트 원본의 잠재 버그를 수정 방향으로 이탈** — 원본은 "공통 조상 디렉터리 한 단계 아래"만 별도 순회해, 파일들이 공통 조상 디렉터리에 직접 있는 경우(하위 디렉터리 중첩이 없는 경우) 그 파일들이 트리에서 통째로 누락됨. 백엔드 버전은 `renderDir(공통조상, ...)`를 직접 재귀 호출하는 통합 구조로 바꿔 파일이 어디 있든 빠짐없이 렌더링되도록 함 — 코드도 더 단순해짐(§2 Simplicity 부합). **의도적으로 프론트 원본과 100% 동일하지 않은 지점** — 실제 레포(다중 디렉터리)에서는 원본도 이 버그를 안 만나 육안상 차이 없음, 단일 디렉터리 소규모 레포 분석 시에만 차이가 드러남.
+3. `GraphController`에 `GET /api/projects/{projectId}/graph/context-md?graphId=` 신규(오너 인증, 기존 `getGraph`와 동일한 소유권 검증+graphId 해소 패턴) — `{"content": "..."}` 반환.
+4. `McpRpcController`에 `get_repo_map` 툴 신설(6번째 툴) — `verifyPublicGraph` 재사용, `RepoMapService.generate()` 결과를 그대로 반환(다른 툴처럼 구조화 JSON이 아니라 완성된 마크다운 텍스트 자체가 값 — 기존 `toJson()` 래핑 그대로 통과, 특별 취급 불필요).
+5. 프론트 `GraphPage.tsx`의 "↓ AI 컨텍스트 (.md)" 버튼을 새 백엔드 엔드포인트 호출로 교체 — 생성 로직은 삭제하고 응답 텍스트를 그대로 `Blob`+다운로드(사용자 확정: "버튼은 신규 엔드포인트로 교체하되 다운로드 기능 자체는 유지"). 루트명(파일명에 쓰던 `${rootName}-structure.md`)은 응답 헤더 문자열(`# {rootName} — ...`)에서 정규식으로 역추출 — 별도 응답 필드 추가 없이 기존 파일명 관례 보존.
+6. `downloadTreeText` 함수는 프론트에서 완전히 삭제(다른 호출부 없음 확인 후 제거, §3 자기 코드가 만든 orphan 정리).
+
+**결과.** 신규 백엔드 테스트 — `RepoMapServiceTest` 7종(루트명 산출·주석 유무 표시·함수 알파벳 정렬·다중 디렉터리 분기 표시·DB_TABLE 등 비FILE/FUNCTION 노드 제외·파일 없을 때 "project" 폴백), `McpRpcControllerTest`에 `get_repo_map` 1종 추가(6개 툴 카운트 갱신), `GraphControllerOwnershipTest`에 `getContextMd` 소유권 검증 2종(비소유자 차단·타 프로젝트 graphId 차단) 추가. `gradlew test` 전체 통과. `npx tsc -b` 통과. **런타임 검증** — ① `get_repo_map`을 `codeprint` MCP 미접속 상태에서(하네스 세션 시작 후 신규 등록이라 재접속 불가) `curl -X POST /mcp/rpc`로 직접 호출, 자기 프로젝트(1,673+ 노드) 실 데이터로 중첩 트리+한국어 함수 주석이 정확히 포함된 마크다운 확인. ② claude-in-chrome 실 로그인 세션에서 GraphPage "AI 컨텍스트" 버튼과 동일한 `fetch('/api/projects/{id}/graph/context-md')` 호출 → 200, 235KB 콘텐츠, 첫 줄 `# project — 프로젝트 구조` 확인(소유자 인증 경로 정상). 콘솔 에러 없음.
+
+**한계.** §16.3 포맷 강화(도메인 구조·API 표면·DB 테이블·경고 요약 통합, API_ENDPOINT 노드 실체화 선행 필요)는 이번 스코프 밖 — 사용자 지시대로 2차 작업으로 분리, 다음 착수 시 "이중작업 방지" 기준으로 어떤 섹션이 실제로 유효한지부터 재확인.
