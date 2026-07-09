@@ -944,6 +944,51 @@ class StaticCodeAnalyzerTest {
         assertThat(result.controllerMappings()).contains("/api/projects/{id}");
     }
 
+    @Test
+    @DisplayName("Java 컨트롤러 매핑마다 어노테이션 다음에 오는 메서드를 처리 함수로 해소한다")
+    void Java_컨트롤러_매핑_처리함수_해소() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                @RestController
+                @RequestMapping("/api/projects")
+                public class ProjectController {
+                    @GetMapping("/list")
+                    public List<Project> list() { return null; }
+                    @PostMapping
+                    public Project create() { return null; }
+                    @DeleteMapping("/{id}")
+                    public void delete() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.controllerMappingFunctions())
+                .containsEntry("/api/projects/list", "list")
+                .containsEntry("/api/projects", "create")
+                .containsEntry("/api/projects/{id}", "delete");
+    }
+
+    @Test
+    @DisplayName("같은 경로에 GET/POST가 겹치면 나중에 매칭된 함수로 덮어써진다 (알려진 한계)")
+    void Java_컨트롤러_매핑_동일경로_후행함수로_덮어쓰기() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                @RestController
+                @RequestMapping("/api/projects")
+                public class ProjectController {
+                    @GetMapping
+                    public List<Project> list() { return null; }
+                    @PostMapping
+                    public Project create() { return null; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.controllerMappingFunctions()).containsEntry("/api/projects", "create");
+    }
+
     // ── 나머지 언어 함수 추출 ─────────────────────────────────────────────
 
     @Test

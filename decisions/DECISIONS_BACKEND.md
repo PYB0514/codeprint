@@ -1393,3 +1393,21 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** 신규 백엔드 테스트(`RepoMapServiceTest`) 2종 — summary는 함수 생략, full(기본값 포함)은 함수 포함. `GraphControllerOwnershipTest`의 `getContextMd` 관련 2종을 새 4-arg 시그니처로 갱신(레벨 인자 미반영 시 컴파일 실패 — B-15와 동일 패턴, 이번엔 push 전 로컬 `gradlew test`로 미리 잡음). `gradlew test` 전체 통과, `npx tsc -b` 통과. **런타임 검증(claude-in-chrome 실 로그인 세션, codeprint 자기 프로젝트)** — "내보내기" 드롭다운에 "AI 컨텍스트 - 전체"·"AI 컨텍스트 - 요약" 2개 버튼 정상 렌더링 확인. "요약" 클릭 시 실제 네트워크 요청이 `?level=summary&graphId=...`로 나가고 200 응답 확인. `fetch`로 두 레벨 응답을 직접 비교 — summary 50,673자 vs full 237,900자(약 79% 축소), 함수 목록이 실제로 빠짐을 확인.
 
 **한계.** 도메인 스코프 옵션은 미착수 — 다음 착수 시 `extractDomain`을 백엔드로 이식할지, MD 생성에 한해 별도 경량 규칙으로 근사할지 설계 결정 필요.
+
+## API_ENDPOINT 함수 단위 확장 — Java/Kotlin 1차 (2026-07-10, codeprint_109)
+
+**문제.** PR #486(파일 단위 1차)이 의도적으로 남겨둔 후속 작업 — API_ENDPOINT 노드는 있지만 "이 경로를 실제로 처리하는 함수가 무엇인지" 연결이 없어, 프론트 흐름재생이 API_ENDPOINT에서 시작해도 더 이어지지 않는 막다른 지점이었음(Context108에 기록된 알려진 트레이드오프). 사용자 확인(AskUserQuestion) 결과 5개 언어(Java/Kotlin·JS/TS·Python·Go·Ruby) 전체 대신 **Java/Kotlin만 먼저 착수**로 스코프 확정(프레임워크별 "핸들러 찾는 법"이 완전히 달라 리스크 분산).
+
+**사전 조사(구현 전 필수).** `ParsedFile.functions`가 함수명만 `List<String>`으로 저장하고 위치(라인/오프셋) 정보를 전혀 안 가지고 있어, "이 어노테이션이 어떤 함수 위에 있는지" 판정할 데이터가 파이프라인에 없었음. 다행히 `java.util.regex.Matcher`는 항상 `start()`/`end()`를 제공하므로, 별도 위치 필드를 추가하지 않고 매칭 시점에만 위치를 활용하는 방식으로 충분히 해결 가능함을 확인.
+
+**결정.**
+1. **위치 기반 휴리스틱** — `findEnclosingFunction(content, language, fromPosition)`: 어노테이션 매칭 위치(`mm.end()`) 이후 처음 나오는 함수 선언을 그 어노테이션의 핸들러로 간주(Java Spring 어노테이션은 항상 메서드 바로 위에 위치하는 관례에 의존). `extractControllerMappings`(기존, 무변경)와 동일한 classPrefix+methodPath 합성 규칙을 별도 메서드 `extractControllerMappingFunctions`에서 반복해 키 문자열을 일치시킴(두 메서드가 상태를 공유하지 않아 중복이지만, 기존 메서드의 흐름을 안 건드리는 게 더 안전하다고 판단 — Surgical Changes 원칙).
+2. **데이터 모델** — `ParsedFile.controllerMappings`(`List<String>`, 기존)는 그대로 두고, 새 필드 `Map<String, String> controllerMappingFunctions`(매핑 경로 문자열 → 함수명, Java/Kotlin만 채움·그 외 언어는 빈 맵)를 추가. `List<ControllerMapping>` 레코드로 타입을 바꾸는 대신 별도 맵을 병행하는 쪽을 선택 — API_CALL 엣지 매칭 로직(4개 다른 언어 브랜치 포함)을 안 건드리기 위함(최소 침습).
+3. **엣지 타입 재사용** — API_ENDPOINT → FUNCTION 엣지를 새 타입 대신 기존 `EdgeType.FUNCTION_CALL`로 생성. 프론트 `GraphPage.tsx`의 `openFuncNode`(흐름재생 진입점)가 이미 `FUNCTION_CALL` 엣지의 source/target 타입으로 `FUNCTION`뿐 아니라 `API_ENDPOINT`도 받아들이도록 짜여 있음을 코드로 직접 확인(1453·1459행) — 신규 타입을 만들면 프론트도 같이 고쳐야 했을 것을, 기존 타입 재사용으로 **프론트 변경 0줄**로 흐름재생이 자동으로 이어지게 함.
+4. **알려진 한계(설계상 트레이드오프, 테스트로 확정)** — `Map<경로,함수>` 구조상 같은 경로 키에 GET/POST 등 여러 매핑이 겹치면 나중 것이 앞 것을 덮어씀(예: `@GetMapping`+`@PostMapping` 둘 다 클래스 prefix만 쓰면 동일 키). 기존 `controllerMappings`도 이미 "GET/POST가 같은 경로면 같은 API_ENDPOINT 노드로 합쳐짐" 한계가 있어(PR #486 기록) 새로 만든 문제가 아니라 기존 한계의 연장.
+
+**결과.** 신규 테스트 — `StaticCodeAnalyzerTest` 3종(정상 해소·동일경로 덮어쓰기 확정), `GraphBuilderTest` 2종(핸들러 있으면 FUNCTION_CALL 엣지 생성·없으면 미생성). `gradlew test` 전체 통과. **런타임 검증(claude-in-chrome 실 로그인 세션, codeprint 자기 프로젝트, 실제 재분석 트리거)** — `fetch`로 그래프 데이터 직접 조회해 API_ENDPOINT 115개 중 109개(94.8%)가 실제 FUNCTION_CALL 핸들러 엣지로 연결됨을 확인. `codeprint` MCP `get_warnings` 자가검사 — HIGH 0건·MEDIUM 0건(베이스라인 유지, LOW 5건도 기존과 동일).
+
+**★부수 발견(런타임 검증 중 실제로 걸림) — `ParsedFile` 캐시가 스키마 변경을 인지 못 함.** `ParsedFile`에 새 필드(`controllerMappingFunctions`)를 추가한 뒤 실 재분석을 돌렸더니, 캐시 히트된 파일들의 신규 필드가 `null`로 채워져 API_ENDPOINT가 115→1개로 급감하는 것을 관측. `CachedParsedFileLoader.ANALYZER_VERSION`을 스키마 변경 시 올려야 한다는 주석이 이미 있었으나 실제로 지켜진 적이 없었던 것으로 확인(`ParsedFile`이 지난 세션들에 걸쳐 12회 이상 필드 추가됐는데 버전은 계속 1). 1→2로 올려 해결, 재검증으로 115/109 정상 회복 확인. 상세는 `ERROR_TRACKER.md` B-16. **이 발견 자체가 규칙 4(런타임 검증)의 가치를 재확인한 사례** — 유닛 테스트는 캐시 없이 매번 새 `StaticCodeAnalyzer` 인스턴스로 파싱하므로 이 버그를 잡을 수 없었고, 실제 DB 캐시가 쌓인 상태에서 라이브 재분석을 해야만 드러남.
+
+**한계.** 나머지 4개 언어(JS/TS·Python·Go·Ruby)의 함수 단위 확장은 후속 세션 과제로 이월 — 프레임워크별로 핸들러 함수를 찾는 방법이 다름(Express/Go/Ruby는 라우팅 호출의 인자로 핸들러가 직접 나와 정규식 캡처 그룹만 추가하면 되어 이번 위치 휴리스틱보다 오히려 신뢰도가 높을 것으로 예상, Python은 Java와 동일한 위치 휴리스틱 적용 가능).

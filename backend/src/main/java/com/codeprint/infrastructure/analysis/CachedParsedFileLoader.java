@@ -23,7 +23,9 @@ import java.util.UUID;
 public class CachedParsedFileLoader {
 
     // StaticCodeAnalyzer 출력 의미나 ParsedFile 스키마가 바뀌면 이 값을 올려 기존 캐시를 전부 무효화한다.
-    static final int ANALYZER_VERSION = 1;
+    // v2(2026-07-10): ParsedFile에 controllerMappingFunctions 필드 추가(API_ENDPOINT 함수 단위 확장) — 미인상 시
+    // 구스키마 캐시 JSON을 신스키마 레코드로 역직렬화하다 실패하거나(필드 초과) null 필드로 조용히 깨짐(필드 누락).
+    static final int ANALYZER_VERSION = 2;
     private static final Duration CACHE_TTL = Duration.ofDays(30);
 
     private final StaticCodeAnalyzer staticCodeAnalyzer;

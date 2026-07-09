@@ -28,8 +28,24 @@ public record ParsedFile(
         List<String> declaredTypes,              // 파일이 선언한 클래스/인터페이스명 목록 (파일명≠클래스명 언어의 Type::method 해소용 — Java/C#은 빈 목록)
         List<String> testMethods,                // 테스트 함수명 목록 (Rust #[test]/#[cfg(test)] mod 등 — HIGH_FAN_OUT 제외용. 파일명으로 못 거르는 인라인 테스트 대응)
         List<DbAccess> dbAccesses,               // 비JPA ORM 데이터 접근 목록 (Django Entity.objects 등 — 코드→DB_TABLE 엣지용. 엔티티 클래스명 기준)
-        String extendedClass                     // "class Foo extends Bar"의 Bar — 상속 메서드 호출 해소용 (Java 한정, null이면 상속 없음)
+        String extendedClass,                    // "class Foo extends Bar"의 Bar — 상속 메서드 호출 해소용 (Java 한정, null이면 상속 없음)
+        Map<String, String> controllerMappingFunctions // controllerMappings 경로 문자열 → 처리 함수명 (Java/Kotlin만, 그 외 언어는 빈 맵 — API_ENDPOINT 함수 단위 엣지용)
 ) {
+    // 기존 호출부 호환용 — controllerMappingFunctions 미지정 시 빈 맵(함수 단위 미해소 언어 그대로 동작)
+    public ParsedFile(
+            String filePath, String language, List<String> functions, List<String> imports,
+            String fileComment, Map<String, String> functionComments, Map<String, List<String>> functionCalls,
+            List<String> instantiatedClasses, List<DbTableInfo> dbTables, String repositoryEntityClass,
+            List<ColumnInfo> entityColumns, List<String> apiCalls, List<String> controllerMappings,
+            List<String> implementedInterfaces, List<String> asyncMethods, List<String> jsxComponents,
+            List<RawSqlAccess> rawSqlAccesses, List<String> frameworkAnnotatedMethods,
+            List<String> valueReferencedFunctions, Map<String, Integer> functionDefCounts,
+            List<String> declaredTypes, List<String> testMethods, List<DbAccess> dbAccesses, String extendedClass) {
+        this(filePath, language, functions, imports, fileComment, functionComments, functionCalls,
+                instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings,
+                implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods,
+                valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, Map.of());
+    }
     // 기존 호출부 호환용 — declaredTypes·testMethods·extendedClass 미지정 시 빈 값 (파일명 매칭만 쓰는 Java/C# 등)
     public ParsedFile(
             String filePath, String language, List<String> functions, List<String> imports,
