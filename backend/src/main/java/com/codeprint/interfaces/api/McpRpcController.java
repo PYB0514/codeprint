@@ -3,14 +3,11 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.application.graph.GraphQueryService;
-import com.codeprint.domain.community.Post;
-import com.codeprint.domain.community.PostRepository;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.graph.NodeType;
 import com.codeprint.domain.project.Project;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,7 +27,6 @@ public class McpRpcController {
 
     private final GraphFacade graphFacade;
     private final GraphQueryService graphQueryService;
-    private final PostRepository postRepository;
 
     // MCP JSON-RPC 2.0 단일 엔드포인트 — stateless, 세션 없음
     @PostMapping("/mcp/rpc")
@@ -59,7 +55,7 @@ public class McpRpcController {
         return Map.of(
                 "protocolVersion", MCP_VERSION,
                 "capabilities", Map.of("tools", Map.of()),
-                "serverInfo", Map.of("name", "codeprint", "version", "0.86.17")
+                "serverInfo", Map.of("name", "codeprint", "version", "0.117.5")
         );
     }
 
@@ -67,35 +63,35 @@ public class McpRpcController {
     private Map<String, Object> buildToolsList() {
         List<Map<String, Object>> tools = List.of(
                 buildTool("search_public_projects",
-                        "공개 공유된 프로젝트 목록 검색. 제목·레포 URL로 필터 가능.",
-                        Map.of("query", prop("string", "검색어 (선택)")),
+                        "Search public projects by name or GitHub repo URL. Returns each project's latest graph ID for use with the other tools.",
+                        Map.of("query", prop("string", "Search query (optional) — matches project name or repo URL")),
                         List.of()),
 
                 buildTool("get_graph_overview",
-                        "그래프 개요 — 프로젝트 정보·파일/함수 통계·언어 분포·경고 수 반환.",
-                        Map.of("graphId", prop("string", "조회할 그래프 UUID")),
+                        "Graph overview — project info, file/function stats, language distribution, and warning counts.",
+                        Map.of("graphId", prop("string", "Graph UUID to query")),
                         List.of("graphId")),
 
                 buildTool("get_warnings",
-                        "그래프 경고 목록 — 각 경고에 구체적인 수정 가이드 포함.",
+                        "List of structural warnings for a graph, each with an actionable fix suggestion.",
                         Map.of(
-                                "graphId",  prop("string", "조회할 그래프 UUID"),
-                                "severity", prop("string", "HIGH | MEDIUM | LOW 필터 (선택)")),
+                                "graphId",  prop("string", "Graph UUID to query"),
+                                "severity", prop("string", "Filter by HIGH | MEDIUM | LOW (optional)")),
                         List.of("graphId")),
 
                 buildTool("find_nodes",
-                        "노드 이름·파일 경로로 검색. 함수·파일·DB 테이블·API 엔드포인트 포함.",
+                        "Search nodes by name or file path. Includes functions, files, DB tables, and API endpoints.",
                         Map.of(
-                                "graphId", prop("string", "조회할 그래프 UUID"),
-                                "query",   prop("string", "검색어"),
-                                "limit",   prop("integer", "최대 반환 수 (기본 20)")),
+                                "graphId", prop("string", "Graph UUID to query"),
+                                "query",   prop("string", "Search query"),
+                                "limit",   prop("integer", "Max results to return (default 20)")),
                         List.of("graphId", "query")),
 
                 buildTool("get_node_neighbors",
-                        "특정 노드의 인바운드·아웃바운드 이웃 노드와 엣지 타입 반환.",
+                        "Inbound and outbound neighbor nodes and edge types for a specific node.",
                         Map.of(
-                                "graphId", prop("string", "그래프 UUID"),
-                                "nodeId",  prop("string", "노드 UUID")),
+                                "graphId", prop("string", "Graph UUID"),
+                                "nodeId",  prop("string", "Node UUID")),
                         List.of("graphId", "nodeId"))
         );
         return Map.of("tools", tools);
@@ -125,49 +121,29 @@ public class McpRpcController {
         );
     }
 
-    // 공개 공유된 프로젝트 목록 반환 — 그래프가 첨부된 게시글 기반
+    // 공개 프로젝트 목록 반환 — 게시글 첨부 여부와 무관하게 공개(isPublic) 프로젝트 전체가 검색 대상
     private List<Map<String, Object>> toolSearchPublicProjects(Map<String, Object> args) {
-        String query = args.get("query") instanceof String s ? s.toLowerCase() : null;
+        String query = args.get("query") instanceof String s ? s : null;
 
-        List<Post> posts = postRepository.findWithGraphOrSnapshots(PageRequest.of(0, 50));
-
-        return posts.stream()
-                .filter(p -> query == null
-                        || (p.getTitle() != null && p.getTitle().toLowerCase().contains(query))
-                        || (p.getRepoUrl() != null && p.getRepoUrl().toLowerCase().contains(query)))
+        return graphFacade.searchPublicProjects(query).stream()
                 .limit(20)
-                .map(p -> resolvePublicProjectEntry(p))
+                .map(this::toPublicProjectEntry)
                 .filter(Objects::nonNull)
                 .toList();
     }
 
-    // 게시글의 그래프 → 프로젝트 정보 조회 — 비공개 프로젝트이면 null 반환 (레거시 단일 첨부 또는 신규 스냅샷 중 첫 번째)
-    private Map<String, Object> resolvePublicProjectEntry(Post post) {
-        UUID graphId = post.getGraphId();
-        if (graphId == null) {
-            graphId = postRepository.findSnapshotsByPostId(post.getId()).stream()
-                    .findFirst()
-                    .map(com.codeprint.domain.community.PostGraphSnapshot::getGraphId)
-                    .orElse(null);
-        }
-        if (graphId == null) return null;
-
-        Optional<Graph> graphOpt = graphQueryService.findById(graphId);
-        if (graphOpt.isEmpty()) return null;
-
-        UUID projectId = graphOpt.get().getProjectId();
-        try {
-            Project project = graphFacade.getPublicProject(projectId);
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("projectId", projectId.toString());
-            entry.put("name", project.getName());
-            entry.put("repoUrl", project.getGithubRepoUrl());
-            entry.put("latestGraphId", graphId.toString());
-            entry.put("postTitle", post.getTitle());
-            return entry;
-        } catch (Exception e) {
-            return null;
-        }
+    // 공개 프로젝트 → MCP 응답 엔트리 변환 — 실제 최신 그래프 조회, 그래프가 없으면(분석 이력 없음) 제외
+    private Map<String, Object> toPublicProjectEntry(Project project) {
+        return graphQueryService.findLatestByProject(project.getId())
+                .map(graph -> {
+                    Map<String, Object> entry = new LinkedHashMap<>();
+                    entry.put("projectId", project.getId().toString());
+                    entry.put("name", project.getName());
+                    entry.put("repoUrl", project.getGithubRepoUrl());
+                    entry.put("latestGraphId", graph.getId().toString());
+                    return entry;
+                })
+                .orElse(null);
     }
 
     // 그래프 개요 — 노드 통계·언어 분포·경고 수 반환

@@ -12,6 +12,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -98,5 +99,14 @@ class GraphFacadeTest {
 
         assertThat(assertThatThrownBy(() -> facade.verifyGraphReadAccess(graphId, ownerId))
                 .isInstanceOf(IllegalArgumentException.class)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("searchPublicProjects — projectQueryService에 위임")
+    void searchPublicProjects_delegates() {
+        Project p = Project.create(ownerId, "url", "n", null);
+        when(projectQueryService.searchPublic("codeprint")).thenReturn(List.of(p));
+
+        assertThat(facade.searchPublicProjects("codeprint")).containsExactly(p);
     }
 }

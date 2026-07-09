@@ -3,8 +3,6 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.application.graph.GraphQueryService;
-import com.codeprint.domain.community.Post;
-import com.codeprint.domain.community.PostRepository;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.EdgeType;
 import com.codeprint.domain.graph.Graph;
@@ -17,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
@@ -26,7 +23,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.lenient;
 
@@ -35,7 +31,6 @@ class McpRpcControllerTest {
 
     @Mock private GraphFacade graphFacade;
     @Mock private GraphQueryService graphQueryService;
-    @Mock private PostRepository postRepository;
 
     private McpRpcController controller;
 
@@ -45,7 +40,7 @@ class McpRpcControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new McpRpcController(graphFacade, graphQueryService, postRepository);
+        controller = new McpRpcController(graphFacade, graphQueryService);
     }
 
     @Test
@@ -80,6 +75,54 @@ class McpRpcControllerTest {
 
         // 각 툴에 inputSchema가 있는지 확인
         tools.forEach(t -> assertThat(((Map<?,?>) t).get("inputSchema")).isNotNull());
+    }
+
+    @Test
+    @DisplayName("search_public_projects — 프로젝트명으로 검색, 실제 최신 그래프 반환")
+    void searchPublicProjects_matchesByNameAndReturnsLatestGraph() {
+        UUID pid = UUID.randomUUID();
+        Project project = mock(Project.class);
+        when(project.getId()).thenReturn(pid);
+        when(project.getName()).thenReturn("codeprint");
+        when(project.getGithubRepoUrl()).thenReturn("https://github.com/test/codeprint");
+
+        Graph latestGraph = mock(Graph.class);
+        UUID latestGraphId = UUID.randomUUID();
+        when(latestGraph.getId()).thenReturn(latestGraphId);
+
+        when(graphFacade.searchPublicProjects("codeprint")).thenReturn(List.of(project));
+        when(graphQueryService.findLatestByProject(pid)).thenReturn(Optional.of(latestGraph));
+
+        var req = toolCallRequest("search_public_projects", Map.of("query", "codeprint"));
+        ResponseEntity<Map<String, Object>> resp = controller.handle(req);
+
+        Map<?,?> toolResult = parseToolResult(resp);
+        String text = (String) ((List<?>) toolResult.get("content")).stream()
+                .map(c -> (String) ((Map<?,?>) c).get("text"))
+                .findFirst().orElse("");
+        assertThat(text).contains("codeprint").contains(latestGraphId.toString());
+    }
+
+    @Test
+    @DisplayName("search_public_projects — 그래프 없는 공개 프로젝트는 결과에서 제외")
+    void searchPublicProjects_excludesProjectsWithoutGraph() {
+        UUID pid = UUID.randomUUID();
+        Project project = mock(Project.class);
+        when(project.getId()).thenReturn(pid);
+        lenient().when(project.getName()).thenReturn("no-graph-project");
+        lenient().when(project.getGithubRepoUrl()).thenReturn("https://github.com/test/no-graph");
+
+        when(graphFacade.searchPublicProjects(null)).thenReturn(List.of(project));
+        when(graphQueryService.findLatestByProject(pid)).thenReturn(Optional.empty());
+
+        var req = toolCallRequest("search_public_projects", Map.of());
+        ResponseEntity<Map<String, Object>> resp = controller.handle(req);
+
+        Map<?,?> toolResult = parseToolResult(resp);
+        String text = (String) ((List<?>) toolResult.get("content")).stream()
+                .map(c -> (String) ((Map<?,?>) c).get("text"))
+                .findFirst().orElse("");
+        assertThat(text).isEqualTo("[]");
     }
 
     @Test
