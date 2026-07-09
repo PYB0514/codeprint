@@ -1300,3 +1300,16 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 5. `AdminDigestService`(일일 다이제스트) 연동은 스코프 제외 — `DailyStats`·`AdminMetricsQuery` 등 여러 파일을 건드리는 확장 작업이라 A1 요구사항("신고 버튼 → 관리자 큐") 자체와 무관, 큐 화면 자체의 미처리 건수 배지(`reports.filter(status==='OPEN').length`)로 충분.
 
 **결과.** `gradlew compileJava compileTestJava test` 전체 통과(신규 테스트 없음 — `FeedbackController`도 전용 테스트가 없어 동일 선례 유지, CLAUDE.md §4 "Controller는 TDD 불필요, 런타임 검증으로 대체" 원칙과 일치). Flyway `V52` 마이그레이션 앱 기동 시 정상 적용 확인. 실 로그인 세션(claude-in-chrome)으로 E2E 검증 — 본인 게시글에는 "신고" 버튼이 정상적으로 숨겨짐(수정 버튼만 노출, `user.username !== authorUsername` 조건 확인) 확인 후, 신고 대상이 될 타인 콘텐츠가 로컬 DB에 없어 브라우저 콘솔 `fetch`로 `POST /api/reports` 직접 호출 → 201 확인 → `GET /api/reports/admin` 200 + 데이터 정확 확인 → AdminPage에서 "신고 · 미처리 1건" 렌더 확인 → "처리 완료" 클릭 → "미처리 0건"으로 즉시 반영 확인. 콘솔 에러 없음. 테스트 레코드는 검증 후 `docker exec psql`로 직접 제거해 로컬 DB 원상 복구.
+
+## 런칭 갭 A4 — 쪽지(DM) 차단 (2026-07-09)
+
+**문제.** PRODUCT_STRATEGY.md §15.3 A4 — 쪽지(DirectMessage) 컨텍스트에 차단·뮤트 개념이 전무해, A1(신고)이 생겨도 신고 대상이 계속 쪽지를 보낼 수 있어 신고 자체가 무의미해짐("신고와 세트" 요구사항).
+
+**결정.** `domain/message`(기존 `DirectMessage` 컨텍스트)에 신규 `UserBlock` 엔티티 추가 — 이 패키지는 이미 `DirectMessageRepository`가 domain 인터페이스+`infrastructure/persistence` 구현체로 정식 분리돼 있어(Feedback류의 단순 큐와 다른 성숙한 컨텍스트), `UserBlockRepository`도 같은 이웃 관례를 따라 domain 인터페이스+`UserBlockJpaBaseRepository`+`UserBlockRepositoryImpl` 3단 구성으로 맞춤(Feedback의 JpaRepository 직접 상속 지름길은 이 패키지엔 안 맞음 — §3 "가장 가까운 이웃 코드의 관례를 따른다").
+1. `UserBlock`(`blockerId`, `blockedId`, `createdAt`) + `V53__add_user_blocks.sql`((blocker_id, blocked_id) UNIQUE).
+2. `MessageApplicationService.send()`에 **양방향** 차단 체크 추가 — `existsByBlockerAndBlocked(receiverId, senderId)` **또는** `(senderId, receiverId)` 둘 중 하나라도 있으면 403. 요구사항의 핵심 케이스는 "수신자가 발신자를 차단"이지만, "내가 차단한 사람에게는 나도 못 보낸다"가 더 단순한 멘탈모델이라 대칭적으로 설계(플랫폼 일반 관행과도 일치).
+3. `MessageController`에 `POST /api/messages/block/{userId}`·`DELETE /api/messages/block/{userId}`·`GET /api/messages/blocks` 3개 엔드포인트 추가. `SecurityConfig` 변경 불필요.
+4. **차단 목록 전용 화면은 안 만듦** — 받은 쪽지함이 과거 대화 상대를 그대로 보여주므로, 차단한 상대와의 스레드를 다시 열면 거기서 차단 해제가 가능해 "최소 뮤트"(A4 요구사항 문구) 범위로 충분하다고 판단.
+5. 레이트리밋 미적용 — 차단/해제는 저빈도·자기제한적 액션(반복해도 비용·악용 여지 없음, 이미 인증 사용자 대상)이라 기존 "남용 위험 있는 쓰기 엔드포인트" 기준에 안 걸림.
+
+**결과.** `gradlew compileJava compileTestJava test` 전체 통과. 신규 단위 테스트(`MessageApplicationServiceTest`) — 수신자가 차단한 경우 403, **발신자가 차단한 경우(역방향)도 403**, 자기 자신 차단 시 400, 중복 차단 시 저장 스킵, 신규 차단 시 저장, 차단 목록 조회 총 6건. 기존 `send` 테스트 3건은 생성자 시그니처 변경(`UserBlockRepository` 추가)에 맞춰 목만 갱신, 동작은 그대로. **런타임 검증(claude-in-chrome)에서 자동화 도구의 한계 발견** — `handleBlock`이 네이티브 `confirm()`을 쓰는데(기존 `handleDeletePost`와 동일 패턴), claude-in-chrome이 페이지 내 JS 실행이 필요한 명령(screenshot·navigate 등)을 `confirm()`이 열려 있는 동안 전부 블로킹해 CDP 타임아웃 발생 — `Escape`로 다이얼로그를 취소해 복구. 이후 검증은 브라우저 콘솔 `fetch`로 `POST /api/messages/block/{id}`(204)→`GET /api/messages/blocks`(목록 반영)→차단 중 전송 시도(403)→`DELETE /api/messages/block/{id}`(204)→전송 재시도(201) 전체 흐름 직접 호출로 확인, UI 렌더링은 재차단 후 새로고침으로 "차단 해제" 버튼+"차단한 사용자입니다" 안내 문구 정상 노출을 스크린샷으로 별도 확인(구현은 수정 안 함 — confirm() 자체는 기존 패턴이라 §3 유지). 테스트 데이터(차단 관계 1건, 쪽지 2건)는 `docker exec psql`로 직접 제거.

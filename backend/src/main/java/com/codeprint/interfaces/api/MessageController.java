@@ -92,6 +92,26 @@ public class MessageController {
         messageService.markRead(messageId, currentUserId(principal));
     }
 
+    // 사용자 차단
+    @PostMapping("/block/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void block(@PathVariable UUID userId, Principal principal) {
+        messageService.block(currentUserId(principal), userId);
+    }
+
+    // 사용자 차단 해제
+    @DeleteMapping("/block/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void unblock(@PathVariable UUID userId, Principal principal) {
+        messageService.unblock(currentUserId(principal), userId);
+    }
+
+    // 내가 차단한 사용자 ID 목록
+    @GetMapping("/blocks")
+    public List<UUID> blockedUserIds(Principal principal) {
+        return messageService.getBlockedUserIds(currentUserId(principal));
+    }
+
     // DirectMessage 목록 -> MessageResponse 목록 — 작성자/수신자 유저를 한 번에 배치 조회해 N+1 제거
     private List<MessageResponse> toResponses(List<DirectMessage> messages) {
         if (messages.isEmpty()) return List.of();

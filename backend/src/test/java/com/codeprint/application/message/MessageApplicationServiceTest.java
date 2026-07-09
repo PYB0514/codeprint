@@ -3,6 +3,8 @@ package com.codeprint.application.message;
 
 import com.codeprint.domain.message.DirectMessage;
 import com.codeprint.domain.message.DirectMessageRepository;
+import com.codeprint.domain.message.UserBlock;
+import com.codeprint.domain.message.UserBlockRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,13 +27,15 @@ import static org.mockito.Mockito.*;
 class MessageApplicationServiceTest {
 
     @Mock private DirectMessageRepository messageRepository;
+    @Mock private UserBlockRepository userBlockRepository;
     @Mock private UserQueryPort userQueryPort;
 
     private MessageApplicationService service;
 
     @BeforeEach
     void setUp() {
-        service = new MessageApplicationService(messageRepository, userQueryPort);
+        service = new MessageApplicationService(messageRepository, userBlockRepository, userQueryPort);
+        lenient().when(userBlockRepository.existsByBlockerAndBlocked(any(), any())).thenReturn(false);
     }
 
     private UserSummaryDto someUser(UUID id) {
@@ -76,6 +81,81 @@ class MessageApplicationServiceTest {
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
         verify(messageRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("send — 수신자가 발신자를 차단했으면 403 FORBIDDEN, 저장 안 함")
+    void send_blockedByReceiver_forbidden() {
+        UUID sender = UUID.randomUUID();
+        UUID receiver = UUID.randomUUID();
+        when(userQueryPort.findById(receiver)).thenReturn(Optional.of(someUser(receiver)));
+        when(userBlockRepository.existsByBlockerAndBlocked(receiver, sender)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.send(sender, receiver, "hi"))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+        verify(messageRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("send — 발신자가 수신자를 차단했어도(역방향) 403 FORBIDDEN, 저장 안 함")
+    void send_blockedBySender_forbidden() {
+        UUID sender = UUID.randomUUID();
+        UUID receiver = UUID.randomUUID();
+        when(userQueryPort.findById(receiver)).thenReturn(Optional.of(someUser(receiver)));
+        when(userBlockRepository.existsByBlockerAndBlocked(sender, receiver)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.send(sender, receiver, "hi"))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+        verify(messageRepository, never()).save(any());
+    }
+
+    // --- block / unblock ---
+
+    @Test
+    @DisplayName("block — 자기 자신이면 400 BAD_REQUEST, 저장 안 함")
+    void block_self_badRequest() {
+        UUID me = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.block(me, me))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(userBlockRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("block — 이미 차단돼 있으면 중복 저장 안 함")
+    void block_alreadyBlocked_skipsSave() {
+        UUID blocker = UUID.randomUUID();
+        UUID blocked = UUID.randomUUID();
+        when(userBlockRepository.existsByBlockerAndBlocked(blocker, blocked)).thenReturn(true);
+
+        service.block(blocker, blocked);
+
+        verify(userBlockRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("block — 신규 차단이면 저장")
+    void block_new_saves() {
+        UUID blocker = UUID.randomUUID();
+        UUID blocked = UUID.randomUUID();
+        when(userBlockRepository.existsByBlockerAndBlocked(blocker, blocked)).thenReturn(false);
+
+        service.block(blocker, blocked);
+
+        verify(userBlockRepository).save(any(UserBlock.class));
+    }
+
+    @Test
+    @DisplayName("getBlockedUserIds — 차단한 사용자 ID 목록 반환")
+    void getBlockedUserIds_returnsIds() {
+        UUID blocker = UUID.randomUUID();
+        UUID blocked = UUID.randomUUID();
+        when(userBlockRepository.findByBlockerId(blocker)).thenReturn(List.of(UserBlock.of(blocker, blocked)));
+
+        assertThat(service.getBlockedUserIds(blocker)).containsExactly(blocked);
     }
 
     // --- markRead: 수신자 권한 ---

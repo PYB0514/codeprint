@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.119.0',
+    date: '2026-07-09',
+    title: '쪽지 차단 기능 추가',
+    type: 'feature',
+    items: [
+      { category: '쪽지', desc: '대화 상대를 차단할 수 있습니다. 차단하면 서로 쪽지를 주고받을 수 없으며, 언제든 차단을 해제할 수 있습니다.' },
+    ],
+  },
+  {
     version: 'v0.118.0',
     date: '2026-07-09',
     title: '게시글·댓글 신고 기능 추가',
