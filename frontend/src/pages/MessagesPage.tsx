@@ -30,6 +30,7 @@ export default function MessagesPage() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [notifSettings, setNotifSettings] = useState<{ teamChat: boolean; dm: boolean } | null>(null)
+  const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { subscribed, loading: pushLoading, subscribe, unsubscribe, checkSubscription } = useWebPush()
 
@@ -47,6 +48,9 @@ export default function MessagesPage() {
       .finally(() => setLoading(false))
     axios.get<{ teamChat: boolean; dm: boolean }>('/api/notifications/settings')
       .then(r => setNotifSettings(r.data))
+      .catch(() => null)
+    axios.get<string[]>('/api/messages/blocks')
+      .then(r => setBlockedIds(new Set(r.data)))
       .catch(() => null)
     checkSubscription()
   }, [myId, checkSubscription])
@@ -87,6 +91,21 @@ export default function MessagesPage() {
     } catch {
       // 전송 실패 — 무시
     }
+  }
+
+  // 현재 대화 상대 차단
+  const handleBlock = async () => {
+    if (!activeUserId) return
+    if (!confirm(`${activeUsername}님을 차단할까요? 서로 쪽지를 주고받을 수 없게 됩니다.`)) return
+    await axios.post(`/api/messages/block/${activeUserId}`)
+    setBlockedIds(prev => new Set(prev).add(activeUserId))
+  }
+
+  // 현재 대화 상대 차단 해제
+  const handleUnblock = async () => {
+    if (!activeUserId) return
+    await axios.delete(`/api/messages/block/${activeUserId}`)
+    setBlockedIds(prev => { const next = new Set(prev); next.delete(activeUserId); return next })
   }
 
   if (loading) {
@@ -177,8 +196,23 @@ export default function MessagesPage() {
         <div className="flex-1 flex flex-col">
           {activeUserId ? (
             <>
-              <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
+              <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-white">{activeUsername}</span>
+                {blockedIds.has(activeUserId) ? (
+                  <button
+                    onClick={handleUnblock}
+                    className="text-xs text-gray-500 hover:text-white border border-gray-700 rounded-lg px-2.5 py-1 transition-colors"
+                  >
+                    차단 해제
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleBlock}
+                    className="text-xs text-gray-500 hover:text-red-400 border border-gray-700 rounded-lg px-2.5 py-1 transition-colors"
+                  >
+                    차단
+                  </button>
+                )}
               </div>
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
                 {thread.map(msg => {
@@ -199,6 +233,11 @@ export default function MessagesPage() {
                 })}
                 <div ref={messagesEndRef} />
               </div>
+              {blockedIds.has(activeUserId) ? (
+                <div className="p-4 border-t border-gray-800 text-center text-xs text-gray-600">
+                  차단한 사용자입니다. 차단을 해제하면 다시 쪽지를 주고받을 수 있습니다.
+                </div>
+              ) : (
               <form onSubmit={sendMessage} className="p-4 border-t border-gray-800 flex gap-2">
                 <input
                   value={input}
@@ -215,6 +254,7 @@ export default function MessagesPage() {
                   전송
                 </button>
               </form>
+              )}
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">

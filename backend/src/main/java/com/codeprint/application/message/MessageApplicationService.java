@@ -3,6 +3,8 @@ package com.codeprint.application.message;
 
 import com.codeprint.domain.message.DirectMessage;
 import com.codeprint.domain.message.DirectMessageRepository;
+import com.codeprint.domain.message.UserBlock;
+import com.codeprint.domain.message.UserBlockRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -21,6 +23,7 @@ import java.util.UUID;
 public class MessageApplicationService {
 
     private final DirectMessageRepository messageRepository;
+    private final UserBlockRepository userBlockRepository;
     private final UserQueryPort userQueryPort;
 
     // 쪽지 전송
@@ -32,7 +35,33 @@ public class MessageApplicationService {
         if (senderId.equals(receiverId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "자신에게 쪽지를 보낼 수 없습니다.");
         }
+        if (userBlockRepository.existsByBlockerAndBlocked(receiverId, senderId)
+                || userBlockRepository.existsByBlockerAndBlocked(senderId, receiverId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "차단된 사용자와는 쪽지를 주고받을 수 없습니다.");
+        }
         return messageRepository.save(DirectMessage.of(senderId, receiverId, content));
+    }
+
+    // 사용자 차단
+    @Transactional
+    public void block(UUID blockerId, UUID blockedId) {
+        if (blockerId.equals(blockedId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "자신을 차단할 수 없습니다.");
+        }
+        if (userBlockRepository.existsByBlockerAndBlocked(blockerId, blockedId)) return;
+        userBlockRepository.save(UserBlock.of(blockerId, blockedId));
+    }
+
+    // 사용자 차단 해제
+    @Transactional
+    public void unblock(UUID blockerId, UUID blockedId) {
+        userBlockRepository.deleteByBlockerAndBlocked(blockerId, blockedId);
+    }
+
+    // 내가 차단한 사용자 ID 목록
+    @Transactional(readOnly = true)
+    public List<UUID> getBlockedUserIds(UUID blockerId) {
+        return userBlockRepository.findByBlockerId(blockerId).stream().map(UserBlock::getBlockedId).toList();
     }
 
     // 받은 쪽지함 — 대화 상대별 최신 1개
