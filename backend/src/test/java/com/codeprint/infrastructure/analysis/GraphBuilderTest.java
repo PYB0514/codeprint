@@ -135,6 +135,54 @@ class GraphBuilderTest {
         assertThat(functionCallCount).isEqualTo(0);
     }
 
+    @Test
+    @DisplayName("자기 파일에 동명 정의가 있으면 cross-file 동명 함수로는 phantom 엣지를 만들지 않는다 (엣지 정확도 패턴 A, Java)")
+    void 자기정의_있으면_cross파일_동명함수_phantom_엣지_미생성() {
+        // DECISIONS_ANALYSIS.md 패턴 A: McpRpcController.handleToolCall→toJson처럼 자기 파일에 이미
+        // toJson이 있는데, bare 호출 해소가 전역 폴백으로 무관한 다른 파일의 동명 toJson에도 엣지를 만들던 phantom
+        ParsedFile caller = parsedFileWithCalls("src/McpRpcController.java", "Java",
+                List.of("handleToolCall", "toJson"),
+                Map.of("handleToolCall", List.of("toJson")));
+        ParsedFile decoy = parsedFile("src/ArchitectureIntentService.java", "Java", List.of("toJson"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, decoy));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        List<Edge> toJsonCallEdges = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .filter(e -> e.getEdgeIdentifier().contains("toJson"))
+                .toList();
+
+        // sameFile 마커 엣지 1개만 있어야 함 — ArchitectureIntentService로 가는 cross-file 엣지는 없어야 함
+        assertThat(toJsonCallEdges).hasSize(1);
+        assertThat(toJsonCallEdges.get(0).getMetadata().get("sameFile")).isEqualTo(true);
+        assertThat(toJsonCallEdges.get(0).getMetadata().get("calleeFile")).isEqualTo("src/McpRpcController.java");
+    }
+
+    @Test
+    @DisplayName("Java 외 언어는 자기 정의가 있어도 cross-file 동명 함수 해소를 그대로 유지한다 (패턴 A 수정은 Java 한정)")
+    void 비Java_언어는_자기정의_있어도_기존_동작_유지() {
+        // 언어별 감사(DECISIONS_ANALYSIS.md 2차)에서 비Java는 selfcall도 오귀속될 수 있는 복합형이라
+        // 패턴 A 배제를 Java에만 적용하기로 함 — 다른 언어는 기존 폴백 그대로 유지돼야 한다
+        ParsedFile caller = parsedFileWithCalls("src/svc/context.go", "Go",
+                List.of("handle", "process"),
+                Map.of("handle", List.of("process")));
+        ParsedFile other = parsedFile("src/other/helper.go", "Go", List.of("process"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, other));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasCrossFileEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> "src/other/helper.go".equals(e.getMetadata().get("calleeFile")));
+
+        assertThat(hasCrossFileEdge).isTrue();
+    }
+
     // ── IMPORT 엣지 타입 확인 ───────────────────────────────────────────────
 
     @Test
