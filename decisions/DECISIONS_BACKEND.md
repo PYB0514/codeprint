@@ -1411,3 +1411,13 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **★부수 발견(런타임 검증 중 실제로 걸림) — `ParsedFile` 캐시가 스키마 변경을 인지 못 함.** `ParsedFile`에 새 필드(`controllerMappingFunctions`)를 추가한 뒤 실 재분석을 돌렸더니, 캐시 히트된 파일들의 신규 필드가 `null`로 채워져 API_ENDPOINT가 115→1개로 급감하는 것을 관측. `CachedParsedFileLoader.ANALYZER_VERSION`을 스키마 변경 시 올려야 한다는 주석이 이미 있었으나 실제로 지켜진 적이 없었던 것으로 확인(`ParsedFile`이 지난 세션들에 걸쳐 12회 이상 필드 추가됐는데 버전은 계속 1). 1→2로 올려 해결, 재검증으로 115/109 정상 회복 확인. 상세는 `ERROR_TRACKER.md` B-16. **이 발견 자체가 규칙 4(런타임 검증)의 가치를 재확인한 사례** — 유닛 테스트는 캐시 없이 매번 새 `StaticCodeAnalyzer` 인스턴스로 파싱하므로 이 버그를 잡을 수 없었고, 실제 DB 캐시가 쌓인 상태에서 라이브 재분석을 해야만 드러남.
 
 **한계.** 나머지 4개 언어(JS/TS·Python·Go·Ruby)의 함수 단위 확장은 후속 세션 과제로 이월 — 프레임워크별로 핸들러 함수를 찾는 방법이 다름(Express/Go/Ruby는 라우팅 호출의 인자로 핸들러가 직접 나와 정규식 캡처 그룹만 추가하면 되어 이번 위치 휴리스틱보다 오히려 신뢰도가 높을 것으로 예상, Python은 Java와 동일한 위치 휴리스틱 적용 가능).
+
+## WebSocket CORS 와일드카드 제거 (2026-07-10, codeprint_110)
+
+**문제.** 2026-07-06 문서 위생 세션에서 발견해 로컬 보안 백로그로만 남겨뒀던 MEDIUM 항목 — `WebSocketConfig.java:25`의 `setAllowedOriginPatterns`가 `https://*.vercel.app` 와일드카드를 허용해, SECURITY_POLICY.md의 "와일드카드 금지" 원칙과 코드가 불일치한 상태였음. 같은 프로젝트의 `SecurityConfig.corsConfigurationSource()`는 이미 정확한 도메인(`https://codeprint-iota.vercel.app`)만 허용하고 있어, 두 CORS 설정이 서로 다른 기준을 쓰고 있었음.
+
+**결정.** `WebSocketConfig`의 패턴을 `SecurityConfig`와 동일한 정확한 도메인 `https://codeprint-iota.vercel.app`로 교체 — 실제 배포 도메인은 이 하나뿐이라 와일드카드가 애초에 방어하려던 "여러 Vercel 프리뷰 도메인 지원" 같은 실사용 요구가 없었고, 넓혀서 얻는 이득 없이 임의의 `*.vercel.app` 사이트가 우리 WebSocket(`/ws`, STOMP)에 handshake를 시도할 수 있는 공격 표면만 열어두고 있었음.
+
+**결과.** 백엔드를 먼저 내리고([[feedback_no_gradle_while_backend_running]] 준수) `gradlew test` 전체 통과 확인 후 `preview_start`로 재기동, `codeprint` MCP `get_warnings` 자가검사 HIGH 0건(베이스라인 유지) 확인. 재기동 후 `search_public_projects` 재호출로 MCP 연결이 백엔드 재시작을 넘어 유지됨도 함께 확인(stateless HTTP 호출이라 재연결 이슈 없음).
+
+**한계.** 이 origin은 로컬에서 실제 WebSocket handshake로 재현 검증하지 못함(배포 도메인에서만 발생하는 경로라 dev 환경 `localhost:3000`은 영향 없음) — 코드 대조(두 CORS 설정 일치)로 대체.
