@@ -11,7 +11,7 @@
 새 컨텍스트를 시작할 때 아래 문장을 그대로 붙여넣으면 된다. 읽을 파일·순서는 §0 참조.
 
 ```
-/loop CLAUDE.md, PROGRESS.md, 최신 Context 파일 읽고 개발예정사항 순서대로 진행해.
+/loop CLAUDE.md, PROGRESS.md, 최신 Context 파일 읽고 개발예정사항 순서대로 진행해. 코드 구조 파악할 때 Glob/Grep/Read 대신 exploreLocal부터 써.
 ```
 
 ---
@@ -55,6 +55,8 @@
 **서버 기동은 Preview 도구로 직접 관리한다.** `preview_start`(`.claude/launch.json` 기반)로 프론트엔드·백엔드 모두 직접 켠다. Docker Postgres(`docker compose up -d`)도 직접 기동(Docker Desktop 자체 실행은 사용자 담당). `npm run dev`/`./gradlew bootRun`을 Bash로 직접 실행하는 건 금지 — 반드시 preview_start 경유.
 
 **브라우저 검증·Cowork 도구 사용 기준 → §0b 참조.**
+
+**코드 구조 파악은 Glob/Grep/Read 반복 대신 `exploreLocal` 우선 사용한다.** 이 저장소 자체의 구조를 알아야 할 때(함수 위치·호출관계 등) `./gradlew exploreLocal -PqueryMode=repoMap|find|neighbors`(`backend/build/codeprint-local/`에 결과 저장, Read 도구로 확인)를 먼저 시도 — 여러 번 파일을 열어보는 탐색보다 토큰이 훨씬 적게 든다. push 전 워닝 자가검사(`analyzeLocal`)와는 별개 도구, 세션 내내 필요할 때마다 사용(2026-07-10 도입 경위 `decisions/DECISIONS_BACKEND.md` 참조).
 
 ---
 
@@ -104,7 +106,7 @@
 
 *자가 진단(push 전 항상)*
 - push 전 `./gradlew analyzeLocal`로 워닝 자가검사(HIGH/MEDIUM 확인) — Spring/DB/백엔드 불필요, 항상 이걸로 실행(2026-07-10부로 MCP 경유 방식 폐기, `decisions/DECISIONS_BACKEND.md` 참조).
-- 코드 구조 탐색(Glob/Grep/Read 반복 대신 토큰 절감)에는 `./gradlew exploreLocal -PqueryMode=repoMap|find|neighbors`(`backend/build/codeprint-local/`에 결과 파일 저장, Windows 콘솔 인코딩 문제로 stdout 대신 파일 출력 — Read 도구로 확인). **내부 전용, 공개 레포에 커밋 안 함**(Desktop 유료 가치와 겹침, `.gitignore` 처리됨).
+- 코드 구조 탐색용 `exploreLocal`은 §0 참조(push 시점 전용 도구 아님, 세션 내내 사용).
 - **개발 중간 자가검사**: push 직전 1회로 미루지 않는다. 자연스러운 멈춤 지점마다 중간 점검.
 
 **규칙 5: DECISIONS.md 기록**
