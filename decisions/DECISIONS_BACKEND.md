@@ -1466,3 +1466,13 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `exploreLocal`(repoMap/find/neighbors) 3종 모두 이 저장소(`backend/src/main/java/com/codeprint/tools/`) 대상 실행으로 한글 정상 출력·정확한 함수 호출관계(예: `buildGraph`의 inbound에 `analyze`·`main` 정상 포착) 확인. `compileJava`/`compileTestJava`/`test` 전체 통과(MCP 삭제로 인한 참조 깨짐 없음).
 
 **한계.** ①기존 `analyzeLocal`/`watchLocal`의 공개 레포 노출 갭은 오늘 미해결(별도 판단 필요 — 비공개 전환 또는 의도적 수용 결정). ②열화판 공개 스킬(배포 채널)은 오늘 미착수 — 실제 배포 메커니즘 조사부터 필요. ③`search_public_projects`의 Team 유료축 재설계(인증·비공개 레포)도 미착수. ④기존 MCP 실사용자 존재 여부는 끝내 미검증(Railway 로그 접근 불가) — 문제 제보 시 열화 스킬로 조기 흡수할 것.
+
+### 후속 — `exploreLocal` 파싱 결과 디스크 캐시화 (같은 세션 이어서)
+
+**문제.** 위 결정으로 도입한 `exploreLocal`은 CLI 호출마다 새 JVM 프로세스가 뜨는 구조라, 매 호출이 전체 소스를 처음부터 재파싱함(`InMemoryParsedFileCachePort`는 프로세스 생명주기 안에서만 유효). 정적 파일을 미리 만들어두는 대안(항상 최신이 아님, staleness 문제)과 비교하며 트레이드오프를 논의하다가, "매번 재파싱"이 이 방식의 유일한 실질적 약점으로 확인돼 개선하기로 함.
+
+**결정.** `FileParsedFileCachePort`(신규, `com.codeprint.tools`) — 기존 `ParsedFileCachePostgresAdapter`가 쓰던 `ParsedFileJsonCodec`(ParsedFile↔JSON, round-trip 동치 보장)을 그대로 재사용해 `build/codeprint-local/parse-cache.json`(gitignore 처리됨)에 캐시를 영속화. `InMemoryParsedFileCachePort`와 동일한 키 스킴(`projectId:analyzerVersion:relPath:contentHash`)이라 인터페이스 계약 변경 없음. **부수 수정**: `LocalGraphQuery`가 매 실행마다 `UUID.randomUUID()`로 projectId를 새로 만들던 걸 고정 상수(`00000000-...-000000000000`)로 변경 — 캐시 키에 projectId가 포함되는데 실행마다 바뀌면 디스크 캐시가 있어도 항상 새 네임스페이스라 hit이 원리적으로 불가능했을 결함(적용 전 발견).
+
+**결과.** 동일 대상 2회 연속 실행 — 1차 `hit 0, miss 5` → 2차 `hit 5, miss 0` 확인(전체 캐시 히트). 캐시 경유 후 `repoMap.md` 출력 내용도 정상(round-trip 무결성 확인). `compileJava`/`test` 전체 통과.
+
+**한계.** `analyzeLocal`/`watchLocal`은 이번 캐시 전환 대상에서 제외(오늘 스코프는 `exploreLocal`만, 기존 도구는 무변경) — 필요해지면 같은 방식으로 전환 가능. 내용 변경 시 캐시 무효화(content hash 불일치)는 기존 `CachedParsedFileLoader` 로직 재사용이라 별도 검증 안 함(프로덕션에서 이미 검증된 경로).
