@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.122.4',
+    date: '2026-07-10',
+    title: 'MCP(JSON-RPC) 서버 종료',
+    type: 'fix',
+    items: [
+      { category: '백엔드', desc: 'Claude Code 등에서 `claude mcp add`로 연결하던 MCP JSON-RPC 서버(POST /mcp/rpc)를 종료했습니다. 대화형 조회 채널은 재설계 중입니다.' },
+    ],
+  },
+  {
     version: 'v0.122.3',
     date: '2026-07-10',
     title: 'API 엔드포인트 흐름재생 확장 — Express·FastAPI/Flask·Django·Go',

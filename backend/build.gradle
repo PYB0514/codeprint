@@ -11,6 +11,11 @@ java {
     sourceCompatibility = JavaVersion.VERSION_17
 }
 
+// Windows 로컬(MS949 기본 인코딩)에서 javac가 UTF-8 소스의 한글 주석을 깨뜨리는 문제 방지
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
 configurations {
     compileOnly {
         extendsFrom annotationProcessor
@@ -117,6 +122,22 @@ task watchLocal(type: JavaExec, dependsOn: classes) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.codeprint.tools.LocalWatcher'
     args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
+}
+
+// 로컬 그래프 탐색 — repo map/노드검색/이웃조회 (Spring/DB 불필요, 내부 전용 — LocalGraphQuery.java는 gitignore 처리돼 공개 레포엔 없음)
+task exploreLocal(type: JavaExec, dependsOn: classes) {
+    group = 'codeprint'
+    description = '로컬 그래프에서 repo map(기본)·노드검색·이웃조회 (내부 전용, Spring/DB 불필요)'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.codeprint.tools.LocalGraphQuery'
+    // Windows 콘솔 기본 인코딩(CP949)이 한국어 주석·경로를 깨뜨려 UTF-8 강제
+    jvmArgs = ['-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8']
+    // -PqueryMode=repoMap|find|neighbors, -PqueryTarget=검색어 또는 노드ID, -PanalysisDir=경로(기본 .)
+    args = [
+        project.hasProperty('queryMode') ? project.property('queryMode') : 'repoMap',
+        project.hasProperty('queryTarget') ? project.property('queryTarget') : '',
+        project.hasProperty('analysisDir') ? project.property('analysisDir') : '.'
+    ]
 }
 
 // tree-sitter A/B 회귀 도구 — Java 함수·호출 추출을 정규식과 비교 (DB 불필요)

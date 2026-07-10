@@ -1441,3 +1441,28 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **라이브 검증(로컬, `/api/dev/test-token`으로 테스트유저 JWT 발급 → gin-gonic/gin 신규 프로젝트 생성·실 분석 트리거).** API_ENDPOINT 139개 중 6개가 실제 FUNCTION_CALL 핸들러 엣지로 연결됨(`handlerTest1`·`handlerTest2` 등 명명된 함수 정상 매칭 확인). 나머지 133개는 gin 자체가 라우터 라이브러리라 테스트 스위트 대부분이 `func(c *gin.Context) {}` 인라인 익명 핸들러를 쓰기 때문 — `lastIdentifierArg` 가드가 이를 정확히 걸러내 오탐 없이 미해소로 처리함을 확인(낮은 연결률 자체가 아니라 "익명 핸들러는 정확히 skip하는지"가 검증 대상이었음). 검증 후 테스트 프로젝트는 삭제.
 
 **한계.** Ruby·NestJS 미착수(위 이유). Django·Express의 크로스파일 참조(뷰가 다른 파일에 있는 경우)는 이번 아키텍처로는 원천적으로 해소 불가 — 언젠가 필요해지면 프로젝트 전체 함수 인덱스(파일 무관 이름 조회)로 확장하는 별도 설계가 필요.
+
+## MCP JSON-RPC 서버 제거 — 로컬 전용 도구로 대체 (2026-07-10, codeprint_111)
+
+> 대체: "무료 배포 채널 확정 — Claude 스킬/MCP"(2026-07-07, `PRODUCT_STRATEGY.md` §14.5) 및 "16.2 배포 형태 ②MCP get_repo_map·③레포 커밋 파일"(2026-07-08, §16.2).
+
+**문제.** codeprint_111 세션 시작 시 codeprint MCP가 이번에도 미연결(조사 경위는 `decisions/DECISIONS_INFRA.md` "codeprint MCP 미연결 시 자가 진단 절차" 참조). 이 조사 도중 사용자가 "MCP가 우리 핵심기능(토큰 절감)에 정말 필요한가"를 근본부터 재질문 — 대화로 각 도구의 실제 호출 트리거를 하나씩 검증.
+
+**검토한 대안과 탈락 이유(도달 과정).**
+1. **훅 타임아웃 확대로 연결 안정화** — 근본 문제(도구를 쓸 트리거가 있는가)를 안 건드리는 대증요법이라 보류.
+2. **로컬 전용 스킬 + 열화판 공개 스킬 병행** — 처음 방향. `search_public_projects`(다른 공개 프로젝트 검색)는 웹 갤러리 브라우징 성격이라 AI 에이전트가 자발적으로 부를 트리거가 없음. `get_warnings`/`find_nodes`/`get_repo_map`(특정 graphId 조회)도 "로컬 접근 있는 에이전트가 원격 조회할 이유가 있는가" 검증 결과, **로컬 파일시스템에 이미 접근 중인 에이전트(Claude Code 자신 포함)에게는 로컬 도구가 원격 MCP보다 항상 우월**(백엔드·DB·연결 안정성 문제 자체가 없음)하다는 결론 → MCP 경유 조회 자체가 불필요.
+3. **`.codeprint/context.md`(레포에 graphId 커밋해 에이전트가 발견) 재검토** — 이 메커니즘의 존재 이유가 "에이전트가 원격 조회하려면 graphId를 어떻게 알아내나"였는데, 2번 결론(로컬 에이전트는 원격 조회 자체가 불필요)에 따라 전제 자체가 소멸. **폐기.**
+4. **MSA 교차 서비스 조회(다른 논의에서 파생)** — "작업 중인 서비스가 아닌 다른 서비스 구조를 알아야 할 때"는 로컬 접근이 없어 원격 조회가 유효한 시나리오로 재확인. 단 실사용은 비공개(private) 레포 접근이 필수라 `search_public_projects`(공개 전용)로는 불가 — 기존 백로그 "인증 MCP(비공개 자기 레포)"와 동일 축이고, 성격상 무료 배포 깔때기가 아니라 **Team 유료축**(비공개 레포 교차 참조=아키텍처 거버넌스 가치)에 해당. 오늘 스코프 밖, 재설계 방향만 기록.
+5. **기존 MCP 서버(`/mcp/rpc`) 완전 제거 vs 유지** — 제거 전 "웹사이트나 데스크탑에서 다른 사용자가 쓰고 있을 가능성"을 확인(사용자 지적) — 프론트엔드 어디서도 `/mcp/rpc`를 호출하지 않음(웹 기능 아님) 확인, Desktop은 미착수라 의존 없음. 다만 README에 실제 설치 가이드가 공개돼 있어 외부 실사용 가능성 자체를 배제 못함(Railway 프로덕션 로그 접근 불가로 미검증) — **사용자가 위험 감수 하에 제거 결정**(등재 전이라 노출 경로가 제한적이라는 판단, 실사용자가 나타나면 열간 스킬 대체로 흡수).
+
+**결정.**
+1. **`McpRpcController.java`(`/mcp/rpc`, 6개 툴) + `McpRpcControllerTest.java` + `.mcp.json` 삭제**. `McpController.java`(`/mcp/graphs/{graphId}/context`·`/mcp/admin/stats`)는 별개 기능이라 유지. `RateLimitFilter`의 `/mcp/rpc` 전용 규칙만 제거, `SecurityConfig`의 `/mcp/**` CORS·permitAll은 `McpController`와 공유라 유지.
+2. **`LocalGraphQuery.java` 신설** — `LocalAnalyzer.buildGraph()`(신규 추출, `analyze()`와 공유)로 로컬 그래프를 만들고 `RepoMapService.generate(nodes)`(Spring 의존 없는 순수 함수, `new`로 직접 생성)로 repo map을, `McpRpcController`의 `toolFindNodes`/`toolGetNodeNeighbors`와 동일 로직으로 노드검색·이웃조회를 제공. `./gradlew exploreLocal -PqueryMode=repoMap|find|neighbors`.
+3. **`neighbors`를 노드ID가 아닌 이름/경로 검색어로 재설계** — 매 CLI 실행이 `UUID.randomUUID()`로 새 그래프를 만들어 노드 ID가 실행마다 바뀌므로, `find`로 얻은 ID가 다음 `neighbors` 호출에 무효(발견 못 하면 조용히 실패했을 결함, 실행 중 검증으로 발견). 검색어로 노드를 그 안에서 직접 찾아 즉시 이웃 조회하는 구조로 변경, 검색어가 여러 노드에 걸리면 후보 목록만 반환.
+4. **`LocalGraphQuery.java`를 `.gitignore` 처리, 공개 레포에 커밋 안 함** — `analyzeLocal`/`watchLocal`은 이미 공개 레포(`backend/src/main/java/com/codeprint/tools/`)에 있어 누구나 클론해 Desktop 유료 가치(로컬 분석엔진+워치모드)를 무료로 쓸 수 있는 기존 갭이 발견됨(레포가 실제 Public임을 `gh repo view`로 확인, decisions/PRODUCT_STRATEGY.md 어디에도 이 갭을 의도적으로 수용한 기록 없음 — 전략 문서와 실제 배치가 어긋난 상태로 방치돼 있었음). **오늘 이 기존 갭 자체는 고치지 않고(스코프 초과), 최소한 신규 추가분이 갭을 키우지 않도록 격리만 함.**
+5. **컴파일 인코딩 버그 수정** — `exploreLocal` 최초 실행 시 한글 주석이 깨짐(`?��` 패턴). 원인 조사: JVM 런타임 출력 인코딩(`-Dstdout.encoding=UTF-8`) 문제가 아니라, 이 Windows 머신의 JVM 기본 인코딩이 `MS949`(`file.encoding`/`sun.jnu.encoding` 확인)이고 `build.gradle`에 `compileJava` 소스 인코딩 강제가 없어 콘솔 릴레이 경로(Gradle→Windows 콘솔 코드페이지)가 UTF-8 바이트를 깨뜨리는 것으로 판명(파일로 리다이렉트+Read 도구로도 동일하게 깨짐 확인, 컴파일러 인코딩 수정만으론 해결 안 됨). **최종 해결**: ①`build.gradle`에 `tasks.withType(JavaCompile) { options.encoding = 'UTF-8' }` 전역 추가(재발 방지, 이 환경의 모든 로컬 컴파일에 적용) ②`LocalGraphQuery`는 콘솔 출력 자체를 포기하고 `build/codeprint-local/`(gitignore 처리됨) 아래 UTF-8 파일로 결과를 쓰고 Read 도구로 확인하는 방식으로 우회(콘솔 릴레이 경로를 아예 안 거침).
+6. **문서 동기화**: README "🔌 AI 에이전트 연동 (MCP)" 섹션 삭제+로드맵 항목 갱신, `PRODUCT_STRATEGY.md` §14.5·§16.2·§16.4에 대체 배너·갱신, `docs/FEATURES.md` 컨트롤러 목록 갱신, `CLAUDE.md` §0·규칙4의 MCP 연결확인 절차 전면 삭제(analyzeLocal 직접 사용으로 단순화), `PROGRESS.md` 관련 서술 갱신, `ChangelogPage.tsx`에 v0.122.4 항목 추가.
+
+**결과.** `exploreLocal`(repoMap/find/neighbors) 3종 모두 이 저장소(`backend/src/main/java/com/codeprint/tools/`) 대상 실행으로 한글 정상 출력·정확한 함수 호출관계(예: `buildGraph`의 inbound에 `analyze`·`main` 정상 포착) 확인. `compileJava`/`compileTestJava`/`test` 전체 통과(MCP 삭제로 인한 참조 깨짐 없음).
+
+**한계.** ①기존 `analyzeLocal`/`watchLocal`의 공개 레포 노출 갭은 오늘 미해결(별도 판단 필요 — 비공개 전환 또는 의도적 수용 결정). ②열화판 공개 스킬(배포 채널)은 오늘 미착수 — 실제 배포 메커니즘 조사부터 필요. ③`search_public_projects`의 Team 유료축 재설계(인증·비공개 레포)도 미착수. ④기존 MCP 실사용자 존재 여부는 끝내 미검증(Railway 로그 접근 불가) — 문제 제보 시 열화 스킬로 조기 흡수할 것.

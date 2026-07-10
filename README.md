@@ -125,21 +125,6 @@ cd frontend && npm install && npm run dev
 
 ---
 
-## 🔌 AI 에이전트 연동 (MCP)
-
-분석된 공개 프로젝트의 그래프를 AI 에이전트가 직접 조회할 수 있는 MCP(Model Context Protocol) 서버를 제공한다. 레포를 Grep/Read로 반복 탐색하는 대신, 이미 구조화된 그래프를 그대로 조회한다.
-
-**Claude Code에 연결:**
-```bash
-claude mcp add --transport http codeprint https://codeprint.up.railway.app/mcp/rpc
-```
-
-**제공 툴 6종** — `search_public_projects` · `get_graph_overview` · `get_warnings` · `find_nodes` · `get_node_neighbors` · `get_repo_map`
-
-> **경계**: 대화형 조회 전용이다. CI 파이프라인이나 git hook에 자동 연동하는 용도는 지원하지 않는다(그 자동화는 팀·데스크탑 플랜의 영역). 공개(public)로 표시된 프로젝트만 조회 가능하다.
-
----
-
 ## 🗺 로드맵
 
 - [x] 다국어 분석 엔진(tree-sitter AST) · 구조 경고 감지 15종 + severity · 오탐 캘리브레이션
@@ -147,7 +132,7 @@ claude mcp add --transport http codeprint https://codeprint.up.railway.app/mcp/r
 - [x] 실시간 협업 · 커뮤니티 · AI 연동(BYOK) · MCP 컨텍스트 엔드포인트
 - [x] GitHub PR webhook 자동 리뷰 + `codeprint/structure` 머지 게이트 · 결제 · 관리자 대시보드
 - [ ] **PR 게이트 셀프서비스 UI** — 프로젝트별 webhook 발급·연결 상태 표시 (v1.0 크리티컬 패스, 진행 예정)
-- [x] 무료 배포 채널 — **Claude 스킬/MCP 확정(2026-07)**. MCP 서버(`POST /mcp/rpc`, 툴 6종) + 원격 연결 실전 검증 + 설치 가이드(위 섹션) 완료. 레지스트리 등재는 진행 예정. 대화형 조회 전용(CI/훅 자동화는 팀·데스크탑 영역)
+- [ ] 무료 배포 채널 — **Claude 스킬로 재설계 중(2026-07-10)**. MCP JSON-RPC 서버(`POST /mcp/rpc`)는 트리거 부재로 폐기, 재설계 경위는 `decisions/DECISIONS_BACKEND.md` 참조
 - [ ] 데스크탑 앱 — 로컬 폴더 분석(파일 변경 감지 → push 전 자동 재검사), 코드 외부 전송 없음
 
 ---
