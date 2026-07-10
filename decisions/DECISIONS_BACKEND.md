@@ -1516,3 +1516,21 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `PRODUCT_STRATEGY.md` §14.5·§16.2에 정정 배너/신규 행 추가, `PROGRESS.md`에 신규 백로그 섹션 추가(둘 다 로컬 전용 문서). 실제 구현은 미착수 — 이번엔 문서 정합성 복구까지만.
 
 **한계.** 구체적 패키징 형식(스킬 매니페스트 구조·설치 가이드)·경계 문구(§14.2 "정보 vs 자동화" 재적용) 설계는 다음 세션 과제.
+
+## 열화판 공개 스킬 — 스코프 최종 확정 (2026-07-11, codeprint_112, 같은 세션 이어서)
+
+> 위 항목의 후속 — 착수 전 사용자 요청으로 재검토해 스코프 확정.
+
+**문제.** 착수 전 세 가지 재검토 필요가 발견됨: ①`exploreLocal`(토큰 절감)만으로는 무료 배포 훅이 약함 ②"용량이 얼마나 되나" 질문에 처음엔 근거 없이 "수십~100MB"로 답해 사용자가 구조적 타당성에 의문 제기 ③"IDE에도 재사용" 제안이 실제로는 기존에 이미 유료 백로그로 분류된 기능(IDE 자동 저장 트리거)과 충돌.
+
+**검토·측정.**
+1. **기능 스코프**: `project_adoption_lever_focus` 메모리("채택 레버=무설정 conformance 게이트·HIGH 경고 precision")와 대조 결과, `exploreLocal` 단독은 이 레버와 무관(탐색 편의일 뿐). `analyzeLocal`(경고 탐지)이 실제 레버 — 둘 다 §14.2 "정보 vs 자동화" 기준상 요청 시 1회 응답(정보)이라 함께 무료 스코프에 넣어도 원칙 위반 없음 → **스코프를 `exploreLocal`+`analyzeLocal`로 확장**.
+2. **용량 실측**: 처음 추정("전체 runtimeClasspath 재사용 시 수십~100MB")은 근거 없는 추정이었음. Gradle 캐시 직접 측정 결과 — tree-sitter 13개 언어 문법 합계 약 11MB(Java+TS+TSX만이면 약 2.5MB), Jackson·spring-context(전체 Spring Boot 아닌 stereotype 애노테이션용 최소 모듈)까지 합쳐도 **v1 언어 스코프 기준 10~15MB선**. Spring 관련 import는 `@Service`/`@Component` 애노테이션 메타데이터뿐(DI 미사용, `new`로 직접 생성) 확인.
+3. **배포 채널별 적합성 재검토**: `exploreLocal`(토큰 절감)은 AI 에이전트 문맥에서만 의미 성립 — IDE(사람이 쓰는 도구)엔 "토큰" 개념 자체가 없어 채널 부적합. `analyzeLocal`을 IDE 확장으로 배포하려던 안은 "저장 시 자동 재분석"이 성립해야 실사용성이 있는데, 이는 `watchLocal`과 동일한 자동화 패턴 — `PROGRESS.md` 기존 백로그에 이미 "IDE 확장(저장 시 인라인 경고)"이 Desktop 유료 후보로 명시돼 있어, 그대로 진행하면 이번 세션 내내 고친 "유료축 무료 유출"을 IDE 채널로 재현하게 됨을 발견 → **IDE 확장은 이 트랙에서 명시적 제외**, 기존 Desktop 유료 백로그 그대로 유지.
+4. **언어 스코프**: v1(Java·Kotlin·TS·TSX, 사용자 지정 자기 도그푸딩) vs `project_adoption_lever_focus`의 실제 레버 대상 언어(Java/Python/JS-React) 사이에 Python 하나가 빠지는 불일치 확인 → v2로 명시적 예약(이번 세션 초반 겪은 "요약 중 누락→폐기로 오인" 재발 방지).
+
+**결정.** `PRODUCT_STRATEGY.md` §16.6 신설(단일 소스) — 기능=`exploreLocal`+`analyzeLocal`(`watchLocal` 제외) / 언어=v1 Java·Kotlin·TS·TSX, v2 Python 예약 / 배포=Claude Code Skill 확정, IDE 확장 제외, npm/pip는 "1회 응답" 유지 시 여지만.
+
+**결과.** `PRODUCT_STRATEGY.md` §16.2·§16.6, `PROGRESS.md` 백로그 갱신(둘 다 로컬 전용). 실제 구현(Shadow jar·Skill 매니페스트)은 다음 단계 — 이번엔 스코프 확정까지.
+
+**한계.** Claude Code Skill의 실제 배포·발견 메커니즘(마켓플레이스 유무 등) 미조사 — 착수 1단계로 필요.
