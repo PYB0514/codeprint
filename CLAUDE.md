@@ -52,7 +52,7 @@
 
 명시적 지시가 없으면 위 기준대로 자율 진행한다. 방향이 불확실할 때만 짧게 묻는다.
 
-**서버 기동은 Preview 도구로 직접 관리한다.** `preview_start`(`.claude/launch.json` 기반)로 프론트엔드·백엔드 모두 직접 켠다. Docker Postgres(`docker compose up -d`)도 직접 기동(Docker Desktop 자체 실행은 사용자 담당). `npm run dev`/`./gradlew bootRun`을 Bash로 직접 실행하는 건 금지 — 반드시 preview_start 경유.
+**서버 기동은 Preview 도구로 직접 관리하고, 필요할 때만 켠다.** `preview_start`(`.claude/launch.json` 기반)로 프론트엔드·백엔드 모두 직접 켠다. Docker Postgres(`docker compose up -d`)도 직접 기동(Docker Desktop 자체 실행은 사용자 담당). `npm run dev`/`./gradlew bootRun`을 Bash로 직접 실행하는 건 금지 — 반드시 preview_start 경유. **세션 시작 시 자동 기동은 안 함**(2026-07-10 MCP 폐기로 "미리 켜둬야 연결된다"는 이유 자체가 소멸 — `decisions/DECISIONS_INFRA.md` 참조), 브라우저 검증·API 확인 등 실제로 필요한 시점에만 켠다. **작업이 끝나면 직접 끈다** — Docker DB(`docker compose down`)·Gradle 데몬(`./gradlew --stop`)·`preview_stop`으로 백엔드/프론트를, 더 쓸 계획이 없으면 그 자리에서 내린다(장시간 세션에서 데몬 누적이 메모리 부족을 일으킨 실제 사례 있음).
 
 **브라우저 검증·Cowork 도구 사용 기준 → §0b 참조.**
 
