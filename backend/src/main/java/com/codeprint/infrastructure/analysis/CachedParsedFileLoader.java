@@ -25,7 +25,10 @@ public class CachedParsedFileLoader {
     // StaticCodeAnalyzer 출력 의미나 ParsedFile 스키마가 바뀌면 이 값을 올려 기존 캐시를 전부 무효화한다.
     // v2(2026-07-10): ParsedFile에 controllerMappingFunctions 필드 추가(API_ENDPOINT 함수 단위 확장) — 미인상 시
     // 구스키마 캐시 JSON을 신스키마 레코드로 역직렬화하다 실패하거나(필드 초과) null 필드로 조용히 깨짐(필드 누락).
-    static final int ANALYZER_VERSION = 2;
+    // v3(2026-07-10): 스키마는 그대로지만 controllerMappingFunctions의 "출력 의미"가 바뀜(JS/TS·Python·Go
+    // 처리 함수 해소 로직 추가) — 미인상 시 기존에 캐시된 파일은 여전히 구로직 결과(빈 맵)를 반환해 새 코드가
+    // 아예 실행되지 않는 채로 조용히 무효화됨(B-16과 같은 부류, 이번엔 역직렬화 실패가 아니라 스테일 값).
+    static final int ANALYZER_VERSION = 3;
     private static final Duration CACHE_TTL = Duration.ofDays(30);
 
     private final StaticCodeAnalyzer staticCodeAnalyzer;
