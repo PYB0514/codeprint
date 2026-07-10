@@ -144,7 +144,7 @@ public class GraphController {
     }
 
     // "AI 컨텍스트" 파일/함수 트리 마크다운 — 웹 다운로드 버튼이 호출 (§16.1 생성기 백엔드 승격,
-    // 프론트 downloadTreeText 클라이언트 로직을 대체 — MCP get_repo_map과 동일 생성기 사용)
+    // 프론트 downloadTreeText 클라이언트 로직을 대체)
     @GetMapping("/api/projects/{projectId}/graph/context-md")
     public ResponseEntity<Map<String, String>> getContextMd(
             @PathVariable UUID projectId,
