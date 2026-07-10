@@ -81,6 +81,7 @@
 - 민감 정보(토큰, 비밀번호)가 로그에 노출되지 않는지
 - `permitAll()` 추가 시 SECURITY_POLICY.md 허용 기준 3가지 충족 여부
 - Actuator 엔드포인트를 새로 공개하지 않는지
+- 새 파일이 `PRODUCT_STRATEGY.md`에 정의된 유료 축(Desktop/Team) 가치와 겹치면 커밋 전 gitignore로 등록한다
 
 **규칙 3: 코드 품질 확인**
 - 200줄이 50줄로 줄여질 수 있으면 리팩토링 후 커밋
