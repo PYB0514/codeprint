@@ -1534,3 +1534,18 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `PRODUCT_STRATEGY.md` §16.2·§16.6, `PROGRESS.md` 백로그 갱신(둘 다 로컬 전용). 실제 구현(Shadow jar·Skill 매니페스트)은 다음 단계 — 이번엔 스코프 확정까지.
 
 **한계.** Claude Code Skill의 실제 배포·발견 메커니즘(마켓플레이스 유무 등) 미조사 — 착수 1단계로 필요.
+
+## 열화판 공개 Skill — 독립 실행 fat jar 1차 빌드·검증 (2026-07-11, codeprint_112, 같은 세션 이어서)
+
+> §16.6 착수 순서 ①②(Skill 배포 메커니즘 조사 → fat jar 빌드·검증) 완료.
+
+**①Skill 배포 메커니즘 조사(claude-code-guide 에이전트).** Skill 자체는 별도 마켓플레이스가 없고, **Plugin Marketplace**(`.claude-plugin/marketplace.json`+`plugin.json`)로 배포하는 게 표준 — 플러그인 안에 `skills/` 디렉터리로 스킬 포함, 사용자는 `/plugin marketplace add owner/repo` → `/plugin install`. 실행파일 번들 가능(`${CLAUDE_PLUGIN_ROOT}`로 참조), 사용자 프로젝트 경로는 `${CLAUDE_PROJECT_DIR}`로 받아야 함(하드코딩 금지).
+
+**②fat jar 빌드 — 계획 대비 3가지 정정.**
+1. **Shadow 플러그인 대신 순정 `Jar` 태스크** — `com.gradleup.shadow` 플러그인을 Gradle Plugin Portal에서 새로 받으려 하니 `UnknownPluginException`. 원인 조사: TCP 연결은 정상(`Test-NetConnection` 성공)인데 JVM 레벨에서만 실패 — 이 로컬 환경의 Oracle JDK 17.0.2(2022-01 릴리스, 오래됨)가 Cloudflare 경유 최신 인증서 체인을 신뢰 못 하는 것으로 추정(SSLKEYLOGFILE이 AV 프록시를 가리키는 정황도 확인, 확정 진단은 아님). 새 플러그인 다운로드 없이 `id 'java'`에 이미 포함된 `Jar` 태스크+`zipTree`로 직접 fat jar 구성하는 방식으로 우회.
+2. **`toolsRuntime` 최소 구성 시도 → 언어별 선별 불가 확인** — Java/TS/TSX만 넣고 실행하니 `NoClassDefFoundError: TreeSitterPython`. 원인: `StaticCodeAnalyzer` 생성자가 전체 tree-sitter 언어 분석기를 **즉시 초기화**(지연 초기화 아님) — 언어별 선별은 이 클래스를 고쳐야 가능한데 이번 스코프의 리팩토링 대상 아님(§3 surgical). → 전체 13개 언어 포함으로 전환, 그래도 실측 19~21MB(사전 추정 10~25MB 범위 안).
+3. **런타임 의존성 2개 누락 발견(실행 중 발견)** — `slf4j-api`(Lombok `@Slf4j` 런타임 필요), `spring-data-commons`(도메인 클래스의 `Persistable` 구현). 둘 다 `toolsRuntime`에 추가.
+
+**결과.** `backend/build.gradle`에 `toolsRuntime` configuration + `exploreLocalJar`/`analyzeLocalJar` 태스크(둘 다 순정 `Jar`, Shadow 불필요) 신설. 실측 검증: 레포 밖 임시 디렉터리로 jar 복사 후 `java -jar`만으로 실행 — `exploreLocalJar`를 `frontend/src`(62파일)에 실행해 정상 repoMap 생성, `analyzeLocalJar`를 `frontend/src`(경고 0)·`backend/src/main/java`(HIGH_FAN_OUT 5건, 기존 self 베이스라인과 일치)에 각각 실행해 프로덕션과 동일한 결과 확인. `compileJava`/`compileTestJava` 통과, 기존 태스크(`analyzeLocal`/`watchLocal`/`exploreLocal`/test) 무영향 확인.
+
+**한계.** `.claude/skills/` 매니페스트(SKILL.md)·Plugin/Marketplace 구조 작성은 다음 단계. JDK trust store 문제의 근본 원인은 확정 진단 아님(우회로만 해결) — 향후 다른 신규 Gradle 플러그인이 필요해지면 재발 가능, 그때 JDK 업그레이드 검토.
