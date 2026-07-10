@@ -40,7 +40,7 @@
 2. `contexts/Context{N}.md` — 가장 번호가 높은 최신 Context 파일(`ls contexts/ | sort -V | tail`로 직접 찾는다). **"다음 세션 첫 액션"의 단일 소스는 이 파일이다** — PROGRESS.md는 이 정보를 담지 않는다(2026-07-10 구조 개편, 근거는 `decisions/DECISIONS_INFRA.md`).
 3. `PROGRESS.md` — 기능 백로그·로컬 실행법·알려진 문제(참조용, "다음 액션"은 없음)
 
-이어서 `ToolSearch`로 `codeprint` MCP 연결 여부를 확인한다(세션 시작 시점 1회만 연결 시도되므로 지금 확인) — 안 잡히면 규칙 4 "자가 진단" 절차(analyzeLocal 대체 + 백엔드를 세션 끝까지 켜둠)를 따른다.
+이어서 `ToolSearch`로 `codeprint` MCP 연결 여부를 확인한다(세션 시작 시점 1회만 연결 시도되므로 지금 확인) — 안 잡히면 규칙 4 "자가 진단" 절차(올스탑 후 원인 진단 먼저, 그 다음에만 analyzeLocal 대체)를 따른다.
 
 **"다음은 뭐 할까?" 라고 묻지 않는다.** 작업이 끝나면 최신 Context 파일과 SECURITY_POLICY.md를 보고 스스로 다음 우선순위를 판단해서 진행한다.
 
@@ -106,7 +106,13 @@
 - push 전 `get_warnings`로 자가검사(HIGH/MEDIUM 확인)
 - **세션 시작 전 백엔드+DB를 미리 켜둔다.** MCP는 세션(터미널) 시작 시점에 딱 한 번만 연결을 시도한다 — 도중에 `preview_start`로 나중에 켜도 그 세션에선 재연결 안 됨(하네스 레벨). 직전 세션이 끝날 때 백엔드를 켜둬야 다음 세션에서 연결된다.
   - **잡히면**: 그대로 `get_warnings` 사용.
-  - **안 잡히면**: `./gradlew analyzeLocal`(Spring/DB 불필요, 같은 엔진)로 대체. 동시에 백엔드를 `preview_start`로 켜서 세션 끝까지 유지 — 다음 세션 연결 준비. 세션 마무리 시 사용자에게 짧게 안내.
+  - **안 잡히면 — 대체하지 말고 올스탑, 원인 진단 먼저(2026-07-10 규칙 변경, 사용자 지시)**: 다른 백로그 작업으로 넘어가지 않고 즉시 아래를 확인해 사용자에게 보고한다.
+    1. `curl -s -o NUL -w "%{http_code}" http://localhost:8080/actuator/health` — 지금은 떠 있는가?
+    2. `docker inspect -f "{{.State.Running}}" codeprint-db` — DB 컨테이너 상태
+    3. PowerShell `Get-Process -Name java | Select Id,StartTime`로 백엔드 프로세스 기동 시각 vs 현재 시각 비교 — 세션 시작 시점에 콜드부트 중이었는지 추정(콜드 `gradlew bootRun`이 `session-start-backend.js`의 대기시간·훅 자체 타임아웃보다 오래 걸리면 이 패턴이 나옴, `decisions/DECISIONS_INFRA.md` 참조)
+    4. `.mcp.json`에 `codeprint` 서버 URL(`http://localhost:8080/mcp/rpc`)이 정확한지
+    - 진단 결과 "구조적 제약(세션당 1회 연결, 재연결 불가)+백엔드가 지금은 정상"으로 확인되면 그때만 `./gradlew analyzeLocal`로 대체하고 백엔드를 `preview_start`로 세션 끝까지 유지(다음 세션 연결 준비), 세션 마무리 시 사용자에게 짧게 안내.
+    - 백엔드가 지금도 안 떠 있거나 CORS/설정 오류 등 새로운 원인으로 보이면 analyzeLocal로 넘어가지 말고 원인과 수정안을 먼저 사용자에게 보고.
 - **개발 중간 자가검사**: push 직전 1회로 미루지 않는다. 자연스러운 멈춤 지점마다 중간 점검.
 
 **규칙 5: DECISIONS.md 기록**
