@@ -16,8 +16,11 @@ ERROR_TRACKER.md
 backend/bin/
 
 # 내부 전용 로컬 그래프 탐색 도구 — Desktop 유료 가치(로컬 분석엔진)와 겹쳐 공개 레포에 커밋 안 함
-# (analyzeLocal/watchLocal은 기존 공개 상태 유지 — 이 갭은 decisions/DECISIONS_BACKEND.md에 별도 기록)
 backend/src/main/java/com/codeprint/tools/LocalGraphQuery.java
+
+# 데스크탑 자동 갱신(watchLocal)은 PRODUCT_STRATEGY.md에 유료 축으로 명시된 기능 — 공개 레포 미노출
+# (analyzeLocal은 "정보 vs 자동화" 경계상 자동화가 아니라 공개 유지, decisions/DECISIONS_BACKEND.md 참조)
+backend/src/main/java/com/codeprint/tools/LocalWatcher.java
 
 # 로컬 실행 로그
 *.log

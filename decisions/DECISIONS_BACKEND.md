@@ -1467,6 +1467,8 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 
 **한계.** ①기존 `analyzeLocal`/`watchLocal`의 공개 레포 노출 갭은 오늘 미해결(별도 판단 필요 — 비공개 전환 또는 의도적 수용 결정). ②열화판 공개 스킬(배포 채널)은 오늘 미착수 — 실제 배포 메커니즘 조사부터 필요. ③`search_public_projects`의 Team 유료축 재설계(인증·비공개 레포)도 미착수. ④기존 MCP 실사용자 존재 여부는 끝내 미검증(Railway 로그 접근 불가) — 문제 제보 시 열화 스킬로 조기 흡수할 것.
 
+> ⚠️ **①항목 대체됨 (2026-07-11)** — "`watchLocal` 공개 레포 노출 갭 해소 — LocalWatcher.java gitignore 전환"으로 대체. `watchLocal`만 gitignore 처리(비공개 전환), `analyzeLocal`은 의도적 수용으로 결론. 아래 원문은 이력 보존용.
+
 ### 후속 — `exploreLocal` 파싱 결과 디스크 캐시화 (같은 세션 이어서)
 
 **문제.** 위 결정으로 도입한 `exploreLocal`은 CLI 호출마다 새 JVM 프로세스가 뜨는 구조라, 매 호출이 전체 소스를 처음부터 재파싱함(`InMemoryParsedFileCachePort`는 프로세스 생명주기 안에서만 유효). 정적 파일을 미리 만들어두는 대안(항상 최신이 아님, staleness 문제)과 비교하며 트레이드오프를 논의하다가, "매번 재파싱"이 이 방식의 유일한 실질적 약점으로 확인돼 개선하기로 함.
@@ -1476,3 +1478,27 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** 동일 대상 2회 연속 실행 — 1차 `hit 0, miss 5` → 2차 `hit 5, miss 0` 확인(전체 캐시 히트). 캐시 경유 후 `repoMap.md` 출력 내용도 정상(round-trip 무결성 확인). `compileJava`/`test` 전체 통과.
 
 **한계.** `analyzeLocal`/`watchLocal`은 이번 캐시 전환 대상에서 제외(오늘 스코프는 `exploreLocal`만, 기존 도구는 무변경) — 필요해지면 같은 방식으로 전환 가능. 내용 변경 시 캐시 무효화(content hash 불일치)는 기존 `CachedParsedFileLoader` 로직 재사용이라 별도 검증 안 함(프로덕션에서 이미 검증된 경로).
+
+## `watchLocal` 공개 레포 노출 갭 해소 — LocalWatcher.java gitignore 전환 (2026-07-11, codeprint_112)
+
+> 대체: 위 "MCP JSON-RPC 서버 제거" 결정 ①항목("analyzeLocal/watchLocal 공개 레포 노출 갭은 오늘 미해결").
+
+**문제.** Context111이 남긴 판단 필요 항목 — `analyzeLocal`/`watchLocal`(Desktop 유료 가치인 로컬 분석엔진+자동 재분석)이 `backend/src/main/java/com/codeprint/tools/`에 공개 상태로 있어, 공개 레포를 클론하면 누구나 무료로 쓸 수 있는 상태였음. `PRODUCT_STRATEGY.md` §13.2(L393 "개인 유료 = Desktop, 로컬 분석엔진")·§14.4(L579 "④데스크탑 자동 갱신(유료) | watchLocal이 저장 시 context.md 자동 재생성")가 이 두 기능을 유료 축으로 명시하는데 실제 배치가 어긋나 있었음.
+
+**검토한 대안과 탈락 이유(도달 과정).**
+1. **`analyzeLocal`·`watchLocal` 둘 다 히스토리째 완전 제거** — 사용자 최초 요청. 조사 결과 `LocalAnalyzer.java`(analyzeLocal)는 전체 660커밋 중 362번째(PR #143)부터 존재해, 히스토리에서 지우려면 그 이후 약 300개 커밋 SHA 전부·태그 291개 전부가 재작성돼야 함. 취업 포트폴리오 겸용 레포(CLAUDE.md §8)의 커밋 히스토리 대부분이 훼손되는 비용이 과해 탈락.
+2. **`watchLocal`만 히스토리째 제거** — `LocalWatcher.java`는 cf3e20f(PR #418, HEAD 기준 89번째)부터라 재작성 범위가 88개 커밋·태그 43개로 축소됨. 그래도 force-push 재작성 자체의 리스크(포트폴리오 히스토리 훼손, 기존 클론/포크와의 불일치)가 지켜지는 가치(watchLocal은 이미 공개 유지하기로 한 `LocalAnalyzer.analyze()`를 호출하는 얇은 래퍼일 뿐이라 알고리즘적 가치가 낮음) 대비 과하다고 판단해 탈락.
+3. **파일명 변경/재생성으로 "우회 은닉"** — git이 rename을 delete+add로 취급해 과거 blob이 그대로 남는 구조라 실효성 없음(히스토리 재작성과 동일한 문제로 귀결).
+4. **`analyzeLocal`도 함께 gitignore** — "정보 vs 자동화" 경계(§14.2 L442-443, 유료는 자동화 패키징이지 판정 내용 자체가 아님) 기준으로 `analyzeLocal`은 수동 1회성 실행이라 자동화에 해당 안 함, `watchLocal`(저장 시 자동 재분석)만 명확히 해당 → `analyzeLocal`은 기존 "진입장벽=클론+컴파일" 논리로 의도적 수용 유지, 범위를 `watchLocal`로 좁힘.
+
+**결정.**
+1. **히스토리 재작성 안 함** — 과거 커밋(cf3e20f~)엔 `LocalWatcher.java` 원문이 남아있음(수용).
+2. **`git rm --cached`로 추적만 해제 + `.gitignore` 등록**(`LocalGraphQuery.java`와 동일 패턴). 로컬 디스크 파일은 그대로 남아 `watchLocal` gradle task는 계속 정상 동작, 공개 레포 최신 상태(HEAD)에서만 사라짐.
+3. **`analyzeLocal`(`LocalAnalyzer.java`)·`InMemoryParsedFileCachePort.java`(analyzeLocal과 공유 의존성)는 공개 유지** — 위 4번 근거.
+4. **재발 방지 규칙 신설**(CLAUDE.md 규칙 2 보안 체크리스트) — "새 파일이 `PRODUCT_STRATEGY.md`에 정의된 유료 축(Desktop/Team) 가치와 겹치면 커밋 전 gitignore로 등록한다". 기존엔 `LocalGraphQuery.java` 사례처럼 발견 시점에 즉흥 처리만 했을 뿐 상시 규칙이 없었음(사용자 지적으로 발견).
+
+**결과.** `git rm --cached` 후 `compileJava`/`compileTestJava` 통과(파일이 로컬 디스크에 남아있어 컴파일 영향 없음 확인). README·`docs/FEATURES.md`엔 애초에 `watchLocal` 사용법이 공개 문서화돼 있지 않아 추가 정리 불필요(확인 완료).
+
+**★재평가(같은 세션, 사용자 재질문으로 발견) — 이 조치의 실제 방어 범위는 "우발적 발견" 차단이지 "작정한 탐색" 차단이 아니다.** `git clone`은 기본적으로 전체 히스토리를 받아가므로, `git log --all --diff-filter=A -- '**/LocalWatcher.java'` + `git show <sha>:...`면 30초 안에 과거본을 그대로 복원 가능 — git에 익숙한 사람(=이 코드를 노릴 법한 사람)에겐 사실상 무방비. 즉 이번 조치가 막는 건 "GitHub 파일 트리를 그냥 훑어보는" 가장 흔한 경로뿐. 그럼에도 유지하기로 한 이유: ①Desktop이 아직 미출시라 위협이 가설 단계(실제 유출 증거 없음, MCP 폐기 때와 동일 리스크 감수 패턴) ②완전 차단(히스토리 재작성)의 비용(포트폴리오 히스토리 훼손)이 확률 낮은 위협 대비 과함 ③가장 흔한 유출 경로 하나는 실제로 막았으므로 비용 대비 효익은 여전히 양수. **에스컬레이션 조건**: 실제 유출 정황(신고·경쟁 서비스 발견 등)이 나오면 그때 히스토리 재작성 또는 진짜 라이선스 게이트(§13.4, GitLab EE 방식 벤치마킹) 착수 — 지금 미리 안 함(§13.3 원칙과 동일).
+
+**한계.** 과거 커밋 히스토리엔 여전히 원문이 남아있어, git log를 뒤지는 수준의 접근에는 방어되지 않음(의도적 수용 — 위 대안 검토 참조). `analyzeLocal`의 노출 갭은 이번 결정으로 "의도적 수용"으로 명시적 확정(더 이상 미해결 판단 대기 항목 아님).
