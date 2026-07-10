@@ -4,7 +4,6 @@ package com.codeprint.application.graph;
 import com.codeprint.application.analysis.AnalysisApplicationService;
 import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.graph.Graph;
-import com.codeprint.domain.graph.port.ProjectSearchPort;
 import com.codeprint.domain.project.Project;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,7 +12,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -30,8 +28,6 @@ class GraphFacadeTest {
     private ProjectQueryService projectQueryService;
     @Mock
     private AnalysisApplicationService analysisApplicationService;
-    @Mock
-    private ProjectSearchPort projectSearchPort;
 
     @InjectMocks
     private GraphFacade facade;
@@ -102,14 +98,5 @@ class GraphFacadeTest {
 
         assertThat(assertThatThrownBy(() -> facade.verifyGraphReadAccess(graphId, ownerId))
                 .isInstanceOf(IllegalArgumentException.class)).isNotNull();
-    }
-
-    @Test
-    @DisplayName("searchPublicProjects — projectSearchPort(어댑터 경유)에 위임")
-    void searchPublicProjects_delegates() {
-        Project p = Project.create(ownerId, "url", "n", null);
-        when(projectSearchPort.searchPublic("codeprint")).thenReturn(List.of(p));
-
-        assertThat(facade.searchPublicProjects("codeprint")).containsExactly(p);
     }
 }

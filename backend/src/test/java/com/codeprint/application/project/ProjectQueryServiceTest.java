@@ -16,7 +16,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -105,26 +104,6 @@ class ProjectQueryServiceTest {
 
         assertThatThrownBy(() -> service.getPublicProject(projectId))
                 .isInstanceOf(IllegalStateException.class);
-    }
-
-    @Test
-    @DisplayName("searchPublic — 프로젝트명·레포 URL로 필터")
-    void searchPublic_filtersByNameOrRepoUrl() {
-        Project match = Project.create(ownerId, "https://github.com/x/codeprint", "codeprint", null);
-        Project noMatch = Project.create(ownerId, "https://github.com/x/other", "other", null);
-        when(repository.findAllPublic(any())).thenReturn(List.of(match, noMatch));
-
-        assertThat(service.searchPublic("codeprint")).containsExactly(match);
-    }
-
-    @Test
-    @DisplayName("searchPublic — query 없으면 전체 반환")
-    void searchPublic_noQuery_returnsAll() {
-        Project p1 = project(ownerId);
-        Project p2 = project(otherId);
-        when(repository.findAllPublic(any())).thenReturn(List.of(p1, p2));
-
-        assertThat(service.searchPublic(null)).containsExactly(p1, p2);
     }
 
     private Project project(UUID userId) {

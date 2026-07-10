@@ -2,7 +2,6 @@
 package com.codeprint.infrastructure.persistence.project;
 
 import com.codeprint.domain.project.Project;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -18,9 +17,6 @@ public interface ProjectJpaRepository extends JpaRepository<Project, UUID> {
 
     // 특정 유저의 공개 프로젝트 목록 조회
     List<Project> findByUserIdAndIsPublicTrue(UUID userId);
-
-    // 전체 공개 프로젝트 목록 조회 (최신순)
-    List<Project> findByIsPublicTrueOrderByCreatedAtDesc(Pageable pageable);
 
     // GitHub 레포 URL 매칭 — .git 접미사·대소문자 차이를 무시하고 조회
     @Query("select p from Project p where lower(p.githubRepoUrl) = lower(:url) "
