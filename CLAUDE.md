@@ -11,7 +11,7 @@
 새 컨텍스트를 시작할 때 아래 문장을 그대로 붙여넣으면 된다.
 
 ```
-CLAUDE.md, PROGRESS.md, 최신 Context 파일 읽고 이어서 시작하자.
+/loop CLAUDE.md, PROGRESS.md, 최신 Context 파일 읽고 개발예정사항 순서대로 진행해
 ```
 
 Claude는 이 세 파일을 읽고 다음을 파악한 뒤 작업을 시작한다.
