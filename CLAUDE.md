@@ -56,7 +56,7 @@
 
 **브라우저 검증·Cowork 도구 사용 기준 → §0b 참조.**
 
-**코드 구조 파악은 Glob/Grep/Read 반복 대신 `exploreLocal` 우선 사용한다.** 이 저장소 자체의 구조를 알아야 할 때(함수 위치·호출관계 등) `./gradlew exploreLocal -PqueryMode=repoMap|find|neighbors`(`backend/build/codeprint-local/`에 결과 저장, Read 도구로 확인)를 먼저 시도 — 여러 번 파일을 열어보는 탐색보다 토큰이 훨씬 적게 든다. push 전 워닝 자가검사(`analyzeLocal`)와는 별개 도구, 세션 내내 필요할 때마다 사용(2026-07-10 도입 경위 `decisions/DECISIONS_BACKEND.md` 참조).
+**코드 구조 파악은 Glob/Grep/Read 반복 대신 `exploreLocal` 우선 사용한다.** 이 저장소 자체의 구조를 알아야 할 때(함수 위치·호출관계 등) `./gradlew exploreLocal -PqueryMode=repoMap|find|neighbors`(`backend/build/codeprint-local/`에 결과 저장, Read 도구로 확인)를 먼저 시도 — 여러 번 파일을 열어보는 탐색보다 토큰이 훨씬 적게 든다. push 전 워닝 자가검사(`analyzeLocal`)와는 별개 도구, 세션 내내 필요할 때마다 사용(2026-07-10 도입 경위 `decisions/DECISIONS_BACKEND.md` 참조). **강제 장치**: `backend/src`·`frontend/src`에서 식별자를 Grep/Glob으로 찾으려 하면 `.claude/hooks/check-explore-local-first.js`가 exploreLocal 결과 파일이 10분 이내 갱신됐는지 확인해 없으면 자동 차단한다(사용자 승인 불필요, exploreLocal 실행으로 스스로 해소, 경위 `decisions/DECISIONS_INFRA.md` 참조) — decisions/·docs/ 등 비-소스 검색과 텍스트 내용 검색은 그대로 허용된다.
 
 ---
 
