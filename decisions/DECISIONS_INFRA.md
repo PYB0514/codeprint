@@ -226,3 +226,27 @@ Set-Content -Path "PROGRESS_ARCHIVE.md" -Value $lines -Encoding utf8
 
 ### 교훈
 "완료된 기록은 git/decisions/Context가 이미 갖고 있으니 중복 보존 안 한다"는 이번 세션 내내 적용한 원칙은 **완료된 일**에만 맞는 원칙이었다. **아직 안 끝난 일(외부 승인·계약 대기)**은 어디에도 "완료 기록"이 없으므로 같은 논리로 지우면 안 됐는데, 구조 개편에 몰입해 있느라 이 구분을 놓쳤다. 다행히 실제 세션 마무리(Context 파일 작성) 전에 자체 리뷰로 발견해 데이터 유실 없이 수정.
+
+---
+
+## exploreLocal 미사용 방지 훅 — Grep/Glob PreToolUse에 파일 타임스탬프 강제 (2026-07-10, 같은 세션 이어서)
+
+### 문제
+CLAUDE.md §0에 "코드 구조 파악은 Glob/Grep/Read 대신 exploreLocal 우선 사용"을 명문화(PR #504)했지만, 사용자가 "이건 권장 문구일 뿐이라 나중에 습관대로 Glob/Grep을 다시 쓰면 결국 의미없다"고 지적 — 문서로 적어두는 것과 실제로 지켜지는 것은 다른 문제. "Glob/Grep 쓰기 전에 무조건 한 번 생각해서 꼭 필요한지 막는 프로세스"를 요청받음.
+
+### 검토한 대안과 탈락 이유
+1. **Read까지 포함해 3개 도구 전부 가로채기** — 탈락. `exploreLocal find`는 파일 경로/노드만 알려줄 뿐이라, 실제 내용을 보려면 결국 Read가 필요함(대체 관계 아니라 순차 관계). Read를 막으면 정상 흐름 자체가 막힘.
+2. **`ask`(사용자 승인) 방식** — 탈락. 걸릴 때마다 사용자를 방해하고, 오판 시 "그냥 진행해"로 승인만 받으면 exploreLocal을 실제로 확인했다는 보장이 전혀 없어 사용자가 지적한 "형식적 통과" 문제가 그대로 남음.
+3. **모든 Grep/Glob 호출을 무조건 차단** — 탈락. `decisions/`·`contexts/`·`docs/`·설정/마이그레이션 파일처럼 exploreLocal이 애초에 커버 못 하는 비-소스 파일 검색, 그리고 이름이 아닌 텍스트 내용 검색(주석 문구·TODO·에러 메시지)은 exploreLocal로 대체 불가능한 정당한 용도라 이것까지 막으면 정상 작업이 안 됨(사용자 질문 "Glob/Grep이 꼭 필요한 경우는 없어?"에 대한 답변으로 확인).
+
+### 결정
+`.claude/hooks/check-explore-local-first.js`(신규, 로컬 전용) — Grep/Glob PreToolUse 훅, 결정론적 JS(LLM 판단 아님).
+1. **면제(항상 allow)**: 검색 경로가 `backend/src`·`frontend/src` 밖이거나(decisions/contexts/docs 등), 검색어가 식별자 형태가 아니거나(공백 포함 자연어·40자 초과), glob 필터가 비-코드 확장자(`.md/.yml/.json/.sql` 등)인 경우.
+2. **그 외(구조 검색으로 판단)**: `backend/build/codeprint-local/`(exploreLocal 결과 저장 경로) 안의 파일 중 **10분 이내에 갱신된 게 있는지 실제로 확인** — 있으면 "방금 exploreLocal을 실제로 실행했다"는 물증으로 보고 allow, 없으면 **`deny`**(사용자 승인 요청 아님, 나 혼자 조용히 막혀서 exploreLocal을 먼저 실행하게 됨).
+- `ask` 대신 `deny`를 택한 이유: 이 막힘은 내가 exploreLocal을 실행하면 스스로 해소되는 자기해결형 차단이라 사용자 개입이 원리적으로 불필요함 — 세션 도중 매번 사용자를 부르지 않고도 강제력을 확보하는 방식.
+
+### 결과
+파이프 테스트 5종 실측: ①`backend/src` 식별자 검색·마커 없음 → deny ②`decisions/` 검색 → allow(면제) ③자연어 문구 검색 → allow(면제) ④`backend/src/**/*.java` Glob → deny ⑤`contexts/*.md` Glob → allow(면제). 이어서 오래된 마커(28분 전, 신선도 기준 밖) → 여전히 deny 확인 → `exploreLocal` 실제 실행 → 곧바로 재시도 → allow로 전환 확인. `settings.json` JSON 문법 검증 통과.
+
+### 한계
+`backend/build/codeprint-local/`이 존재한다는 사실만으로 "결과를 실제로 읽었는지"까지는 검증 못 함(파일 mtime은 "실행했다"의 증거일 뿐 "확인했다"의 증거는 아님) — 이 이상의 강제는 하네스 레벨 접근이 필요해 이번 스코프 밖. 40자·정규식 기반 식별자 판정은 휴리스틱이라 경계 사례(예: 긴 함수명)에서 오탐 가능 — 실사용 중 오판 패턴이 쌓이면 조정.
