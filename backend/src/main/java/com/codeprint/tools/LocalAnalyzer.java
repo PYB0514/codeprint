@@ -52,6 +52,20 @@ public class LocalAnalyzer {
 
     // rootDir을 분석해 워닝 목록을 반환 — LocalWatcher가 동일 loader(캐시 유지)로 반복 호출
     static List<Map<String, Object>> analyze(Path rootDir, UUID projectId, CachedParsedFileLoader loader) throws Exception {
+        GraphResult result = buildGraph(rootDir, projectId, loader);
+
+        // 의도 아키텍처 선언(.codeprint/architecture.json)이 있으면 INTENT_DRIFT까지 검사
+        ArchitectureIntent intent = loadIntent(rootDir);
+        if (intent != null) {
+            System.out.println("의도 선언 로드: 모듈 " + intent.modules().size() + "개, 규칙 " + intent.rules().size() + "개");
+        }
+
+        GraphWarningService warningService = new GraphWarningService();
+        return warningService.detect(result.nodes(), result.edges(), intent);
+    }
+
+    // rootDir을 파싱+그래프 구성까지만 수행 — LocalGraphQuery(repo map·노드검색·이웃조회)가 워닝 계산 없이 재사용
+    static GraphResult buildGraph(Path rootDir, UUID projectId, CachedParsedFileLoader loader) throws Exception {
         SourceFileWalker walker = new SourceFileWalker();
         List<Path> files = walker.walk(rootDir).files();
         System.out.println("소스 파일 수: " + files.size());
@@ -69,15 +83,11 @@ public class LocalAnalyzer {
         List<Edge> edges = repo.findEdgesByGraphId(graph.getId());
         System.out.println("노드: " + nodes.size() + ", 엣지: " + edges.size());
 
-        // 의도 아키텍처 선언(.codeprint/architecture.json)이 있으면 INTENT_DRIFT까지 검사
-        ArchitectureIntent intent = loadIntent(rootDir);
-        if (intent != null) {
-            System.out.println("의도 선언 로드: 모듈 " + intent.modules().size() + "개, 규칙 " + intent.rules().size() + "개");
-        }
-
-        GraphWarningService warningService = new GraphWarningService();
-        return warningService.detect(nodes, edges, intent);
+        return new GraphResult(nodes, edges);
     }
+
+    // buildGraph 결과 묶음 — 노드·엣지만 필요한 호출자를 위해 워닝 계산과 분리
+    record GraphResult(List<Node> nodes, List<Edge> edges) {}
 
     // rootDir/.codeprint/architecture.json 을 읽어 의도 아키텍처를 구성 — 없거나 파싱 실패면 null
     private static ArchitectureIntent loadIntent(Path rootDir) {

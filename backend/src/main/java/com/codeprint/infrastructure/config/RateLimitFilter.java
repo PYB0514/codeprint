@@ -41,8 +41,7 @@ public class RateLimitFilter implements Filter {
             new RateLimitRule("POST", "/api/reports", "report", 5),
             new RateLimitRule("POST", "/api/messages/*", "message-send", 30),
             new RateLimitRule("POST", "/api/users/*/follow", "follow", 30),
-            new RateLimitRule("POST", "/api/push/subscribe", "push-subscribe", 10),
-            new RateLimitRule("POST", "/mcp/rpc", "mcp-rpc", 30)
+            new RateLimitRule("POST", "/api/push/subscribe", "push-subscribe", 10)
     );
 
     // 요청 IP 추출 — Railway 프록시가 실제 접속 IP를 X-Forwarded-For 맨 끝에 추가하므로 마지막 값을 사용
