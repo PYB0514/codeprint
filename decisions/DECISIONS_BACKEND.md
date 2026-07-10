@@ -1421,3 +1421,23 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** 백엔드를 먼저 내리고([[feedback_no_gradle_while_backend_running]] 준수) `gradlew test` 전체 통과 확인 후 `preview_start`로 재기동, `codeprint` MCP `get_warnings` 자가검사 HIGH 0건(베이스라인 유지) 확인. 재기동 후 `search_public_projects` 재호출로 MCP 연결이 백엔드 재시작을 넘어 유지됨도 함께 확인(stateless HTTP 호출이라 재연결 이슈 없음).
 
 **한계.** 이 origin은 로컬에서 실제 WebSocket handshake로 재현 검증하지 못함(배포 도메인에서만 발생하는 경로라 dev 환경 `localhost:3000`은 영향 없음) — 코드 대조(두 CORS 설정 일치)로 대체.
+
+## API_ENDPOINT 함수 단위 확장 — JS/TS·Python·Go 2차 (Ruby·NestJS 제외) (2026-07-10, codeprint_110)
+
+**문제.** Context109(PR #491)가 Java/Kotlin만 먼저 착수하고 남긴 후속 과제 — 나머지 4개 언어(JS/TS·Python·Go·Ruby)의 API_ENDPOINT→FUNCTION 핸들러 연결. 착수 전 조사에서 Context109가 세웠던 가정("Express/Go/Ruby는 라우팅 호출 인자에 핸들러가 직접 나와 신뢰도 높을 것") 중 **Ruby 부분이 실제로는 틀렸음을 발견** — Rails 관례(`get '/posts', to: 'posts#index'`)는 컨트롤러#액션을 **문자열로** 참조하고 그 액션은 항상 다른 파일(`app/controllers/*.rb`)에 있어, 동일 파일 내 함수만 조회 가능한 현재 아키텍처(`funcNodeIds`)로는 매칭률이 구조적으로 0%로 확정적임.
+
+**결정.**
+1. **스코프를 JS/TS·Python·Go 3개로 축소, Ruby는 제외**(위 이유) — 시도해도 항상 실패할 게 뻔한 코드를 추가하지 않음(Simplicity First).
+2. **언어별로 실제 프레임워크 관례에 맞는 기법을 다르게 적용**:
+   - Java/Kotlin(기존)·**Python FastAPI/Flask**: 위치 휴리스틱(`findEnclosingFunction` 재사용 — 데코레이터 바로 다음 함수 선언).
+   - **JS/TS Express**·**Go Gin/Echo/Fiber**: 신규 `lastIdentifierArg` 헬퍼 — 라우팅 호출의 같은 줄 나머지 인자에서 마지막 인자가 순수 식별자(또는 `h.GetUsers`처럼 점으로 구분된 참조의 마지막 세그먼트)면 핸들러로 채택, `=>`·`function`·`func(`·`{`가 섞여 있으면(익명 함수/화살표) null 반환해 오검출 방지.
+   - **Python Django**: `path('route/', views.func)`의 뷰 참조에서 마지막 `.` 뒤 식별자 추출 — `views.py`처럼 다른 파일에 있는 경우가 흔하지만, 그런 경우 GraphBuilder의 동일 파일 `funcNodeIds` 조회가 자연히 null이 되어 엣지 미생성으로 안전하게 귀결(확인 못하는 연결은 안 만드는 게 맞음, 별도 크로스파일 처리 안 함).
+3. **NestJS도 이번 스코프에서 제외** — 구현 도중 발견: NestJS 컨트롤러 메서드는 데코레이터 없이 `findAll() {}` 형태의 클래스 메서드로 선언되는데, `getFunctionPattern("TypeScript")`가 `function` 키워드·`const` 화살표 함수만 인식하고 **클래스 메서드 선언 자체를 애초에 FUNCTION 노드로 잡지 않음**(이번 기능 한정 문제가 아니라 TS 클래스 메서드 파싱의 더 넓은 기존 한계) — 위치 휴리스틱을 구현해도 항상 조회 실패로 귀결돼 구현 자체를 보류, 별도 과제로 백로그 등재.
+
+**결과.** `StaticCodeAnalyzerTest`에 언어별 신규 테스트 8종(Express 정상해소·NestJS 미해소 확인·FastAPI·Django·Go 정상해소·Go 익명함수 미해소·Go 리시버 메서드 점표기·Ruby 미해소 확인) + 기존 `GraphBuilderTest`(언어 무관 wiring 테스트, 무변경으로 이미 통과)로 이중 검증. `gradlew test` 전체 통과.
+
+**★부수 발견 — 캐시 무효화 누락 재발(B-16과 같은 부류, 이번엔 다른 형태).** `CachedParsedFileLoader.ANALYZER_VERSION` 주석이 "출력 의미가 바뀌면 올릴 것"이라고 명시하는데, 이번 변경은 `ParsedFile` 스키마는 그대로고 `controllerMappingFunctions`의 **계산 로직만** 바뀜(스키마 미변경 → 역직렬화는 항상 성공하므로 B-16처럼 명백히 깨지지 않음) — 그래서 놓치기 더 쉬운 케이스였음. 버전을 안 올렸다면 이미 캐시된 JS/TS·Python·Go 파일은 새 로직이 영영 실행되지 않고 빈 맵을 계속 반환했을 것(에러도, 경고도 없이 조용히 무효화). `ANALYZER_VERSION` 2→3으로 상향해 해결. **push 전 코드 리뷰 단계에서 캐시 정책 주석을 다시 읽다가 발견** — 라이브 재분석 없이도 캐시 아키텍처를 정독하는 것만으로 잡을 수 있었던 사례.
+
+**라이브 검증(로컬, `/api/dev/test-token`으로 테스트유저 JWT 발급 → gin-gonic/gin 신규 프로젝트 생성·실 분석 트리거).** API_ENDPOINT 139개 중 6개가 실제 FUNCTION_CALL 핸들러 엣지로 연결됨(`handlerTest1`·`handlerTest2` 등 명명된 함수 정상 매칭 확인). 나머지 133개는 gin 자체가 라우터 라이브러리라 테스트 스위트 대부분이 `func(c *gin.Context) {}` 인라인 익명 핸들러를 쓰기 때문 — `lastIdentifierArg` 가드가 이를 정확히 걸러내 오탐 없이 미해소로 처리함을 확인(낮은 연결률 자체가 아니라 "익명 핸들러는 정확히 skip하는지"가 검증 대상이었음). 검증 후 테스트 프로젝트는 삭제.
+
+**한계.** Ruby·NestJS 미착수(위 이유). Django·Express의 크로스파일 참조(뷰가 다른 파일에 있는 경우)는 이번 아키텍처로는 원천적으로 해소 불가 — 언젠가 필요해지면 프로젝트 전체 함수 인덱스(파일 무관 이름 조회)로 확장하는 별도 설계가 필요.

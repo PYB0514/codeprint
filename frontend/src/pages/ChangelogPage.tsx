@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.122.3',
+    date: '2026-07-10',
+    title: 'API 엔드포인트 흐름재생 확장 — Express·FastAPI/Flask·Django·Go',
+    type: 'fix',
+    items: [
+      { category: '그래프', desc: 'Java/Kotlin에 이어 Express·FastAPI/Flask·Django·Go(Gin/Echo/Fiber) 프로젝트도 API 엔드포인트에서 흐름재생을 시작하면 실제 처리 함수까지 이어서 볼 수 있습니다. 인라인 익명 함수로 처리되는 라우트는 이름이 없어 계속 엔드포인트에서 멈춥니다.' },
+    ],
+  },
+  {
     version: 'v0.122.1',
     date: '2026-07-10',
     title: 'API 엔드포인트 흐름재생이 처리 함수까지 이어짐 (Java/Kotlin)',

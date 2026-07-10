@@ -989,6 +989,143 @@ class StaticCodeAnalyzerTest {
         assertThat(result.controllerMappingFunctions()).containsEntry("/api/projects", "create");
     }
 
+    @Test
+    @DisplayName("Express 컨트롤러 매핑마다 마지막 인자가 순수 식별자면 처리 함수로 해소한다")
+    void Express_컨트롤러_매핑_처리함수_해소() throws IOException {
+        Path file = tempDir.resolve("userRouter.js");
+        Files.writeString(file, """
+                const express = require('express');
+                const router = express.Router();
+                function getUsers(req, res) {}
+                function createUser(req, res) {}
+                router.get('/users', getUsers);
+                router.post('/users', authMiddleware, createUser);
+                router.delete('/users/:id', (req, res) => { res.send(); });
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "JavaScript");
+
+        assertThat(result.controllerMappingFunctions())
+                .containsEntry("GET:/users", "getUsers")
+                .containsEntry("POST:/users", "createUser")
+                .doesNotContainKey("DELETE:/users/:id");
+    }
+
+    @Test
+    @DisplayName("NestJS는 이번 스코프에서 제외 — 처리 함수가 해소되지 않는다 (클래스 메서드가 FUNCTION 노드로 안 잡히는 별도 한계)")
+    void NestJS_컨트롤러_매핑_처리함수_미해소() throws IOException {
+        Path file = tempDir.resolve("cats.controller.ts");
+        Files.writeString(file, """
+                import { Controller, Get } from '@nestjs/common';
+
+                @Controller('cats')
+                export class CatsController {
+                    @Get()
+                    findAll() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.controllerMappingFunctions()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("FastAPI 컨트롤러 매핑마다 데코레이터 다음에 오는 함수를 처리 함수로 해소한다")
+    void FastAPI_컨트롤러_매핑_처리함수_해소() throws IOException {
+        Path file = writePyFile("""
+                from fastapi import FastAPI
+                app = FastAPI()
+
+                @app.get("/items")
+                async def get_items():
+                    pass
+
+                @app.post("/items")
+                async def create_item():
+                    pass
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.controllerMappingFunctions())
+                .containsEntry("GET:/items", "get_items")
+                .containsEntry("POST:/items", "create_item");
+    }
+
+    @Test
+    @DisplayName("Django path()의 뷰 참조에서 마지막 식별자를 처리 함수로 해소한다")
+    void Django_컨트롤러_매핑_처리함수_해소() throws IOException {
+        Path file = writePyFile("""
+                from django.urls import path
+                from . import views
+
+                urlpatterns = [
+                    path('items/', views.item_list),
+                    path('items/<int:pk>/', views.item_detail),
+                ]
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.controllerMappingFunctions())
+                .containsEntry("GET:/items/", "item_list")
+                .containsEntry("GET:/items/<int:pk>/", "item_detail");
+    }
+
+    @Test
+    @DisplayName("Go Gin 컨트롤러 매핑마다 마지막 인자가 순수 식별자면 처리 함수로 해소한다")
+    void GoGin_컨트롤러_매핑_처리함수_해소() throws IOException {
+        Path file = tempDir.resolve("main.go");
+        Files.writeString(file, """
+                package main
+                import "github.com/gin-gonic/gin"
+                func getUsers(c *gin.Context) {}
+                func main() {
+                    r := gin.Default()
+                    r.GET("/users", getUsers)
+                    r.POST("/users", func(c *gin.Context) {})
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.controllerMappingFunctions())
+                .containsEntry("GET:/users", "getUsers")
+                .doesNotContainKey("POST:/users");
+    }
+
+    @Test
+    @DisplayName("Go 리시버 메서드 참조(h.GetUsers)는 마지막 세그먼트만 처리 함수로 해소한다")
+    void GoGin_리시버_메서드_처리함수_해소() throws IOException {
+        Path file = tempDir.resolve("router.go");
+        Files.writeString(file, """
+                package main
+                func main() {
+                    r.GET("/users", h.GetUsers)
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.controllerMappingFunctions()).containsEntry("GET:/users", "GetUsers");
+    }
+
+    @Test
+    @DisplayName("Ruby는 이번 스코프에서 제외 — 처리 함수가 해소되지 않는다 (route가 항상 다른 파일의 컨트롤러#액션을 문자열로 참조)")
+    void Ruby_컨트롤러_매핑_처리함수_미해소() throws IOException {
+        Path file = tempDir.resolve("routes.rb");
+        Files.writeString(file, """
+                Rails.application.routes.draw do
+                    get '/posts', to: 'posts#index'
+                end
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Ruby");
+
+        assertThat(result.controllerMappingFunctions()).isEmpty();
+    }
+
     // ── 나머지 언어 함수 추출 ─────────────────────────────────────────────
 
     @Test

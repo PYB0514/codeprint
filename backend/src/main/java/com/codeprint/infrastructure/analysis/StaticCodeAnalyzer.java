@@ -972,31 +972,105 @@ public class StaticCodeAnalyzer {
         return result;
     }
 
-    // Java/Kotlin(Spring) 컨트롤러 매핑 → 실제 처리 함수명 (1차 함수 단위 확장, 다른 언어는 후속 작업)
-    // 어노테이션 위치 바로 다음에 나오는 함수 선언을 핸들러로 간주 — extractControllerMappings와 동일한
-    // prefix 합성 규칙을 반복해 키 문자열을 일치시킨다(둘이 서로 다른 메서드라 상태 공유는 안 함).
+    // 컨트롤러 매핑 → 실제 처리 함수명 (Java/Kotlin 1차 + JS/TS·Python·Go 2차 확장, Ruby는 제외)
+    // 두 기법을 언어별로 다르게 적용: ①위치 휴리스틱(findEnclosingFunction, 데코레이터 바로 다음 함수 선언)
+    // ②호출 인자 캡처(lastIdentifierArg, 라우팅 호출의 핸들러 인자를 직접 추출).
+    // extractControllerMappings와 동일한 키 합성 규칙을 각 브랜치에서 반복해 키 문자열을 일치시킨다
+    // (두 메서드가 상태를 공유하지 않아 중복이지만, 기존 메서드 흐름을 안 건드리는 게 더 안전하다고 판단).
     private Map<String, String> extractControllerMappingFunctions(String content, String language) {
-        if (!language.equals("Java") && !language.equals("Kotlin")) return Map.of();
         Map<String, String> result = new LinkedHashMap<>();
 
-        String classPrefix = "";
-        Matcher cm = Pattern.compile(
-            "@RequestMapping\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']+)[\"']"
-        ).matcher(content);
-        if (cm.find()) classPrefix = cm.group(1);
+        if (language.equals("Java") || language.equals("Kotlin")) {
+            String classPrefix = "";
+            Matcher cm = Pattern.compile(
+                "@RequestMapping\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']+)[\"']"
+            ).matcher(content);
+            if (cm.find()) classPrefix = cm.group(1);
 
-        Matcher mm = Pattern.compile(
-            "@(?:Get|Post|Put|Delete|Patch)Mapping(?:\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']*)[\"']\\s*\\))?",
-            Pattern.CASE_INSENSITIVE
-        ).matcher(content);
-        while (mm.find()) {
-            String methodPath = mm.group(1);
-            String key = methodPath == null ? classPrefix : classPrefix + methodPath;
-            if (key.isEmpty()) continue;
-            String funcName = findEnclosingFunction(content, language, mm.end());
-            if (funcName != null) result.put(key, funcName);
+            Matcher mm = Pattern.compile(
+                "@(?:Get|Post|Put|Delete|Patch)Mapping(?:\\s*\\(\\s*(?:value\\s*=\\s*)?[\"']([^\"']*)[\"']\\s*\\))?",
+                Pattern.CASE_INSENSITIVE
+            ).matcher(content);
+            while (mm.find()) {
+                String methodPath = mm.group(1);
+                String key = methodPath == null ? classPrefix : classPrefix + methodPath;
+                if (key.isEmpty()) continue;
+                String funcName = findEnclosingFunction(content, language, mm.end());
+                if (funcName != null) result.put(key, funcName);
+            }
+
+        } else if (language.equals("JavaScript") || language.equals("TypeScript")) {
+            // Express: router.get('/path', ...args) — 같은 줄의 마지막 인자가 순수 식별자면 핸들러로 간주.
+            // NestJS(@Controller 클래스 메서드)는 이번 스코프 제외 — TS 함수 추출 정규식이 class method
+            // 선언(데코레이터 없이 `methodName() {}` 형태)을 애초에 FUNCTION 노드로 잡지 않아(getFunctionPattern이
+            // function 키워드·const 화살표만 인식) 위치 휴리스틱을 적용해도 항상 조회 실패로 귀결됨 — 별도 과제.
+            Matcher m = Pattern.compile(
+                "\\b(?:router|app)\\.(get|post|put|delete|patch)\\s*\\(\\s*['\"`]([^'\"`\\n]+)['\"`]\\s*,([^\\n]*)",
+                Pattern.CASE_INSENSITIVE
+            ).matcher(content);
+            while (m.find()) {
+                String key = m.group(1).toUpperCase() + ":" + m.group(2);
+                String handler = lastIdentifierArg(m.group(3));
+                if (handler != null) result.put(key, handler);
+            }
+
+        } else if (language.equals("Python")) {
+            // FastAPI/Flask: 위치 휴리스틱 재사용(데코레이터 바로 다음 함수 선언)
+            Matcher m = Pattern.compile(
+                "@(?:app|router|bp|blueprint)\\.(get|post|put|delete|patch)\\s*\\(\\s*['\"`]([^'\"`\\n]+)['\"`]",
+                Pattern.CASE_INSENSITIVE
+            ).matcher(content);
+            while (m.find()) {
+                String key = m.group(1).toUpperCase() + ":" + m.group(2);
+                String funcName = findEnclosingFunction(content, language, m.end());
+                if (funcName != null) result.put(key, funcName);
+            }
+
+            // Django: path('route/', views.func) — 뷰 참조의 마지막 '.' 뒤 식별자를 핸들러로 간주.
+            // views.py처럼 다른 파일에 정의된 경우가 흔한데, 그런 경우 아래 GraphBuilder의 동일 파일
+            // funcNodeIds 조회가 자연히 null이 되어 엣지가 안 만들어질 뿐(확인 못하는 연결은 안 만드는 게 맞음).
+            Matcher dj = Pattern.compile(
+                "\\b(?:re_)?path\\s*\\(\\s*r?['\"]([^'\"\\n]*)['\"]\\s*,\\s*([\\w.]+)"
+            ).matcher(content);
+            while (dj.find()) {
+                String path = dj.group(1).replaceAll("^\\^", "").replaceAll("\\$$", "");
+                String key = "GET:" + (path.startsWith("/") ? path : "/" + path);
+                String ref = dj.group(2);
+                int lastDot = ref.lastIndexOf('.');
+                result.put(key, lastDot >= 0 ? ref.substring(lastDot + 1) : ref);
+            }
+
+        } else if (language.equals("Go")) {
+            // Gin/Echo/Fiber: r.GET("/path", handler) — 같은 줄의 마지막 인자를 핸들러로 간주(리시버 메서드
+            // h.GetUsers 형태의 점(.) 포함 참조도 lastIdentifierArg가 마지막 세그먼트만 추출해 처리)
+            Matcher m = Pattern.compile(
+                "\\b\\w+\\.(GET|POST|PUT|DELETE|PATCH)\\s*\\(\\s*\"([^\"\\n]+)\"\\s*,([^\\n]*)",
+                Pattern.CASE_INSENSITIVE
+            ).matcher(content);
+            while (m.find()) {
+                String key = m.group(1).toUpperCase() + ":" + m.group(2);
+                String handler = lastIdentifierArg(m.group(3));
+                if (handler != null) result.put(key, handler);
+            }
         }
+
         return result;
+    }
+
+    // 같은 줄의 나머지 인자 문자열에서 마지막 인자가 순수 식별자(또는 점으로 구분된 참조의 마지막 세그먼트)면
+    // 반환, 익명 함수/화살표 함수가 섞여 있으면 null(오검출 방지 — 함수명이 없는 인라인 핸들러는 해소 불가)
+    private String lastIdentifierArg(String restOfLine) {
+        if (restOfLine.contains("=>") || restOfLine.contains("function")
+                || restOfLine.contains("func(") || restOfLine.contains("{")) {
+            return null;
+        }
+        int closeParen = restOfLine.indexOf(')');
+        String argsOnly = closeParen >= 0 ? restOfLine.substring(0, closeParen) : restOfLine;
+        String[] parts = argsOnly.split(",");
+        String last = parts[parts.length - 1].trim();
+        if (!last.matches("^[\\w$]+(?:\\.[\\w$]+)*$")) return null;
+        int lastDot = last.lastIndexOf('.');
+        return lastDot >= 0 ? last.substring(lastDot + 1) : last;
     }
 
     // 지정 위치 이후 처음 나오는 함수 선언명 반환 — 어노테이션을 다음 함수 선언에 매칭할 때 사용, 못 찾으면 null
