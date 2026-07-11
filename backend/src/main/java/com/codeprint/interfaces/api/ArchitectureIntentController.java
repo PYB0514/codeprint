@@ -60,8 +60,26 @@ public class ArchitectureIntentController {
                         .map(g -> new ArchitectureIntent.IgnoreRule(g.type(), g.from(), g.to()))
                         .toList()
         );
-        intentService.save(projectId, intent);
+        intentService.save(projectId, intent, user.getId(), user.getUsername());
         return ResponseEntity.ok(Map.of("violationCount", countIntentDriftViolations(projectId, intent)));
+    }
+
+    // 예외 규칙 변경 이력 조회 — 소유자만
+    @GetMapping("/api/projects/{projectId}/architecture-intent/audit-log")
+    public ResponseEntity<List<Map<String, Object>>> getAuditLog(
+            @PathVariable UUID projectId,
+            @AuthenticationPrincipal User user) {
+        graphFacade.verifyProjectOwnership(projectId, user.getId());
+        List<Map<String, Object>> entries = intentService.findAuditLog(projectId).stream()
+                .map(e -> Map.<String, Object>of(
+                        "username", e.getUsername(),
+                        "action", e.getAction(),
+                        "ruleType", e.getRuleType() == null ? "" : e.getRuleType(),
+                        "ruleFrom", e.getRuleFrom() == null ? "" : e.getRuleFrom(),
+                        "ruleTo", e.getRuleTo() == null ? "" : e.getRuleTo(),
+                        "createdAt", e.getCreatedAt().toString()))
+                .toList();
+        return ResponseEntity.ok(entries);
     }
 
     // 방금 저장한 의도 규칙 기준으로 최신 그래프의 INTENT_DRIFT 위반 수를 계산 — 그래프가 없으면 0

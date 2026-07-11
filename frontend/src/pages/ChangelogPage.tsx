@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.124.0',
+    date: '2026-07-12',
+    title: '예외 규칙 변경 이력 (Audit Log)',
+    type: 'feature',
+    items: [
+      { category: '그래프', desc: '경고 패널의 "예외 규칙" 섹션에 "변경 이력"이 추가됐습니다. 누가 언제 어떤 규칙을 추가·제거했는지 확인할 수 있습니다.' },
+    ],
+  },
+  {
     version: 'v0.123.0',
     date: '2026-07-12',
     title: '구조 경고 AI 분석 버튼',

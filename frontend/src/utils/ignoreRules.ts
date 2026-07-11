@@ -1,5 +1,6 @@
 // 경고 예외(IGNORE) 패턴 규칙 — 글로브 추론·매칭과 architecture-intent API 라운드트립
 // (modules·rules는 보존하고 ignore만 교체 저장해 데이터 손실을 막는다)
+import axios from 'axios'
 
 export interface IgnoreRule {
   type: string
@@ -78,27 +79,44 @@ export function countMatches(
 
 // 프로젝트의 IGNORE 규칙 로드 — 없으면 빈 목록
 export async function loadIgnoreRules(projectId: string): Promise<IgnoreRule[]> {
-  const res = await fetch(`/api/projects/${projectId}/architecture-intent`, { credentials: 'include' })
-  if (!res.ok) return []
-  const data = await res.json()
-  return (data.ignore ?? []).map((g: { type?: string; from?: string; to?: string }) => ({
-    type: g.type ?? '', from: g.from ?? '', to: g.to ?? '',
-  }))
+  try {
+    const res = await axios.get(`/api/projects/${projectId}/architecture-intent`)
+    return (res.data.ignore ?? []).map((g: { type?: string; from?: string; to?: string }) => ({
+      type: g.type ?? '', from: g.from ?? '', to: g.to ?? '',
+    }))
+  } catch {
+    return []
+  }
+}
+
+// 예외 규칙 변경 이력 한 건
+export interface AuditLogEntry {
+  username: string
+  action: 'ADD' | 'REMOVE'
+  ruleType: string
+  ruleFrom: string
+  ruleTo: string
+  createdAt: string
+}
+
+// 예외 규칙 변경 이력 조회 — 소유자만(비소유자는 403이므로 실패 시 빈 목록)
+export async function loadAuditLog(projectId: string): Promise<AuditLogEntry[]> {
+  try {
+    const res = await axios.get(`/api/projects/${projectId}/architecture-intent/audit-log`)
+    return res.data
+  } catch {
+    return []
+  }
 }
 
 // IGNORE 규칙 저장 — modules·rules는 현재 값을 그대로 라운드트립해 보존하고 ignore만 교체한다
 export async function saveIgnoreRules(projectId: string, ignore: IgnoreRule[]): Promise<void> {
-  const cur = await fetch(`/api/projects/${projectId}/architecture-intent`, { credentials: 'include' })
-  const data = cur.ok ? await cur.json() : { modules: [], rules: [] }
+  const cur = await axios.get(`/api/projects/${projectId}/architecture-intent`).catch(() => null)
+  const data = cur?.data ?? { modules: [], rules: [] }
   const body = {
     modules: (data.modules ?? []).map((m: { name: string; globs?: string[] }) => ({ name: m.name, globs: m.globs ?? [] })),
     rules: data.rules ?? [],
     ignore,
   }
-  await fetch(`/api/projects/${projectId}/architecture-intent`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    credentials: 'include',
-  })
+  await axios.put(`/api/projects/${projectId}/architecture-intent`, body)
 }

@@ -1731,3 +1731,15 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `compileJava`/`./gradlew test`(전체 통과, 신규 로직은 기존 explain/generateCode와 동일한 얇은 위임 구조라 별도 단위 테스트 없이 런타임 검증으로 대체 — Controller/DTO 변환은 TDD 불필요 대상). 로컬 서버 curl 실측: `@Valid` 검증(message 누락 400), 인증 없이 401, 키 미등록 시 400("OPENAI API 키가 등록되지 않았습니다") — `IllegalArgumentException`이 `GlobalExceptionHandler`로 정상 매핑됨 확인. 더미 키 등록 후 재호출 → `AiController.explainWarning → AiExplainService.explainWarning → OpenAiService.explain`까지 도달해 실제 OpenAI API가 401(Incorrect API key)을 반환하는 것까지 스택트레이스로 확인 — 기존 `/api/ai/explain`(1/9 PR에서 동일 방식 검증)과 완전히 동일한 통합 경로를 재사용함을 입증.
 
 **한계·후속.** 프론트 연동(`GraphPage.tsx`의 경고 패널에 "AI 분석" 버튼 추가)은 이번 세션에서 하지 않음 — `GraphPage.tsx`가 최고위험 파일이라 별도 세션에서 UI/UX 설계(로딩 상태·에러 처리·요금 안내 등)를 포함해 진행 권장.
+
+## 예외 규칙 변경 감사 로그(Audit Log) 신설 — architecture_intent_audit_log (2026-07-12)
+
+**배경.** 이번 세션에서 CLAUDE.md `/loop` 지시문(보안·시스템설계 키워드 전수 점검)에 따라 `SECURITY_REVIEW.md`(로컬 전용)를 작성하며 "누가 언제 경고를 무시/예외규칙 추가했는지 감사 로그가 없다"는 갭을 발견. 착수 전 코드 확인 결과 **`RBAC`은 이미 부분 존재**(`TeamMember.role`이 `TeamRole{OWNER, MEMBER}`로 이미 있고 `TeamProjectAllocation`으로 프로젝트-팀 연결도 이미 있음) — `SECURITY_REVIEW.md`/PROGRESS.md에 "역할 세분화가 없다"고 적었던 초기 판단은 코드 확인 없이 PROGRESS.md 요약만 보고 내린 부정확한 기록이었음(정정: 두 로컬 문서 모두 수정). 반면 예외 규칙(`ignoreRules`, `PUT /api/projects/{id}/architecture-intent`)은 실제로 DB에 저장은 되지만(`architecture_intent` 테이블 전체 upsert) 변경 시점의 행위자·이전값을 남기지 않아 Audit Log는 실제 갭이었음.
+
+**결정.** `architecture_intent_audit_log` 테이블(V56) 신설 — 예외 규칙(ignore) 배열만 대상으로 삼고 modules/rules는 대상에서 제외(이유: ignore는 "경고를 끄는" 거버넌스 행위라 팀 신뢰가 걸리지만, modules/rules는 프로젝트 구조 선언이라 성격이 다름 — 스코프를 좁혀 과설계 방지). `ArchitectureIntentService.save()`의 **기존 2-인자 시그니처는 그대로 두고 3-인자(actorUserId, actorUsername) 오버로드를 추가**하는 방식을 택함 — 대안으로 기존 시그니처에 actor 파라미터를 강제로 추가하는 안도 검토했으나, 기존 테스트 8개(`ArchitectureIntentServiceTest`)와 호출부가 전부 "행위자 불필요" 맥락이라 churn만 커지고 얻는 게 없어 탈락. 새 오버로드가 이전 상태(`findByProjectId`)와 새 상태의 `ignores()`를 구조적 `equals`로 비교해 추가분은 ADD, 제거분은 REMOVE로 기록하고 upsert와 같은 트랜잭션에 묶음(원자성 보장, 감사기록과 실제 저장이 어긋나는 경우 방지). `Controller`(`ArchitectureIntentController.saveIntent`)만 신규 오버로드를 호출하도록 한 줄 변경.
+
+**TDD 적용.** "상태 비교 후 분기(ADD/REMOVE/변경없음)" 로직이라 CLAUDE.md §4 기준(조건분기 2개 이상)에 해당 — 구현 전 `ArchitectureIntentServiceTest`에 3케이스(신규 추가→ADD 기록/기존 제거→REMOVE 기록/무변경→기록 없음) 먼저 작성.
+
+**결과.** `compileJava`/`./gradlew test`(`ArchitectureIntentServiceTest` 11개 전부 통과, 기존 8개 무변경 그대로 통과 — 오버로드 방식이라 churn 0 확인됨) / `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변(새 `recordIgnoreRuleChanges` 헬퍼는 호출 2건뿐). 프론트는 `WarningPanel.tsx`의 기존 "예외 규칙" 접이식 섹션 안에 "변경 이력" 하위 섹션을 추가(지연 로드 — 펼칠 때만 `GET /api/projects/{id}/architecture-intent/audit-log` 호출), 별도 화면 신설 없이 기존 UI에 자연스럽게 편입.
+
+**한계·후속.** 소유자만 조회 가능(`graphFacade.verifyProjectOwnership`) — Team tier에서 "멤버도 조회 가능"하게 열지는 TeamRole 기반 권한 체계를 프로젝트-그래프 API 레이어까지 확장하는 별도 작업이 선행돼야 함(현재 project 소유권 검증은 개인 소유자 기준, Team 배선과 아직 연결 안 됨 — RBAC이 Team 컨텍스트엔 있지만 Project/Graph 컨텍스트엔 아직 안 뻗어있는 상태). 이 확장은 범위가 커서 별도 세션 대상으로 남김.

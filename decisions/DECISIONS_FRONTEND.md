@@ -821,3 +821,11 @@ const fetchGraph = useCallback(async () => {
 **결정.** `downloadWarningsMd`에서 `meta.desc`가 있으면 그룹 헤더 바로 아래 인용구(`> ...`)로 추가. 기존 `WARNING_META` 단일 소스를 그대로 재사용(신규 데이터 없음), 라벨 조회 로직과 동일 패턴.
 
 **결과.** `tsc -b` 통과. 순수 문자열 조합 함수(그래프 인증 세션 불필요)라 로직 검토로 정확성 확인 — 실 브라우저 클릭 확인은 GitHub OAuth 로그인 필요라 이번엔 생략(위험도 낮음: 이미 검증된 `WARNING_META`·Blob 다운로드 패턴 재사용뿐, 신규 분기 없음).
+
+## 예외 규칙(ignoreRules) 저장 조용한 실패 — raw fetch가 CSRF 헤더 누락 (2026-07-12, codeprint_116)
+
+**문제.** Audit Log 기능(백엔드 감사 로그 신설) 브라우저 E2E 검증 중 발견 — 실제로 예외 규칙을 추가했는데 감사 로그가 텅 비어있었음. 원인 추적 결과 `ignoreRules.ts`의 `loadIgnoreRules`/`saveIgnoreRules`가 전역 axios 인스턴스가 아니라 **raw `fetch()`**를 쓰고 있었음 — `main.tsx`가 `axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'`로 붙이는 CSRF 헤더가 `fetch()` 호출엔 안 붙어 `SecurityConfig`의 CSRF 필터가 PUT을 403으로 차단. 더 나쁜 건 `fetch()`가 HTTP 에러 상태를 예외로 던지지 않아(`res.ok` 미검사) `GraphPage.tsx`의 `try/catch`도 못 잡아 **콘솔 에러조차 없는 완전 침묵 실패** — 화면엔 규칙이 추가된 것처럼(낙관적 업데이트) 보이지만 새로고침하면 사라짐. GET은 CSRF 대상이 아니라 정상 동작해 지금까지 발견이 늦어짐(`ERROR_TRACKER.md` FE-23).
+
+**결정.** `ignoreRules.ts`의 `loadIgnoreRules`/`saveIgnoreRules`(+ 신규 `loadAuditLog`)를 전부 공유 `axios` 인스턴스로 통일 — 다른 모든 API 호출(`GraphPage.tsx` 등)과 동일 패턴. `saveIgnoreRules` 실패 시 axios가 예외를 던지므로 기존 `try/catch`의 `alert('예외 규칙 저장에 실패했습니다.')`가 이제 실제로 작동.
+
+**결과.** `tsc -b` 통과. 실브라우저(claude-in-chrome) E2E — 수정 전 PUT 403(콘솔 무반응) 재현 확인 → 수정 후 같은 조작으로 PUT 200, "예외 규칙" 섹션 반영, `docker exec ... psql`로 `architecture_intent_audit_log` 테이블에 ADD 행 실제 삽입까지 확인. 규칙 제거(REMOVE) 경로도 같은 방식으로 PUT 200 + REMOVE 행 삽입 확인 후 테스트 데이터 정리(DELETE). **교훈: 같은 화면 안에서도 API 호출 방식(axios vs fetch)이 섞여 있으면 전역 인터셉터·기본 헤더가 조용히 빠질 수 있다 — 새 기능 추가 시 인접 코드의 호출 방식도 눈여겨볼 것.**

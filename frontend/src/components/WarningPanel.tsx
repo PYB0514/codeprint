@@ -1,6 +1,6 @@
 // 구조 경고 목록을 타입별로 그룹핑해서 표시하는 패널
 import { useState } from 'react'
-import { type IgnoreRule, inferGlob, countMatches } from '../utils/ignoreRules'
+import { type IgnoreRule, type AuditLogEntry, inferGlob, countMatches, loadAuditLog } from '../utils/ignoreRules'
 
 interface Warning {
   type: string
@@ -12,6 +12,7 @@ interface Warning {
 
 // 경고에서 패턴 예외 규칙을 만들기 위한 부가 핸들러 묶음 (소유자에게만 전달)
 interface IgnoreOps {
+  projectId: string                   // 변경 이력 조회용
   fileOf: (nodeId: string) => string  // nodeId → 파일 경로 (글로브 추론·미리보기용)
   rules: IgnoreRule[]                 // 현재 저장된 예외 규칙
   allWarnings: Warning[]              // 미리보기 카운트 대상 (현재 보이는 경고)
@@ -117,7 +118,50 @@ function IgnoreRulesSection({ ops }: { ops: IgnoreOps }) {
           <p className="text-[10px] text-gray-600 leading-relaxed mt-0.5">
             규칙에 매치되는 경고는 억제됩니다. 제거하면 다음 그래프 조회 시 다시 나타납니다.
           </p>
+          <AuditLogSection projectId={ops.projectId} />
         </div>
+      )}
+    </div>
+  )
+}
+
+// 예외 규칙 변경 이력 — 접이식, 펼칠 때만 조회(지연 로드)
+function AuditLogSection({ projectId }: { projectId: string }) {
+  const [open, setOpen] = useState(false)
+  const [entries, setEntries] = useState<AuditLogEntry[] | null>(null)
+
+  const handleToggle = async () => {
+    if (open) { setOpen(false); return }
+    setOpen(true)
+    if (entries) return
+    setEntries(await loadAuditLog(projectId))
+  }
+
+  return (
+    <div className="mt-1 border-t border-gray-700/40 pt-1">
+      <button onClick={handleToggle} className="flex items-center gap-1.5 w-full text-left">
+        <span className="text-[10px] font-semibold text-gray-400">변경 이력</span>
+        <span className="ml-auto text-gray-600 text-[10px]">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        entries === null ? (
+          <p className="text-[10px] text-gray-600 mt-1">불러오는 중...</p>
+        ) : entries.length === 0 ? (
+          <p className="text-[10px] text-gray-600 mt-1">기록된 변경 이력이 없습니다.</p>
+        ) : (
+          <div className="flex flex-col gap-0.5 mt-1">
+            {entries.map((e, i) => (
+              <div key={i} className="text-[10px] text-gray-500 leading-snug">
+                <span className={e.action === 'ADD' ? 'text-emerald-400' : 'text-red-400'}>
+                  {e.action === 'ADD' ? '+' : '−'}
+                </span>{' '}
+                <span className="text-gray-400">{e.username}</span>
+                {' · '}{e.ruleType || '모든 타입'} · {e.ruleFrom || '*'} → {e.ruleTo || '*'}
+                {' · '}{new Date(e.createdAt).toLocaleString('ko-KR')}
+              </div>
+            ))}
+          </div>
+        )
       )}
     </div>
   )

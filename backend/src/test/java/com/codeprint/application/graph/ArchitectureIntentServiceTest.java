@@ -2,11 +2,14 @@
 package com.codeprint.application.graph;
 
 import com.codeprint.domain.graph.ArchitectureIntent;
+import com.codeprint.domain.graph.ArchitectureIntentAuditLog;
+import com.codeprint.domain.graph.ArchitectureIntentAuditLogRepository;
 import com.codeprint.domain.graph.ArchitectureIntentRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,10 +21,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ArchitectureIntentServiceTest {
 
     private final UUID projectId = UUID.randomUUID();
+    private final UUID userId = UUID.randomUUID();
 
-    // 인메모리 저장소를 주입한 서비스 생성 (@RequiredArgsConstructor 필드 순서: repository, objectMapper)
+    // 인메모리 저장소를 주입한 서비스 생성 (@RequiredArgsConstructor 필드 순서: repository, objectMapper, auditLogRepository)
     private ArchitectureIntentService serviceWith(InMemoryRepository repo) {
-        return new ArchitectureIntentService(repo, new ObjectMapper());
+        return new ArchitectureIntentService(repo, new ObjectMapper(), new InMemoryAuditLogRepository());
+    }
+
+    private ArchitectureIntentService serviceWith(InMemoryRepository repo, InMemoryAuditLogRepository auditRepo) {
+        return new ArchitectureIntentService(repo, new ObjectMapper(), auditRepo);
     }
 
     @Test
@@ -142,6 +150,56 @@ class ArchitectureIntentServiceTest {
         assertThat(svc.findByProjectId(projectId)).isEmpty();
     }
 
+    @Test
+    @DisplayName("행위자 포함 저장 — 예외 규칙 신규 추가는 ADD로 기록")
+    void saveWithActor_newIgnoreRule_recordsAdd() {
+        InMemoryRepository repo = new InMemoryRepository();
+        InMemoryAuditLogRepository auditRepo = new InMemoryAuditLogRepository();
+        ArchitectureIntentService svc = serviceWith(repo, auditRepo);
+        ArchitectureIntent intent = new ArchitectureIntent(List.of(), List.of(),
+                List.of(new ArchitectureIntent.IgnoreRule("DEAD_CODE", "**/legacy/**", "")));
+
+        svc.save(projectId, intent, userId, "tester");
+
+        assertThat(auditRepo.saved).hasSize(1);
+        assertThat(auditRepo.saved.get(0).getAction()).isEqualTo("ADD");
+        assertThat(auditRepo.saved.get(0).getRuleType()).isEqualTo("DEAD_CODE");
+        assertThat(auditRepo.saved.get(0).getUsername()).isEqualTo("tester");
+    }
+
+    @Test
+    @DisplayName("행위자 포함 저장 — 기존 규칙 제거는 REMOVE로 기록, 유지된 규칙은 기록 안 함")
+    void saveWithActor_removedIgnoreRule_recordsRemove() {
+        InMemoryRepository repo = new InMemoryRepository();
+        InMemoryAuditLogRepository auditRepo = new InMemoryAuditLogRepository();
+        ArchitectureIntentService svc = serviceWith(repo, auditRepo);
+        ArchitectureIntent.IgnoreRule kept = new ArchitectureIntent.IgnoreRule("DEAD_CODE", "**/legacy/**", "");
+        ArchitectureIntent.IgnoreRule removed = new ArchitectureIntent.IgnoreRule("HIGH_FAN_OUT", "**/x/**", "");
+        svc.save(projectId, new ArchitectureIntent(List.of(), List.of(), List.of(kept, removed)), userId, "tester");
+        auditRepo.saved.clear();
+
+        svc.save(projectId, new ArchitectureIntent(List.of(), List.of(), List.of(kept)), userId, "tester");
+
+        assertThat(auditRepo.saved).hasSize(1);
+        assertThat(auditRepo.saved.get(0).getAction()).isEqualTo("REMOVE");
+        assertThat(auditRepo.saved.get(0).getRuleType()).isEqualTo("HIGH_FAN_OUT");
+    }
+
+    @Test
+    @DisplayName("행위자 포함 저장 — 변경 없으면 감사 로그 기록 안 함")
+    void saveWithActor_noChange_recordsNothing() {
+        InMemoryRepository repo = new InMemoryRepository();
+        InMemoryAuditLogRepository auditRepo = new InMemoryAuditLogRepository();
+        ArchitectureIntentService svc = serviceWith(repo, auditRepo);
+        ArchitectureIntent.IgnoreRule rule = new ArchitectureIntent.IgnoreRule("DEAD_CODE", "**/legacy/**", "");
+        svc.save(projectId, new ArchitectureIntent(List.of(), List.of(), List.of(rule)), userId, "tester");
+        auditRepo.saved.clear();
+
+        svc.save(projectId, new ArchitectureIntent(List.of(), List.of(), List.of(rule)), userId, "tester");
+
+        assertThat(auditRepo.saved).isEmpty();
+    }
+
     // upsert된 JSON을 메모리에 그대로 보관하는 테스트 더블
     private static class InMemoryRepository implements ArchitectureIntentRepository {
         final Map<UUID, String> store = new HashMap<>();
@@ -159,6 +217,22 @@ class ArchitectureIntentServiceTest {
         @Override
         public void deleteByProjectId(UUID projectId) {
             store.remove(projectId);
+        }
+    }
+
+    // 저장된 감사 로그를 메모리에 쌓아두는 테스트 더블
+    private static class InMemoryAuditLogRepository implements ArchitectureIntentAuditLogRepository {
+        final List<ArchitectureIntentAuditLog> saved = new ArrayList<>();
+
+        @Override
+        public ArchitectureIntentAuditLog save(ArchitectureIntentAuditLog log) {
+            saved.add(log);
+            return log;
+        }
+
+        @Override
+        public List<ArchitectureIntentAuditLog> findByProjectIdOrderByCreatedAtDesc(UUID projectId) {
+            return saved;
         }
     }
 }
