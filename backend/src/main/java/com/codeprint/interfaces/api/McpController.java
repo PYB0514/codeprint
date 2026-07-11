@@ -8,7 +8,7 @@ import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.graph.NodeType;
-import com.codeprint.domain.project.Project;
+import com.codeprint.domain.graph.port.ProjectAccessPort.ProjectAccessView;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -46,7 +46,7 @@ public class McpController {
         if (graph == null) return ResponseEntity.notFound().build();
 
         // 공개 프로젝트 검증 (비공개이면 403)
-        Project project;
+        ProjectAccessView project;
         try {
             project = graphFacade.getPublicProject(graph.getProjectId());
         } catch (Exception e) {
@@ -108,9 +108,9 @@ public class McpController {
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("graphId", graphId.toString());
-        response.put("projectId", project.getId().toString());
-        response.put("projectName", project.getName());
-        response.put("repoUrl", project.getGithubRepoUrl());
+        response.put("projectId", project.id().toString());
+        response.put("projectName", project.name());
+        response.put("repoUrl", project.githubRepoUrl());
         response.put("stats", stats);
         response.put("nodes", nodeSummaries);
         response.put("edges", edgeSummaries);

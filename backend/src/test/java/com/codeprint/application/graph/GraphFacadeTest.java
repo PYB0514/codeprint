@@ -1,10 +1,9 @@
 // GraphFacade 단위 테스트 — verifyGraphReadAccess 공개/소유자 분기 회귀 방지
 package com.codeprint.application.graph;
 
-import com.codeprint.application.analysis.AnalysisApplicationService;
-import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.graph.Graph;
-import com.codeprint.domain.project.Project;
+import com.codeprint.domain.graph.port.AnalysisReadPort;
+import com.codeprint.domain.graph.port.ProjectAccessPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +16,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,9 +26,9 @@ class GraphFacadeTest {
     @Mock
     private GraphQueryService graphQueryService;
     @Mock
-    private ProjectQueryService projectQueryService;
+    private ProjectAccessPort projectAccessPort;
     @Mock
-    private AnalysisApplicationService analysisApplicationService;
+    private AnalysisReadPort analysisReadPort;
 
     @InjectMocks
     private GraphFacade facade;
@@ -45,7 +46,7 @@ class GraphFacadeTest {
     @DisplayName("verifyGraphReadAccess — 공개 프로젝트면 비로그인(userId=null)도 통과")
     void publicProject_anonymous_passes() {
         when(graphQueryService.findById(graphId)).thenReturn(Optional.of(graph(projectId)));
-        when(projectQueryService.getPublicProject(projectId)).thenReturn(Project.create(ownerId, "url", "n", null));
+        doNothing().when(projectAccessPort).verifyPublic(projectId);
 
         facade.verifyGraphReadAccess(graphId, null);
         // 예외 없이 통과하면 성공
@@ -55,7 +56,7 @@ class GraphFacadeTest {
     @DisplayName("verifyGraphReadAccess — 공개 프로젝트면 로그인 사용자(비소유자)도 통과")
     void publicProject_otherUser_passes() {
         when(graphQueryService.findById(graphId)).thenReturn(Optional.of(graph(projectId)));
-        when(projectQueryService.getPublicProject(projectId)).thenReturn(Project.create(ownerId, "url", "n", null));
+        doNothing().when(projectAccessPort).verifyPublic(projectId);
 
         facade.verifyGraphReadAccess(graphId, otherId);
     }
@@ -64,8 +65,8 @@ class GraphFacadeTest {
     @DisplayName("verifyGraphReadAccess — 비공개 프로젝트는 소유자만 통과")
     void privateProject_owner_passes() {
         when(graphQueryService.findById(graphId)).thenReturn(Optional.of(graph(projectId)));
-        when(projectQueryService.getPublicProject(projectId)).thenThrow(new IllegalStateException("Project is not public"));
-        when(projectQueryService.getProject(projectId, ownerId)).thenReturn(Project.create(ownerId, "url", "n", null));
+        doThrow(new IllegalStateException("Project is not public")).when(projectAccessPort).verifyPublic(projectId);
+        doNothing().when(projectAccessPort).verifyOwnership(projectId, ownerId);
 
         facade.verifyGraphReadAccess(graphId, ownerId);
     }
@@ -74,7 +75,7 @@ class GraphFacadeTest {
     @DisplayName("verifyGraphReadAccess — 비공개 프로젝트 + 비로그인은 차단")
     void privateProject_anonymous_throws() {
         when(graphQueryService.findById(graphId)).thenReturn(Optional.of(graph(projectId)));
-        when(projectQueryService.getPublicProject(projectId)).thenThrow(new IllegalStateException("Project is not public"));
+        doThrow(new IllegalStateException("Project is not public")).when(projectAccessPort).verifyPublic(projectId);
 
         assertThatThrownBy(() -> facade.verifyGraphReadAccess(graphId, null))
                 .isInstanceOf(IllegalStateException.class);
@@ -84,8 +85,9 @@ class GraphFacadeTest {
     @DisplayName("verifyGraphReadAccess — 비공개 프로젝트 + 비소유자는 차단")
     void privateProject_nonOwner_throws() {
         when(graphQueryService.findById(graphId)).thenReturn(Optional.of(graph(projectId)));
-        when(projectQueryService.getPublicProject(projectId)).thenThrow(new IllegalStateException("Project is not public"));
-        when(projectQueryService.getProject(projectId, otherId)).thenThrow(new IllegalStateException("Not authorized to access this project"));
+        doThrow(new IllegalStateException("Project is not public")).when(projectAccessPort).verifyPublic(projectId);
+        doThrow(new IllegalStateException("Not authorized to access this project"))
+                .when(projectAccessPort).verifyOwnership(projectId, otherId);
 
         assertThatThrownBy(() -> facade.verifyGraphReadAccess(graphId, otherId))
                 .isInstanceOf(IllegalStateException.class);
