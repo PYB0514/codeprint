@@ -340,8 +340,12 @@ public class StaticCodeAnalyzer {
             case "Kotlin" ->
                 Pattern.compile("^\\s*(?:(?:public|private|protected|internal|override|open|abstract|suspend|inline|operator|external)\\s+)*fun\\s+(\\w+)\\s*[(<]",
                         Pattern.MULTILINE);
+            // findEnclosingFunction(정규식 전용 위치 휴리스틱, tree-sitter 미사용) 전용 패턴 — 데코레이터 없이
+            // methodName() {} 형태로 선언되는 class method(NestJS 등)를 4번째 대안으로 인식. isKeyword가
+            // if/for/while/switch/catch 등 제어문을 걸러내 오탐을 막는다(제어문은 뒤에 '(' 없는 catch류 제외 나머지도 필터링됨).
             case "TypeScript", "JavaScript" ->
-                Pattern.compile("(?:function\\s+(\\w+)|(?:const|let|var)\\s+(\\w+)\\s*=\\s*(?:async\\s*)?(?:\\([^)]*\\)|\\w+)\\s*=>|(?:async\\s+)?function\\s*\\*?\\s*(\\w+))",
+                Pattern.compile("(?:function\\s+(\\w+)|(?:const|let|var)\\s+(\\w+)\\s*=\\s*(?:async\\s*)?(?:\\([^)]*\\)|\\w+)\\s*=>|(?:async\\s+)?function\\s*\\*?\\s*(\\w+)" +
+                        "|^[ \\t]*(?:(?:public|private|protected|static|readonly|abstract|override|async)\\s+)*(\\w+)\\s*\\([^)]*\\)\\s*(?::\\s*[^{;=]+)?\\s*\\{)",
                         Pattern.MULTILINE);
             case "Python" ->
                 Pattern.compile("^\\s*(?:async\\s+)?def\\s+(\\w+)\\s*\\(", Pattern.MULTILINE);
@@ -1001,9 +1005,6 @@ public class StaticCodeAnalyzer {
 
         } else if (language.equals("JavaScript") || language.equals("TypeScript")) {
             // Express: router.get('/path', ...args) — 같은 줄의 마지막 인자가 순수 식별자면 핸들러로 간주.
-            // NestJS(@Controller 클래스 메서드)는 이번 스코프 제외 — TS 함수 추출 정규식이 class method
-            // 선언(데코레이터 없이 `methodName() {}` 형태)을 애초에 FUNCTION 노드로 잡지 않아(getFunctionPattern이
-            // function 키워드·const 화살표만 인식) 위치 휴리스틱을 적용해도 항상 조회 실패로 귀결됨 — 별도 과제.
             Matcher m = Pattern.compile(
                 "\\b(?:router|app)\\.(get|post|put|delete|patch)\\s*\\(\\s*['\"`]([^'\"`\\n]+)['\"`]\\s*,([^\\n]*)",
                 Pattern.CASE_INSENSITIVE
@@ -1012,6 +1013,28 @@ public class StaticCodeAnalyzer {
                 String key = m.group(1).toUpperCase() + ":" + m.group(2);
                 String handler = lastIdentifierArg(m.group(3));
                 if (handler != null) result.put(key, handler);
+            }
+
+            // NestJS: @Controller('prefix') 클래스 prefix + @Get('sub')/@Post() 메서드 데코레이터 다음 class method를
+            // 위치 휴리스틱(findEnclosingFunction)으로 해소 — extractControllerMappings의 동일 브랜치와 키 합성 규칙을
+            // 맞춰야 GraphBuilder의 controllerMappings→controllerMappingFunctions 조회가 성립한다.
+            if (content.contains("@Controller")) {
+                String nestPrefix = "";
+                Matcher cm = Pattern.compile("@Controller\\s*\\(\\s*['\"`]([^'\"`]*)['\"`]").matcher(content);
+                if (cm.find()) nestPrefix = cm.group(1);
+                Matcher nm = Pattern.compile(
+                    "@(Get|Post|Put|Delete|Patch)\\s*\\(\\s*(?:['\"`]([^'\"`]*)['\"`])?\\s*\\)"
+                ).matcher(content);
+                while (nm.find()) {
+                    String sub = nm.group(2);
+                    String full = (sub != null && !sub.isEmpty())
+                            ? (nestPrefix.isEmpty() ? sub : nestPrefix + "/" + sub)
+                            : nestPrefix;
+                    full = ("/" + full).replaceAll("/+", "/");
+                    String key = nm.group(1).toUpperCase() + ":" + full;
+                    String funcName = findEnclosingFunction(content, language, nm.end());
+                    if (funcName != null) result.put(key, funcName);
+                }
             }
 
         } else if (language.equals("Python")) {
