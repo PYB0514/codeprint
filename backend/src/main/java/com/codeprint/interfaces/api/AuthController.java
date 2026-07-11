@@ -1,13 +1,10 @@
 // 인증 관련 REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.user.AuthTokenService;
 import com.codeprint.application.user.UserCommandService;
-import com.codeprint.domain.user.RefreshToken;
-import com.codeprint.domain.user.RefreshTokenRepository;
+import com.codeprint.application.user.UserQueryService;
 import com.codeprint.domain.user.User;
-import com.codeprint.domain.user.UserRepository;
-import com.codeprint.infrastructure.security.JwtTokenProvider;
-import com.codeprint.infrastructure.storage.S3Service;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -24,22 +21,18 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Instant;
 import java.util.Map;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final JwtTokenProvider jwtTokenProvider;
-    private final RefreshTokenRepository refreshTokenRepository;
-    private final UserRepository userRepository;
-    private final S3Service s3Service;
+    private final AuthTokenService authTokenService;
+    private final UserQueryService userQueryService;
     private final UserCommandService userCommandService;
 
-    // Refresh Token 유효 기간: 7일
+    // refresh_token 쿠키 maxAge — AuthTokenService의 DB 만료 기간과 동일(7일)
     private static final long REFRESH_TOKEN_EXPIRY_SECONDS = 7 * 24 * 60 * 60L;
 
     @Value("${app.frontend-url:http://localhost:3000}")
@@ -57,8 +50,8 @@ public class AuthController {
         body.put("username", user.getUsername());
         body.put("plan", user.getPlan());
         body.put("hasGithubToken", user.getGithubAccessToken() != null);
-        body.put("avatarUrl", s3Service.toPresignedUrl(user.getAvatarUrl()));
-        body.put("graphBgUrl", s3Service.toPresignedUrl(user.getGraphBgUrl()));
+        body.put("avatarUrl", userQueryService.toPresignedAvatarUrl(user.getAvatarUrl()));
+        body.put("graphBgUrl", userQueryService.toPresignedUrl(user.getGraphBgUrl()));
         return ResponseEntity.ok(body);
     }
 
@@ -70,45 +63,32 @@ public class AuthController {
             return ResponseEntity.status(401).body(Map.of("error", "No refresh token"));
         }
 
-        String tokenHash = jwtTokenProvider.hashRefreshToken(rawToken);
-        Optional<RefreshToken> storedOpt = refreshTokenRepository.findByTokenHash(tokenHash);
-        if (storedOpt.isEmpty() || storedOpt.get().isExpired()) {
-            return ResponseEntity.status(401).body(Map.of("error", "Invalid or expired refresh token"));
-        }
+        return authTokenService.rotateRefreshToken(rawToken)
+                .map(pair -> {
+                    boolean isSecure = !frontendUrl.startsWith("http://localhost");
+                    String sameSite = isSecure ? "None" : "Lax";
 
-        RefreshToken stored = storedOpt.get();
-        return userRepository.findById(stored.getUserId()).map(user -> {
-            // 기존 토큰 교체 (Refresh Token Rotation)
-            refreshTokenRepository.deleteByTokenHash(tokenHash);
-            String newRawToken = jwtTokenProvider.generateRefreshToken();
-            String newHash = jwtTokenProvider.hashRefreshToken(newRawToken);
-            refreshTokenRepository.save(RefreshToken.create(user.getId(), newHash,
-                    Instant.now().plusSeconds(REFRESH_TOKEN_EXPIRY_SECONDS)));
+                    ResponseCookie jwtCookie = ResponseCookie.from("jwt", pair.accessToken())
+                            .httpOnly(true)
+                            .path("/")
+                            .maxAge(3600)
+                            .secure(isSecure)
+                            .sameSite(sameSite)
+                            .build();
+                    response.addHeader(HttpHeaders.SET_COOKIE, jwtCookie.toString());
 
-            String newJwt = jwtTokenProvider.generateToken(user.getId(), user.getEmail(), user.getRole().name());
-            boolean isSecure = !frontendUrl.startsWith("http://localhost");
-            String sameSite = isSecure ? "None" : "Lax";
+                    ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", pair.refreshToken())
+                            .httpOnly(true)
+                            .path("/api/auth")
+                            .maxAge(REFRESH_TOKEN_EXPIRY_SECONDS)
+                            .secure(isSecure)
+                            .sameSite(sameSite)
+                            .build();
+                    response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
 
-            ResponseCookie jwtCookie = ResponseCookie.from("jwt", newJwt)
-                    .httpOnly(true)
-                    .path("/")
-                    .maxAge(3600)
-                    .secure(isSecure)
-                    .sameSite(sameSite)
-                    .build();
-            response.addHeader(HttpHeaders.SET_COOKIE, jwtCookie.toString());
-
-            ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", newRawToken)
-                    .httpOnly(true)
-                    .path("/api/auth")
-                    .maxAge(REFRESH_TOKEN_EXPIRY_SECONDS)
-                    .secure(isSecure)
-                    .sameSite(sameSite)
-                    .build();
-            response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
-
-            return ResponseEntity.<Map<String, Object>>ok(Map.of("ok", true));
-        }).orElseGet(() -> ResponseEntity.status(401).body(Map.of("error", "User not found")));
+                    return ResponseEntity.<Map<String, Object>>ok(Map.of("ok", true));
+                })
+                .orElseGet(() -> ResponseEntity.status(401).body(Map.of("error", "Invalid or expired refresh token")));
     }
 
     // 계정 탈퇴 — 사용자 데이터 전체 삭제 후 쿠키 만료
@@ -148,10 +128,7 @@ public class AuthController {
 
     // DB에서 Refresh Token 무효화
     private void revokeRefreshToken(HttpServletRequest request) {
-        String rawToken = extractCookie(request, "refresh_token");
-        if (rawToken != null) {
-            refreshTokenRepository.deleteByTokenHash(jwtTokenProvider.hashRefreshToken(rawToken));
-        }
+        authTokenService.revokeRefreshToken(extractCookie(request, "refresh_token"));
     }
 
     // Spring Security OAuth 세션 무효화

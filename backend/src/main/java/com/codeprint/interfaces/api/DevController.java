@@ -2,7 +2,7 @@
 package com.codeprint.interfaces.api;
 
 import com.codeprint.application.featured.FeaturedRepoService;
-import com.codeprint.infrastructure.security.JwtTokenProvider;
+import com.codeprint.application.user.AuthTokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
@@ -20,14 +20,14 @@ import java.util.UUID;
 @Profile("local")
 public class DevController {
 
-    private final JwtTokenProvider jwtTokenProvider;
+    private final AuthTokenService authTokenService;
     private final FeaturedRepoService featuredRepoService;
 
     // V18 마이그레이션으로 삽입된 테스트 더미 유저의 JWT 발급
     @GetMapping("/test-token")
     public ResponseEntity<Map<String, String>> getTestToken() {
         UUID testUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        String token = jwtTokenProvider.generateToken(testUserId, "testuser@codeprint.dev", "USER");
+        String token = authTokenService.issueAccessToken(testUserId, "testuser@codeprint.dev", "USER");
         return ResponseEntity.ok(Map.of(
                 "token", token,
                 "userId", testUserId.toString(),
