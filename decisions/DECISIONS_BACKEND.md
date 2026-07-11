@@ -1584,3 +1584,19 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `compileJava`/`compileTestJava` 통과(첫 시도에서 record 접근자 네이밍 실수로 컴파일 에러 4건 발생 → `project.getX()` → `project.x()`로 즉시 수정). 전체 백엔드 테스트 통과(`GraphFacadeTest` 6종을 `ProjectAccessPort`/`AnalysisReadPort` mock 기준으로 갱신, `GraphControllerOwnershipTest`는 `GraphFacade` 자체를 목으로 쓰고 반환값을 스텁하지 않아 무변경). `analyzeLocal` 재검증 — HIGH_FAN_OUT 5건으로 기존 self 베이스라인 불변(신규 경고 없음, `CROSS_DOMAIN_CALL`은 애초에 탐지 안 되던 항목이라 이번에도 0건 그대로).
 
 **한계.** `AnalysisReadAdapter.findBranch`가 여전히 `try/catch(Exception e)`로 넓게 잡는 방어 패턴(기존 `getBranchSafely`와 동일 동작 유지 목적) — `AnalysisApplicationService.getAnalysis`가 던지는 구체적 예외 타입까지 좁히는 리팩토링은 이번 스코프 밖.
+
+## 열화판 공개 Skill — GitHub 공개 배포 완료 (2026-07-11, codeprint_113)
+
+> §16.6 착수 순서 ④⑤ 완료. Context112가 "GitHub 공개 여부·레포 이름 확정 후 실제 gh repo create+push — 외부 공개 행위라 별도 승인 필요"로 남겨둔 마지막 단계.
+
+**문제.** 로컬 구조(`C:\Dev\codeprint-plugins\`, Codeprint 레포 밖)는 Context112에서 완성됐지만 실제 공개(퍼블릭 GitHub 레포 생성+push)는 사용자 승인 대기 상태였음. 이번 세션에서 사용자가 명시적으로 승인.
+
+**공개 직전 점검에서 발견해 즉시 수정한 것 2가지.**
+1. `claude plugin validate . --strict` 재실행 결과 `marketplace.json`에 `description` 필드가 없어 경고(strict 모드는 경고를 실패로 처리) — 필드 추가 후 통과 확인.
+2. **실행 권한 비트 유실** — Windows에서 `git add` 시 `bin/codeprint-explore`·`codeprint-analyze` 두 wrapper 스크립트가 `100644`(비실행)로 스테이징됨(NTFS가 Unix 실행 비트 개념이 없어 발생, 로컬 파일시스템 `-rwxr-xr-x` 표시는 MSYS 에뮬레이션일 뿐 git이 인식하는 실제 파일 모드가 아니었음). 그대로 공개했으면 macOS/Linux 사용자가 clone 직후 스킬 실행 시 Permission denied로 막혔을 것 — `git update-index --chmod=+x`로 `100755` 교정 후 커밋.
+
+**결정.** README.md 신규 작성(설치 가이드 — `/plugin marketplace add`+`/plugin install` 사용법) 후 `git init`(브랜치명 `main`)+`gh repo create PYB0514/codeprint-plugins --public --source=. --push`로 공개. jar 파일(21MB×2)은 GitHub Release 분리 없이 **레포에 직접 커밋**(Context112가 미결정으로 남겼던 배포 방식 결정) — wrapper 스크립트가 이미 상대경로(`$DIR/../jars/`)로 로컬 파일을 직접 실행하도록 구현·검증된 상태라, Release 기반 지연 다운로드로 바꾸려면 스크립트 재설계가 필요해 스코프 확대 대신 이미 검증된 방식을 그대로 유지.
+
+**결과.** `https://github.com/PYB0514/codeprint-plugins` 공개(Public) 레포 생성 완료, 초기 커밋 1개(9 파일)로 push. `claude plugin validate --strict` 통과 상태로 공개.
+
+**한계.** 실제 설치(`/plugin marketplace add`)·사용 사례는 아직 없음(배포만 완료, 도그푸딩 외 실사용 검증 없음). jar 직접 커밋 방식이라 향후 언어 추가·버전업 시마다 레포 크기가 계속 커짐 — 사용량이 늘면 GitHub Release 방식으로 전환 검토.
