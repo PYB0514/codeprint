@@ -35,6 +35,9 @@ public class AiController {
                                String callers, String callees, String language) {}
     record GenerateCodeResponse(String code, String language) {}
     record ProviderInfo(String provider, boolean registered) {}
+    record ExplainWarningRequest(@NotBlank String provider, @NotBlank String warningType,
+                                 @NotBlank String severity, @NotBlank String message, String guide) {}
+    record ExplainWarningResponse(String explanation) {}
 
     // 등록된 AI 제공자 목록 조회 (키 값은 반환하지 않음)
     @GetMapping("/keys")
@@ -96,5 +99,16 @@ public class AiController {
         String code = aiExplainService.generateCode(user.getId(), aiProvider,
                 req.nodeName(), req.nodeType(), req.comment(), req.callers(), req.callees(), lang);
         return ResponseEntity.ok(new GenerateCodeResponse(code, lang));
+    }
+
+    // 구조 경고 AI 설명·수정안 요청 — 판정 자체는 불변, AI는 자문(advisory)일 뿐
+    @PostMapping("/explain-warning")
+    public ResponseEntity<ExplainWarningResponse> explainWarning(
+            @Valid @RequestBody ExplainWarningRequest req,
+            @AuthenticationPrincipal User user) {
+        AiProvider aiProvider = AiProvider.valueOf(req.provider().toUpperCase());
+        String explanation = aiExplainService.explainWarning(user.getId(), aiProvider,
+                req.warningType(), req.severity(), req.message(), req.guide());
+        return ResponseEntity.ok(new ExplainWarningResponse(explanation));
     }
 }

@@ -1721,3 +1721,13 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `compileJava`/`./gradlew test`(전체 통과) / `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변. **`grep -r "^import com.codeprint.infrastructure" interfaces/` 0건 — [G-3] 9/9 전부 완료.** 로컬 서버로 SecurityConfig가 구성하는 모든 규칙을 전수 curl 검증(순서대로): `/api/users/me`(보호) 401 / `/api/dev/test-token`(permitAll) 200 / `/api/notices`(permitAll) 200 / `/api/admin/gate-metrics`(ADMIN 전용) 401 / `/actuator/health`(permitAll) 200 / `/actuator/metrics`(ADMIN 전용) 401 / `/oauth2/authorization/github`(로그인 시작) 302 / CSRF 헤더 없는 POST `/api/auth/logout` 403 — 파일 이동 전후 동작 완전히 동일함을 확인.
 
 **다음 단계.** [G-3] 9/9 완료로 `INTERFACES_IMPORTS_INFRA` 검출기 신설 착수 가능(`detectDomainInfraImport`와 동형 — source=`interfaces/**`∧target=`infrastructure/**`) → 신설 후 자기분석 0건 확인 → severity MEDIUM 도입. 착수 순서상 검출기부터 만들었으면 이 리팩토링 PR들이 자기 게이트에 걸렸을 것이므로, 원래 계획대로 리팩토링을 전부 마친 지금이 정확한 타이밍.
+
+## 경고 AI 분석 백엔드 진입점 — /api/ai/explain-warning 신설 (2026-07-11, codeprint_115)
+
+**배경.** Context114가 미착수로 남겨둔 "경고 AI 분석/수정안 버튼"의 백엔드 부분. 기존 `/api/ai/explain`은 그래프 노드(callers/callees) 컨텍스트 전용 프롬프트만 지원해 경고(type/severity/message) 컨텍스트로는 쓸 수 없었음.
+
+**결정.** `AiExplainService.explainWarning(userId, provider, warningType, severity, message, guide)` 신설 — 경고 전용 프롬프트 빌더(`buildWarningPrompt`) 추가, "왜 발생했는지 + 이 프로젝트 코드 기준으로 어떻게 고칠지"를 요청하되 "판정은 이 설명과 무관하게 정적 분석 결과가 그대로 유지된다"는 문구를 프롬프트에 명시(AI는 자문일 뿐 게이트 판정은 불변이어야 한다는 원래 요구사항을 프롬프트 레벨에서 강제). `guide` 파라미터는 프론트 `WarningPanel.tsx`의 `WARNING_META[type].desc`를 그대로 전달받는 용도 — 백엔드에 룰 설명을 중복 하드코딩하지 않고 프론트를 단일 소스로 유지. `AiController`에 `POST /api/ai/explain-warning` 추가(`ExplainWarningRequest`/`Response` record), `@Valid`로 provider·warningType·severity·message 필수 검증.
+
+**결과.** `compileJava`/`./gradlew test`(전체 통과, 신규 로직은 기존 explain/generateCode와 동일한 얇은 위임 구조라 별도 단위 테스트 없이 런타임 검증으로 대체 — Controller/DTO 변환은 TDD 불필요 대상). 로컬 서버 curl 실측: `@Valid` 검증(message 누락 400), 인증 없이 401, 키 미등록 시 400("OPENAI API 키가 등록되지 않았습니다") — `IllegalArgumentException`이 `GlobalExceptionHandler`로 정상 매핑됨 확인. 더미 키 등록 후 재호출 → `AiController.explainWarning → AiExplainService.explainWarning → OpenAiService.explain`까지 도달해 실제 OpenAI API가 401(Incorrect API key)을 반환하는 것까지 스택트레이스로 확인 — 기존 `/api/ai/explain`(1/9 PR에서 동일 방식 검증)과 완전히 동일한 통합 경로를 재사용함을 입증.
+
+**한계·후속.** 프론트 연동(`GraphPage.tsx`의 경고 패널에 "AI 분석" 버튼 추가)은 이번 세션에서 하지 않음 — `GraphPage.tsx`가 최고위험 파일이라 별도 세션에서 UI/UX 설계(로딩 상태·에러 처리·요금 안내 등)를 포함해 진행 권장.
