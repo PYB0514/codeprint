@@ -1670,3 +1670,13 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `compileJava`/`./gradlew test`(Docker Postgres) 통과 — `GraphControllerOwnershipTest`(IDOR 회귀 테스트, `new GraphController(...)` 생성자 시그니처 변경으로 함께 갱신) 포함 전체 통과. `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 복귀(CROSS_CONTEXT_IMPORT 0건 확인). 로컬 서버로 실제 공개 프로젝트(`spring-petclinic`) `/api/share/{id}/graph` 호출 — 응답에 실제 서명된 S3 presigned URL(`ownerBgUrl`)과 `ownRepo:true`가 정확히 포함되는 것까지 실측 확인. `/api/users/{id}/followers`·`/following`도 200 정상 응답 확인.
 
 **한계.** 남은 5건(Attachment·Auth의 S3Service, Auth·Dev의 JwtTokenProvider, SecurityConfig 2건) — Auth는 [반복-A] 로그아웃 버그 이력(3회)이 있는 최고위험 파일이라 별도의 신중한 세션에서.
+
+## 게이트 사각지대 [G-3] 선행 리팩토링 5/9 — AttachmentController → AttachmentPresignService (2026-07-11, codeprint_114)
+
+**문제.** `AttachmentController`(S3 presigned 업로드 URL 발급 전용 컨트롤러)가 `infrastructure.storage.S3Service`를 직접 import — [G-3] 9건 중 5번째, Auth와 무관한 마지막 S3Service 단독 사용처.
+
+**결정.** `application/attachment/AttachmentPresignService` 신설 — `s3Service.generatePresignedUploadUrl` 호출만 이전. content-type 화이트리스트·파일명 길이/traversal·파일 크기 검증(SECURITY_POLICY.md 대상)은 HTTP 레벨 입력 검증이라 컨트롤러에 그대로 유지(Application으로 옮길 이유 없음 — 검증 대상이 바뀐 게 아니라 위임 대상만 바뀜).
+
+**결과.** `compileJava`/`./gradlew test` 통과, `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변(신규 위반 없음). 로컬 서버 curl 검증 — 정상 요청(`image/png`) 시 실제 서명된 S3 업로드 URL 발급 확인, 허용되지 않은 content-type(`application/exe`) 시 여전히 400으로 거부되는 것 확인(검증 로직 보존).
+
+**한계.** 남은 4건(Auth의 S3Service+JwtTokenProvider, Dev의 JwtTokenProvider, SecurityConfig 2건) — Auth는 별도 신중한 세션에서.
