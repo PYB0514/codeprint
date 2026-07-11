@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.122.5',
+    date: '2026-07-11',
+    title: '오늘의 공개레포 — 게시글 1개로 통합',
+    type: 'fix',
+    items: [
+      { category: '랜딩페이지', desc: '"오늘의 공개레포" 카드 5개가 각각 다른 페이지로 흩어져 있던 것을, 커뮤니티 게시글 1개의 스냅샷 5개로 모았습니다. 클릭하면 같은 게시글 안에서 스냅샷만 바뀝니다.' },
+    ],
+  },
+  {
     version: 'v0.122.4',
     date: '2026-07-10',
     title: 'MCP(JSON-RPC) 서버 종료',

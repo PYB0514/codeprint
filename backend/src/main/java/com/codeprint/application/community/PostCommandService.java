@@ -57,6 +57,12 @@ public class PostCommandService {
         postRepository.saveSnapshots(entities);
     }
 
+    // 게시글의 기존 스냅샷을 지우고 새 스냅샷으로 교체 — 매일 갱신되는 고정 게시글(오늘의 공개레포)용
+    public void replaceGraphSnapshots(UUID postId, List<SnapshotToSave> snapshots) {
+        postRepository.deleteSnapshotsByPostId(postId);
+        saveGraphSnapshots(postId, snapshots);
+    }
+
     // 게시글 ID로 그래프 스냅샷 목록 조회
     @Transactional(readOnly = true)
     public List<PostGraphSnapshot> getGraphSnapshots(UUID postId) {
