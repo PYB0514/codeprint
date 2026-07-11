@@ -34,6 +34,14 @@ public class AiExplainService {
         return resolveService(provider).explain(apiKey, prompt);
     }
 
+    // 구조 경고 컨텍스트로 AI 설명·수정안 생성 — 판정 자체(게이트 통과/차단)는 불변, AI는 자문(advisory)일 뿐
+    public String explainWarning(UUID userId, AiProvider provider, String warningType, String severity,
+                                 String message, String guide) {
+        String apiKey = apiKeyOf(userId, provider);
+        String prompt = buildWarningPrompt(warningType, severity, message, guide);
+        return resolveService(provider).explain(apiKey, prompt);
+    }
+
     private String apiKeyOf(UUID userId, AiProvider provider) {
         UserAiKey key = aiKeyRepository.findByUserIdAndProvider(userId, provider)
                 .orElseThrow(() -> new IllegalArgumentException(provider + " API 키가 등록되지 않았습니다."));
@@ -79,6 +87,21 @@ public class AiExplainService {
         sb.append("\n위 정보를 바탕으로 이 함수의 ").append(lang).append(" 구현 코드 스텁을 생성해주세요. ");
         sb.append("실제 구현 가능한 수준의 코드를 작성하되, 코드만 반환하고 설명은 생략하세요. ");
         sb.append("코드 블록(```").append(lang).append(" ... ```) 형식으로 반환하세요.");
+        return sb.toString();
+    }
+
+    // 구조 경고 컨텍스트를 기반으로 AI 설명·수정 프롬프트 구성
+    private String buildWarningPrompt(String warningType, String severity, String message, String guide) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("다음은 정적 분석 도구가 코드 구조 그래프에서 감지한 경고입니다.\n\n");
+        sb.append("경고 유형: ").append(warningType).append("\n");
+        sb.append("심각도: ").append(severity).append("\n");
+        sb.append("상세 메시지: ").append(message).append("\n");
+        if (guide != null && !guide.isBlank())
+            sb.append("일반적인 가이드: ").append(guide).append("\n");
+        sb.append("\n이 경고가 왜 발생했는지와, 이 프로젝트의 구체적인 코드(위 메시지에 등장하는 파일·이름 기준)를 ");
+        sb.append("어떻게 고치면 되는지를 개발자가 바로 실행할 수 있는 수준으로 한국어로 설명해주세요. ");
+        sb.append("판정(경고 유지 여부)은 이 설명과 무관하게 정적 분석 결과가 그대로 유지됩니다 — 참고용 조언임을 전제로 답하세요.");
         return sb.toString();
     }
 }
