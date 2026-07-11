@@ -4,6 +4,16 @@
 
 ---
 
+## INTERFACES_IMPORTS_INFRA — Interfaces→Infrastructure 직접 import 검출기 신설 (2026-07-11, codeprint_115)
+
+**배경.** `GATE_GAPS.md` [G-3](2026-07-07 발견) — CLAUDE.md §10이 `Interfaces → Application → Domain` 단방향을 명문화하지만, 기존 검출기는 `DOMAIN_IMPORTS_INFRA`(domain→infra)만 있어 Controller가 infrastructure를 직접 import해도 게이트가 못 잡음. "선행 리팩토링 9건 완료 → 검출기 신설 → 자기분석 0 확인" 순서(먼저 검출기를 만들면 자기 리팩토링 PR이 자기 게이트에 걸림)로 계획됐고, 이번 세션에 9/9 리팩토링이 끝나 착수.
+
+**해법.** `detectInterfaceInfraImport`: `detectDomainInfraImport`(2026-06-24 도입, 별칭 인식 포함)와 동형 — `INTERFACE_LAYER_DIRS`({interfaces, presentation, controllers, controller}) 소스가 `INFRA_LAYER_DIRS` 타깃을 IMPORT하면 발화. 기존 검출기들의 precision 장치를 그대로 재사용: 테스트 아티팩트 제외(`isTestArtifact`, 2026-06-25 3종 통일), Shared Kernel 예외(`/shared/`), **컴포지션 루트 예외**(`isCompositionRoot`, *Config류가 아니라 *Configuration/*Bootstrap/*LifeCycle 접미사 — DB_LAYER_BYPASS의 2026-07-01 선례를 그대로 가져옴, 자기 레포 SecurityConfig가 실제로 이 패턴이라 재배치로 해소했지만 다른 레포의 합법적 배선 클래스는 오탐 방지). severity=**MEDIUM**(HIGH만 머지 차단이라 도입 초기 관찰 기간 확보 — GATE_GAPS.md 제안 그대로).
+
+**검증(이번 세션 범위).** 단위 테스트 7종(`GraphWarningServiceTest`, TDD로 먼저 작성 후 구현) — 기본 발화·별칭(`presentation/`) recall·**precision: `application/`→infra는 정상 방향이라 미발화**(이 프로젝트가 Facade/Service 패턴으로 application→infra를 허용하는 컨벤션이라 가장 중요한 정밀도 방어선)·shared 예외·컴포지션 루트 예외·테스트코드 예외. `analyzeLocal`로 self 자기분석 — `INTERFACES_IMPORTS_INFRA` **0건**(9/9 선행 리팩토링이 실제로 전부 해소됐음을 검출기 스스로 증명, 도그푸딩 전제 충족). `WarningPanel.tsx`(WARNING_META)·`HowItWorksPage.tsx`(WARNING_GUIDE) 동기화 확인(get_page_text로 실제 렌더링 확인).
+
+**한계·후속.** 이전 신규 검출기들(CROSS_FEATURE_IMPORT 등)과 달리 **외부 레퍼런스 레포(buckpal·ddd-library·spring-petclinic·py-realworld 등) A/B precision/recall 측정은 이번 세션에서 안 함** — self 레포 검증만으로 도입, 벤치 인프라(PROGRESS.md "자가개선 루프") 착수 시 룰별 벤치에 포함해 정식 측정 권장. severity HIGH 승격도 그 측정 이후로 미룸(GATE_GAPS.md 제안 순서 그대로).
+
 ## CROSS_FEATURE_IMPORT — React/JS 피처 경계 위반 감지 (2026-06-25, feat v0.96.0)
 
 **배경(JS-React conformance 1단계).** TS import 해소 토대(v0.95.6) 위에서 JS-React conformance 첫 검출기. "어떻게 분석할지" 고민의 결론: Java/Python 레이어-별칭 접근은 JS에 안 통함(NestJS는 엔티티 공유라 naive cross-feature=FP 붕괴, 코드로 확인). 정답지=bulletproof-react eslint `import/no-restricted-paths`(features 상호 격리 + app→features→shared 단방향). 두 컨벤션(bulletproof·FSD)의 **공통 교집합인 cross-feature 격리**부터(최고 정밀, 분류 불필요).

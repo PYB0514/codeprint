@@ -47,6 +47,7 @@ export const WARNING_META: Record<string, { label: string; desc: string; color: 
   CROSS_FEATURE_IMPORT:        { label: '기능 폴더 간 직접 참조',   desc: '기능 폴더(features/A)가 다른 기능 폴더(features/B)를 직접 import합니다 — 기능끼리 얽힙니다. 공유할 코드는 shared/로 옮기세요.', color: '#0ea5e9', severity: 'HIGH'   },
   FEATURE_LAYER_VIOLATION:     { label: '레이어 단방향 위반',       desc: '의존은 app → features → shared 한 방향이어야 하는데 거꾸로 import했습니다 — 공용 코드가 특정 기능에 묶여 재사용이 깨집니다.', color: '#6366f1', severity: 'HIGH'   },
   DOMAIN_IMPORTS_INFRA:        { label: '핵심 로직 → 인프라 의존',  desc: '비즈니스 로직(domain/)이 DB·외부 연동 코드(infrastructure/)를 직접 import합니다 — 핵심 로직이 특정 기술에 묶여 테스트·교체가 어려워집니다.', color: '#ef4444', severity: 'HIGH'   },
+  INTERFACES_IMPORTS_INFRA:    { label: 'Controller → 인프라 직접 의존', desc: 'Controller 등 진입점(interfaces/)이 DB·외부 연동 코드(infrastructure/)를 직접 import합니다 — 중간 계층(Application Service)이 빠져 계층 구조가 흐트러집니다. Application Service나 Facade를 거치세요.', color: '#f97373', severity: 'MEDIUM' },
   CROSS_DOMAIN_CALL:           { label: '도메인 경계 넘는 호출',    desc: '다른 도메인의 함수를 중간 인터페이스 없이 직접 호출합니다 — port 인터페이스를 두면 각 도메인을 독립적으로 수정할 수 있습니다.', color: '#f43f5e', severity: 'MEDIUM' },
   MISSING_CONVERTER_MIGRATION: { label: '@Convert 마이그레이션 필요', desc: '필드에 @Convert(암호화 등)를 붙였는데 기존 DB 데이터를 변환하는 마이그레이션이 없을 수 있습니다 — 조회 시 오류 위험. 이미 처리했다면 숨기세요.', color: '#ec4899', severity: 'MEDIUM' },
   DEAD_CODE:                   { label: '데드 코드 후보',           desc: '프로젝트 안에서 호출하는 곳을 찾지 못한 함수입니다 — 안 쓰는 코드거나, 프레임워크가 호출해 분석에 안 보일 수도 있어 "후보"입니다.', color: '#6b7280', severity: 'LOW'    },

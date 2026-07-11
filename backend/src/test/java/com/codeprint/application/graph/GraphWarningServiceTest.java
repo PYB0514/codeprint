@@ -818,6 +818,87 @@ class GraphWarningServiceTest {
         assertThat(warnings.stream().filter(w -> "DOMAIN_IMPORTS_INFRA".equals(w.get("type"))).toList()).isEmpty();
     }
 
+    // isDddProject 게이트를 열기 위한 도메인 레이어 더미 노드 — INTERFACES_IMPORTS_INFRA 테스트 전용
+    // (interfaces+infrastructure 조합만으로는 domain/application 마커가 없어 DDD 게이트가 안 열린다).
+    private Node dddGateNode() {
+        return funcNodeWithPath("Dummy", "/com/example/domain/user/User.java");
+    }
+
+    @Test
+    @DisplayName("interfaces/(Controller) → infrastructure/ IMPORT — INTERFACES_IMPORTS_INFRA 발화 (G-3)")
+    void interfaceImportsInfra_detected() {
+        Node controller = funcNodeWithPath("AuthController", "/com/example/interfaces/api/AuthController.java");
+        Node infra = funcNodeWithPath("JwtTokenProvider", "/com/example/infrastructure/security/JwtTokenProvider.java");
+        Edge imp = importEdgeForPath(controller.getId(), infra.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(controller, infra, dddGateNode()), List.of(imp));
+
+        List<Map<String, Object>> found = warnings.stream().filter(w -> "INTERFACES_IMPORTS_INFRA".equals(w.get("type"))).toList();
+        assertThat(found).hasSize(1);
+        assertThat(found.get(0).get("severity")).isEqualTo("MEDIUM");
+    }
+
+    @Test
+    @DisplayName("presentation/(interfaces 별칭) → infra IMPORT — INTERFACES_IMPORTS_INFRA 발화 (recall)")
+    void interfaceImportsInfra_presentationAlias_detected() {
+        Node controller = funcNodeWithPath("UserController", "/com/example/presentation/UserController.java");
+        Node infra = funcNodeWithPath("S3Service", "/com/example/infrastructure/storage/S3Service.java");
+        Edge imp = importEdgeForPath(controller.getId(), infra.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(controller, infra, dddGateNode()), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "INTERFACES_IMPORTS_INFRA".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("precision: application/ → infrastructure/ IMPORT은 정상 방향 — INTERFACES_IMPORTS_INFRA 미발화")
+    void interfaceImportsInfra_applicationLayer_notFlagged() {
+        // Application이 infra를 직접 쓰는 건 이 프로젝트 컨벤션상 정상(Facade/Service 패턴) — interfaces만 대상.
+        Node appService = funcNodeWithPath("AuthTokenService", "/com/example/application/user/AuthTokenService.java");
+        Node infra = funcNodeWithPath("JwtTokenProvider", "/com/example/infrastructure/security/JwtTokenProvider.java");
+        Edge imp = importEdgeForPath(appService.getId(), infra.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(appService, infra, dddGateNode()), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "INTERFACES_IMPORTS_INFRA".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("precision: interfaces/ → infrastructure/shared/ IMPORT — Shared Kernel 예외로 미발화")
+    void interfaceImportsInfra_sharedException_notFlagged() {
+        Node controller = funcNodeWithPath("AuthController", "/com/example/interfaces/api/AuthController.java");
+        Node sharedInfra = funcNodeWithPath("AesEncryptionConverter", "/com/example/infrastructure/shared/AesEncryptionConverter.java");
+        Edge imp = importEdgeForPath(controller.getId(), sharedInfra.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(controller, sharedInfra, dddGateNode()), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "INTERFACES_IMPORTS_INFRA".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("precision: 컴포지션 루트(*Configuration)가 interfaces/에서 infra 배선 — 예외로 미발화")
+    void interfaceImportsInfra_compositionRoot_excluded() {
+        Node config = funcNodeWithPath("SecurityConfiguration", "/com/example/interfaces/api/SecurityConfiguration.java");
+        Node infra = funcNodeWithPath("JwtAuthenticationFilter", "/com/example/infrastructure/security/JwtAuthenticationFilter.java");
+        Edge imp = importEdgeForPath(config.getId(), infra.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(config, infra, dddGateNode()), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "INTERFACES_IMPORTS_INFRA".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("precision: 테스트 코드(interfaces 패키지 *Test)가 인프라를 직접 import — INTERFACES_IMPORTS_INFRA 미발화")
+    void interfaceImportsInfra_testSource_excluded() {
+        Node test = funcNodeWithPath("login", "/src/test/java/com/example/interfaces/api/AuthControllerTest.java");
+        Node infra = funcNodeWithPath("JwtTokenProvider", "/src/main/java/com/example/infrastructure/security/JwtTokenProvider.java");
+        Edge imp = importEdgeForPath(test.getId(), infra.getId());
+
+        List<Map<String, Object>> warnings = service.detect(List.of(test, infra, dddGateNode()), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "INTERFACES_IMPORTS_INFRA".equals(w.get("type"))).toList()).isEmpty();
+    }
+
     @Test
     @DisplayName("DB_TABLE 노드에 hasConverter=true 메타데이터 — MISSING_CONVERTER_MIGRATION 경고")
     void missingConverterMigration_detected() {
