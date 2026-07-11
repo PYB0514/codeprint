@@ -3,6 +3,7 @@ package com.codeprint.application.project;
 
 import com.codeprint.domain.project.Project;
 import com.codeprint.domain.project.ProjectRepository;
+import com.codeprint.domain.project.port.TeamAccessPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +24,9 @@ class ProjectQueryServiceTest {
 
     @Mock
     private ProjectRepository repository;
+
+    @Mock
+    private TeamAccessPort teamAccessPort;
 
     @InjectMocks
     private ProjectQueryService service;
@@ -68,13 +72,24 @@ class ProjectQueryServiceTest {
     }
 
     @Test
-    @DisplayName("getProject — 소유자 아니면 IllegalStateException")
+    @DisplayName("getProject — 소유자 아니고 팀 접근 권한도 없으면 IllegalStateException")
     void getProject_notOwner_throws() {
         Project p = project(ownerId);
         when(repository.findById(projectId)).thenReturn(Optional.of(p));
+        when(teamAccessPort.hasAccessViaTeam(projectId, otherId)).thenReturn(false);
 
         assertThatThrownBy(() -> service.getProject(projectId, otherId))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("getProject — 소유자 아니어도 프로젝트가 배분된 팀의 멤버면 반환 (RBAC)")
+    void getProject_teamMember_returns() {
+        Project p = project(ownerId);
+        when(repository.findById(projectId)).thenReturn(Optional.of(p));
+        when(teamAccessPort.hasAccessViaTeam(projectId, otherId)).thenReturn(true);
+
+        assertThat(service.getProject(projectId, otherId)).isSameAs(p);
     }
 
     @Test
