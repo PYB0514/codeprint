@@ -1167,8 +1167,10 @@ export function downloadWarningsMd(warningList: { type: string; nodeIds: string[
   }
   const lines = [`# 구조 경고 리포트\n`, `> 총 ${warningList.length}개 경고\n`]
   for (const [type, msgs] of grouped.entries()) {
-    const label = WARNING_META[type] ? `${WARNING_META[type].label} (${type})` : type
+    const meta = WARNING_META[type]
+    const label = meta ? `${meta.label} (${type})` : type
     lines.push(`\n## ${label} (${msgs.length}개)\n`)
+    if (meta?.desc) lines.push(`> ${meta.desc}\n`)
     msgs.forEach(m => lines.push(`- ${m.replace(/^[^:]+:\s*/, '')}`))
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })

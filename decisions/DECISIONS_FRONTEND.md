@@ -813,3 +813,11 @@ const fetchGraph = useCallback(async () => {
 2. **OG 이미지(A2)** — 랜딩 히어로와 동일한 브랜드 톤(`bg-gray-950` 배경, favicon.svg의 보라·파랑 그라디언트, "GitHub 레포를 인터랙티브 회로도로" 카피)으로 1200×630 카드 제작. **제작 방식 — 브라우저 스크린샷 대신 Node `@napi-rs/canvas`로 직접 픽셀 렌더링**: 처음엔 정적 HTML(`_og-draft.html`)을 만들어 claude-in-chrome의 `zoom(save_to_disk)`으로 캡처하려 했으나, 저장된 파일의 실제 디스크 경로를 Bash/PowerShell 양쪽에서 찾지 못함(브라우저 확장 호스트가 로컬 파일시스템 밖에 저장하는 것으로 추정) — 세션 스크래치 디렉터리에 `@napi-rs/canvas`(Node 네이티브 캔버스, 프로젝트 `package.json`에는 추가하지 않음)를 임시 설치해 시스템 폰트(`malgun.ttf`/`malgunbd.ttf`)로 직접 그려 `frontend/public/og-image.png`에 저장. **탈락**: `pip install pillow`(사내망 SSL 인증서 검증 실패로 설치 자체 불가) — `npm`은 같은 환경에서 정상 동작해 npm 생태계 경로로 전환.
 
 **결과.** `tsc -b` 통과. `file` 명령으로 PNG 실제 픽셀 크기 1200×630(8-bit RGBA) 확인. claude-in-chrome으로 `/some-nonexistent-page` 접속 시 404 페이지 렌더 + "홈으로 이동" 클릭 시 `/`로 정상 이동 확인. `/og-image.png` 직접 접속으로 Vite 정적 서빙 확인(브라우저 탭 제목에 "(1200×630)" 표시로 실제 렌더 크기까지 확인). 배포 후 실제 OG 카드는 카카오톡·슬랙 등 외부 크롤러 캐시 특성상 이번 세션에서 직접 확인 불가 — 배포 후 Facebook Sharing Debugger 등으로 재확인 권장(후속 확인 항목, 코드는 정상).
+
+## 경고 MD 내보내기에 룰별 가이드(WARNING_META.desc) 미포함 (2026-07-11, codeprint_114)
+
+**문제.** PROGRESS.md "경고 설명·수정 가이드 레이어" 백로그 점검 중 발견 — `WarningPanel.tsx`의 `WARNING_META`엔 이미 15종 전체에 "왜+어떻게 고쳐라" `desc`가 있고 패널 UI에도 렌더되는데, `downloadWarningsMd`(`graphLayout.ts`)는 `WARNING_META[type].label`만 쓰고 `desc`는 안 넣고 있었음 — MD로 내보내면 가이드 없이 타입명+메시지 목록만 남는 상태. 백로그 자체가 "MD 산출물에 위 템플릿·근거를 채우면 자동으로 풍부해짐"이라고 이미 정확히 짚어뒀던 갭.
+
+**결정.** `downloadWarningsMd`에서 `meta.desc`가 있으면 그룹 헤더 바로 아래 인용구(`> ...`)로 추가. 기존 `WARNING_META` 단일 소스를 그대로 재사용(신규 데이터 없음), 라벨 조회 로직과 동일 패턴.
+
+**결과.** `tsc -b` 통과. 순수 문자열 조합 함수(그래프 인증 세션 불필요)라 로직 검토로 정확성 확인 — 실 브라우저 클릭 확인은 GitHub OAuth 로그인 필요라 이번엔 생략(위험도 낮음: 이미 검증된 `WARNING_META`·Blob 다운로드 패턴 재사용뿐, 신규 분기 없음).
