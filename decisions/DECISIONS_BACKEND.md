@@ -1632,3 +1632,17 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `V55__add_gate_check_logs.sql` 적용, `compileJava`/`tsc -b` 통과. 로컬 Postgres로 실제 검증 — ①서버 기동 로그로 마이그레이션 정상 적용 확인 ②`gate_check_logs`에 테스트 행 1건 직접 INSERT 후 `/api/admin/gate-metrics`를 ADMIN 롤 JWT로 호출해 `{guardedRepos:1, weeklyNewAnalysisRepos:11, weeklyShares:1, blockedPrsTotal:1}` 응답이 DB 실측치와 정확히 일치함을 확인(테스트 데이터는 검증 후 원복). `/api/admin/**`가 인증 없이는 401 반환하는 것도 재확인. `AdminPage.tsx`에 3층 지표 카드 섹션(`GateMetricCard`) 추가 — 다만 앱 전역 라우트 가드가 비로그인 `/admin` 접근을 홈으로 리다이렉트해 실브라우저 렌더링(카드 레이아웃)까지는 확인 못함(GitHub OAuth 관리자 로그인 필요, 기존 `StatCard`와 동일 Tailwind 패턴이라 위험도는 낮게 판단).
 
 **한계.** `guardedRepos`(북극성)는 "PR 검사 연결"과 "실검사 발생"을 분리하지 않고 `gate_check_logs`에 기록이 있으면 곧 연결+실검사 둘 다로 간주 — 실제로는 이 두 조건이 항상 동치(체크 로그가 있다는 것 자체가 webhook이 연결돼 실제로 검사가 돌았다는 증거)라 별도 컬럼 불필요하다고 판단했지만, 향후 "연결은 됐지만 아직 한 번도 안 돈" 상태를 구분해야 할 요구가 생기면 프로젝트 쪽에 별도 플래그가 필요. `weeklyNewAnalysisRepos`는 PR 리뷰용 분석과 사용자가 직접 실행한 분석을 구분하지 않음(둘 다 `analyses` 테이블에 같이 쌓임) — "경험" 지표 취지상 문제없다고 판단했으나 향후 구분이 필요해지면 `AnalysisResult`에 트리거 소스 컬럼 추가 검토.
+
+## 게이트 사각지대 [G-3] 선행 리팩토링 1/9 — AiController → AiExplainService (2026-07-11, codeprint_114)
+
+> `GATE_GAPS.md` [G-3](Interfaces→Infrastructure 직접 import, 검출기 부재) 착수. 전체 9건은 Auth·S3 등 보안 민감 경로가 섞여 있어 한 PR에 다 넣지 않고 파일 그룹별로 쪼개기로 함(PROGRESS.md에 명시) — 가장 위험도 낮은 `AiController`(1곳, 비인증 인프라)부터 파일럿으로 진행.
+
+**문제.** `AiController`가 `infrastructure.ai.AiService`(전략 패턴 인터페이스)를 `List<AiService>`로 직접 주입받고, 프롬프트 조립(`buildPrompt`/`buildCodeGenPrompt`)까지 컨트롤러 안에서 수행 — CLAUDE.md §10 `Interfaces → Application → Domain` 단방향 위반. `GATE_GAPS.md`가 이미 "프롬프트 조립이 컨트롤러에 있는 문제도 함께 해소 권장"이라 명시해뒀던 부분.
+
+**결정.** `application/ai/AiExplainService` 신설 — AI 제공자 조회(`UserAiKeyRepository`)·구현체 선택(`List<AiService>`)·프롬프트 조립·호출을 전부 이 응용 서비스로 이전. `AiController`는 요청 파싱 후 `explainNode`/`generateCode` 호출만 남김(`infrastructure.ai.AiService` import 완전 제거). Application이 infrastructure 인터페이스를 의존하는 건 기존 `AdminDigestService`→`AdminMetricsQuery` 선례와 동일한 정상 방향(Interfaces→Application→Domain ← Infrastructure).
+
+**런타임 검증 중 무관한 버그 발견·수정.** `/api/ai/explain`·`/api/ai/generate-code`를 실제 호출로 검증하던 중 `DELETE /api/ai/keys/{provider}`가 항상 500인 걸 발견 — `UserAiKeyJpaRepository.deleteByUserIdAndProvider`(Spring Data 파생 delete 쿼리)에 `@Transactional`이 없어 `TransactionRequiredException`. `RefreshTokenRepositoryImpl.deleteByTokenHash`([반복-A] #154에서 같은 원인으로 수정된 선례)와 동일 패턴이라 그 수정 방식을 그대로 따름 — 단 이 리포지토리는 별도 Impl 클래스 없이 JPA 인터페이스가 도메인 인터페이스를 직접 구현하는 구조라, `@Transactional`을 인터페이스 메서드에 직접 붙임. 회귀 테스트는 `RefreshTokenRepositoryTest`와 동일한 리플렉션 검증 패턴(`UserAiKeyJpaRepositoryTest`). 상세: `ERROR_TRACKER.md` BE-13. 같은 패턴이 다른 리포지토리에도 있을 수 있어 전수 감사는 별도 백그라운드 태스크로 분리(범위 확대 방지).
+
+**결과.** `compileJava`/`./gradlew test`(746+1건) 통과, `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변. 로컬 서버로 `/api/ai/keys`(GET)·`/api/ai/explain`·`/api/ai/generate-code`·`/api/ai/keys/{provider}`(PUT/DELETE) 전부 curl 실호출 — 키 미등록 시 400, 더미 키로 실제 `AiService.explain()`(OpenAI 401) 도달까지 확인해 리팩토링이 기존 동작을 그대로 보존함을 검증. `DELETE` 수정 전/후 500→204 직접 대조 확인.
+
+**한계.** PROGRESS.md G-3 항목 참조 — 남은 8건(S3 5곳·JWT 2곳·GitHubApiClient 1곳)과 `INTERFACES_IMPORTS_INFRA` 검출기 신설은 별도 세션.
