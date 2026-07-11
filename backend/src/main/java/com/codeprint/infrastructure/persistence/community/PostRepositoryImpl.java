@@ -145,6 +145,12 @@ public class PostRepositoryImpl implements PostRepository {
         snapshotJpa.saveAll(snapshots);
     }
 
+    // 게시글의 기존 그래프 스냅샷 전부 삭제
+    @Override
+    public void deleteSnapshotsByPostId(UUID postId) {
+        snapshotJpa.deleteByPostId(postId);
+    }
+
     // 게시글 ID로 그래프 스냅샷 목록 조회 (노출 순)
     @Override
     public List<PostGraphSnapshot> findSnapshotsByPostId(UUID postId) {

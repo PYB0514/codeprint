@@ -1600,3 +1600,20 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `https://github.com/PYB0514/codeprint-plugins` 공개(Public) 레포 생성 완료, 초기 커밋 1개(9 파일)로 push. `claude plugin validate --strict` 통과 상태로 공개.
 
 **한계.** 실제 설치(`/plugin marketplace add`)·사용 사례는 아직 없음(배포만 완료, 도그푸딩 외 실사용 검증 없음). jar 직접 커밋 방식이라 향후 언어 추가·버전업 시마다 레포 크기가 계속 커짐 — 사용량이 늘면 GitHub Release 방식으로 전환 검토.
+
+## PR-D — "오늘의 공개레포"를 게시글 1개+스냅샷 5개로 통합 (2026-07-11, codeprint_113)
+
+> PROGRESS.md에 오래 남아있던 백로그("게시글 기반 공유그래프 전면 재설계"의 마지막 조각) 착수·완료.
+
+**문제.** `FeaturedRepoService`가 매일 5개 레포를 분석해 각각 독립 시스템 프로젝트로 저장하고, 프론트가 5개 카드를 각각 `/share/{projectId}`(레거시 단일 그래프 뷰어)로 연결. PR-A~C가 이미 만든 "게시글+다중 스냅샷" 구조를 안 쓰고 있었음.
+
+**설계.**
+1. **cross-context 규칙 준수** — `application/featured`가 `application/community`(PostCommandService)를 직접 주입받지 않도록 `domain/featured/port/PostPublishingPort`(createPost/captureSnapshot/replaceSnapshots/getSnapshotPositions) 신설 + `infrastructure/adapter/FeaturedPostPublishingAdapter`가 위임(방금 GraphFacade에서 적용한 것과 동일 원칙, 바로 이어서 적용).
+2. **고정 게시글 postId 저장** — Flyway `V54__add_featured_daily_post.sql`로 싱글톤 테이블(`id SMALLINT PRIMARY KEY DEFAULT 1` + CHECK 제약으로 단일 행 강제) 신설. `FeaturedDailyPost` 엔티티 + `FeaturedPostRepository`(도메인)로 최초 생성 여부 판단.
+3. **스냅샷 교체 저장** — 기존 `PostCommandService.saveGraphSnapshots`는 추가만 하고 교체 기능이 없어, `PostRepository.deleteSnapshotsByPostId` 신설 + `PostCommandService.replaceGraphSnapshots`(삭제 후 재저장) 추가.
+4. **그래프 미완료 레포 방어** — featured 프로젝트는 분석이 `@Async`라 트리거 직후엔 그래프가 없을 수 있음(신규 레포 최초 노출 시 특히). `captureSnapshot`이 `Optional.empty()`를 반환하면 스냅샷 목록에서 조용히 제외(에러 아님) — `ArchitectureIntentController`의 "그래프 없으면 0 반환" 선례와 동일 원칙.
+5. **position 정합성** — 랜딩페이지 카드가 "몇 번째 스냅샷인지" 알아야 딥링크(`/community/posts/{postId}/graph/{position}`) 가능한데, 미완료 레포가 스냅샷 목록에서 빠지면 position이 압축(compact)되어 원래 리스트 인덱스와 어긋남. 이걸 추정하지 않고 `PostPublishingPort.getSnapshotPositions(postId)`로 **실제 저장된 스냅샷의 projectId→position 매핑을 다시 조회**해 프론트 응답에 정확히 반영(`FeaturedRepoService.getCurrentFeaturedForDisplay`).
+
+**결과.** 전체 백엔드 테스트 통과(`FeaturedRepoServiceTest` 3종 추가 — 게시글 최초생성/재사용/그래프미완료 스킵), `compileJava`/`tsc -b` 통과, `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변. 로컬 DB로 실제 라이브 검증 — `/api/dev/trigger-featured-repos` 2회 호출로 (1)브랜드뉴 레포 5개 트리거 시 postId는 즉시 생성되고 position 전부 null(그래프 미완료) (2)로테이션이 기존 그래프 있는 레포로 넘어가자 4/5는 position 0~3(압축), 나머지 1개(axios, 최초 노출)는 null로 정확히 분리되는 것 확인. 브라우저로 랜딩페이지 카드 클릭 → `spring-petclinic` 실제 그래프 정상 렌더링, `axios` 카드는 `disabled` 확인.
+
+**한계.** `captureSnapshot`이 매 API 요청마다 프리셋 조회 쿼리를 수행(캐시 없음) — 트래픽이 늘면 캐싱 검토. 게시글 제목/본문은 고정 문자열이라 매일 갱신 안 됨(스냅샷 5개 내용만 갱신) — 날짜 포함 등 개선 여지 있으나 이번 스코프 밖.

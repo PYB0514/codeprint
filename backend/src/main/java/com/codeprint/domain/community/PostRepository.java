@@ -68,6 +68,9 @@ public interface PostRepository {
     // 그래프 스냅샷 목록 저장
     void saveSnapshots(List<PostGraphSnapshot> snapshots);
 
+    // 게시글의 기존 그래프 스냅샷을 전부 삭제 — 스냅샷 교체 저장 전 호출용
+    void deleteSnapshotsByPostId(UUID postId);
+
     // 게시글 ID로 그래프 스냅샷 목록 조회 (노출 순)
     List<PostGraphSnapshot> findSnapshotsByPostId(UUID postId);
 

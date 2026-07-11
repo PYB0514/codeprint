@@ -311,17 +311,18 @@ export default function LandingPage() {
   )
 }
 
-// 오늘의 공개레포 응답 타입
+// 오늘의 공개레포 응답 타입 — postId/position은 통합 게시글 스냅샷 딥링크용(분석 미완료 시 null)
 interface FeaturedRepo {
-  projectId: string
   repoFullName: string
   language: string
   stars: number | null
   description: string | null
   ogImageUrl: string
+  postId: string | null
+  position: number | null
 }
 
-// 오늘의 공개레포 — 매일 시스템이 선정·분석한 오픈소스 카드 목록
+// 오늘의 공개레포 — 매일 시스템이 선정·분석한 오픈소스 카드 목록(통합 게시글 스냅샷으로 이동)
 function FeaturedReposSection() {
   const navigate = useNavigate()
   const [repos, setRepos] = useState<FeaturedRepo[]>([])
@@ -341,9 +342,10 @@ function FeaturedReposSection() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {repos.map((r) => (
           <button
-            key={r.projectId}
-            onClick={() => navigate(`/share/${r.projectId}`)}
-            className="text-left bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-gray-600 transition-colors"
+            key={r.repoFullName}
+            disabled={r.postId == null || r.position == null}
+            onClick={() => navigate(`/community/posts/${r.postId}/graph/${r.position}`)}
+            className="text-left bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-800"
           >
             <img src={r.ogImageUrl} alt={r.repoFullName} className="w-full h-32 object-cover bg-gray-800" loading="lazy" />
             <div className="p-3 flex flex-col gap-1">

@@ -2,7 +2,6 @@
 package com.codeprint.interfaces.api;
 
 import com.codeprint.application.featured.FeaturedRepoService;
-import com.codeprint.domain.featured.FeaturedRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,25 +17,26 @@ public class FeaturedRepoController {
 
     private final FeaturedRepoService featuredRepoService;
 
-    // 오늘 선정된 공개레포 목록 조회 — 랜딩페이지 노출용
+    // 오늘 선정된 공개레포 목록 조회 — 랜딩페이지 노출용, 통합 게시글 딥링크(postId+position) 포함
     @GetMapping
     public List<FeaturedRepoResponse> getFeaturedRepos() {
-        return featuredRepoService.getCurrentFeatured().stream()
+        return featuredRepoService.getCurrentFeaturedForDisplay().stream()
                 .map(FeaturedRepoResponse::from)
                 .toList();
     }
 
-    record FeaturedRepoResponse(UUID projectId, String repoFullName, String language, Integer stars,
-                                 String description, String ogImageUrl) {
+    record FeaturedRepoResponse(String repoFullName, String language, Integer stars,
+                                 String description, String ogImageUrl, UUID postId, Integer position) {
 
-        static FeaturedRepoResponse from(FeaturedRepo repo) {
+        static FeaturedRepoResponse from(FeaturedRepoService.FeaturedDisplayItem item) {
             return new FeaturedRepoResponse(
-                    repo.getProjectId(),
-                    repo.getRepoFullName(),
-                    repo.getLanguage(),
-                    repo.getStars(),
-                    repo.getDescription(),
-                    "https://opengraph.githubassets.com/1/" + repo.getRepoFullName()
+                    item.repo().getRepoFullName(),
+                    item.repo().getLanguage(),
+                    item.repo().getStars(),
+                    item.repo().getDescription(),
+                    "https://opengraph.githubassets.com/1/" + item.repo().getRepoFullName(),
+                    item.postId(),
+                    item.position()
             );
         }
     }
