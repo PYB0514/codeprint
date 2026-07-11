@@ -1711,3 +1711,13 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `compileJava`/`./gradlew test`(전체, Docker Postgres 기동 상태로 실패 0건) 통과, `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변. 로컬 서버 curl 실측 — 실제 PNG 파일로 아바타·배경 업로드(S3 presigned URL 응답 확인) → `/api/auth/me`로 저장 확인 → 잘못된 content-type(`.txt`) 업로드 시 여전히 400 거부(검증 로직 보존) → 아바타·배경 삭제 200 확인(BE-14 수정 후) → `/api/auth/me`로 둘 다 null 복귀 확인.
 
 **한계.** 남은 1건(`SecurityConfig`의 `JwtAuthenticationFilter`+`OAuth2SuccessHandler` 배선) — 컴포지션 루트 재배치라 별도 세션. 이 1건 완료 후 `INTERFACES_IMPORTS_INFRA` 검출기 신설.
+
+## 게이트 사각지대 [G-3] 선행 리팩토링 9/9(완료) — SecurityConfig를 infrastructure/config로 재배치 (2026-07-11, codeprint_115)
+
+**문제.** `SecurityConfig`(Spring Security 필터체인·CORS·OAuth2 설정)가 `interfaces/api/` 패키지에 있으면서 `infrastructure.security.JwtAuthenticationFilter`·`OAuth2SuccessHandler`를 직접 import — [G-3] 마지막 9번째. 다른 8건과 달리 이건 "잘못된 위치에서 infra를 가져다 쓴 로직"이 아니라 **애초에 파일 배치 자체가 틀린 경우**(컴포지션 루트 성격의 설정 클래스가 `interfaces/`에 있을 이유가 없음, `CacheConfig`·`DataSourceConfig`·`CsrfHeaderFilter`·`RateLimitFilter`·`SecurityHeadersFilter` 등 동급 설정 클래스는 전부 `infrastructure/config/`에 이미 있었음) — GATE_GAPS.md가 처음부터 "예외 패턴보다 재배치가 정도"라고 제안했던 이유.
+
+**결정.** 로직 추출이 아니라 **`git mv`로 파일만 `infrastructure/config/SecurityConfig.java`로 이동 + 패키지 선언만 변경**. 착수 전 `exploreLocal neighbors`로 역참조를 확인해보니 inbound 0건(다른 어떤 클래스도 `SecurityConfig`를 타입으로 import하지 않음 — `@Configuration` 빈이라 Spring 컴포넌트 스캔으로만 인식되고, `@SpringBootApplication`이 `com.codeprint` 루트에 있어 패키지 이동과 무관하게 계속 스캔 대상). 따라서 다른 파일 변경이 전혀 필요 없는, 이번 G-3 9건 중 가장 단순한 케이스였음.
+
+**결과.** `compileJava`/`./gradlew test`(전체 통과) / `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변. **`grep -r "^import com.codeprint.infrastructure" interfaces/` 0건 — [G-3] 9/9 전부 완료.** 로컬 서버로 SecurityConfig가 구성하는 모든 규칙을 전수 curl 검증(순서대로): `/api/users/me`(보호) 401 / `/api/dev/test-token`(permitAll) 200 / `/api/notices`(permitAll) 200 / `/api/admin/gate-metrics`(ADMIN 전용) 401 / `/actuator/health`(permitAll) 200 / `/actuator/metrics`(ADMIN 전용) 401 / `/oauth2/authorization/github`(로그인 시작) 302 / CSRF 헤더 없는 POST `/api/auth/logout` 403 — 파일 이동 전후 동작 완전히 동일함을 확인.
+
+**다음 단계.** [G-3] 9/9 완료로 `INTERFACES_IMPORTS_INFRA` 검출기 신설 착수 가능(`detectDomainInfraImport`와 동형 — source=`interfaces/**`∧target=`infrastructure/**`) → 신설 후 자기분석 0건 확인 → severity MEDIUM 도입. 착수 순서상 검출기부터 만들었으면 이 리팩토링 PR들이 자기 게이트에 걸렸을 것이므로, 원래 계획대로 리팩토링을 전부 마친 지금이 정확한 타이밍.
