@@ -509,7 +509,7 @@ public class GraphBuilder {
         }
 
         // API_ENDPOINT 노드 생성 + FILE → API_ENDPOINT 엣지 (컨트롤러 경로 표면 시각화 — 파일 단위 1차 완료).
-        // 처리 함수까지 연결하는 함수 단위 엣지(2차, Java/Kotlin·JS/TS·Python·Go — Ruby·NestJS는 제외, 사유는
+        // 처리 함수까지 연결하는 함수 단위 엣지(2차, Java/Kotlin·JS/TS(Express+NestJS)·Python·Go — Ruby는 제외, 사유는
         // StaticCodeAnalyzer.extractControllerMappingFunctions 주석 참조) — controllerMappingFunctions로 해소된
         // 매핑은 API_ENDPOINT → FUNCTION을 FUNCTION_CALL 타입으로 생성(프론트 흐름재생이 API_ENDPOINT를
         // FUNCTION과 동일하게 FUNCTION_CALL 엣지 소스/타깃으로 취급하도록 이미 준비돼 있어 신규 타입 불필요).

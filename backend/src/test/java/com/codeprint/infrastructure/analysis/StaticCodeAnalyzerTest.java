@@ -123,6 +123,50 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("TypeScript 클래스 메서드(데코레이터 없이 methodName() {} 형태)를 함수로 추출한다")
+    void TypeScript_클래스_메서드_함수_추출() throws IOException {
+        Path file = writeTsFile("""
+                export class CatsService {
+                    async findAll(): Promise<Cat[]> {
+                        return [];
+                    }
+                    create(dto: CreateCatDto) {
+                        return dto;
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functions()).contains("findAll", "create");
+    }
+
+    @Test
+    @DisplayName("TypeScript 클래스 메서드 추출 시 제어문 키워드는 함수로 오인하지 않는다")
+    void TypeScript_클래스_메서드_제어문_오탐_방지() throws IOException {
+        Path file = writeTsFile("""
+                export class OrderService {
+                    process(order: Order) {
+                        if (order.isValid()) {
+                            for (const item of order.items) {
+                                while (item.retryCount > 0) {}
+                            }
+                        }
+                        try {
+                            this.save(order);
+                        } catch (e) {}
+                        return order;
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functions()).contains("process");
+        assertThat(result.functions()).doesNotContain("if", "for", "while", "try", "catch");
+    }
+
+    @Test
     @DisplayName("Python 파일에서 def 함수명을 추출한다")
     void Python_함수_추출() throws IOException {
         Path file = writePyFile("""
@@ -1012,22 +1056,27 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
-    @DisplayName("NestJS는 이번 스코프에서 제외 — 처리 함수가 해소되지 않는다 (클래스 메서드가 FUNCTION 노드로 안 잡히는 별도 한계)")
-    void NestJS_컨트롤러_매핑_처리함수_미해소() throws IOException {
+    @DisplayName("NestJS 컨트롤러 매핑마다 클래스 메서드를 처리 함수로 해소한다")
+    void NestJS_컨트롤러_매핑_처리함수_해소() throws IOException {
         Path file = tempDir.resolve("cats.controller.ts");
         Files.writeString(file, """
-                import { Controller, Get } from '@nestjs/common';
+                import { Controller, Get, Post } from '@nestjs/common';
 
                 @Controller('cats')
                 export class CatsController {
                     @Get()
                     findAll() {}
+
+                    @Post()
+                    create() {}
                 }
                 """);
 
         ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
 
-        assertThat(result.controllerMappingFunctions()).isEmpty();
+        assertThat(result.controllerMappingFunctions())
+                .containsEntry("GET:/cats", "findAll")
+                .containsEntry("POST:/cats", "create");
     }
 
     @Test

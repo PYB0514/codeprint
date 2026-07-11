@@ -1549,3 +1549,20 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `backend/build.gradle`에 `toolsRuntime` configuration + `exploreLocalJar`/`analyzeLocalJar` 태스크(둘 다 순정 `Jar`, Shadow 불필요) 신설. 실측 검증: 레포 밖 임시 디렉터리로 jar 복사 후 `java -jar`만으로 실행 — `exploreLocalJar`를 `frontend/src`(62파일)에 실행해 정상 repoMap 생성, `analyzeLocalJar`를 `frontend/src`(경고 0)·`backend/src/main/java`(HIGH_FAN_OUT 5건, 기존 self 베이스라인과 일치)에 각각 실행해 프로덕션과 동일한 결과 확인. `compileJava`/`compileTestJava` 통과, 기존 태스크(`analyzeLocal`/`watchLocal`/`exploreLocal`/test) 무영향 확인.
 
 **한계.** `.claude/skills/` 매니페스트(SKILL.md)·Plugin/Marketplace 구조 작성은 다음 단계. JDK trust store 문제의 근본 원인은 확정 진단 아님(우회로만 해결) — 향후 다른 신규 Gradle 플러그인이 필요해지면 재발 가능, 그때 JDK 업그레이드 검토.
+
+## NestJS 컨트롤러 매핑 처리 함수 미해소 수정 (2026-07-11, codeprint_113)
+
+> Context110이 여러 세션째 남겨둔 백로그("StaticCodeAnalyzer.java:334 getFunctionPattern NestJS 클래스 메서드 미인식") 착수.
+
+**문제.** `NestJS_컨트롤러_매핑_처리함수_미해소` 테스트가 "NestJS는 이번 스코프에서 제외 — 클래스 메서드가 FUNCTION 노드로 안 잡히는 별도 한계"로 명시적으로 기록해둔 알려진 한계. `@Controller('cats')` + `@Get() findAll() {}` 같은 데코레이터 없는 class method 선언을 처리 함수로 못 찾아 API_ENDPOINT → FUNCTION 엣지가 생성되지 않음.
+
+**원인 재확인 — 착수 전 가정이 틀렸었다.** 처음엔 "TS 함수 추출 자체가 class method를 못 잡는다"는 기존 주석을 그대로 믿고 `extractFunctions`/`ParsedFile.functions()`부터 고치려 했으나, 회귀 테스트를 먼저 작성해보니(TDD) 클래스 메서드 추출 테스트 2건은 **이미 통과**했다. 확인해보니 tree-sitter 기반 `TreeSitterTypescriptAnalyzer` 도입(다른 세션에서 완료, StaticCodeAnalyzer.java:22 주석 "정규식이 못 잡는 클래스 메서드 회복"으로 이미 해결됨) 이후 `functions()` 목록 자체는 정확하다. 진짜 갭은 `extractControllerMappingFunctions`의 위치 휴리스틱 `findEnclosingFunction`이 tree-sitter 결과를 쓰지 않고 **여전히 구식 정규식 `getFunctionPattern`을 직접 호출**한다는 것 — 이 정규식이 `function`/화살표 함수만 인식하고 데코레이터 없는 class method(`methodName() {}`) 브랜치가 없어 데코레이터 위치 이후 첫 함수 선언을 못 찾음. 백로그 서술("함수 추출 자체가 안 됨")과 실제 결함 위치(위치 휴리스틱 전용 legacy 정규식)가 달랐던 셈 — 회귀 테스트를 먼저 실행해 실제 실패 지점을 좁힌 뒤에야 정확한 스코프가 드러남.
+
+**결정.**
+1. `getFunctionPattern`(TS/JS)에 4번째 대안 추가 — `^[ \t]*(?:modifier\s+)*(\w+)\s*\([^)]*\)\s*(?::\s*리턴타입)?\s*\{` 형태로 데코레이터 없는 class method 인식. 기존 `isKeyword` 필터(if/for/while/switch/catch 등 이미 등록)가 제어문 오탐을 그대로 막아줘 별도 예외 목록 불필요 — 회귀 테스트로 if/for/while/try/catch 오탐 없음 확인.
+2. `extractControllerMappingFunctions`에 `extractControllerMappings`의 기존 NestJS 브랜치(`@Controller` prefix + `@Get/@Post/@Put/@Delete/@Patch` 데코레이터)와 **동일한 key 합성 규칙**으로 새 분기 추가, `findEnclosingFunction` 호출로 처리 함수명 해소. 두 메서드가 상태를 공유하지 않아 로직이 중복되지만(기존 Java/Python 브랜치들도 동일 패턴), 기존 흐름을 안 건드리는 게 더 안전하다는 이 파일의 기존 원칙(L978 주석)을 따름.
+3. `NestJS_컨트롤러_매핑_처리함수_미해소` 테스트를 "해소"로 뒤집어 `containsEntry("GET:/cats", "findAll")` 등으로 교체.
+
+**결과.** 전체 백엔드 테스트(174+3건) 통과, `compileJava` 통과, `analyzeLocal` 자가검사 결과 HIGH_FAN_OUT 5건으로 기존 self 베이스라인과 동일(신규 경고 없음). `GraphBuilder.java`의 "Ruby·NestJS는 제외" 주석도 "Ruby는 제외"로 갱신(NestJS 더 이상 예외 아님).
+
+**한계.** 정규식 기반 위치 휴리스틱이라 데코레이터와 메서드 선언 사이에 다른 메서드가 끼어 있거나 메서드 시그니처가 여러 줄에 걸치면(멀티라인 파라미터) 여전히 못 잡을 수 있음 — 기존 Java/Python 브랜치와 동일한 수준의 한계라 이번 수정 스코프 밖. `findEnclosingFunction`을 tree-sitter 결과 기반으로 재작성하면 근본 해결되지만 더 큰 리팩토링이라 별도 과제로 남김.
