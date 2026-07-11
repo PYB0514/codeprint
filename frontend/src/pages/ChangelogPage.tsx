@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.123.0',
+    date: '2026-07-12',
+    title: '구조 경고 AI 분석 버튼',
+    type: 'feature',
+    items: [
+      { category: '그래프', desc: 'AI API 키를 등록했다면, 경고 패널의 각 경고 항목에서 "AI" 버튼을 눌러 원인과 수정안을 바로 물어볼 수 있습니다. 판정(경고 유지 여부) 자체는 이 설명과 무관하게 그대로 유지됩니다.' },
+    ],
+  },
+  {
     version: 'v0.122.5',
     date: '2026-07-11',
     title: '오늘의 공개레포 — 게시글 1개로 통합',

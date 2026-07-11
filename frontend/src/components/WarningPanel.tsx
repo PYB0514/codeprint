@@ -19,6 +19,11 @@ interface IgnoreOps {
   onRemove: (index: number) => void
 }
 
+// 경고 AI 분석 요청 위임 — 실제 API 호출은 상위(GraphPage 등)가 담당, 이 컴포넌트는 axios를 모름
+interface AiExplainOps {
+  onExplain: (w: Warning) => Promise<string>
+}
+
 interface Props {
   warnings: Warning[]
   onNodeNavigate?: (nodeId: string) => void
@@ -29,6 +34,8 @@ interface Props {
   onRestore?: (w: Warning) => void
   // 패턴 예외 규칙 조작 — 소유자에게만 전달 (없으면 "무시" 액션·규칙 패널 미표시)
   ignoreOps?: IgnoreOps
+  // AI 분석 — 제공자 키 등록된 경우에만 전달 (없으면 버튼 미표시)
+  aiExplain?: AiExplainOps
 }
 
 const SEVERITY_ORDER: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
@@ -58,7 +65,7 @@ export const WARNING_META: Record<string, { label: string; desc: string; color: 
 }
 
 // 경고 목록을 타입별로 그룹핑하여 severity 순(HIGH→MEDIUM→LOW)으로 표시
-export default function WarningPanel({ warnings, onNodeNavigate, onSuppress, suppressed, onRestore, ignoreOps }: Props) {
+export default function WarningPanel({ warnings, onNodeNavigate, onSuppress, suppressed, onRestore, ignoreOps, aiExplain }: Props) {
   const grouped = new Map<string, Warning[]>()
   for (const w of warnings) {
     if (!grouped.has(w.type)) grouped.set(w.type, [])
@@ -77,7 +84,7 @@ export default function WarningPanel({ warnings, onNodeNavigate, onSuppress, sup
         <IgnoreRulesSection ops={ignoreOps} />
       )}
       {sortedEntries.map(([type, items]) => (
-        <WarningGroup key={type} type={type} items={items} onNodeNavigate={onNodeNavigate} onSuppress={onSuppress} ignoreOps={ignoreOps} />
+        <WarningGroup key={type} type={type} items={items} onNodeNavigate={onNodeNavigate} onSuppress={onSuppress} ignoreOps={ignoreOps} aiExplain={aiExplain} />
       ))}
       {suppressed && suppressed.length > 0 && (
         <SuppressedGroup items={suppressed} onRestore={onRestore} />
@@ -147,11 +154,30 @@ function SuppressedGroup({ items, onRestore }: { items: Warning[]; onRestore?: (
 }
 
 // 경고 타입별 접기/펼치기 그룹
-function WarningGroup({ type, items, onNodeNavigate, onSuppress, ignoreOps }: { type: string; items: Warning[]; onNodeNavigate?: (nodeId: string) => void; onSuppress?: (w: Warning) => void; ignoreOps?: IgnoreOps }) {
+function WarningGroup({ type, items, onNodeNavigate, onSuppress, ignoreOps, aiExplain }: { type: string; items: Warning[]; onNodeNavigate?: (nodeId: string) => void; onSuppress?: (w: Warning) => void; ignoreOps?: IgnoreOps; aiExplain?: AiExplainOps }) {
   const [open, setOpen] = useState(true)
   // 현재 패턴 예외 폼이 열린 경고의 인덱스 (-1=닫힘)
   const [ignoreFormFor, setIgnoreFormFor] = useState(-1)
+  // AI 분석 패널이 열린 경고의 인덱스 (-1=닫힘) + 인덱스별 로딩/결과 캐시(재클릭 시 재요청 안 함)
+  const [aiOpenFor, setAiOpenFor] = useState(-1)
+  const [aiLoadingFor, setAiLoadingFor] = useState(-1)
+  const [aiResults, setAiResults] = useState<Record<number, string>>({})
   const meta = WARNING_META[type] ?? { label: type, desc: '', color: '#eab308', severity: 'MEDIUM' }
+
+  const handleAiToggle = async (i: number, w: Warning) => {
+    if (aiOpenFor === i) { setAiOpenFor(-1); return }
+    setAiOpenFor(i)
+    if (aiResults[i] !== undefined) return
+    setAiLoadingFor(i)
+    try {
+      const text = await aiExplain!.onExplain(w)
+      setAiResults((prev) => ({ ...prev, [i]: text }))
+    } catch {
+      setAiResults((prev) => ({ ...prev, [i]: 'AI 분석을 가져오지 못했습니다. API 키를 확인해주세요.' }))
+    } finally {
+      setAiLoadingFor(-1)
+    }
+  }
   const severity = items[0]?.severity ?? meta.severity ?? 'MEDIUM'
   const sevStyle = SEVERITY_STYLE[severity] ?? SEVERITY_STYLE.MEDIUM
 
@@ -192,6 +218,13 @@ function WarningGroup({ type, items, onNodeNavigate, onSuppress, ignoreOps }: { 
                     title="이 패턴을 예외로 — 같은 부류 경고를 한 번에 억제"
                   >무시</button>
                 )}
+                {aiExplain && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleAiToggle(i, w) }}
+                    className="shrink-0 text-gray-500 hover:text-blue-400 px-1"
+                    title="AI로 원인·수정안 분석"
+                  >{aiLoadingFor === i ? '...' : 'AI'}</button>
+                )}
                 {onSuppress && w.fingerprint && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onSuppress(w) }}
@@ -206,6 +239,11 @@ function WarningGroup({ type, items, onNodeNavigate, onSuppress, ignoreOps }: { 
                   ops={ignoreOps}
                   onDone={() => setIgnoreFormFor(-1)}
                 />
+              )}
+              {aiExplain && aiOpenFor === i && (
+                <div className="mt-1 mb-0.5 ml-2 bg-gray-800/60 border border-blue-800/30 rounded px-2 py-1.5 text-[11px] text-gray-300 leading-relaxed">
+                  {aiLoadingFor === i ? 'AI가 분석 중...' : aiResults[i]}
+                </div>
               )}
             </div>
           ))}
