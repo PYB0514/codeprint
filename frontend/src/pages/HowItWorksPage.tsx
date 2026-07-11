@@ -34,6 +34,10 @@ const WARNING_GUIDE: Record<string, { example: string; limitation: string }> = {
     example: 'domain/ 이 infrastructure/ 를 직접 import — 의존 방향 역전 위반(도메인은 인프라를 몰라야 함).',
     limitation: 'shared/(공유 커널)는 허용. DDD 구조 프로젝트에서만 활성화.',
   },
+  INTERFACES_IMPORTS_INFRA: {
+    example: 'interfaces/(Controller 등) 가 infrastructure/ 를 직접 import — Application Service를 건너뛴 계층 위반.',
+    limitation: 'shared/는 허용, 컴포지션 루트(*Configuration 등)는 배선이 설계 의도라 예외. DDD 구조 프로젝트에서만 활성화, 초기 도입이라 severity MEDIUM.',
+  },
   CROSS_DOMAIN_CALL: {
     example: '함수 호출이 도메인 경계를 직접 넘음 — port/ 인터페이스를 경유해야 함.',
     limitation: '한정자 없는 호출은 동명 함수로 매칭되는 한계가 있어 getter·JPA·JDK·동명 함수는 제외. 그래도 일부 오탐 가능.',

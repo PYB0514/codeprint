@@ -34,6 +34,7 @@ public class GraphWarningService {
             warnings.addAll(detectDbLayerBypass(nodes, edges));
             warnings.addAll(detectCrossContextDomainImport(nodes, edges));
             warnings.addAll(detectDomainInfraImport(nodes, edges));
+            warnings.addAll(detectInterfaceInfraImport(nodes, edges));
             warnings.addAll(detectCrossDomainFunctionCall(nodes, edges));
         } else {
             // 비DDD 프로젝트 — Controller/Service/Repository 레이어 컨벤션을 자동 감지해 위반 검사
@@ -611,6 +612,10 @@ public class GraphWarningService {
     // "db"는 Python 생태계(예: app/db/repositories)의 영속화 레이어 관용 명명이다.
     private static final Set<String> INFRA_LAYER_DIRS = Set.of(
         "infrastructure", "infra", "persistence", "adapter", "adapters", "dao", "db");
+    // 인터페이스(진입점) 레이어 디렉터리 별칭 — Controller/Presentation 계층. application(usecase)과는 별개로
+    // 좁게 잡는다 — application→infrastructure는 정상 방향(포트/직접 호출 둘 다 허용)이라 여기 섞으면 오탐.
+    private static final Set<String> INTERFACE_LAYER_DIRS = Set.of(
+        "interfaces", "presentation", "controllers", "controller");
     // 애플리케이션 레이어 디렉터리 별칭 — isDddProject 게이트가 레이어드/DDD 프로젝트를 인식할 때 사용.
     // "app"은 제외 — /app/ 은 앱 루트 패키지로 흔히 쓰여(레이어 아님) 오분류를 일으킨다.
     // "services"는 Python 생태계(예: app/services)의 애플리케이션 레이어 관용 명명이다.
@@ -1028,6 +1033,44 @@ public class GraphWarningService {
                 w.put("message", "DDD 의존 방향 위반: domain/"
                         + (srcContext != null ? srcContext : "?") + " → infrastructure/ 직접 import. "
                         + "공통 관심사는 shared/ 로 이동하거나 domain/port/ 인터페이스로 역전하세요.");
+                warnings.add(w);
+            }
+        }
+        return warnings;
+    }
+
+    // interfaces/(Controller 등)가 infrastructure/ 를 직접 IMPORT — 의존 방향 위반
+    // (Interfaces → Application → Domain 단방향, Interfaces가 Infrastructure를 건너뛰면 안 됨)
+    // 컴포지션 루트(*Config·*Configuration·*Bootstrap·*LifeCycle)는 배선이 설계 의도라 예외 — DB_LAYER_BYPASS와 동일 판단.
+    // severity=MEDIUM: 도입 초기 관찰 기간(자기 레포 0건·벤치 무오탐 확인 후 HIGH 승격 검토).
+    private List<Map<String, Object>> detectInterfaceInfraImport(List<Node> nodes, List<Edge> edges) {
+        Map<UUID, String> nodeFilePaths = new HashMap<>();
+        Map<UUID, String> nameMap = new HashMap<>();
+        for (Node n : nodes) {
+            nodeFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+            nameMap.put(n.getId(), n.getName());
+        }
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Edge e : edges) {
+            if (e.getType() != EdgeType.IMPORT) continue;
+            String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
+            String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
+
+            if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))) continue;
+            if (isCompositionRoot(srcPath)) continue;
+
+            boolean srcIsInterface = containsLayerSegment(srcPath, INTERFACE_LAYER_DIRS);
+            boolean tgtIsInfra = containsLayerSegment(tgtPath, INFRA_LAYER_DIRS) && !tgtPath.contains("/shared/");
+
+            if (srcIsInterface && tgtIsInfra) {
+                Map<String, Object> w = new LinkedHashMap<>();
+                w.put("type", "INTERFACES_IMPORTS_INFRA");
+                w.put("severity", "MEDIUM");
+                w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
+                w.put("edgeIds", List.of(e.getId().toString()));
+                w.put("message", "레이어 단방향 위반: interfaces/ 가 infrastructure/ 를 직접 import. "
+                        + "Application Service나 Facade를 경유하세요(Interfaces → Application → Domain ← Infrastructure).");
                 warnings.add(w);
             }
         }
