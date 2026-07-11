@@ -1656,3 +1656,17 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `compileJava`/`./gradlew test`(Docker Postgres) 통과, `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변. 로컬 서버 curl 검증 — GitHub 토큰 없는 테스트 유저로 `/api/projects/github-repos` 200 `[]`(기존 동작과 동일), 존재하지 않는 projectId로 `/branches` 400 "Project not found"(500 아님, 정상 에러 전파 확인). 프론트(`CreateProjectModal.tsx`)가 기대하는 필드명(`htmlUrl`/`fullName`/`isPrivate`)과 `GithubRepoView` 필드명이 완전히 동일해 응답 JSON 불변 확인, 프론트 수정 불필요.
 
 **한계.** 남은 7건(S3 5곳·JWT 2곳·SecurityConfig 2건)은 별도 세션.
+
+## 게이트 사각지대 [G-3] 선행 리팩토링 3/9·4/9 — GraphController·UserFollowController → S3Service 이전 (2026-07-11, codeprint_114)
+
+**문제.** `GraphController`(`/api/share/{projectId}/graph` 공개 조회에서 소유자 배경이미지 presigned URL 1곳)와 `UserFollowController`(팔로워/팔로잉 목록의 아바타 URL 변환)가 `infrastructure.storage.S3Service`를 직접 import — [G-3] 9건 중 3·4번째.
+
+**결정.**
+1. **GraphController** — 기존 `GraphFacade`(PR #513에서 이미 `ProjectAccessPort`/`AnalysisReadPort` 패턴 확립)에 `getPublicOwnerInfo(ProjectAccessView)` 추가.
+2. **UserFollowController** — 별도 Facade가 없어, 이미 "타 컨텍스트에서 사용자 정보가 필요할 때 사용"이라 문서화된 기존 `application/user/UserQueryService`에 `toPresignedAvatarUrl(String)` 델리게이트 추가.
+
+**★ 리팩토링 도중 스스로 새 위반을 만들고 자가검사로 잡은 사례.** GraphFacade에 `getPublicOwnerInfo`를 처음 구현할 때 `UserRepository`(domain/user)를 직접 주입했음 — S3Service(infrastructure)만 신경 쓰다 domain 간 cross-context 위반(`application/graph`→`domain/user`)을 놓침. `./gradlew analyzeLocal` 재검증에서 `CROSS_CONTEXT_IMPORT: 1건`이 새로 뜨는 걸 즉시 발견 — PR #513이 세운 "포트는 타 도메인 엔티티를 그대로 반환하지 않는다"는 컨벤션과 정확히 같은 문제였음. `domain/graph/port/GraphUserInfoPort`(+`infrastructure/adapter/GraphUserInfoAdapter`, 기존 `domain/collaboration/port/UserInfoPort`+`UserInfoAdapter`와 완전히 동일한 패턴)를 신설해 교정 — S3Service(infrastructure)는 애초에 위반이 아니라 그대로 GraphFacade에 남김. **교훈: G-3 같은 "infra 직접 의존 제거" 작업에서 대체 경로(Facade)에 새 의존을 추가할 때, 그 의존이 domain(다른 컨텍스트)인지 infrastructure인지 매번 구분해서 확인할 것 — 후자만 응용 계층에서 허용.** `analyzeLocal`을 매 슬라이스마다 재실행하는 규칙(CLAUDE.md 규칙4)이 실제로 이 실수를 push 전에 잡아낸 실사례.
+
+**결과.** `compileJava`/`./gradlew test`(Docker Postgres) 통과 — `GraphControllerOwnershipTest`(IDOR 회귀 테스트, `new GraphController(...)` 생성자 시그니처 변경으로 함께 갱신) 포함 전체 통과. `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 복귀(CROSS_CONTEXT_IMPORT 0건 확인). 로컬 서버로 실제 공개 프로젝트(`spring-petclinic`) `/api/share/{id}/graph` 호출 — 응답에 실제 서명된 S3 presigned URL(`ownerBgUrl`)과 `ownRepo:true`가 정확히 포함되는 것까지 실측 확인. `/api/users/{id}/followers`·`/following`도 200 정상 응답 확인.
+
+**한계.** 남은 5건(Attachment·Auth의 S3Service, Auth·Dev의 JwtTokenProvider, SecurityConfig 2건) — Auth는 [반복-A] 로그아웃 버그 이력(3회)이 있는 최고위험 파일이라 별도의 신중한 세션에서.

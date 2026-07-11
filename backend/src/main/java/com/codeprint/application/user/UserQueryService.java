@@ -3,6 +3,7 @@ package com.codeprint.application.user;
 
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserRepository;
+import com.codeprint.infrastructure.storage.S3Service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,12 @@ import java.util.UUID;
 public class UserQueryService {
 
     private final UserRepository userRepository;
+    private final S3Service s3Service;
+
+    // 저장된 아바타 URL을 presigned URL로 변환 (S3Service 정책 그대로 위임)
+    public String toPresignedAvatarUrl(String avatarUrl) {
+        return s3Service.toPresignedUrl(avatarUrl);
+    }
 
     // 사용자 ID로 username 조회 (없으면 "알 수 없음")
     public String findUsernameById(UUID userId) {
