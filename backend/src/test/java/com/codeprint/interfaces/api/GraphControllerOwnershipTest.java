@@ -11,8 +11,6 @@ import com.codeprint.application.graph.RepoMapService;
 import com.codeprint.application.graph.WarningSuppressionService;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.user.User;
-import com.codeprint.domain.user.UserRepository;
-import com.codeprint.infrastructure.storage.S3Service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,8 +36,6 @@ class GraphControllerOwnershipTest {
     @Mock private GraphWarningService graphWarningService;
     @Mock private WarningSuppressionService warningSuppressionService;
     @Mock private NodeStyleService nodeStyleService;
-    @Mock private UserRepository userRepository;
-    @Mock private S3Service s3Service;
     @Mock private GraphResponseAssembler graphResponseAssembler;
     @Mock private RepoMapService repoMapService;
 
@@ -54,7 +50,7 @@ class GraphControllerOwnershipTest {
         controller = new GraphController(
                 graphQueryService, graphCommandService, graphFacade, graphDiffService,
                 graphWarningService, warningSuppressionService, nodeStyleService,
-                userRepository, s3Service, graphResponseAssembler, repoMapService);
+                graphResponseAssembler, repoMapService);
         user = mock(User.class);
         lenient().when(user.getId()).thenReturn(userId);
     }

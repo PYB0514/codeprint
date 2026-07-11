@@ -1,12 +1,12 @@
 // 유저 팔로우/팔로워 REST API
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.user.UserQueryService;
 import com.codeprint.domain.user.User;
 import com.codeprint.domain.user.UserFollow;
 import com.codeprint.domain.user.UserFollowRepository;
 import com.codeprint.shared.event.UserFollowedEvent;
 import com.codeprint.domain.user.UserRepository;
-import com.codeprint.infrastructure.storage.S3Service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
@@ -27,7 +27,7 @@ public class UserFollowController {
     private final UserFollowRepository userFollowRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
-    private final S3Service s3Service;
+    private final UserQueryService userQueryService;
 
     // 팔로우
     @PostMapping("/{userId}/follow")
@@ -97,7 +97,7 @@ public class UserFollowController {
                 .map(u -> Map.<String, Object>of(
                         "id", u.getId(),
                         "username", u.getUsername(),
-                        "avatarUrl", u.getAvatarUrl() != null ? s3Service.toPresignedUrl(u.getAvatarUrl()) : "https://github.com/" + u.getUsername() + ".png"
+                        "avatarUrl", u.getAvatarUrl() != null ? userQueryService.toPresignedAvatarUrl(u.getAvatarUrl()) : "https://github.com/" + u.getUsername() + ".png"
                 ))
                 .toList();
     }

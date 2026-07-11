@@ -13,8 +13,6 @@ import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.user.User;
-import com.codeprint.domain.user.UserRepository;
-import com.codeprint.infrastructure.storage.S3Service;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -45,8 +43,6 @@ public class GraphController {
     private final GraphWarningService graphWarningService;
     private final WarningSuppressionService warningSuppressionService;
     private final NodeStyleService nodeStyleService;
-    private final UserRepository userRepository;
-    private final S3Service s3Service;
     private final GraphResponseAssembler graphResponseAssembler;
     private final RepoMapService repoMapService;
 
@@ -170,11 +166,9 @@ public class GraphController {
     @GetMapping("/api/share/{projectId}/graph")
     public ResponseEntity<?> getPublicGraph(@PathVariable UUID projectId) {
         var project = graphFacade.getPublicProject(projectId);
-        Optional<User> owner = userRepository.findById(project.userId());
-        String ownerBgUrl = owner
-                .map(u -> s3Service.toPresignedUrl(u.getGraphBgUrl()))
-                .orElse(null);
-        boolean ownRepo = owner.map(u -> project.isOwnRepo(u.getUsername())).orElse(false);
+        var ownerInfo = graphFacade.getPublicOwnerInfo(project);
+        String ownerBgUrl = ownerInfo.bgUrl();
+        boolean ownRepo = ownerInfo.ownRepo();
         return graphQueryService.findLatestByProject(projectId)
                 .map(graph -> {
                     List<Node> nodes = graphQueryService.getNodes(graph.getId());

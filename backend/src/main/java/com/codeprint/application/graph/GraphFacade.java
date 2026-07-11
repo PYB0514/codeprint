@@ -3,8 +3,10 @@ package com.codeprint.application.graph;
 
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.port.AnalysisReadPort;
+import com.codeprint.domain.graph.port.GraphUserInfoPort;
 import com.codeprint.domain.graph.port.ProjectAccessPort;
 import com.codeprint.domain.graph.port.ProjectAccessPort.ProjectAccessView;
+import com.codeprint.infrastructure.storage.S3Service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +22,8 @@ public class GraphFacade {
     private final GraphQueryService graphQueryService;
     private final ProjectAccessPort projectAccessPort;
     private final AnalysisReadPort analysisReadPort;
+    private final GraphUserInfoPort graphUserInfoPort;
+    private final S3Service s3Service;
 
     // 프로젝트 소유권 확인 — 소유자 아니면 예외
     public void verifyProjectOwnership(UUID projectId, UUID userId) {
@@ -53,6 +57,16 @@ public class GraphFacade {
     // 공개 프로젝트 조회 — 비인증 접근용
     public ProjectAccessView getPublicProject(UUID projectId) {
         return projectAccessPort.getPublicProject(projectId);
+    }
+
+    // 공개 그래프 소유자의 배경 이미지 presigned URL + 내 레포 여부
+    public record PublicOwnerInfo(String bgUrl, boolean ownRepo) {}
+
+    // 공개 그래프 응답에 표시할 소유자 배경이미지·소유 여부 조회 — 소유자 조회 실패 시 기본값
+    public PublicOwnerInfo getPublicOwnerInfo(ProjectAccessView project) {
+        return graphUserInfoPort.findUserInfo(project.userId())
+                .map(info -> new PublicOwnerInfo(s3Service.toPresignedUrl(info.graphBgUrl()), project.isOwnRepo(info.username())))
+                .orElse(new PublicOwnerInfo(null, false));
     }
 
     // 그래프 버전 목록에 브랜치명을 포함하여 반환
