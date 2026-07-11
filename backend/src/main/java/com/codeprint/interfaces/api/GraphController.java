@@ -170,7 +170,7 @@ public class GraphController {
     @GetMapping("/api/share/{projectId}/graph")
     public ResponseEntity<?> getPublicGraph(@PathVariable UUID projectId) {
         var project = graphFacade.getPublicProject(projectId);
-        Optional<User> owner = userRepository.findById(project.getUserId());
+        Optional<User> owner = userRepository.findById(project.userId());
         String ownerBgUrl = owner
                 .map(u -> s3Service.toPresignedUrl(u.getGraphBgUrl()))
                 .orElse(null);

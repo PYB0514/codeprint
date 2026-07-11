@@ -1566,3 +1566,21 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** 전체 백엔드 테스트(174+3건) 통과, `compileJava` 통과, `analyzeLocal` 자가검사 결과 HIGH_FAN_OUT 5건으로 기존 self 베이스라인과 동일(신규 경고 없음). `GraphBuilder.java`의 "Ruby·NestJS는 제외" 주석도 "Ruby는 제외"로 갱신(NestJS 더 이상 예외 아님).
 
 **한계.** 정규식 기반 위치 휴리스틱이라 데코레이터와 메서드 선언 사이에 다른 메서드가 끼어 있거나 메서드 시그니처가 여러 줄에 걸치면(멀티라인 파라미터) 여전히 못 잡을 수 있음 — 기존 Java/Python 브랜치와 동일한 수준의 한계라 이번 수정 스코프 밖. `findEnclosingFunction`을 tree-sitter 결과 기반으로 재작성하면 근본 해결되지만 더 큰 리팩토링이라 별도 과제로 남김.
+
+## GraphFacade cross-context 직접 호출 전량 정리 — ProjectAccessPort/AnalysisReadPort 신설 (2026-07-11, codeprint_113)
+
+> Context110~112가 3세션째 미룬 백로그("GraphFacade 나머지 cross-context 호출 포트/어댑터 정리") 완전 해소. 2026-07-09 `CROSS_DOMAIN_CALL 회귀 수정 — GraphFacade.searchPublicProjects → ProjectSearchPort` 항목이 "GraphFacade의 다른 cross-context 호출 전체를 포트/어댑터로 정리하는 건 이번 스코프 밖"이라 명시적으로 남겨뒀던 나머지.
+
+**문제.** `GraphFacade`(application/graph)가 `ProjectQueryService`(application/project) 6곳, `AnalysisApplicationService`(application/analysis) 1곳을 직접 주입받아 호출 — CLAUDE.md §10 "application/contextA가 application/contextB를 직접 주입받지 않음" 위반. `analyzeLocal`의 `CROSS_DOMAIN_CALL` 탐지기가 이걸 못 잡는 이유를 `GraphWarningService.isFrameworkCallPattern`에서 확인 — `get`/`set` + 대문자로 시작하는 이름은 "정적 분석으로 호출 추적 불가"인 getter/setter 패턴으로 간주해 무조건 제외하는 가드가 있는데, `getProject`/`getPublicProject`/`getAnalysis`가 전부 이 패턴에 걸려 구조적으로 영구히 안 잡힘(탐지기의 버그가 아니라 의도된 한계 — precision 우선 트레이드오프).
+
+**설계 검토 — 처음 계획보다 범위가 커짐.** 기존 포트 8개(`GraphReadPort`·`ProjectReadPort`·`UserInfoPort` 등)를 전수 대조한 결과, 이 코드베이스는 예외 없이 **포트가 다른 컨텍스트의 도메인 엔티티를 그대로 반환하지 않는** 컨벤션을 지킴(항상 원시값이나 자체 `record` view로 좁힘 — `GraphReadPort`는 "graph 도메인 모델 비노출"이라 주석까지 명시). `GraphFacade.getOwnedProject`/`getPublicProject`는 `Project` 엔티티를 그대로 반환해 `GraphController`·`McpController`가 `isOwnRepo`·`getUserId` 등을 직접 쓰는 구조라, 이 컨벤션을 지키려면 반환값 없는 4곳(`verifyProjectOwnership`·`verifyGraphOwnership`·`verifyGraphReadAccess`·`getGraphVersionsWithBranch`)과 Project를 반환해야 하는 2곳(`getOwnedProject`·`getPublicProject`)을 다르게 처리해야 함이 드러남 — 사용자에게 "일부만 정리(4곳)" vs "전체 정리(view 타입 신설, Controller 3개 동반 수정)" 트레이드오프를 보고하고 확인받아 **전체 정리**로 진행.
+
+**결정.**
+1. `domain/graph/port/ProjectAccessPort` 신설 — `verifyOwnership`/`verifyPublic`(반환값 없음, 4곳용) + `getOwnedProject`/`getPublicProject`(2곳용, `ProjectAccessView` record 반환). `ProjectAccessView(id, userId, name, githubRepoUrl)`에 `Project.isOwnRepo`와 동일한 로직(`GithubRepoOwner.matches`, project 도메인 미의존 shared 유틸)을 그대로 옮겨 담아 domain/graph가 domain/project를 import할 필요 자체를 제거.
+2. `domain/graph/port/AnalysisReadPort` 신설 — `findBranch(analysisId): Optional<String>`. `infrastructure/adapter/ProjectAccessAdapter`·`AnalysisReadAdapter`가 각각 `ProjectQueryService`·`AnalysisApplicationService`를 감싸 위임(이 어댑터들은 infrastructure 계층이라 두 도메인 다 알아도 무방 — 기존 `ProjectReadAdapter` 선례와 동일).
+3. `GraphFacade`가 `ProjectAccessPort`·`AnalysisReadPort`만 주입받도록 전환, `ProjectQueryService`·`AnalysisApplicationService` 의존 완전 제거.
+4. `GraphController`(2곳, `var` 타입 추론이라 무변경)·`GraphViewPresetController`(1곳, 반환값 미사용이라 무변경)·`McpController`(1곳, `Project project;` 명시적 선언 → `ProjectAccessView project;` + `project.getId()/getName()/getGithubRepoUrl()` → record 접근자 `project.id()/name()/githubRepoUrl()`로 교체 — Lombok getter 스타일과 record 접근자 스타일이 달라 컴파일 에러로 처음 발견, 즉시 수정) 갱신.
+
+**결과.** `compileJava`/`compileTestJava` 통과(첫 시도에서 record 접근자 네이밍 실수로 컴파일 에러 4건 발생 → `project.getX()` → `project.x()`로 즉시 수정). 전체 백엔드 테스트 통과(`GraphFacadeTest` 6종을 `ProjectAccessPort`/`AnalysisReadPort` mock 기준으로 갱신, `GraphControllerOwnershipTest`는 `GraphFacade` 자체를 목으로 쓰고 반환값을 스텁하지 않아 무변경). `analyzeLocal` 재검증 — HIGH_FAN_OUT 5건으로 기존 self 베이스라인 불변(신규 경고 없음, `CROSS_DOMAIN_CALL`은 애초에 탐지 안 되던 항목이라 이번에도 0건 그대로).
+
+**한계.** `AnalysisReadAdapter.findBranch`가 여전히 `try/catch(Exception e)`로 넓게 잡는 방어 패턴(기존 `getBranchSafely`와 동일 동작 유지 목적) — `AnalysisApplicationService.getAnalysis`가 던지는 구체적 예외 타입까지 좁히는 리팩토링은 이번 스코프 밖.
