@@ -1680,3 +1680,22 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `compileJava`/`./gradlew test` 통과, `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변(신규 위반 없음). 로컬 서버 curl 검증 — 정상 요청(`image/png`) 시 실제 서명된 S3 업로드 URL 발급 확인, 허용되지 않은 content-type(`application/exe`) 시 여전히 400으로 거부되는 것 확인(검증 로직 보존).
 
 **한계.** 남은 4건(Auth의 S3Service+JwtTokenProvider, Dev의 JwtTokenProvider, SecurityConfig 2건) — Auth는 별도 신중한 세션에서.
+
+## 게이트 사각지대 [G-3] 선행 리팩토링 6/9·7/9 — AuthController·DevController → AuthTokenService (2026-07-11, codeprint_115, TDD)
+
+> [반복-A] 로그아웃 버그 이력(3회, PR #150/#152/#154)이 있는 최고위험 파일이라 세션 시작 시 사용자에게 접근 방식을 재확인(AskUserQuestion) — "TDD 우선" 선택으로 진행.
+
+**문제.** `AuthController`가 `infrastructure.security.JwtTokenProvider`(토큰 발급/해시)와 `infrastructure.storage.S3Service`(아바타/배경 presigned URL)를 직접 import, `DevController`도 테스트 토큰 발급에 `JwtTokenProvider`를 직접 import — [G-3] 9건 중 6·7번째.
+
+**결정.**
+1. **TDD로 `application/user/AuthTokenService` 신설(테스트 먼저 작성)** — `rotateRefreshToken`(Refresh Token Rotation 전체: 해시 검증→만료 확인→기존 토큰 삭제→신규 발급, `Optional<TokenPair>` 반환)·`revokeRefreshToken`(null-safe)·`issueAccessToken`(단순 위임) 3개 public 메서드. `AuthTokenServiceTest`에 유효/만료/미존재/사용자없음 4가지 분기 + revoke 2가지 + issue 1가지, 총 7개 테스트 작성 후 구현.
+2. **`refresh()`의 두 에러 분기("Invalid or expired" vs "User not found") 통합** — 둘 다 401이고 프론트(`main.tsx`)는 상태코드만으로 재로그인 리다이렉트를 결정(메시지 본문 미검사)이라 `Optional`로 단순화해도 행동 변화 없음. 확인 후 통합.
+3. **S3Service는 기존 `UserQueryService`로 흡수** — `toPresignedAvatarUrl`은 그대로 두고, 내부에서 재사용할 제네릭 `toPresignedUrl(url)`을 추가(아바타 전용이 아닌 배경이미지에도 필요해서). 새 메서드 추가 없이 기존 메서드 시그니처 변경은 안 함 — `UserFollowController`의 기존 호출부 영향 없음.
+4. **`DevController`도 같은 세션에서 함께 처리**(Context114가 "따로 고치면 나중에 설계가 어긋날 수 있다"고 권장한 대로) — `AuthTokenService.issueAccessToken`으로 교체.
+5. **`AuthControllerLogoutTest` 갱신 + refresh() 커버리지 신규 추가** — 생성자가 `(AuthTokenService, UserQueryService, UserCommandService)`로 바뀌어 mock을 교체, logout 테스트는 "DB 삭제 호출 검증"에서 "`authTokenService.revokeRefreshToken` 위임 검증"으로 전환(구현 세부사항이 서비스로 옮겨갔으므로). refresh() 3개 테스트(쿠키 없음/유효/무효) 신규 추가.
+
+**analyzeLocal로 새 위반 발견·즉시 수정.** 1차 구현에서 `rotateRefreshToken`이 함수 호출 9개로 `HIGH_FAN_OUT` 신규 발생(베이스라인 5→6). "토큰 검증"과 "신규 토큰 쌍 발급·저장" 두 책임이 한 메서드에 섞여 있던 게 원인 — `issueRotatedTokenPair(User, oldTokenHash)` private 메서드로 분리해 베이스라인 5건 복귀 확인. CLAUDE.md §10 SRP 체크("함수가 7개 이상 함수 호출 시 분리 검토")가 실제로 걸러낸 사례.
+
+**결과.** `AuthTokenServiceTest`(7)·`AuthControllerLogoutTest`(8, 기존 5+신규 3)·`UserQueryServiceTest`(4) 전부 통과, `compileJava`/`./gradlew test`(757개 중 DB 관련 3건만 실패 — Docker Postgres 미기동 사전 확인, 무관). `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 유지. 로컬 Postgres로 [반복-A] 전 시나리오 curl 실측: ①`/api/dev/test-token` 발급 ②`/api/auth/me` 200(presigned URL 경로 정상) ③`refresh_token` 행을 DB에 직접 삽입 후 `/api/auth/refresh` → 200 + 새 jwt/refresh_token 쿠키 발급, DB 행이 새 해시로 교체됨 확인 ④회전된 구 토큰 재사용 시도 → 401(rotation 정상) ⑤`/api/auth/logout` → 204 + 쿠키 `Max-Age=0` 만료 + DB 행 삭제(0건) 확인. CSRF 헤더(`X-Requested-With`) 요구도 그대로 유지됨을 확인(첫 시도에서 헤더 누락으로 403 재현 — 기존 방어 로직 보존 검증 겸함).
+
+**한계.** 남은 2건(`SecurityConfig`의 `JwtAuthenticationFilter`+`OAuth2SuccessHandler` 배선, `UserImageController`의 S3Service+UserRepository). **★기록 정정**: 직전 항목들의 "남은 N건" 서술이 `UserImageController`를 누락한 채 집계돼 있었음(원래 9개 파일 목록엔 있었으나 "5건→4건" 카운트다운에서 실수로 빠짐) — 이번에 `grep -r "^import com.codeprint.infrastructure" interfaces/`로 실제 잔여 위반을 재확인해 바로잡음. `SecurityConfig`는 컴포지션 루트 배치 자체를 옮기는 구조 변경이라 별도 세션(GATE_GAPS.md 제안: infrastructure/config로 재배치), `UserImageController`는 `AttachmentController`(5/9)와 동일 패턴이라 위험도 낮음 — 다음 정리 대상.
