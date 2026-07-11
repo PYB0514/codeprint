@@ -1,5 +1,5 @@
 // Spring Security 설정 (JWT 필터, OAuth2, CORS)
-package com.codeprint.interfaces.api;
+package com.codeprint.infrastructure.config;
 
 import com.codeprint.infrastructure.security.JwtAuthenticationFilter;
 import com.codeprint.infrastructure.security.OAuth2SuccessHandler;
