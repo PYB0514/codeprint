@@ -1,8 +1,8 @@
 // S3 presigned URL 발급 API
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.attachment.AttachmentPresignService;
 import com.codeprint.domain.user.User;
-import com.codeprint.infrastructure.storage.S3Service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,7 +16,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class AttachmentController {
 
-    private final S3Service s3Service;
+    private final AttachmentPresignService attachmentPresignService;
 
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
             "image/jpeg", "image/png", "image/gif", "image/webp"
@@ -55,7 +55,7 @@ public class AttachmentController {
             }
         }
 
-        S3Service.PresignedUploadResult result = s3Service.generatePresignedUploadUrl(contentType, filename);
+        var result = attachmentPresignService.generateUploadUrl(contentType, filename);
 
         return ResponseEntity.ok(Map.of(
                 "uploadUrl", result.uploadUrl(),
