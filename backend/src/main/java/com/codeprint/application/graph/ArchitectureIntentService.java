@@ -2,6 +2,8 @@
 package com.codeprint.application.graph;
 
 import com.codeprint.domain.graph.ArchitectureIntent;
+import com.codeprint.domain.graph.ArchitectureIntentAuditLog;
+import com.codeprint.domain.graph.ArchitectureIntentAuditLogRepository;
 import com.codeprint.domain.graph.ArchitectureIntentRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,6 +27,7 @@ public class ArchitectureIntentService {
 
     private final ArchitectureIntentRepository repository;
     private final ObjectMapper objectMapper;
+    private final ArchitectureIntentAuditLogRepository auditLogRepository;
 
     // 프로젝트의 의도 아키텍처 조회 — 없으면 빈 Optional
     @Transactional(readOnly = true)
@@ -37,6 +40,40 @@ public class ArchitectureIntentService {
     @CacheEvict(value = "graphWarnings", allEntries = true)
     public void save(UUID projectId, ArchitectureIntent intent) {
         repository.upsert(projectId, toJson(intent));
+    }
+
+    // 행위자 정보를 남기며 저장 — 예외(IGNORE) 규칙 추가/제거분만 감사 로그로 기록(모듈·의존규칙은 대상 아님)
+    @Transactional
+    @CacheEvict(value = "graphWarnings", allEntries = true)
+    public void save(UUID projectId, ArchitectureIntent intent, UUID actorUserId, String actorUsername) {
+        List<ArchitectureIntent.IgnoreRule> before = findByProjectId(projectId)
+                .map(ArchitectureIntent::ignores)
+                .orElse(List.of());
+        recordIgnoreRuleChanges(projectId, actorUserId, actorUsername, before, intent.ignores());
+        repository.upsert(projectId, toJson(intent));
+    }
+
+    // 이전·이후 예외 규칙을 비교해 추가/제거된 것만 감사 로그로 기록
+    private void recordIgnoreRuleChanges(UUID projectId, UUID userId, String username,
+            List<ArchitectureIntent.IgnoreRule> before, List<ArchitectureIntent.IgnoreRule> after) {
+        for (ArchitectureIntent.IgnoreRule rule : after) {
+            if (!before.contains(rule)) {
+                auditLogRepository.save(ArchitectureIntentAuditLog.create(
+                        projectId, userId, username, "ADD", rule.type(), rule.fromGlob(), rule.toGlob()));
+            }
+        }
+        for (ArchitectureIntent.IgnoreRule rule : before) {
+            if (!after.contains(rule)) {
+                auditLogRepository.save(ArchitectureIntentAuditLog.create(
+                        projectId, userId, username, "REMOVE", rule.type(), rule.fromGlob(), rule.toGlob()));
+            }
+        }
+    }
+
+    // 프로젝트의 예외 규칙 변경 이력 최신순 조회
+    @Transactional(readOnly = true)
+    public List<ArchitectureIntentAuditLog> findAuditLog(UUID projectId) {
+        return auditLogRepository.findByProjectIdOrderByCreatedAtDesc(projectId);
     }
 
     // 프로젝트의 의도 아키텍처를 삭제하고 경고 캐시를 무효화

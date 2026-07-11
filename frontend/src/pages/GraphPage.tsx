@@ -2474,6 +2474,7 @@ function GraphPageInner() {
             suppressed={suppressedWarnings}
             onRestore={handleRestoreWarning}
             ignoreOps={{
+              projectId: projectId ?? '',
               fileOf: fileOfNodeId,
               rules: ignoreRules,
               allWarnings: warnings,
