@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -18,6 +19,24 @@ public class ProjectFacade {
     private final ProjectQueryService projectQueryService;
     private final AnalysisApplicationService analysisApplicationService;
     private final GitHubApiClient gitHubApiClient;
+
+    // 사용자의 GitHub 레포 목록 조회 (프로젝트 생성 시 선택용) — 토큰 없거나 조회 실패 시 빈 목록
+    public List<GithubRepoView> getGithubRepos(String githubToken) {
+        if (githubToken == null || githubToken.isBlank()) return List.of();
+        try {
+            return gitHubApiClient.fetchUserRepos(githubToken).stream()
+                    .map(r -> new GithubRepoView(r.name(), r.fullName(), r.htmlUrl(), r.description(), r.isPrivate()))
+                    .toList();
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    // 프로젝트 레포의 GitHub 브랜치 목록 조회
+    public List<String> getBranches(UUID projectId, UUID userId, String githubToken) {
+        var project = projectQueryService.getProject(projectId, userId);
+        return gitHubApiClient.fetchBranches(project.getGithubRepoUrl(), githubToken);
+    }
 
     // 최신 분석과 GitHub 최신 커밋을 비교하여 재분석 필요 여부 반환
     public Map<String, Object> getFreshness(UUID projectId, UUID userId, String githubToken) {

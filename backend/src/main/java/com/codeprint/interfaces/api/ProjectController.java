@@ -1,12 +1,11 @@
 // 프로젝트 CRUD REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.project.GithubRepoView;
 import com.codeprint.application.project.ProjectCommandService;
 import com.codeprint.application.project.ProjectFacade;
 import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.user.User;
-import com.codeprint.infrastructure.github.GitHubApiClient;
-import com.codeprint.infrastructure.github.GitHubRepoDto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +24,6 @@ public class ProjectController {
 
     private final ProjectCommandService projectCommandService;
     private final ProjectQueryService projectQueryService;
-    private final GitHubApiClient gitHubApiClient;
     private final ProjectFacade projectFacade;
 
     // 현재 사용자의 프로젝트 목록 조회
@@ -60,14 +58,8 @@ public class ProjectController {
 
     // 현재 사용자의 GitHub 레포 목록 조회 (프로젝트 생성 시 선택용)
     @GetMapping("/github-repos")
-    public ResponseEntity<List<GitHubRepoDto>> getGithubRepos(@AuthenticationPrincipal User user) {
-        String token = user.getGithubAccessToken();
-        if (token == null || token.isBlank()) return ResponseEntity.ok(List.of());
-        try {
-            return ResponseEntity.ok(gitHubApiClient.fetchUserRepos(token));
-        } catch (Exception e) {
-            return ResponseEntity.ok(List.of());
-        }
+    public ResponseEntity<List<GithubRepoView>> getGithubRepos(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(projectFacade.getGithubRepos(user.getGithubAccessToken()));
     }
 
     // 프로젝트 레포의 GitHub 브랜치 목록 조회
@@ -75,8 +67,7 @@ public class ProjectController {
     public ResponseEntity<List<String>> getBranches(
             @PathVariable UUID projectId,
             @AuthenticationPrincipal User user) {
-        var project = projectQueryService.getProject(projectId, user.getId());
-        return ResponseEntity.ok(gitHubApiClient.fetchBranches(project.getGithubRepoUrl(), user.getGithubAccessToken()));
+        return ResponseEntity.ok(projectFacade.getBranches(projectId, user.getId(), user.getGithubAccessToken()));
     }
 
     // 프로젝트 공개/비공개 상태 전환
