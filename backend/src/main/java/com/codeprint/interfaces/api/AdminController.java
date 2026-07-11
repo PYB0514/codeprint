@@ -3,6 +3,7 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.application.admin.AdminDigestService;
 import com.codeprint.application.admin.Digest;
+import com.codeprint.application.admin.GateMetricsService;
 import com.codeprint.domain.admin.PlanGrantLog;
 import com.codeprint.domain.admin.PlanGrantLogRepository;
 import com.codeprint.domain.analysis.AnalysisRepository;
@@ -36,6 +37,7 @@ public class AdminController {
     private final AnalysisRepository analysisRepository;
     private final PlanGrantLogRepository planGrantLogRepository;
     private final AdminDigestService adminDigestService;
+    private final GateMetricsService gateMetricsService;
 
     private static final java.time.ZoneId KST = java.time.ZoneId.of("Asia/Seoul");
 
@@ -50,6 +52,12 @@ public class AdminController {
                 "totalProjects", projectRepository.count(),
                 "totalAnalyses", analysisRepository.count()
         ));
+    }
+
+    // 지표 대시보드(북극성·경험·실적 3층 체계) 조회
+    @GetMapping("/gate-metrics")
+    public ResponseEntity<?> getGateMetrics() {
+        return ResponseEntity.ok(gateMetricsService.current());
     }
 
     // 최신 일일 다이제스트 조회 (저장된 스냅샷 기준)
