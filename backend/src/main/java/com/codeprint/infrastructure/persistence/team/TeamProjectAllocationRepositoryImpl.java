@@ -19,6 +19,7 @@ public class TeamProjectAllocationRepositoryImpl implements TeamProjectAllocatio
     @Override public TeamProjectAllocation save(TeamProjectAllocation a) { return jpa.save(a); }
     @Override public void deleteById(UUID id) { jpa.deleteById(id); }
     @Override public List<TeamProjectAllocation> findByTeamId(UUID teamId) { return jpa.findByTeamId(teamId); }
+    @Override public List<TeamProjectAllocation> findByProjectId(UUID projectId) { return jpa.findByProjectId(projectId); }
     @Override public Optional<TeamProjectAllocation> findByTeamIdAndProjectId(UUID teamId, UUID projectId) { return jpa.findByTeamIdAndProjectId(teamId, projectId); }
     @Override public int sumAllocatedSeatsByTeamId(UUID teamId) { return jpa.sumAllocatedSeatsByTeamId(teamId); }
 }

@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.125.0',
+    date: '2026-07-12',
+    title: '팀에 공유된 프로젝트, 팀원도 동일하게 사용 가능',
+    type: 'feature',
+    items: [
+      { category: '팀', desc: '팀에 좌석이 배분된 프로젝트는 팀원(멤버)도 소유자와 동일하게 그래프·경고 조회, 경고 숨기기, 예외 규칙 추가/제거를 할 수 있습니다. 프로젝트 삭제·공개 전환 등은 계속 소유자만 가능합니다.' },
+    ],
+  },
+  {
     version: 'v0.124.0',
     date: '2026-07-12',
     title: '예외 규칙 변경 이력 (Audit Log)',

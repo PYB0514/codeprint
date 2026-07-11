@@ -11,6 +11,7 @@ import java.util.UUID;
 
 public interface TeamProjectAllocationJpaRepository extends JpaRepository<TeamProjectAllocation, UUID> {
     List<TeamProjectAllocation> findByTeamId(UUID teamId);
+    List<TeamProjectAllocation> findByProjectId(UUID projectId);
     Optional<TeamProjectAllocation> findByTeamIdAndProjectId(UUID teamId, UUID projectId);
 
     // 팀 전체 배분 합산

@@ -1742,4 +1742,18 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 
 **결과.** `compileJava`/`./gradlew test`(`ArchitectureIntentServiceTest` 11개 전부 통과, 기존 8개 무변경 그대로 통과 — 오버로드 방식이라 churn 0 확인됨) / `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변(새 `recordIgnoreRuleChanges` 헬퍼는 호출 2건뿐). 프론트는 `WarningPanel.tsx`의 기존 "예외 규칙" 접이식 섹션 안에 "변경 이력" 하위 섹션을 추가(지연 로드 — 펼칠 때만 `GET /api/projects/{id}/architecture-intent/audit-log` 호출), 별도 화면 신설 없이 기존 UI에 자연스럽게 편입.
 
-**한계·후속.** 소유자만 조회 가능(`graphFacade.verifyProjectOwnership`) — Team tier에서 "멤버도 조회 가능"하게 열지는 TeamRole 기반 권한 체계를 프로젝트-그래프 API 레이어까지 확장하는 별도 작업이 선행돼야 함(현재 project 소유권 검증은 개인 소유자 기준, Team 배선과 아직 연결 안 됨 — RBAC이 Team 컨텍스트엔 있지만 Project/Graph 컨텍스트엔 아직 안 뻗어있는 상태). 이 확장은 범위가 커서 별도 세션 대상으로 남김.
+**한계·후속.** 소유자만 조회 가능(`graphFacade.verifyProjectOwnership`) — Team tier에서 "멤버도 조회 가능"하게 열지는 TeamRole 기반 권한 체계를 프로젝트-그래프 API 레이어까지 확장하는 별도 작업이 선행돼야 함(현재 project 소유권 검증은 개인 소유자 기준, Team 배선과 아직 연결 안 됨 — RBAC이 Team 컨텍스트엔 있지만 Project/Graph 컨텍스트엔 아직 안 뻗어있는 상태). **이 확장은 같은 세션에서 바로 이어서 완료 — 아래 항목 참조.**
+
+## RBAC — Project/Graph API 레이어로 팀 접근 권한 확장 (2026-07-12, codeprint_116)
+
+**배경.** 위 Audit Log 항목의 "한계·후속"에서 남긴 갭. 사용자에게 팀 멤버(OWNER 아닌 MEMBER)가 팀 소유 프로젝트에서 어디까지 할 수 있어야 하는지 확인 — **"OWNER와 동일 권한"** 확정(팀 관리는 기존처럼 OWNER 전용 유지, 프로젝트 삭제 기능 자체가 없어 리스크가 크지 않다는 게 근거).
+
+**범위 조사.** 코드 확인 결과 소유권 검증이 예상보다 훨씬 단일 지점에 몰려 있었음 — `GraphFacade.verifyProjectOwnership` → `ProjectAccessAdapter.verifyOwnership` → `ProjectQueryService.getProject()`의 `project.getUserId().equals(requestingUserId)` 단 한 줄. 이 한 곳만 고치면 경고 조회·suppress·예외규칙 추가/제거·감사로그 조회·그래프 diff·그래프 고정 등 **9개 엔드포인트에 자동 적용**됨(Port&Adapter 패턴이 이미 그래프 컨텍스트에 있었던 덕분). 단, 프로젝트 자체의 삭제(`ProjectCommandService.deleteProject`)는 `ProjectQueryService`를 안 거치고 **독립된 자체 소유권 검증**을 갖고 있어 이번 확장과 무관 — 팀 멤버에게 그래프/경고 조작 권한을 열어도 프로젝트 삭제·공개전환(`visibility`)·주요 브랜치 설정 같은 민감 조작은 전혀 영향받지 않음을 코드로 확인 후 진행(가장 신경 쓰였던 "혹시 삭제까지 열리는 거 아닌가" 우려를 구조적으로 배제).
+
+**결정.** `ProjectQueryService.getProject()`에 `TeamAccessPort`(신규, `domain/project/port/`) 의존성 추가 — 소유자가 아니면 `teamAccessPort.hasAccessViaTeam(projectId, userId)`로 한 번 더 확인 후 인가. 어댑터(`infrastructure/adapter/TeamAccessAdapter`)는 `TeamProjectAllocationRepository.findByProjectId`(신규 쿼리 메서드, project→team 역방향)로 프로젝트가 배분된 팀들을 찾고, 각 팀에 `TeamMemberRepository.findByTeamIdAndUserId`로 소속 여부만 확인(OWNER/MEMBER 구분 없이 존재 여부만 — "동일 권한" 요구사항 그대로 반영, `TeamRole` 값 자체는 안 봄). project 컨텍스트가 team 컨텍스트 도메인 클래스를 직접 참조하지 않도록 포트로 역전(CLAUDE.md §10).
+
+**TDD 적용.** "소유자 OR 팀 접근권한" 조건분기 로직이라 §4 기준 해당 — `ProjectQueryServiceTest`에 팀 멤버 성공 케이스 신규 추가, 기존 "소유자 아니면 예외" 테스트는 mock 기본값(false)으로 그대로 통과해 churn 없음.
+
+**결과.** `compileJava`/`./gradlew test`(`ProjectQueryServiceTest` 9개·`GraphFacadeTest` 6개 전부 통과, 전체 스위트는 Docker DB 미기동으로 통합테스트 3건만 실패 — 무관) / `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변, 신규 `CROSS_CONTEXT_IMPORT` 없음(포트 경유라 정상).
+
+**한계.** `GET /api/projects/{id}`(프로젝트 메타 조회)·`AnalysisFacade`(재분석 트리거)도 같은 choke point를 거치므로 팀 멤버가 재분석까지 트리거 가능해짐 — 파괴적이지 않은 조작이라 "동일 권한" 취지에 부합한다고 판단해 별도 예외 처리 안 함.
