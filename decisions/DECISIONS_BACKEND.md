@@ -1699,3 +1699,15 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `AuthTokenServiceTest`(7)·`AuthControllerLogoutTest`(8, 기존 5+신규 3)·`UserQueryServiceTest`(4) 전부 통과, `compileJava`/`./gradlew test`(757개 중 DB 관련 3건만 실패 — Docker Postgres 미기동 사전 확인, 무관). `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 유지. 로컬 Postgres로 [반복-A] 전 시나리오 curl 실측: ①`/api/dev/test-token` 발급 ②`/api/auth/me` 200(presigned URL 경로 정상) ③`refresh_token` 행을 DB에 직접 삽입 후 `/api/auth/refresh` → 200 + 새 jwt/refresh_token 쿠키 발급, DB 행이 새 해시로 교체됨 확인 ④회전된 구 토큰 재사용 시도 → 401(rotation 정상) ⑤`/api/auth/logout` → 204 + 쿠키 `Max-Age=0` 만료 + DB 행 삭제(0건) 확인. CSRF 헤더(`X-Requested-With`) 요구도 그대로 유지됨을 확인(첫 시도에서 헤더 누락으로 403 재현 — 기존 방어 로직 보존 검증 겸함).
 
 **한계.** 남은 2건(`SecurityConfig`의 `JwtAuthenticationFilter`+`OAuth2SuccessHandler` 배선, `UserImageController`의 S3Service+UserRepository). **★기록 정정**: 직전 항목들의 "남은 N건" 서술이 `UserImageController`를 누락한 채 집계돼 있었음(원래 9개 파일 목록엔 있었으나 "5건→4건" 카운트다운에서 실수로 빠짐) — 이번에 `grep -r "^import com.codeprint.infrastructure" interfaces/`로 실제 잔여 위반을 재확인해 바로잡음. `SecurityConfig`는 컴포지션 루트 배치 자체를 옮기는 구조 변경이라 별도 세션(GATE_GAPS.md 제안: infrastructure/config로 재배치), `UserImageController`는 `AttachmentController`(5/9)와 동일 패턴이라 위험도 낮음 — 다음 정리 대상.
+
+## 게이트 사각지대 [G-3] 선행 리팩토링 8/9 — UserImageController → UserImageService (2026-07-11, codeprint_115)
+
+**문제.** `UserImageController`(아바타·배경 이미지 업로드/삭제)가 `infrastructure.storage.S3Service`와 `domain.user.UserRepository`를 직접 import — [G-3] 9건 중 8번째. 직전 항목(6/9·7/9) 정리 중 `grep`으로 잔여 위반을 재확인하면서 발견(이전 세션들의 "남은 N건" 서술에서 누락돼 있었음).
+
+**결정.** `application/user/UserImageService` 신설 — `AttachmentPresignService`(5/9)와 동일하게 검증 로직(`validateImage`: content-type 화이트리스트·크기·빈파일)과 S3 키 추출·삭제(`deleteS3File`)를 그대로 이전. Controller는 `@AuthenticationPrincipal User user`에서 `user.getId()`만 서비스에 넘기고, 서비스가 `UserRepository`로 재조회 후 갱신 — 다른 컨트롤러들(`AuthController.deleteAccount` 등)이 이미 쓰는 "인터페이스는 ID만 넘긴다" 컨벤션과 통일.
+
+**★런타임 검증 중 리팩토링과 무관한 기존 버그 발견·수정.** 아바타/배경 삭제 API가 항상 500 — 원인은 새로 만든 코드가 아니라 **원본부터 있던** `Map.of("avatarUrl", (Object) null)`. Java의 `Map.of`는 null 값을 명시적으로 금지해 호출 즉시 NPE(컴파일은 통과). `Collections.singletonMap(key, null)`로 교체해 해결. 상세: `ERROR_TRACKER.md` BE-14. **이 삭제 API가 만들어진 이후 한 번도 실사용 curl/브라우저 검증을 안 거쳤다는 뜻** — CLAUDE.md 규칙4 "정적 검증 통과 ≠ 기능 정상 동작"이 정확히 겨냥하는 사례.
+
+**결과.** `compileJava`/`./gradlew test`(전체, Docker Postgres 기동 상태로 실패 0건) 통과, `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변. 로컬 서버 curl 실측 — 실제 PNG 파일로 아바타·배경 업로드(S3 presigned URL 응답 확인) → `/api/auth/me`로 저장 확인 → 잘못된 content-type(`.txt`) 업로드 시 여전히 400 거부(검증 로직 보존) → 아바타·배경 삭제 200 확인(BE-14 수정 후) → `/api/auth/me`로 둘 다 null 복귀 확인.
+
+**한계.** 남은 1건(`SecurityConfig`의 `JwtAuthenticationFilter`+`OAuth2SuccessHandler` 배선) — 컴포지션 루트 재배치라 별도 세션. 이 1건 완료 후 `INTERFACES_IMPORTS_INFRA` 검출기 신설.
