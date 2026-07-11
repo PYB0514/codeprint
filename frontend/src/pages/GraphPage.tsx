@@ -30,7 +30,7 @@ import { useCollaboration } from '../hooks/useCollaboration'
 import { useSidebarResize } from '../hooks/useSidebarResize'
 import CollaborationPanel from '../components/CollaborationPanel'
 import CursorOverlay from '../components/CursorOverlay'
-import WarningPanel from '../components/WarningPanel'
+import WarningPanel, { WARNING_META } from '../components/WarningPanel'
 import TeamChatPanel from '../components/TeamChatPanel'
 import ArchitectureIntentPanel from '../components/ArchitectureIntentPanel'
 import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewToggles'
@@ -680,6 +680,18 @@ function GraphPageInner() {
     } finally {
       setAiGenerating(false)
     }
+  }
+
+  // 경고 패널의 "AI" 버튼 — 선택된 제공자로 경고 원인·수정안 분석 요청
+  const handleAiExplainWarning = async (w: { type: string; severity?: string; message: string }) => {
+    const res = await axios.post<{ explanation: string }>('/api/ai/explain-warning', {
+      provider: selectedAiProvider,
+      warningType: w.type,
+      severity: w.severity ?? 'MEDIUM',
+      message: w.message,
+      guide: WARNING_META[w.type]?.desc ?? '',
+    })
+    return res.data.explanation
   }
 
   // 흐름 재생 초기화 — 공유 훅 리셋 + GraphPage 전용 클릭 노드 해제
@@ -2468,6 +2480,7 @@ function GraphPageInner() {
               onAdd: handleAddIgnore,
               onRemove: handleRemoveIgnore,
             }}
+            aiExplain={aiProviders.some((p) => p.registered) ? { onExplain: handleAiExplainWarning } : undefined}
           />
         ) : (
           <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
