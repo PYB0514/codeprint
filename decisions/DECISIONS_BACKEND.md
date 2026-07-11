@@ -1617,3 +1617,18 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** 전체 백엔드 테스트 통과(`FeaturedRepoServiceTest` 3종 추가 — 게시글 최초생성/재사용/그래프미완료 스킵), `compileJava`/`tsc -b` 통과, `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변. 로컬 DB로 실제 라이브 검증 — `/api/dev/trigger-featured-repos` 2회 호출로 (1)브랜드뉴 레포 5개 트리거 시 postId는 즉시 생성되고 position 전부 null(그래프 미완료) (2)로테이션이 기존 그래프 있는 레포로 넘어가자 4/5는 position 0~3(압축), 나머지 1개(axios, 최초 노출)는 null로 정확히 분리되는 것 확인. 브라우저로 랜딩페이지 카드 클릭 → `spring-petclinic` 실제 그래프 정상 렌더링, `axios` 카드는 `disabled` 확인.
 
 **한계.** `captureSnapshot`이 매 API 요청마다 프리셋 조회 쿼리를 수행(캐시 없음) — 트래픽이 늘면 캐싱 검토. 게시글 제목/본문은 고정 문자열이라 매일 갱신 안 됨(스냅샷 5개 내용만 갱신) — 날짜 포함 등 개선 여지 있으나 이번 스코프 밖.
+
+## 지표 대시보드(§0.3) — gate_check_logs 신설, PR 게이트 판정을 처음으로 DB에 기록 (2026-07-11, codeprint_114)
+
+> PROGRESS.md에 여러 세션째 밀려있던 "지표 대시보드(§0.3)" 착수. `PRODUCT_STRATEGY.md` §0.3 설계는 "게이트 연결 레포·실검사·차단 이벤트는 이미 서버 데이터로 존재 — 관리자 대시보드 집계만 추가하면 됨"이라 전제했음.
+
+**문제.** 착수 전 코드로 확인해보니 이 전제가 틀렸음. `PrReviewService.postCommitStatus`는 게이트 판정(success/failure)을 GitHub commit status API로 게시만 하고, 그 결과를 DB 어디에도 저장하지 않았음 — `log.warn`으로 실패만 남기고 성공 시엔 로그조차 없었음. 즉 "게이트가 지키는 레포 수(PR 검사 연결+최근 30일 실검사)"·"게이트가 막은 PR 누적"은 집계할 원본 데이터 자체가 없었음. 설계 문서가 실제 구현보다 앞서나간 채로 방치된 사례 — 런타임 검증(규칙4) 없이 문서만 보고 진행했으면 존재하지 않는 테이블을 집계하려다 막혔을 것.
+
+**결정.**
+1. **새 도메인 모델**: `domain/analysis/GateCheckLog`(projectId·prNumber·state·highCount·warningCount·createdAt) 신설 — `AnalysisResult`와 동일한 엔티티 스타일(정적 팩토리 `create`, `@NoArgsConstructor(PROTECTED)`). `PrReviewService.postCommitStatus`가 GitHub API 게시 성공/실패와 무관하게 항상 로컬에 기록하도록 변경(게시가 실패해도 로컬 판정 자체는 유효한 사실이라 기록 가치가 있음).
+2. **집계는 기존 리포팅 read-model 패턴 재사용**: `infrastructure/admin/AdminMetricsQuery`(일일 다이제스트용, 여러 테이블을 가로지르는 네이티브 SQL count)가 이미 있던 선례를 그대로 따라 `GateMetricsQuery` 신설 — Repository 포트 경유 대신 EntityManager 네이티브 쿼리로 `gate_check_logs`·`analyses`·`posts` 3개 테이블을 직접 읽음. 새 패턴이 아니라 기존 패턴 재사용이라 `docs/ARCHITECTURE.md` 갱신 대상 아님으로 판단.
+3. **가드레일 지표(HIGH 경고 precision) 이번 스코프 제외** — 벤치 오탐률 데이터 소스(FP 신고 채널+룰별 벤치)가 아직 없어(PROGRESS.md "자가개선 루프" 전제와 동일 이유) 만들어봤자 하드코딩 플레이스홀더뿐. 북극성·경험·실적 3층만 구현, 가드레일은 벤치 인프라 착수 시점에 별도 추가하기로 사용자와 합의(AskUserQuestion).
+
+**결과.** `V55__add_gate_check_logs.sql` 적용, `compileJava`/`tsc -b` 통과. 로컬 Postgres로 실제 검증 — ①서버 기동 로그로 마이그레이션 정상 적용 확인 ②`gate_check_logs`에 테스트 행 1건 직접 INSERT 후 `/api/admin/gate-metrics`를 ADMIN 롤 JWT로 호출해 `{guardedRepos:1, weeklyNewAnalysisRepos:11, weeklyShares:1, blockedPrsTotal:1}` 응답이 DB 실측치와 정확히 일치함을 확인(테스트 데이터는 검증 후 원복). `/api/admin/**`가 인증 없이는 401 반환하는 것도 재확인. `AdminPage.tsx`에 3층 지표 카드 섹션(`GateMetricCard`) 추가 — 다만 앱 전역 라우트 가드가 비로그인 `/admin` 접근을 홈으로 리다이렉트해 실브라우저 렌더링(카드 레이아웃)까지는 확인 못함(GitHub OAuth 관리자 로그인 필요, 기존 `StatCard`와 동일 Tailwind 패턴이라 위험도는 낮게 판단).
+
+**한계.** `guardedRepos`(북극성)는 "PR 검사 연결"과 "실검사 발생"을 분리하지 않고 `gate_check_logs`에 기록이 있으면 곧 연결+실검사 둘 다로 간주 — 실제로는 이 두 조건이 항상 동치(체크 로그가 있다는 것 자체가 webhook이 연결돼 실제로 검사가 돌았다는 증거)라 별도 컬럼 불필요하다고 판단했지만, 향후 "연결은 됐지만 아직 한 번도 안 돈" 상태를 구분해야 할 요구가 생기면 프로젝트 쪽에 별도 플래그가 필요. `weeklyNewAnalysisRepos`는 PR 리뷰용 분석과 사용자가 직접 실행한 분석을 구분하지 않음(둘 다 `analyses` 테이블에 같이 쌓임) — "경험" 지표 취지상 문제없다고 판단했으나 향후 구분이 필요해지면 `AnalysisResult`에 트리거 소스 컬럼 추가 검토.

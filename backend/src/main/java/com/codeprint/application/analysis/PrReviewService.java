@@ -3,6 +3,8 @@ package com.codeprint.application.analysis;
 
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
+import com.codeprint.domain.analysis.GateCheckLog;
+import com.codeprint.domain.analysis.GateCheckLogRepository;
 import com.codeprint.domain.analysis.port.WarningDetectionPort;
 import com.codeprint.infrastructure.analysis.CachedParsedFileLoader;
 import com.codeprint.infrastructure.analysis.GraphBuilder;
@@ -32,6 +34,7 @@ public class PrReviewService {
     private final WarningDetectionPort warningDetectionPort;
     private final GitHubApiClient gitHubApiClient;
     private final AnalysisRepository analysisRepository;
+    private final GateCheckLogRepository gateCheckLogRepository;
     private final RepoCloner repoCloner;
     private final SourceFileWalker sourceFileWalker;
     private final CachedParsedFileLoader cachedParsedFileLoader;
@@ -67,7 +70,7 @@ public class PrReviewService {
                 repoUrl, prNumber, warnings.size(), lowFilteredCount, outOfScopeCount, diffScoped);
 
         // CI 게이트 — PR head 커밋에 구조 검사 상태 게시. 브랜치 보호의 required check로 등록하면 머지를 막을 수 있음.
-        String gateState = postCommitStatus(repoUrl, prNumber, warnings, commentUrl, githubToken);
+        String gateState = postCommitStatus(projectId, repoUrl, prNumber, warnings, commentUrl, githubToken);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("prNumber", prNumber);
@@ -86,12 +89,13 @@ public class PrReviewService {
     // head SHA는 PR API의 head.sha로 조회 — fork PR도 base repo의 refs/pull/{N}/head로 도달 가능해 게이트가 동작한다
     // (브랜치명 조회는 fork 브랜치가 base repo에 없어 fork PR에서 실패했음). 동일repo PR도 head.sha가 정확.
     // 상태 게시 실패는 리뷰를 깨뜨리지 않도록 graceful 처리(코멘트는 이미 게시됨). 게시한 state를 반환.
-    private String postCommitStatus(String repoUrl, int prNumber, List<Map<String, Object>> warnings,
+    // 게이트 판정은 GitHub 게시 성공 여부와 무관하게 항상 로컬에 기록(지표 대시보드 집계용 데이터 소스).
+    private String postCommitStatus(UUID projectId, String repoUrl, int prNumber, List<Map<String, Object>> warnings,
                                     String targetUrl, String githubToken) {
         String state = gateState(warnings);
+        long highCount = warnings.stream().filter(w -> "HIGH".equals(w.get("severity"))).count();
         try {
             String headSha = gitHubApiClient.fetchPullRequestHeadSha(repoUrl, prNumber, githubToken);
-            long highCount = warnings.stream().filter(w -> "HIGH".equals(w.get("severity"))).count();
             String description = highCount > 0
                     ? highCount + "건의 구조 위반(HIGH)이 변경 파일에 있습니다"
                     : "구조 위반(HIGH) 없음";
@@ -99,6 +103,7 @@ public class PrReviewService {
         } catch (Exception e) {
             log.warn("CI 게이트 상태 게시 실패(리뷰 코멘트는 유지): repo={}, pr={}", repoUrl, prNumber, e);
         }
+        gateCheckLogRepository.save(GateCheckLog.create(projectId, prNumber, state, (int) highCount, warnings.size()));
         return state;
     }
 
