@@ -80,11 +80,22 @@
 
 ## 레이트 리미팅 기준 ✅ 적용 완료
 
-| 엔드포인트 | 제한 |
-|---|---|
-| `POST /api/analyses` | IP당 10회/분 |
-| `POST /api/attachments/presign` | IP당 20회/분 |
-| `GET /oauth2/**` | IP당 20회/분 |
+`RateLimitFilter`(IP+카테고리별 버킷) 기준. 아래 표는 실제 코드와 동기화된 전체 목록 — 신규 규칙 추가 시 이 표도 함께 갱신한다(2026-07-12 기준 3개만 적혀 있던 걸 실제 10개 규칙으로 동기화).
+
+| 엔드포인트 | 제한 | 비고 |
+|---|---|---|
+| `POST /api/analyses` | IP당 1회/3분 | 레포 클론+정적분석 비용이 커 다른 쓰기 API보다 엄격(2026-07-12, 기존 10회/분은 post-create보다 오히려 널널해 교정) |
+| `POST /api/attachments/presign` | IP당 20회/분 | S3 비용 |
+| `POST /api/community/posts` | IP당 5회/분 | |
+| `POST /api/community/posts/*/like` | IP당 60회/분 | |
+| `POST /api/graphs/*/nodes/*/comments` | IP당 20회/분 | |
+| `POST /api/feedback` | IP당 5회/분 | |
+| `POST /api/reports` | IP당 5회/분 | |
+| `POST /api/messages/*` | IP당 30회/분 | |
+| `POST /api/users/*/follow` | IP당 30회/분 | |
+| `POST /api/push/subscribe` | IP당 10회/분 | |
+
+> ⚠️ 이전에 이 표에 있던 `GET /oauth2/** IP당 20회/분` 항목은 허위 기재였음(2026-07-12 발견) — `RateLimitFilter`의 모든 규칙이 POST만 매칭해 GET 경로는 애초에 아무 제한도 없다. OAuth 인가 요청 반복 남용은 별도 위협모델(GitHub 자체 레이트리밋에 일부 의존)이라 즉시 추가하지 않고 후속 과제로만 기록.
 
 ---
 
