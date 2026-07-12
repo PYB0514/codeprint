@@ -5,6 +5,7 @@ import com.codeprint.domain.message.UserBlock;
 import com.codeprint.domain.message.UserBlockRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -31,6 +32,7 @@ public class UserBlockRepositoryImpl implements UserBlockRepository {
     }
 
     @Override
+    @Transactional
     public void deleteByBlockerAndBlocked(UUID blockerId, UUID blockedId) {
         jpa.deleteByBlockerIdAndBlockedId(blockerId, blockedId);
     }

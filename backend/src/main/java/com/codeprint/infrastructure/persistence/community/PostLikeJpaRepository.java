@@ -6,6 +6,7 @@ import com.codeprint.domain.community.PostLikeRepository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -28,5 +29,6 @@ public interface PostLikeJpaRepository extends JpaRepository<PostLike, UUID>, Po
     List<PostLike> findByUserIdAndPostIdIn(UUID userId, List<UUID> postIds);
 
     // 특정 유저+게시글 좋아요 삭제
+    @Transactional
     void deleteByUserIdAndPostId(UUID userId, UUID postId);
 }

@@ -5,6 +5,7 @@ import com.codeprint.domain.graph.NodeStyle;
 import com.codeprint.domain.graph.NodeStyleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +33,7 @@ public class NodeStyleRepositoryImpl implements NodeStyleRepository {
     }
 
     @Override
+    @Transactional
     public void deleteByGraphIdAndNodeId(UUID graphId, UUID nodeId) {
         jpa.deleteByGraphIdAndNodeId(graphId, nodeId);
     }
