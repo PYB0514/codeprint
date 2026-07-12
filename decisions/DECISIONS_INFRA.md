@@ -308,3 +308,42 @@ Context116부터 "Railway Postgres 자동 백업 활성화 여부 확인"이 대
 - **복구 절차 미검증** — 덤프 생성까지만 구현, `pg_restore`로 실제 복원이 되는지는 아직 리허설 안 함. 진짜 재해 시점에 처음 시도하면 위험 — 별도로 최소 1회 복원 리허설 필요.
 - **PITR 아님** — 위 표 그대로 최대 24시간 유실 구간 존재, 진짜 무중단 복구가 필요해지면 Pro 결제가 정답.
 - **알림 없음** — 백업 실패 시 GitHub Actions 화면을 직접 확인해야 앎(Slack/이메일 알림 미연동, 필요 시 후속 작업).
+
+---
+
+## 보안 사고 — 공개 Skill fat jar에 실 자격증명 전체 유출 (2026-07-12, codeprint_118)
+
+### 문제
+Railway DB 백업 작업(위 항목) 중 `workflow_dispatch`로 GitHub Actions에서 S3 `ListBucket`을 처음 호출해봤다가 `AWSCompromisedKeyQuarantineV3`(AWS가 자동 부착하는 격리 정책) deny에 걸려 발견. AWS가 보낸 메일(Support Case #178375848300947, 2026-07-11)로 확인한 결과, IAM 사용자 `codeprint-s3`의 액세스 키가 `github.com/PYB0514/codeprint-plugins`의 공개 커밋(`a7a9dca`, 2026-07-11 codeprint_113 "열화판 공개 Skill" 배포)에 포함된 `codeprint-explore.jar`에서 온라인 공개 노출된 상태로 24시간 이상 방치돼 있었음.
+
+**실제로 열어본 결과 AWS 키만이 아니었음** — 유출된 파일은 `application-local.yml` 전체(gitignore 처리된 로컬 전용 secret 파일)였고, 안에는 `jwt.secret`(전체 사용자 세션 위조 가능)·`spring.security.oauth2...github.client-secret`·`toss.client-key`/`secret-key`(결제 API)·`aws.s3.access-key`/`secret-key`·`github.webhook-secret`까지 전부 평문으로 들어있었음. `codeprint-analyze.jar`(같은 레포의 자매 jar)도 동일하게 오염 확인.
+
+### 근본 원인
+`backend/build.gradle`의 `exploreLocalJar`/`analyzeLocalJar` 태스크가 `from(sourceSets.main.output)`로 리소스 디렉터리 전체를 통째로 포함 — Gradle 리소스 수집은 실제 파일시스템을 그대로 globbing하므로, `.gitignore`가 git 추적만 막을 뿐 로컬에 물리적으로 존재하는 `application-local.yml`은 그대로 jar에 담김. 두 태스크 모두 2026-07-11(codeprint_113)에 "열화판 공개 Skill"을 만들며 신설됐고, 그 세션에서 "java -jar로 실제 도는가"만 검증하고 jar 내부 파일 목록은 확인하지 않은 채 공개 레포에 게시.
+
+**프로세스 관점의 진짜 원인**: 이 프로젝트의 보안 체크리스트(SECURITY_POLICY.md)는 전부 "돌아가는 웹앱"(엔드포인트 인증·소유권·CORS 등) 기준으로 짜여 있었고, "빌드 산출물을 공개 레포에 배포"라는 이 프로젝트 최초의 행위 유형에 대한 체크 항목이 아예 없었음. 체크리스트 부재를 떠나서도, `application-local.yml`이 실 자격증명 파일이라는 사실과 fat jar가 리소스 전체를 담는다는 사실 둘 다 이미 문서화돼 있었는데 그 세션에서 둘을 연결짓지 못한 판단 실패이기도 함.
+
+### 조치
+1. **원인 수정**: 두 Jar 태스크에 `exclude 'application-*.yml'` 추가, 재빌드 후 `application.yml`(비-시크릿, 이미 공개)만 남음을 실제 압축 해제로 검증.
+2. **범위 확정 감사**: `codeprint-plugins`·`codeprint` 양쪽 전체 git 히스토리를 실사 — `codeprint-plugins`는 해당 1개 커밋의 jar 2개가 유일한 유출, `codeprint`(메인 레포)는 `application-local.yml`이 커밋된 적 자체가 없고 jar도 표준 `gradle-wrapper.jar`뿐임을 확인(추가 유출 없음 확정).
+3. **정리 커밋**: 정리된 jar를 일반 커밋(`6c4d81b`)으로 `codeprint-plugins` main에 반영 — 지금부터 신규 방문자는 정리된 버전만 봄. **단, force-push 히스토리 삭제는 로컬 훅이 main 강제 push를 무조건 차단하도록 설정돼 있어 미실행** — 사용자 직접 처리 또는 훅 예외 승인 대기.
+4. **GitHub 플랫폼 방어**: `codeprint` 메인 레포에 Secret Scanning + Push Protection 활성화(기존 비활성 상태였음, `codeprint-plugins`는 이미 켜져 있었으나 이번 유출을 못 막았음 — 아래 한계 참조).
+5. **바이너리 전용 게이트 신설**: `codeprint-plugins`에 `.github/workflows/binary-secret-scan.yml` 추가 — push/PR마다 저장소 내 모든 `*.jar`/`*.zip`을 실제로 압축 해제해 ①`application-*.yml`(application.yml 제외) 존재 여부 ②AWS 키/PEM 개인키/평문 secret 필드 패턴을 검사, 발견 시 빌드 실패. CI에서 현재 정리된 jar 기준 통과 확인(오탐 없음).
+6. **체크리스트 보강**: `SECURITY_POLICY.md` 개발 체크리스트에 "공개 배포용 산출물을 새로 만들 때 내부 파일 목록을 직접 확인했는가" 항목 추가.
+
+### 남은 조치 (사용자 액션, Claude 대행 불가)
+- Toss Payments API 키 재발급(최우선 — 금전 리스크)
+- AWS `codeprint-s3` 액세스 키 재발급·기존 키 삭제·격리 정책 분리·CloudTrail 무단 활동 확인
+- GitHub OAuth App Client Secret 재발급
+- JWT secret 교체(전체 사용자 세션 무효화 동반)
+- GitHub webhook secret 재발급
+- 위 전부 Railway 환경변수 반영 + AWS/JWT는 GitHub Secrets(DB 백업 워크플로용)도 갱신
+- `codeprint-plugins` force-push 히스토리 완전 삭제 여부 결정
+
+### 결과
+근본 원인 코드 수정·재빌드·검증 완료. 유출 범위 확정(2개 파일, 1개 커밋, 다른 유출 없음). 재발 방지 게이트(CI 바이너리 스캔) 신설·검증 완료. 실제 자격증명 재발급은 계정 소유자만 가능해 미완료 — 이 문서 갱신 시점 기준 여전히 노출된 키들이 유효한 상태이므로 최우선 후속 작업.
+
+### 한계
+- Push Protection이 켜져 있어도 압축 아카이브(jar/zip) 내부까지는 실시간 스캔하지 못함 — 이번 유출이 정확히 그 사각지대였고, GitHub 플랫폼 기능만으로는 근본적으로 못 막는 종류의 위험. 바이너리 게이트(위 5번)가 이 사각지대를 메우는 유일한 방어선.
+- history force-push 미해결 — 옛 커밋 `a7a9dca`는 여전히 GitHub에 남아있고, 이미 AWS 스캐너에 인덱싱된 이상 다른 스크래퍼도 이미 수집했을 가능성을 배제 못함. **키 재발급만이 실질적 방어이고, 히스토리 삭제는 위생 조치일 뿐 이미 발생한 노출 자체를 되돌리지 못함.**
+- 이번 대응은 "이미 알려진 위험 패턴(로컬 secret 파일)"을 잡는 데 최적화됨 — 앞으로 완전히 새로운 종류의 배포 행위(예: Docker 이미지 공개, npm 패키지 게시 등)를 할 때 동일한 종류의 맹점이 다시 생길 수 있음. 체크리스트 항목 추가(6번)가 유일한 일반적 방어이고, 그마저도 사람이 실제로 체크할 때만 작동함.
