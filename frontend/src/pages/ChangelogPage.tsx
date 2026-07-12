@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.125.1',
+    date: '2026-07-12',
+    title: 'AI 설명/코드 생성 기능 제거',
+    type: 'fix',
+    items: [
+      { category: 'AI', desc: '경고 AI 설명, 함수 노드 AI 설명, AI 코드 생성 기능과 설정 페이지의 AI API 키 등록을 제거했습니다. 화면에 이미 표시되는 정보를 AI가 다시 요약해주는 수준이라 실질적인 정보 이득이 없다고 판단했습니다.' },
+    ],
+  },
+  {
     version: 'v0.125.0',
     date: '2026-07-12',
     title: '팀에 공유된 프로젝트, 팀원도 동일하게 사용 가능',

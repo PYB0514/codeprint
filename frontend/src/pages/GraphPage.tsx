@@ -30,7 +30,7 @@ import { useCollaboration } from '../hooks/useCollaboration'
 import { useSidebarResize } from '../hooks/useSidebarResize'
 import CollaborationPanel from '../components/CollaborationPanel'
 import CursorOverlay from '../components/CursorOverlay'
-import WarningPanel, { WARNING_META } from '../components/WarningPanel'
+import WarningPanel from '../components/WarningPanel'
 import TeamChatPanel from '../components/TeamChatPanel'
 import ArchitectureIntentPanel from '../components/ArchitectureIntentPanel'
 import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewToggles'
@@ -273,12 +273,6 @@ function GraphPageInner() {
   const [counts, setCounts] = useState({ files: 0, funcs: 0, edges: 0 })
   const [loading, setLoading] = useState(true)
   const [tourRunning, setTourRunning] = useState(false)
-  const [aiProviders, setAiProviders] = useState<{ provider: string; registered: boolean }[]>([])
-  const [selectedAiProvider, setSelectedAiProvider] = useState<string>('')
-  const [aiExplaining, setAiExplaining] = useState(false)
-  const [aiExplanation, setAiExplanation] = useState<string | null>(null)
-  const [aiGenerating, setAiGenerating] = useState(false)
-  const [aiGeneratedCode, setAiGeneratedCode] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [sidebar, setSidebar] = useState<SidebarContent | null>(null)
   const [rightCollapsed, setRightCollapsed] = useState(true)
@@ -620,80 +614,6 @@ function GraphPageInner() {
     })
   }, [])
 
-  // 사이드바 노드 변경 시 AI 설명/코드 초기화
-  useEffect(() => { setAiExplanation(null); setAiGeneratedCode(null) }, [sidebar])
-
-  // 선택한 AI 제공자로 함수 노드 설명 요청
-  const handleAiExplain = async () => {
-    if (!selectedAiProvider || sidebar?.kind !== 'func') return
-    setAiExplaining(true)
-    setAiExplanation(null)
-    try {
-      const s = sidebar
-      const res = await axios.post<{ explanation: string }>(
-        '/api/ai/explain',
-        {
-          provider: selectedAiProvider,
-          nodeId: s.funcName,
-          nodeName: s.funcName,
-          nodeType: 'FUNCTION',
-          comment: s.funcComment ?? '',
-          callers: s.callers.map((c: { funcName: string }) => c.funcName).join(', '),
-          callees: s.callees.map((c: { funcName: string }) => c.funcName).join(', '),
-        }
-      )
-      setAiExplanation(res.data.explanation)
-    } catch {
-      setAiExplanation('AI 설명을 가져오지 못했습니다. API 키를 확인해주세요.')
-    } finally {
-      setAiExplaining(false)
-    }
-  }
-
-  // 선택한 함수 노드의 코드 스텁을 AI로 생성
-  const handleAiGenerateCode = async () => {
-    if (!selectedAiProvider || sidebar?.kind !== 'func') return
-    setAiGenerating(true)
-    setAiGeneratedCode(null)
-    try {
-      const s = sidebar
-      const res = await axios.post<{ code: string; language: string }>(
-        '/api/ai/generate-code',
-        {
-          provider: selectedAiProvider,
-          nodeName: s.funcName,
-          nodeType: 'FUNCTION',
-          comment: s.funcComment ?? '',
-          callers: s.callers.map((c: { funcName: string }) => c.funcName).join(', '),
-          callees: s.callees.map((c: { funcName: string }) => c.funcName).join(', '),
-          language: (() => {
-            // rawNodes에서 가장 많이 등장하는 언어를 주 언어로 사용
-            const langCount: Record<string, number> = {}
-            for (const n of rawNodes) if (n.language) langCount[n.language] = (langCount[n.language] ?? 0) + 1
-            return Object.entries(langCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'java'
-          })(),
-        }
-      )
-      setAiGeneratedCode(res.data.code)
-    } catch {
-      setAiGeneratedCode('코드 생성에 실패했습니다. API 키를 확인해주세요.')
-    } finally {
-      setAiGenerating(false)
-    }
-  }
-
-  // 경고 패널의 "AI" 버튼 — 선택된 제공자로 경고 원인·수정안 분석 요청
-  const handleAiExplainWarning = async (w: { type: string; severity?: string; message: string }) => {
-    const res = await axios.post<{ explanation: string }>('/api/ai/explain-warning', {
-      provider: selectedAiProvider,
-      warningType: w.type,
-      severity: w.severity ?? 'MEDIUM',
-      message: w.message,
-      guide: WARNING_META[w.type]?.desc ?? '',
-    })
-    return res.data.explanation
-  }
-
   // 흐름 재생 초기화 — 공유 훅 리셋 + GraphPage 전용 클릭 노드 해제
   const resetPlayback = useCallback(() => {
     resetFlowPlayback()
@@ -771,14 +691,6 @@ function GraphPageInner() {
       .then((res) => {
         setCurrentUserId(res.data.id)
         setBgUrl(res.data.graphBgUrl ?? null)
-      })
-      .catch(() => {})
-
-    axios.get<{ provider: string; registered: boolean }[]>('/api/ai/keys')
-      .then((res) => {
-        setAiProviders(res.data)
-        const first = res.data.find((p) => p.registered)
-        if (first) setSelectedAiProvider(first.provider)
       })
       .catch(() => {})
   }, [])
@@ -2481,7 +2393,6 @@ function GraphPageInner() {
               onAdd: handleAddIgnore,
               onRemove: handleRemoveIgnore,
             }}
-            aiExplain={aiProviders.some((p) => p.registered) ? { onExplain: handleAiExplainWarning } : undefined}
           />
         ) : (
           <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
@@ -2835,52 +2746,6 @@ function GraphPageInner() {
                         ))
                       }
                     </SidebarSection>
-
-                    {/* AI 설명 */}
-                    {aiProviders.some((p) => p.registered) && (
-                      <SidebarSection title="AI 설명">
-                        <div className="flex items-center gap-2 mb-2">
-                          <select
-                            value={selectedAiProvider}
-                            onChange={(e) => setSelectedAiProvider(e.target.value)}
-                            className="flex-1 bg-gray-800 text-white text-xs px-2 py-1.5 rounded border border-gray-700 focus:outline-none"
-                          >
-                            {aiProviders.filter((p) => p.registered).map((p) => (
-                              <option key={p.provider} value={p.provider}>
-                                {p.provider === 'CLAUDE' ? 'Claude' : p.provider === 'OPENAI' ? 'ChatGPT' : 'Gemini'}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={handleAiExplain}
-                            disabled={aiExplaining || aiGenerating}
-                            className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1.5 rounded disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                          >
-                            {aiExplaining ? '...' : '설명'}
-                          </button>
-                          <button
-                            onClick={handleAiGenerateCode}
-                            disabled={aiExplaining || aiGenerating}
-                            className="text-xs bg-purple-700 hover:bg-purple-600 text-white px-2 py-1.5 rounded disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                          >
-                            {aiGenerating ? '...' : '코드'}
-                          </button>
-                        </div>
-                        {aiExplanation && (
-                          <p className="text-xs text-gray-300 leading-relaxed bg-gray-800 rounded-lg px-3 py-2">
-                            {aiExplanation}
-                          </p>
-                        )}
-                        {aiGeneratedCode && (
-                          <pre className="text-xs text-green-300 bg-gray-900 rounded-lg px-3 py-2 overflow-x-auto whitespace-pre-wrap break-words">
-                            {aiGeneratedCode}
-                          </pre>
-                        )}
-                        {!aiExplanation && !aiGeneratedCode && !aiExplaining && !aiGenerating && (
-                          <p className="text-xs text-gray-600">설명 또는 코드 생성을 눌러보세요.</p>
-                        )}
-                      </SidebarSection>
-                    )}
 
                     {/* 노드 코멘트 */}
                     <SidebarSection title={`코멘트${nodeComments.length > 0 ? ` (${nodeComments.length})` : ''}`}>
