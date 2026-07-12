@@ -446,6 +446,26 @@ function GraphPageInner() {
     }
   }, [projectId])
 
+  // 내가 오탐 신고한 fingerprint 집합 — 신고 버튼 상태 표시용
+  const [reportedFingerprints, setReportedFingerprints] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (!projectId || !currentUserId) return
+    axios.get(`/api/projects/${projectId}/warnings/report-fp/mine`)
+      .then(res => setReportedFingerprints(new Set(res.data)))
+      .catch(() => {})
+  }, [projectId, currentUserId])
+
+  // 오탐 신고 — 서버에 저장(멱등) 후 버튼 상태를 "신고됨"으로 갱신
+  const handleReportFp = useCallback(async (w: { type: string; fingerprint?: string }) => {
+    if (!projectId || !w.fingerprint) return
+    try {
+      await axios.post(`/api/projects/${projectId}/warnings/report-fp`, { fingerprint: w.fingerprint, type: w.type })
+      setReportedFingerprints(prev => new Set(prev).add(w.fingerprint!))
+    } catch {
+      alert('오탐 신고에 실패했습니다.')
+    }
+  }, [projectId])
+
   // 패턴 예외(IGNORE) 규칙 — architecture-intent에 저장, 그룹 단위로 경고 억제
   const [ignoreRules, setIgnoreRules] = useState<IgnoreRule[]>([])
   // fetchGraph는 아래에서 정의되므로 ref로 안정 참조 (예외 규칙 변경 후 경고 재조회용)
@@ -2385,6 +2405,8 @@ function GraphPageInner() {
             onSuppress={handleSuppressWarning}
             suppressed={suppressedWarnings}
             onRestore={handleRestoreWarning}
+            onReportFp={handleReportFp}
+            reportedFingerprints={reportedFingerprints}
             ignoreOps={{
               projectId: projectId ?? '',
               fileOf: fileOfNodeId,

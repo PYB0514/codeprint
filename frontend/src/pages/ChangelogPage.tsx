@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.127.0',
+    date: '2026-07-13',
+    title: '경고 오탐 신고 기능 추가',
+    type: 'feature',
+    items: [
+      { category: '경고 감지', desc: '경고를 오탐으로 신고할 수 있습니다. 프로젝트를 볼 수 있는 사람이면 소유자가 아니어도 신고할 수 있으며, 신고 이력은 향후 감지 규칙 정확도 개선에 활용됩니다.' },
+    ],
+  },
+  {
     version: 'v0.126.0',
     date: '2026-07-13',
     title: '삭제 쿼리 @Transactional 누락 경고 추가',
