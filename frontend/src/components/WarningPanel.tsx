@@ -51,6 +51,7 @@ export const WARNING_META: Record<string, { label: string; desc: string; color: 
   INTERFACES_IMPORTS_INFRA:    { label: 'Controller → 인프라 직접 의존', desc: 'Controller 등 진입점(interfaces/)이 DB·외부 연동 코드(infrastructure/)를 직접 import합니다 — 중간 계층(Application Service)이 빠져 계층 구조가 흐트러집니다. Application Service나 Facade를 거치세요.', color: '#f97373', severity: 'MEDIUM' },
   CROSS_DOMAIN_CALL:           { label: '도메인 경계 넘는 호출',    desc: '다른 도메인의 함수를 중간 인터페이스 없이 직접 호출합니다 — port 인터페이스를 두면 각 도메인을 독립적으로 수정할 수 있습니다.', color: '#f43f5e', severity: 'MEDIUM' },
   MISSING_CONVERTER_MIGRATION: { label: '@Convert 마이그레이션 필요', desc: '필드에 @Convert(암호화 등)를 붙였는데 기존 DB 데이터를 변환하는 마이그레이션이 없을 수 있습니다 — 조회 시 오류 위험. 이미 처리했다면 숨기세요.', color: '#ec4899', severity: 'MEDIUM' },
+  MISSING_TRANSACTIONAL_DELETE: { label: '@Transactional 누락',    desc: 'Spring Data 파생 삭제 쿼리(deleteBy*/removeBy*)에 @Transactional이 없습니다 — 트랜잭션 경계가 없으면 EntityManager 부재로 런타임 예외가 발생합니다. 메서드에 @Transactional을 추가하세요.', color: '#84cc16', severity: 'MEDIUM' },
   DEAD_CODE:                   { label: '데드 코드 후보',           desc: '프로젝트 안에서 호출하는 곳을 찾지 못한 함수입니다 — 안 쓰는 코드거나, 프레임워크가 호출해 분석에 안 보일 수도 있어 "후보"입니다.', color: '#6b7280', severity: 'LOW'    },
   HIGH_FAN_OUT:                { label: '한 함수에 몰린 책임',      desc: '함수 하나가 7개 넘는 함수를 호출합니다 — 하는 일이 많아 수정 영향 범위가 큽니다. 역할별 분리를 검토하세요.', color: '#f59e0b', severity: 'LOW'    },
   LAYERED_REVERSE_DEPENDENCY:  { label: '레이어 역전 의존',        desc: '아래 계층(Repository 등)이 위 계층(Controller 등)을 import합니다 — 계층 구조가 뒤집혀 재사용과 테스트가 어려워집니다.', color: '#dc2626', severity: 'HIGH'   },

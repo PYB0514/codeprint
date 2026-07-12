@@ -149,8 +149,9 @@ public class StaticCodeAnalyzer {
         List<String> frameworkAnnotatedMethods = extractFrameworkAnnotatedMethods(masked, language);
         List<DbAccess> dbAccesses = extractDbAccesses(masked, language);
         String extendedClass = extractExtendedClass(masked, language);
+        List<String> transactionalMethods = extractTransactionalMethods(masked, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions, transactionalMethods);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함
@@ -1288,6 +1289,23 @@ public class StaticCodeAnalyzer {
             }
         }
 
+        return result;
+    }
+
+    // @Transactional 어노테이션이 붙은 메서드명 추출 (Spring 개념이라 Java/Kotlin만 해당)
+    // JpaRepository 파생 쿼리 메서드는 인터페이스 추상 메서드라 접근제어자가 없는 경우가 흔해
+    // (모디파이어를 요구하는 extractAsyncMethods 방식 대신) 스택 애노테이션까지 다루는
+    // methodNameAfterAnnotation을 재사용 — extractFrameworkAnnotatedMethods와 동일 패턴
+    private List<String> extractTransactionalMethods(String content, String language) {
+        List<String> result = new ArrayList<>();
+        if (!language.equals("Java") && !language.equals("Kotlin")) return result;
+
+        String[] lines = content.split("\n");
+        for (int i = 0; i < lines.length; i++) {
+            if (!"Transactional".equals(leadingAnnotationName(lines[i]))) continue;
+            String name = methodNameAfterAnnotation(lines, i, null);
+            if (name != null) result.add(name);
+        }
         return result;
     }
 

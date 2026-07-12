@@ -4,6 +4,7 @@ package com.codeprint.infrastructure.persistence.graph;
 import com.codeprint.domain.graph.ArchitectureIntentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -31,6 +32,7 @@ public class ArchitectureIntentRepositoryImpl implements ArchitectureIntentRepos
 
     // 프로젝트의 의도 삭제
     @Override
+    @Transactional
     public void deleteByProjectId(UUID projectId) {
         jpa.deleteById(projectId);
     }

@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.126.0',
+    date: '2026-07-13',
+    title: '삭제 쿼리 @Transactional 누락 경고 추가',
+    type: 'feature',
+    items: [
+      { category: '경고 감지', desc: 'Spring Data 파생 삭제 쿼리(deleteBy*/removeBy*)에 @Transactional이 없으면 새로 경고합니다. 트랜잭션 경계가 없으면 실행 시 런타임 예외가 발생할 수 있습니다.' },
+    ],
+  },
+  {
     version: 'v0.125.4',
     date: '2026-07-12',
     title: '그래프 분석 생성 요청 제한 강화',
