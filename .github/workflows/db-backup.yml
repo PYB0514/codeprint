@@ -36,7 +36,7 @@ jobs:
         run: |
           set -euo pipefail
           FILENAME="codeprint-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
-          pg_dump "$DATABASE_URL" | gzip > "$FILENAME"
+          /usr/lib/postgresql/18/bin/pg_dump "$DATABASE_URL" | gzip > "$FILENAME"
           aws s3 cp "$FILENAME" "s3://${S3_BUCKET}/${S3_PREFIX}/${FILENAME}"
           rm -f "$FILENAME"
 
