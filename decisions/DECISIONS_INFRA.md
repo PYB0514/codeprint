@@ -281,3 +281,30 @@ CLAUDE.md §0에 "코드 구조 파악은 Glob/Grep/Read 대신 exploreLocal 우
 
 ### 한계
 "작업 단위가 끝났다"는 판단을 여전히 에이전트(Claude)의 문맥 판단에 의존 — 만약 판단을 깜빡하고 안 끄면 이전과 동일하게 프로세스가 누적될 수 있음(자동 강제 장치는 아님). 완전한 자동화가 필요해지면 그때 Stop 훅 등 다른 메커니즘을 재검토.
+
+---
+
+## Railway Postgres 백업 부재 확인 → GitHub Actions 일일 pg_dump로 대체 (2026-07-12, codeprint_118)
+
+### 문제
+Context116부터 "Railway Postgres 자동 백업 활성화 여부 확인"이 대기 항목으로 여러 세션 이어지다, 사용자가 직접 Railway 대시보드 Backups 탭을 확인해 스크린샷 공유 — **"Backups and point-in-time recovery (PITR) are only available for customers on the Pro plan" + "No Backups"**. 즉 현재 플랜에서는 백업이 전혀 없는 상태였음(대기가 길어진 사이 실제로는 무방비 기간이 계속되고 있었던 셈).
+
+### 검토한 대안과 탈락 이유
+1. **Railway Pro 플랜 결제** — 결제는 비가역·금전적 액션이라 Claude가 대행 불가(Safety Rules), 사용자가 직접 판단할 문제로 남김.
+2. **GitHub Actions 스케줄로 pg_dump → S3** (채택) — 사용자가 "10~30분처럼 짧은 주기면 부담이 커지냐"고 질문. 검토 결과 이 레포가 public이라 Actions 분(分) 자체는 무제한 무료, S3 비용도 이 DB 규모에선 미미(월 $1 안팎)해 **주기를 짧게 잡아도 금전 비용은 거의 안 늘어남**을 확인. 다만 목적이 "전멸 방지"(재해복구)지 초 단위 PITR이 아니라는 점, 그리고 촘촘한 자체 파이프라인은 관리형 Pro보다 오히려 신뢰도가 낮다는 점(실패해도 알림 없음)을 근거로 **하루 1회**로 최종 확정(사용자 승인).
+
+### 결정
+`.github/workflows/db-backup.yml` 신설 — 매일 03:00 KST(cron `0 18 * * *`, UTC 기준) 실행:
+1. `pg_dump`로 Railway Postgres 전체 덤프 → gzip 압축
+2. 기존 S3 버킷(`codeprint-uploads`, `application.yml`의 `AWS_S3_BUCKET` 기본값과 동일) 내 `db-backups/` prefix에 업로드 — 새 버킷을 만들지 않고 기존 인프라 재사용(단순성 우선, §2)
+3. 30일 초과 백업은 매 실행마다 자동 삭제(retention)
+
+**필요 GitHub Secrets(사용자가 직접 등록, Claude는 값을 다루지 않음)**: `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`(기존 S3 자격증명 재사용 가능 여부는 사용자 확인 필요) / `BACKUP_DATABASE_URL`(Railway Postgres의 **public/proxy** 연결 문자열 — GitHub Actions는 Railway 내부망 밖에서 접속하므로 internal URL이 아닌 public URL 필요).
+
+### 결과
+워크플로 파일 작성 완료, 아직 미실행(Secrets 미등록 상태이므로 최초 트리거 시 실패 예상 — 사용자가 Secrets 3종 등록 후 `workflow_dispatch`로 1회 수동 실행해 검증 필요, 다음 세션 대기 항목으로 등록).
+
+### 한계
+- **복구 절차 미검증** — 덤프 생성까지만 구현, `pg_restore`로 실제 복원이 되는지는 아직 리허설 안 함. 진짜 재해 시점에 처음 시도하면 위험 — 별도로 최소 1회 복원 리허설 필요.
+- **PITR 아님** — 위 표 그대로 최대 24시간 유실 구간 존재, 진짜 무중단 복구가 필요해지면 Pro 결제가 정답.
+- **알림 없음** — 백업 실패 시 GitHub Actions 화면을 직접 확인해야 앎(Slack/이메일 알림 미연동, 필요 시 후속 작업).

@@ -1,0 +1,51 @@
+# 매일 1회 Railway Postgres를 pg_dump해 S3에 저장하는 재해복구용 백업
+name: DB Backup
+
+on:
+  schedule:
+    - cron: '0 18 * * *'  # 매일 03:00 KST(UTC 18:00)
+  workflow_dispatch: {}
+
+env:
+  AWS_REGION: ap-northeast-2
+  S3_BUCKET: codeprint-uploads
+  S3_PREFIX: db-backups
+  RETENTION_DAYS: 30
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install postgresql-client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Dump database and upload to S3
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          FILENAME="codeprint-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+          pg_dump "$DATABASE_URL" | gzip > "$FILENAME"
+          aws s3 cp "$FILENAME" "s3://${S3_BUCKET}/${S3_PREFIX}/${FILENAME}"
+          rm -f "$FILENAME"
+
+      - name: Prune backups older than retention window
+        run: |
+          set -euo pipefail
+          CUTOFF=$(date -u -d "-${RETENTION_DAYS} days" +%Y%m%d)
+          aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "${S3_PREFIX}/" \
+            --query "Contents[].Key" --output text | tr '\t' '\n' | while read -r KEY; do
+            [ -z "$KEY" ] && continue
+            FDATE=$(echo "$KEY" | grep -oP '(?<=codeprint-)\d{8}' || true)
+            if [ -n "$FDATE" ] && [ "$FDATE" -lt "$CUTOFF" ]; then
+              echo "삭제: $KEY"
+              aws s3 rm "s3://${S3_BUCKET}/${KEY}"
+            fi
+          done
