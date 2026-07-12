@@ -2452,6 +2452,54 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("Java @Transactional 어노테이션 메서드를 transactionalMethods에 포함한다")
+    void Java_Transactional_어노테이션_감지() throws IOException {
+        Path file = writeJavaFile("""
+                public class FooRepositoryImpl {
+                    @Transactional
+                    public void deleteByFooId(String id) {}
+
+                    public void findByFooId(String id) {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.transactionalMethods()).contains("deleteByFooId");
+        assertThat(result.transactionalMethods()).doesNotContain("findByFooId");
+    }
+
+    @Test
+    @DisplayName("접근제어자 없는 인터페이스 추상 메서드(JpaRepository 파생 쿼리)도 감지한다")
+    void Java_Transactional_인터페이스_추상메서드_감지() throws IOException {
+        // JpaRepository 파생 쿼리는 인터페이스 추상 메서드라 public/private 같은 제어자가 없는 게 흔함
+        Path file = writeJavaFile("""
+                public interface FooJpaRepository extends JpaRepository<Foo, java.util.UUID> {
+                    @Transactional
+                    void deleteByUserIdAndPostId(java.util.UUID userId, java.util.UUID postId);
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.transactionalMethods()).contains("deleteByUserIdAndPostId");
+    }
+
+    @Test
+    @DisplayName("TypeScript는 @Transactional 개념이 없어 transactionalMethods를 추출하지 않는다")
+    void TypeScript는_Transactional_추출_안함() throws IOException {
+        Path file = writeTsFile("""
+                class FooService {
+                    async deleteFoo(id: string) {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.transactionalMethods()).isEmpty();
+    }
+
+    @Test
     @DisplayName("TypeScript async function을 asyncMethods에 포함한다")
     void TypeScript_async_function_감지() throws IOException {
         Path file = writeTsFile("""

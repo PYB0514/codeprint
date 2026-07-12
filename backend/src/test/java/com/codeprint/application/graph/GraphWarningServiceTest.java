@@ -925,6 +925,92 @@ class GraphWarningServiceTest {
         assertThat(warnings.stream().filter(w -> "MISSING_CONVERTER_MIGRATION".equals(w.get("type"))).toList()).isEmpty();
     }
 
+    @Test
+    @DisplayName("infra/persistence의 deleteBy* 메서드에 @Transactional 없음 — MISSING_TRANSACTIONAL_DELETE 경고")
+    void missingTransactionalDelete_derivedDeleteMethod_noAnnotation_detected() {
+        Node deleteMethod = funcNodeWithPath("deleteByUserIdAndPostId",
+                "/infrastructure/persistence/community/PostBookmarkJpaRepository.java");
+
+        List<Map<String, Object>> warnings = service.detect(List.of(deleteMethod), List.of());
+
+        assertThat(warnings).hasSize(1);
+        assertThat(warnings.get(0).get("type")).isEqualTo("MISSING_TRANSACTIONAL_DELETE");
+    }
+
+    @Test
+    @DisplayName("removeBy* 메서드도 동일 규칙 적용")
+    void missingTransactionalDelete_removeByVariant_detected() {
+        Node removeMethod = funcNodeWithPath("removeByFollowerIdAndFollowingId",
+                "/infrastructure/persistence/user/UserFollowRepositoryImpl.java");
+
+        List<Map<String, Object>> warnings = service.detect(List.of(removeMethod), List.of());
+
+        assertThat(warnings.stream().filter(w -> "MISSING_TRANSACTIONAL_DELETE".equals(w.get("type")))).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("@Transactional 메타데이터 있음 — MISSING_TRANSACTIONAL_DELETE 경고 없음")
+    void missingTransactionalDelete_hasAnnotation_noWarning() {
+        Node deleteMethod = funcNodeWithPath("deleteByUserIdAndPostId",
+                "/infrastructure/persistence/community/PostBookmarkJpaRepository.java");
+        deleteMethod.updateMetadata(Map.of("isTransactional", true));
+
+        List<Map<String, Object>> warnings = service.detect(List.of(deleteMethod), List.of());
+
+        assertThat(warnings.stream().filter(w -> "MISSING_TRANSACTIONAL_DELETE".equals(w.get("type")))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("infra/persistence 레이어 밖의 deleteBy* — MISSING_TRANSACTIONAL_DELETE 경고 없음(오탐 방지 경로 가드)")
+    void missingTransactionalDelete_outsidePersistenceLayer_noWarning() {
+        Node deleteMethod = funcNodeWithPath("deleteByUserIdAndPostId",
+                "/application/community/PostBookmarkService.java");
+
+        List<Map<String, Object>> warnings = service.detect(List.of(deleteMethod), List.of());
+
+        assertThat(warnings.stream().filter(w -> "MISSING_TRANSACTIONAL_DELETE".equals(w.get("type")))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("CrudRepository 기본 메서드 deleteById — MISSING_TRANSACTIONAL_DELETE 경고 없음(프레임워크가 이미 트랜잭션 처리)")
+    void missingTransactionalDelete_baseDeleteById_noWarning() {
+        Node deleteMethod = funcNodeWithPath("deleteById",
+                "/infrastructure/persistence/project/ProjectRepositoryImpl.java");
+
+        List<Map<String, Object>> warnings = service.detect(List.of(deleteMethod), List.of());
+
+        assertThat(warnings.stream().filter(w -> "MISSING_TRANSACTIONAL_DELETE".equals(w.get("type")))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("@Transactional Impl이 내부 JpaRepository 메서드를 호출 — 내부 메서드는 경고 없음(호출자가 트랜잭션 경계 제공)")
+    void missingTransactionalDelete_wrappedByTransactionalCaller_noWarning() {
+        Node implMethod = funcNodeWithPath("deleteByFollowerIdAndFollowingId",
+                "/infrastructure/persistence/user/UserFollowRepositoryImpl.java");
+        implMethod.updateMetadata(Map.of("isTransactional", true));
+        Node jpaInterfaceMethod = funcNodeWithPath("deleteByFollowerIdAndFollowingId",
+                "/infrastructure/persistence/user/UserFollowJpaRepository.java");
+        Edge call = callEdge(implMethod.getId(), jpaInterfaceMethod.getId(), false);
+
+        List<Map<String, Object>> warnings = service.detect(List.of(implMethod, jpaInterfaceMethod), List.of(call));
+
+        assertThat(warnings.stream().filter(w -> "MISSING_TRANSACTIONAL_DELETE".equals(w.get("type")))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("호출자가 트랜잭션 경계 없이 호출 — 경고 유지(정상 발화 회귀 방지)")
+    void missingTransactionalDelete_callerNotTransactional_stillDetected() {
+        Node caller = funcNodeWithPath("removeFollow",
+                "/application/user/UserFollowService.java");
+        Node jpaInterfaceMethod = funcNodeWithPath("deleteByFollowerIdAndFollowingId",
+                "/infrastructure/persistence/user/UserFollowJpaRepository.java");
+        Edge call = callEdge(caller.getId(), jpaInterfaceMethod.getId(), false);
+
+        List<Map<String, Object>> warnings = service.detect(List.of(caller, jpaInterfaceMethod), List.of(call));
+
+        assertThat(warnings.stream().filter(w -> "MISSING_TRANSACTIONAL_DELETE".equals(w.get("type")))).hasSize(1);
+    }
+
     private List<Map<String, Object>> crossDomain(List<Map<String, Object>> warnings) {
         return warnings.stream().filter(w -> "CROSS_DOMAIN_CALL".equals(w.get("type"))).toList();
     }

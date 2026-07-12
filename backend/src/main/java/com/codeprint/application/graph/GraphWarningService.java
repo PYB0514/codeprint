@@ -27,6 +27,7 @@ public class GraphWarningService {
         warnings.addAll(detectBrokenInterfaceChains(nodes, edges));
         warnings.addAll(detectAsyncSelfCalls(nodes, edges));
         warnings.addAll(detectMissingConverterMigration(nodes));
+        warnings.addAll(detectMissingTransactionalDelete(nodes, edges));
         warnings.addAll(detectDeadCode(nodes, edges));
         warnings.addAll(detectHighFanOut(nodes, edges));
         // DDD 폴더 구조(/domain/, /application/, /infrastructure/)를 사용하는 프로젝트에만 적용
@@ -310,6 +311,65 @@ public class GraphWarningService {
                         + " ApplicationContext.getBean()으로 프록시를 경유해 호출하세요.");
                 warnings.add(w);
             }
+        }
+        return warnings;
+    }
+
+    // Spring Data 파생 삭제 쿼리(deleteBy*/removeBy*) 메서드명 패턴 — JPA 관례
+    private static final java.util.regex.Pattern DERIVED_DELETE_METHOD =
+            java.util.regex.Pattern.compile("^(delete|remove)By[A-Z]");
+
+    // JpaRepository 파생 삭제 쿼리에 @Transactional 누락 — 같은 원인 클래스가 3번 반복된 뒤([반복] BE-15,
+    // decisions/DECISIONS_BACKEND.md) 발견 즉시 InvalidDataAccessApiUsageException(500)으로 이어짐.
+    // Java/Kotlin 전용(Spring 개념) + infra∩persistence 레이어로 한정해 무관한 deleteBy* 오탐 배제.
+    // 신규 규칙이라 severity는 MEDIUM(관찰 기간 확보) — 자기 레포 0 확인 후 HIGH 승격 검토.
+    //
+    // ★도그푸딩 실측(2026-07-12)에서 15건 오탐 발견 후 2단계 정밀도 가드 추가:
+    // ①deleteById/removeById는 CrudRepository 기본 메서드라 SimpleJpaRepository가 프레임워크 차원에서
+    //   이미 @Transactional 처리 — 사용자 정의 파생 쿼리(예: deleteByUserId)와 이름 패턴만으론 구분 불가해 제외.
+    // ②"Impl 클래스가 @Transactional로 감싸고 내부 JpaRepository 인터페이스 메서드를 호출"하는 표준 패턴에서,
+    //   내부 인터페이스 메서드 자체엔 애노테이션이 없어도 호출자(Impl)가 이미 트랜잭션 경계를 제공 — FUNCTION_CALL
+    //   엣지로 "isTransactional=true인 소스에서 오는 호출이 있는지" 확인해 이런 경우는 발화하지 않는다.
+    private List<Map<String, Object>> detectMissingTransactionalDelete(List<Node> nodes, List<Edge> edges) {
+        Map<UUID, Boolean> nodeIsTransactional = new HashMap<>();
+        for (Node n : nodes) {
+            if (n.getType() != NodeType.FUNCTION) continue;
+            Map<String, Object> meta = n.getMetadata();
+            nodeIsTransactional.put(n.getId(), meta != null && Boolean.TRUE.equals(meta.get("isTransactional")));
+        }
+        // 이 메서드로 향하는 호출 중 이미 트랜잭션 경계를 가진 소스(Impl 래퍼)가 있는 target 집합
+        Set<UUID> coveredByTransactionalCaller = new HashSet<>();
+        for (Edge e : edges) {
+            if (e.getType() != EdgeType.FUNCTION_CALL) continue;
+            if (Boolean.TRUE.equals(nodeIsTransactional.get(e.getSourceNodeId()))) {
+                coveredByTransactionalCaller.add(e.getTargetNodeId());
+            }
+        }
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Node n : nodes) {
+            if (n.getType() != NodeType.FUNCTION) continue;
+            if (!"Java".equalsIgnoreCase(n.getLanguage()) && !"Kotlin".equalsIgnoreCase(n.getLanguage())) continue;
+            String name = n.getName();
+            if (name == null || !DERIVED_DELETE_METHOD.matcher(name).find()) continue;
+            if (name.equals("deleteById") || name.equals("removeById")) continue;
+
+            String fp = n.getFilePath() != null ? n.getFilePath() : "";
+            if (isTestArtifact(fp, name)) continue;
+            if (!containsLayerSegment(fp, INFRA_LAYER_DIRS) || !containsLayerSegment(fp, PERSISTENCE_LAYER_DIRS)) continue;
+
+            if (Boolean.TRUE.equals(nodeIsTransactional.get(n.getId()))) continue;
+            if (coveredByTransactionalCaller.contains(n.getId())) continue;
+
+            Map<String, Object> w = new LinkedHashMap<>();
+            w.put("type", "MISSING_TRANSACTIONAL_DELETE");
+            w.put("severity", "MEDIUM");
+            w.put("nodeIds", List.of(n.getId().toString()));
+            w.put("edgeIds", List.of());
+            w.put("message", "@Transactional 누락: " + name
+                    + " — Spring Data 파생 삭제 쿼리에 트랜잭션 경계가 없으면 EntityManager 부재로 런타임 예외가 발생합니다."
+                    + " 수정: 메서드에 @Transactional을 추가하세요.");
+            warnings.add(w);
         }
         return warnings;
     }

@@ -103,6 +103,9 @@ public class GraphBuilder {
                 if (pf.frameworkAnnotatedMethods() != null && pf.frameworkAnnotatedMethods().contains(funcName)) {
                     meta.put("isFrameworkAnnotated", true);
                 }
+                if (pf.transactionalMethods() != null && pf.transactionalMethods().contains(funcName)) {
+                    meta.put("isTransactional", true);
+                }
                 // 값(콜백)으로 참조되는 함수 — 호출 엣지가 없어도 DEAD_CODE 오탐에서 제외하기 위한 플래그
                 if (pf.valueReferencedFunctions() != null && pf.valueReferencedFunctions().contains(funcName)) {
                     meta.put("referencedAsValue", true);

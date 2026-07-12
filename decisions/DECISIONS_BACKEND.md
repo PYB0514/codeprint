@@ -1816,3 +1816,22 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `compileJava` 통과, 기존 `RateLimitFilterTest` 5개 전체 통과(테스트가 `RateLimitFilter`를 블랙박스로 다뤄 내부 자료구조 교체에 영향 없음). Caffeine의 TTL/maximumSize 자체는 검증된 서드파티 라이브러리 동작이라 별도 단위테스트를 추가하지 않음 — 필드 타입이 `Map`에서 `Cache`로 바뀌어, 이후 실수로 무제한 자료구조로 되돌리면 코드 리뷰에서 바로 드러나는 구조.
 
 **교훈.** 감사에서 발견한 항목이 여러 갈래([MEDIUM] 안에 XFF 스푸핑 + 버킷 메모리 고갈 2가지)일 때, 수정 커밋이 첫 번째 갈래만 고치고 나머지는 "부수"라는 이유로 누락되기 쉽다 — 발견 기록에 갈래가 여러 개면 각각을 개별 체크박스로 쪼개 추적했어야 함. 이번엔 사용자가 예전 기억을 다시 꺼내 물어봐서 드러났지만, 그러지 않았다면 계속 묻혀 있었을 것.
+
+## MISSING_TRANSACTIONAL_DELETE 게이트 규칙 신설 — deleteBy*/removeBy* @Transactional 누락 자동 탐지 (2026-07-12, codeprint_119)
+
+**배경.** 같은 원인(파생 delete 쿼리 `@Transactional` 누락)이 세 번 반복(PR #154 → BE-13 → BE-15, "9건 발견·수정" 항목 참조)돼 `ERROR_TRACKER.md`에 [반복] 승격까지 됐지만, 그동안은 회귀 테스트(`TransactionalDeleteMethodsTest`)로만 막고 있었음 — 이번 세션에서 "DB 관련 규칙도 그래프로 잡을 수 있냐"는 논의 중, 이건 "메서드명 패턴(`deleteBy*`/`removeBy*`)+애노테이션 유무"라는 순수 구조적 사실이라 필드접근·데이터흐름 확장 없이 기존 그래프 모델(FUNCTION_CALL 엣지·노드 메타데이터) 그대로 게이트 규칙으로 승격 가능하다고 판단해 착수.
+
+**구현.**
+1. `StaticCodeAnalyzer.extractTransactionalMethods()` 신규 — `@Transactional` 붙은 메서드명 추출(Java/Kotlin만). 기존 `extractAsyncMethods`(정규식, 모디파이어 필수)를 그대로 베끼려다, JpaRepository 파생 쿼리는 인터페이스 추상 메서드라 `public`/`private` 같은 접근제어자가 없는 경우가 흔하다는 걸 실측(`PostBookmarkJpaRepository.deleteByUserIdAndPostId`)으로 발견 — 대신 스택 애노테이션·모디파이어 부재를 이미 다루는 `methodNameAfterAnnotation`(기존 `extractFrameworkAnnotatedMethods`가 쓰던 헬퍼)을 재사용.
+2. `ParsedFile`에 `transactionalMethods` 필드 추가(기존 `controllerMappingFunctions` 추가 때와 동일한 패턴 — 새 필드를 맨 뒤에 붙이고 이전 생성자 체인에 backward-compat 생성자 추가, 기존 호출부 불변).
+3. `GraphBuilder`가 FUNCTION 노드 메타데이터에 `isTransactional: true` 반영(`isAsync`와 동일 패턴).
+4. `GraphWarningService.detectMissingTransactionalDelete()` 신규 — `deleteBy*`/`removeBy*` + Java/Kotlin + `infrastructure`∩`persistence` 레이어(기존 `detectDbLayerBypass`의 `INFRA_LAYER_DIRS ∩ PERSISTENCE_LAYER_DIRS` 헬퍼 재사용) + `isTransactional` 메타데이터 없음 → 경고. severity는 신규 규칙 관례대로 MEDIUM.
+
+**도그푸딩 실측에서 15건 오탐 발견 → 2단계 정밀도 가드 추가(계획에 없던 발견).**
+- **①CrudRepository 기본 메서드 오탐(8건)**: `deleteById`/`removeById`는 Spring Data `SimpleJpaRepository`가 프레임워크 차원에서 이미 `@Transactional` 처리하는 base 메서드인데, 이름 패턴(`deleteBy[A-Z]`)만으론 사용자 정의 파생 쿼리(`deleteByUserId` 등)와 구분이 안 됐음 → 정확히 `deleteById`/`removeById`인 경우 이름으로 제외.
+- **②"Impl이 @Transactional로 감싸고 내부 JpaRepository 인터페이스 메서드를 호출"하는 표준 래핑 패턴 오탐(6건)**: `UserFollowRepositoryImpl.deleteByFollowerIdAndFollowingId`(Impl, `@Transactional` 있음)가 `UserFollowJpaRepository.deleteByFollowerIdAndFollowingId`(내부 인터페이스, 애노테이션 없음)를 호출하는 구조에서, 내부 인터페이스 메서드만 따로 보면 애노테이션이 없어 오탐. FUNCTION_CALL 엣지로 "`isTransactional=true`인 소스로부터 오는 호출이 있으면" 그 target은 이미 트랜잭션 경계 안에 있다고 보고 제외.
+- **③메서드 본문 내용까지 봐야 하는 경계 케이스(1건, 규칙으로 해결 불가)**: `ArchitectureIntentRepositoryImpl.deleteByProjectId`는 이름은 커스텀 파생 쿼리처럼 보이지만 실제로는 내부에서 `jpa.deleteById(...)`(CrudRepository 기본 메서드, 자체 트랜잭션 보장)만 호출 — 기술적으론 안전하나 이걸 그래프로 구분하려면 메서드 본문 데이터흐름까지 봐야 해서 현재 모델(호출관계·메타데이터만 추적) 밖. 규칙을 더 정교하게 만드는 대신, 다른 9건과 동일하게 `@Transactional`을 붙여 일관성 있게 방어적으로 처리(기술적 중복이지만 향후 리팩토링 안전망 역할).
+
+**결과.** `compileJava`/`compileTestJava` 통과. 신규 단위테스트 — `StaticCodeAnalyzerTest` 3개(모디파이어 없는 인터페이스 메서드 감지 포함), `GraphWarningServiceTest` 6개(발화·비발화·경로가드·CrudRepository 기본메서드 제외·래핑패턴 제외·비-래핑 정상발화 회귀방지) 전부 통과. `analyzeLocal` 자기 레포 재분석 — 최초 15건 → 가드 2단계 적용 후 1건 → `ArchitectureIntentRepositoryImpl` 수정 후 **0건**(도그푸딩 전제 충족). 전체 백엔드 테스트(786개, Docker Postgres 기동 상태) 통과 확인.
+
+**교훈.** "이름 패턴+애노테이션 유무"라 쉬울 거라 예상했던 규칙도, 실제 코드베이스에 흔한 두 가지 정상 패턴(프레임워크 기본 메서드, Impl 래핑 위임)과 이름이 겹치면 오탐이 크게 튄다 — "그래프가 구조적으로 잡을 수 있나" 판정에서 "쉬움"으로 분류했더라도, 실제 도그푸딩 없이는 정밀도를 확신할 수 없다(`GATE_GAPS.md` 절차가 정확히 이 실측 단계를 강제하는 이유). WARNING_META(`WarningPanel.tsx`)·WARNING_GUIDE(`HowItWorksPage.tsx`)에도 등록해 사용자 노출 규칙과 동기화.

@@ -46,6 +46,10 @@ const WARNING_GUIDE: Record<string, { example: string; limitation: string }> = {
     example: '@Convert(암호화 등) 컬럼이 있는데 기존 평문 데이터를 변환하는 Flyway 마이그레이션이 없을 가능성 — 조회 시 복호화 실패로 500.',
     limitation: '마이그레이션 존재 여부까지는 못 보고 "가능성"만 경고. 이미 처리했다면 숨기세요.',
   },
+  MISSING_TRANSACTIONAL_DELETE: {
+    example: 'JpaRepository의 deleteBy*/removeBy* 파생 쿼리에 @Transactional이 없음 — 호출 시 EntityManager 부재로 런타임 예외.',
+    limitation: 'Java/Kotlin의 infrastructure/persistence(또는 adapter) 경로에 있는 메서드만 검사 — 다른 언어·경로의 삭제 메서드는 대상 아님.',
+  },
   DEAD_CODE: {
     example: '어떤 FUNCTION_CALL 엣지도 받지 않는 함수 — 아무 곳에서도 호출되지 않는 후보.',
     limitation: '리플렉션(JPA 컨버터)·다형성 디스패치처럼 정적으로 안 보이는 호출은 못 잡아 오탐이 날 수 있음(상당수 제외 처리됨). 차후 기능용으로 남긴 함수면 숨기세요.',
