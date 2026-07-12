@@ -1,6 +1,8 @@
 // IP 기반 API 요청 제한 필터 — 쓰기 엔드포인트 남용 방어
 package com.codeprint.infrastructure.config;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.Refill;
@@ -15,8 +17,7 @@ import org.springframework.util.PathMatcher;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @Order(2)
@@ -24,8 +25,13 @@ public class RateLimitFilter implements Filter {
 
     private final PathMatcher pathMatcher = new AntPathMatcher();
 
-    // IP+카테고리별 버킷 (카테고리마다 한도가 달라 규칙에서 한도를 받아 생성)
-    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+    // IP+카테고리별 버킷 — 가장 긴 집계 창(현재 3분)보다 넉넉한 TTL로 유휴 항목을 자동 정리해
+    // 무제한 증가(스푸핑 IP를 계속 바꿔가며 항목을 무한 생성하는 2차 DoS)를 막는다. maximumSize는
+    // TTL 만료 전에도 상한을 보장하는 2중 방어(Context103 MEDIUM 발견 중 미해결로 남았던 부분 수정)
+    private final Cache<String, Bucket> buckets = Caffeine.newBuilder()
+            .expireAfterAccess(10, TimeUnit.MINUTES)
+            .maximumSize(100_000)
+            .build();
 
     // 레이트리밋 대상 — 메서드·경로 패턴·카테고리·허용 횟수·집계 창(분)
     private record RateLimitRule(String method, String pathPattern, String category, int limit, int windowMinutes) {}
@@ -84,7 +90,7 @@ public class RateLimitFilter implements Filter {
 
         if (matched != null) {
             String key = extractIp(request) + ":" + matched.category();
-            Bucket bucket = buckets.computeIfAbsent(key, k -> newBucket(matched.limit(), matched.windowMinutes()));
+            Bucket bucket = buckets.get(key, k -> newBucket(matched.limit(), matched.windowMinutes()));
             if (!bucket.tryConsume(1)) {
                 response.setStatus(429);
                 response.setContentType("application/json;charset=UTF-8");
