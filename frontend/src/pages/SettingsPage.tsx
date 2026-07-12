@@ -1,10 +1,12 @@
 ﻿// 사용자 설정 페이지 — 프로필 이미지, 배경 이미지 관리
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
 
 // 설정 페이지 렌더링
 export default function SettingsPage() {
+  const navigate = useNavigate()
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [bgUrl, setBgUrl] = useState<string | null>(null)
   const [imageMsg, setImageMsg] = useState<string | null>(null)
@@ -20,8 +22,8 @@ export default function SettingsPage() {
         setAvatarUrl(r.data.avatarUrl ?? null)
         setBgUrl(r.data.graphBgUrl ?? null)
       })
-      .catch(() => {})
-  }, [])
+      .catch(() => navigate('/', { replace: true }))
+  }, [navigate])
 
   // 이미지 업로드 공통 처리
   const uploadImage = async (file: File, endpoint: string, setter: (url: string) => void) => {

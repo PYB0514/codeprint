@@ -841,3 +841,13 @@ const fetchGraph = useCallback(async () => {
 **마이페이지 — 현행 2탭(글/프로젝트) 유지, `/settings`·`/teams`는 계속 별도 페이지.** 탭 통합을 요구하는 사용자 불편 신고가 없고, 두 페이지가 독립적으로 이미 잘 작동 중 — 통합 시 얻는 UX 이득이 라우팅·상태관리 리팩토링 비용을 상회한다는 근거가 없어 원래 계획(4탭)에 억지로 맞추지 않기로 함.
 
 **재추진 조건.** PR7은 공유 뷰어 기능이 커져 실제 코드 중복이 유의미해질 때, 마이페이지는 탭 미통합으로 인한 구체적 사용자 불편이 접수될 때 — 조건 충족 전엔 재논의 안 함(현재 PROGRESS.md 백로그에서 제거, 이 기록이 유일한 근거).
+
+## SettingsPage 비로그인 접근 시 가드 없음 (2026-07-12, codeprint_119)
+
+**문제.** S3 IAM 권한 축소 작업 중 사용자가 "로그인 없이 설정 페이지에 들어가지는 게 이상하다"고 직접 발견 — 실제로 `/settings`가 비로그인 상태에서도 프로필/배경 이미지 업로드 UI와 "계정 삭제" 폼을 그대로 렌더링하고 있었음. `SettingsPage.tsx`의 `useEffect`가 `/api/auth/me` 실패를 `.catch(() => {})`로 조용히 삼키기만 하고 별도 가드가 없었던 게 원인.
+
+**심각도 확인.** 실제 데이터 침해는 아님 — 백엔드가 이미 이중으로 막고 있었음. `/api/users/me/avatar`·`/api/users/me/background`는 `SecurityConfig`에서 `.authenticated()`로 명시돼 컨트롤러 도달 전 401. `/api/auth/account`(DELETE)는 `/api/auth/**` 전체가 `permitAll()`이지만 `AuthController.deleteAccount()`에 `if (user == null) return 401` 방어 코드가 있어 실제 삭제는 불가능했음. 즉 순수 프론트 UX 결함(비로그인 사용자에게 의미 없는 "실패" 에러만 보여줌)이었고 보안 취약점은 아니었음.
+
+**결정.** 신규 가드 컴포넌트를 만들지 않고, 같은 문제를 이미 겪은 `TeamsPage.tsx`의 기존 패턴(보호된 데이터 조회 실패 시 `navigate('/', { replace: true })`)을 그대로 재사용. `SettingsPage.tsx`의 `/api/auth/me` `.catch(() => {})`를 `.catch(() => navigate('/', { replace: true }))`로 교체.
+
+**결과.** `tsc -b` 통과. Preview 프론트 서버(백엔드 미기동, 로그인 세션 없음)에서 `/settings` 직접 접속 시 즉시 `/`(랜딩 페이지)로 리다이렉트되는 것을 `get_page_text`로 확인.
