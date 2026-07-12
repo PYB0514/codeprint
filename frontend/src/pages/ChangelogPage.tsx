@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.125.3',
+    date: '2026-07-12',
+    title: '비로그인 상태에서 설정 페이지 접근 시 홈으로 이동',
+    type: 'fix',
+    items: [
+      { category: '프론트엔드', desc: '로그인하지 않은 상태에서 설정 페이지에 접근하면 업로드/계정 삭제 UI가 그대로 보이던 문제를 수정했습니다. 실제 업로드·삭제는 서버에서 이미 차단돼 있어 데이터 유출은 없었습니다.' },
+    ],
+  },
+  {
     version: 'v0.125.2',
     date: '2026-07-12',
     title: '북마크·좋아요 취소 등 삭제 API 500 오류 수정',
