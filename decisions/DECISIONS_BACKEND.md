@@ -1794,3 +1794,25 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **회귀 테스트.** `TransactionalDeleteMethodsTest`(신규) — 9개 메서드 전부 리플렉션으로 `@Transactional` 존재를 검증. 개별 클래스별 테스트 대신 하나로 통합한 이유: 9건 모두 "annotation 존재 확인"이라는 동일한 검증 로직이라 개별 파일로 나누면 순수 중복.
 
 **교훈.** 같은 원인 클래스(파생 delete `@Transactional` 누락)가 세 번째 발견됨(PR #154 → BE-13 → 이번). `ERROR_TRACKER.md` BE-15로 등재하고 [반복] 승격 — 새 Repository에 `deleteBy*`/`removeBy*` 파생 메서드를 추가할 때 `@Transactional`을 기본값으로 붙이는 습관화가 필요.
+
+## 그래프 분석 생성 레이트리밋 강화 — 비용 대비 한도 역전 교정 (2026-07-12, codeprint_119)
+
+**문제.** 사용자가 "게시글 생성보다 그래프 분석이 더 널널한 게 이상하지 않냐"고 직접 지적. 확인 결과 `RateLimitFilter`의 `analysis` 카테고리가 분당 10회, `post-create`는 분당 5회로 — 레포 클론+정적분석(코드 주석에 "비용 큼"이라고 스스로 적어뒀음)이 단순 DB insert 하나뿐인 게시글 생성보다 비용이 훨씬 큰데도 한도는 오히려 2배 더 널널했음. 애초에 상대적 비용을 고려하지 않고 정해진 숫자로 보임.
+
+**결정.** `analysis` 카테고리를 분당 10회 → **3분당 1회**로 강화(사용자 제안 반영). 기존 `RateLimitRule`이 "분당 N회"만 표현 가능했던 걸 `windowMinutes` 필드를 추가해 임의 분 단위 창을 지원하도록 일반화 — 다른 9개 규칙은 `windowMinutes=1`로 기존 동작 그대로 유지, `analysis`만 `limit=1, windowMinutes=3`으로 변경. `/api/analyses`는 이미 `SecurityConfig`에서 `permitAll` 목록에 없어 로그인(GitHub OAuth) 필수임도 이번에 재확인 — IP 레이트리밋은 그 위에 얹는 2차 방어선.
+
+**부수 발견 — SECURITY_POLICY.md 레이트 리미팅 표 이중 오류.** ①실제 규칙 10개 중 3개만 기재돼 있었음(문서 갱신 누락) → 10개 전체로 동기화. ②`GET /oauth2/** IP당 20회/분`이 표에 있었으나 `RateLimitFilter`의 모든 규칙이 `"POST"` 메서드만 매칭해 실제로는 아무 제한도 없는 **허위 기재**였음 → 배너로 정정, 즉시 규칙 추가는 안 하고(OAuth 인가 요청 반복은 다른 위협모델이라 별도 검토 필요) 후속 과제로만 남김.
+
+**결과.** `compileJava` 통과. `RateLimitFilterTest`에 `analysisCategory_limitedToOnePerThreeMinutes` 신규 추가(3분 창 내 2번째 요청이 429인지 검증) — 전체 5개 테스트 통과. 기존 `/api/feedback` 기준 테스트들은 영향 없음(카테고리별 독립 버킷).
+
+**교훈.** 레이트리밋 숫자를 "그럴듯한 라운드 넘버"로 정하면 실제 비용 순서와 역전될 수 있다 — 카테고리를 새로 추가할 때 인접 카테고리와 상대 비용을 비교하는 절차가 없었던 게 근본 원인. 문서(SECURITY_POLICY.md)가 코드보다 항상 뒤처질 수 있다는 것도 이번 세션에서 두 번째로 확인(S3 IAM 최소권한 논의 때도 유사 패턴) — 보안 관련 표는 코드 변경 시 기계적으로 동기화하는 습관이 필요.
+
+### 추가 — 버킷 맵 무제한 증가(2차 DoS) 해소, `Context103` 미해결 잔여 발견 (같은 세션)
+
+**문제.** 사용자가 "이번 레이트리밋이 DoS 방어인 건 알겠는데, 예전에 DoS 관련해서 알려준 게 있었을 텐데 왜 대비를 못 했냐"고 질문. `contexts/Context103.md`를 확인해보니 실제로 이전 세션(감사 성격)에서 **[MEDIUM] 레이트리밋 XFF 스푸핑 우회**를 발견했는데, 본문에 "부수: 버킷 맵 unbounded → 메모리 고갈 2차 DoS"라는 잔여 항목이 함께 적혀 있었음. `git log`로 후속 조치(PR #472, 2026-07-08)를 확인한 결과 XFF 스푸핑(첫 값 대신 마지막 값 사용) 부분만 고쳐졌고, "버킷 맵이 무한정 커지는" 부분은 고쳐진 적이 없었음 — `buckets`가 여전히 `new ConcurrentHashMap<>()`로, 만료·상한 없이 IP+카테고리 조합마다 영구히 쌓이는 구조였음(스푸핑 자체는 막혔지만, 실제 분산된 IP로 요청을 보내면 여전히 맵이 무한정 커질 수 있음).
+
+**결정.** 이미 프로젝트에 있는 Caffeine(`CacheConfig.java`가 그래프 캐싱에 사용 중인 것과 동일 라이브러리, 신규 의존성 추가 없음)으로 `Map<String, Bucket>` → `Cache<String, Bucket>` 교체. `expireAfterAccess(10분)`(가장 긴 집계 창인 analysis의 3분보다 넉넉하게 잡아 활성 사용자의 한도가 창 도중에 리셋되지 않도록) + `maximumSize(100_000)`(TTL 만료 전에도 상한을 보장하는 2중 방어) 적용. `buckets.computeIfAbsent(...)` → `buckets.get(key, mappingFunction)`으로 호출부만 교체(Caffeine `Cache`가 동일한 원자적 get-or-create를 제공해 로직 변경 없음).
+
+**결과.** `compileJava` 통과, 기존 `RateLimitFilterTest` 5개 전체 통과(테스트가 `RateLimitFilter`를 블랙박스로 다뤄 내부 자료구조 교체에 영향 없음). Caffeine의 TTL/maximumSize 자체는 검증된 서드파티 라이브러리 동작이라 별도 단위테스트를 추가하지 않음 — 필드 타입이 `Map`에서 `Cache`로 바뀌어, 이후 실수로 무제한 자료구조로 되돌리면 코드 리뷰에서 바로 드러나는 구조.
+
+**교훈.** 감사에서 발견한 항목이 여러 갈래([MEDIUM] 안에 XFF 스푸핑 + 버킷 메모리 고갈 2가지)일 때, 수정 커밋이 첫 번째 갈래만 고치고 나머지는 "부수"라는 이유로 누락되기 쉽다 — 발견 기록에 갈래가 여러 개면 각각을 개별 체크박스로 쪼개 추적했어야 함. 이번엔 사용자가 예전 기억을 다시 꺼내 물어봐서 드러났지만, 그러지 않았다면 계속 묻혀 있었을 것.
