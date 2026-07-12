@@ -43,17 +43,6 @@ const FEATURES = [
   {
     icon: (
       <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
-      </svg>
-    ),
-    title: 'AI 분석 · 코드 생성',
-    desc: '본인 API 키로 Claude·ChatGPT·Gemini 중 원하는 AI에게 함수 설명을 요청한다. 누락된 구현체를 감지해 코드 초안을 생성한다.',
-    color: 'text-purple-400',
-    bg: 'bg-purple-500/10 border-purple-500/20',
-  },
-  {
-    icon: (
-      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
       </svg>
     ),
@@ -145,7 +134,7 @@ export default function LandingPage() {
 
           <p className="text-gray-400 text-base max-w-md leading-relaxed">
             URL 하나로 파일 구조, 함수 호출 흐름, DB 연결 관계를 시각화한다.
-            구조 경고 감지와 AI 분석까지 — 전부 무료.
+            구조 경고 감지까지 — 전부 무료.
           </p>
 
           {/* URL 입력 — 바로 분석 시작 */}
@@ -263,7 +252,6 @@ export default function LandingPage() {
                 <li>✓ 비공개 프로젝트 무제한</li>
                 <li>✓ 그래프 시각화 전체</li>
                 <li>✓ 경고 감지 15종 (HIGH 8종 포함)</li>
-                <li>✓ AI 설명 · 코드 생성 (본인 API 키)</li>
                 <li>✓ 그래프 버전 히스토리 · 경고 MD 내보내기</li>
                 <li>✓ 협업 세션 최대 6명 (오너 포함)</li>
                 <li>✓ 커뮤니티 갤러리</li>

@@ -34,7 +34,6 @@
 - **코드 분석 엔진**: tree-sitter AST 기반 정적 분석기(정규식 폴백 유지) — Java·Kotlin·TypeScript·JavaScript·Python·Go·Rust·C·C++·C#·PHP·Ruby·Swift 13개 언어 + Prisma 스키마(Kotlin은 정규식 전용, 나머지 AST). 경고 감지기 15종(HIGH 7·MEDIUM 4·LOW 2·INTENT_DRIFT 포함, 상세는 [`docs/FEATURES.md`](FEATURES.md) 참조).
 - **비동기 처리**: Spring @Async + WebSocket (분석 진행률 실시간 푸시)
 - **결제**: 토스페이먼츠 (테스트 키 있음, 라이브 키는 사업자 등록 필요)
-- **AI 연동**: Anthropic API (Claude)
 
 ### 프론트엔드
 - **프레임워크**: React 18+
@@ -80,12 +79,12 @@ C:\Dev\codeprint\
 
 > 전체 기능·API 인벤토리는 [`docs/FEATURES.md`](FEATURES.md), 사용자 관점 요약은 [`docs/USER_FEATURES.md`](USER_FEATURES.md) 참조. 이 표는 더 이상 유지하지 않음(2026-07-05부로 두 문서로 대체 — 아래는 마지막으로 유지되던 초기 로드맵, 실제 개발은 이 순서를 따르지 않고 훨씬 광범위하게 확장됨).
 
-무료 개수 제한(프로젝트 3개)은 성장 레버 보호를 위해 폐지됨(PR #413). 프로젝트 시각화·경고 감지·커뮤니티·팔로우·북마크·DM·AI 설명(BYO-key)까지 전부 Free 티어에서 제공되며, 유료는 팀/조직 단위(좌석제)와 향후 Desktop 라이선스로 분리됨.
+무료 개수 제한(프로젝트 3개)은 성장 레버 보호를 위해 폐지됨(PR #413). 프로젝트 시각화·경고 감지·커뮤니티·팔로우·북마크·DM까지 전부 Free 티어에서 제공되며, 유료는 팀/조직 단위(좌석제)와 향후 Desktop 라이선스로 분리됨.
 
 ---
 
 ## 과금 모델
 
-- **Free (개인)**: 사실상 전 기능 무료 — 공개/비공개 분석 무제한, 그래프 시각화, 경고 감지, 커뮤니티/팔로우/DM, AI 설명(본인 API 키). 개수 제한 없음.
+- **Free (개인)**: 사실상 전 기능 무료 — 공개/비공개 분석 무제한, 그래프 시각화, 경고 감지, 커뮤니티/팔로우/DM. 개수 제한 없음.
 - **DESKTOP (개인·팀 공용 단일 유료 티어)**: 좌석당 4,900원/월, 팀 단위 좌석제(Toss Payments). 과거 FREE/PRO/TEAM_STARTER/GROWTH/BUSINESS 5단계 모델은 2026-07-01 PR #413으로 FREE/DESKTOP 2단계로 축소됨 — 상세는 `PRODUCT_STRATEGY.md` §13 참조.
 - 결제: 토스페이먼츠 (테스트 키 운영 중, 라이브 키는 사업자 등록 후)

@@ -950,6 +950,8 @@
 
 ---
 
+> ⚠️ **대체됨 (2026-07-12)** — "AI 키 기반 기능 전면 제거"로 대체. 화면에 이미 보이는 정보를 재탕하는 수준이라 정보 이득이 없다고 판단해 기능 자체를 제거. 아래 원문은 이력 보존용.
+
 ## AI 설명 기능 — 다중 제공자 설계 결정 (v1.33)
 
 **문제.** 그래프 노드 AI 설명 기능을 어떤 방식으로 구현할지 결정 필요.
@@ -1722,6 +1724,8 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 
 **다음 단계.** [G-3] 9/9 완료로 `INTERFACES_IMPORTS_INFRA` 검출기 신설 착수 가능(`detectDomainInfraImport`와 동형 — source=`interfaces/**`∧target=`infrastructure/**`) → 신설 후 자기분석 0건 확인 → severity MEDIUM 도입. 착수 순서상 검출기부터 만들었으면 이 리팩토링 PR들이 자기 게이트에 걸렸을 것이므로, 원래 계획대로 리팩토링을 전부 마친 지금이 정확한 타이밍.
 
+> ⚠️ **대체됨 (2026-07-12)** — "AI 키 기반 기능 전면 제거"로 대체. 이 엔드포인트가 LLM에 보내는 값(warningType/severity/message/guide)이 `WarningPanel.tsx` 화면에 이미 표시되는 텍스트와 동일해 정보 이득이 없음이 드러나 제거. 아래 원문은 이력 보존용.
+
 ## 경고 AI 분석 백엔드 진입점 — /api/ai/explain-warning 신설 (2026-07-11, codeprint_115)
 
 **배경.** Context114가 미착수로 남겨둔 "경고 AI 분석/수정안 버튼"의 백엔드 부분. 기존 `/api/ai/explain`은 그래프 노드(callers/callees) 컨텍스트 전용 프롬프트만 지원해 경고(type/severity/message) 컨텍스트로는 쓸 수 없었음.
@@ -1757,3 +1761,22 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `compileJava`/`./gradlew test`(`ProjectQueryServiceTest` 9개·`GraphFacadeTest` 6개 전부 통과, 전체 스위트는 Docker DB 미기동으로 통합테스트 3건만 실패 — 무관) / `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변, 신규 `CROSS_CONTEXT_IMPORT` 없음(포트 경유라 정상).
 
 **한계.** `GET /api/projects/{id}`(프로젝트 메타 조회)·`AnalysisFacade`(재분석 트리거)도 같은 choke point를 거치므로 팀 멤버가 재분석까지 트리거 가능해짐 — 파괴적이지 않은 조작이라 "동일 권한" 취지에 부합한다고 판단해 별도 예외 처리 안 함.
+
+## AI 키 기반 기능 전면 제거 — explain-warning/노드설명/코드생성/키 인프라 (2026-07-12, codeprint_117)
+
+**문제.** `explain-warning`(경고 AI 설명, PR #526/527) 프론트 연동 직후, 이 기능이 DLP(코드 전송 고지) 백로그를 유발한다는 논의 중 "MD 내보내기로 충분한데 굳이 인앱 AI 호출이 필요한가"라는 문제 제기가 나옴.
+
+**검토 과정.** 코드를 직접 확인해 `AiExplainService.buildWarningPrompt()`가 LLM에 보내는 값(`warningType`/`severity`/`message`/`guide`)이 `WarningPanel.tsx` 화면에 이미 표시되고 `downloadWarningsMd()` MD 내보내기에도 이미 담기는 텍스트와 동일함을 확인 — 실제 소스 코드나 화면에 없는 정보는 전송하지 않음. 즉 "이미 보이는 텍스트를 LLM이 재서술"하는 수준이라 정보 이득이 없음. 같은 기준을 형제 기능(`/api/ai/explain` 노드 설명)에도 적용해 재검토한 결과 동일하게 `nodeName`/`comment`/`callers`/`callees`만 전송해 화면에 이미 보이는 정보의 재탕이었음. `/api/ai/generate-code`(코드 생성)만 "화면에 없던 새 산출물(코드 스텁)"을 만들어 성격이 다르지만, "당분간 AI 연동 기능 자체를 안 넣는다"는 방향이 확정되며 함께 제거 대상에 포함.
+
+**탈락한 대안.**
+1. "DLP 고지 문구만 추가" — explain-warning을 유지하되 코드 전송 고지만 붙이는 안. 정보 이득이 없는 기능에 고지를 붙이는 건 문제의 본질(기능 자체의 무가치함)을 안 건드리는 미봉책이라 탈락.
+2. "백엔드는 주석 처리, 프론트 게이트만 제거" — UI에서만 숨기고 엔드포인트는 살려두는 안. 사용자 지적대로, 이러면 인증된 사용자가 직접 호출 가능한 죽은 공격 표면만 남고, git 히스토리가 이미 구현을 보존하므로 나중에 필요하면 그대로 복원 가능해 남겨둘 이유가 없어 탈락.
+3. "AI 키 인프라(`AesEncryptionConverter` 등)까지 통째로 제거" — 처음엔 이 방향으로 논의됐으나, `AesEncryptionConverter`가 `User.java`의 GitHub 토큰 암호화에도 쓰이는 공용 컨버터임을 코드로 확인해 제외. 컨버터 자체는 유지.
+
+**결정.** 백엔드 8개 파일 전체 삭제 — `AiController`, `AiExplainService`, `UserAiKey`(도메인), `UserAiKeyRepository`(포트), `AiProvider`(enum), `AiService`(전략 인터페이스) 및 구현체 3개(`ClaudeAiService`/`OpenAiService`/`GeminiAiService`), `UserAiKeyJpaRepository`(어댑터). 관련 테스트 `UserAiKeyJpaRepositoryTest`도 함께 삭제. 프론트는 `SettingsPage.tsx`의 AI 키 등록 UI, `GraphPage.tsx`의 AI 설명/코드생성 사이드바 섹션과 관련 state·핸들러, `WarningPanel.tsx`의 AI 버튼(직전 세션에서 제거)을 삭제. 랜딩페이지(`LandingPage.tsx`)의 "AI 분석·코드 생성" 기능 소개 카드와 요금제 문구도 함께 제거(더 이상 제공하지 않는 기능을 마케팅에 남겨두면 안 됨).
+
+**DB 마이그레이션 처리.** `user_ai_keys` 테이블(V16)은 이미 프로덕션에 배포돼 있어, 삭제 시 사용자들의 암호화된 AI 키를 영구 삭제하는 되돌릴 수 없는 작업이 됨. 사용자 확인 결과 **테이블은 그대로 두고 코드만 제거**하기로 결정 — 나중에 기능을 재도입하면 기존 테이블을 재사용 가능, 데이터 손실 위험 없음. V16 마이그레이션 파일 자체도 삭제하지 않음(이미 적용된 Flyway 히스토리와 체크섬이 어긋나는 걸 방지).
+
+**결과.** `compileJava`/`./gradlew test`(전체 통과)/`npx tsc -b`(에러 0) 확인. `docs/FEATURES.md`·`docs/PROJECT.md`·`docs/USER_FEATURES.md`의 AI 기능 언급 제거, `PROGRESS.md` 백로그 정리, `ChangelogPage.tsx`에 v0.125.1(fix) 항목 추가.
+
+**교훈.** "키 인프라가 이미 있어 한계 비용이 낮다"는 이유로 기능을 만들었으나, 그 기능이 실제로 유의미한 정보를 생성하는지를 먼저 검증하지 않았음 — 이번처럼 "만들 수 있어서 만든다"는 판단은 착수 전에 코드 근거로 부가가치를 먼저 확인해야 함.
