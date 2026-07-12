@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.125.4',
+    date: '2026-07-12',
+    title: '그래프 분석 생성 요청 제한 강화',
+    type: 'fix',
+    items: [
+      { category: '백엔드', desc: '그래프 분석 생성 요청 제한을 IP당 분당 10회에서 3분당 1회로 강화했습니다. 레포 클론과 정적 분석은 비용이 커 다른 API보다 엄격한 기준이 필요하다고 판단했습니다.' },
+    ],
+  },
+  {
     version: 'v0.125.3',
     date: '2026-07-12',
     title: '비로그인 상태에서 설정 페이지 접근 시 홈으로 이동',

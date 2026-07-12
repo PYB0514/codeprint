@@ -27,21 +27,23 @@ public class RateLimitFilter implements Filter {
     // IP+카테고리별 버킷 (카테고리마다 한도가 달라 규칙에서 한도를 받아 생성)
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
-    // 레이트리밋 대상 — 메서드·경로 패턴·카테고리·분당 허용 횟수
-    private record RateLimitRule(String method, String pathPattern, String category, int limitPerMinute) {}
+    // 레이트리밋 대상 — 메서드·경로 패턴·카테고리·허용 횟수·집계 창(분)
+    private record RateLimitRule(String method, String pathPattern, String category, int limit, int windowMinutes) {}
 
     // 남용 위험이 있는 쓰기 엔드포인트 전체 등록 (신규 추가 시 이 목록에만 추가하면 됨)
+    // ★analysis는 레포 클론+정적분석으로 다른 카테고리보다 비용이 훨씬 커, 단순 쓰기(post-create 등)보다
+    // 오히려 한도가 널널했던 걸 3분당 1회로 교정(2026-07-12) — decisions/DECISIONS_BACKEND.md 참조
     private final List<RateLimitRule> rules = List.of(
-            new RateLimitRule("POST", "/api/analyses", "analysis", 10),          // 레포 클론 비용 큼
-            new RateLimitRule("POST", "/api/attachments/presign", "attach", 20), // S3 비용
-            new RateLimitRule("POST", "/api/community/posts", "post-create", 5),
-            new RateLimitRule("POST", "/api/community/posts/*/like", "post-like", 60),
-            new RateLimitRule("POST", "/api/graphs/*/nodes/*/comments", "comment-create", 20),
-            new RateLimitRule("POST", "/api/feedback", "feedback", 5),
-            new RateLimitRule("POST", "/api/reports", "report", 5),
-            new RateLimitRule("POST", "/api/messages/*", "message-send", 30),
-            new RateLimitRule("POST", "/api/users/*/follow", "follow", 30),
-            new RateLimitRule("POST", "/api/push/subscribe", "push-subscribe", 10)
+            new RateLimitRule("POST", "/api/analyses", "analysis", 1, 3),          // 레포 클론+정적분석 비용 큼
+            new RateLimitRule("POST", "/api/attachments/presign", "attach", 20, 1), // S3 비용
+            new RateLimitRule("POST", "/api/community/posts", "post-create", 5, 1),
+            new RateLimitRule("POST", "/api/community/posts/*/like", "post-like", 60, 1),
+            new RateLimitRule("POST", "/api/graphs/*/nodes/*/comments", "comment-create", 20, 1),
+            new RateLimitRule("POST", "/api/feedback", "feedback", 5, 1),
+            new RateLimitRule("POST", "/api/reports", "report", 5, 1),
+            new RateLimitRule("POST", "/api/messages/*", "message-send", 30, 1),
+            new RateLimitRule("POST", "/api/users/*/follow", "follow", 30, 1),
+            new RateLimitRule("POST", "/api/push/subscribe", "push-subscribe", 10, 1)
     );
 
     // 요청 IP 추출 — Railway 프록시가 실제 접속 IP를 X-Forwarded-For 맨 끝에 추가하므로 마지막 값을 사용
@@ -55,10 +57,10 @@ public class RateLimitFilter implements Filter {
         return request.getRemoteAddr();
     }
 
-    // 분당 한도로 새 버킷 생성
-    private Bucket newBucket(int limitPerMinute) {
+    // 집계 창(분) 기준 한도로 새 버킷 생성
+    private Bucket newBucket(int limit, int windowMinutes) {
         return Bucket.builder()
-                .addLimit(Bandwidth.classic(limitPerMinute, Refill.intervally(limitPerMinute, Duration.ofMinutes(1))))
+                .addLimit(Bandwidth.classic(limit, Refill.intervally(limit, Duration.ofMinutes(windowMinutes))))
                 .build();
     }
 
@@ -82,7 +84,7 @@ public class RateLimitFilter implements Filter {
 
         if (matched != null) {
             String key = extractIp(request) + ":" + matched.category();
-            Bucket bucket = buckets.computeIfAbsent(key, k -> newBucket(matched.limitPerMinute()));
+            Bucket bucket = buckets.computeIfAbsent(key, k -> newBucket(matched.limit(), matched.windowMinutes()));
             if (!bucket.tryConsume(1)) {
                 response.setStatus(429);
                 response.setContentType("application/json;charset=UTF-8");

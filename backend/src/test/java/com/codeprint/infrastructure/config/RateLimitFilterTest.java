@@ -85,6 +85,22 @@ class RateLimitFilterTest {
     }
 
     @Test
+    @DisplayName("analysis 카테고리는 3분당 1회 — 클론+정적분석 비용이 커 다른 쓰기 API보다 엄격")
+    void analysisCategory_limitedToOnePerThreeMinutes() throws Exception {
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getRequestURI()).thenReturn("/api/analyses");
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("4.4.4.4");
+
+        filter.doFilter(request, response, chain);
+        verify(chain, times(1)).doFilter(request, response);
+
+        filter.doFilter(request, response, chain); // 같은 3분 창 내 2번째 — 초과
+        verify(response).setStatus(429);
+        verify(chain, times(1)).doFilter(request, response);
+    }
+
+    @Test
     @DisplayName("카테고리가 다르면 서로 다른 버킷 — 한 카테고리 소진이 다른 카테고리에 영향 없음")
     void differentCategories_useSeparateBuckets() throws Exception {
         when(request.getRemoteAddr()).thenReturn("3.3.3.3");

@@ -1794,3 +1794,15 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **회귀 테스트.** `TransactionalDeleteMethodsTest`(신규) — 9개 메서드 전부 리플렉션으로 `@Transactional` 존재를 검증. 개별 클래스별 테스트 대신 하나로 통합한 이유: 9건 모두 "annotation 존재 확인"이라는 동일한 검증 로직이라 개별 파일로 나누면 순수 중복.
 
 **교훈.** 같은 원인 클래스(파생 delete `@Transactional` 누락)가 세 번째 발견됨(PR #154 → BE-13 → 이번). `ERROR_TRACKER.md` BE-15로 등재하고 [반복] 승격 — 새 Repository에 `deleteBy*`/`removeBy*` 파생 메서드를 추가할 때 `@Transactional`을 기본값으로 붙이는 습관화가 필요.
+
+## 그래프 분석 생성 레이트리밋 강화 — 비용 대비 한도 역전 교정 (2026-07-12, codeprint_119)
+
+**문제.** 사용자가 "게시글 생성보다 그래프 분석이 더 널널한 게 이상하지 않냐"고 직접 지적. 확인 결과 `RateLimitFilter`의 `analysis` 카테고리가 분당 10회, `post-create`는 분당 5회로 — 레포 클론+정적분석(코드 주석에 "비용 큼"이라고 스스로 적어뒀음)이 단순 DB insert 하나뿐인 게시글 생성보다 비용이 훨씬 큰데도 한도는 오히려 2배 더 널널했음. 애초에 상대적 비용을 고려하지 않고 정해진 숫자로 보임.
+
+**결정.** `analysis` 카테고리를 분당 10회 → **3분당 1회**로 강화(사용자 제안 반영). 기존 `RateLimitRule`이 "분당 N회"만 표현 가능했던 걸 `windowMinutes` 필드를 추가해 임의 분 단위 창을 지원하도록 일반화 — 다른 9개 규칙은 `windowMinutes=1`로 기존 동작 그대로 유지, `analysis`만 `limit=1, windowMinutes=3`으로 변경. `/api/analyses`는 이미 `SecurityConfig`에서 `permitAll` 목록에 없어 로그인(GitHub OAuth) 필수임도 이번에 재확인 — IP 레이트리밋은 그 위에 얹는 2차 방어선.
+
+**부수 발견 — SECURITY_POLICY.md 레이트 리미팅 표 이중 오류.** ①실제 규칙 10개 중 3개만 기재돼 있었음(문서 갱신 누락) → 10개 전체로 동기화. ②`GET /oauth2/** IP당 20회/분`이 표에 있었으나 `RateLimitFilter`의 모든 규칙이 `"POST"` 메서드만 매칭해 실제로는 아무 제한도 없는 **허위 기재**였음 → 배너로 정정, 즉시 규칙 추가는 안 하고(OAuth 인가 요청 반복은 다른 위협모델이라 별도 검토 필요) 후속 과제로만 남김.
+
+**결과.** `compileJava` 통과. `RateLimitFilterTest`에 `analysisCategory_limitedToOnePerThreeMinutes` 신규 추가(3분 창 내 2번째 요청이 429인지 검증) — 전체 5개 테스트 통과. 기존 `/api/feedback` 기준 테스트들은 영향 없음(카테고리별 독립 버킷).
+
+**교훈.** 레이트리밋 숫자를 "그럴듯한 라운드 넘버"로 정하면 실제 비용 순서와 역전될 수 있다 — 카테고리를 새로 추가할 때 인접 카테고리와 상대 비용을 비교하는 절차가 없었던 게 근본 원인. 문서(SECURITY_POLICY.md)가 코드보다 항상 뒤처질 수 있다는 것도 이번 세션에서 두 번째로 확인(S3 IAM 최소권한 논의 때도 유사 패턴) — 보안 관련 표는 코드 변경 시 기계적으로 동기화하는 습관이 필요.
