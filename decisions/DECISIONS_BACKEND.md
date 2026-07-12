@@ -1835,3 +1835,17 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `compileJava`/`compileTestJava` 통과. 신규 단위테스트 — `StaticCodeAnalyzerTest` 3개(모디파이어 없는 인터페이스 메서드 감지 포함), `GraphWarningServiceTest` 6개(발화·비발화·경로가드·CrudRepository 기본메서드 제외·래핑패턴 제외·비-래핑 정상발화 회귀방지) 전부 통과. `analyzeLocal` 자기 레포 재분석 — 최초 15건 → 가드 2단계 적용 후 1건 → `ArchitectureIntentRepositoryImpl` 수정 후 **0건**(도그푸딩 전제 충족). 전체 백엔드 테스트(786개, Docker Postgres 기동 상태) 통과 확인.
 
 **교훈.** "이름 패턴+애노테이션 유무"라 쉬울 거라 예상했던 규칙도, 실제 코드베이스에 흔한 두 가지 정상 패턴(프레임워크 기본 메서드, Impl 래핑 위임)과 이름이 겹치면 오탐이 크게 튄다 — "그래프가 구조적으로 잡을 수 있나" 판정에서 "쉬움"으로 분류했더라도, 실제 도그푸딩 없이는 정밀도를 확신할 수 없다(`GATE_GAPS.md` 절차가 정확히 이 실측 단계를 강제하는 이유). WARNING_META(`WarningPanel.tsx`)·WARNING_GUIDE(`HowItWorksPage.tsx`)에도 등록해 사용자 노출 규칙과 동기화.
+
+## 오탐 신고 기능(FP report) — 자가개선 루프 선결 구성요소 ① 착수 (2026-07-13, codeprint_120)
+
+**배경.** PROGRESS.md의 "자가개선 루프"(오탐 신고 → 벤치 → 자동 수정, v1.0 이후 전체 착수 보류) 항목이 명시한 선결 구성요소 3가지(①오탐 신고 버튼+`fp_reports` 테이블 ②룰별 벤치 스위트 ③재현 페이로드) 중, 전체 루프와 무관하게 지금 당장 값어치가 있는 ①만 이번 세션에서 착수하기로 사용자와 합의(나머지 둘은 여전히 v1.0 이후 보류).
+
+**설계 — 기존 `WarningSuppression`(숨기기) 패턴을 그대로 재사용.** `domain/graph/FpReport`(Entity) + `FpReportRepository`(포트) + `infrastructure/persistence/graph/FpReportJpaRepository`·`FpReportRepositoryImpl`(어댑터) + `application/graph/FpReportService` — 레이어 구성·네이밍 전부 `WarningSuppression` 4종 세트와 동형. `fp_reports` 테이블(V57)도 `warning_suppressions`(V39)와 동일 컨벤션(fingerprint 64자, project_id FK CASCADE)에 `reporter_id`(신고자)·`reason`(선택 입력) 추가, `UNIQUE(project_id, fingerprint, reporter_id)`로 동일 사용자 중복 신고를 멱등 처리.
+
+**"숨기기"와의 핵심 차이 — 접근 권한을 소유자 전용이 아니라 "읽을 수 있는 사람 전체"로 설계.** 기존 suppress는 프로젝트 소유자만 가능(`WarningController`가 `graphFacade.verifyProjectOwnership` 사용) — 프로젝트 설정을 바꾸는 관리 행위이기 때문. 반면 오탐 신고는 "이 경고가 틀렸다"는 관찰 보고라 그 경고를 볼 수 있는 사람이면 누구나(소유자가 아니어도) 신호를 낼 수 있어야 향후 벤치·자가개선 루프의 학습 신호가 풍부해진다고 판단 — `GraphFacade`에 `verifyProjectReadAccess(projectId, userId)` 신규(기존 `verifyGraphReadAccess`의 "공개면 누구나, 비공개면 소유자만" 로직을 projectId 기준으로 동일 재사용, graphId 조회 단계만 생략). 단 익명 신고는 막기 위해 `/api/projects/{projectId}/warnings/report-fp`는 `SecurityConfig`의 `anyRequest().authenticated()`에 그대로 걸려 로그인은 필수.
+
+**스코프를 의도적으로 좁힘(MVP).** un-report(신고 취소) 엔드포인트는 만들지 않음 — suppress와 달리 "신고 이력 자체가 데이터"라 취소를 허용하면 신호가 사라짐. 신고 집계·전시(예: "N명이 오탐으로 신고" 뱃지)도 이번엔 안 함 — 지금은 데이터를 쌓기 시작하는 단계이고, 실제 소비(벤치 연동)는 위 선결 구성요소 ②가 붙어야 의미가 생기므로 시기상조로 판단.
+
+**결과.** `compileJava`/`npx tsc -b` 에러 0. 신규 `FpReportServiceTest` 3종(`WarningSuppressionServiceTest`와 동일 패턴 — 신규 저장·멱등·조회) 포함 백엔드 전체 789개 테스트 통과(Docker Postgres 기동, `ddl-auto=validate`로 V57 스키마 검증 포함). **브라우저 실측** — `/api/dev/test-token`(로컬 전용)으로 발급한 JWT로 실제 로그인 세션을 만들고, `tokio-rs/mini-redis` 벤치 프로젝트(로컬 DB, 소유자를 테스트 계정으로 임시 변경 후 검증·즉시 원복)에서 DEAD_CODE 경고의 "이 경고를 오탐으로 신고" 버튼을 실클릭 → 버튼이 "오탐으로 신고됨"으로 즉시 전환 → `fp_reports` 테이블에 실제 행 생성까지 확인(검증 후 테스트 데이터 삭제).
+
+**한계.** 프론트 버튼은 현재 `GraphPage.tsx`(소유자 전용 뷰)에만 연결 — 백엔드는 비소유자 읽기도 허용하도록 설계했지만, 비소유자가 실제로 접근하는 공개 공유 뷰어(`CommunityPostGraphPage.tsx` 등)에는 아직 버튼을 연결하지 않음. 크라우드소싱 신호를 넓히려면 후속 세션에서 그쪽에도 같은 `onReportFp`/`reportedFingerprints` props를 연결하는 작업이 남아있음.

@@ -30,6 +30,10 @@ interface Props {
   onRestore?: (w: Warning) => void
   // 패턴 예외 규칙 조작 — 소유자에게만 전달 (없으면 "무시" 액션·규칙 패널 미표시)
   ignoreOps?: IgnoreOps
+  // 오탐 신고 — 로그인한 사용자면 누구나(소유자 아니어도, 없으면 버튼 미표시)
+  onReportFp?: (w: Warning) => void
+  // 내가 이미 신고한 fingerprint 집합 — 신고 버튼 상태 표시용
+  reportedFingerprints?: Set<string>
 }
 
 const SEVERITY_ORDER: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
@@ -60,7 +64,7 @@ export const WARNING_META: Record<string, { label: string; desc: string; color: 
 }
 
 // 경고 목록을 타입별로 그룹핑하여 severity 순(HIGH→MEDIUM→LOW)으로 표시
-export default function WarningPanel({ warnings, onNodeNavigate, onSuppress, suppressed, onRestore, ignoreOps }: Props) {
+export default function WarningPanel({ warnings, onNodeNavigate, onSuppress, suppressed, onRestore, ignoreOps, onReportFp, reportedFingerprints }: Props) {
   const grouped = new Map<string, Warning[]>()
   for (const w of warnings) {
     if (!grouped.has(w.type)) grouped.set(w.type, [])
@@ -79,7 +83,7 @@ export default function WarningPanel({ warnings, onNodeNavigate, onSuppress, sup
         <IgnoreRulesSection ops={ignoreOps} />
       )}
       {sortedEntries.map(([type, items]) => (
-        <WarningGroup key={type} type={type} items={items} onNodeNavigate={onNodeNavigate} onSuppress={onSuppress} ignoreOps={ignoreOps} />
+        <WarningGroup key={type} type={type} items={items} onNodeNavigate={onNodeNavigate} onSuppress={onSuppress} ignoreOps={ignoreOps} onReportFp={onReportFp} reportedFingerprints={reportedFingerprints} />
       ))}
       {suppressed && suppressed.length > 0 && (
         <SuppressedGroup items={suppressed} onRestore={onRestore} />
@@ -192,7 +196,7 @@ function SuppressedGroup({ items, onRestore }: { items: Warning[]; onRestore?: (
 }
 
 // 경고 타입별 접기/펼치기 그룹
-function WarningGroup({ type, items, onNodeNavigate, onSuppress, ignoreOps }: { type: string; items: Warning[]; onNodeNavigate?: (nodeId: string) => void; onSuppress?: (w: Warning) => void; ignoreOps?: IgnoreOps }) {
+function WarningGroup({ type, items, onNodeNavigate, onSuppress, ignoreOps, onReportFp, reportedFingerprints }: { type: string; items: Warning[]; onNodeNavigate?: (nodeId: string) => void; onSuppress?: (w: Warning) => void; ignoreOps?: IgnoreOps; onReportFp?: (w: Warning) => void; reportedFingerprints?: Set<string> }) {
   const [open, setOpen] = useState(true)
   // 현재 패턴 예외 폼이 열린 경고의 인덱스 (-1=닫힘)
   const [ignoreFormFor, setIgnoreFormFor] = useState(-1)
@@ -236,6 +240,17 @@ function WarningGroup({ type, items, onNodeNavigate, onSuppress, ignoreOps }: { 
                     className="shrink-0 text-gray-500 hover:text-emerald-400 px-1"
                     title="이 패턴을 예외로 — 같은 부류 경고를 한 번에 억제"
                   >무시</button>
+                )}
+                {onReportFp && w.fingerprint && (
+                  reportedFingerprints?.has(w.fingerprint) ? (
+                    <span className="shrink-0 text-emerald-500/70 px-1.5 self-center text-[10px]" title="오탐으로 신고됨">🚩</span>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onReportFp(w) }}
+                      className="shrink-0 text-gray-500 hover:text-orange-400 px-1.5"
+                      title="이 경고를 오탐으로 신고"
+                    >🚩</button>
+                  )
                 )}
                 {onSuppress && w.fingerprint && (
                   <button

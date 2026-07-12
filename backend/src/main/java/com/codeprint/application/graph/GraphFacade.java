@@ -59,6 +59,16 @@ public class GraphFacade {
         return projectAccessPort.getPublicProject(projectId);
     }
 
+    // 프로젝트 읽기 접근 허용 — 공개면 누구나, 비공개면 소유자만 (오탐 신고 등 조회 권한만 필요한 API용)
+    public void verifyProjectReadAccess(UUID projectId, UUID userId) {
+        try {
+            projectAccessPort.verifyPublic(projectId);
+        } catch (IllegalStateException notPublic) {
+            if (userId == null) throw notPublic;
+            projectAccessPort.verifyOwnership(projectId, userId);
+        }
+    }
+
     // 공개 그래프 소유자의 배경 이미지 presigned URL + 내 레포 여부
     public record PublicOwnerInfo(String bgUrl, boolean ownRepo) {}
 
