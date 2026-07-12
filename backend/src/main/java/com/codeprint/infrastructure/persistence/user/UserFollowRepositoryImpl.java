@@ -5,6 +5,7 @@ import com.codeprint.domain.user.UserFollow;
 import com.codeprint.domain.user.UserFollowRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -26,6 +27,7 @@ public class UserFollowRepositoryImpl implements UserFollowRepository {
     }
 
     // 팔로우 관계 삭제
+    @Transactional
     public void deleteByFollowerIdAndFollowingId(UUID followerId, UUID followingId) {
         jpa.deleteByFollowerIdAndFollowingId(followerId, followingId);
     }

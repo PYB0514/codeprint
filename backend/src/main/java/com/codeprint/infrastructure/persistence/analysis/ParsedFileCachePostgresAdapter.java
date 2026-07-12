@@ -7,6 +7,7 @@ import com.codeprint.infrastructure.analysis.ParsedFileCachePort;
 import com.codeprint.infrastructure.analysis.ParsedFileJsonCodec;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -49,6 +50,7 @@ public class ParsedFileCachePostgresAdapter implements ParsedFileCachePort {
 
     // cutoff 이전 미사용 엔트리 삭제
     @Override
+    @Transactional
     public void evictOlderThan(UUID projectId, Instant cutoff) {
         jpa.deleteByProjectIdAndUpdatedAtBefore(projectId, cutoff);
     }

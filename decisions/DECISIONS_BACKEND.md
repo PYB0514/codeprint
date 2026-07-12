@@ -1780,3 +1780,17 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `compileJava`/`./gradlew test`(전체 통과)/`npx tsc -b`(에러 0) 확인. `docs/FEATURES.md`·`docs/PROJECT.md`·`docs/USER_FEATURES.md`의 AI 기능 언급 제거, `PROGRESS.md` 백로그 정리, `ChangelogPage.tsx`에 v0.125.1(fix) 항목 추가.
 
 **교훈.** "키 인프라가 이미 있어 한계 비용이 낮다"는 이유로 기능을 만들었으나, 그 기능이 실제로 유의미한 정보를 생성하는지를 먼저 검증하지 않았음 — 이번처럼 "만들 수 있어서 만든다"는 판단은 착수 전에 코드 근거로 부가가치를 먼저 확인해야 함.
+
+## deleteBy*/removeBy* @Transactional 전수 감사 — 9건 발견·수정 (2026-07-12, codeprint_117)
+
+**배경.** BE-13(`UserAiKeyJpaRepository.deleteByUserIdAndProvider` `@Transactional` 누락)이 "Spring Data 파생 `deleteBy*`/`removeBy*` 메서드는 프로젝트 전역에 더 있을 수 있음"을 후속 과제로 남김. 이번 세션에서 `exploreLocal`로 `deleteBy`/`removeBy` 전체를 조회해 실제 점검.
+
+**발견.** 9건에서 동일 원인 확인 — `PostBookmarkJpaRepository.deleteByUserIdAndPostId`, `PostLikeJpaRepository.deleteByUserIdAndPostId`, `PushSubscriptionRepository.deleteByUserIdAndEndpoint`(인터페이스가 도메인 인터페이스를 직접 구현하는 구조, 별도 Impl 없음), `UserFollowRepositoryImpl`, `NodeStyleRepositoryImpl`, `WarningSuppressionRepositoryImpl`, `UserBlockRepositoryImpl`, `PostRepositoryImpl.deleteSnapshotsByPostId`, `ParsedFileCachePostgresAdapter.evictOlderThan`(Impl 래퍼) — 전부 파생 delete 쿼리에 `@Transactional` 누락. 실사용 시 전부 `InvalidDataAccessApiUsageException`(No EntityManager with actual transaction available) → 500이 됐을 것.
+
+**결정.** 9곳 전부 기존 관례(`RefreshTokenRepositoryImpl` 패턴)대로 `@Transactional` 추가 — Impl 래퍼가 있으면 Impl 메서드에, 없으면(도메인 인터페이스를 JPA 인터페이스가 직접 구현) 인터페이스 메서드에 직접.
+
+**결과.** `compileJava`/`./gradlew test`(Docker DB 기동 상태 784개 전체 통과, 신규 `TransactionalDeleteMethodsTest` 9개 포함)/`analyzeLocal`(HIGH_FAN_OUT 5건 베이스라인 불변). 브라우저 실측 2건 — 커뮤니티 게시글 북마크 취소(`DELETE /api/community/posts/{id}/bookmark` → 204), 좋아요 취소(`DELETE .../like` → 204) 확인, 나머지 7건은 같은 수정 패턴이라 회귀 테스트로 대체.
+
+**회귀 테스트.** `TransactionalDeleteMethodsTest`(신규) — 9개 메서드 전부 리플렉션으로 `@Transactional` 존재를 검증. 개별 클래스별 테스트 대신 하나로 통합한 이유: 9건 모두 "annotation 존재 확인"이라는 동일한 검증 로직이라 개별 파일로 나누면 순수 중복.
+
+**교훈.** 같은 원인 클래스(파생 delete `@Transactional` 누락)가 세 번째 발견됨(PR #154 → BE-13 → 이번). `ERROR_TRACKER.md` BE-15로 등재하고 [반복] 승격 — 새 Repository에 `deleteBy*`/`removeBy*` 파생 메서드를 추가할 때 `@Transactional`을 기본값으로 붙이는 습관화가 필요.

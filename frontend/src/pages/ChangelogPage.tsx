@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.125.2',
+    date: '2026-07-12',
+    title: '북마크·좋아요 취소 등 삭제 API 500 오류 수정',
+    type: 'fix',
+    items: [
+      { category: '백엔드', desc: '게시글 북마크/좋아요 취소, 언팔로우, 차단 해제, 경고 숨김 해제, 그래프 노드 커스텀 색상 삭제 등 9개 삭제 API에서 트랜잭션 설정 누락으로 오류가 발생할 수 있던 문제를 수정했습니다.' },
+    ],
+  },
+  {
     version: 'v0.125.1',
     date: '2026-07-12',
     title: 'AI 설명/코드 생성 기능 제거',

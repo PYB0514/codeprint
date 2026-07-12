@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -147,6 +148,7 @@ public class PostRepositoryImpl implements PostRepository {
 
     // 게시글의 기존 그래프 스냅샷 전부 삭제
     @Override
+    @Transactional
     public void deleteSnapshotsByPostId(UUID postId) {
         snapshotJpa.deleteByPostId(postId);
     }

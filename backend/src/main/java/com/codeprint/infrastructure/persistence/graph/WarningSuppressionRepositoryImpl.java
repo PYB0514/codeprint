@@ -5,6 +5,7 @@ import com.codeprint.domain.graph.WarningSuppression;
 import com.codeprint.domain.graph.WarningSuppressionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Set;
 import java.util.UUID;
@@ -38,6 +39,7 @@ public class WarningSuppressionRepositoryImpl implements WarningSuppressionRepos
 
     // suppress 해제
     @Override
+    @Transactional
     public void deleteByProjectIdAndFingerprint(UUID projectId, String fingerprint) {
         jpa.deleteByProjectIdAndFingerprint(projectId, fingerprint);
     }

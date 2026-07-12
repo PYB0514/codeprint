@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -43,5 +44,6 @@ public interface PostBookmarkJpaRepository extends JpaRepository<PostBookmark, U
     List<PostBookmark> findByUserIdAndPostIdIn(UUID userId, List<UUID> postIds);
 
     // 특정 유저+게시글 북마크 삭제
+    @Transactional
     void deleteByUserIdAndPostId(UUID userId, UUID postId);
 }
