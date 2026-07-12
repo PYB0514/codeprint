@@ -171,7 +171,10 @@ tasks.register('exploreLocalJar', Jar) {
     archiveClassifier = ''
     archiveVersion = ''
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    from(sourceSets.main.output)
+    from(sourceSets.main.output) {
+        // 로컬 전용 프로필(application-*.yml, 실 자격증명 포함)이 fat jar에 번들링되는 것 차단 — 2026-07-12 유출 사고 재발 방지
+        exclude 'application-*.yml'
+    }
     from({ configurations.toolsRuntime.collect { it.isDirectory() ? it : zipTree(it) } }) {
         exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'module-info.class'
     }
@@ -188,7 +191,10 @@ tasks.register('analyzeLocalJar', Jar) {
     archiveClassifier = ''
     archiveVersion = ''
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    from(sourceSets.main.output)
+    from(sourceSets.main.output) {
+        // 로컬 전용 프로필(application-*.yml, 실 자격증명 포함)이 fat jar에 번들링되는 것 차단 — 2026-07-12 유출 사고 재발 방지
+        exclude 'application-*.yml'
+    }
     from({ configurations.toolsRuntime.collect { it.isDirectory() ? it : zipTree(it) } }) {
         exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'module-info.class'
     }
