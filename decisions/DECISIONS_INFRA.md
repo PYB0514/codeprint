@@ -394,3 +394,13 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 ### 한계
 - 위 규칙들은 전부 CLAUDE.md에 적힌 **프로세스 규칙**이지 GitHub이 기술적으로 강제하는 하드 게이트가 아님 — 실행 시점에 이 규칙을 실제로 떠올려 적용하는지는 여전히 에이전트(Claude) 판단에 의존. 완전한 기술적 강제는 솔로 개발 체제의 구조적 한계로 달성 불가.
 - "적대적 검증 에이전트"도 같은 모델 계열의 별도 인스턴스일 뿐, 사람 전문가의 판단력을 완전히 대체하진 못함 — 특히 이번처럼 "바이너리 내부를 실제로 열어보는 것" 같은 명시적 지시가 있어야 발견되는 유형엔 유효하지만, 지시받지 않은 완전히 새로운 관점의 발견은 여전히 보장 못함.
+
+## S3 IAM 최소권한 세분화 — 버킷 단위로 확정 (2026-07-12, codeprint_119)
+
+**문제.** SEC-3 사고(공개 Skill jar 자격증명 유출) 후속 과제로 PROGRESS.md·SECURITY_POLICY.md에 남아있던 "S3 IAM 최소권한 세분화"(`codeprint-s3` 사용자가 `AmazonS3FullAccess`를 갖고 있던 것)를 이번 세션에서 실제로 착수.
+
+**탈락한 대안 — prefix(폴더) 단위 세분화.** 처음엔 코드에서 실제 쓰는 4개 prefix(`attachments/`·`avatars/`·`backgrounds/`·`db-backups/`)만 `Resource`로 명시하는 정책을 제안·작성까지 했으나, 사용자가 "이러면 새 prefix가 생길 때마다 매번 정책을 고쳐야 하는 거 아니냐"고 유지보수 비용을 지적. 재검토 결과 — `codeprint-uploads` 버킷이 이 앱 전용이라, prefix 단위 세분화가 막는 위험(같은 버킷 내 다른 폴더 접근)은 애초에 전부 같은 앱 소유 데이터라 실질 이득이 작은 반면, 새 기능마다 IAM 정책을 갱신해야 하는 유지보수 비용은 실재함 — 탈락.
+
+**결정.** **버킷 단위**로만 세분화 — `s3:PutObject`/`GetObject`/`DeleteObject`를 `arn:aws:s3:::codeprint-uploads/*`에, `s3:ListBucket`을 버킷 자체에 허용하는 인라인 정책(`codeprint-s3-scoped`)으로 기존 `AmazonS3FullAccess`를 교체. 이 자격증명이 다시 유출되더라도 피해 범위가 "AWS 계정 전체의 모든 S3 버킷"에서 "이 앱 전용 버킷 하나"로 줄어드는 게 핵심 이득이고, 버킷 내 prefix가 새로 생겨도 정책을 다시 안 건드려도 됨.
+
+**결과.** AWS 콘솔에서 사용자가 직접 적용(신규 정책 추가 → 기존 FullAccess 제거 순서로 권한 공백 없이 교체). `gh workflow run db-backup.yml`로 실제 재실행 — Put(덤프 업로드)·List+Delete(보존기간 초과분 정리) 전부 성공 확인(`gh run view --log`로 403/denied 없음 확인). 정책이 prefix 구분 없이 버킷 전체에 적용되므로, 이 검증 하나가 `attachments/`·`avatars/`·`backgrounds/`에도 동일하게 적용됨(정책상 경로 구분이 없어 별도 검증 불필요).
