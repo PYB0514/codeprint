@@ -1,0 +1,5 @@
+{
+  "warnings": [
+    { "type": "CROSS_CONTEXT_IMPORT", "count": 1 }
+  ]
+}

@@ -1714,3 +1714,19 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **검증.** `BenchCommonCasesTest` 5건 신규 GREEN(각 함정을 실측으로 잡아 처음엔 RED였다가 픽스처 수정 후 GREEN — 탐지기 자체는 손대지 않음). 전체 백엔드 테스트(814건 = 기존 809 + 벤치 5) green.
 
 **한계.** ①이 커밋은 §4 0단계(인프라+§1)까지만 — §2의 17개 룰별 P/N 케이스(2c 1~3단계)와 §3 R층 히스토리 스냅샷은 후속 커밋에서 이어감(BENCH_SPEC.md의 체크리스트가 진행 상태 소스) ②`BenchSuiteTest`는 아직 `bench/rules/` 아래 케이스가 없어 동적 테스트 0건(다음 단계에서 픽스처 추가 시 자동 수집됨, 인프라 자체는 이번에 검증 완료) ③픽스처의 물리 디렉터리 구조가 실제 프로젝트 관용(Maven/Gradle 표준 `src/main/java/...`)과 다르게 최소화돼 있음 — 벤치 목적(레이어/게이트 판정 검증)에는 무관하지만 실제 레포 구조를 그대로 재현한 건 아님.
+
+## 벤치 스위트 1단계 — HIGH 8종 P/N 케이스 46건 코드화 (2026-07-13, codeprint_123)
+
+**배경.** BENCH_SPEC.md §4 1단계 — 위 0단계(러너 인프라)에 이어, 2.1(CYCLIC_IMPORT)·2.5(DB_LAYER_BYPASS)·2.6(CROSS_CONTEXT_IMPORT)·2.7(CROSS_FEATURE_IMPORT)·2.8(FEATURE_LAYER_VIOLATION)·2.9(DOMAIN_IMPORTS_INFRA)·2.15(LAYERED_REVERSE_DEPENDENCY)·2.17(INTENT_DRIFT) 8개 HIGH 룰의 P/N 픽스처를 `bench/rules/<TYPE>/<case>/`에 작성. `BenchSuiteTest`가 이미 이 경로를 동적 탐색하도록 만들어져 있어(0단계), 픽스처+`expected.json`만 추가하면 자동 수집됨 — 코드 변경은 INTENT_DRIFT용 `BenchIntentLoader` 하나뿐.
+
+**설계 원칙 — 케이스마다 실제 GraphWarningService 소스를 먼저 읽고 조건을 손으로 추적한 뒤 픽스처를 설계**(추측 금지). 각 룰의 게이트 조건(예: DDD 게이트=domain+application/infra 2종, FSD 게이트=피처 2개+프론트 언어)을 정확히 충족/미충족시키는 최소 픽스처를 구성. `expected.json`은 "이 룰만 단독으로 낼 경고"가 아니라 **파이프라인이 실제로 내는 전체 경고**를 반영 — 같은 IMPORT 엣지가 여러 룰의 조건을 동시에 만족하면(예: `interfaces/`→`infrastructure/persistence/`는 `DB_LAYER_BYPASS`이자 동시에 `INTERFACES_IMPORTS_INFRA`) 둘 다 기록. 이게 실측 없이 예상만으로 작성했으면 놓쳤을 함정.
+
+**INTENT_DRIFT 전용 인프라 — `BenchIntentLoader` 신설.** 다른 7종과 달리 INTENT_DRIFT는 디렉터리 구조가 아니라 `ArchitectureIntent`(모듈·금지규칙·ignore) 객체가 있어야 발화 대상이 정해진다. 케이스 디렉터리에 `intent.json`(LocalAnalyzer.loadIntent와 동일 스키마: modules/rules/ignore)이 있으면 로드해 `BenchPipelineRunner.run(dir, intent)`로 전달하도록 `BenchSuiteTest` 한 줄만 확장 — 없으면 기존과 동일(`null`)이라 기존 46-9=37건은 무회귀.
+
+**픽스처 설계에서 겪은 함정(전부 해결, 코드 수정 0건 — 전부 픽스처 오류).**
+①**TS 사이드이펙트 import는 캡처되지 않음** — `extractImports`의 TS/JS 정규식이 `from\s+['"]...['"]`만 매칭해 `import './b';`(from 없음)는 아예 import로 안 잡힘. `CYCLIC_IMPORT/n-diamond-ts`와 `CROSS_FEATURE_IMPORT` 초안이 전부 이 함정에 빠져 "엣지가 아예 안 생겨서 우연히 expected(0건)와 일치"하는 거짓 통과였음 — `import { x } from '...'` 형태로 전부 수정해 엣지가 실제로 생기는지부터 재확인(디버그 스크래치 테스트로 실측). ②**함수 파라미터만 있고 호출은 없는 Java 메서드가 DEAD_CODE 노이즈를 만듦** — CYCLIC_IMPORT Java 픽스처에 `void use(B b) {}` 식 메서드를 넣었다가 DEAD_CODE가 섞여 나옴 → 이후 모든 IMPORT/구조 전용 픽스처는 함수 정의 자체를 없애고(빈 클래스) `import`문만 남기는 패턴으로 통일(불필요한 FUNCTION 노드를 안 만들면 DEAD_CODE 위험 자체가 없음). ③**같은 패키지 클래스 참조는 import 문이 없어 IMPORT 엣지가 안 생김** — 0단계에서 이미 겪은 함정이지만 1단계 초안(LAYERED_REVERSE_DEPENDENCY)에서 재발, 서로 다른 패키지로 분리해 명시적 import를 강제.
+④**INTENT_DRIFT의 "FUNCTION_CALL만 있고 IMPORT 없는" N케이스**는 실제 port→adapter 다형성 디스패치로는 재현이 안 됨(`implements` 절만으로는 FUNCTION_CALL이 안 생기고, 인터페이스 경유 호출은 인터페이스 자신에게 귀속됨을 디버그 스크래치 테스트로 확인) — 대신 "import 없는 bare 정적 호출(`Helper.doWork()`, Helper 미import)"이 실제로 FUNCTION_CALL만 만들고 IMPORT는 안 만드는 것을 실측으로 찾아 그 패턴으로 대체.
+
+**검증.** 46개 신규 케이스 전부 `BenchSuiteTest`(동적 `@TestFactory`) GREEN. 전체 백엔드 테스트 864건(`BenchSuiteTest` 46 + `BenchCommonCasesTest` 5 포함) green. `analyzeLocal` 자가검사 HIGH_FAN_OUT 5건 베이스라인 불변(백엔드 프로덕션 코드는 이번 커밋에서 미변경 — 테스트 리소스·`BenchIntentLoader`·`BenchSuiteTest` 한 줄만 추가).
+
+**한계.** ①룰당 P/N 4~6개 수준의 최소 대표 케이스만 — BENCH_SPEC.md §2가 명시한 전체 변형(예: DB_LAYER_BYPASS의 언어별 recall 전부, CROSS_DOMAIN_CALL류 예외 15종)까지는 미포함, 2단계(빈약 MEDIUM 4종)·3단계(N층 대형 2종)에서 이어감 ②픽스처가 각 룰의 "정상 발화·정상 배제" 최소 증명에 집중돼 있어, 여러 룰이 동시에 얽히는 복합 실전 레포 시나리오는 §3 R층(실레포 히스토리 스냅샷)에서 별도로 다룸.

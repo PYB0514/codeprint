@@ -1,0 +1,6 @@
+{
+  "warnings": [
+    { "type": "DB_LAYER_BYPASS", "count": 1 },
+    { "type": "INTERFACES_IMPORTS_INFRA", "count": 1 }
+  ]
+}

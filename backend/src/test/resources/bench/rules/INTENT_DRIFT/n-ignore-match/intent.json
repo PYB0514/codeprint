@@ -1,0 +1,12 @@
+{
+  "modules": [
+    { "name": "moduleA", "globs": ["moduleA/**"] },
+    { "name": "moduleB", "globs": ["moduleB/**"] }
+  ],
+  "rules": [
+    { "from": "moduleA", "to": "moduleB" }
+  ],
+  "ignore": [
+    { "type": "INTENT_DRIFT", "fromGlob": "moduleA/**", "toGlob": "moduleB/**" }
+  ]
+}
