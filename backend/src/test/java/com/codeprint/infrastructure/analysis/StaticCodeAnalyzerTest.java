@@ -167,6 +167,59 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("useCallback으로 감싼 함수를 함수 정의로 추출한다")
+    void TypeScript_useCallback_감싼_함수_추출() throws IOException {
+        // task_4190b92e: variable_declarator의 value가 call_expression(useCallback)이라 기존엔 함수로 인식 안 됨
+        Path file = writeTsFile("""
+                function Foo() {
+                    const plainArrow = () => { doWork(); };
+                    const handleClick = useCallback(() => {
+                        doWork();
+                    }, []);
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functions()).contains("plainArrow", "handleClick");
+        assertThat(result.functionCalls().get("handleClick")).contains("doWork");
+    }
+
+    @Test
+    @DisplayName("memo·forwardRef로 감싼 컴포넌트를 함수 정의로 추출한다")
+    void TypeScript_memo_forwardRef_감싼_함수_추출() throws IOException {
+        Path file = writeTsFile("""
+                const Panel = memo(() => {
+                    renderPanel();
+                });
+                const Input = forwardRef((props, ref) => {
+                    renderInput();
+                });
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functions()).contains("Panel", "Input");
+        assertThat(result.functionCalls().get("Panel")).contains("renderPanel");
+        assertThat(result.functionCalls().get("Input")).contains("renderInput");
+    }
+
+    @Test
+    @DisplayName("useMemo로 감싼 값은 함수가 아닐 수 있어 함수 정의로 승격하지 않는다")
+    void TypeScript_useMemo_감싼_값은_함수_미추출() throws IOException {
+        // precision 우선: useMemo는 반환값이 함수가 아닌 경우가 많아 허용목록에서 제외(PROGRESS.md 조사 결론)
+        Path file = writeTsFile("""
+                function Foo() {
+                    const total = useMemo(() => computeTotal(), []);
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functions()).doesNotContain("total");
+    }
+
+    @Test
     @DisplayName("Python 파일에서 def 함수명을 추출한다")
     void Python_함수_추출() throws IOException {
         Path file = writePyFile("""
