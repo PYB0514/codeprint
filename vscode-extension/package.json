@@ -1,0 +1,22 @@
+{
+  "name": "codeprint-watch",
+  "displayName": "Codeprint Watch Mode",
+  "description": "파일 저장 시 Codeprint 구조 경고를 인라인으로 표시 (내부 개발용, 마켓플레이스 미배포)",
+  "version": "0.0.1",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Linters"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}

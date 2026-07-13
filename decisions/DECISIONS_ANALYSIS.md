@@ -1615,3 +1615,26 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **부수 발견(범위 밖, 별도 task로 분리) — `useCallback`/`useMemo` 등으로 감싼 함수가 `functions()` 추출에서 통째로 누락됨.** `handleReportFp = useCallback(async (w) => {...}, [projectId])` 같은 패턴이 `TreeSitterTypescriptAnalyzer`의 `isFunctionValue()`가 직접 화살표/함수 표현식만 인식하고 콜 표현식으로 감싼 내부 화살표 함수는 인식 못 해 발생 — 줄 번호 작업과 무관한 사전부터 있던 갭(이 함수가 애초에 FUNCTION 노드로 안 잡힘, DEAD_CODE/HIGH_FAN_OUT 등에도 영향). 별도 세션 작업으로 분리(spawn_task 등록).
 
 **한계.** ①Java·TypeScript/JavaScript만(나머지 9개 언어는 미착수) ②FUNCTION 노드만(FILE/DB_TABLE/API_ENDPOINT는 줄 정보 없음) ③동명 오버로드는 첫 정의 줄로 근사(정밀 구분 안 함) ④VS Code 확장 자체는 이번 범위 밖(다음 단계) ⑤`useCallback` 등으로 감싼 함수는 여전히 라인은커녕 노드 자체가 안 잡힘(위 부수 발견 참조, 별도 후속 작업 필요).
+
+## VS Code 워치모드 확장 스캐폴딩 — 저장소 위치·게이팅 결정 + LocalWatcher JSON 출력 전환 (2026-07-13, codeprint_121)
+
+**배경.** 줄 번호 선결 작업(위 항목) 완료 후 VS Code 확장 본체 착수. 새 프로젝트 구조를 만들기 전 두 가지 결정이 필요했음.
+
+**결정 1 — 저장소 위치: 이 레포 내 `vscode-extension/` 디렉터리(모노레포).** 처음엔 `codeprint-plugins`(열화판 공개 Skill)와 같은 별도 레포를 검토했으나, 사용자가 "확장과 백엔드 경고 규칙이 미러링(동기화)돼야 하는 문제"를 지적해 재검토. 실사례 벤치마킹(WebSearch) 결과 — ①rust-analyzer는 확장·언어서버가 별도 레포지만 팀 스스로 "분리로 인한 마찰"을 이유로 합병을 논의 중(GitHub 이슈 확인) ②SonarLint는 확장 자체 릴리즈에 분석 엔진 jar를 직접 번들해 "빌드/릴리즈 파이프라인 하나가 엔진 버전과 확장을 묶어 낸다"는 원칙으로 동작 ③ESLint/Prettier는 별도 레포이나 엔진이 사용자 프로젝트의 npm 의존성으로 이미 설치돼 있어 확장은 얇은 클라이언트일 뿐이라 Codeprint 케이스(엔진 개발자=확장 개발자)와 다름. **결론: "같은 레포냐"가 아니라 "jar 버전과 확장이 하나의 빌드 파이프라인으로 묶이느냐"가 본질** — 1인 개발 규모에서 이를 가장 저마찰로 보장하는 방법은 모노레포. `codeprint-plugins`는 "가끔 갱신되는 무료 배포 깔때기"라 이 지연을 감수해도 되지만, 핵심 사용자 상시 도구인 워치모드 확장은 신선도가 더 중요해 판단을 뒤집음.
+
+**결정 2 — 결제/라이선스 게이팅: 지금은 없음, 로컬 개발만(마켓플레이스 미공개).** `watchLocal`(`LocalWatcher.java`)은 2026-07-11에 "Desktop 유료 가치라 공개 레포 노출 갭 해소" 목적으로 이미 gitignore 처리된 파일 — VS Code 확장을 만드는 것 자체가 그 결정이 미뤄뒀던 "실제 패키징(설치형 배포) 시점"에 해당함을 착수 전에 인지하고 사용자에게 확인. 사용자가 "지금은 게이팅 없이 로컬에만(마켓플레이스 미공개)"으로 확정 — 확장 코드(`vscode-extension/`, 얇은 오케스트레이션 글루 코드일 뿐 알고리즘적 가치 없음)는 공개 레포에 그대로 두되, 실제로 마켓플레이스에 게시하기 전에 게이팅 설계를 다시 논의하기로 함. `LocalWatcher.java` 자체는 기존 결정대로 계속 gitignore 유지.
+
+**구현 — `LocalWatcher`를 사람이 읽는 콘솔 로그에서 구조화된 JSON 파일로 전환.**
+1. `printDiff`(변화분만 출력)를 `writeWarnings`(현재 워닝 전체를 JSON으로)로 교체 — 확장이 매번 전체 상태를 그대로 받아 diff 로직을 자체적으로 가질 필요 없게 함.
+2. **실측에서 발견한 버그 — Windows 콘솔 릴레이가 JSON 속 한국어를 깨뜨림.** 처음엔 stdout에 마커 접두사(`CODEPRINT_WARNINGS:`)+JSON 한 줄을 출력하는 방식으로 구현·실행했으나, 실제 출력을 바이트 단위(`xxd`)로 확인한 결과 한국어 부분이 CP949로 깨져 있음을 발견(`-Dstdout.encoding=UTF-8` jvmArgs를 추가했음에도 일부 문자가 리터럴 `?`로 치환됨 — JVM 플래그만으론 불충분). `LocalGraphQuery.java`가 정확히 같은 문제를 이미 "콘솔 출력을 포기하고 파일에 UTF-8로 쓰는" 방식으로 해결한 전례(2026-07-10, 위 "MCP JSON-RPC 서버 제거" 결정 참조)를 그대로 재적용 — `Files.writeString(OUTPUT_FILE, json, StandardCharsets.UTF_8)`로 `build/codeprint-local/watch-warnings.json`에 매 분석 주기마다 덮어쓰기, 확장은 이 파일을 감시(`fs.watch`)해서 읽는 구조로 전환. `xxd`로 재검증해 순수 UTF-8 바이트임을 확인.
+3. 부수로 `build.gradle`의 `watchLocal` task에 `exploreLocal`엔 이미 있던 `jvmArgs = ['-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8']`가 누락돼 있었음을 발견해 추가(콘솔에 남는 두 줄짜리 상태 메시지용, 워닝 payload 자체는 이제 파일 경로라 이 플래그와 무관하지만 일관성을 위해 유지).
+
+**VS Code 확장 스캐폴딩.** `vscode-extension/`(package.json·tsconfig.json·src/extension.ts·`.vscode/launch.json`) 신설 — `activate()`에서 `backend/gradlew.bat watchLocal -PanalysisDir=..`를 자식 프로세스로 스폰하고, `watch-warnings.json`을 `fs.watch`로 감시하다 변경 시 읽어 `vscode.DiagnosticCollection`에 반영(HIGH→Error, MEDIUM→Warning, LOW→Information 매핑, 1-indexed 줄→0-indexed Range 변환). 마켓플레이스 게시용 파일(`.vscodeignore`, publisher 등록 등)은 아직 만들지 않음(결정 2에 따라 미배포 단계).
+
+**검증.**
+- `npx tsc -p ./` 클린 컴파일.
+- **파일 출력 실측** — `watchLocal` 실행 후 `xxd`로 `watch-warnings.json` 원본 바이트 확인, 순수 UTF-8("과도한 의존" 등 정상 렌더) — 수정 전(콘솔 마커 방식)과 대조해 버그 재현 및 해소 확인.
+- **파이프라인 드라이런** — `vscode` 모듈은 Extension Host 밖에서 로드 불가하므로, `extension.ts`의 스폰+파일감시+파싱 로직을 순수 Node 스크립트로 재현해 실행 — 5개 워닝 정상 파싱, 1-indexed→0-indexed 줄 변환 정확(예: `AnalysisRunner.java` line 33→0-indexed 32), 한국어 메시지 정상 렌더 확인.
+- **한계 — VS Code UI 자체(실제 에디터 내 물결선 표시)는 미검증.** Extension Development Host(F5)를 여는 GUI 자동화 도구가 없어, "Diagnostics API 호출까지"는 데이터 흐름으로 검증했으나 "실제로 에디터에 표시되는지"는 사용자가 직접 `vscode-extension/`을 VS Code로 열어 F5로 확인해야 함.
+
+**다음 단계(다음 컨텍스트).** 사용자가 F5로 실제 렌더링 확인 → 이슈 있으면 피드백 받아 수정. 이후 남은 항목: 마켓플레이스 배포 여부·게이팅 설계(결정 2 재논의 필요), 나머지 9개 언어 줄 번호, `useCallback` 함수 추출 갭(별도 task 진행 중).

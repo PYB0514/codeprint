@@ -137,12 +137,15 @@ task analyzeLocal(type: JavaExec, dependsOn: classes) {
     args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
 }
 
-// 로컬 코드베이스 워치모드 — 파일 변경 감지 시 증분 재분석, 워닝 diff만 출력 (Spring/DB 불필요)
+// 로컬 코드베이스 워치모드 — 파일 변경 감지 시 증분 재분석, 현재 워닝 전체를 JSON으로 stdout 출력 (Spring/DB 불필요)
+// VS Code 확장(vscode-extension/)이 이 stdout을 파싱 — Windows 콘솔 기본 인코딩(CP949)이 JSON 속 한국어를
+// 깨뜨려(exploreLocal과 동일 이슈, decisions/ 기록) UTF-8 강제 필요
 task watchLocal(type: JavaExec, dependsOn: classes) {
     group = 'codeprint'
-    description = '로컬 소스 디렉터리를 감시하며 변경 시 자동 재분석 (Ctrl+C로 종료)'
+    description = '로컬 소스 디렉터리를 감시하며 변경 시 자동 재분석, 워닝 JSON을 stdout에 출력 (Ctrl+C로 종료)'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.codeprint.tools.LocalWatcher'
+    jvmArgs = ['-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8']
     args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
 }
 
