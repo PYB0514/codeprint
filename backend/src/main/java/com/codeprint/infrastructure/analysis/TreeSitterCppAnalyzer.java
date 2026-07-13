@@ -29,8 +29,9 @@ class TreeSitterCppAnalyzer extends AbstractTreeSitterAnalyzer {
             "true", "false", "nullptr", "operator", "void", "auto", "signed", "unsigned"
     );
 
-    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록
-    record Result(List<String> functions, Map<String, List<String>> functionCalls) {}
+    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록, 함수명→정의 시작 줄(1-indexed), 함수명→식별자 시작 컬럼(0-indexed)
+    record Result(List<String> functions, Map<String, List<String>> functionCalls,
+                  Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {}
 
     @Override
     protected TSLanguage createLanguage() {
@@ -48,25 +49,32 @@ class TreeSitterCppAnalyzer extends AbstractTreeSitterAnalyzer {
             List<String> functions = new ArrayList<>();
             Map<String, Set<String>> calls = new LinkedHashMap<>();
             // functions 는 raw(중복 포함) 리스트 — 파일 내 동명 정의 수(머지 다중도)를 StaticCodeAnalyzer가 중앙에서 집계/디둡한다.
-            walk(root, src, null, functions, calls);
+            // 함수명 → 첫 정의의 시작 줄(1-indexed)·식별자 시작 컬럼(0-indexed) — VS Code 인라인 경고용
+            Map<String, Integer> functionLines = new LinkedHashMap<>();
+            Map<String, Integer> functionColumns = new LinkedHashMap<>();
+            walk(root, src, null, functions, calls, functionLines, functionColumns);
 
             Map<String, List<String>> functionCalls = new LinkedHashMap<>();
             calls.forEach((caller, callees) -> functionCalls.put(caller, new ArrayList<>(callees)));
-            return new Result(functions, functionCalls);
+            return new Result(functions, functionCalls, functionLines, functionColumns);
         });
     }
 
     // 트리를 재귀 순회하며 함수 정의를 수집하고, 호출을 가장 가까운 정의에 귀속
     private void walk(TSNode node, byte[] src, String enclosing,
-                      List<String> functions, Map<String, Set<String>> calls) {
+                      List<String> functions, Map<String, Set<String>> calls,
+                      Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {
         String type = node.getType();
         String current = enclosing;
 
         // 함수 정의(본문 있음) — 선언자 체인을 풀어 함수명 추출. 순수 가상 선언(field_declaration)·함수 포인터는 정의가 아니라 제외됨.
         if (type.equals("function_definition")) {
-            String name = functionName(node, src);
+            TSNode nameNode = functionNameNode(node);
+            String name = nameNode != null ? text(nameNode, src) : null;
             if (name != null && !name.isEmpty() && !CPP_KEYWORDS.contains(name)) {
                 functions.add(name);
+                functionLines.putIfAbsent(name, nameNode.getStartPoint().getRow() + 1);
+                functionColumns.putIfAbsent(name, nameNode.getStartPoint().getColumn());
                 current = name;
             }
         } else if (type.equals("call_expression") && current != null) {
@@ -76,15 +84,15 @@ class TreeSitterCppAnalyzer extends AbstractTreeSitterAnalyzer {
 
         int n = node.getChildCount();
         for (int i = 0; i < n; i++) {
-            walk(node.getChild(i), src, current, functions, calls);
+            walk(node.getChild(i), src, current, functions, calls, functionLines, functionColumns);
         }
     }
 
-    // function_definition 의 선언자 체인을 풀어 함수명을 찾는다.
+    // function_definition 의 선언자 체인을 풀어 함수명 식별자 노드를 찾는다.
     // 체인: pointer/reference/parenthesized/function_declarator 를 declarator 필드로 내려가며,
-    // 리프가 identifier(자유함수·생성자)·field_identifier(클래스 메서드)·operator_name·destructor_name 이면 그 텍스트,
-    // qualified_identifier(Foo::bar 아웃오브라인 정의)면 name 필드로 더 내려가 메서드명만 취한다.
-    private String functionName(TSNode funcDef, byte[] src) {
+    // 리프가 identifier(자유함수·생성자)·field_identifier(클래스 메서드)·operator_name·destructor_name 이면 그 노드,
+    // qualified_identifier(Foo::bar 아웃오브라인 정의)면 name 필드로 더 내려가 메서드명 노드만 취한다.
+    private TSNode functionNameNode(TSNode funcDef) {
         TSNode d = funcDef.getChildByFieldName("declarator");
         int guard = 0;
         while (d != null && !d.isNull() && guard++ < 24) {
@@ -98,7 +106,7 @@ class TreeSitterCppAnalyzer extends AbstractTreeSitterAnalyzer {
                 }
                 case "qualified_identifier" -> d = d.getChildByFieldName("name");
                 case "identifier", "field_identifier", "operator_name", "destructor_name" -> {
-                    return text(d, src);
+                    return d;
                 }
                 default -> { return null; }
             }

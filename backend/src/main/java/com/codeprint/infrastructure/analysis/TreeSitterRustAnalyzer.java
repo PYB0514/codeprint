@@ -17,9 +17,11 @@ import java.util.Set;
 // 귀속하며, 주석·문자열·매크로 토큰 속 식별자를 호출로 오인하지 않는다(AST가 토큰 종류를 구분).
 class TreeSitterRustAnalyzer extends AbstractTreeSitterAnalyzer {
 
-    // tree-sitter 추출 결과 — 함수명 목록, 함수별 호출(callee) 목록, 파일이 선언한 타입명 목록, 테스트 함수명 목록
+    // tree-sitter 추출 결과 — 함수명 목록, 함수별 호출(callee) 목록, 파일이 선언한 타입명 목록, 테스트 함수명 목록,
+    // 함수명→정의 시작 줄(1-indexed), 함수명→식별자 시작 컬럼(0-indexed)
     record Result(List<String> functions, Map<String, List<String>> functionCalls,
-                  List<String> declaredTypes, List<String> testFunctions) {}
+                  List<String> declaredTypes, List<String> testFunctions,
+                  Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {}
 
     @Override
     protected TSLanguage createLanguage() {
@@ -41,11 +43,14 @@ class TreeSitterRustAnalyzer extends AbstractTreeSitterAnalyzer {
             List<String> declaredTypes = new ArrayList<>();
             List<String> testFunctions = new ArrayList<>();
             collectDeclaredTypes(root, src, declaredTypes);
-            walk(root, src, null, functions, calls, new LinkedHashMap<>(), testFunctions, false);
+            // 함수명 → 첫 정의의 시작 줄(1-indexed)·식별자 시작 컬럼(0-indexed) — VS Code 인라인 경고용
+            Map<String, Integer> functionLines = new LinkedHashMap<>();
+            Map<String, Integer> functionColumns = new LinkedHashMap<>();
+            walk(root, src, null, functions, calls, new LinkedHashMap<>(), testFunctions, false, functionLines, functionColumns);
 
             Map<String, List<String>> functionCalls = new LinkedHashMap<>();
             calls.forEach((caller, callees) -> functionCalls.put(caller, new ArrayList<>(callees)));
-            return new Result(functions, functionCalls, declaredTypes, testFunctions);
+            return new Result(functions, functionCalls, declaredTypes, testFunctions, functionLines, functionColumns);
         });
     }
 
@@ -69,7 +74,8 @@ class TreeSitterRustAnalyzer extends AbstractTreeSitterAnalyzer {
     // inTestCtx = 이 노드가 #[test]/#[cfg(test)] mod 아래의 테스트 코드인지 — 테스트 함수를 HIGH_FAN_OUT에서 제외하기 위함.
     private void walk(TSNode node, byte[] src, String enclosing,
                       List<String> functions, Map<String, Set<String>> calls,
-                      Map<String, String> scope, List<String> testFunctions, boolean inTestCtx) {
+                      Map<String, String> scope, List<String> testFunctions, boolean inTestCtx,
+                      Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {
         String type = node.getType();
         String current = enclosing;
         Map<String, String> childScope = scope;
@@ -87,6 +93,8 @@ class TreeSitterRustAnalyzer extends AbstractTreeSitterAnalyzer {
                 String name = text(nameNode, src);
                 if (!name.isEmpty()) {
                     functions.add(name);
+                    functionLines.putIfAbsent(name, nameNode.getStartPoint().getRow() + 1);
+                    functionColumns.putIfAbsent(name, nameNode.getStartPoint().getColumn());
                     current = name;
                     // #[test] 함수 또는 #[cfg(test)] mod 내부 함수 — HIGH_FAN_OUT 제외 대상(테스트는 setup으로 호출 많음)
                     if (inTestCtx && !testFunctions.contains(name)) testFunctions.add(name);
@@ -109,11 +117,11 @@ class TreeSitterRustAnalyzer extends AbstractTreeSitterAnalyzer {
             TSNode child = node.getChild(i);
             if (child.getType().equals("attribute_item")) {
                 if (text(child, src).contains("test")) pendingTestAttr = true;
-                walk(child, src, current, functions, calls, childScope, testFunctions, inTestCtx);
+                walk(child, src, current, functions, calls, childScope, testFunctions, inTestCtx, functionLines, functionColumns);
                 continue;
             }
             boolean childTestCtx = inTestCtx || pendingTestAttr;
-            walk(child, src, current, functions, calls, childScope, testFunctions, childTestCtx);
+            walk(child, src, current, functions, calls, childScope, testFunctions, childTestCtx, functionLines, functionColumns);
             pendingTestAttr = false;
         }
     }

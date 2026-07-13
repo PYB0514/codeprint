@@ -17,8 +17,10 @@ import java.util.Set;
 // 귀속하며, 주석·문자열 리터럴(import 경로 등) 속 식별자를 호출로 오인하지 않는다(AST가 토큰 종류를 구분).
 class TreeSitterGoAnalyzer extends AbstractTreeSitterAnalyzer {
 
-    // tree-sitter 추출 결과 — 함수명 목록, 함수별 호출(callee) 목록, 파일이 선언한 타입명 목록
-    record Result(List<String> functions, Map<String, List<String>> functionCalls, List<String> declaredTypes) {}
+    // tree-sitter 추출 결과 — 함수명 목록, 함수별 호출(callee) 목록, 파일이 선언한 타입명 목록,
+    // 함수명→정의 시작 줄(1-indexed), 함수명→식별자 시작 컬럼(0-indexed)
+    record Result(List<String> functions, Map<String, List<String>> functionCalls, List<String> declaredTypes,
+                  Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {}
 
     @Override
     protected TSLanguage createLanguage() {
@@ -39,11 +41,14 @@ class TreeSitterGoAnalyzer extends AbstractTreeSitterAnalyzer {
             // 파일이 선언한 타입명(Go는 파일명≠타입명이라 Type::method 해소에 필요)을 수집한다.
             List<String> declaredTypes = new ArrayList<>();
             collectDeclaredTypes(root, src, declaredTypes);
-            walk(root, src, null, functions, calls, new LinkedHashMap<>());
+            // 함수명 → 첫 정의의 시작 줄(1-indexed)·식별자 시작 컬럼(0-indexed) — VS Code 인라인 경고용
+            Map<String, Integer> functionLines = new LinkedHashMap<>();
+            Map<String, Integer> functionColumns = new LinkedHashMap<>();
+            walk(root, src, null, functions, calls, new LinkedHashMap<>(), functionLines, functionColumns);
 
             Map<String, List<String>> functionCalls = new LinkedHashMap<>();
             calls.forEach((caller, callees) -> functionCalls.put(caller, new ArrayList<>(callees)));
-            return new Result(functions, functionCalls, declaredTypes);
+            return new Result(functions, functionCalls, declaredTypes, functionLines, functionColumns);
         });
     }
 
@@ -65,7 +70,7 @@ class TreeSitterGoAnalyzer extends AbstractTreeSitterAnalyzer {
     // scope = 현재 위치에서 보이는 변수명→타입(리시버 + 파라미터 + 지역변수). selector_expression 수신자 해소에 사용.
     private void walk(TSNode node, byte[] src, String enclosing,
                       List<String> functions, Map<String, Set<String>> calls,
-                      Map<String, String> scope) {
+                      Map<String, String> scope, Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {
         String type = node.getType();
         String current = enclosing;
         Map<String, String> childScope = scope;
@@ -77,6 +82,8 @@ class TreeSitterGoAnalyzer extends AbstractTreeSitterAnalyzer {
                 String name = text(nameNode, src);
                 if (!name.isEmpty()) {
                     functions.add(name);
+                    functionLines.putIfAbsent(name, nameNode.getStartPoint().getRow() + 1);
+                    functionColumns.putIfAbsent(name, nameNode.getStartPoint().getColumn());
                     current = name;
                 }
             }
@@ -96,7 +103,7 @@ class TreeSitterGoAnalyzer extends AbstractTreeSitterAnalyzer {
 
         int n = node.getChildCount();
         for (int i = 0; i < n; i++) {
-            walk(node.getChild(i), src, current, functions, calls, childScope);
+            walk(node.getChild(i), src, current, functions, calls, childScope, functionLines, functionColumns);
         }
     }
 

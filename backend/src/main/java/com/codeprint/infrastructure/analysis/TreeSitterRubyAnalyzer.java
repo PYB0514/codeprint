@@ -18,8 +18,9 @@ import java.util.Set;
 // 한계: 인자·수신자 없는 bare 호출(foo)은 Ruby 문법상 지역변수와 구분 불가라 identifier로 파싱돼 호출로 세지 않는다(정규식도 동일).
 class TreeSitterRubyAnalyzer extends AbstractTreeSitterAnalyzer {
 
-    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록
-    record Result(List<String> functions, Map<String, List<String>> functionCalls) {}
+    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록, 함수명→정의 시작 줄(1-indexed), 함수명→식별자 시작 컬럼(0-indexed)
+    record Result(List<String> functions, Map<String, List<String>> functionCalls,
+                  Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {}
 
     @Override
     protected TSLanguage createLanguage() {
@@ -37,17 +38,21 @@ class TreeSitterRubyAnalyzer extends AbstractTreeSitterAnalyzer {
             List<String> functions = new ArrayList<>();
             Map<String, Set<String>> calls = new LinkedHashMap<>();
             // functions 는 raw(중복 포함) 리스트 — 파일 내 동명 정의 수(머지 다중도)를 StaticCodeAnalyzer가 중앙에서 집계/디둡한다.
-            walk(root, src, null, functions, calls);
+            // 함수명 → 첫 정의의 시작 줄(1-indexed)·식별자 시작 컬럼(0-indexed) — VS Code 인라인 경고용
+            Map<String, Integer> functionLines = new LinkedHashMap<>();
+            Map<String, Integer> functionColumns = new LinkedHashMap<>();
+            walk(root, src, null, functions, calls, functionLines, functionColumns);
 
             Map<String, List<String>> functionCalls = new LinkedHashMap<>();
             calls.forEach((caller, callees) -> functionCalls.put(caller, new ArrayList<>(callees)));
-            return new Result(functions, functionCalls);
+            return new Result(functions, functionCalls, functionLines, functionColumns);
         });
     }
 
     // 트리를 재귀 순회하며 메서드·싱글톤 메서드 정의를 수집하고, 호출을 가장 가까운 정의에 귀속
     private void walk(TSNode node, byte[] src, String enclosing,
-                      List<String> functions, Map<String, Set<String>> calls) {
+                      List<String> functions, Map<String, Set<String>> calls,
+                      Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {
         String type = node.getType();
         String current = enclosing;
 
@@ -58,6 +63,8 @@ class TreeSitterRubyAnalyzer extends AbstractTreeSitterAnalyzer {
                 String name = text(nameNode, src);
                 if (!name.isEmpty()) {
                     functions.add(name);
+                    functionLines.putIfAbsent(name, nameNode.getStartPoint().getRow() + 1);
+                    functionColumns.putIfAbsent(name, nameNode.getStartPoint().getColumn());
                     current = name;
                 }
             }
@@ -67,7 +74,7 @@ class TreeSitterRubyAnalyzer extends AbstractTreeSitterAnalyzer {
 
         int n = node.getChildCount();
         for (int i = 0; i < n; i++) {
-            walk(node.getChild(i), src, current, functions, calls);
+            walk(node.getChild(i), src, current, functions, calls, functionLines, functionColumns);
         }
     }
 

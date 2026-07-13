@@ -17,8 +17,9 @@ import java.util.Set;
 // 귀속하며, 주석·문자열 보간(\(expr)) 속 식별자를 호출로 오인하지 않는다(AST가 토큰 종류를 구분).
 class TreeSitterSwiftAnalyzer extends AbstractTreeSitterAnalyzer {
 
-    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록
-    record Result(List<String> functions, Map<String, List<String>> functionCalls) {}
+    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록, 함수명→정의 시작 줄(1-indexed), 함수명→식별자 시작 컬럼(0-indexed)
+    record Result(List<String> functions, Map<String, List<String>> functionCalls,
+                  Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {}
 
     @Override
     protected TSLanguage createLanguage() {
@@ -36,30 +37,43 @@ class TreeSitterSwiftAnalyzer extends AbstractTreeSitterAnalyzer {
             List<String> functions = new ArrayList<>();
             Map<String, Set<String>> calls = new LinkedHashMap<>();
             // functions 는 raw(중복 포함) 리스트 — 파일 내 동명 정의 수(머지 다중도)를 StaticCodeAnalyzer가 중앙에서 집계/디둡한다.
-            walk(root, src, null, functions, calls);
+            // 함수명 → 첫 정의의 시작 줄(1-indexed)·식별자 시작 컬럼(0-indexed) — VS Code 인라인 경고용
+            Map<String, Integer> functionLines = new LinkedHashMap<>();
+            Map<String, Integer> functionColumns = new LinkedHashMap<>();
+            walk(root, src, null, functions, calls, functionLines, functionColumns);
 
             Map<String, List<String>> functionCalls = new LinkedHashMap<>();
             calls.forEach((caller, callees) -> functionCalls.put(caller, new ArrayList<>(callees)));
-            return new Result(functions, functionCalls);
+            return new Result(functions, functionCalls, functionLines, functionColumns);
         });
     }
 
     // 트리를 재귀 순회하며 함수·생성자·프로토콜 메서드 정의를 수집하고, 호출을 가장 가까운 정의에 귀속
     private void walk(TSNode node, byte[] src, String enclosing,
-                      List<String> functions, Map<String, Set<String>> calls) {
+                      List<String> functions, Map<String, Set<String>> calls,
+                      Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {
         String type = node.getType();
         String current = enclosing;
 
         // 일반 함수·프로토콜 메서드 시그니처 — 첫 simple_identifier 자식이 이름
         if (type.equals("function_declaration") || type.equals("protocol_function_declaration")) {
-            String name = firstSimpleIdentifier(node, src);
-            if (name != null) {
-                functions.add(name);
-                current = name;
+            TSNode nameNode = childOfType(node, "simple_identifier");
+            if (nameNode != null) {
+                String name = text(nameNode, src);
+                if (!name.isEmpty()) {
+                    functions.add(name);
+                    functionLines.putIfAbsent(name, nameNode.getStartPoint().getRow() + 1);
+                    functionColumns.putIfAbsent(name, nameNode.getStartPoint().getColumn());
+                    current = name;
+                }
             }
         } else if (type.equals("init_declaration")) {
             // 생성자 — Swift는 Type(...) 형태로 호출되나 정의 노드명은 init 으로 기록(정규식이 못 잡던 것)
+            // "init" 키워드 자체(anonymous 토큰)를 식별자 위치로 사용 — modifier(public/required 등)가 앞에 붙어도 정확한 위치
+            TSNode initTok = childOfType(node, "init");
             functions.add("init");
+            functionLines.putIfAbsent("init", (initTok != null ? initTok : node).getStartPoint().getRow() + 1);
+            functionColumns.putIfAbsent("init", (initTok != null ? initTok : node).getStartPoint().getColumn());
             current = "init";
         } else if (type.equals("call_expression") && current != null) {
             recordCall(node, src, current, calls);
@@ -67,7 +81,7 @@ class TreeSitterSwiftAnalyzer extends AbstractTreeSitterAnalyzer {
 
         int n = node.getChildCount();
         for (int i = 0; i < n; i++) {
-            walk(node.getChild(i), src, current, functions, calls);
+            walk(node.getChild(i), src, current, functions, calls, functionLines, functionColumns);
         }
     }
 

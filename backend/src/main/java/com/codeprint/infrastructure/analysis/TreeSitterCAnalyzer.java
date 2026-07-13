@@ -18,8 +18,9 @@ import java.util.Set;
 // 주석·문자열·매크로 토큰 속 식별자를 호출로 오인하지 않는다(AST가 토큰 종류를 구분).
 class TreeSitterCAnalyzer extends AbstractTreeSitterAnalyzer {
 
-    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록
-    record Result(List<String> functions, Map<String, List<String>> functionCalls) {}
+    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록, 함수명→정의 시작 줄(1-indexed), 함수명→식별자 시작 컬럼(0-indexed)
+    record Result(List<String> functions, Map<String, List<String>> functionCalls,
+                  Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {}
 
     @Override
     protected TSLanguage createLanguage() {
@@ -36,25 +37,32 @@ class TreeSitterCAnalyzer extends AbstractTreeSitterAnalyzer {
         return parseTree(content, (root, src) -> {
             List<String> functions = new ArrayList<>();
             Map<String, Set<String>> calls = new LinkedHashMap<>();
-            walk(root, src, null, functions, calls);
+            // 함수명 → 첫 정의의 시작 줄(1-indexed)·식별자 시작 컬럼(0-indexed) — VS Code 인라인 경고용
+            Map<String, Integer> functionLines = new LinkedHashMap<>();
+            Map<String, Integer> functionColumns = new LinkedHashMap<>();
+            walk(root, src, null, functions, calls, functionLines, functionColumns);
 
             Map<String, List<String>> functionCalls = new LinkedHashMap<>();
             calls.forEach((caller, callees) -> functionCalls.put(caller, new ArrayList<>(callees)));
-            return new Result(functions, functionCalls);
+            return new Result(functions, functionCalls, functionLines, functionColumns);
         });
     }
 
     // 트리를 재귀 순회하며 함수 정의를 수집하고, 호출을 가장 가까운 정의에 귀속
     private void walk(TSNode node, byte[] src, String enclosing,
-                      List<String> functions, Map<String, Set<String>> calls) {
+                      List<String> functions, Map<String, Set<String>> calls,
+                      Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {
         String type = node.getType();
         String current = enclosing;
 
         // 함수 정의(본문 있음) — 선언자 체인을 풀어 함수명 추출. 함수 포인터 선언(declaration)은 정의가 아니라 제외됨.
         if (type.equals("function_definition")) {
-            String name = functionName(node, src);
+            TSNode nameNode = functionNameNode(node);
+            String name = nameNode != null ? text(nameNode, src) : null;
             if (name != null && !name.isEmpty()) {
                 functions.add(name);
+                functionLines.putIfAbsent(name, nameNode.getStartPoint().getRow() + 1);
+                functionColumns.putIfAbsent(name, nameNode.getStartPoint().getColumn());
                 current = name;
             }
         } else if (type.equals("call_expression") && current != null) {
@@ -67,16 +75,16 @@ class TreeSitterCAnalyzer extends AbstractTreeSitterAnalyzer {
 
         int n = node.getChildCount();
         for (int i = 0; i < n; i++) {
-            walk(node.getChild(i), src, current, functions, calls);
+            walk(node.getChild(i), src, current, functions, calls, functionLines, functionColumns);
         }
     }
 
-    // function_definition 의 선언자 체인(pointer/function/parenthesized_declarator)을 풀어 함수명 식별자를 찾는다
-    private String functionName(TSNode funcDef, byte[] src) {
+    // function_definition 의 선언자 체인(pointer/function/parenthesized_declarator)을 풀어 함수명 식별자 노드를 찾는다
+    private TSNode functionNameNode(TSNode funcDef) {
         TSNode d = funcDef.getChildByFieldName("declarator");
         int guard = 0;
         while (d != null && !d.isNull() && guard++ < 16) {
-            if (d.getType().equals("identifier")) return text(d, src);
+            if (d.getType().equals("identifier")) return d;
             d = d.getChildByFieldName("declarator");
         }
         return null;

@@ -3666,7 +3666,7 @@ class StaticCodeAnalyzerTest {
         assertThat(result.functionCalls().get("run")).doesNotContain("fakeCall", "alsoFake");
     }
 
-    // ── 함수 정의 줄 번호 추출 (VS Code 인라인 경고용, Java/TypeScript만) ──────────
+    // ── 함수 정의 줄 번호·컬럼 추출 (VS Code 인라인 경고용, 11개 언어 전체) ──────────
 
     @Test
     @DisplayName("Java 메서드의 정의 시작 줄을 1-indexed로 추출한다")
@@ -3766,6 +3766,179 @@ class StaticCodeAnalyzerTest {
         assertThat(result.functionColumns()).containsEntry("greet", 9);
         // "const add = (..." — add는 6번째 문자(0-indexed)에서 시작
         assertThat(result.functionColumns()).containsEntry("add", 6);
+    }
+
+    @Test
+    @DisplayName("Python 메서드의 정의 시작 줄·식별자 컬럼을 추출한다")
+    void Python_함수_줄번호_컬럼_추출() throws IOException {
+        Path file = writePyFile("""
+                class UserService:
+                    def find_by_id(self, id):
+                        return None
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.functionLines()).containsEntry("find_by_id", 2);
+        // "    def find_by_id(..." — find_by_id는 8번째 문자(0-indexed)에서 시작
+        assertThat(result.functionColumns()).containsEntry("find_by_id", 8);
+    }
+
+    @Test
+    @DisplayName("Go 함수의 정의 시작 줄·식별자 컬럼을 추출한다")
+    void Go_함수_줄번호_컬럼_추출() throws IOException {
+        Path file = writeGoFile("""
+                package main
+
+                func FindById(id int) int {
+                	return id
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.functionLines()).containsEntry("FindById", 3);
+        // "func FindById(..." — FindById는 5번째 문자(0-indexed)에서 시작
+        assertThat(result.functionColumns()).containsEntry("FindById", 5);
+    }
+
+    @Test
+    @DisplayName("Rust 메서드의 정의 시작 줄·식별자 컬럼을 추출한다")
+    void Rust_함수_줄번호_컬럼_추출() throws IOException {
+        Path file = writeRustFile("""
+                struct UserService;
+
+                impl UserService {
+                    fn find_by_id(&self, id: i32) -> i32 {
+                        id
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Rust");
+
+        assertThat(result.functionLines()).containsEntry("find_by_id", 4);
+        // "    fn find_by_id(..." — find_by_id는 7번째 문자(0-indexed)에서 시작
+        assertThat(result.functionColumns()).containsEntry("find_by_id", 7);
+    }
+
+    @Test
+    @DisplayName("C# 메서드의 정의 시작 줄·식별자 컬럼을 추출한다")
+    void CSharp_함수_줄번호_컬럼_추출() throws IOException {
+        Path file = tempDir.resolve("UserService.cs");
+        Files.writeString(file, """
+                public class UserService {
+                    public User FindById(int id) {
+                        return null;
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C#");
+
+        assertThat(result.functionLines()).containsEntry("FindById", 2);
+        // "    public User FindById(..." — FindById는 16번째 문자(0-indexed)에서 시작
+        assertThat(result.functionColumns()).containsEntry("FindById", 16);
+    }
+
+    @Test
+    @DisplayName("Ruby 메서드의 정의 시작 줄·식별자 컬럼을 추출한다")
+    void Ruby_함수_줄번호_컬럼_추출() throws IOException {
+        Path file = tempDir.resolve("user_service.rb");
+        Files.writeString(file, """
+                class UserService
+                  def find_by_id(id)
+                    nil
+                  end
+                end
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Ruby");
+
+        assertThat(result.functionLines()).containsEntry("find_by_id", 2);
+        // "  def find_by_id(..." — find_by_id는 6번째 문자(0-indexed)에서 시작
+        assertThat(result.functionColumns()).containsEntry("find_by_id", 6);
+    }
+
+    @Test
+    @DisplayName("PHP 메서드의 정의 시작 줄·식별자 컬럼을 추출한다")
+    void PHP_함수_줄번호_컬럼_추출() throws IOException {
+        Path file = tempDir.resolve("UserService.php");
+        Files.writeString(file, """
+                <?php
+                class UserService {
+                    public function findById($id) {
+                        return null;
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "PHP");
+
+        assertThat(result.functionLines()).containsEntry("findById", 3);
+        // "    public function findById(..." — findById는 20번째 문자(0-indexed)에서 시작
+        assertThat(result.functionColumns()).containsEntry("findById", 20);
+    }
+
+    @Test
+    @DisplayName("C 함수의 정의 시작 줄·식별자 컬럼을 추출한다")
+    void C_함수_줄번호_컬럼_추출() throws IOException {
+        Path file = tempDir.resolve("user_service.c");
+        Files.writeString(file, """
+                int find_by_id(int id) {
+                    return id;
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C");
+
+        assertThat(result.functionLines()).containsEntry("find_by_id", 1);
+        // "int find_by_id(..." — find_by_id는 4번째 문자(0-indexed)에서 시작
+        assertThat(result.functionColumns()).containsEntry("find_by_id", 4);
+    }
+
+    @Test
+    @DisplayName("C++ 메서드의 정의 시작 줄·식별자 컬럼을 추출한다")
+    void Cpp_함수_줄번호_컬럼_추출() throws IOException {
+        Path file = tempDir.resolve("UserService.cpp");
+        Files.writeString(file, """
+                class UserService {
+                public:
+                    int findById(int id) {
+                        return id;
+                    }
+                };
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "C++");
+
+        assertThat(result.functionLines()).containsEntry("findById", 3);
+        // "    int findById(..." — findById는 8번째 문자(0-indexed)에서 시작
+        assertThat(result.functionColumns()).containsEntry("findById", 8);
+    }
+
+    @Test
+    @DisplayName("Swift 메서드·생성자의 정의 시작 줄·식별자 컬럼을 추출한다")
+    void Swift_함수_줄번호_컬럼_추출() throws IOException {
+        Path file = writeSwiftFile("""
+                class UserService {
+                    func findById(id: Int) -> Int {
+                        return id
+                    }
+
+                    init(id: Int) {
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Swift");
+
+        assertThat(result.functionLines()).containsEntry("findById", 2);
+        // "    func findById(..." — findById는 9번째 문자(0-indexed)에서 시작
+        assertThat(result.functionColumns()).containsEntry("findById", 9);
+        assertThat(result.functionLines()).containsEntry("init", 6);
+        // "    init(..." — init은 4번째 문자(0-indexed)에서 시작
+        assertThat(result.functionColumns()).containsEntry("init", 4);
     }
 
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
