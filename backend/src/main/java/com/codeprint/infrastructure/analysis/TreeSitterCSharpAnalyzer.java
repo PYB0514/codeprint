@@ -17,8 +17,9 @@ import java.util.Set;
 // 귀속하며, 주석·문자열 리터럴 속 식별자를 호출로 오인하지 않는다(AST가 토큰 종류를 구분).
 class TreeSitterCSharpAnalyzer extends AbstractTreeSitterAnalyzer {
 
-    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록
-    record Result(List<String> functions, Map<String, List<String>> functionCalls) {}
+    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록, 함수명→정의 시작 줄(1-indexed), 함수명→식별자 시작 컬럼(0-indexed)
+    record Result(List<String> functions, Map<String, List<String>> functionCalls,
+                  Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {}
 
     @Override
     protected TSLanguage createLanguage() {
@@ -39,11 +40,14 @@ class TreeSitterCSharpAnalyzer extends AbstractTreeSitterAnalyzer {
             // 클래스 필드는 메서드 어디서든 가시(선언 순서 무관)하므로 walk 전에 먼저 타입을 모은다.
             Map<String, String> fieldTypes = new LinkedHashMap<>();
             collectFieldTypes(root, src, fieldTypes);
-            walk(root, src, null, functions, calls, fieldTypes);
+            // 함수명 → 첫 정의의 시작 줄(1-indexed)·식별자 시작 컬럼(0-indexed) — VS Code 인라인 경고용
+            Map<String, Integer> functionLines = new LinkedHashMap<>();
+            Map<String, Integer> functionColumns = new LinkedHashMap<>();
+            walk(root, src, null, functions, calls, fieldTypes, functionLines, functionColumns);
 
             Map<String, List<String>> functionCalls = new LinkedHashMap<>();
             calls.forEach((caller, callees) -> functionCalls.put(caller, new ArrayList<>(callees)));
-            return new Result(functions, functionCalls);
+            return new Result(functions, functionCalls, functionLines, functionColumns);
         });
     }
 
@@ -51,7 +55,7 @@ class TreeSitterCSharpAnalyzer extends AbstractTreeSitterAnalyzer {
     // scope = 현재 위치에서 보이는 변수명→타입(필드 + 파라미터 + 지역변수). 호출 수신자 타입 해소에 사용.
     private void walk(TSNode node, byte[] src, String enclosing,
                       List<String> functions, Map<String, Set<String>> calls,
-                      Map<String, String> scope) {
+                      Map<String, String> scope, Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {
         String type = node.getType();
 
         // 메서드·생성자·로컬 함수 — 모두 name 필드 보유 (인터페이스 추상 메서드도 method_declaration)
@@ -63,14 +67,18 @@ class TreeSitterCSharpAnalyzer extends AbstractTreeSitterAnalyzer {
             // #if/#endif 전처리기 지시문 주변에서 그래머가 노드 경계를 잘못 잡아 공백 섞인 깨진 텍스트가
             // 나오는 경우가 있어(예: "id IgnoreCultureForTypedAttribu") 유효 식별자만 함수로 인정
             String name = isValidIdentifier(rawName) ? rawName : "";
-            if (!name.isEmpty()) functions.add(name);
+            if (!name.isEmpty()) {
+                functions.add(name);
+                functionLines.putIfAbsent(name, nameNode.getStartPoint().getRow() + 1);
+                functionColumns.putIfAbsent(name, nameNode.getStartPoint().getColumn());
+            }
             // 메서드 스코프 = 필드(전역) 복사본 + 이 메서드의 파라미터(+지역변수는 본문 순회 중 추가)
             Map<String, String> methodScope = new LinkedHashMap<>(scope);
             addParameterTypes(node, src, methodScope);
             String current = name.isEmpty() ? enclosing : name;
             int n = node.getChildCount();
             for (int i = 0; i < n; i++) {
-                walk(node.getChild(i), src, current, functions, calls, methodScope);
+                walk(node.getChild(i), src, current, functions, calls, methodScope, functionLines, functionColumns);
             }
             return;
         }
@@ -88,7 +96,7 @@ class TreeSitterCSharpAnalyzer extends AbstractTreeSitterAnalyzer {
 
         int n = node.getChildCount();
         for (int i = 0; i < n; i++) {
-            walk(node.getChild(i), src, enclosing, functions, calls, scope);
+            walk(node.getChild(i), src, enclosing, functions, calls, scope, functionLines, functionColumns);
         }
     }
 

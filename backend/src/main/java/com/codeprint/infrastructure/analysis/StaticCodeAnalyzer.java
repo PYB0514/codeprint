@@ -82,9 +82,9 @@ public class StaticCodeAnalyzer {
                 language.equals("C++") ? treeSitterCpp.parse(content) : Optional.empty();
         Optional<TreeSitterSwiftAnalyzer.Result> swiftTs =
                 language.equals("Swift") ? treeSitterSwift.parse(content) : Optional.empty();
-        // 함수명 → 정의 시작 줄(1-indexed). 현재 Java/TypeScript/JavaScript만 채워짐 — 그 외 언어는 빈 맵.
+        // 함수명 → 정의 시작 줄(1-indexed). 11개 언어 모두 채워짐(정규식 폴백 경로만 빈 맵) — VS Code 인라인 경고용.
         Map<String, Integer> functionLines = Map.of();
-        // 함수명 → 식별자 시작 컬럼(0-indexed). 현재 Java/TypeScript/JavaScript만 채워짐 — 그 외 언어는 빈 맵.
+        // 함수명 → 식별자 시작 컬럼(0-indexed). 11개 언어 모두 채워짐(정규식 폴백 경로만 빈 맵) — 인라인 경고 밑줄 정밀도용.
         Map<String, Integer> functionColumns = Map.of();
         if (javaTs.isPresent()) {
             functions = javaTs.get().functions();
@@ -95,6 +95,8 @@ public class StaticCodeAnalyzer {
             functions = pyTs.get().functions();
             functionCalls = pyTs.get().functionCalls();
             declaredTypes = pyTs.get().declaredTypes();
+            functionLines = pyTs.get().functionLines();
+            functionColumns = pyTs.get().functionColumns();
         } else if (tsTs.isPresent()) {
             functions = tsTs.get().functions();
             functionCalls = tsTs.get().functionCalls();
@@ -105,29 +107,45 @@ public class StaticCodeAnalyzer {
             functions = goTs.get().functions();
             functionCalls = goTs.get().functionCalls();
             declaredTypes = goTs.get().declaredTypes();
+            functionLines = goTs.get().functionLines();
+            functionColumns = goTs.get().functionColumns();
         } else if (rustTs.isPresent()) {
             functions = rustTs.get().functions();
             functionCalls = rustTs.get().functionCalls();
             declaredTypes = rustTs.get().declaredTypes();
             testMethods = rustTs.get().testFunctions();
+            functionLines = rustTs.get().functionLines();
+            functionColumns = rustTs.get().functionColumns();
         } else if (csTs.isPresent()) {
             functions = csTs.get().functions();
             functionCalls = csTs.get().functionCalls();
+            functionLines = csTs.get().functionLines();
+            functionColumns = csTs.get().functionColumns();
         } else if (rubyTs.isPresent()) {
             functions = rubyTs.get().functions();
             functionCalls = rubyTs.get().functionCalls();
+            functionLines = rubyTs.get().functionLines();
+            functionColumns = rubyTs.get().functionColumns();
         } else if (phpTs.isPresent()) {
             functions = phpTs.get().functions();
             functionCalls = phpTs.get().functionCalls();
+            functionLines = phpTs.get().functionLines();
+            functionColumns = phpTs.get().functionColumns();
         } else if (cTs.isPresent()) {
             functions = cTs.get().functions();
             functionCalls = cTs.get().functionCalls();
+            functionLines = cTs.get().functionLines();
+            functionColumns = cTs.get().functionColumns();
         } else if (cppTs.isPresent()) {
             functions = cppTs.get().functions();
             functionCalls = cppTs.get().functionCalls();
+            functionLines = cppTs.get().functionLines();
+            functionColumns = cppTs.get().functionColumns();
         } else if (swiftTs.isPresent()) {
             functions = swiftTs.get().functions();
             functionCalls = swiftTs.get().functionCalls();
+            functionLines = swiftTs.get().functionLines();
+            functionColumns = swiftTs.get().functionColumns();
         } else {
             functions = extractFunctions(masked, language);
             functionCalls = extractFunctionCalls(masked, language, functions);
