@@ -1698,4 +1698,19 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **배포 부트스트랩 순서 — 별도 PR로 분리한 이유.** `codeprint/structure` 체크는 GitHub Actions가 아니라 **현재 배포된** Codeprint 백엔드(Railway, main 브랜치 기준 자동 배포)가 매기는 라이브 상태 코드다. 이 수정이 벤치 인프라 PR(#553)과 같은 브랜치에 있으면, 그 PR 자신의 게이트가 "아직 배포 안 된 자기 자신의 수정"으로는 통과할 수 없는 부트스트랩 순환에 빠진다 — 그래서 이 수정만 별도 PR(fix/cyclic-import-test-path-exclusion, #553에서 cherry-pick)로 분리해 먼저 main에 머지·배포하고, 배포 반영을 확인한 뒤 #553을 재실행하는 순서를 취함.
 
 **한계.** ①`isTestPath`가 "src/test/"를 요구해 Python(`tests/`)·Go(`_test.go`) 등 일부 언어 컨벤션은 못 잡음(기존 다른 탐지기와 동일한 기존 한계, 이번에 새로 만든 것 아님) ②근본적으로는 프로젝트 자체의 `ArchitectureIntent`(DB)에 ignore 규칙을 추가하는 것도 유효한 대안이었으나, 프로덕션 데이터 변경은 사용자 승인 없이 진행하지 않는 것이 안전 원칙이라 엔진 레벨 수정을 택함 — 필요시 웹 UI로 추가 ignore를 등록하는 것은 여전히 가능(상호 배타 아님).
->>>>>>> 23fdfa0 (fix: CYCLIC_IMPORT 탐지기에 테스트 경로 제외 추가 (TDD))
+
+## 벤치 스위트 러너 인프라 + §1 공통 케이스 5종 코드화 (2026-07-13, codeprint_123)
+
+**배경.** `BENCH_SPEC.md`(Fable이 이전 세션에 명세, 로컬 전용) §4 체크리스트 0단계 — 자가개선 루프(오탐 신고→자동 개선)의 채택 게이트가 될 룰별 벤치를 실제 코드로 옮기는 작업의 첫 단계.
+
+**설계.** BENCH_SPEC.md §0 원칙대로 `LocalAnalyzer`(캐시 있는 CLI 도구)와 별개로, 매번 캐시 없이 `SourceFileWalker → StaticCodeAnalyzer → GraphBuilder → GraphWarningService.detect()` 풀 파이프라인을 직접 구동하는 테스트 전용 러너를 신설 — 손으로 만든 노드/엣지가 아니라 실제 소스 파일 픽스처를 분석기에 통과시켜야 상류 레이어(분석기 메타 추출·GraphBuilder 배선) 결함까지 잡을 수 있기 때문(기존 `GraphWarningServiceTest`는 탐지기 로직만 검증, 벤치는 그 위 레이어).
+
+**구현.** `src/test/java/com/codeprint/bench/` 신설(프로덕션 코드 미변경) — `InMemoryGraphRepository`(LocalAnalyzer의 동일 이름 private 클래스를 테스트 전용으로 재구현, DB 없이 GraphBuilder 구동) · `BenchPipelineRunner`(픽스처 디렉터리 하나를 받아 경고 목록 반환) · `BenchCaseLoader`(클래스패스 `bench/<subDir>` 아래에서 `expected.json`을 가진 케이스 디렉터리를 재귀 탐색) · `BenchExpectation`(`expected.json`을 `{warnings:[{type,count}]}`로 파싱해 실제 경고를 타입별 건수로 집계 비교 — 과다·과소 검출 둘 다 실패) · `BenchSuiteTest`(`@TestFactory`로 `bench/rules/` 아래 모든 케이스를 동적 탐색, 스테이지 1부터 여기에 픽스처만 추가하면 자동 수집됨).
+
+**§1 공통 케이스 5종은 별도 파일(`BenchCommonCasesTest`)** — 단순 건수 비교가 아니라 개별 어서션이 필요해 제네릭 스위트 대상에서 제외(BENCH_SPEC.md 주석대로): `c-determinism`(동일 픽스처 3회 연속 분석 → fingerprint 목록 완전 동일) · `c-fingerprint-stable`(재분석해도 fingerprint 집합 불변) · `c-ignore-optout`(intent ignore 패턴이 매치 타입만 억제) · `c-ddd-routing`(DDD 게이트 픽스처는 DDD 5종만, LAYERED_* 미발화) · `c-layered-routing`(비DDD 레이어드 픽스처는 LAYERED_*만, DDD 5종 미발화).
+
+**픽스처 설계에서 겪은 함정(전부 해결).** ①`GraphWarningService.containsLayerSegment`가 `/domain/`처럼 앞뒤 슬래시로 세그먼트를 매칭해, 레이어 디렉터리가 픽스처 루트의 최상위 세그먼트면(`domain/model/Foo.java`, 선행 슬래시 없음) 매칭 실패 — DDD 게이트가 안 열려 `ddd-routing` 케이스가 처음에 경고 0건이었음. `src/` 한 단계를 더 감싸 모든 레이어 디렉터리가 항상 중첩되도록 해결. ②`GraphBuilder`의 IMPORT 엣지는 `pf.imports()`(명시적 `import` 문)만 보고 같은 패키지 내 클래스 사용은 잡지 않음 — `layered-routing` 픽스처의 `FooRepository`/`FooController`를 처음에 같은 패키지(`example`)에 둬 명시적 import가 없다 보니 IMPORT 엣지 자체가 안 생겨 `LAYERED_REVERSE_DEPENDENCY`가 미발화. ③이어서 물리 디렉터리(`src/controller/`)와 import 문자열(`example.controller...`)의 접두사가 어긋나 `isImportMatch`(접미사 매칭)가 실패 — 물리 경로를 `example/controller/`·`example/repository/`로 바꿔 import 문자열과 정확히 대응시켜 해결. 세 경우 모두 GraphBuilder 실측(실패 원인을 assertion 실패 메시지로 직접 확인 후 픽스처 수정)으로 잡음 — 탐지기 버그가 아니라 픽스처 설계 오류였음을 매번 확인.
+
+**검증.** `BenchCommonCasesTest` 5건 신규 GREEN(각 함정을 실측으로 잡아 처음엔 RED였다가 픽스처 수정 후 GREEN — 탐지기 자체는 손대지 않음). 전체 백엔드 테스트(814건 = 기존 809 + 벤치 5) green.
+
+**한계.** ①이 커밋은 §4 0단계(인프라+§1)까지만 — §2의 17개 룰별 P/N 케이스(2c 1~3단계)와 §3 R층 히스토리 스냅샷은 후속 커밋에서 이어감(BENCH_SPEC.md의 체크리스트가 진행 상태 소스) ②`BenchSuiteTest`는 아직 `bench/rules/` 아래 케이스가 없어 동적 테스트 0건(다음 단계에서 픽스처 추가 시 자동 수집됨, 인프라 자체는 이번에 검증 완료) ③픽스처의 물리 디렉터리 구조가 실제 프로젝트 관용(Maven/Gradle 표준 `src/main/java/...`)과 다르게 최소화돼 있음 — 벤치 목적(레이어/게이트 판정 검증)에는 무관하지만 실제 레포 구조를 그대로 재현한 건 아님.
