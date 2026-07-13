@@ -524,6 +524,29 @@ class GraphBuilderTest {
         assertThat(funcNode.getMetadata().get("line")).isEqualTo(3);
     }
 
+    @Test
+    @DisplayName("ParsedFile.functionColumns()의 컬럼이 FUNCTION 노드 메타데이터에 시작/끝으로 저장된다")
+    void FUNCTION_노드_컬럼_메타데이터_저장() {
+        ParsedFile file = new ParsedFile("src/UserService.java", "Java",
+                List.of("findById"), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(), List.of(), Map.of(), List.of(), List.of(), List.of(), null,
+                Map.of(), List.of(), Map.of("findById", 3), Map.of("findById", 16));
+
+        graphBuilder.build(projectId, analysisId, List.of(file));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+
+        Node funcNode = nodeCaptor.getAllValues().stream()
+                .filter(n -> n.getType() == NodeType.FUNCTION && "findById".equals(n.getName()))
+                .findFirst().orElseThrow();
+
+        // endCol = col(16) + "findById".length()(8) = 24
+        assertThat(funcNode.getMetadata().get("col")).isEqualTo(16);
+        assertThat(funcNode.getMetadata().get("endCol")).isEqualTo(24);
+    }
+
     // ── 인터페이스 → 구현체 우선 매핑 ─────────────────────────────────────────
 
     @Test

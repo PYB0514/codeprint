@@ -84,10 +84,13 @@ public class StaticCodeAnalyzer {
                 language.equals("Swift") ? treeSitterSwift.parse(content) : Optional.empty();
         // 함수명 → 정의 시작 줄(1-indexed). 현재 Java/TypeScript/JavaScript만 채워짐 — 그 외 언어는 빈 맵.
         Map<String, Integer> functionLines = Map.of();
+        // 함수명 → 식별자 시작 컬럼(0-indexed). 현재 Java/TypeScript/JavaScript만 채워짐 — 그 외 언어는 빈 맵.
+        Map<String, Integer> functionColumns = Map.of();
         if (javaTs.isPresent()) {
             functions = javaTs.get().functions();
             functionCalls = javaTs.get().functionCalls();
             functionLines = javaTs.get().functionLines();
+            functionColumns = javaTs.get().functionColumns();
         } else if (pyTs.isPresent()) {
             functions = pyTs.get().functions();
             functionCalls = pyTs.get().functionCalls();
@@ -97,6 +100,7 @@ public class StaticCodeAnalyzer {
             functionCalls = tsTs.get().functionCalls();
             declaredTypes = tsTs.get().declaredTypes();
             functionLines = tsTs.get().functionLines();
+            functionColumns = tsTs.get().functionColumns();
         } else if (goTs.isPresent()) {
             functions = goTs.get().functions();
             functionCalls = goTs.get().functionCalls();
@@ -155,7 +159,7 @@ public class StaticCodeAnalyzer {
         String extendedClass = extractExtendedClass(masked, language);
         List<String> transactionalMethods = extractTransactionalMethods(masked, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions, transactionalMethods, functionLines);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions, transactionalMethods, functionLines, functionColumns);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함

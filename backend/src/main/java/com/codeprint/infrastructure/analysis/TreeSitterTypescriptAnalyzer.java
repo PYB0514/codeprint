@@ -23,9 +23,10 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
     // tsx 언어 핸들은 불변이라 공유 안전 — 최초 1회만 생성(native 로드 트리거)
     private volatile TSLanguage tsxLanguage;
 
-    // tree-sitter 추출 결과 — 함수명 목록, 함수별 호출(callee) 목록, 파일이 선언한 클래스/인터페이스명 목록, 함수명→정의 시작 줄(1-indexed)
+    // tree-sitter 추출 결과 — 함수명 목록, 함수별 호출(callee) 목록, 파일이 선언한 클래스/인터페이스명 목록,
+    // 함수명→정의 시작 줄(1-indexed), 함수명→식별자 시작 컬럼(0-indexed)
     record Result(List<String> functions, Map<String, List<String>> functionCalls, List<String> declaredTypes,
-                  Map<String, Integer> functionLines) {}
+                  Map<String, Integer> functionLines, Map<String, Integer> functionColumns) {}
 
     @Override
     protected TSLanguage createLanguage() {
@@ -44,16 +45,18 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
             Map<String, Set<String>> calls = new LinkedHashMap<>();
             // 함수명 → 첫 정의의 시작 줄(1-indexed). 동명 오버로드는 첫 정의만 유지(줄 하나로 근사 — 오버로드별 구분은 범위 밖).
             Map<String, Integer> functionLines = new LinkedHashMap<>();
+            // 함수명 → 식별자(이름) 시작 컬럼(0-indexed) — VS Code 인라인 경고 밑줄을 식별자 범위로 좁히는 데 사용
+            Map<String, Integer> functionColumns = new LinkedHashMap<>();
             // functions 는 raw(중복 포함) 리스트 — 파일 내 동명 정의 수(머지 다중도)를 StaticCodeAnalyzer가 중앙에서 집계/디둡한다.
             // 파일이 선언한 클래스/인터페이스명(파일명≠클래스명이라 Type::method 해소에 필요) + 필드 타입 스코프를 walk 전에 모은다.
             List<String> declaredTypes = new ArrayList<>();
             Map<String, String> fieldTypes = new LinkedHashMap<>();
             collectTypesAndFields(root, src, declaredTypes, fieldTypes);
-            walk(root, src, null, functions, calls, fieldTypes, functionLines);
+            walk(root, src, null, functions, calls, fieldTypes, functionLines, functionColumns);
 
             Map<String, List<String>> functionCalls = new LinkedHashMap<>();
             calls.forEach((caller, callees) -> functionCalls.put(caller, new ArrayList<>(callees)));
-            return new Result(functions, functionCalls, declaredTypes, functionLines);
+            return new Result(functions, functionCalls, declaredTypes, functionLines, functionColumns);
         });
     }
 
@@ -73,7 +76,8 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
     // scope = 현재 위치에서 보이는 변수명→타입(필드 + 생성자 파라미터 프로퍼티 + 함수 파라미터 + 지역변수).
     private void walk(TSNode node, byte[] src, String enclosing,
                       List<String> functions, Map<String, Set<String>> calls,
-                      Map<String, String> scope, Map<String, Integer> functionLines) {
+                      Map<String, String> scope, Map<String, Integer> functionLines,
+                      Map<String, Integer> functionColumns) {
         String type = node.getType();
         String current = enclosing;
         Map<String, String> childScope = scope;
@@ -82,10 +86,14 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
             // 이름 필드를 직접 가진 정의 — 일반 함수·제너레이터·클래스 메서드·오버로드 시그니처·인터페이스/추상 메서드
             case "function_declaration", "generator_function_declaration", "method_definition",
                  "function_signature", "method_signature", "abstract_method_signature" -> {
-                String name = nameOf(node, src);
+                TSNode nameNode = nameNodeOf(node, src);
+                String name = nameNode != null ? text(nameNode, src) : "";
                 if (!name.isEmpty()) {
                     functions.add(name);
-                    functionLines.putIfAbsent(name, node.getStartPoint().getRow() + 1);
+                    // line·col 모두 식별자(nameNode) 기준 — node(정의 전체)가 데코레이터를 포함해 시작할 경우
+                    // col(식별자 컬럼)과 다른 줄을 가리키면 VS Code Range(line+col 합성)가 어긋난다.
+                    functionLines.putIfAbsent(name, nameNode.getStartPoint().getRow() + 1);
+                    functionColumns.putIfAbsent(name, nameNode.getStartPoint().getColumn());
                     current = name;
                 }
                 // 함수 스코프 = 바깥 스코프(필드 등) 복사본 + 이 함수의 파라미터
@@ -100,28 +108,35 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
             // 화살표/함수표현식을 바인딩에 대입(함수 정의) 또는 일반 변수/필드 선언(타입 등록)
             case "variable_declarator", "public_field_definition" -> {
                 if (isFunctionValue(node.getChildByFieldName("value"))) {
-                    String name = nameOf(node, src);
+                    TSNode nameNode = nameNodeOf(node, src);
+                    String name = nameNode != null ? text(nameNode, src) : "";
                     if (!name.isEmpty()) {
                         functions.add(name);
                         functionLines.putIfAbsent(name, node.getStartPoint().getRow() + 1);
+                        functionColumns.putIfAbsent(name, nameNode.getStartPoint().getColumn());
                         current = name;
                     }
                 } else {
                     // 비함수 — 지역변수/필드 타입을 스코프에 등록(필드는 pre-pass에서 이미 수집, 지역변수가 주 대상)
                     String vtype = declaredType(node, src);
                     if (vtype != null) {
-                        String nm = nameOf(node, src);
-                        if (!nm.isEmpty()) scope.put(nm, vtype);
+                        TSNode nameNode = nameNodeOf(node, src);
+                        if (nameNode != null) {
+                            String nm = text(nameNode, src);
+                            if (!nm.isEmpty()) scope.put(nm, vtype);
+                        }
                     }
                 }
             }
             // 멤버/식별자에 함수표현식 대입 — CommonJS의 핵심 패턴(exports.foo=function(){}, Proto.prototype.bar=function(){})
             case "assignment_expression" -> {
                 if (isFunctionValue(node.getChildByFieldName("right"))) {
-                    String name = assignmentTargetName(node.getChildByFieldName("left"), src);
+                    TSNode nameNode = assignmentTargetNode(node.getChildByFieldName("left"), src);
+                    String name = nameNode != null ? text(nameNode, src) : "";
                     if (!name.isEmpty()) {
                         functions.add(name);
                         functionLines.putIfAbsent(name, node.getStartPoint().getRow() + 1);
+                        functionColumns.putIfAbsent(name, nameNode.getStartPoint().getColumn());
                         current = name;
                     }
                 }
@@ -134,7 +149,7 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
 
         int n = node.getChildCount();
         for (int i = 0; i < n; i++) {
-            walk(node.getChild(i), src, current, functions, calls, childScope, functionLines);
+            walk(node.getChild(i), src, current, functions, calls, childScope, functionLines, functionColumns);
         }
     }
 
@@ -145,25 +160,25 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
         return t.equals("arrow_function") || t.equals("function_expression") || t.equals("function");
     }
 
-    // 대입 좌변에서 함수 이름 추출 — 멤버 대입(obj.foo / A.prototype.bar)은 끝 속성명, 단순 식별자는 그 이름
-    private String assignmentTargetName(TSNode left, byte[] src) {
-        if (left == null || left.isNull()) return "";
+    // 대입 좌변에서 함수 이름 노드 추출 — 멤버 대입(obj.foo / A.prototype.bar)은 끝 속성명 노드, 단순 식별자는 그 노드(컬럼 추출용으로 노드째 반환)
+    private TSNode assignmentTargetNode(TSNode left, byte[] src) {
+        if (left == null || left.isNull()) return null;
         String t = left.getType();
-        if (t.equals("identifier")) return text(left, src);
+        if (t.equals("identifier")) return left;
         if (t.equals("member_expression")) {
             TSNode prop = left.getChildByFieldName("property");
-            if (prop != null && !prop.isNull()) return text(prop, src);
+            if (prop != null && !prop.isNull()) return prop;
         }
-        return ""; // 그 외(subscript 등)는 안정적 이름이 없어 제외
+        return null; // 그 외(subscript 등)는 안정적 이름이 없어 제외
     }
 
-    // 노드의 name 필드 텍스트 — 식별자(identifier/property_identifier)일 때만 (구조분해 패턴 등 제외)
-    private String nameOf(TSNode node, byte[] src) {
+    // 노드의 name 필드 — 식별자(identifier/property_identifier)일 때만 (구조분해 패턴 등 제외). 컬럼 추출용으로 노드째 반환
+    private TSNode nameNodeOf(TSNode node, byte[] src) {
         TSNode nameNode = node.getChildByFieldName("name");
-        if (nameNode == null || nameNode.isNull()) return "";
+        if (nameNode == null || nameNode.isNull()) return null;
         String t = nameNode.getType();
-        if (!t.equals("identifier") && !t.equals("property_identifier")) return "";
-        return text(nameNode, src);
+        if (!t.equals("identifier") && !t.equals("property_identifier")) return null;
+        return nameNode;
     }
 
     // call_expression 의 callee 를 호출자(current)에 기록 — 수신자 타입을 알면 "Type::method", 모르면 bare
@@ -214,7 +229,7 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
         String t = node.getType();
         switch (t) {
             case "class_declaration", "abstract_class_declaration", "interface_declaration", "enum_declaration" -> {
-                // 클래스/인터페이스명은 type_identifier 노드(nameOf는 거부) — 별도 추출
+                // 클래스/인터페이스명은 type_identifier 노드(nameNodeOf는 거부) — 별도 추출
                 String name = declNameOf(node, src);
                 if (!name.isEmpty() && !declaredTypes.contains(name)) declaredTypes.add(name);
             }
@@ -222,7 +237,8 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
                 // 비함수 필드만 (arrow 메서드 필드는 함수 정의로 별도 처리)
                 if (!isFunctionValue(node.getChildByFieldName("value"))) {
                     String vtype = typeNameFromAnnotation(node.getChildByFieldName("type"), src);
-                    String nm = nameOf(node, src);
+                    TSNode nameNode = nameNodeOf(node, src);
+                    String nm = nameNode != null ? text(nameNode, src) : "";
                     if (vtype != null && !nm.isEmpty()) fieldTypes.putIfAbsent(nm, vtype);
                 }
             }
