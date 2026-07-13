@@ -209,7 +209,7 @@ interface PostSnapshot {
     opaqueLayerSet?: string[]
   }
   position: number
-  warnings: { type: string; nodeIds: string[]; message: string }[]
+  warnings: { type: string; severity?: 'HIGH' | 'MEDIUM' | 'LOW'; nodeIds: string[]; message: string; fingerprint?: string }[]
 }
 
 // 노드 코멘트 응답 타입 (읽기 전용)
@@ -254,10 +254,36 @@ function CommunityPostSnapshotInner() {
   const [edgeVisibility, setEdgeVisibility] = useState({ se: false, sc: false, si: false, sb: true, sdb: false, sapi: true })
   const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
   const [opaqueDomainSet, setOpaqueDomainSet] = useState<Set<string>>(new Set())
-  const [warnings, setWarnings] = useState<{ type: string; nodeIds: string[]; message: string }[]>([])
+  const [warnings, setWarnings] = useState<PostSnapshot['warnings']>([])
   const [warningPanelOpen, setWarningPanelOpen] = useState(false)
   const [graphId, setGraphId] = useState<string | null>(null)
+  const [snapshotProjectId, setSnapshotProjectId] = useState<string | null>(null)
   const [nodeComments, setNodeComments] = useState<NodeCommentView[]>([])
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  // 내가 오탐 신고한 fingerprint 집합 — 신고 버튼 상태 표시용 (비소유자도 신고 가능)
+  const [reportedFingerprints, setReportedFingerprints] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    axios.get<{ id: string }>('/api/auth/me').then(res => setCurrentUserId(res.data.id)).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!snapshotProjectId || !currentUserId) return
+    axios.get(`/api/projects/${snapshotProjectId}/warnings/report-fp/mine`)
+      .then(res => setReportedFingerprints(new Set(res.data)))
+      .catch(() => {})
+  }, [snapshotProjectId, currentUserId])
+
+  // 오탐 신고 — 서버에 저장(멱등) 후 버튼 상태를 "신고됨"으로 갱신
+  const handleReportFp = useCallback(async (w: { type: string; fingerprint?: string }) => {
+    if (!snapshotProjectId || !w.fingerprint) return
+    try {
+      await axios.post(`/api/projects/${snapshotProjectId}/warnings/report-fp`, { fingerprint: w.fingerprint, type: w.type })
+      setReportedFingerprints(prev => new Set(prev).add(w.fingerprint!))
+    } catch {
+      alert('오탐 신고에 실패했습니다.')
+    }
+  }, [snapshotProjectId])
 
   // 흐름 재생 — 종료 시 표시 토글 기준 기본 엣지 스타일 복원
   const restorePlaybackEdgeStyles = useCallback(() => {
@@ -332,6 +358,7 @@ function CommunityPostSnapshotInner() {
         setNodes(finalNodes)
         setEdges(applyEdgeVisibility(builtEdges, se, sc, si, sb, sdb, sapi))
         setGraphId(snapshot.graphId)
+        setSnapshotProjectId(snapshot.projectId)
         setWarnings(snapshot.warnings ?? [])
         setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
       })
@@ -714,7 +741,12 @@ function CommunityPostSnapshotInner() {
               {warnings.length === 0 ? (
                 <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
               ) : (
-                <WarningPanel warnings={warnings} onNodeNavigate={handleFocusNode} />
+                <WarningPanel
+                  warnings={warnings}
+                  onNodeNavigate={handleFocusNode}
+                  onReportFp={currentUserId ? handleReportFp : undefined}
+                  reportedFingerprints={reportedFingerprints}
+                />
               )}
             </CornerPanel>
           </div>
