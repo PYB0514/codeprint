@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.128.0',
+    date: '2026-07-13',
+    title: '커뮤니티 공유 그래프에도 오탐 신고 연결',
+    type: 'feature',
+    items: [
+      { category: '경고 감지', desc: '커뮤니티에 공유된 그래프를 보는 사람도(로그인 시) 경고를 오탐으로 신고할 수 있습니다 — 기존에는 프로젝트 소유자 화면에서만 가능했습니다.' },
+    ],
+  },
+  {
     version: 'v0.127.0',
     date: '2026-07-13',
     title: '경고 오탐 신고 기능 추가',
