@@ -182,7 +182,8 @@ public class GraphWarningService {
         Map<String, String> importEdgeIds = new HashMap<>();
 
         for (Node n : nodes) {
-            if (n.getType() == NodeType.FILE) {
+            // 테스트 코드(벤치 픽스처 포함)의 의도적 순환은 아키텍처 위반이 아니므로 제외 — 다른 탐지기와 동일한 기준.
+            if (n.getType() == NodeType.FILE && !isTestPath(n.getFilePath())) {
                 adj.put(n.getId(), new HashSet<>());
                 nameMap.put(n.getId(), n.getName());
                 String fp = n.getFilePath();

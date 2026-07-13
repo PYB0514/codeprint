@@ -25,6 +25,10 @@ class GraphWarningServiceTest {
         return Node.create(graphId, NodeType.FILE, name, "/" + name + ".java", "java");
     }
 
+    private Node fileNodeWithPath(String name, String filePath) {
+        return Node.create(graphId, NodeType.FILE, name, filePath, "java");
+    }
+
     private Node funcNode(String name, boolean isInterface) {
         Node n = Node.create(graphId, NodeType.FUNCTION, name, "/Svc.java", "java");
         if (isInterface) n.updateMetadata(Map.of("isInterface", true));
@@ -78,6 +82,21 @@ class GraphWarningServiceTest {
         );
         assertThat(warnings).hasSize(1);
         assertThat(warnings.get(0).get("type")).isEqualTo("CYCLIC_IMPORT");
+    }
+
+    @Test
+    @DisplayName("테스트 픽스처 경로(src/test/) 간의 순환 의존은 CYCLIC_IMPORT 대상에서 제외한다")
+    void cyclicImport_testPathExcluded() {
+        // 벤치 스위트(BenchCommonCasesTest c-determinism)의 의도적 순환 픽스처(a.ts↔b.ts)가 이 저장소
+        // 자체 구조 게이트(codeprint/structure, PR #553)에서 HIGH로 오탐된 것을 계기로 발견 — 다른 탐지기(DB_LAYER_BYPASS
+        // 등)는 이미 isTestPath로 테스트 코드를 제외하는데 CYCLIC_IMPORT만 빠져 있었다.
+        Node a = fileNodeWithPath("a.ts", "backend/src/test/resources/bench/common/cyclic-with-orphan/a.ts");
+        Node b = fileNodeWithPath("b.ts", "backend/src/test/resources/bench/common/cyclic-with-orphan/b.ts");
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(a, b),
+                List.of(importEdge(a.getId(), b.getId()), importEdge(b.getId(), a.getId()))
+        );
+        assertThat(warnings).isEmpty();
     }
 
     @Test

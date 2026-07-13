@@ -1682,3 +1682,20 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **검증.** TDD RED 확인(신규 2건 실패, useMemo negative case는 이미 GREEN) → 구현 후 3건 전부 GREEN. `StaticCodeAnalyzerTest` 전체(194건) green. 전체 백엔드 테스트(809건, 기존과 동일 — 이 저장소는 Java만 써서 회귀 없음 확인용) green. `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변(백엔드가 Java 전용이라 이 변경의 영향권 밖, 그대로 불변임을 재확인하는 게 목적). `npx tsc -b`(frontend) 클린 컴파일. **실측** — `analyzeLocal -PanalysisDir=frontend/src`로 실제 이 저장소의 프론트엔드(useCallback 다수 사용)를 분석기에 통과시켜 크래시 없이 정상 완료, HIGH_FAN_OUT 1건(`FlowPlaybackPanel`)만 검출됨을 확인(승격된 함수들이 예외 없이 파싱됨을 실제 소스로 재확인).
 
 **한계.** ①`useMemo`는 의도적으로 미포함(위 설계 참조) — 필요해지면 "반환문이 함수 리터럴인 경우만" 같은 더 정밀한 조건으로 재검토 ②`useCallback`/`memo`/`forwardRef`를 다른 용도로 재정의(shadowing)해 쓰는 경우는 이름만으로 판정하므로 오탐 가능성이 있으나 React 생태계에서 극히 드묾 ③Vue `computed`/Svelte 등 다른 프레임워크의 유사 래퍼는 범위 밖.
+
+## CYCLIC_IMPORT 탐지기에 테스트 경로 제외 추가 (2026-07-13, codeprint_123)
+
+**배경.** 위 벤치 인프라 PR(#553)을 올리자 이 저장소 자신의 구조 게이트(`codeprint/structure`, 이 프로젝트 자체가 Codeprint로 자기 자신을 실사용 중인 dogfooding 배선)가 새로 추가한 의도적 순환 픽스처(`backend/src/test/resources/bench/common/cyclic-with-orphan/a.ts↔b.ts`)를 HIGH `CYCLIC_IMPORT` 위반으로 보고해 머지가 막힘.
+
+**시도했다가 기각한 방법 — 레포 루트 `.codeprint/architecture.json`으로 ignore 선언.** LocalAnalyzer(로컬 CLI)는 이 파일을 읽지만, 실제 PR 코멘트를 다는 `codeprint/structure` 체크는 `GitHubWebhookService`/`PrReviewService`가 이 프로젝트의 **DB에 저장된** `ArchitectureIntent`(웹 UI로 등록)를 사용 — 레포에 커밋한 JSON 파일은 이 경로에서 전혀 읽히지 않아 효과가 없음(코드 확인으로 확정, 파일 작성 후 그대로 삭제).
+
+**원인 파악.** `detectCyclicImports`는 다른 5개 DDD 탐지기·`detectMissingTransactionalDelete` 등과 달리 `isTestPath` 필터가 아예 없었음(코드 직접 확인) — 테스트 코드의 의도적 순환(회귀 픽스처, mock 등)이 실제 아키텍처 위반과 동일하게 취급되고 있었던 기존 갭. 벤치 PR이 우연히 이 갭을 실사용 조건에서 드러낸 것.
+
+**결정.** `.codeprint/architecture.json` 우회 대신 탐지기 자체의 갭을 수정 — 다른 탐지기와 동일한 `isTestPath`(`/src/test/`·`__tests__`·`.test.`·`.spec.` 패턴) 기준을 `detectCyclicImports`의 FILE 노드 수집 단계에 추가해, 테스트 경로 파일은 인접 그래프에서 아예 제외. 이러면 벤치 러너가 픽스처를 격리 실행할 때(상대경로가 `a.ts`뿐, `/src/test/` 세그먼트 없음)는 영향이 없고, 이 저장소가 자기 자신을 스캔할 때(절대경로 접두사에 `backend/src/test/...` 포함)만 제외됨 — 벤치 케이스 자체의 정확성과 무관하게 순수히 self-hosting 오탐만 제거.
+
+**검증.** TDD — `GraphWarningServiceTest`에 `cyclicImport_testPathExcluded`(테스트 경로 파일 간 순환은 경고 0건) 신규 추가, 수정 전 RED 확인 → 수정 후 GREEN. 전체 백엔드 테스트(810건 = 기존 809+신규 1) green.
+
+**배포 부트스트랩 순서 — 별도 PR로 분리한 이유.** `codeprint/structure` 체크는 GitHub Actions가 아니라 **현재 배포된** Codeprint 백엔드(Railway, main 브랜치 기준 자동 배포)가 매기는 라이브 상태 코드다. 이 수정이 벤치 인프라 PR(#553)과 같은 브랜치에 있으면, 그 PR 자신의 게이트가 "아직 배포 안 된 자기 자신의 수정"으로는 통과할 수 없는 부트스트랩 순환에 빠진다 — 그래서 이 수정만 별도 PR(fix/cyclic-import-test-path-exclusion, #553에서 cherry-pick)로 분리해 먼저 main에 머지·배포하고, 배포 반영을 확인한 뒤 #553을 재실행하는 순서를 취함.
+
+**한계.** ①`isTestPath`가 "src/test/"를 요구해 Python(`tests/`)·Go(`_test.go`) 등 일부 언어 컨벤션은 못 잡음(기존 다른 탐지기와 동일한 기존 한계, 이번에 새로 만든 것 아님) ②근본적으로는 프로젝트 자체의 `ArchitectureIntent`(DB)에 ignore 규칙을 추가하는 것도 유효한 대안이었으나, 프로덕션 데이터 변경은 사용자 승인 없이 진행하지 않는 것이 안전 원칙이라 엔진 레벨 수정을 택함 — 필요시 웹 UI로 추가 ignore를 등록하는 것은 여전히 가능(상호 배타 아님).
+>>>>>>> 23fdfa0 (fix: CYCLIC_IMPORT 탐지기에 테스트 경로 제외 추가 (TDD))
