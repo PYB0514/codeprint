@@ -11,6 +11,9 @@ ERROR_TRACKER.md
 
 # IDE 개인 설정
 .vscode/
+# vscode-extension/은 확장 자체가 VS Code용이라 F5 디버그 실행 설정이 곧 개발 스캐폴딩 — 예외적으로 추적
+!vscode-extension/.vscode/
+!vscode-extension/.vscode/launch.json
 
 # 백엔드 빌드 아웃풋
 backend/bin/
