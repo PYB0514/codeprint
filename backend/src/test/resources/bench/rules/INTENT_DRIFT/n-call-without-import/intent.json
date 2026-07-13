@@ -1,0 +1,10 @@
+{
+  "modules": [
+    { "name": "callerpkg", "globs": ["callerpkg/**"] },
+    { "name": "adapterpkg", "globs": ["adapterpkg/**"] }
+  ],
+  "rules": [
+    { "from": "callerpkg", "to": "adapterpkg" }
+  ],
+  "ignore": []
+}

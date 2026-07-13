@@ -1,0 +1,5 @@
+{
+  "warnings": [
+    { "type": "CROSS_FEATURE_IMPORT", "count": 1 }
+  ]
+}

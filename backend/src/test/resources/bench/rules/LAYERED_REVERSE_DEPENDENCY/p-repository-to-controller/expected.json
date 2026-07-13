@@ -1,0 +1,5 @@
+{
+  "warnings": [
+    { "type": "LAYERED_REVERSE_DEPENDENCY", "count": 1 }
+  ]
+}

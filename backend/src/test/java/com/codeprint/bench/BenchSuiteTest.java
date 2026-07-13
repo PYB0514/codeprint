@@ -18,7 +18,8 @@ class BenchSuiteTest {
     Stream<DynamicTest> 룰별_벤치_케이스() {
         List<Path> cases = BenchCaseLoader.discoverCases("rules");
         return cases.stream().map(caseDir -> dynamicTest(caseName(caseDir), () -> {
-            List<Map<String, Object>> actual = BenchPipelineRunner.run(caseDir);
+            // intent.json이 있으면(INTENT_DRIFT 케이스) 로드해 함께 실행 — 없으면 기존과 동일(null)
+            List<Map<String, Object>> actual = BenchPipelineRunner.run(caseDir, BenchIntentLoader.loadIfPresent(caseDir));
             BenchExpectation.assertMatches(caseDir, actual);
         }));
     }
