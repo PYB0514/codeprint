@@ -1668,3 +1668,17 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **검증.** `StaticCodeAnalyzerTest`에 9개 언어 각각 1종(총 9, 줄+컬럼 함께 검증) 추가 — 전부 실제 실행으로 컬럼 값을 손으로 계산해 assert했고 첫 실행에서 전부 green(191건, 실패 0)이라 계산 오차 없음을 확인. 전체 백엔드 테스트 809건(기존 800+신규 9) green(Docker Postgres 기동). `analyzeLocal` 자가검사 HIGH_FAN_OUT 5건 베이스라인 불변.
 
 **한계.** ①동명 오버로드는 여전히 첫 정의의 줄/컬럼만 유지(1a와 동일한 근사 범위, 11개 언어 공통) ②Swift `init` 컬럼은 "init" 키워드 위치이지 함수명 텍스트가 아님(원래도 `functions` 목록엔 문자열 "init"으로만 기록되는 기존 설계, 여러 오버로드 `init`이 있으면 첫 번째만) ③VS Code 실제 에디터 렌더링은 이 저장소가 Java/TS만 사용해 나머지 9개 언어는 실제 파일로 F5 검증이 원천적으로 불가능 — 단위 테스트의 손 계산 검증까지만 확인.
+
+## useCallback/memo/forwardRef 감싼 함수 추출 갭 수정 (2026-07-13, codeprint_123, TDD)
+
+**배경.** codeprint_121~122에서 확인된 부수 발견(task_4190b92e) — `TreeSitterTypescriptAnalyzer.isFunctionValue`가 `arrow_function`/`function_expression`/`function` 3종만 함수 정의로 인정해, `const handleClick = useCallback(() => {...}, [])` 형태에서 value가 `call_expression`이라 함수로 안 잡혔음(줄/컬럼은커녕 함수 노드 자체가 누락). 부수효과로 이런 함수 내부 호출이 바깥(둘러싼) 함수의 fan-out으로 잘못 귀속돼 그래프 정밀도도 왜곡되고 있었음.
+
+**TDD로 갭 재현.** `StaticCodeAnalyzerTest`에 3종 추가 — ①`useCallback` 감싼 화살표 함수가 `functions()`에 잡히고 내부 호출(`doWork`)이 올바르게 그 함수 이름에 귀속되는지 ②`memo`/`forwardRef` 감싼 컴포넌트도 동일하게 추출되는지(둘 다 수정 전 RED 확인) ③`useMemo`로 감싼 값은 함수로 승격되지 않아야 하는지(수정 전에도 GREEN — 의도적 negative case).
+
+**설계 — precision 우선, `useMemo`는 허용목록에서 제외.** `useCallback`/`memo`/`forwardRef`는 인자로 넘긴 함수를 그대로(또는 감싸서) 반환하는 게 확정적이라 함수 정의로 승격해도 안전하지만, `useMemo`는 반환값이 함수가 아닌 경우(`useMemo(() => computeTotal(), [])`처럼 콜백 자체는 함수지만 *반환값*은 숫자/객체)가 흔해 "이 바인딩이 함수다"라는 판정 자체가 틀릴 위험이 큼 — HIGH precision을 유지하는 이 프로젝트의 핵심 원칙(§17 벤치 게이트)에 맞춰 제외.
+
+**구현.** `isFunctionValue(TSNode value)`에 `byte[] src` 파라미터를 추가하고, value 타입이 `call_expression`이면서 콜백 `isFunctionWrapperCall`(callee가 `FUNCTION_WRAPPER_CALLS = {useCallback, memo, forwardRef}` 소속 + 인자 중 함수 노드 존재)을 만족할 때도 함수로 인정하도록 확장. 이름/줄/컬럼은 기존과 동일하게 변수 식별자(`nameNodeOf`) 기준 — 승격 여부만 바뀌고 위치 추출 로직은 그대로 재사용. **부수 수정** — `case "call_expression"`의 `recordCall`이 래퍼 호출(`useCallback(...)` 자체)까지 그 함수의 fan-out으로 기록하던 걸(승격된 함수 본문 안에서 래퍼 호출 노드도 재귀 순회에 걸림) `isFunctionWrapperCall` 가드로 제외 — 안 그러면 승격 즉시 "이 함수가 useCallback을 호출한다"는 가짜 엣지가 생겨 HIGH_FAN_OUT을 오염시킴.
+
+**검증.** TDD RED 확인(신규 2건 실패, useMemo negative case는 이미 GREEN) → 구현 후 3건 전부 GREEN. `StaticCodeAnalyzerTest` 전체(194건) green. 전체 백엔드 테스트(809건, 기존과 동일 — 이 저장소는 Java만 써서 회귀 없음 확인용) green. `analyzeLocal` HIGH_FAN_OUT 5건 베이스라인 불변(백엔드가 Java 전용이라 이 변경의 영향권 밖, 그대로 불변임을 재확인하는 게 목적). `npx tsc -b`(frontend) 클린 컴파일. **실측** — `analyzeLocal -PanalysisDir=frontend/src`로 실제 이 저장소의 프론트엔드(useCallback 다수 사용)를 분석기에 통과시켜 크래시 없이 정상 완료, HIGH_FAN_OUT 1건(`FlowPlaybackPanel`)만 검출됨을 확인(승격된 함수들이 예외 없이 파싱됨을 실제 소스로 재확인).
+
+**한계.** ①`useMemo`는 의도적으로 미포함(위 설계 참조) — 필요해지면 "반환문이 함수 리터럴인 경우만" 같은 더 정밀한 조건으로 재검토 ②`useCallback`/`memo`/`forwardRef`를 다른 용도로 재정의(shadowing)해 쓰는 경우는 이름만으로 판정하므로 오탐 가능성이 있으나 React 생태계에서 극히 드묾 ③Vue `computed`/Svelte 등 다른 프레임워크의 유사 래퍼는 범위 밖.

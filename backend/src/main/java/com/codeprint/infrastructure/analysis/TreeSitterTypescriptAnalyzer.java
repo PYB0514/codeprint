@@ -107,7 +107,7 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
             }
             // 화살표/함수표현식을 바인딩에 대입(함수 정의) 또는 일반 변수/필드 선언(타입 등록)
             case "variable_declarator", "public_field_definition" -> {
-                if (isFunctionValue(node.getChildByFieldName("value"))) {
+                if (isFunctionValue(node.getChildByFieldName("value"), src)) {
                     TSNode nameNode = nameNodeOf(node, src);
                     String name = nameNode != null ? text(nameNode, src) : "";
                     if (!name.isEmpty()) {
@@ -130,7 +130,7 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
             }
             // 멤버/식별자에 함수표현식 대입 — CommonJS의 핵심 패턴(exports.foo=function(){}, Proto.prototype.bar=function(){})
             case "assignment_expression" -> {
-                if (isFunctionValue(node.getChildByFieldName("right"))) {
+                if (isFunctionValue(node.getChildByFieldName("right"), src)) {
                     TSNode nameNode = assignmentTargetNode(node.getChildByFieldName("left"), src);
                     String name = nameNode != null ? text(nameNode, src) : "";
                     if (!name.isEmpty()) {
@@ -142,7 +142,8 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
                 }
             }
             case "call_expression" -> {
-                if (current != null) recordCall(node, src, current, calls, scope);
+                // useCallback(fn, deps) 같은 래퍼 호출 자체는 함수 본문이 만드는 실호출이 아니라 fan-out에서 제외
+                if (current != null && !isFunctionWrapperCall(node, src)) recordCall(node, src, current, calls, scope);
             }
             default -> { /* 그 외 노드는 순회만 */ }
         }
@@ -153,11 +154,30 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
         }
     }
 
-    // value 노드가 화살표 함수/함수 표현식인지 — 바인딩을 함수 정의로 볼지 판정
-    private boolean isFunctionValue(TSNode value) {
+    // 함수 정의로 승격할 값을 감쌀 수 있는 콜백 API — useMemo는 반환값이 함수 아닌 경우가 흔해 precision 우선 제외
+    private static final Set<String> FUNCTION_WRAPPER_CALLS = Set.of("useCallback", "memo", "forwardRef");
+
+    // value 노드가 화살표 함수/함수 표현식이거나, 그 함수를 감싸는 허용된 래퍼 호출(useCallback 등)인지 — 바인딩을 함수 정의로 볼지 판정
+    private boolean isFunctionValue(TSNode value, byte[] src) {
         if (value == null || value.isNull()) return false;
         String t = value.getType();
-        return t.equals("arrow_function") || t.equals("function_expression") || t.equals("function");
+        if (t.equals("arrow_function") || t.equals("function_expression") || t.equals("function")) return true;
+        return t.equals("call_expression") && isFunctionWrapperCall(value, src);
+    }
+
+    // call_expression이 FUNCTION_WRAPPER_CALLS 소속 호출이고 인자 중 함수 노드를 실제로 감싸고 있는지
+    private boolean isFunctionWrapperCall(TSNode call, byte[] src) {
+        TSNode fn = call.getChildByFieldName("function");
+        if (fn == null || fn.isNull() || !fn.getType().equals("identifier")) return false;
+        if (!FUNCTION_WRAPPER_CALLS.contains(text(fn, src))) return false;
+        TSNode args = call.getChildByFieldName("arguments");
+        if (args == null || args.isNull()) return false;
+        int n = args.getChildCount();
+        for (int i = 0; i < n; i++) {
+            String at = args.getChild(i).getType();
+            if (at.equals("arrow_function") || at.equals("function_expression") || at.equals("function")) return true;
+        }
+        return false;
     }
 
     // 대입 좌변에서 함수 이름 노드 추출 — 멤버 대입(obj.foo / A.prototype.bar)은 끝 속성명 노드, 단순 식별자는 그 노드(컬럼 추출용으로 노드째 반환)
@@ -235,7 +255,7 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
             }
             case "public_field_definition" -> {
                 // 비함수 필드만 (arrow 메서드 필드는 함수 정의로 별도 처리)
-                if (!isFunctionValue(node.getChildByFieldName("value"))) {
+                if (!isFunctionValue(node.getChildByFieldName("value"), src)) {
                     String vtype = typeNameFromAnnotation(node.getChildByFieldName("type"), src);
                     TSNode nameNode = nameNodeOf(node, src);
                     String nm = nameNode != null ? text(nameNode, src) : "";
