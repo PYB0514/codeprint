@@ -3666,6 +3666,69 @@ class StaticCodeAnalyzerTest {
         assertThat(result.functionCalls().get("run")).doesNotContain("fakeCall", "alsoFake");
     }
 
+    // ── 함수 정의 줄 번호 추출 (VS Code 인라인 경고용, Java/TypeScript만) ──────────
+
+    @Test
+    @DisplayName("Java 메서드의 정의 시작 줄을 1-indexed로 추출한다")
+    void Java_함수_줄번호_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class UserService {
+                    public User findById(Long id) {
+                        return null;
+                    }
+
+                    public void save(User user) {
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionLines()).containsEntry("findById", 3);
+        assertThat(result.functionLines()).containsEntry("save", 7);
+    }
+
+    @Test
+    @DisplayName("Java 동명 오버로드는 첫 정의의 줄만 유지한다")
+    void Java_동명_오버로드_첫정의_줄_유지() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class Calculator {
+                    public int add(int a, int b) {
+                        return a + b;
+                    }
+
+                    public double add(double a, double b) {
+                        return a + b;
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.functionLines()).containsEntry("add", 3);
+    }
+
+    @Test
+    @DisplayName("TypeScript 함수 선언과 화살표 함수의 정의 시작 줄을 추출한다")
+    void TypeScript_함수_줄번호_추출() throws IOException {
+        Path file = writeTsFile("""
+                function greet(name: string): string {
+                    return `hi ${name}`;
+                }
+
+                const add = (a: number, b: number) => {
+                    return a + b;
+                };
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.functionLines()).containsEntry("greet", 1);
+        assertThat(result.functionLines()).containsEntry("add", 5);
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeSwiftFile(String content) throws IOException {

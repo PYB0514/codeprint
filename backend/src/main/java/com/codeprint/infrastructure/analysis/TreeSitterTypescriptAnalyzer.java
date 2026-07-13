@@ -23,8 +23,9 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
     // tsx 언어 핸들은 불변이라 공유 안전 — 최초 1회만 생성(native 로드 트리거)
     private volatile TSLanguage tsxLanguage;
 
-    // tree-sitter 추출 결과 — 함수명 목록, 함수별 호출(callee) 목록, 파일이 선언한 클래스/인터페이스명 목록
-    record Result(List<String> functions, Map<String, List<String>> functionCalls, List<String> declaredTypes) {}
+    // tree-sitter 추출 결과 — 함수명 목록, 함수별 호출(callee) 목록, 파일이 선언한 클래스/인터페이스명 목록, 함수명→정의 시작 줄(1-indexed)
+    record Result(List<String> functions, Map<String, List<String>> functionCalls, List<String> declaredTypes,
+                  Map<String, Integer> functionLines) {}
 
     @Override
     protected TSLanguage createLanguage() {
@@ -41,16 +42,18 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
         return parseTree(content, tsx ? this::tsxLanguage : this::language, (root, src) -> {
             List<String> functions = new ArrayList<>();
             Map<String, Set<String>> calls = new LinkedHashMap<>();
+            // 함수명 → 첫 정의의 시작 줄(1-indexed). 동명 오버로드는 첫 정의만 유지(줄 하나로 근사 — 오버로드별 구분은 범위 밖).
+            Map<String, Integer> functionLines = new LinkedHashMap<>();
             // functions 는 raw(중복 포함) 리스트 — 파일 내 동명 정의 수(머지 다중도)를 StaticCodeAnalyzer가 중앙에서 집계/디둡한다.
             // 파일이 선언한 클래스/인터페이스명(파일명≠클래스명이라 Type::method 해소에 필요) + 필드 타입 스코프를 walk 전에 모은다.
             List<String> declaredTypes = new ArrayList<>();
             Map<String, String> fieldTypes = new LinkedHashMap<>();
             collectTypesAndFields(root, src, declaredTypes, fieldTypes);
-            walk(root, src, null, functions, calls, fieldTypes);
+            walk(root, src, null, functions, calls, fieldTypes, functionLines);
 
             Map<String, List<String>> functionCalls = new LinkedHashMap<>();
             calls.forEach((caller, callees) -> functionCalls.put(caller, new ArrayList<>(callees)));
-            return new Result(functions, functionCalls, declaredTypes);
+            return new Result(functions, functionCalls, declaredTypes, functionLines);
         });
     }
 
@@ -70,7 +73,7 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
     // scope = 현재 위치에서 보이는 변수명→타입(필드 + 생성자 파라미터 프로퍼티 + 함수 파라미터 + 지역변수).
     private void walk(TSNode node, byte[] src, String enclosing,
                       List<String> functions, Map<String, Set<String>> calls,
-                      Map<String, String> scope) {
+                      Map<String, String> scope, Map<String, Integer> functionLines) {
         String type = node.getType();
         String current = enclosing;
         Map<String, String> childScope = scope;
@@ -82,6 +85,7 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
                 String name = nameOf(node, src);
                 if (!name.isEmpty()) {
                     functions.add(name);
+                    functionLines.putIfAbsent(name, node.getStartPoint().getRow() + 1);
                     current = name;
                 }
                 // 함수 스코프 = 바깥 스코프(필드 등) 복사본 + 이 함수의 파라미터
@@ -99,6 +103,7 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
                     String name = nameOf(node, src);
                     if (!name.isEmpty()) {
                         functions.add(name);
+                        functionLines.putIfAbsent(name, node.getStartPoint().getRow() + 1);
                         current = name;
                     }
                 } else {
@@ -116,6 +121,7 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
                     String name = assignmentTargetName(node.getChildByFieldName("left"), src);
                     if (!name.isEmpty()) {
                         functions.add(name);
+                        functionLines.putIfAbsent(name, node.getStartPoint().getRow() + 1);
                         current = name;
                     }
                 }
@@ -128,7 +134,7 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
 
         int n = node.getChildCount();
         for (int i = 0; i < n; i++) {
-            walk(node.getChild(i), src, current, functions, calls, childScope);
+            walk(node.getChild(i), src, current, functions, calls, childScope, functionLines);
         }
     }
 
