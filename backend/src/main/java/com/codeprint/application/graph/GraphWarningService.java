@@ -51,10 +51,16 @@ public class GraphWarningService {
         Map<UUID, String> idToFilePath = new HashMap<>();
         // 노드 위치 조회용 인덱스 — 경고에 발생 줄 번호를 부여(Java/TS/JS FUNCTION 노드만 보유, VS Code 인라인 경고용)
         Map<UUID, Integer> idToLine = new HashMap<>();
+        // 노드 위치 조회용 인덱스 — 경고에 발생 컬럼 범위[시작,끝]를 부여(Java/TS/JS FUNCTION 노드만 보유, VS Code 인라인 경고 밑줄 정밀도용)
+        Map<UUID, int[]> idToColRange = new HashMap<>();
         for (Node n : nodes) {
             idToFilePath.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
             if (n.getMetadata() != null && n.getMetadata().get("line") instanceof Number num) {
                 idToLine.put(n.getId(), num.intValue());
+            }
+            if (n.getMetadata() != null && n.getMetadata().get("col") instanceof Number colNum
+                    && n.getMetadata().get("endCol") instanceof Number endColNum) {
+                idToColRange.put(n.getId(), new int[]{colNum.intValue(), endColNum.intValue()});
             }
         }
         // 사용자가 선언한 ignore 패턴(글로브)에 매치되는 경고를 그룹 억제 — opt-out 모델.
@@ -75,6 +81,8 @@ public class GraphWarningService {
             attachPrimaryFile(w, idToFilePath);
             // 경고 발생 줄 번호 — primary 노드가 줄 정보를 보유한 FUNCTION 노드일 때만 부여
             attachPrimaryLine(w, idToLine);
+            // 경고 발생 컬럼 범위 — primary 노드가 컬럼 정보를 보유한 FUNCTION 노드일 때만 부여
+            attachPrimaryColumn(w, idToColRange);
         }
         // 타입→파일→메시지 안정 정렬 — parallelStream 파싱(#363) 이후 실행마다 경고 집계 순회 순서가 달라져
         // PR 코멘트 diff 노이즈·UI 목록이 재분석마다 튀던 문제 해소(내용은 이미 결정적, 순서만 비결정적이었음)
@@ -102,6 +110,21 @@ public class GraphWarningService {
         try {
             Integer line = idToLine.get(UUID.fromString(String.valueOf(nodeIds.get(0))));
             if (line != null) w.put("line", line);
+        } catch (IllegalArgumentException ignored) {
+            // nodeIds[0]가 UUID 형식이 아니면 위치 미부여 (방어적)
+        }
+    }
+
+    // 경고의 primary 노드(nodeIds[0]) 식별자 컬럼 범위를 col/endCol 필드로 부여 — 컬럼 정보 없는 노드면 미부여
+    private void attachPrimaryColumn(Map<String, Object> w, Map<UUID, int[]> idToColRange) {
+        Object raw = w.get("nodeIds");
+        if (!(raw instanceof List<?> nodeIds) || nodeIds.isEmpty()) return;
+        try {
+            int[] range = idToColRange.get(UUID.fromString(String.valueOf(nodeIds.get(0))));
+            if (range != null) {
+                w.put("col", range[0]);
+                w.put("endCol", range[1]);
+            }
         } catch (IllegalArgumentException ignored) {
             // nodeIds[0]가 UUID 형식이 아니면 위치 미부여 (방어적)
         }

@@ -155,6 +155,31 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("경고에 컬럼 범위(col/endCol)가 metadata에 col·endCol이 있는 primary 노드에서 부여된다")
+    void warning_carriesPrimaryColumnRange() {
+        Node orphan = funcNodeWithPath("orphan", "/com/x/Svc.java");
+        orphan.updateMetadata(Map.of("col", 16, "endCol", 24));
+
+        List<Map<String, Object>> warnings = service.detect(List.of(orphan), List.of());
+
+        assertThat(warnings).anySatisfy(w -> {
+            assertThat(w.get("type")).isEqualTo("DEAD_CODE");
+            assertThat(w.get("col")).isEqualTo(16);
+            assertThat(w.get("endCol")).isEqualTo(24);
+        });
+    }
+
+    @Test
+    @DisplayName("primary 노드에 col/endCol metadata가 없으면 col/endCol 필드가 부여되지 않는다")
+    void warning_noColumnMetadata_noColumnField() {
+        Node orphan = funcNodeWithPath("orphan", "/com/x/Svc.java");
+
+        List<Map<String, Object>> warnings = service.detect(List.of(orphan), List.of());
+
+        assertThat(warnings).anySatisfy(w -> assertThat(w).doesNotContainKeys("col", "endCol"));
+    }
+
+    @Test
     @DisplayName("A→B→C→A 3노드 순환 의존 감지")
     void cyclicImport_threeNodes() {
         Node a = fileNode("A");

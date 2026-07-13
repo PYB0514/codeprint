@@ -31,8 +31,27 @@ public record ParsedFile(
         String extendedClass,                    // "class Foo extends Bar"의 Bar — 상속 메서드 호출 해소용 (Java 한정, null이면 상속 없음)
         Map<String, String> controllerMappingFunctions, // controllerMappings 경로 문자열 → 처리 함수명 (Java/Kotlin만, 그 외 언어는 빈 맵 — API_ENDPOINT 함수 단위 엣지용)
         List<String> transactionalMethods,       // @Transactional 어노테이션이 붙은 메서드명 목록 (Java/Kotlin만 — MISSING_TRANSACTIONAL_DELETE 판정용)
-        Map<String, Integer> functionLines       // 함수명 → 정의 시작 줄(1-indexed, Java/TypeScript/JavaScript만 — 그 외 언어는 빈 맵). VS Code 인라인 경고용
+        Map<String, Integer> functionLines,      // 함수명 → 정의 시작 줄(1-indexed, Java/TypeScript/JavaScript만 — 그 외 언어는 빈 맵). VS Code 인라인 경고용
+        Map<String, Integer> functionColumns     // 함수명 → 식별자 시작 컬럼(0-indexed, Java/TypeScript/JavaScript만 — 그 외 언어는 빈 맵). VS Code 인라인 경고 밑줄 정밀도용
 ) {
+    // 기존 호출부 호환용 — functionColumns 미지정 시 빈 맵
+    public ParsedFile(
+            String filePath, String language, List<String> functions, List<String> imports,
+            String fileComment, Map<String, String> functionComments, Map<String, List<String>> functionCalls,
+            List<String> instantiatedClasses, List<DbTableInfo> dbTables, String repositoryEntityClass,
+            List<ColumnInfo> entityColumns, List<String> apiCalls, List<String> controllerMappings,
+            List<String> implementedInterfaces, List<String> asyncMethods, List<String> jsxComponents,
+            List<RawSqlAccess> rawSqlAccesses, List<String> frameworkAnnotatedMethods,
+            List<String> valueReferencedFunctions, Map<String, Integer> functionDefCounts,
+            List<String> declaredTypes, List<String> testMethods, List<DbAccess> dbAccesses, String extendedClass,
+            Map<String, String> controllerMappingFunctions, List<String> transactionalMethods,
+            Map<String, Integer> functionLines) {
+        this(filePath, language, functions, imports, fileComment, functionComments, functionCalls,
+                instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings,
+                implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods,
+                valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass,
+                controllerMappingFunctions, transactionalMethods, functionLines, Map.of());
+    }
     // 기존 호출부 호환용 — functionLines 미지정 시 빈 맵
     public ParsedFile(
             String filePath, String language, List<String> functions, List<String> imports,

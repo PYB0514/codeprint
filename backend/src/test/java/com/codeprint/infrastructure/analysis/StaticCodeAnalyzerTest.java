@@ -3729,6 +3729,45 @@ class StaticCodeAnalyzerTest {
         assertThat(result.functionLines()).containsEntry("add", 5);
     }
 
+    @Test
+    @DisplayName("Java 메서드 식별자의 시작 컬럼을 0-indexed로 추출한다")
+    void Java_함수_컬럼_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class UserService {
+                    public User findById(Long id) {
+                        return null;
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        // "    public User findById(Long id) {" — findById는 16번째 문자(0-indexed)에서 시작
+        assertThat(result.functionColumns()).containsEntry("findById", 16);
+    }
+
+    @Test
+    @DisplayName("TypeScript 함수 선언과 화살표 함수 식별자의 시작 컬럼을 0-indexed로 추출한다")
+    void TypeScript_함수_컬럼_추출() throws IOException {
+        Path file = writeTsFile("""
+                function greet(name: string): string {
+                    return `hi ${name}`;
+                }
+
+                const add = (a: number, b: number) => {
+                    return a + b;
+                };
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        // "function greet(..." — greet는 9번째 문자(0-indexed)에서 시작
+        assertThat(result.functionColumns()).containsEntry("greet", 9);
+        // "const add = (..." — add는 6번째 문자(0-indexed)에서 시작
+        assertThat(result.functionColumns()).containsEntry("add", 6);
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private Path writeSwiftFile(String content) throws IOException {

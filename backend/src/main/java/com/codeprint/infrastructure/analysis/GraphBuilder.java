@@ -125,6 +125,14 @@ public class GraphBuilder {
                     Integer line = pf.functionLines().get(funcName);
                     if (line != null) meta.put("line", line);
                 }
+                // 정의 식별자 시작/끝 컬럼(0-indexed, Java/TS/JS만) — VS Code 인라인 경고 밑줄을 식별자 범위로 좁히는 데 사용
+                if (pf.functionColumns() != null) {
+                    Integer col = pf.functionColumns().get(funcName);
+                    if (col != null) {
+                        meta.put("col", col);
+                        meta.put("endCol", col + funcName.length());
+                    }
+                }
                 funcNode.updateMetadata(meta);
                 graphRepository.saveNode(funcNode);
                 funcNodeIds.put(pf.filePath() + "::" + funcName, funcNode.getId());

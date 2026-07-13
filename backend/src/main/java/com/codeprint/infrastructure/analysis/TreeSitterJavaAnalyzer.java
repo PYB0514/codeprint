@@ -17,8 +17,9 @@ import java.util.Set;
 // 주석·문자열 리터럴 내부의 가짜 식별자를 호출로 오인하지 않는다(AST가 토큰 종류를 구분).
 class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
 
-    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록, 함수명→정의 시작 줄(1-indexed)
-    record Result(List<String> functions, Map<String, List<String>> functionCalls, Map<String, Integer> functionLines) {}
+    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록, 함수명→정의 시작 줄(1-indexed), 함수명→식별자 시작 컬럼(0-indexed)
+    record Result(List<String> functions, Map<String, List<String>> functionCalls, Map<String, Integer> functionLines,
+                  Map<String, Integer> functionColumns) {}
 
     @Override
     protected TSLanguage createLanguage() {
@@ -37,15 +38,17 @@ class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
             Map<String, Set<String>> calls = new LinkedHashMap<>();
             // 함수명 → 첫 정의의 시작 줄(1-indexed). 동명 오버로드는 첫 정의만 유지(줄 하나로 근사 — 오버로드별 구분은 범위 밖).
             Map<String, Integer> functionLines = new LinkedHashMap<>();
+            // 함수명 → 식별자(이름) 시작 컬럼(0-indexed) — VS Code 인라인 경고 밑줄을 식별자 범위로 좁히는 데 사용
+            Map<String, Integer> functionColumns = new LinkedHashMap<>();
             // functions 는 raw(중복 포함) 리스트 — 파일 내 동명 정의 수(머지 다중도)를 StaticCodeAnalyzer가 중앙에서 집계/디둡한다.
             // 클래스 필드는 어느 메서드에서든 가시하므로(선언 순서 무관) walk 전에 먼저 타입을 모은다.
             Map<String, String> fieldTypes = new LinkedHashMap<>();
             collectFieldTypes(root, src, fieldTypes);
-            walk(root, src, null, functions, calls, fieldTypes, functionLines);
+            walk(root, src, null, functions, calls, fieldTypes, functionLines, functionColumns);
 
             Map<String, List<String>> functionCalls = new LinkedHashMap<>();
             calls.forEach((caller, callees) -> functionCalls.put(caller, new ArrayList<>(callees)));
-            return new Result(functions, functionCalls, functionLines);
+            return new Result(functions, functionCalls, functionLines, functionColumns);
         });
     }
 
@@ -53,7 +56,8 @@ class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
     // scope = 현재 위치에서 보이는 변수명→타입(필드 + 파라미터 + 지역변수). method_invocation 수신자 해소에 사용.
     private void walk(TSNode node, byte[] src, String enclosing,
                       List<String> functions, Map<String, Set<String>> calls,
-                      Map<String, String> scope, Map<String, Integer> functionLines) {
+                      Map<String, String> scope, Map<String, Integer> functionLines,
+                      Map<String, Integer> functionColumns) {
         String type = node.getType();
 
         if (type.equals("method_declaration")
@@ -63,17 +67,19 @@ class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
             String name = (nameNode != null && !nameNode.isNull()) ? text(nameNode, src) : "";
             if (!name.isEmpty()) {
                 functions.add(name);
-                functionLines.putIfAbsent(name, node.getStartPoint().getRow() + 1);
+                // 식별자(nameNode) 자신의 위치 기준 — node(정의 전체)의 시작은 어노테이션(@Async 등)이 있으면
+                // 그 줄부터라 col(식별자 컬럼)과 다른 줄을 가리키는 불일치가 생긴다(VS Code Range가 line+col을
+                // 한 지점으로 합성하므로 반드시 같은 줄이어야 함) — line·col 모두 nameNode 기준으로 통일.
+                functionLines.putIfAbsent(name, nameNode.getStartPoint().getRow() + 1);
+                functionColumns.putIfAbsent(name, nameNode.getStartPoint().getColumn());
             }
-            // node의 시작 줄은 어노테이션(@Async 등)이 있으면 그 줄부터다 — method_declaration이 어노테이션을
-            // 자식으로 포함하는 tree-sitter-java 문법 특성. "메서드 정의 블록의 시작"으로는 정확해 인라인 경고용으로 무방.
             // 메서드 스코프 = 필드(전역) 복사본 + 이 메서드의 파라미터(+지역변수는 본문 순회 중 추가)
             Map<String, String> methodScope = new LinkedHashMap<>(scope);
             addParameterTypes(node, src, methodScope);
             String current = name.isEmpty() ? enclosing : name;
             int n = node.getChildCount();
             for (int i = 0; i < n; i++) {
-                walk(node.getChild(i), src, current, functions, calls, methodScope, functionLines);
+                walk(node.getChild(i), src, current, functions, calls, methodScope, functionLines, functionColumns);
             }
             return;
         }
@@ -88,7 +94,7 @@ class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
 
         int n = node.getChildCount();
         for (int i = 0; i < n; i++) {
-            walk(node.getChild(i), src, enclosing, functions, calls, scope, functionLines);
+            walk(node.getChild(i), src, enclosing, functions, calls, scope, functionLines, functionColumns);
         }
     }
 

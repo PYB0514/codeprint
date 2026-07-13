@@ -1591,6 +1591,8 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 
 ## 함수 노드 줄 번호 추출 (Java·TypeScript/JS 우선) — VS Code 워치모드 확장 선결 작업 (2026-07-13, codeprint_121)
 
+> ⚠️ **대체됨 (2026-07-13, codeprint_122)** — "IDE 컬럼 정밀도 개선 — line/col 기준 통일(nameNode)"로 대체. `line`을 어노테이션 포함 정의 시작줄로 유지한 채 컬럼(nameNode 기준)을 추가하자 서로 다른 줄을 가리키는 버그가 드러남. 아래 원문은 이력 보존용.
+
 **배경.** 사용자가 데스크탑 워치모드의 남은 항목(VS Code 확장, 저장 시 인라인 경고)을 다음 작업으로 선택. 착수 전 두 가지를 발견함.
 
 **발견 1 — `watchLocal` 데몬이 실제로 깨져 있었음.** PROGRESS.md 백로그엔 "완료"로 기록돼 있었으나 `LocalWatcher.java`(2026-07-11 gitignore 전환 결정으로 로컬 디스크엔 남아있어야 했음)가 디스크에서 실제로 사라져 있어 `./gradlew watchLocal` 실행 시 `ClassNotFoundException`. git 히스토리(gitignore 전환 직전 마지막 커밋 `cf3e20f`)에서 원문을 복구해 로컬 디스크에 재배치(커밋 안 함, 기존 설계 그대로 로컬 전용 유지) — 정상 동작 재확인.
@@ -1638,3 +1640,21 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 - **한계 — VS Code UI 자체(실제 에디터 내 물결선 표시)는 미검증.** Extension Development Host(F5)를 여는 GUI 자동화 도구가 없어, "Diagnostics API 호출까지"는 데이터 흐름으로 검증했으나 "실제로 에디터에 표시되는지"는 사용자가 직접 `vscode-extension/`을 VS Code로 열어 F5로 확인해야 함.
 
 **다음 단계(다음 컨텍스트).** 사용자가 F5로 실제 렌더링 확인 → 이슈 있으면 피드백 받아 수정. 이후 남은 항목: 마켓플레이스 배포 여부·게이팅 설계(결정 2 재논의 필요), 나머지 9개 언어 줄 번호, `useCallback` 함수 추출 갭(별도 task 진행 중).
+
+## IDE 컬럼 정밀도 개선 — line/col 기준을 nameNode로 통일 (2026-07-13, codeprint_122)
+
+**대체: "함수 노드 줄 번호 추출"(2026-07-13, codeprint_121)** — `functionLines`가 `node.getStartPoint()`(정의 전체 시작, 어노테이션 포함)를 쓰던 것을 `nameNode.getStartPoint()`(식별자 자신의 위치)로 변경. 번복 이유는 아래 발견 참조.
+
+**배경.** PRODUCT_STRATEGY.md §17.2의 1a(Sonnet 담당, 사용자 사전 확인됨) — 지금은 경고 줄 전체(0~200자)에 밑줄이 그어지는 걸 tree-sitter `getEndPoint()`로 실제 식별자(함수명) 위치만 밑줄 치도록 좁히는 작업.
+
+**설계.** 함수명 식별자의 시작 컬럼(0-indexed)만 저장하고 끝 컬럼은 `GraphBuilder`에서 `시작컬럼 + funcName.length()`로 계산해 함께 저장(소비 측 재계산 불필요, 클래스 필드 개수도 절약).
+
+**구현.** `TreeSitterJavaAnalyzer`/`TreeSitterTypescriptAnalyzer`의 `Result`에 `functionColumns`(Map<String,Integer>) 추가 — Java는 기존 `nameNode` 재사용, TS는 `nameOf()`/`assignmentTargetName()`이 텍스트만 반환하던 것을 `nameNodeOf()`/`assignmentTargetNode()`로 리팩토링해 TSNode 자체를 반환하도록 바꿔 컬럼을 얻음. `ParsedFile`에 `functionColumns` 필드 추가(기존 26개 필드 레코드의 하위호환 생성자 오버로드 패턴 그대로 이어감). `GraphBuilder`가 FUNCTION 노드 metadata에 `col`/`endCol` 저장(기존 `line` 저장과 대칭). `GraphWarningService`에 `attachPrimaryColumn` 신설, 경고에 `col`/`endCol` 부여. `vscode-extension/src/extension.ts`는 `col`/`endCol`이 있으면 `new vscode.Range(line, col, line, endCol)`, 없으면 기존 폴백(줄 전체) 유지.
+
+**실측에서 발견한 버그 — line과 col이 서로 다른 줄을 가리킴.** `watchLocal`로 실제 `watch-warnings.json`을 생성해 대조하던 중 `AnalysisRunner.run`(줄 33=line, col=16)의 33번째 줄이 `@Async`(어노테이션)라 16번째 컬럼이면 줄 길이(11자)를 넘어서는 위치임을 발견. 원인은 `line`(codeprint_121에서 "정의 블록 시작, 어노테이션 포함"으로 의도적으로 설계)과 `col`(이번에 nameNode 기준으로 신규 추가)이 어노테이션이 있는 함수에서 서로 다른 줄을 참조하기 때문 — VS Code `Range(line, col, line, endCol)`는 `line`과 `col`을 한 지점으로 합성하므로, 어노테이션이 있는 메서드(이 저장소 실제 경고 5건 중 2건: `@Async`/`@Transactional`의 `AnalysisRunner.run`, `@Override`의 `OAuth2SuccessHandler.onAuthenticationSuccess`)에서 밑줄이 엉뚱한 위치에 그어지는 실제 버그였음.
+
+**해결.** `line`의 유일한 실제 소비자가 `extension.ts`(VS Code 인라인 경고 용도)뿐임을 확인(`file`처럼 PR 코멘트용으로 아직 쓰이지 않음) — "정의 블록 시작"보다 "식별자가 실제로 있는 줄"이 그 목적에 더 정확하다고 판단해 `functionLines`도 `nameNode` 기준으로 통일. TS analyzer는 데코레이터(`@Get()` 등)가 붙는 `method_definition` 등 3개 케이스 전부 동일하게 통일(변수 선언류는 데코레이터가 안 붙어 원래도 영향 없었음).
+
+**검증.** 신규 단위 테스트 6종(`StaticCodeAnalyzerTest` 컬럼 추출 2·`GraphBuilderTest` 컬럼 메타데이터 1·`GraphWarningServiceTest` 컬럼 부여 2, 총 5 — 위 버그 수정은 기존 line 테스트가 어노테이션 없는 케이스라 회귀 없이 그대로 통과) 전부 green. **실측 교차검증** — `GraphBuilder.build`(col=17, "    public Graph "가 17자와 일치)·`GraphPage.tsx`의 `GraphPageInner`(col=9, "function "이 9자와 일치) 2건을 grep 실측과 대조해 정확히 일치. **버그 재현·수정 확인** — `watchLocal`로 수정 전/후 `watch-warnings.json`을 각각 생성해 `AnalysisRunner.run`이 line=33→35(어노테이션 줄→실제 시그니처 줄)로 바뀌며 col=16과 같은 줄을 가리키게 됨을 확인(수정 전 33행 "    @Async"(11자)에 col 16은 줄 밖, 수정 후 35행 "    public void run("의 16번째 문자가 정확히 "r"). 전체 백엔드 테스트 800건(기존 795+신규 5) green(Docker Postgres 기동). `analyzeLocal` 자가검사 HIGH_FAN_OUT 5건 베이스라인 불변. `npx tsc -p ./`(vscode-extension) 클린 컴파일.
+
+**한계.** ①Java·TypeScript/JavaScript만(1b로 나머지 9개 언어 확장 예정) ②동명 오버로드는 여전히 첫 정의의 컬럼만 유지(줄과 동일한 근사 범위) ③VS Code 실제 에디터 렌더링(밑줄이 정확히 식별자 폭만 덮는지)은 codeprint_121과 동일한 한계로 이번 세션 미검증 — JSON 페이로드 레벨(`col`/`endCol` 값 자체)까지는 실측 확인, Extension Development Host(F5) GUI 확인은 사용자 몫으로 남김.

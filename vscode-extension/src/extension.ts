@@ -10,6 +10,8 @@ interface CodeprintWarning {
   message: string
   file?: string
   line?: number
+  col?: number
+  endCol?: number
   fingerprint?: string
 }
 
@@ -70,7 +72,10 @@ function reloadDiagnostics(outputFile: string, workspaceRoot: string) {
   for (const w of warnings) {
     if (!w.file) continue
     const line = Math.max(0, (w.line ?? 1) - 1)
-    const range = new vscode.Range(line, 0, line, 200)
+    // 컬럼 정보(Java/TS/JS FUNCTION 노드)가 있으면 식별자 범위만, 없으면 줄 전체를 밑줄
+    const range = w.col != null && w.endCol != null
+      ? new vscode.Range(line, w.col, line, w.endCol)
+      : new vscode.Range(line, 0, line, 200)
     const severity = SEVERITY_MAP[w.severity ?? 'MEDIUM'] ?? vscode.DiagnosticSeverity.Warning
     const diagnostic = new vscode.Diagnostic(range, `[${w.type}] ${w.message}`, severity)
     diagnostic.source = 'Codeprint'
