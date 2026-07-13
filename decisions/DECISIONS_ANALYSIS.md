@@ -1588,3 +1588,30 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 2. **저렴한 버전(함수 단위 "함수 안에 루프+레포지토리스러운 이름의 호출이 텍스트로 존재")**: `asyncMethods`/`transactionalMethods`처럼 독립 보조 스캔으로 만들면 자료구조 변경 없이 낮은 리스크로 구현 가능하나, 실제 타입 해소 없이 "이름이 레포지토리스럽게 생겼다"는 순수 이름 패턴 휴리스틱이라 정밀도가 낮음 — 바로 위 `MISSING_TRANSACTIONAL_DELETE`가 "메서드명+애노테이션 유무"라는 훨씬 강한 구조적 사실이었는데도 도그푸딩에서 15건 오탐이 났던 전례를 감안하면, 더 약한 신호로는 오탐이 그보다 심할 가능성이 높음. 게다가 이 저렴한 버전이 잘 안 통하더라도 "정밀 버전(실제 타입해소+데이터흐름)도 가치가 없다"는 결론으로 이어지진 않음 — 실패 양상이 서로 달라 유효한 PoC가 못 됨.
 
 **결정.** 이번 세션엔 착수하지 않고 보류. 재추진 조건: ①정밀 버전은 `functionCalls`를 호출 지점 단위로 리모델링할 명확한 다른 수요가 먼저 생기거나(예: 다른 기능이 같은 리모델링을 필요로 함) ②저렴한 버전은 실제 사용자 신고(자가개선 루프의 "오탐 신고" 인프라, `memory/project_selfimprovement_loop` 참조)로 N+1이 실제로 자주 문제되는 패턴임이 확인된 뒤 재검토.
+
+## 함수 노드 줄 번호 추출 (Java·TypeScript/JS 우선) — VS Code 워치모드 확장 선결 작업 (2026-07-13, codeprint_121)
+
+**배경.** 사용자가 데스크탑 워치모드의 남은 항목(VS Code 확장, 저장 시 인라인 경고)을 다음 작업으로 선택. 착수 전 두 가지를 발견함.
+
+**발견 1 — `watchLocal` 데몬이 실제로 깨져 있었음.** PROGRESS.md 백로그엔 "완료"로 기록돼 있었으나 `LocalWatcher.java`(2026-07-11 gitignore 전환 결정으로 로컬 디스크엔 남아있어야 했음)가 디스크에서 실제로 사라져 있어 `./gradlew watchLocal` 실행 시 `ClassNotFoundException`. git 히스토리(gitignore 전환 직전 마지막 커밋 `cf3e20f`)에서 원문을 복구해 로컬 디스크에 재배치(커밋 안 함, 기존 설계 그대로 로컬 전용 유지) — 정상 동작 재확인.
+
+**발견 2 — 그래프 모델에 줄 번호가 없음.** `Node`는 `filePath`만 갖고 정확한 소스 줄 위치가 없어, VS Code 인라인 경고(특정 줄에 물결선)를 만들려면 파서 확장이 선행돼야 함이 드러남. 사용자에게 스코프를 확인받아 "줄 번호 추출부터 먼저 구축"으로 진행.
+
+**조사 결과 — 예상보다 저비용.** `StaticCodeAnalyzer`는 이미 tree-sitter(AST) 기반(`io.github.bonede:tree-sitter`)이라, 각 언어 분석기의 `walk()`가 함수 정의 노드를 순회하는 시점에 `TSNode.getStartPoint().getRow()`(0-indexed)로 줄 번호를 바로 얻을 수 있음(javap로 `TSNode`/`TSPoint` API 직접 확인) — 별도 파서 도입이나 오프셋 계산 없이 "이미 있지만 안 읽던 값"을 뽑아 쓰는 수준.
+
+**결정 — 범위를 Java·TypeScript/JS로 한정(11개 언어 중).** 이 저장소 자체(Java 백엔드+TS 프론트)로 먼저 도그푸딩할 수 있고, 열화판 공개 Skill 착수 때도 동일 원칙(Codeprint 자체 구성 언어 우선)을 썼던 전례를 따름. 나머지 9개 언어는 fast-follow로 남김.
+
+**구현.**
+1. `TreeSitterJavaAnalyzer.Result`/`TreeSitterTypescriptAnalyzer.Result`에 `Map<String,Integer> functionLines`(함수명→정의 시작 줄, 1-indexed) 추가 — `walk()`에서 함수 정의 발견 시 `putIfAbsent`로 기록(동명 오버로드는 첫 정의만 유지 — 오버로드별 정밀 구분은 범위 밖, 코드 주석으로 명시).
+2. `ParsedFile`에 `functionLines` 필드 추가 — 기존 26개 필드 레코드의 누적된 하위호환 생성자 오버로드 패턴을 그대로 이어감(새 생성자 하나만 추가, 기존 호출부 전부 무변경 컴파일 확인).
+3. `Node.metadata`(이미 JSONB)에 `"line"` 키로 저장(`GraphBuilder.build()`) — **스키마 마이그레이션 없음**. 기존 `mergedDefCount`(Integer)가 이미 같은 메커니즘으로 프로덕션에서 동작 중임을 실제 DB 조회로 확인해 안전성 재확인.
+4. `GraphWarningService.detect()`에 `attachPrimaryFile`과 대칭인 `attachPrimaryLine` 추가 — 경고 맵에 `"line"` 필드 부여(줄 정보 없는 노드면 미부여, 방어적).
+
+**검증.**
+- 신규 단위 테스트 7종(`StaticCodeAnalyzerTest` 3·`GraphBuilderTest` 1·`GraphWarningServiceTest` 2) 전부 통과.
+- **실측 교차검증** — 이 저장소의 실제 파일로 별도 스크립트 실행: `AnalysisRunner.run`(어노테이션 `@Async`/`@Transactional` 포함 시작 줄 33 — 어노테이션도 `method_declaration` 노드의 자식이라 포함되는 tree-sitter-java 문법 특성, 정의 블록 시작으로는 정확), `AnalysisRunner.waitForAnalysis`(줄 100, 어노테이션 없어 정확히 시그니처 줄), `GraphPage.tsx`의 `GraphPageInner`(줄 240)·`GraphPage`(줄 3330) — grep으로 확인한 실제 줄과 4건 모두 정확히 일치.
+- 전체 백엔드 테스트(795건) green(Docker Postgres 기동 상태). `analyzeLocal` 자가검사 — HIGH_FAN_OUT 5건 베이스라인 불변(신규 구조 위반 없음).
+
+**부수 발견(범위 밖, 별도 task로 분리) — `useCallback`/`useMemo` 등으로 감싼 함수가 `functions()` 추출에서 통째로 누락됨.** `handleReportFp = useCallback(async (w) => {...}, [projectId])` 같은 패턴이 `TreeSitterTypescriptAnalyzer`의 `isFunctionValue()`가 직접 화살표/함수 표현식만 인식하고 콜 표현식으로 감싼 내부 화살표 함수는 인식 못 해 발생 — 줄 번호 작업과 무관한 사전부터 있던 갭(이 함수가 애초에 FUNCTION 노드로 안 잡힘, DEAD_CODE/HIGH_FAN_OUT 등에도 영향). 별도 세션 작업으로 분리(spawn_task 등록).
+
+**한계.** ①Java·TypeScript/JavaScript만(나머지 9개 언어는 미착수) ②FUNCTION 노드만(FILE/DB_TABLE/API_ENDPOINT는 줄 정보 없음) ③동명 오버로드는 첫 정의 줄로 근사(정밀 구분 안 함) ④VS Code 확장 자체는 이번 범위 밖(다음 단계) ⑤`useCallback` 등으로 감싼 함수는 여전히 라인은커녕 노드 자체가 안 잡힘(위 부수 발견 참조, 별도 후속 작업 필요).

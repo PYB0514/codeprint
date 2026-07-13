@@ -503,6 +503,27 @@ class GraphBuilderTest {
         assertThat(fileNodeCount).isEqualTo(3);
     }
 
+    @Test
+    @DisplayName("ParsedFile.functionLines()의 줄 번호가 FUNCTION 노드 메타데이터에 저장된다")
+    void FUNCTION_노드_줄번호_메타데이터_저장() {
+        ParsedFile file = new ParsedFile("src/UserService.java", "Java",
+                List.of("findById"), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(), List.of(), Map.of(), List.of(), List.of(), List.of(), null,
+                Map.of(), List.of(), Map.of("findById", 3));
+
+        graphBuilder.build(projectId, analysisId, List.of(file));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+
+        Node funcNode = nodeCaptor.getAllValues().stream()
+                .filter(n -> n.getType() == NodeType.FUNCTION && "findById".equals(n.getName()))
+                .findFirst().orElseThrow();
+
+        assertThat(funcNode.getMetadata().get("line")).isEqualTo(3);
+    }
+
     // ── 인터페이스 → 구현체 우선 매핑 ─────────────────────────────────────────
 
     @Test

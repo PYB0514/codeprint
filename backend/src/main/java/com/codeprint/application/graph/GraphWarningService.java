@@ -49,8 +49,13 @@ public class GraphWarningService {
         warnings.addAll(detectIntentDrift(nodes, edges, intent));
         // 노드 위치 조회용 인덱스 — 경고에 발생 파일 경로를 부여하기 위함
         Map<UUID, String> idToFilePath = new HashMap<>();
+        // 노드 위치 조회용 인덱스 — 경고에 발생 줄 번호를 부여(Java/TS/JS FUNCTION 노드만 보유, VS Code 인라인 경고용)
+        Map<UUID, Integer> idToLine = new HashMap<>();
         for (Node n : nodes) {
             idToFilePath.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+            if (n.getMetadata() != null && n.getMetadata().get("line") instanceof Number num) {
+                idToLine.put(n.getId(), num.intValue());
+            }
         }
         // 사용자가 선언한 ignore 패턴(글로브)에 매치되는 경고를 그룹 억제 — opt-out 모델.
         // isEmpty()(모듈/규칙 유무)와 독립적으로 적용한다 — ignores만 선언한 의도도 유효하다.
@@ -68,6 +73,8 @@ public class GraphWarningService {
             w.put("fingerprint", fingerprint((String) w.get("type"), (String) w.get("message")));
             // 경고 발생 위치 파일 — primary 노드(첫 nodeId)의 경로. 그래프 없는 PR 코멘트에서 위치 표시용
             attachPrimaryFile(w, idToFilePath);
+            // 경고 발생 줄 번호 — primary 노드가 줄 정보를 보유한 FUNCTION 노드일 때만 부여
+            attachPrimaryLine(w, idToLine);
         }
         // 타입→파일→메시지 안정 정렬 — parallelStream 파싱(#363) 이후 실행마다 경고 집계 순회 순서가 달라져
         // PR 코멘트 diff 노이즈·UI 목록이 재분석마다 튀던 문제 해소(내용은 이미 결정적, 순서만 비결정적이었음)
@@ -85,6 +92,18 @@ public class GraphWarningService {
             return idToFilePath.getOrDefault(UUID.fromString(String.valueOf(rawId)), "");
         } catch (IllegalArgumentException e) {
             return "";
+        }
+    }
+
+    // 경고의 primary 노드(nodeIds[0]) 정의 줄을 line 필드로 부여 — 줄 정보 없는 노드(파일/DB/API, 또는 Java·TS/JS 외 언어)면 미부여
+    private void attachPrimaryLine(Map<String, Object> w, Map<UUID, Integer> idToLine) {
+        Object raw = w.get("nodeIds");
+        if (!(raw instanceof List<?> nodeIds) || nodeIds.isEmpty()) return;
+        try {
+            Integer line = idToLine.get(UUID.fromString(String.valueOf(nodeIds.get(0))));
+            if (line != null) w.put("line", line);
+        } catch (IllegalArgumentException ignored) {
+            // nodeIds[0]가 UUID 형식이 아니면 위치 미부여 (방어적)
         }
     }
 

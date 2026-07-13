@@ -120,6 +120,11 @@ public class GraphBuilder {
                     int defCount = pf.functionDefCounts().getOrDefault(funcName, 1);
                     if (defCount >= 2) meta.put("mergedDefCount", defCount);
                 }
+                // 정의 시작 줄(1-indexed, Java/TS/JS만) — VS Code 인라인 경고가 이 줄을 가리킴
+                if (pf.functionLines() != null) {
+                    Integer line = pf.functionLines().get(funcName);
+                    if (line != null) meta.put("line", line);
+                }
                 funcNode.updateMetadata(meta);
                 graphRepository.saveNode(funcNode);
                 funcNodeIds.put(pf.filePath() + "::" + funcName, funcNode.getId());

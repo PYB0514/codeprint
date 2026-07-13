@@ -131,6 +131,30 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("경고에 발생 줄 번호(line)가 metadata에 line이 있는 primary 노드에서 부여된다")
+    void warning_carriesPrimaryLine() {
+        Node orphan = funcNodeWithPath("orphan", "/com/x/Svc.java");
+        orphan.updateMetadata(Map.of("line", 42));
+
+        List<Map<String, Object>> warnings = service.detect(List.of(orphan), List.of());
+
+        assertThat(warnings).anySatisfy(w -> {
+            assertThat(w.get("type")).isEqualTo("DEAD_CODE");
+            assertThat(w.get("line")).isEqualTo(42);
+        });
+    }
+
+    @Test
+    @DisplayName("primary 노드에 line metadata가 없으면 line 필드가 부여되지 않는다")
+    void warning_noLineMetadata_noLineField() {
+        Node orphan = funcNodeWithPath("orphan", "/com/x/Svc.java");
+
+        List<Map<String, Object>> warnings = service.detect(List.of(orphan), List.of());
+
+        assertThat(warnings).anySatisfy(w -> assertThat(w).doesNotContainKey("line"));
+    }
+
+    @Test
     @DisplayName("A→B→C→A 3노드 순환 의존 감지")
     void cyclicImport_threeNodes() {
         Node a = fileNode("A");
