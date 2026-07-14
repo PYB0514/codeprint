@@ -31,6 +31,9 @@ public class AdminDigestService {
     static final int DOD_MIN_BASE = 10;
     // 미처리 문의 백로그 경고 임계 — 이 이상 쌓이면 응대 지연 신호
     static final int OPEN_FEEDBACK_BACKLOG_THRESHOLD = 10;
+    // DB 크기 경고 임계 — Railway Hobby 볼륨 상한(500MB)의 80%. 디스크 풀로 분석이 조용히 실패했던
+    // [G-4] 사고 재발방지용(`decisions/DECISIONS_INFRA.md` "프로덕션 Postgres 디스크 풀 사고" 참조)
+    static final long DB_SIZE_WARNING_BYTES = 400L * 1024 * 1024;
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -38,8 +41,14 @@ public class AdminDigestService {
     private final AdminMetricsQuery metricsQuery;
     private final ApplicationEventPublisher eventPublisher;
 
-    // 순수 로직 — 오늘 지표 + 전일 스냅샷(null 가능) + 현재 미처리 문의 게이지로 이상 신호를 판정
+    // 순수 로직 — 오늘 지표 + 전일 스냅샷(null 가능) + 현재 미처리 문의 게이지로 이상 신호를 판정 (DB 크기 게이지 없는 호출용)
     public Digest computeDigest(LocalDate date, DailyMetrics today, DailyStats yesterday, int openFeedback) {
+        return computeDigest(date, today, yesterday, openFeedback, 0L, List.of());
+    }
+
+    // DB 크기·상위 테이블 게이지까지 포함한 전체 버전 — 임계 초과 시 디스크 풀 사고[G-4] 재발방지 이상 신호 추가
+    public Digest computeDigest(LocalDate date, DailyMetrics today, DailyStats yesterday, int openFeedback,
+                                 long dbSizeBytes, List<Digest.TableSize> topTables) {
         List<String> anomalies = new ArrayList<>();
 
         if (today.analysesTotal() >= MIN_ANALYSES_FOR_RATE) {
@@ -59,7 +68,23 @@ public class AdminDigestService {
             anomalies.add("미처리 문의 " + openFeedback + "건 누적");
         }
 
-        return new Digest(date, today, openFeedback, anomalies);
+        if (dbSizeBytes >= DB_SIZE_WARNING_BYTES) {
+            anomalies.add("DB 크기 " + formatMb(dbSizeBytes) + "MB — Hobby 볼륨 상한 근접");
+        }
+
+        return new Digest(date, today, openFeedback, dbSizeBytes, topTables, anomalies);
+    }
+
+    // 바이트를 MB 정수로 반올림
+    private static long formatMb(long bytes) {
+        return Math.round(bytes / (1024.0 * 1024.0));
+    }
+
+    // 크기 상위 3개 테이블 조회 — Object[](이름, 바이트) 로우를 값 객체로 변환
+    private List<Digest.TableSize> topTables() {
+        return metricsQuery.topTableSizes(3).stream()
+                .map(row -> new Digest.TableSize((String) row[0], ((Number) row[1]).longValue()))
+                .toList();
     }
 
     // 전일 대비 변화율이 임계를 넘으면 이상 신호 추가
@@ -81,8 +106,9 @@ public class AdminDigestService {
         if (recent.isEmpty()) return Optional.empty();
         DailyStats latest = recent.get(0);
         DailyStats prev = recent.size() > 1 ? recent.get(1) : null;
-        // 미처리 문의는 시점 게이지라 스냅샷에 없음 — 항상 현재값으로 조회
-        return Optional.of(computeDigest(latest.getStatDate(), metricsOf(latest), prev, metricsQuery.openFeedbackCount()));
+        // 미처리 문의·DB 크기는 시점 게이지라 스냅샷에 없음 — 항상 현재값으로 조회
+        return Optional.of(computeDigest(latest.getStatDate(), metricsOf(latest), prev,
+                metricsQuery.openFeedbackCount(), metricsQuery.dbSizeBytes(), topTables()));
     }
 
     // 스냅샷 엔티티 → 지표 값 객체 변환
@@ -99,7 +125,8 @@ public class AdminDigestService {
         Instant end = date.plusDays(1).atStartOfDay(KST).toInstant();
         DailyMetrics today = metricsQuery.collect(start, end);
         DailyStats yesterday = dailyStatsRepository.findByStatDate(date.minusDays(1)).orElse(null);
-        Digest digest = computeDigest(date, today, yesterday, metricsQuery.openFeedbackCount());
+        Digest digest = computeDigest(date, today, yesterday, metricsQuery.openFeedbackCount(),
+                metricsQuery.dbSizeBytes(), topTables());
 
         // 스냅샷 업서트 — 같은 날짜 행이 있으면 제자리 UPDATE, 없으면 INSERT
         // (delete+insert는 한 트랜잭션 내 Hibernate flush가 INSERT를 DELETE보다 먼저 실행해 유니크 위반)
@@ -130,7 +157,15 @@ public class AdminDigestService {
                 .append(" · 분석 ").append(m.analysesTotal()).append("(실패 ").append(m.analysesFailed()).append(")")
                 .append(" · 결제 ").append(m.paymentsCount()).append("건 ").append(m.paymentsAmount()).append("원")
                 .append(" · 문의 ").append(m.newFeedback())
-                .append(" · 미처리 ").append(d.openFeedback());
+                .append(" · 미처리 ").append(d.openFeedback())
+                .append(" · DB ").append(formatMb(d.dbSizeBytes())).append("MB");
+        if (!d.topTables().isEmpty()) {
+            sb.append(" (");
+            sb.append(d.topTables().stream()
+                    .map(t -> t.name() + " " + formatMb(t.bytes()) + "MB")
+                    .reduce((a, b) -> a + ", " + b).orElse(""));
+            sb.append(")");
+        }
         if (d.hasAnomaly()) {
             sb.append("\n⚠ 이상: ").append(String.join(" / ", d.anomalies()));
         }

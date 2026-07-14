@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -86,5 +87,37 @@ class AdminDigestServiceTest {
     void openFeedbackBacklog_belowThreshold_notFlagged() {
         Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 9);
         assertThat(d.anomalies()).noneMatch(a -> a.contains("미처리 문의"));
+    }
+
+    @Test
+    @DisplayName("DB 크기가 임계(400MB) 이상이면 디스크 풀 재발방지 이상으로 감지")
+    void dbSizeAboveThreshold_flagged() {
+        long size = 420L * 1024 * 1024;
+        Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 0, size, List.of());
+        assertThat(d.anomalies()).anyMatch(a -> a.contains("DB 크기") && a.contains("420"));
+    }
+
+    @Test
+    @DisplayName("DB 크기가 임계 미만이면 이상 없음")
+    void dbSizeBelowThreshold_notFlagged() {
+        long size = 300L * 1024 * 1024;
+        Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 0, size, List.of());
+        assertThat(d.anomalies()).noneMatch(a -> a.contains("DB 크기"));
+    }
+
+    @Test
+    @DisplayName("상위 테이블 목록이 Digest에 그대로 전달된다")
+    void topTables_passedThrough() {
+        List<Digest.TableSize> tables = List.of(new Digest.TableSize("edges", 100L));
+        Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 0, 0L, tables);
+        assertThat(d.topTables()).isEqualTo(tables);
+    }
+
+    @Test
+    @DisplayName("4-인자 오버로드는 DB 크기 게이지 없이 이상 없음으로 동작(하위 호환)")
+    void fourArgOverload_noDbSizeAnomaly() {
+        Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 0);
+        assertThat(d.dbSizeBytes()).isZero();
+        assertThat(d.topTables()).isEmpty();
     }
 }
