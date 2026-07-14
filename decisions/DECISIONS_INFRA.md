@@ -2,6 +2,18 @@
 
 ---
 
+## exploreLocal find/neighbors "결함" — 실은 파라미터명 오사용 (2026-07-15)
+
+**문제.** Context126(Fable)이 "`-PqueryMode=find -Pquery=X`가 쿼리를 무시하고 동일한 전체 목록을 반환"하는 도구 결함을 발견했다고 기록. 이번 세션(codeprint_127, Sonnet)에서 재현 시도 중 `neighbors` 모드도 같은 증상(엉뚱한 후보 목록 반환)을 보여 재확인.
+
+**원인.** `backend/build.gradle`의 `exploreLocal` 태스크는 `project.hasProperty('queryTarget')`로 값을 읽는데, 두 세션 모두 `-Pquery=X`(잘못된 파라미터명)로 호출했다 — Gradle이 `queryTarget` 프로퍼티를 못 찾아 빈 문자열로 폴백, `LocalGraphQuery`가 검색어 없이 실행돼 `find`는 전체 목록을, `neighbors`는 모호한 후보 목록을 반환한 것. `-PqueryTarget=X`로 정확히 호출하니 정상 동작 확인(`GraphRetentionPolicy` 검색 시 관련 파일/함수 11개만 정확히 반환).
+
+**결정.** 코드 수정 없음(도구 자체는 정상) — `CLAUDE.md` §0 exploreLocal 사용법에 `-PqueryTarget`(`-Pquery` 아님) 표기를 명시해 재발 방지.
+
+**결과.** 두 세션에 걸쳐 "도구 결함"으로 잘못 기록됐던 PROGRESS.md/Context126 서술은 오인이었음이 확인됨 — 실제 착수 대상 백로그 아님.
+
+---
+
 ## codeprint.dev 도메인 참조 일괄 제거 — 실서비스 주소로 교체 (2026-07-07)
 
 **문제.** README 대문·프론트 SEO 메타(canonical·og:url·og:image)·robots.txt·sitemap.xml이 전부 codeprint.dev를 가리켰는데, 2026-07-06 실측(HttpWebRequest, AllowAutoRedirect=false)으로 이 도메인이 무관한 외부 사이트(taig.io, openresty)로 302 리다이렉트됨을 확인. 방문자(면접관 포함)가 남의 사이트로 가고, canonical이 외부 도메인을 가리켜 SEO도 훼손되는 상태.

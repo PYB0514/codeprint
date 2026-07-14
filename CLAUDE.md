@@ -56,7 +56,7 @@
 
 **브라우저 검증·Cowork 도구 사용 기준 → §0b 참조.**
 
-**코드 구조 파악은 Glob/Grep/Read 반복 대신 `exploreLocal` 우선 사용한다.** 이 저장소 자체의 구조를 알아야 할 때(함수 위치·호출관계 등) `./gradlew exploreLocal -PqueryMode=repoMap|find|neighbors`(`backend/build/codeprint-local/`에 결과 저장, Read 도구로 확인)를 먼저 시도 — 여러 번 파일을 열어보는 탐색보다 토큰이 훨씬 적게 든다. push 전 워닝 자가검사(`analyzeLocal`)와는 별개 도구, 세션 내내 필요할 때마다 사용(2026-07-10 도입 경위 `decisions/DECISIONS_BACKEND.md` 참조). **강제 장치**: `backend/src`·`frontend/src`에서 식별자를 Grep/Glob으로 찾으려 하면 `.claude/hooks/check-explore-local-first.js`가 exploreLocal 결과 파일에 그 대상이 있고 소스보다 최신인지(시간창이 아니라 실제 소스 변경 여부로 판단) 확인해 아니면 자동 차단한다(사용자 승인 불필요, exploreLocal 재실행으로 스스로 해소, 경위 `decisions/DECISIONS_INFRA.md` 참조) — decisions/·docs/ 등 비-소스 검색과 텍스트 내용 검색은 그대로 허용된다.
+**코드 구조 파악은 Glob/Grep/Read 반복 대신 `exploreLocal` 우선 사용한다.** 이 저장소 자체의 구조를 알아야 할 때(함수 위치·호출관계 등) `./gradlew exploreLocal -PqueryMode=repoMap|find|neighbors`(`backend/build/codeprint-local/`에 결과 저장, Read 도구로 확인)를 먼저 시도 — **find·neighbors 모드는 검색어를 `-PqueryTarget=식별자`로 반드시 함께 넘긴다**(`-Pquery=` 아님 — 이 이름으로 넘기면 Gradle이 인식 못 해 조용히 빈 값으로 처리되고 repoMap과 동일한 전체 목록이 반환된다, 2026-07-15 두 세션에 걸쳐 "find 모드 결함"으로 오인됐던 원인 — 실제로는 도구 결함이 아니라 파라미터명 오사용, `decisions/DECISIONS_INFRA.md` 참조) — 여러 번 파일을 열어보는 탐색보다 토큰이 훨씬 적게 든다. push 전 워닝 자가검사(`analyzeLocal`)와는 별개 도구, 세션 내내 필요할 때마다 사용(2026-07-10 도입 경위 `decisions/DECISIONS_BACKEND.md` 참조). **강제 장치**: `backend/src`·`frontend/src`에서 식별자를 Grep/Glob으로 찾으려 하면 `.claude/hooks/check-explore-local-first.js`가 exploreLocal 결과 파일에 그 대상이 있고 소스보다 최신인지(시간창이 아니라 실제 소스 변경 여부로 판단) 확인해 아니면 자동 차단한다(사용자 승인 불필요, exploreLocal 재실행으로 스스로 해소, 경위 `decisions/DECISIONS_INFRA.md` 참조) — decisions/·docs/ 등 비-소스 검색과 텍스트 내용 검색은 그대로 허용된다.
 
 ---
 
