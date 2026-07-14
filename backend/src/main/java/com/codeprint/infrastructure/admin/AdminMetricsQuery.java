@@ -40,6 +40,23 @@ public class AdminMetricsQuery {
         return n.intValue();
     }
 
+    // 현재 DB 총 크기(바이트) — Railway 디스크 풀 사고[G-4] 재발방지용 상시 게이지
+    public long dbSizeBytes() {
+        Number n = (Number) em.createNativeQuery("SELECT pg_database_size(current_database())").getSingleResult();
+        return n.longValue();
+    }
+
+    // 크기 상위 N개 테이블(이름, 바이트) — 디스크 급증 시 원인 테이블을 다이제스트만으로 바로 파악
+    public List<Object[]> topTableSizes(int limit) {
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = em.createNativeQuery(
+                "SELECT relname, pg_total_relation_size(relid) AS sz FROM pg_catalog.pg_statio_user_tables "
+                        + "ORDER BY sz DESC LIMIT :limit")
+                .setParameter("limit", limit)
+                .getResultList();
+        return rows;
+    }
+
     // ADMIN 역할 사용자 ID 목록 (다이제스트 수신자)
     public List<UUID> adminUserIds() {
         @SuppressWarnings("unchecked")

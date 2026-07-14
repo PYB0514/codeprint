@@ -2,6 +2,18 @@
 
 ---
 
+## GATE_GAPS.md [G-4] 재발방지 — PR 리뷰 실패 상태 명시 + 일일 다이제스트 DB 크기 지표(2026-07-15)
+
+**문제.** [G-4] 사고(`decisions/DECISIONS_INFRA.md` "프로덕션 Postgres 디스크 풀 사고")의 근본 원인은 두 가지가 겹쳐서 발견이 늦어진 것 — ①`PrReviewRunner.reviewAsync`가 예외를 로그로만 남기고 삼켜, `codeprint/structure` 체크가 실패가 아니라 아예 응답 없음(`mergeStateStatus: BLOCKED`)으로 나타나 원인 파악이 어려웠음. ②디스크 사용량을 사전에 알 방법이 없어 사고가 터지고 나서야 발견.
+
+**결정.** ①`PrReviewRunner`가 `review()` 실행 중 예외를 잡으면, `AnalysisFacade.resolveOwnedRepoUrl`+`GitHubApiClient.fetchPullRequestHeadSha`로 PR head SHA를 다시 조회해 `error` 상태를 게시(이 재조회 자체가 실패해도 로그만 남기고 조용히 흡수 — webhook 응답에 영향 없다는 기존 원칙 유지). ②`AdminDigestService`에 `computeDigest`의 5-인자 오버로드(`dbSizeBytes`, `topTables`)를 추가해 DB 총 크기가 Railway Hobby 볼륨 상한(500MB)의 80%(400MB)를 넘으면 이상 신호로 표시, 크기 상위 3개 테이블도 다이제스트 문구에 포함.
+
+**검토한 대안.** ①`PrReviewRunner`가 review() 진입 전에 미리 "pending" 상태를 먼저 게시해두는 방식 — 기각(정상 흐름에서도 매번 API 호출 1회가 추가돼 낭비, 실패 시에만 사후 게시가 더 단순). ②DB 크기 경고를 별도 스케줄러로 분리 — 기각(이미 매일 도는 다이제스트에 자연스럽게 얹을 수 있어 새 인프라 불필요).
+
+**결과.** `PrReviewRunnerTest` 3건(정상 완료 시 미게시, 실패 시 error 게시, 실패 상태 게시 자체 실패 시에도 무해) 신규. `AdminDigestServiceTest` 4건(임계 초과/미만, topTables 전달, 4-인자 하위호환) 신규. 전체 927건 green(로컬 Docker DB 포함). `analyzeLocal` 신규 경고 없음. `GATE_GAPS.md` [G-4] 항목의 "재발 방지" 상태를 미착수→완료로 갱신.
+
+---
+
 ## 갤러리 커밋 SHA 동일 시 재분석 스킵 — 저장 레버 ①(2026-07-15, §18.8-④ 1단계)
 
 **문제.** 실측(Railway 프로덕션 직접 psql 조회) 결과 시스템(갤러리) 그래프가 60개(리포 15개×4버전)로 개인 그래프 10개보다 훨씬 많고, 노드/엣지 기준 갤러리가 전체의 81~84%를 차지함을 확인. `FeaturedRepoService.refreshDailyFeatured()`가 매일 06:00 KST에 무조건 5개 레포를 재분석해, 커밋이 하루 동안 바뀌지 않은 레포도 매번 새 그래프 버전을 쌓고 있었다.
