@@ -1,0 +1,5 @@
+{
+  "warnings": [
+    { "type": "MISSING_CONVERTER_MIGRATION", "count": 1 }
+  ]
+}

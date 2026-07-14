@@ -176,8 +176,9 @@ public class StaticCodeAnalyzer {
         List<DbAccess> dbAccesses = extractDbAccesses(masked, language);
         String extendedClass = extractExtendedClass(masked, language);
         List<String> transactionalMethods = extractTransactionalMethods(masked, language);
+        List<String> interfaceMethods = extractInterfaceMethods(masked, language, functions);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions, transactionalMethods, functionLines, functionColumns);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions, transactionalMethods, functionLines, functionColumns, interfaceMethods);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함
@@ -724,13 +725,38 @@ public class StaticCodeAnalyzer {
         Matcher m = Pattern.compile(
                 "\\bclass\\s+\\w[\\w<>]*(?:\\s+extends\\s+[\\w<>,.\\s]+)?\\s+implements\\s+([\\w<>,.\\s]+?)\\s*\\{"
         ).matcher(content);
-        if (!m.find()) return List.of();
-        List<String> result = new ArrayList<>();
-        for (String part : m.group(1).split(",")) {
-            String name = part.trim().replaceAll("<[^>]*>", "").trim();
-            if (!name.isEmpty()) result.add(name);
+        if (m.find()) {
+            List<String> result = new ArrayList<>();
+            for (String part : m.group(1).split(",")) {
+                String name = part.trim().replaceAll("<[^>]*>", "").trim();
+                if (!name.isEmpty()) result.add(name);
+            }
+            return result;
         }
-        return result;
+        // ★도그푸딩 실측(2026-07-14): Spring Data Repository 인터페이스가 JpaRepository<...>와 도메인 포트
+        // 인터페이스를 함께 extends해 프록시로 한 번에 구현하는 패턴(예: FooJpaRepository extends
+        // JpaRepository<X,ID>, FooRepository) — class implements가 아니라 interface extends라 위 정규식에
+        // 안 잡혀 BROKEN_INTERFACE_CHAIN이 도메인 포트 메서드 전체를 오탐했다.
+        if (language.equals("Java") || language.equals("Kotlin")) {
+            Matcher im = Pattern.compile(
+                    "\\binterface\\s+\\w[\\w<>]*\\s+extends\\s+([\\w<>,.\\s]+?)\\s*\\{"
+            ).matcher(content);
+            if (im.find()) {
+                List<String> result = new ArrayList<>();
+                for (String part : im.group(1).split(",")) {
+                    String name = part.trim().replaceAll("<[^>]*>", "").trim();
+                    // 완전한정 이름(com.example.FooRepository)이면 단순 이름만 취한다 — ifaceNameToFile이
+                    // 파일명(단순 이름) 기준으로 매칭하므로 패키지 경로가 붙으면 매칭이 안 된다(도그푸딩 실측).
+                    int lastDot = name.lastIndexOf('.');
+                    if (lastDot >= 0) name = name.substring(lastDot + 1);
+                    // 제네릭 프레임워크 타입 자체(JpaRepository 등)는 "구현 대상 도메인 인터페이스"가 아니므로 제외
+                    if (name.isEmpty() || name.matches("(?:Jpa|Crud|PagingAndSorting)?Repository")) continue;
+                    result.add(name);
+                }
+                return result;
+            }
+        }
+        return List.of();
     }
 
     // "class Foo extends Bar"에서 상위 클래스명 추출 — 상속 메서드 호출 해소용(엣지 정확도 패턴 A', Java 한정).
@@ -1333,6 +1359,65 @@ public class StaticCodeAnalyzer {
             if (name != null) result.add(name);
         }
         return result;
+    }
+
+    // 파일의 최상위 타입이 interface로 선언되면(파일명=인터페이스명 관례, implementedInterfaces 매칭과 동일 전제)
+    // 그 파일의 모든 메서드는 인터페이스 추상 메서드 — BROKEN_INTERFACE_CHAIN이 구현체 존재 여부를 판정하는 데 사용
+    private List<String> extractInterfaceMethods(String content, String language, List<String> functions) {
+        if (!language.equals("Java") && !language.equals("Kotlin")) return List.of();
+        Matcher ifaceMatcher = Pattern.compile("\\binterface\\s+\\w[\\w<>]*[^{]*\\{").matcher(content);
+        if (!ifaceMatcher.find()) return List.of();
+        // Spring Data Repository(JpaRepository/CrudRepository/PagingAndSortingRepository) 파생 인터페이스는
+        // 스프링이 런타임 프록시로 구현을 생성 — 소스에 implements/@Override 체인이 절대 나타나지 않는다
+        // (도그푸딩 실측 2026-07-14: 이 가드 없이는 findByX/deleteByX 등 파생 쿼리 137건이 전부 오탐).
+        if (Pattern.compile("extends\\s+(?:Jpa|Crud|PagingAndSorting)?Repository\\s*<").matcher(content).find()) {
+            return List.of();
+        }
+        // 인터페이스 자신의 최상위 본문만 본다 — 중첩 class/record/interface/enum(예: 포트 인터페이스 안에
+        // record 응답 타입을 선언하고 그 안에 헬퍼 메서드를 두는 패턴)의 메서드는 인터페이스 추상 메서드가
+        // 아니므로 제외해야 한다(도그푸딩 실측: ProjectAccessPort 안 record의 isOwnRepo가 오탐으로 잡혔다).
+        int bodyEnd = matchingBraceEnd(content, ifaceMatcher.end() - 1);
+        if (bodyEnd < 0) return List.of();
+        String ownBody = stripNestedTypeBodies(content.substring(ifaceMatcher.end(), bodyEnd));
+
+        List<String> result = new ArrayList<>();
+        for (String name : functions) {
+            if (Pattern.compile("\\b" + Pattern.quote(name) + "\\s*\\(").matcher(ownBody).find()) {
+                result.add(name);
+            }
+        }
+        return result;
+    }
+
+    // openBraceIdx 위치의 '{'와 짝이 맞는 '}' 인덱스를 깊이 카운팅으로 찾는다 — 없으면 -1
+    private int matchingBraceEnd(String content, int openBraceIdx) {
+        int depth = 0;
+        for (int i = openBraceIdx; i < content.length(); i++) {
+            char c = content.charAt(i);
+            if (c == '{') depth++;
+            else if (c == '}') {
+                depth--;
+                if (depth == 0) return i;
+            }
+        }
+        return -1;
+    }
+
+    // 본문 안의 중첩 class/record/interface/enum 선언 블록을 통째로 제거 — 최상위 멤버만 남긴다
+    private String stripNestedTypeBodies(String body) {
+        Matcher m = Pattern.compile("\\b(?:class|interface|record|enum)\\s+\\w[^{;]*\\{").matcher(body);
+        List<int[]> spans = new ArrayList<>();
+        while (m.find()) {
+            int braceIdx = m.end() - 1;
+            int end = matchingBraceEnd(body, braceIdx);
+            if (end < 0) continue;
+            spans.add(new int[]{m.start(), end + 1});
+        }
+        StringBuilder sb = new StringBuilder(body);
+        for (int i = spans.size() - 1; i >= 0; i--) {
+            sb.delete(spans.get(i)[0], spans.get(i)[1]);
+        }
+        return sb.toString();
     }
 
     // 프레임워크/런타임이 호출하는 메서드를 표시하는 어노테이션 — 부착 메서드는 코드상 호출부가 없어도 dead 아님

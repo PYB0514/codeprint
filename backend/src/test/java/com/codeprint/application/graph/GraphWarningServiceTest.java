@@ -217,9 +217,10 @@ class GraphWarningServiceTest {
     void interfaceChain_ok() {
         Node iface = funcNode("save", true);
         Node impl = funcNode("saveImpl", false);
+        // GraphBuilder 실제 방향: isInterfaceImpl 엣지는 source=인터페이스, target=구현체
         List<Map<String, Object>> warnings = service.detect(
                 List.of(iface, impl),
-                List.of(callEdge(UUID.randomUUID(), iface.getId(), true))
+                List.of(callEdge(iface.getId(), impl.getId(), true))
         );
         assertThat(warnings).isEmpty();
     }
@@ -227,13 +228,24 @@ class GraphWarningServiceTest {
     @Test
     @DisplayName("인터페이스 메서드에 구현체 엣지 없음 — BROKEN_INTERFACE_CHAIN 경고")
     void interfaceChain_broken() {
+        Node iface = funcNode("doWork", true);
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(iface),
+                List.of()
+        );
+        // DEAD_CODE 등 다른 타입 경고가 함께 감지될 수 있으므로 타입 필터 후 검증
+        assertThat(warnings).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("BROKEN_INTERFACE_CHAIN"));
+    }
+
+    @Test
+    @DisplayName("★도그푸딩 실측: Spring Data 기본 메서드명(save 등)은 구현 엣지 없어도 경고 없음(상속 제공, 소스에 재선언 안 됨)")
+    void interfaceChain_springDataBaseMethod_noWarning() {
         Node iface = funcNode("save", true);
         List<Map<String, Object>> warnings = service.detect(
                 List.of(iface),
                 List.of()
         );
-        assertThat(warnings).hasSize(1);
-        assertThat(warnings.get(0).get("type")).isEqualTo("BROKEN_INTERFACE_CHAIN");
+        assertThat(warnings).noneMatch(w -> "BROKEN_INTERFACE_CHAIN".equals(w.get("type")));
     }
 
     @Test

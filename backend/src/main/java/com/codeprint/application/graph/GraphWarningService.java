@@ -268,19 +268,31 @@ public class GraphWarningService {
     }
 
     // isInterfaceImpl 메타데이터가 있는 FUNCTION_CALL 엣지의 소스가 인터페이스인데 대응 구현체 엣지가 없는 경우
+    // ★버그 수정(2026-07-14, 벤치 실측): GraphBuilder는 isInterfaceImpl 엣지를 인터페이스→구현체 방향(source=인터페이스,
+    // target=구현체)으로 생성하는데(GraphBuilder.java 인터페이스 매칭 블록), 기존 코드는 getTargetNodeId()를 모아
+    // 인터페이스 자신의 nodeId와 대조했다 — target은 항상 구현체 쪽 ID라 인터페이스 ID와 절대 일치할 수 없어,
+    // 구현체가 있어도 매번 오탐하는 상태였다(핸드빌트 단위테스트만으로는 엣지 방향이 검증되지 않아 미발견).
+    // Spring Data CrudRepository/JpaRepository가 프레임워크 차원에서 제공하는 기본 메서드명 — 도메인 포트
+    // 인터페이스가 같은 이름으로 선언해도, 하위 Spring Data 인터페이스 소스에는 이 메서드들이 텍스트로
+    // 재선언되지 않는다(상속으로 자동 제공돼 SimpleJpaRepository가 구현) — 정적 분석으로는 구현 엣지를
+    // 원천적으로 찾을 수 없어 이름으로 제외한다(도그푸딩 실측 2026-07-14).
+    private static final Set<String> SPRING_DATA_BASE_METHODS = Set.of(
+            "save", "saveAll", "saveAndFlush", "findById", "findAll", "findAllById",
+            "deleteById", "delete", "deleteAll", "deleteAllById", "existsById", "count", "flush");
+
     private List<Map<String, Object>> detectBrokenInterfaceChains(List<Node> nodes, List<Edge> edges) {
-        // interfaceImpl 엣지 대상 nodeId 수집
-        Set<UUID> implTargets = new HashSet<>();
+        // isInterfaceImpl 엣지의 소스(인터페이스 쪽) nodeId 수집 — 이 집합에 있으면 구현체 엣지가 존재
+        Set<UUID> interfacesWithImpl = new HashSet<>();
         for (Edge e : edges) {
             if (e.getType() == EdgeType.FUNCTION_CALL) {
                 Object isImpl = e.getMetadata() != null ? e.getMetadata().get("isInterfaceImpl") : null;
                 if (Boolean.TRUE.equals(isImpl)) {
-                    implTargets.add(e.getTargetNodeId());
+                    interfacesWithImpl.add(e.getSourceNodeId());
                 }
             }
         }
 
-        // FUNCTION 노드 중 isInterface=true인데 implTargets에 없는 노드
+        // FUNCTION 노드 중 isInterface=true인데 interfacesWithImpl에 없는 노드
         Map<UUID, String> nameMap = new HashMap<>();
         for (Node n : nodes) {
             nameMap.put(n.getId(), n.getName());
@@ -293,8 +305,9 @@ public class GraphWarningService {
             if (meta == null) continue;
             Object isInterface = meta.get("isInterface");
             if (!Boolean.TRUE.equals(isInterface)) continue;
+            if (SPRING_DATA_BASE_METHODS.contains(n.getName())) continue;
 
-            if (!implTargets.contains(n.getId())) {
+            if (!interfacesWithImpl.contains(n.getId())) {
                 Map<String, Object> w = new LinkedHashMap<>();
                 w.put("type", "BROKEN_INTERFACE_CHAIN");
                 w.put("severity", "MEDIUM");

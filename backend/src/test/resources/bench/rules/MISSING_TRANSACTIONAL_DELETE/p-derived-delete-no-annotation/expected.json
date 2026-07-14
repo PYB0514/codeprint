@@ -1,0 +1,5 @@
+{
+  "warnings": [
+    { "type": "MISSING_TRANSACTIONAL_DELETE", "count": 1 }
+  ]
+}
