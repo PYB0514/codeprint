@@ -2,6 +2,20 @@
 
 ---
 
+## 갤러리 커밋 SHA 동일 시 재분석 스킵 — 저장 레버 ①(2026-07-15, §18.8-④ 1단계)
+
+**문제.** 실측(Railway 프로덕션 직접 psql 조회) 결과 시스템(갤러리) 그래프가 60개(리포 15개×4버전)로 개인 그래프 10개보다 훨씬 많고, 노드/엣지 기준 갤러리가 전체의 81~84%를 차지함을 확인. `FeaturedRepoService.refreshDailyFeatured()`가 매일 06:00 KST에 무조건 5개 레포를 재분석해, 커밋이 하루 동안 바뀌지 않은 레포도 매번 새 그래프 버전을 쌓고 있었다.
+
+**막다른 길.** 처음엔 `analyses.last_commit_sha`(V5)로 비교하려 했으나, `FeaturedAnalysisTriggerAdapter.triggerAnalysis()`가 `AnalysisRunner.run(..., branch=null, ...)`로 호출해 `AnalysisRunner`의 `if (branch != null)` 가드에 걸려 갤러리 리포는 `lastCommitSha`가 항상 null로 저장됨을 코드 확인으로 발견 — 이 필드로는 비교 불가.
+
+**결정.** `FeaturedRepo` 엔티티에 `lastAnalyzedCommitSha` 컬럼(V60)을 별도로 신설. `featureOne()`에서 매번 GitHub 기본 브랜치 최신 커밋 SHA(`GitHubApiClient.fetchLatestCommitShaOfDefaultBranch`, `/commits?per_page=1`로 브랜치명 사전조회 없이 1콜)를 조회해 저장된 값과 다를 때만 분석 트리거. 조회 실패(레이트리밋 등)는 안전하게 재분석 쪽으로 판단(스킵 안 함) — 기존 `RepoMetadataPort` 어댑터의 "실패해도 흐름은 막지 않는다" 원칙과 동일.
+
+**검토한 대안.** ①`analyses` 테이블에 브랜치 파라미터를 채워 넣어 기존 `lastCommitSha` 재사용 — 기각(featured 트리거 시점엔 아직 기본 브랜치명을 모름, `AnalysisRunner`가 분석 완료 후에야 브랜치 있으면 SHA를 채우는 구조라 사전 비교 타이밍과 안 맞음). ②GitHub API로 브랜치명 먼저 조회 후 `fetchLatestCommitSha(url, branch, token)` 재사용 — 기각(API 호출 2회, `/commits?per_page=1`이 브랜치 파라미터 없이 기본 브랜치 최신 커밋을 1콜로 반환해 더 단순).
+
+**결과.** `FeaturedRepoServiceTest`에 스킵/재분석/조회실패 3개 시나리오 회귀 테스트 추가(총 9건 green). 샌드박스 환경 자체의 TLS 인증서 체인 문제(schannel/PKIX 둘 다 실패)로 실제 GitHub API 아웃바운드 호출은 이 세션에서 라이브 검증 불가 — 기존에 프로덕션에서 이미 동작 중인 `fetchRepoMetadata`와 동일한 요청 패턴(공개 엔드포인트, 토큰 없음, 동일 에러 처리)이라는 점으로 대체 확인.
+
+---
+
 ## 노드 쓰기 IDOR 수정 — GraphCommandService (2026-07-08, 보안수정)
 
 **문제.** `GraphController.updateNodeAnnotation`/`updateNodePosition`이 `graphFacade.verifyGraphOwnership(graphId, userId)`로 그래프 소유권만 검증하고, `GraphCommandService.updateNodeAnnotation`/`updateNodePosition`은 `nodeId`로 곧장 노드를 조회·수정해 `node.getGraphId()`가 요청 경로의 `graphId`와 같은지 확인하지 않았다. 자기 소유 그래프 ID + 남의 그래프에 속한 nodeId를 조합하면 타인 노드의 주석·위치를 변조할 수 있었다(공개 그래프 nodeId는 `/api/share/{projectId}/graph` 응답에 그대로 노출돼 실제 공격 표면 존재 — Context105 MCP 도그푸딩 세션에서 발견, task_3f69223f).

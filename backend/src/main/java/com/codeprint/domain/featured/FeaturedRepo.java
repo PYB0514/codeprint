@@ -37,6 +37,9 @@ public class FeaturedRepo {
     @Column(name = "last_featured_at")
     private Instant lastFeaturedAt;
 
+    @Column(name = "last_analyzed_commit_sha", length = 50)
+    private String lastAnalyzedCommitSha;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -48,6 +51,16 @@ public class FeaturedRepo {
         this.stars = stars;
         this.description = description;
         this.lastFeaturedAt = now;
+    }
+
+    // 최신 커밋 SHA가 마지막 분석 시점과 같은지 — null(조회 실패)이면 항상 다르다고 판단해 안전하게 재분석
+    public boolean isCommitUnchanged(String latestCommitSha) {
+        return latestCommitSha != null && latestCommitSha.equals(lastAnalyzedCommitSha);
+    }
+
+    // 분석을 트리거한 시점의 커밋 SHA를 기록 — 조회 실패로 null이면 다음 라운드에 다시 판단하도록 그대로 null 저장
+    public void markCommitAnalyzed(String commitSha) {
+        this.lastAnalyzedCommitSha = commitSha;
     }
 
     // GitHub 클론용 HTTPS URL로 변환

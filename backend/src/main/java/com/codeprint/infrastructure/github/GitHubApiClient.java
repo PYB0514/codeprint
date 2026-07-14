@@ -50,6 +50,33 @@ public class GitHubApiClient {
 
     public record RepoMetadata(Integer stars, String description) {}
 
+    // 기본 브랜치의 최신 커밋 SHA 조회 — 브랜치명 사전 조회 없이 per_page=1로 최근 커밋 1개만 요청
+    public String fetchLatestCommitShaOfDefaultBranch(String repoFullName) {
+        String apiUrl = "https://api.github.com/repos/" + repoFullName + "/commits?per_page=1";
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28")
+                    .GET().build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new RuntimeException("GitHub API " + response.statusCode() + " — " + response.body());
+            }
+            JsonNode commits = objectMapper.readTree(response.body());
+            if (!commits.isArray() || commits.isEmpty()) {
+                throw new RuntimeException("GitHub API 커밋 목록 비어있음: " + repoFullName);
+            }
+            JsonNode shaNode = commits.get(0).get("sha");
+            if (shaNode == null) {
+                throw new RuntimeException("GitHub API 응답에 sha 필드 없음: " + response.body());
+            }
+            return shaNode.asText();
+        } catch (Exception e) {
+            throw new RuntimeException("GitHub 기본 브랜치 커밋 SHA 조회 실패: " + repoFullName, e);
+        }
+    }
+
     // GitHub 레포 URL에서 브랜치 목록을 조회 (최대 100개)
     public List<String> fetchBranches(String githubRepoUrl, String githubAccessToken) {
         String ownerRepo = extractOwnerRepo(githubRepoUrl);
