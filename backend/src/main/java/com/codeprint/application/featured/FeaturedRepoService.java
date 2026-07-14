@@ -5,10 +5,12 @@ import com.codeprint.domain.featured.FeaturedPostRepository;
 import com.codeprint.domain.featured.FeaturedRepo;
 import com.codeprint.domain.featured.FeaturedRepoRepository;
 import com.codeprint.domain.featured.port.AnalysisTriggerPort;
+import com.codeprint.domain.featured.port.CommitShaPort;
 import com.codeprint.domain.featured.port.PostPublishingPort;
 import com.codeprint.domain.featured.port.ProjectProvisioningPort;
 import com.codeprint.domain.featured.port.RepoMetadataPort;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -31,6 +34,7 @@ public class FeaturedRepoService {
     private final ProjectProvisioningPort projectProvisioningPort;
     private final AnalysisTriggerPort analysisTriggerPort;
     private final RepoMetadataPort repoMetadataPort;
+    private final CommitShaPort commitShaPort;
     private final PostPublishingPort postPublishingPort;
     private final FeaturedPostRepository featuredPostRepository;
 
@@ -59,10 +63,19 @@ public class FeaturedRepoService {
         return postId;
     }
 
-    // 레포 하나를 선정 처리 — (최초라면 프로젝트 생성 후) 분석 트리거 + 메타데이터 갱신
+    // 레포 하나를 선정 처리 — (최초라면 프로젝트 생성 후) 커밋이 바뀐 경우에만 분석 트리거 + 메타데이터 갱신
     private void featureOne(FeaturedRepo repo) {
+        boolean isFirstFeature = repo.getProjectId() == null;
         UUID projectId = resolveProjectId(repo);
-        analysisTriggerPort.triggerAnalysis(projectId, repo.toGithubRepoUrl());
+        String latestSha = commitShaPort.fetchLatestCommitSha(repo.getRepoFullName()).orElse(null);
+
+        if (!isFirstFeature && repo.isCommitUnchanged(latestSha)) {
+            log.info("커밋 변경 없음, 재분석 스킵: {} ({})", repo.getRepoFullName(), latestSha);
+        } else {
+            analysisTriggerPort.triggerAnalysis(projectId, repo.toGithubRepoUrl());
+            repo.markCommitAnalyzed(latestSha);
+        }
+
         persistMetadata(repo, projectId);
     }
 
