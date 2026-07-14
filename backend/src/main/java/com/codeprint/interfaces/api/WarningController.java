@@ -60,7 +60,9 @@ public class WarningController {
             return ResponseEntity.badRequest().build();
         }
         graphFacade.verifyProjectReadAccess(projectId, user.getId());
-        fpReportService.reportFalsePositive(projectId, req.fingerprint(), req.type(), user.getId(), req.reason());
+        UUID graphId = (req.graphId() != null && !req.graphId().isBlank()) ? UUID.fromString(req.graphId()) : null;
+        fpReportService.reportFalsePositive(projectId, graphId, req.fingerprint(), req.type(), user.getId(), req.reason(),
+                req.message(), req.file(), req.line(), req.col(), req.endCol());
         return ResponseEntity.noContent().build();
     }
 
@@ -73,6 +75,7 @@ public class WarningController {
         return ResponseEntity.ok(fpReportService.getReportedFingerprintsByUser(projectId, user.getId()));
     }
 
-    // 오탐 신고 요청 — reason은 선택 입력
-    record ReportFpRequest(String fingerprint, String type, String reason) {}
+    // 오탐 신고 요청 — reason은 선택 입력. graphId/message/file/line/col/endCol은 재현 페이로드용(선택, 미제공 시 구조적 필드 없이 저장)
+    record ReportFpRequest(String fingerprint, String type, String reason,
+                            String graphId, String message, String file, Integer line, Integer col, Integer endCol) {}
 }

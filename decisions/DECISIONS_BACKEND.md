@@ -1890,3 +1890,29 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** TDD로 `gateState`에 5개 케이스 신규(0단계 항상 게이팅·1단계 기본 게이팅·1단계 끄면 통과·2단계 기본 미게이팅·2단계 켜면 게이팅) — 전부 GREEN. 백엔드 전체 테스트 green(V58 마이그레이션 검증 포함), `compileJava`/`npx tsc -b` 에러 0. **브라우저 실측** — `/mypage`에서 "게이트 설정" 패널을 열어 1·2단계 체크박스 토글 → 새로고침 후에도 상태 유지 확인(실제 DB 저장·재조회 확인).
 
 **한계.** 0단계 분류가 지금은 화이트리스트가 아니라 "1·2단계 집합에 없으면 전부 0단계"라는 기본값(fallback)이다 — 안전한 방향(새 HIGH 룰이 실수로 미분류돼도 느슨해지는 대신 항상 게이팅되는 쪽으로 실패)이지만, 룰이 늘어나면 명시적 화이트리스트로 바꾸는 걸 재검토할 것. 2단계→1단계 실제 승격은 가드레일 지표에 충분한 fp_reports 데이터가 쌓여야 가능 — 지금은 파이프라인만 마련, 실제 승격 판단은 미래 세션.
+
+---
+
+## 오탐 신고 재현 페이로드 — 자가개선 루프 선결 구성요소 ③ 착수 (2026-07-14, codeprint_125)
+
+**배경.** PROGRESS.md "자가개선 루프"가 명시한 선결 구성요소 3가지(①오탐 신고 ②룰별 벤치 ③재현 페이로드) 중 ①②는 완료됐고, ③만 남아있었다. 기존 `fp_reports`(V57)는 `fingerprint`·`warning_type`·`reason`만 저장 — 신고 시점 경고가 정확히 무엇을 가리켰는지(파일·줄·코드) 구조적으로 남지 않아, 나중에 "이 신고가 실제로 재현되는가"를 검증할 방법이 없었다.
+
+**검토한 대안.**
+1. **신고 시점엔 아무것도 안 남기고, 검증 시점에 git checkout으로 재현** — 기각. 커밋이 rebase·force-push로 사라질 수 있음(실제로 `codeprint-plugins` 옛 커밋 force-push 히스토리 삭제가 백로그에 있음 — 이 프로젝트에서 이미 현실적인 리스크로 확인된 사례).
+2. **경고가 가리키는 소스 코드 전문을 DB에 영구 저장** — 기각. 서버가 분석 후 소스 코드 자체를 어디에도 보관하지 않는다(`sourceCode` 저장 로직 exploreLocal로 검색해 0건 확인) — "코드 외부 전송 없음" 프라이버시 방향과 상충하고, 신규 저장 인프라가 필요해 과설계.
+3. **(채택) 구조적 필드는 항상 저장 + GitHub 공개 레포는 최선노력으로 코드 스니펫도 즉시 확보, 비공개·로컬은 스니펫 없이도 신고 자체는 항상 성공** — 신규 소스 보관소를 만들지 않고 기존 `GitHubApiClient`(PR 리뷰 플로우 재사용)로 "신고 즉시 1회 조회해서 텍스트로 굳혀둠"는 접근.
+
+**설계 — 커밋 SHA는 "조회 시점 HEAD"가 아니라 "그 경고를 만든 그래프의 정확한 분석 커밋".**
+- 처음엔 "신고 시점에 현재 HEAD를 fetch"로 설계했으나, `Graph.analysisId → AnalysisResult.lastCommitSha`(그래프 원본 `Graph.java`·`AnalysisResult.java` 확인)로 이미 "이 그래프가 정확히 어느 커밋을 분석했는지"가 결정론적으로 기록돼 있다는 걸 발견해 이걸로 전환 — HEAD 드리프트 리스크가 원천 차단된다.
+- 체인: 프론트가 이미 들고 있는 `graphId` → `GraphRepository.findById(graphId).getAnalysisId()`(같은 컨텍스트, 직접 주입) → `AnalysisReadPort.findCommitSha(analysisId)`(기존 `findBranch`와 동일 패턴으로 확장, `domain/graph/port/AnalysisReadPort.java`+`AnalysisReadAdapter.java`) → `ProjectAccessPort.findGithubRepoUrl(projectId)`(신규 메서드, `getProjectInternal` 재사용 — PR 게이트가 이미 쓰는 "앞단에서 접근 검증 끝난 흐름 전용" 패턴) → `GitHubApiClient.fetchFileContent`(신규, `raw.githubusercontent.com` 비인증 GET — 공개 레포만 성공, 실패 시 null) → `extractSnippet`(순수 함수, ±5줄).
+- 전 구간 try/catch로 감싸 어느 단계든 실패해도 신고 자체(구조적 필드 저장)는 항상 성공(`FpReportService.captureSnippet`).
+
+**구현.** V59 마이그레이션(`message`·`file_path`·`line`·`col`·`end_col`·`code_snippet` 전부 nullable 추가). `FpReport.create` 시그니처 확장. `WarningController.ReportFpRequest`에 `graphId`+구조적 필드 추가, 프론트(`GraphPage.tsx`·`CommunityPostGraphPage.tsx`)는 이미 응답 JSON에 들어있던 `file`/`line`/`col`/`endCol`/`message`(VS Code 확장용으로 이미 존재하던 필드, 2026-07-13 완료분)를 타입만 넓혀서 그대로 실어보냄 — 백엔드 신규 계산 없음.
+
+**검증(런타임 실측, /mypage 테스트 유저로 실제 Codeprint 레포 분석 후).**
+- **구조적 필드**: ASYNC_SELF_CALL 경고 신고 → `fp_reports` row에 `file_path`/`line`/`col`/`message` 정확히 저장 확인(DB 직접 조회).
+- **스니펫 미확보 시나리오 발견**: 이 프로젝트의 `analyses.branch`/`last_commit_sha`가 둘 다 비어있었다 — `AnalysisRunner`가 `if (branch != null)`일 때만 커밋 SHA를 기록하는데, GitHub 미연동 계정(테스트 유저)은 브랜치 해소 자체가 안 되는 게 원인. **의도와 다르게 동작한 부분**: 처음엔 "GitHub 연동만 되면 항상 스니펫이 붙을 것"으로 가정했으나, 실제로는 "분석 시점에 브랜치가 성공적으로 해소된 프로젝트만" 스니펫 대상이 된다 — 별도 수정 없이 이미 있는 best-effort 설계(구조적 필드는 항상 저장)가 이 갭을 정확히 흡수했다.
+- **스니펫 확보 시나리오**: `analyses` row에 실제 `main` 브랜치+`e962f21`(현재 HEAD) 커밋 SHA를 심어 정상 케이스를 재현 → BROKEN_INTERFACE_CHAIN 경고 신고 시 `code_snippet`에 `PaymentGatewayPort.java`의 `confirmPayment` 선언부 ±5줄이 한국어 주석까지 정확히 저장됨을 확인.
+- 신규 유닛 테스트: `FpReportServiceTest` 4건 추가(구조적 필드만 저장·graphId 없으면 스니펫 시도 안 함·정상 확보·커밋 SHA 없으면 스니펫 없이도 저장), `GitHubApiClientTest`에 `extractSnippet` 순수 함수 4건. 백엔드 전체 테스트 green, `compileJava`/`npx tsc -b` 에러 0. `analyzeLocal` 자기분석 — 기존 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1, 전부 수용된 기존 항목)과 동일, 신규 위반 0.
+
+**한계·다음.** GitHub 미연동 프로젝트·비공개 레포는 스니펫 없이 구조적 필드만 쌓인다 — 이걸로도 벤치 오라클(§17.9 `{ruleType, file, line, fingerprint}`) 승격에는 충분하지만, "코드까지 자동으로 픽스처화"는 GitHub 연동+공개 레포 한정. 확장하려면 비공개 레포 토큰 플러밍(User의 githubAccessToken을 project 컨텍스트 밖으로 노출하는 설계)이 별도로 필요 — 지금은 범위 밖으로 명시적으로 미룸.

@@ -360,6 +360,30 @@ public class GitHubApiClient {
         }
     }
 
+    // 공개 레포의 특정 커밋 시점 파일 원문을 비인증 조회(raw.githubusercontent.com) — 실패 시 null(최선노력, 비공개 레포는 항상 실패)
+    public String fetchFileContent(String githubRepoUrl, String path, String ref) {
+        String ownerRepo = extractOwnerRepo(githubRepoUrl);
+        String rawUrl = "https://raw.githubusercontent.com/" + ownerRepo + "/" + ref + "/" + path;
+        try {
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(rawUrl)).GET().build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.statusCode() == 200 ? response.body() : null;
+        } catch (Exception e) {
+            log.warn("GitHub 파일 원문 조회 실패(최선노력, 무시): {}@{}/{}", ownerRepo, ref, path);
+            return null;
+        }
+    }
+
+    // 파일 전문에서 특정 줄 주변 스니펫만 추출 — 1-based 줄 번호, 앞뒤 contextLines만큼 포함(순수 함수, 단위 테스트 대상)
+    public static String extractSnippet(String content, int line, int contextLines) {
+        if (content == null || line < 1) return null;
+        String[] allLines = content.split("\n", -1);
+        int startIdx = Math.max(0, line - 1 - contextLines);
+        int endIdx = Math.min(allLines.length, line + contextLines);
+        if (startIdx >= endIdx) return null;
+        return String.join("\n", java.util.Arrays.asList(allLines).subList(startIdx, endIdx));
+    }
+
     // GitHub URL에서 owner/repo 경로를 추출
     private String extractOwnerRepo(String githubRepoUrl) {
         Matcher m = REPO_PATTERN.matcher(githubRepoUrl);
