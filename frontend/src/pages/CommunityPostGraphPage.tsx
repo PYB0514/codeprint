@@ -274,16 +274,18 @@ function CommunityPostSnapshotInner() {
       .catch(() => {})
   }, [snapshotProjectId, currentUserId])
 
-  // 오탐 신고 — 서버에 저장(멱등) 후 버튼 상태를 "신고됨"으로 갱신
-  const handleReportFp = useCallback(async (w: { type: string; fingerprint?: string }) => {
+  // 오탐 신고 — 서버에 저장(멱등) 후 버튼 상태를 "신고됨"으로 갱신. graphId/message/file/line/col은 재현 페이로드용(GitHub 공개 레포면 코드 스니펫도 서버에서 최선노력 확보)
+  const handleReportFp = useCallback(async (w: { type: string; fingerprint?: string; message?: string; file?: string; line?: number; col?: number; endCol?: number }) => {
     if (!snapshotProjectId || !w.fingerprint) return
     try {
-      await axios.post(`/api/projects/${snapshotProjectId}/warnings/report-fp`, { fingerprint: w.fingerprint, type: w.type })
+      await axios.post(`/api/projects/${snapshotProjectId}/warnings/report-fp`, {
+        fingerprint: w.fingerprint, type: w.type, graphId, message: w.message, file: w.file, line: w.line, col: w.col, endCol: w.endCol
+      })
       setReportedFingerprints(prev => new Set(prev).add(w.fingerprint!))
     } catch {
       alert('오탐 신고에 실패했습니다.')
     }
-  }, [snapshotProjectId])
+  }, [snapshotProjectId, graphId])
 
   // 흐름 재생 — 종료 시 표시 토글 기준 기본 엣지 스타일 복원
   const restorePlaybackEdgeStyles = useCallback(() => {

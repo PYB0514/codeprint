@@ -17,6 +17,9 @@ public interface ProjectAccessPort {
     // 공개 프로젝트 view 반환 — 비공개·부재 시 예외
     ProjectAccessView getPublicProject(UUID projectId);
 
+    // 접근 검증 없는 원시 조회 — 호출자가 이미 접근을 검증한 흐름 전용(오탐 신고 재현 페이로드용)
+    java.util.Optional<String> findGithubRepoUrl(UUID projectId);
+
     // graph 도메인이 필요로 하는 project 필드만 추린 view
     record ProjectAccessView(UUID id, UUID userId, String name, String githubRepoUrl) {
         // 레포 owner가 프로젝트 소유자의 GitHub 계정과 일치하는지 (내 레포 vs 외부 레포 분석 판정)

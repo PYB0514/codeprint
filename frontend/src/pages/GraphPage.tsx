@@ -455,16 +455,18 @@ function GraphPageInner() {
       .catch(() => {})
   }, [projectId, currentUserId])
 
-  // 오탐 신고 — 서버에 저장(멱등) 후 버튼 상태를 "신고됨"으로 갱신
-  const handleReportFp = useCallback(async (w: { type: string; fingerprint?: string }) => {
+  // 오탐 신고 — 서버에 저장(멱등) 후 버튼 상태를 "신고됨"으로 갱신. graphId/message/file/line/col은 재현 페이로드용(GitHub 공개 레포면 코드 스니펫도 서버에서 최선노력 확보)
+  const handleReportFp = useCallback(async (w: { type: string; fingerprint?: string; message?: string; file?: string; line?: number; col?: number; endCol?: number }) => {
     if (!projectId || !w.fingerprint) return
     try {
-      await axios.post(`/api/projects/${projectId}/warnings/report-fp`, { fingerprint: w.fingerprint, type: w.type })
+      await axios.post(`/api/projects/${projectId}/warnings/report-fp`, {
+        fingerprint: w.fingerprint, type: w.type, graphId, message: w.message, file: w.file, line: w.line, col: w.col, endCol: w.endCol
+      })
       setReportedFingerprints(prev => new Set(prev).add(w.fingerprint!))
     } catch {
       alert('오탐 신고에 실패했습니다.')
     }
-  }, [projectId])
+  }, [projectId, graphId])
 
   // 패턴 예외(IGNORE) 규칙 — architecture-intent에 저장, 그룹 단위로 경고 억제
   const [ignoreRules, setIgnoreRules] = useState<IgnoreRule[]>([])

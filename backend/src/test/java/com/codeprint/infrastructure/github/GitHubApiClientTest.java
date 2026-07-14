@@ -69,4 +69,38 @@ class GitHubApiClientTest {
         assertThat(GitHubApiClient.matchMarkerCommentId(null, MARKER)).isNull();
         assertThat(GitHubApiClient.matchMarkerCommentId(parse("{\"message\": \"Not Found\"}"), MARKER)).isNull();
     }
+
+    @Test
+    @DisplayName("extractSnippet — 대상 줄 앞뒤 contextLines만큼 잘라 반환한다")
+    void extractSnippet_middleLine_trimsContext() {
+        String content = "l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10";
+
+        String snippet = GitHubApiClient.extractSnippet(content, 5, 2);
+
+        assertThat(snippet).isEqualTo("l3\nl4\nl5\nl6\nl7");
+    }
+
+    @Test
+    @DisplayName("extractSnippet — 파일 시작 근처 줄이면 앞쪽을 0으로 클램프한다")
+    void extractSnippet_nearStart_clampsToZero() {
+        String content = "l1\nl2\nl3\nl4\nl5";
+
+        String snippet = GitHubApiClient.extractSnippet(content, 1, 2);
+
+        assertThat(snippet).isEqualTo("l1\nl2\nl3");
+    }
+
+    @Test
+    @DisplayName("extractSnippet — content가 null이면 null을 반환한다")
+    void extractSnippet_nullContent_returnsNull() {
+        assertThat(GitHubApiClient.extractSnippet(null, 5, 2)).isNull();
+    }
+
+    @Test
+    @DisplayName("extractSnippet — line이 파일 범위를 벗어나면 null을 반환한다")
+    void extractSnippet_lineOutOfRange_returnsNull() {
+        String content = "l1\nl2\nl3";
+
+        assertThat(GitHubApiClient.extractSnippet(content, 100, 2)).isNull();
+    }
 }

@@ -23,4 +23,13 @@ public class AnalysisReadAdapter implements AnalysisReadPort {
             return Optional.empty();
         }
     }
+
+    @Override
+    public Optional<String> findCommitSha(UUID analysisId) {
+        try {
+            return Optional.ofNullable(analysisApplicationService.getAnalysis(analysisId).getLastCommitSha());
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
 }
