@@ -2,6 +2,9 @@
 package com.codeprint.infrastructure.analysis;
 
 import com.codeprint.domain.graph.*;
+import com.codeprint.domain.graph.port.SnapshotReferencePort;
+import com.codeprint.domain.project.ProjectRepository;
+import com.codeprint.infrastructure.adapter.FeaturedProjectProvisioningAdapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -19,6 +22,8 @@ import java.util.LinkedHashSet;
 public class GraphBuilder {
 
     private final GraphRepository graphRepository;
+    private final ProjectRepository projectRepository;
+    private final SnapshotReferencePort snapshotReferencePort;
 
     // JDK/컬렉션 내장 메서드명 — 실제 타깃은 JDK 타입(그래프에 노드 없음)이라, import 매칭 없이 전역 폴백으로
     // 임의 도메인 파일에 연결되면 거의 확실히 phantom 엣지. 폴백 단계에서만 엣지 생성을 제외하는 용도.
@@ -618,10 +623,20 @@ public class GraphBuilder {
 
         // 보존 정책 — 방금 만든 버전 포함 비고정 최근 N개만 유지, 초과분 삭제 (cascade로 노드/엣지/코멘트/스타일/프리셋 함께 제거)
         // analysis 컨텍스트가 graph 애플리케이션 서비스를 주입받지 않도록, 그래프 저장을 이미 담당하는 빌더에서 도메인 정책을 직접 적용
-        GraphRetentionPolicy.selectEvictable(graphRepository.findByProjectId(projectId))
+        // 시스템(갤러리) 계정 프로젝트는 축소된 보존 개수 적용 + 공유 게시물 스냅샷이 참조 중인 그래프는 보호(§18.8-④)
+        int maxRecent = isSystemOwned(projectId) ? GraphRetentionPolicy.MAX_RECENT_SYSTEM : GraphRetentionPolicy.MAX_RECENT;
+        Set<UUID> protectedGraphIds = snapshotReferencePort.findReferencedGraphIds(projectId);
+        GraphRetentionPolicy.selectEvictable(graphRepository.findByProjectId(projectId), maxRecent, protectedGraphIds)
                 .forEach(old -> graphRepository.deleteById(old.getId()));
 
         return graph;
+    }
+
+    // 프로젝트 소유자가 오늘의 공개레포 시스템 계정인지 확인 — 축소된 보존 개수 적용 여부 판단용
+    private boolean isSystemOwned(UUID projectId) {
+        return projectRepository.findById(projectId)
+                .map(project -> FeaturedProjectProvisioningAdapter.SYSTEM_USER_ID.equals(project.getUserId()))
+                .orElse(false);
     }
 
     // Repository 메서드명 목록에서 수행하는 CRUD 타입 집합 반환

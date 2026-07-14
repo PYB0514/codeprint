@@ -54,7 +54,7 @@ public final class BenchPipelineRunner {
         }
 
         InMemoryGraphRepository repo = new InMemoryGraphRepository();
-        GraphBuilder builder = new GraphBuilder(repo);
+        GraphBuilder builder = new GraphBuilder(repo, new NoOpProjectRepository(), new NoOpSnapshotReferencePort());
         Graph graph = builder.build(projectId, UUID.randomUUID(), parsedFiles);
         List<Node> nodes = repo.findNodesByGraphId(graph.getId());
         List<Edge> edges = repo.findEdgesByGraphId(graph.getId());

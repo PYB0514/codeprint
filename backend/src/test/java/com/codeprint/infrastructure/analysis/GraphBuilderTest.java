@@ -3,6 +3,9 @@ package com.codeprint.infrastructure.analysis;
 
 import com.codeprint.application.graph.GraphWarningService;
 import com.codeprint.domain.graph.*;
+import com.codeprint.domain.graph.port.SnapshotReferencePort;
+import com.codeprint.domain.project.Project;
+import com.codeprint.domain.project.ProjectRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,9 +17,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -30,6 +35,12 @@ class GraphBuilderTest {
     @Mock
     private GraphRepository graphRepository;
 
+    @Mock
+    private ProjectRepository projectRepository;
+
+    @Mock
+    private SnapshotReferencePort snapshotReferencePort;
+
     private GraphBuilder graphBuilder;
 
     private final UUID projectId = UUID.randomUUID();
@@ -37,11 +48,72 @@ class GraphBuilderTest {
 
     @BeforeEach
     void setUp() {
-        graphBuilder = new GraphBuilder(graphRepository);
+        graphBuilder = new GraphBuilder(graphRepository, projectRepository, snapshotReferencePort);
         // Graph.create() → graphRepository.save() 가 Graph 객체를 반환해야 build()가 동작
         when(graphRepository.save(any(Graph.class))).thenAnswer(inv -> inv.getArgument(0));
         when(graphRepository.saveNode(any(Node.class))).thenAnswer(inv -> inv.getArgument(0));
         when(graphRepository.saveEdge(any(Edge.class))).thenAnswer(inv -> inv.getArgument(0));
+        // 개인(비시스템) 계정 프로젝트 기본값 — 보존 정책 회귀 테스트만 이 값을 오버라이드
+        when(projectRepository.findById(any())).thenReturn(Optional.empty());
+        when(snapshotReferencePort.findReferencedGraphIds(any())).thenReturn(Set.of());
+    }
+
+    // ── 회귀: 보존 정책 — 시스템 계정 축소 보존 + 스냅샷 보호(§18.8-④) ──────────
+
+    private static final UUID SYSTEM_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+
+    // 지정 개수만큼 비고정 Graph를 만들어 이미 저장돼 있던 이전 버전들처럼 반환하도록 스텁
+    private List<Graph> existingGraphs(int count) throws Exception {
+        List<Graph> graphs = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            Graph g = Graph.create(projectId, UUID.randomUUID());
+            var createdAt = Graph.class.getDeclaredField("createdAt");
+            createdAt.setAccessible(true);
+            createdAt.set(g, java.time.Instant.ofEpochSecond(i));
+            graphs.add(g);
+        }
+        return graphs;
+    }
+
+    @Test
+    @DisplayName("시스템(갤러리) 계정 프로젝트는 비고정 2개 초과분을 삭제한다")
+    void systemOwnedProjectEvictsBeyondSmallerLimit() throws Exception {
+        com.codeprint.domain.project.Project systemProject =
+                com.codeprint.domain.project.Project.create(SYSTEM_USER_ID, "https://github.com/a/b", "b", null);
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(systemProject));
+        List<Graph> existing = existingGraphs(2); // 새로 생성될 그래프까지 합치면 비고정 3개 → MAX_RECENT_SYSTEM(2) 초과
+        when(graphRepository.findByProjectId(projectId)).thenAnswer(inv -> {
+            List<Graph> all = new ArrayList<>(existing);
+            all.add(Graph.create(projectId, analysisId));
+            return all;
+        });
+
+        var file = parsedFile("A.java", "java", List.of("m"), Map.of());
+        graphBuilder.build(projectId, analysisId, List.of(file));
+
+        verify(graphRepository).deleteById(existing.get(0).getId());
+        verify(graphRepository, never()).deleteById(existing.get(1).getId());
+    }
+
+    @Test
+    @DisplayName("스냅샷이 참조 중인 그래프는 시스템 계정 축소 보존에서도 삭제되지 않고, 대신 그다음으로 오래된 것이 삭제된다")
+    void systemOwnedProjectProtectsSnapshotReferencedGraph() throws Exception {
+        com.codeprint.domain.project.Project systemProject =
+                com.codeprint.domain.project.Project.create(SYSTEM_USER_ID, "https://github.com/a/b", "b", null);
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(systemProject));
+        List<Graph> existing = existingGraphs(3); // 새 그래프까지 비고정 4개, 그중 가장 오래된 1개를 보호
+        when(graphRepository.findByProjectId(projectId)).thenAnswer(inv -> {
+            List<Graph> all = new ArrayList<>(existing);
+            all.add(Graph.create(projectId, analysisId));
+            return all;
+        });
+        when(snapshotReferencePort.findReferencedGraphIds(projectId)).thenReturn(Set.of(existing.get(0).getId()));
+
+        var file = parsedFile("A.java", "java", List.of("m"), Map.of());
+        graphBuilder.build(projectId, analysisId, List.of(file));
+
+        verify(graphRepository, never()).deleteById(existing.get(0).getId());
+        verify(graphRepository).deleteById(existing.get(1).getId());
     }
 
     // ── 회귀: CONTAINS 엣지 중복 방지 ──────────────────────────────────────
