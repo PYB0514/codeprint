@@ -6,6 +6,7 @@ import com.codeprint.domain.featured.FeaturedPostRepository;
 import com.codeprint.domain.featured.FeaturedRepo;
 import com.codeprint.domain.featured.FeaturedRepoRepository;
 import com.codeprint.domain.featured.port.AnalysisTriggerPort;
+import com.codeprint.domain.featured.port.CommitShaPort;
 import com.codeprint.domain.featured.port.PostPublishingPort;
 import com.codeprint.domain.featured.port.ProjectProvisioningPort;
 import com.codeprint.domain.featured.port.RepoMetadataPort;
@@ -35,6 +36,7 @@ class FeaturedRepoServiceTest {
     @Mock private ProjectProvisioningPort projectProvisioningPort;
     @Mock private AnalysisTriggerPort analysisTriggerPort;
     @Mock private RepoMetadataPort repoMetadataPort;
+    @Mock private CommitShaPort commitShaPort;
     @Mock private PostPublishingPort postPublishingPort;
     @Mock private FeaturedPostRepository featuredPostRepository;
 
@@ -43,7 +45,8 @@ class FeaturedRepoServiceTest {
     @BeforeEach
     void setUp() {
         service = new FeaturedRepoService(featuredRepoRepository, projectProvisioningPort, analysisTriggerPort,
-                repoMetadataPort, postPublishingPort, featuredPostRepository);
+                repoMetadataPort, commitShaPort, postPublishingPort, featuredPostRepository);
+        lenient().when(commitShaPort.fetchLatestCommitSha(any())).thenReturn(Optional.empty());
     }
 
     @Test
@@ -78,6 +81,54 @@ class FeaturedRepoServiceTest {
         verify(projectProvisioningPort, never()).createSystemProject(any(), any());
         verify(analysisTriggerPort).triggerAnalysis(existingProjectId, "https://github.com/expressjs/express");
         assertThat(repo.getProjectId()).isEqualTo(existingProjectId);
+    }
+
+    @Test
+    @DisplayName("재노출 레포의 최신 커밋이 마지막 분석 시점과 같으면 분석을 스킵한다")
+    void refreshDailyFeatured_skipsAnalysisWhenCommitUnchanged() throws Exception {
+        UUID existingProjectId = UUID.randomUUID();
+        FeaturedRepo repo = newFeaturedRepo("expressjs/express", existingProjectId);
+        ReflectionTestUtils.setField(repo, "lastAnalyzedCommitSha", "abc123");
+        when(featuredRepoRepository.findRotationCandidates(5)).thenReturn(List.of(repo));
+        when(repoMetadataPort.fetch("expressjs/express")).thenReturn(new RepoMetadataPort.RepoMetadata(65000, "Fast web framework"));
+        when(commitShaPort.fetchLatestCommitSha("expressjs/express")).thenReturn(Optional.of("abc123"));
+
+        service.refreshDailyFeatured();
+
+        verify(analysisTriggerPort, never()).triggerAnalysis(any(), any());
+        assertThat(repo.getLastAnalyzedCommitSha()).isEqualTo("abc123");
+    }
+
+    @Test
+    @DisplayName("재노출 레포의 최신 커밋이 마지막 분석 시점과 다르면 재분석하고 SHA를 갱신한다")
+    void refreshDailyFeatured_reanalyzesWhenCommitChanged() throws Exception {
+        UUID existingProjectId = UUID.randomUUID();
+        FeaturedRepo repo = newFeaturedRepo("expressjs/express", existingProjectId);
+        ReflectionTestUtils.setField(repo, "lastAnalyzedCommitSha", "abc123");
+        when(featuredRepoRepository.findRotationCandidates(5)).thenReturn(List.of(repo));
+        when(repoMetadataPort.fetch("expressjs/express")).thenReturn(new RepoMetadataPort.RepoMetadata(65000, "Fast web framework"));
+        when(commitShaPort.fetchLatestCommitSha("expressjs/express")).thenReturn(Optional.of("def456"));
+
+        service.refreshDailyFeatured();
+
+        verify(analysisTriggerPort).triggerAnalysis(existingProjectId, "https://github.com/expressjs/express");
+        assertThat(repo.getLastAnalyzedCommitSha()).isEqualTo("def456");
+    }
+
+    @Test
+    @DisplayName("커밋 SHA 조회 실패(빈 값)면 안전하게 재분석한다")
+    void refreshDailyFeatured_reanalyzesWhenShaFetchFails() throws Exception {
+        UUID existingProjectId = UUID.randomUUID();
+        FeaturedRepo repo = newFeaturedRepo("expressjs/express", existingProjectId);
+        ReflectionTestUtils.setField(repo, "lastAnalyzedCommitSha", "abc123");
+        when(featuredRepoRepository.findRotationCandidates(5)).thenReturn(List.of(repo));
+        when(repoMetadataPort.fetch("expressjs/express")).thenReturn(new RepoMetadataPort.RepoMetadata(65000, "Fast web framework"));
+        when(commitShaPort.fetchLatestCommitSha("expressjs/express")).thenReturn(Optional.empty());
+
+        service.refreshDailyFeatured();
+
+        verify(analysisTriggerPort).triggerAnalysis(existingProjectId, "https://github.com/expressjs/express");
+        assertThat(repo.getLastAnalyzedCommitSha()).isNull();
     }
 
     @Test
