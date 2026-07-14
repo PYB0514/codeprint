@@ -1849,3 +1849,17 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** `compileJava`/`npx tsc -b` 에러 0. 신규 `FpReportServiceTest` 3종(`WarningSuppressionServiceTest`와 동일 패턴 — 신규 저장·멱등·조회) 포함 백엔드 전체 789개 테스트 통과(Docker Postgres 기동, `ddl-auto=validate`로 V57 스키마 검증 포함). **브라우저 실측** — `/api/dev/test-token`(로컬 전용)으로 발급한 JWT로 실제 로그인 세션을 만들고, `tokio-rs/mini-redis` 벤치 프로젝트(로컬 DB, 소유자를 테스트 계정으로 임시 변경 후 검증·즉시 원복)에서 DEAD_CODE 경고의 "이 경고를 오탐으로 신고" 버튼을 실클릭 → 버튼이 "오탐으로 신고됨"으로 즉시 전환 → `fp_reports` 테이블에 실제 행 생성까지 확인(검증 후 테스트 데이터 삭제).
 
 **한계.** 프론트 버튼은 현재 `GraphPage.tsx`(소유자 전용 뷰)에만 연결 — 백엔드는 비소유자 읽기도 허용하도록 설계했지만, 비소유자가 실제로 접근하는 공개 공유 뷰어(`CommunityPostGraphPage.tsx` 등)에는 아직 버튼을 연결하지 않음. 크라우드소싱 신호를 넓히려면 후속 세션에서 그쪽에도 같은 `onReportFp`/`reportedFingerprints` props를 연결하는 작업이 남아있음.
+
+## 지표 대시보드 가드레일 층(HIGH 경고 정밀도) 추가 (2026-07-14, codeprint_124)
+
+**배경.** BENCH_SPEC.md §4 마지막 항목 — 벤치 스위트(§4 0~4단계)가 완료돼 "가드레일 층(HIGH 경고 precision)"의 선결 구성요소가 갖춰진 상태에서, `GateMetrics`(북극성·경험·실적 3층)에 4번째 층을 추가.
+
+**값의 출처 — 벤치(정적) vs 실사용(fp_reports) 둘 중 하나를 고르지 않고 결합.** 벤치 스위트는 테스트 리소스(`backend/src/test/resources/bench/`)라 배포 아티팩트에 포함되지 않아 런타임에 직접 읽을 수 없다는 게 확인됨(빌드타임 주입도 검토했으나 이 카드의 가치 대비 과한 엔지니어링으로 기각) — 그래서 실제 카드는 두 신호를 분리해서 보여준다: ①**정적 배지**(`sub` 캡션 "벤치 스위트 HIGH 8종 검증됨(46케이스)")는 코드 상 상수 문구로, 벤치 스위트 규모가 바뀔 때 수동 갱신 ②**동적 수치**(`highWarningPrecisionPct`)는 `gate_check_logs.high_count`(최근 30일 합계, 분모) 대비 `fp_reports`(같은 기간 HIGH급 신고 건수, 분자 차감)로 실사용 정밀도를 계산.
+
+**HIGH 8종 목록을 하드코딩한 이유.** `fp_reports.warning_type`만으로는 severity를 알 수 없다(severity는 `GraphWarningService`가 경고 생성 시점에 detector별로 부여하는 값이라 별도 정적 매핑 테이블이 없음) — BENCH_SPEC.md §4 1단계에서 이미 실측 검증된 HIGH 8종(`CYCLIC_IMPORT`·`DB_LAYER_BYPASS`·`CROSS_CONTEXT_IMPORT`·`CROSS_FEATURE_IMPORT`·`FEATURE_LAYER_VIOLATION`·`DOMAIN_IMPORTS_INFRA`·`LAYERED_REVERSE_DEPENDENCY`·`INTENT_DRIFT`)를 `GateMetricsQuery`에 그대로 재사용.
+
+**근사치임을 인지하고 그대로 노출.** `gate_check_logs.high_count`는 "PR 게이트 시점 발생 건수" 누적이라 같은 위반이 여러 PR에서 반복 감지되면 중복 카운트되고, `fp_reports`는 fingerprint 단위 고유 신고라 단위가 완전히 같지 않다 — 정교한 정밀도(고유 위반 인스턴스 기준)를 만들려면 스키마 확장이 필요하지만, 사용자 수가 적은 지금 단계에서는 과한 투자로 판단해 근사치를 그대로 쓰고 코드 주석에 명시. HIGH 발생 0건(분모 0)이면 100%로 처리.
+
+**검증.** `compileJava`/`npx tsc -b` 에러 0, 백엔드 전체 테스트 green(GateMetrics 관련 기존 테스트 없어 회귀 대상 없음). **브라우저 실측** — 로컬 관리자 대시보드(`/admin`)에서 가드레일 카드가 "100%"(로컬 DB에 최근 30일 HIGH 발생 0건 — 분모 0 분기)로 정상 렌더링되는 것을 스크린샷으로 확인. `analyzeLocal` 자가검사 HIGH_FAN_OUT 5건·BROKEN_INTERFACE_CHAIN 1건 불변(회귀 없음).
+
+**한계.** fp_reports 분기(occurrences>0일 때의 실제 차감 계산)는 로컬 DB에 최근 30일 내 HIGH 발생 로그가 없어 실측 검증하지 못함(SQL 문법은 기존 native query와 동일 패턴이라 위험 낮음으로 판단) — 실사용자가 늘어 데이터가 쌓이면 재검증 필요. 이 카드는 `ChangelogPage.tsx`에 기록하지 않음 — `/admin`은 ADMIN 역할 전용 내부 도구라 기존 3층 지표 추가 때도 체인지로그 대상이 아니었던 전례를 따름.

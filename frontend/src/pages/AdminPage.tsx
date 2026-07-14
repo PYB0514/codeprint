@@ -48,6 +48,7 @@ interface GateMetricsData {
   weeklyNewAnalysisRepos: number
   weeklyShares: number
   blockedPrsTotal: number
+  highWarningPrecisionPct: number
 }
 
 interface DigestData {
@@ -335,18 +336,25 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* 지표 대시보드 — 북극성/경험/실적 3층 체계 */}
+        {/* 지표 대시보드 — 북극성/경험/실적/가드레일 4층 체계 */}
         {gateMetrics && (
           <div className="bg-gray-900 rounded-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-800">
               <h2 className="text-lg font-semibold">지표 대시보드</h2>
-              <span className="text-xs text-gray-500">북극성 · 경험 · 실적 — 게이트 검사 로그(gate_check_logs) 기준</span>
+              <span className="text-xs text-gray-500">북극성 · 경험 · 실적 · 가드레일 — 게이트 검사 로그(gate_check_logs) 기준</span>
             </div>
             <div className="px-6 py-4 grid grid-cols-2 md:grid-cols-4 gap-4">
               <GateMetricCard layer="북극성" label="게이트가 지키는 레포" value={gateMetrics.guardedRepos} sub="최근 30일 실검사" />
               <GateMetricCard layer="경험" label="주간 신규 분석 레포" value={gateMetrics.weeklyNewAnalysisRepos} sub="최근 7일" />
               <GateMetricCard layer="경험" label="주간 공유(게시글)" value={gateMetrics.weeklyShares} sub="최근 7일" />
               <GateMetricCard layer="실적" label="게이트가 막은 PR" value={gateMetrics.blockedPrsTotal} sub="누적" />
+              <GateMetricCard
+                layer="가드레일"
+                label="HIGH 경고 정밀도"
+                value={gateMetrics.highWarningPrecisionPct}
+                suffix="%"
+                sub="최근 30일 · 벤치 스위트 HIGH 8종 검증됨(46케이스)"
+              />
             </div>
           </div>
         )}
@@ -742,18 +750,20 @@ function DigestStat({ label, value }: { label: string; value: number | string })
   )
 }
 
-// 지표 대시보드 카드 — 층(북극성/경험/실적) 배지 + 라벨 + 값
-function GateMetricCard({ layer, label, value, sub }: { layer: string; label: string; value: number; sub: string }) {
+// 지표 대시보드 카드 — 층(북극성/경험/실적/가드레일) 배지 + 라벨 + 값
+function GateMetricCard({ layer, label, value, sub, suffix = '' }: { layer: string; label: string; value: number; sub: string; suffix?: string }) {
   const layerColor = layer === '북극성'
     ? 'bg-blue-900/60 text-blue-300'
     : layer === '실적'
       ? 'bg-emerald-900/60 text-emerald-300'
-      : 'bg-gray-700 text-gray-300'
+      : layer === '가드레일'
+        ? 'bg-amber-900/60 text-amber-300'
+        : 'bg-gray-700 text-gray-300'
   return (
     <div className="bg-gray-800/60 rounded-lg p-4">
       <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold mb-2 ${layerColor}`}>{layer}</span>
       <p className="text-gray-400 text-xs mb-1">{label}</p>
-      <p className="text-2xl font-bold">{value.toLocaleString()}</p>
+      <p className="text-2xl font-bold">{value.toLocaleString()}{suffix}</p>
       <p className="text-gray-500 text-xs mt-0.5">{sub}</p>
     </div>
   )

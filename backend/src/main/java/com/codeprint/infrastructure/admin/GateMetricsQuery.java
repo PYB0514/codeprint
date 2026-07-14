@@ -9,6 +9,8 @@ import org.springframework.stereotype.Repository;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Set;
 
 @Repository
 public class GateMetricsQuery {
@@ -16,7 +18,12 @@ public class GateMetricsQuery {
     @PersistenceContext
     private EntityManager em;
 
-    // 지표 대시보드 3층 체계(북극성·경험·실적) 현재 값 집계
+    // BENCH_SPEC.md §4 1단계에서 벤치로 검증된 HIGH 8종 — 가드레일 정밀도 분모/분자를 HIGH급으로 한정하는 데 사용
+    private static final Set<String> HIGH_SEVERITY_TYPES = Set.of(
+            "CYCLIC_IMPORT", "DB_LAYER_BYPASS", "CROSS_CONTEXT_IMPORT", "CROSS_FEATURE_IMPORT",
+            "FEATURE_LAYER_VIOLATION", "DOMAIN_IMPORTS_INFRA", "LAYERED_REVERSE_DEPENDENCY", "INTENT_DRIFT");
+
+    // 지표 대시보드 4층 체계(북극성·경험·실적·가드레일) 현재 값 집계
     public GateMetrics collect() {
         Timestamp last30d = Timestamp.from(Instant.now().minus(30, ChronoUnit.DAYS));
         Timestamp last7d = Timestamp.from(Instant.now().minus(7, ChronoUnit.DAYS));
@@ -24,8 +31,29 @@ public class GateMetricsQuery {
                 countSince("SELECT count(DISTINCT project_id) FROM gate_check_logs WHERE created_at >= :since", last30d),
                 countSince("SELECT count(DISTINCT project_id) FROM analyses WHERE created_at >= :since", last7d),
                 countSince("SELECT count(*) FROM posts WHERE created_at >= :since", last7d),
-                count("SELECT count(*) FROM gate_check_logs WHERE state = 'failure'")
+                count("SELECT count(*) FROM gate_check_logs WHERE state = 'failure'"),
+                highWarningPrecisionPct(last30d)
         );
+    }
+
+    // HIGH 경고 발생(gate_check_logs.high_count 합계) 대비 오탐 미신고 비율 — 근사치(발생은 PR 게이트 시점 누적,
+    // 신고는 fingerprint 단위 고유 신고라 단위가 완전히 같진 않음). HIGH 발생 0건이면 100(분모 0 방지).
+    private int highWarningPrecisionPct(Timestamp since) {
+        Number highOccurrences = (Number) em.createNativeQuery(
+                "SELECT coalesce(sum(high_count), 0) FROM gate_check_logs WHERE created_at >= :since")
+                .setParameter("since", since).getSingleResult();
+        long occurrences = highOccurrences.longValue();
+        if (occurrences == 0) return 100;
+
+        Number highFpReports = (Number) em.createNativeQuery(
+                "SELECT count(*) FROM fp_reports WHERE created_at >= :since AND warning_type IN :types")
+                .setParameter("since", since)
+                .setParameter("types", List.copyOf(HIGH_SEVERITY_TYPES))
+                .getSingleResult();
+        long fpReports = highFpReports.longValue();
+
+        long precise = Math.max(0, occurrences - fpReports);
+        return (int) Math.min(100, Math.round(precise * 100.0 / occurrences));
     }
 
     private int countSince(String sql, Timestamp since) {

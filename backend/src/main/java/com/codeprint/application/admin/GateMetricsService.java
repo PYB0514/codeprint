@@ -12,7 +12,7 @@ public class GateMetricsService {
 
     private final GateMetricsQuery gateMetricsQuery;
 
-    // 지표 대시보드 3층 체계(북극성·경험·실적) 현재 값 조회
+    // 지표 대시보드 4층 체계(북극성·경험·실적·가드레일) 현재 값 조회
     @Transactional(readOnly = true)
     public GateMetrics current() {
         return gateMetricsQuery.collect();
