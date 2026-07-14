@@ -1,0 +1,5 @@
+{
+  "warnings": [
+    { "type": "CROSS_DOMAIN_CALL", "count": 1 }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "warnings": [
+    { "type": "DEAD_CODE", "count": 1 }
+  ]
+}

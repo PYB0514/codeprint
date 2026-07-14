@@ -1768,4 +1768,20 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 
 **검증.** 3개 룰 10개 신규 케이스(ASYNC_SELF_CALL 4·INTERFACES_IMPORTS_INFRA 3·HIGH_FAN_OUT 3) 전부 GREEN. 전체 백엔드 테스트 green(프로덕션 코드 변경 없음 — 테스트 리소스만 추가). `analyzeLocal` 자가검사 — HIGH_FAN_OUT 5건·BROKEN_INTERFACE_CHAIN 1건, 위 버그 수정 커밋 이후와 완전히 동일(회귀 없음, 예상대로 — 이번 커밋은 프로덕션 로직 무변경).
 
-**한계.** BENCH_SPEC.md §2.3·2.10·2.14가 명시한 전체 N케이스 변형 중 대표적인 것만 코드화(예: HIGH_FAN_OUT의 Go `mergedDefCount`·Rust `#[test]` 언어별 케이스, ASYNC_SELF_CALL의 Python async 케이스는 미포함) — 필요 시 후속으로 보강. 3단계의 나머지(2.11 CROSS_DOMAIN_CALL·2.13 DEAD_CODE, 둘 다 예외 조건이 가장 많은 룰)는 별도 세션에서 이어간다.
+**한계.** BENCH_SPEC.md §2.3·2.10·2.14가 명시한 전체 N케이스 변형 중 대표적인 것만 코드화(예: HIGH_FAN_OUT의 Go `mergedDefCount`·Rust `#[test]` 언어별 케이스, ASYNC_SELF_CALL의 Python async 케이스는 미포함) — 필요 시 후속으로 보강.
+
+## 벤치 스위트 3단계 완료 — N층 대형 2종(CROSS_DOMAIN_CALL·DEAD_CODE) 코드화 (2026-07-14, codeprint_124)
+
+**배경.** BENCH_SPEC.md §4 3단계의 나머지 — 2.11(CROSS_DOMAIN_CALL, "예외 조건 최다")·2.13(DEAD_CODE, "N층 최다, 예외 15종+신뢰도 게이트"), BENCH_SPEC.md가 스스로 가장 어렵다고 표시한 두 룰. 소스(`detectCrossDomainFunctionCall`·`detectDeadCode`)를 먼저 정독하고 조건을 손으로 추적한 뒤 픽스처 설계.
+
+**CROSS_DOMAIN_CALL — 동일 함정 3번째 재발.** P 케이스(`application/order/OrderService → domain/inventory/InventoryService` bare 호출)가 처음 0건이었다 — 원인은 0단계·2단계에서 이미 두 번 겪은 것과 동일: `application/`·`domain/`이 픽스처 루트의 최상위 세그먼트라 `containsLayerSegment`(`/domain/`처럼 앞뒤 슬래시 매칭)가 `isDddProject` 게이트를 못 열었다. `src/` 한 단계 더 감싸 해결. **패턴 정착**: 이제 DDD 레이어 디렉터리가 들어가는 모든 벤치 픽스처는 처음부터 `src/`로 감싸는 것으로 확정(0단계 결정 사항이었으나 이번 세션 초반 두 번 더 잊어서 반복 실측 후 수정했다 — BENCH_SPEC.md에도 반복 경고로 남김).
+
+**CROSS_DOMAIN_CALL 픽스처는 IMPORT 문을 의도적으로 생략.** `application/{A}` → `domain/{B}` 방향 호출은 IMPORT 엣지도 함께 만들면 `CROSS_CONTEXT_IMPORT`가 동시 발화해(같은 엣지가 두 룰의 조건을 동시 충족) `expected.json`이 두 타입을 모두 기록해야 한다 — 룰 하나만 검증하는 순수 픽스처를 원해서, 필드 타입 선언만으로 리시버 타입을 해소하는 이미 검증된 경로(1단계 MISSING_TRANSACTIONAL_DELETE wrapped-caller 패턴)를 그대로 재사용해 `import` 없이 클래스 단순명 매칭만으로 호출을 성립시켰다. GraphBuilder의 bare-call 클래스명 해소가 IMPORT 존재와 무관하게 동작함을 다시 한번 실측 확인.
+
+**DEAD_CODE — 15종 예외 중 대표 6종 선정, 체이닝 설계로 상호 오염 방지.** 예외가 워낙 많아(경로 8종+메타 7종+동명다중정의+신뢰도게이트) 전부는 무리라 판단해 대표적인 것만: ①domain/ 진짜 미호출(P) ②루트 레벨 `tests/`(A-1 회귀가드) ③같은 파일 내 호출(B-13 회귀가드, sameFile 엣지도 "호출됨"으로 정상 집계되는지) ④콜백 값 참조(B-16 회귀가드) ⑤React tsx 대문자 컴포넌트 ⑥신뢰도 게이트(Go 36함수 중 34개 미호출 축소 재현). B-13·B-16 케이스에서 "증명하려는 메커니즘 하나만 격리"하기 위해 체이닝 설계를 썼다 — 예를 들어 B-16은 `handler`(referencedAsValue로 제외)·`setup`(같은 파일에서 호출돼 제외, B-13 메커니즘 재사용)·`init`(FRAMEWORK_CALL_NAMES 이름 자체로 제외) 3개 함수를 서로 다른 독립된 제외 사유로 매칭시켜, 어느 하나도 "그냥 안 불려서 죽은 코드로 남는" 경우가 없도록 체인을 완성했다 — 각 함수가 서로 다른 메커니즘으로 검증되므로 테스트 의도가 흐려지지 않는다.
+
+**신뢰도 게이트 픽스처.** Go 파일에 `main()`(FRAMEWORK_CALL_NAMES로 제외) + `helper1()`(main이 호출) + `helper2~35`(미호출) 총 36개 함수 — 미호출 34개, 비율 94%로 `DEAD_CODE_MIN_FUNCTIONS`(30)·`DEAD_CODE_MIN_GATE_COUNT`(10)·`DEAD_CODE_UNTRUSTWORTHY_RATIO`(4%) 셋 다 넉넉히 초과해, 개별 경고 34건 대신 게이트 안내 1건으로 치환되는지 검증.
+
+**검증.** 2개 룰 11개 신규 케이스(CROSS_DOMAIN_CALL 5·DEAD_CODE 6) 전부 `BenchSuiteTest` GREEN(총 81케이스). 전체 백엔드 테스트 green(프로덕션 코드 무변경 — 테스트 리소스만 추가). `analyzeLocal` 자가검사 HIGH_FAN_OUT 5건·BROKEN_INTERFACE_CHAIN 1건, 직전 커밋과 완전히 동일(회귀 없음).
+
+**한계.** DEAD_CODE는 15종 예외 중 대표 6종만 코드화 — 나머지(Python `__init__`, Go 다형성 동명 다중 정의, `isConstructor`/`isEventListener`/`isScheduled`/`isBean` 등 프레임워크 메타 5종, `pages`/`components`/`hooks`/`utils`/`lib` 경로 5종)는 미포함. 이것으로 §4 3단계(BENCH_SPEC.md 전체 17개 룰의 P/N 케이스 코드화)가 완료 — 남은 건 4단계(R층 히스토리 스냅샷 재베이스라인)뿐이다.
