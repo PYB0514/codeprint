@@ -106,6 +106,10 @@ public class GraphBuilder {
                 if (pf.transactionalMethods() != null && pf.transactionalMethods().contains(funcName)) {
                     meta.put("isTransactional", true);
                 }
+                // 인터페이스 추상 메서드 — BROKEN_INTERFACE_CHAIN이 구현체 존재 여부를 판정하는 데 사용
+                if (pf.interfaceMethods() != null && pf.interfaceMethods().contains(funcName)) {
+                    meta.put("isInterface", true);
+                }
                 // 값(콜백)으로 참조되는 함수 — 호출 엣지가 없어도 DEAD_CODE 오탐에서 제외하기 위한 플래그
                 if (pf.valueReferencedFunctions() != null && pf.valueReferencedFunctions().contains(funcName)) {
                     meta.put("referencedAsValue", true);

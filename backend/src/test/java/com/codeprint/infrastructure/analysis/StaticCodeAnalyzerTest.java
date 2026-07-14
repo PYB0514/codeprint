@@ -2539,6 +2539,98 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("인터페이스 파일의 추상 메서드를 interfaceMethods에 포함한다 (BROKEN_INTERFACE_CHAIN 판정용)")
+    void Java_인터페이스_추상메서드_감지() throws IOException {
+        Path file = writeJavaFile("""
+                public interface FooService {
+                    void doWork();
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.interfaceMethods()).contains("doWork");
+    }
+
+    @Test
+    @DisplayName("일반 클래스의 메서드는 interfaceMethods에 포함하지 않는다")
+    void Java_클래스_메서드는_interfaceMethods_제외() throws IOException {
+        Path file = writeJavaFile("""
+                public class FooServiceImpl {
+                    public void doWork() {}
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.interfaceMethods()).doesNotContain("doWork");
+    }
+
+    @Test
+    @DisplayName("★도그푸딩 실측: JpaRepository 파생 인터페이스는 interfaceMethods에서 제외한다(프록시 구현 — @Override 체인 없음)")
+    void Java_JpaRepository_파생_인터페이스는_interfaceMethods_제외() throws IOException {
+        Path file = writeJavaFile("""
+                public interface FooJpaRepository extends JpaRepository<Foo, java.util.UUID> {
+                    java.util.Optional<Foo> findByName(String name);
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.interfaceMethods()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("★도그푸딩 실측: JpaRepository+도메인 포트를 함께 extends하는 인터페이스는 포트 메서드도 구현으로 인정한다")
+    void Java_JpaRepository와_도메인포트_함께_extends() throws IOException {
+        Path file = writeJavaFile("""
+                public interface FooJpaRepository extends JpaRepository<Foo, java.util.UUID>, FooRepository {
+                    java.util.Optional<Foo> findByName(String name);
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.implementedInterfaces()).contains("FooRepository");
+        assertThat(result.implementedInterfaces()).doesNotContain("JpaRepository");
+    }
+
+    @Test
+    @DisplayName("★도그푸딩 실측: 인터페이스 안 중첩 record의 메서드는 interfaceMethods에서 제외한다")
+    void Java_인터페이스_중첩레코드_메서드는_interfaceMethods_제외() throws IOException {
+        Path file = writeJavaFile("""
+                public interface FooPort {
+                    FooView getFoo(String id);
+
+                    record FooView(String id, String name) {
+                        public boolean matches(String other) {
+                            return name.equals(other);
+                        }
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.interfaceMethods()).contains("getFoo");
+        assertThat(result.interfaceMethods()).doesNotContain("matches");
+    }
+
+    @Test
+    @DisplayName("TypeScript는 interfaceMethods를 추출하지 않는다(Java/Kotlin 전용 개념)")
+    void TypeScript는_interfaceMethods_추출_안함() throws IOException {
+        Path file = writeTsFile("""
+                interface FooService {
+                    doWork(): void;
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.interfaceMethods()).isEmpty();
+    }
+
+    @Test
     @DisplayName("TypeScript는 @Transactional 개념이 없어 transactionalMethods를 추출하지 않는다")
     void TypeScript는_Transactional_추출_안함() throws IOException {
         Path file = writeTsFile("""

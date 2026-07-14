@@ -1,0 +1,5 @@
+{
+  "warnings": [
+    { "type": "BROKEN_INTERFACE_CHAIN", "count": 1 }
+  ]
+}
