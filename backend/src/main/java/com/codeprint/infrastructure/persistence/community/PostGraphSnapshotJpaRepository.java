@@ -19,4 +19,8 @@ public interface PostGraphSnapshotJpaRepository extends JpaRepository<PostGraphS
     // 스냅샷을 가진 게시글 ID만 일괄 조회 (N+1 제거용 배치 존재 확인)
     @Query("SELECT DISTINCT s.postId FROM PostGraphSnapshot s WHERE s.postId IN :postIds")
     List<UUID> findDistinctPostIdsByPostIdIn(List<UUID> postIds);
+
+    // 프로젝트가 가진 그래프 중 스냅샷이 참조 중인 graph_id만 조회 — 보존 정책 삭제 대상 제외용
+    @Query("SELECT DISTINCT s.graphId FROM PostGraphSnapshot s WHERE s.projectId = :projectId")
+    List<UUID> findDistinctGraphIdsByProjectId(UUID projectId);
 }

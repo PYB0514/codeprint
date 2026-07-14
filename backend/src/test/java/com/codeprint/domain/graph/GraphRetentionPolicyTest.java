@@ -8,6 +8,7 @@ import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -72,5 +73,31 @@ class GraphRetentionPolicyTest {
     @DisplayName("빈 목록이면 삭제 대상 없음")
     void emptyListNoEviction() {
         assertThat(GraphRetentionPolicy.selectEvictable(List.of())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("시스템 계정용 maxRecent=2 지정 시 비고정 3개면 가장 오래된 1개가 삭제 대상")
+    void customMaxRecentEvictsBeyondSmallerLimit() {
+        List<Graph> graphs = new ArrayList<>();
+        for (int i = 0; i < 3; i++) graphs.add(graph(i, null));
+
+        List<Graph> evict = GraphRetentionPolicy.selectEvictable(graphs, GraphRetentionPolicy.MAX_RECENT_SYSTEM, Set.of());
+
+        assertThat(evict).hasSize(1);
+        assertThat(evict.get(0).getCreatedAt()).isEqualTo(Instant.ofEpochSecond(0));
+    }
+
+    @Test
+    @DisplayName("스냅샷이 참조 중인 graph_id는 고정과 동일하게 삭제 대상에서 제외 — 대신 그다음으로 오래된 것이 삭제")
+    void protectedGraphIdsAreExcludedFromEviction() {
+        List<Graph> graphs = new ArrayList<>();
+        for (int i = 0; i < 4; i++) graphs.add(graph(i, null)); // maxRecent(2) 초과 4개, 그중 가장 오래된 것을 보호
+        UUID protectedId = graphs.get(0).getId(); // 가장 오래돼 원래는 삭제 대상 1순위
+
+        List<Graph> evict = GraphRetentionPolicy.selectEvictable(graphs, GraphRetentionPolicy.MAX_RECENT_SYSTEM, Set.of(protectedId));
+
+        assertThat(evict).hasSize(1);
+        assertThat(evict.get(0).getCreatedAt()).isEqualTo(Instant.ofEpochSecond(1)); // 보호된 0 대신 그다음으로 오래된 1이 삭제
+        assertThat(evict).noneMatch(g -> g.getId().equals(protectedId));
     }
 }

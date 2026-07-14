@@ -16,6 +16,22 @@
 
 ---
 
+## 시스템 계정 그래프 보존 축소 + 스냅샷 참조 보호 — 저장 레버 ②(2026-07-15, §18.8-④ 1단계)
+
+**문제.** `GraphRetentionPolicy.MAX_RECENT=10`이 개인·시스템(갤러리) 프로젝트 구분 없이 일괄 적용돼, 갤러리 리포 하나가 버전 10개(최대 150MB)까지 쌓일 수 있었다. 그런데 통합 게시글(`post_graph_snapshots`)은 항상 **현재 노출 중인 최신 그래프만** 참조하므로, 갤러리 프로젝트의 오래된 버전은 사실상 무참조 죽은 데이터.
+
+**검증 부산물로 발견한 기존 결함.** `GraphRetentionPolicy`는 `Graph.isPinned()`만 보호하는데, 게시물 스냅샷 재발행(`FeaturedPostPublishingAdapter.replaceSnapshots`)은 그래프를 pin하지 않는다 — 개인 사용자가 공유한 게시물이 참조한 그래프도 이후 분석이 쌓이면 retention에 밀려 삭제될 수 있어 공유 링크가 깨질 위험이 있었다(2026-07-15 codeprint_126 Fable 검증에서 먼저 발견, 이번 PR에서 함께 수정).
+
+**결정.** `GraphRetentionPolicy`에 `selectEvictable(graphs, maxRecent, protectedGraphIds)` 오버로드를 추가해 ①보존 개수를 프로젝트 성격별로 다르게(`MAX_RECENT_SYSTEM=2`) ②`post_graph_snapshots`가 참조 중인 graph_id를 pinned와 동일하게 보호. `GraphBuilder`가 `ProjectRepository`로 소유자가 시스템 계정(`FeaturedProjectProvisioningAdapter.SYSTEM_USER_ID`)인지 확인하고, 신규 `SnapshotReferencePort`(구현은 `GraphSnapshotReferenceAdapter`, community 컨텍스트의 `PostGraphSnapshotJpaRepository` 위임)로 보호 대상을 조회해 정책에 전달.
+
+**2가 아닌 1인 이유(§18.8-④ 원문 근거).** `refreshDailyFeatured()`가 분석 완료를 기다리지 않고 비동기로 재발행해, 직전 그래프가 새 그래프 생성 시점에 아직 스냅샷에 참조 중일 수 있다 — 1로 하면 참조 중인 직전 버전이 이번 정책 계산에서 아직 안 보일 타이밍에 삭제될 위험. 2단계(스냅샷 재발행을 분석 완료 후로 재배선)가 되어야 1로 더 좁힐 수 있음(다음 세션 과제로 이월).
+
+**검토한 대안.** ①`GraphBuilder`가 `PostGraphSnapshotJpaRepository`를 직접 주입 — 기각(그래프 컨텍스트 infra가 community 컨텍스트 JPA repository를 직접 참조하면 컨텍스트 경계가 흐려짐, 포트/어댑터로 우회). ②프로젝트 소유자 판별을 `Project` 엔티티에 `isSystemOwned()` 도메인 메서드로 두기 — 기각(SYSTEM_USER_ID 상수가 이미 featured 컨텍스트 소유라 project 도메인에 featured 개념을 역주입하는 셈, 기존 `FeaturedPostPublishingAdapter`도 같은 상수를 인프라 계층에서 그대로 참조하는 전례를 따름).
+
+**결과.** `GraphRetentionPolicyTest` 2건·`GraphBuilderTest` 2건 신규 회귀 테스트 추가, 전체 921건 green(로컬 Docker DB로 통합 테스트 포함 확인). `analyzeLocal` 신규 경고 없음. CLI 전용 도구(`LocalAnalyzer`, `BenchPipelineRunner`)는 DB가 없어 `NoOpProjectRepository`/`NoOpSnapshotReferencePort` 더미로 대체(항상 비시스템·비보호로 동작, 로컬 자가진단 목적상 무해).
+
+---
+
 ## 노드 쓰기 IDOR 수정 — GraphCommandService (2026-07-08, 보안수정)
 
 **문제.** `GraphController.updateNodeAnnotation`/`updateNodePosition`이 `graphFacade.verifyGraphOwnership(graphId, userId)`로 그래프 소유권만 검증하고, `GraphCommandService.updateNodeAnnotation`/`updateNodePosition`은 `nodeId`로 곧장 노드를 조회·수정해 `node.getGraphId()`가 요청 경로의 `graphId`와 같은지 확인하지 않았다. 자기 소유 그래프 ID + 남의 그래프에 속한 nodeId를 조합하면 타인 노드의 주석·위치를 변조할 수 있었다(공개 그래프 nodeId는 `/api/share/{projectId}/graph` 응답에 그대로 노출돼 실제 공격 표면 존재 — Context105 MCP 도그푸딩 세션에서 발견, task_3f69223f).

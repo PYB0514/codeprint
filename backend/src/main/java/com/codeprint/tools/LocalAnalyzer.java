@@ -7,6 +7,9 @@ import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.GraphRepository;
 import com.codeprint.domain.graph.Node;
+import com.codeprint.domain.graph.port.SnapshotReferencePort;
+import com.codeprint.domain.project.Project;
+import com.codeprint.domain.project.ProjectRepository;
 import com.codeprint.infrastructure.analysis.CachedParsedFileLoader;
 import com.codeprint.infrastructure.analysis.GraphBuilder;
 import com.codeprint.infrastructure.analysis.ParsedFile;
@@ -22,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public class LocalAnalyzer {
@@ -77,7 +81,7 @@ public class LocalAnalyzer {
         // 과거 자체 재구현(buildGraph)은 인터페이스→구현체 우선 매칭·sameFile 마커·isFrameworkAnnotated 메타가 빠져
         // 프로덕션보다 호출 해소가 약했고 미호출 비율이 부풀려져(예: petclinic 19% vs 프로덕션 1%) 임계값 교정에 쓸 수 없었다.
         InMemoryGraphRepository repo = new InMemoryGraphRepository();
-        GraphBuilder builder = new GraphBuilder(repo);
+        GraphBuilder builder = new GraphBuilder(repo, new NoOpProjectRepository(), new NoOpSnapshotReferencePort());
         Graph graph = builder.build(projectId, UUID.randomUUID(), parsedFiles);
         List<Node> nodes = repo.findNodesByGraphId(graph.getId());
         List<Edge> edges = repo.findEdgesByGraphId(graph.getId());
@@ -193,5 +197,22 @@ public class LocalAnalyzer {
         @Override
         public void clearPinnedSlot(UUID projectId, int slot) {
         }
+    }
+
+    // DB 없이 GraphBuilder를 구동하기 위한 더미 — CLI엔 실제 프로젝트 소유자 개념이 없어 항상 미조회 처리
+    private static class NoOpProjectRepository implements ProjectRepository {
+        @Override public Project save(Project project) { throw new UnsupportedOperationException(); }
+        @Override public Optional<Project> findById(UUID id) { return Optional.empty(); }
+        @Override public List<Project> findByUserId(UUID userId) { return List.of(); }
+        @Override public List<Project> findByRepoUrl(String repoHttpsUrl) { return List.of(); }
+        @Override public int countPrivateByUserId(UUID userId) { return 0; }
+        @Override public List<Project> findPublicByUserId(UUID userId) { return List.of(); }
+        @Override public void deleteById(UUID id) { }
+        @Override public long count() { return 0; }
+    }
+
+    // DB 없이 GraphBuilder를 구동하기 위한 더미 — CLI엔 공유 게시물 개념이 없어 항상 빈 집합
+    private static class NoOpSnapshotReferencePort implements SnapshotReferencePort {
+        @Override public Set<UUID> findReferencedGraphIds(UUID projectId) { return Set.of(); }
     }
 }
