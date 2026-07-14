@@ -404,3 +404,28 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 **결정.** **버킷 단위**로만 세분화 — `s3:PutObject`/`GetObject`/`DeleteObject`를 `arn:aws:s3:::codeprint-uploads/*`에, `s3:ListBucket`을 버킷 자체에 허용하는 인라인 정책(`codeprint-s3-scoped`)으로 기존 `AmazonS3FullAccess`를 교체. 이 자격증명이 다시 유출되더라도 피해 범위가 "AWS 계정 전체의 모든 S3 버킷"에서 "이 앱 전용 버킷 하나"로 줄어드는 게 핵심 이득이고, 버킷 내 prefix가 새로 생겨도 정책을 다시 안 건드려도 됨.
 
 **결과.** AWS 콘솔에서 사용자가 직접 적용(신규 정책 추가 → 기존 FullAccess 제거 순서로 권한 공백 없이 교체). `gh workflow run db-backup.yml`로 실제 재실행 — Put(덤프 업로드)·List+Delete(보존기간 초과분 정리) 전부 성공 확인(`gh run view --log`로 403/denied 없음 확인). 정책이 prefix 구분 없이 버킷 전체에 적용되므로, 이 검증 하나가 `attachments/`·`avatars/`·`backgrounds/`에도 동일하게 적용됨(정책상 경로 구분이 없어 별도 검증 불필요).
+
+---
+
+## 프로덕션 Postgres 디스크 풀 사고 — 원인 규명·응급 조치 (2026-07-14~15, codeprint_125)
+
+**증상.** PR #562(오탐 신고 재현 페이로드 기능) 머지 전 `codeprint/structure` 필수 체크가 아예 게시되지 않아 `mergeStateStatus: BLOCKED`. GitHub webhook은 정상 수신(202)됐는데 커밋 상태가 하나도 없음 — Backend/Frontend CI는 green이라 더 이상했다.
+
+**진단 경위(GATE_GAPS.md [G-4]와 연계).** Railway CLI(`@railway/cli`, 신규 설치·로그인·`railway link`) + `docker run --rm postgres:16 psql`로 프로덕션 DB에 직접 접속해 조사.
+1. Railway 배포 로그(`railway logs --since 2h`)에서 실제 예외 확인: `PrReviewRunner.reviewAsync`(정상적인 `@Async` 별도 빈 호출, 자기호출 버그 아님)가 삼킨 예외 — `GraphBuilder.build()`의 엣지 배치 INSERT가 `ERROR: could not extend file ... No space left on device`로 실패. webhook 응답은 이미 202를 반환한 뒤(비동기 처리 중) 실패한 거라 GitHub 쪽에서는 아무 신호가 없었음.
+2. `railway volume list --json` — Postgres 볼륨 `500MB 중 495.46MB 사용(99.1%)`.
+3. `pg_database_size` = 240MB인데 볼륨 사용량은 495MB — **실데이터보다 155MB 많음**. 원인 추적: `SHOW max_wal_size` = **1GB**(디스크 전체 500MB보다 큰 예산!), `pg_ls_waldir()` = 144MB. replication slot·WAL 아카이빙은 전부 없음(`archive_mode=off`, slot 0개) — 순수하게 "디스크보다 큰 WAL 예산 설정" 문제.
+4. `edges`·`nodes`에 각각 dead tuple 64,440건·19,050건(오토배큠은 도는데 회수 못 함 — 일반 VACUUM의 구조적 한계, OS로 공간 반환 안 됨).
+
+**응급 조치(전부 사용자 승인 후 순차 진행).**
+1. `CHECKPOINT;` — 효과 없음(WAL 144MB 그대로, 이미 min_wal_size 80MB 근접이라 더 안 줄었을 수 있음).
+2. `ALTER SYSTEM SET max_wal_size='128MB'; SELECT pg_reload_conf();` — 디스크(500MB)에 맞게 재조정. 즉각적 공간 회수는 없었지만(WAL은 checkpoint 주기를 거치며 서서히 수렴) 향후 재발 방지용 근본 수정.
+3. **TRUNCATE 자체가 실패**(`could not extend file`) — TRUNCATE는 새 빈 파일을 만들어야 해서 여유공간이 아예 없으면 이것도 안 된다는 걸 실측으로 확인. 반면 **1행 DELETE는 성공** — WAL append만 필요한 경량 연산이라 통과. **`DELETE FROM parsed_file_cache;`(전량, WHERE 없이)로 캐시 9,837행 삭제 성공** → 후속 `VACUUM (VERBOSE) parsed_file_cache;`가 트레일링 페이지를 실제로 truncate(1367→0 page, toast 544→0 page) — `pg_database_size` 240MB→225MB로 실측 감소, 파일 하나 없이 안전하게(순수 캐시라 데이터 손실 없음, 다음 분석 시 자동 재채움).
+4. `VACUUM (VERBOSE) nodes/edges;` 시도 — dead tuple은 내부적으로 회수(재사용 가능 표시)됐지만 **파일 크기 자체는 안 줄었음**(dead tuple이 파일 끝이 아니라 전역에 흩어져 있어 trailing truncate 불가). `VACUUM FULL`은 테이블 크기만큼 임시공간이 필요해 지금 여유(수십MB)로는 시도 보류.
+5. 여유공간 확보 후 PR에 빈 커밋을 푸시해 webhook 재트리거 → 분석 정상 완료, `codeprint/structure` 정상 게시(success) 확인. PR #562 머지 완료.
+
+**교훈·잔여 리스크.**
+- Railway Hobby 플랜 기본 Postgres 볼륨(500MB)이 이 프로젝트의 그래프 재생성 write 패턴(재분석마다 노드·엣지 전량 삭제 후 재생성)엔 처음부터 너무 작았다 — "혼자 테스트만 해도" 채워질 수준. **v1.0 공개 런칭 전 볼륨 증설(유료)이 필수 선행 작업**으로 재확인.
+- `edges`/`nodes`의 dead tuple 회수(`VACUUM FULL`)는 여전히 미해결 — 다음에 여유공간이 충분할 때(볼륨 증설 직후가 적기) 마무리할 것.
+- **진단 중 실수**: `java -version` 진단하다 로컬에서 크래시가 나서 그 크래시 로그를 지우다가, 원래 조사하려던 프로덕션 백엔드 크래시 로그(`hs_err_pid7512.log`, 진짜 증거)까지 같이 지워버림. 다행히 재시도 크래시 로그에서 동일 OOM 패턴이 재확인돼 원인 규명엔 지장 없었지만, 진단 로그 삭제는 신중해야 한다는 교훈.
+- 근본적 비용 구조 논의(그래프 생성 트리거 분리·쿼타·압축저장 등)는 별도 절 참조(`PRODUCT_STRATEGY.md` §18) — 이 사고가 그 논의의 직접적 계기.
