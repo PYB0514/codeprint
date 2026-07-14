@@ -1,0 +1,5 @@
+{
+  "warnings": [
+    { "type": "HIGH_FAN_OUT", "count": 1 }
+  ]
+}

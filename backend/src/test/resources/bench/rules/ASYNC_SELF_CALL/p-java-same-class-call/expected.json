@@ -1,0 +1,5 @@
+{
+  "warnings": [
+    { "type": "ASYNC_SELF_CALL", "count": 1 }
+  ]
+}
