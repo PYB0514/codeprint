@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.130.0',
+    date: '2026-07-15',
+    title: '팀 API 키 — 비공개 프로젝트 교차 조회',
+    type: 'feature',
+    items: [
+      { category: '팀', desc: '팀 설정 페이지에서 API 키를 발급할 수 있습니다. AI 에이전트가 이 키로 팀에 배분된 비공개 프로젝트의 구조를 원격 조회할 수 있습니다 — 같은 조직의 다른 서비스(MSA) 구조를 참고해야 할 때 유용합니다.' },
+    ],
+  },
+  {
     version: 'v0.129.0',
     date: '2026-07-14',
     title: 'PR 게이트 등급 설정 추가',

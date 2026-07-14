@@ -47,6 +47,15 @@ interface AllocationResponse {
   allocatedSeats: number
 }
 
+interface ApiKeyResponse {
+  id: string
+  name: string
+  keyPrefix: string
+  createdAt: string
+  lastUsedAt: string | null
+  revoked: boolean
+}
+
 // Desktop 라이센스 좌석당 월 요금(원) — 팀 총 요금 = 좌석 수 × 이 값
 const PRICE_PER_SEAT = 4_900
 
@@ -57,6 +66,10 @@ export default function TeamsPage() {
   const [selectedTeam, setSelectedTeam] = useState<TeamResponse | null>(null)
   const [members, setMembers] = useState<MemberResponse[]>([])
   const [allocations, setAllocations] = useState<AllocationResponse[]>([])
+  const [apiKeys, setApiKeys] = useState<ApiKeyResponse[]>([])
+  const [newKeyName, setNewKeyName] = useState('')
+  const [issuingKey, setIssuingKey] = useState(false)
+  const [issuedRawKey, setIssuedRawKey] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newTeamName, setNewTeamName] = useState('')
   const [newTeamSeats, setNewTeamSeats] = useState(5)
@@ -80,15 +93,17 @@ export default function TeamsPage() {
     }
   }
 
-  // 특정 팀 멤버/배분 현황 불러오기
+  // 특정 팀 멤버/배분/API 키 현황 불러오기
   const selectTeam = async (team: TeamResponse) => {
     setSelectedTeam(team)
-    const [membersRes, allocRes] = await Promise.all([
+    const [membersRes, allocRes, keysRes] = await Promise.all([
       axios.get<MemberResponse[]>(`/api/teams/${team.id}/members`),
       axios.get<AllocationResponse[]>(`/api/teams/${team.id}/allocations`),
+      axios.get<ApiKeyResponse[]>(`/api/teams/${team.id}/api-keys`),
     ])
     setMembers(membersRes.data)
     setAllocations(allocRes.data)
+    setApiKeys(keysRes.data)
   }
 
   useEffect(() => {
@@ -162,6 +177,42 @@ export default function TeamsPage() {
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
       setError(err.response?.data?.message ?? '멤버 제거에 실패했습니다.')
+    }
+  }
+
+  // API 키 발급 처리 — 평문은 이 응답에서만 노출되므로 모달로 1회 표시
+  const handleIssueKey = async () => {
+    if (!selectedTeam || !newKeyName.trim()) return
+    setIssuingKey(true)
+    setError(null)
+    try {
+      const res = await axios.post<ApiKeyResponse & { rawKey: string }>(
+        `/api/teams/${selectedTeam.id}/api-keys`,
+        { name: newKeyName.trim() }
+      )
+      setIssuedRawKey(res.data.rawKey)
+      setNewKeyName('')
+      const keysRes = await axios.get<ApiKeyResponse[]>(`/api/teams/${selectedTeam.id}/api-keys`)
+      setApiKeys(keysRes.data)
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      setError(err.response?.data?.message ?? 'API 키 발급에 실패했습니다.')
+    } finally {
+      setIssuingKey(false)
+    }
+  }
+
+  // API 키 폐기 처리
+  const handleRevokeKey = async (keyId: string) => {
+    if (!selectedTeam) return
+    if (!window.confirm('이 API 키를 폐기하시겠습니까? 되돌릴 수 없습니다.')) return
+    try {
+      await axios.delete(`/api/teams/${selectedTeam.id}/api-keys/${keyId}`)
+      const keysRes = await axios.get<ApiKeyResponse[]>(`/api/teams/${selectedTeam.id}/api-keys`)
+      setApiKeys(keysRes.data)
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      setError(err.response?.data?.message ?? 'API 키 폐기에 실패했습니다.')
     }
   }
 
@@ -346,6 +397,66 @@ export default function TeamsPage() {
                   </div>
                 )}
 
+                {/* API 키 — 비공개 프로젝트 교차 조회(AI 에이전트 인증)용 */}
+                <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+                  <h3 className="font-semibold mb-1">API 키</h3>
+                  <p className="text-xs text-gray-500 mb-4">
+                    이 팀에 배분된 프로젝트를 AI 에이전트가 원격으로 조회할 때 사용합니다. (/mcp/team/** 엔드포인트)
+                  </p>
+
+                  <div className="flex gap-2 mb-4">
+                    <input
+                      type="text"
+                      value={newKeyName}
+                      onChange={(e) => setNewKeyName(e.target.value)}
+                      placeholder="키 이름 (예: ci-agent)"
+                      className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                      onKeyDown={(e) => e.key === 'Enter' && handleIssueKey()}
+                    />
+                    <button
+                      onClick={handleIssueKey}
+                      disabled={issuingKey || !newKeyName.trim()}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition"
+                    >
+                      {issuingKey ? '발급 중…' : '발급'}
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {apiKeys.map((k) => (
+                      <div
+                        key={k.id}
+                        className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3"
+                      >
+                        <div>
+                          <div className="text-sm text-gray-300">
+                            {k.name} <span className="font-mono text-gray-500">{k.keyPrefix}…</span>
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            발급 {new Date(k.createdAt).toLocaleDateString('ko-KR')}
+                            {k.lastUsedAt && ` · 최근 사용 ${new Date(k.lastUsedAt).toLocaleDateString('ko-KR')}`}
+                          </div>
+                        </div>
+                        {k.revoked ? (
+                          <span className="text-xs bg-gray-700 text-gray-400 border border-gray-600 px-2 py-0.5 rounded">
+                            폐기됨
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleRevokeKey(k.id)}
+                            className="text-xs text-red-400 hover:text-red-300 transition"
+                          >
+                            폐기
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {apiKeys.length === 0 && (
+                      <p className="text-sm text-gray-500 text-center py-4">아직 발급된 API 키가 없습니다.</p>
+                    )}
+                  </div>
+                </div>
+
                 {/* 좌석 증가 결제 */}
                 <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
                   <h3 className="font-semibold mb-3">좌석 증가</h3>
@@ -444,6 +555,33 @@ export default function TeamsPage() {
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm px-5 py-2 rounded-lg transition"
               >
                 {creating ? '생성 중…' : '팀 만들기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* API 키 발급 직후 1회 노출 모달 — 평문은 재조회 불가 */}
+      {issuedRawKey && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
+            <h2 className="text-lg font-bold mb-2">API 키가 발급되었습니다</h2>
+            <p className="text-sm text-gray-400 mb-4">이 키는 지금만 표시됩니다. 안전한 곳에 복사해두세요.</p>
+            <div className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 font-mono text-sm text-blue-300 break-all select-all">
+              {issuedRawKey}
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => navigator.clipboard.writeText(issuedRawKey)}
+                className="text-sm text-gray-400 hover:text-white px-4 py-2 transition"
+              >
+                복사
+              </button>
+              <button
+                onClick={() => setIssuedRawKey(null)}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-5 py-2 rounded-lg transition"
+              >
+                확인했습니다
               </button>
             </div>
           </div>
