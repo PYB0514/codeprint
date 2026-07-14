@@ -44,6 +44,15 @@ public class ProjectAccessAdapter implements ProjectAccessPort {
         }
     }
 
+    @Override
+    public java.util.Optional<ProjectAccessView> getProjectById(UUID projectId) {
+        try {
+            return java.util.Optional.of(toView(projectQueryService.getProjectInternal(projectId)));
+        } catch (Exception e) {
+            return java.util.Optional.empty();
+        }
+    }
+
     // project 도메인 엔티티를 graph 도메인 소유 view로 변환 — 필요한 필드만 추림
     private ProjectAccessView toView(Project project) {
         return new ProjectAccessView(project.getId(), project.getUserId(), project.getName(), project.getGithubRepoUrl());

@@ -59,6 +59,11 @@ public class GraphFacade {
         return projectAccessPort.getPublicProject(projectId);
     }
 
+    // 접근 검증 없는 원시 조회 — 호출자가 이미 별도 인가를 검증한 흐름 전용(MCP 팀 교차조회용)
+    public java.util.Optional<ProjectAccessView> getProjectById(UUID projectId) {
+        return projectAccessPort.getProjectById(projectId);
+    }
+
     // 프로젝트 읽기 접근 허용 — 공개면 누구나, 비공개면 소유자만 (오탐 신고 등 조회 권한만 필요한 API용)
     public void verifyProjectReadAccess(UUID projectId, UUID userId) {
         try {

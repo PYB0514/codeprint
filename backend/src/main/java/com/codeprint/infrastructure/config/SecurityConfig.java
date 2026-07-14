@@ -1,6 +1,7 @@
 // Spring Security 설정 (JWT 필터, OAuth2, CORS)
 package com.codeprint.infrastructure.config;
 
+import com.codeprint.infrastructure.security.ApiKeyAuthenticationFilter;
 import com.codeprint.infrastructure.security.JwtAuthenticationFilter;
 import com.codeprint.infrastructure.security.OAuth2SuccessHandler;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,6 +26,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
 
     // JWT 필터, OAuth2, CORS, 세션리스 정책을 적용한 Security 필터 체인 구성
@@ -62,7 +64,8 @@ public class SecurityConfig {
             .oauth2Login(oauth2 -> oauth2
                 .successHandler(oAuth2SuccessHandler)
             )
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

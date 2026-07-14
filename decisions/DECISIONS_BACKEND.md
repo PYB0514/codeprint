@@ -1958,3 +1958,26 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 - 신규 유닛 테스트: `FpReportServiceTest` 4건 추가(구조적 필드만 저장·graphId 없으면 스니펫 시도 안 함·정상 확보·커밋 SHA 없으면 스니펫 없이도 저장), `GitHubApiClientTest`에 `extractSnippet` 순수 함수 4건. 백엔드 전체 테스트 green, `compileJava`/`npx tsc -b` 에러 0. `analyzeLocal` 자기분석 — 기존 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1, 전부 수용된 기존 항목)과 동일, 신규 위반 0.
 
 **한계·다음.** GitHub 미연동 프로젝트·비공개 레포는 스니펫 없이 구조적 필드만 쌓인다 — 이걸로도 벤치 오라클(§17.9 `{ruleType, file, line, fingerprint}`) 승격에는 충분하지만, "코드까지 자동으로 픽스처화"는 GitHub 연동+공개 레포 한정. 확장하려면 비공개 레포 토큰 플러밍(User의 githubAccessToken을 project 컨텍스트 밖으로 노출하는 설계)이 별도로 필요 — 지금은 범위 밖으로 명시적으로 미룸.
+
+## 인증 프로젝트 교차 조회 — TeamApiKey 신설 (Team 유료축, 2026-07-15, codeprint_128)
+
+> 기존 백로그 "인증 MCP(비공개 자기 레포)"·"MSA 교차 서비스 조회"(`MCP JSON-RPC 서버 제거` 결정 4번 항목)의 실제 구현. 사용자가 "인증 프로젝트 교차 조회 설계"를 우선순위로 지정해 착수.
+
+**문제.** 로컬 파일 접근이 없는 AI 에이전트(같은 조직의 다른 MSA 서비스 레포를 원격으로 봐야 하는 경우)가 팀 소속 비공개 프로젝트 구조를 조회할 방법이 없었다 — 기존 `/mcp/graphs/{graphId}/context`는 `isPublic` 프로젝트만 허용.
+
+**검토한 대안과 탈락 이유.**
+1. **기존 JWT 재사용** — 브라우저 세션용(액세스 토큰 수명 짧고 리프레시가 쿠키 기반)이라 CLI/에이전트 장기 사용에 부적합. 탈락.
+2. **프로젝트 단위 세분화 권한** — 기존 RBAC 결정("OWNER와 동일 권한", `TeamAccessAdapter`)과 결이 다르고 설계 복잡도만 늘어나 탈락, 팀 전체 스코프로 단순화.
+
+**결정.**
+1. **`TeamApiKey` 도메인 신설**(`domain/team`, V61 마이그레이션) — GitHub PAT과 동일 패턴: 평문은 발급 응답에만 노출(`cpk_` 접두사), 엔티티엔 SHA-256 해시만 저장. `matches()`/`revoke()`/`recordUsage()` — TDD로 먼저 작성(발급·검증·폐기 5케이스).
+2. **`ApiKeyAuthenticationFilter` 신설**(`infrastructure/security`) — `Authorization: Bearer cpk_...` 헤더를 해시 조회해 `TeamApiKeyPrincipal(teamId, apiKeyId)`을 SecurityContext에 세팅, `JwtAuthenticationFilter`와 같은 체인 위치에 배선. 두 필터가 동시에 요청을 보되 토큰 형식(`cpk_` 접두사 유무)으로 서로 간섭 없이 분리됨.
+3. **키 관리 API** — `TeamApiKeyApplicationService`+`TeamApiKeyController`(`/api/teams/{teamId}/api-keys`, OWNER만 발급/목록/폐기, 기존 `TeamApplicationService`와 동일한 `verifyOwner` 패턴 반복 — 공유 유틸 추출은 2줄짜리 검증 로직에 과하다고 판단해 보류).
+4. **MCP 엔드포인트 2종 신설** — `GET /mcp/team/projects`(팀 배분 프로젝트 발견용), `GET /mcp/team/graphs/{graphId}/context`(비공개 허용, 인가 기준은 `isPublic` 대신 팀 배분 여부). 기존 공개용 `/mcp/graphs/{graphId}/context`는 무변경 — 응답 조립 로직(`buildContextResponse`)만 공통 private 메서드로 추출해 중복 제거.
+5. **`ProjectAccessPort.getProjectById`** 신규(접근 검증 없는 원시 조회, `getProjectInternal` 재사용) — 팀 교차조회는 인가를 `TeamProjectAccessService`가 이미 검증하므로 project 컨텍스트에 재검증을 요구하지 않음. `TeamProjectAccessService`(application/team) 신설로 McpController가 team 컨텍스트 배분 여부를 조회.
+
+**의도와 다르게 동작한 부분 — `INTERFACES_IMPORTS_INFRA` 위반 발견 및 수정.** 최초 구현에서 `TeamApiKeyPrincipal`을 `infrastructure/security`에 두고 `McpController`(interfaces)가 직접 import했다 — push 전 `analyzeLocal` 자가검사에서 신규 위반 1건으로 즉시 잡힘. 기존 `JwtAuthenticationFilter`가 `User`(domain.user)를 principal로 쓰는 선례를 그대로 따라 `TeamApiKeyPrincipal`을 `domain/team`으로 옮겨 해결 — `analyzeLocal` 재실행으로 기존 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1)과 정확히 일치, 신규 위반 0 확인.
+
+**검증.** 단위 테스트: `TeamApiKeyTest` 5건(발급/해시/검증/폐기), `TeamApiKeyApplicationServiceTest` 5건(소유권·교차 팀 차단) — 전부 TDD로 먼저 작성 후 구현. 백엔드 전체 테스트 green(통합 테스트 포함, Docker DB 기동 후 재확인), `compileJava`/`npx tsc -b` 에러 0. **브라우저 실측**(claude-in-chrome, 실 로그인 세션) — ①팀 설정 페이지에서 키 발급 → 1회 노출 모달에 `cpk_` 키 확인 ②비공개 프로젝트를 팀에 배분(기존 좌석배분 API 재사용) ③curl로 `/mcp/team/projects` 조회 → 배분된 비공개 프로젝트(`bench-petclinic`) 정상 반환 ④`/mcp/team/graphs/{graphId}/context` 조회 → 비공개 그래프 노드·엣지 정상 반환 ⑤인증 헤더 없이 호출 → 403 ⑥기존 공개용 엔드포인트로 같은 비공개 그래프 조회 시도 → 여전히 403(하위호환 유지 확인) ⑦UI에서 키 폐기(fetch로 직접 호출 — `window.confirm()`이 CDP 자동화 탭을 블로킹해 실제 클릭 대신 fetch로 우회, 팀 삭제·멤버 제거 등 기존 코드도 동일한 `confirm()` 패턴이라 신규 결함 아님) → 이후 동일 키로 요청 시 403 확인.
+
+**한계·다음.** 프론트 UI는 팀장 전용(`/teams` 페이지)만 구현 — 발급된 키를 실제 CI/에이전트 설정에 심는 것은 사용자 책임. 키 회전(rotate)·만료(expiry) 정책은 이번 스코프에 없음(폐기만 지원), 필요해지면 후속 항목으로.
