@@ -1757,3 +1757,15 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **검증.** 4개 룰 13개 신규 케이스(BROKEN_INTERFACE_CHAIN 4·MISSING_TRANSACTIONAL_DELETE 5·MISSING_CONVERTER_MIGRATION 3·LAYERED_BYPASS 3, `BenchSuiteTest` 동적 수집) 전부 GREEN. 관련 유닛테스트(`StaticCodeAnalyzerTest`+8, `GraphWarningServiceTest` 수정 2건+신규 1건) GREEN. 전체 백엔드 테스트(864+13=877건 수준) green. `analyzeLocal` 자가검사 — 버그 수정 전후 실측 대조: HIGH_FAN_OUT 5건(불변, 베이스라인) / BROKEN_INTERFACE_CHAIN 0건(수정 전, 죽은 룰이라 당연) → 137건(버그1·2만 수정한 중간 상태, 실전 무력화 확인용) → 28건(Spring Data 가드 1차) → 18건(도메인 포트 extends 인식) → 1건(CrudRepository 기본 메서드 이름 배제, 중첩 타입 스코핑) — 마지막 1건은 위 "수용" 사례.
 
 **한계.** ①`confirmPayment`(PaymentGatewayPort 동명 패키지 충돌)는 미수정 — 근본 수정은 GraphBuilder의 인터페이스 매칭을 패키지 인식 방식으로 바꿔야 해 이번 스코프 밖 ②`SPRING_DATA_BASE_METHODS` 이름 배제는 파일 내용과 무관한 전역 이름 목록이라, 다른 도메인에서 우연히 같은 이름(`save`/`count` 등)을 가진 **진짜** 인터페이스 메서드가 있고 구현이 누락된 경우도 놓친다 — 위 트레이드오프 참조 ③`extractInterfaceMethods`의 중첩 타입 스코핑은 클래스/레코드/인터페이스/열거형 4종만 처리, Java의 다른 중첩 구조(익명 클래스 등)는 대상 밖(이 저장소에서 실제로 겪은 패턴만 우선 처리).
+
+## 벤치 스위트 3단계 일부 — 나머지 MEDIUM/LOW 3종 코드화 (2026-07-14, codeprint_124)
+
+**배경.** BENCH_SPEC.md §4 3단계 중 "N층 대형 2종(2.11 CROSS_DOMAIN_CALL·2.13 DEAD_CODE)"을 제외한 "나머지 MEDIUM/LOW" — 2.3(ASYNC_SELF_CALL)·2.10(INTERFACES_IMPORTS_INFRA)·2.14(HIGH_FAN_OUT) 3종을 이어서 코드화. 위 BROKEN_INTERFACE_CHAIN 버그 수정 직후라 탐지기 소스는 이미 파악된 상태로 착수.
+
+**INTERFACES_IMPORTS_INFRA 픽스처 함정 — 0단계와 동일한 게이트 미충족 재발.** `interfaces/FooController.java → infrastructure/client/ExternalApiClient.java` IMPORT 픽스처를 만들었는데 처음엔 0건(기대 1건)이 나왔다. `detectInterfaceInfraImport`는 다른 DDD 탐지기들과 마찬가지로 `isDddProject(nodes)`(domain/application/infrastructure 중 2종 이상 발견) 게이트 뒤에서만 호출되는데, 이 픽스처는 "interfaces"(INTERFACE_LAYER_DIRS, DDD 게이트 판정에 안 들어감)와 "infrastructure" 딱 1종만 있어 게이트가 안 열려 있었다 — 디버그 스크래치 테스트로 IMPORT 엣지 자체는 정상 생성됨을 먼저 확인한 뒤(엣지 문제 아님을 배제) 원인을 좁혔다. `domain/FooEntity.java`(빈 클래스) 1개를 추가해 게이트를 충족시켜 해결 — 탐지기·분석기 수정 없음, 순수 픽스처 오류였다(0단계 `decisions/DECISIONS_ANALYSIS.md` "벤치 스위트 러너 인프라" 항목의 동일 함정이 다른 룰에서 재발).
+
+**HIGH_FAN_OUT·ASYNC_SELF_CALL은 실측 그대로 통과.** 두 룰은 IMPORT 기반이 아니라 FUNCTION_CALL 기반이라 receiver 타입 해소(정적 호출 `ClassName.method()` 패턴, 대문자 단순 식별자 → 클래스명 그대로 해소)에 의존 — 이미 앞선 세션(MISSING_TRANSACTIONAL_DELETE의 wrapped-caller 케이스)에서 검증된 패턴을 그대로 재사용해 첫 실행에 GREEN.
+
+**검증.** 3개 룰 10개 신규 케이스(ASYNC_SELF_CALL 4·INTERFACES_IMPORTS_INFRA 3·HIGH_FAN_OUT 3) 전부 GREEN. 전체 백엔드 테스트 green(프로덕션 코드 변경 없음 — 테스트 리소스만 추가). `analyzeLocal` 자가검사 — HIGH_FAN_OUT 5건·BROKEN_INTERFACE_CHAIN 1건, 위 버그 수정 커밋 이후와 완전히 동일(회귀 없음, 예상대로 — 이번 커밋은 프로덕션 로직 무변경).
+
+**한계.** BENCH_SPEC.md §2.3·2.10·2.14가 명시한 전체 N케이스 변형 중 대표적인 것만 코드화(예: HIGH_FAN_OUT의 Go `mergedDefCount`·Rust `#[test]` 언어별 케이스, ASYNC_SELF_CALL의 Python async 케이스는 미포함) — 필요 시 후속으로 보강. 3단계의 나머지(2.11 CROSS_DOMAIN_CALL·2.13 DEAD_CODE, 둘 다 예외 조건이 가장 많은 룰)는 별도 세션에서 이어간다.
