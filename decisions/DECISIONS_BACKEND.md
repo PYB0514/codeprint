@@ -1863,3 +1863,30 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `compileJava`/`npx tsc -b` 에러 0, 백엔드 전체 테스트 green(GateMetrics 관련 기존 테스트 없어 회귀 대상 없음). **브라우저 실측** — 로컬 관리자 대시보드(`/admin`)에서 가드레일 카드가 "100%"(로컬 DB에 최근 30일 HIGH 발생 0건 — 분모 0 분기)로 정상 렌더링되는 것을 스크린샷으로 확인. `analyzeLocal` 자가검사 HIGH_FAN_OUT 5건·BROKEN_INTERFACE_CHAIN 1건 불변(회귀 없음).
 
 **한계.** fp_reports 분기(occurrences>0일 때의 실제 차감 계산)는 로컬 DB에 최근 30일 내 HIGH 발생 로그가 없어 실측 검증하지 못함(SQL 문법은 기존 native query와 동일 패턴이라 위험 낮음으로 판단) — 실사용자가 늘어 데이터가 쌓이면 재검증 필요. 이 카드는 `ChangelogPage.tsx`에 기록하지 않음 — `/admin`은 ADMIN 역할 전용 내부 도구라 기존 3층 지표 추가 때도 체인지로그 대상이 아니었던 전례를 따름.
+
+## PR 게이트 0/1/2단계 등급제 도입 — INTERFACES_IMPORTS_INFRA·MISSING_TRANSACTIONAL_DELETE HIGH 승격 재검토의 결론 (2026-07-14, codeprint_124)
+
+**배경.** BENCH_SPEC.md §4 마지막 항목 "INTERFACES_IMPORTS_INFRA·MISSING_TRANSACTIONAL_DELETE HIGH 승격 재검토" — 벤치 무오탐 + 자기 레포 0건이라는 원래 승격 조건 둘 다 충족된 상태에서 실제로 승격할지 결정하는 세션. 최종 산출물(0/1/2단계 게이트)에 도달하기까지 여러 설계를 검토·기각했고, 그 과정 자체가 다음 룰 승격 때 재사용할 절차라 전부 남긴다.
+
+**검토·기각한 대안들(도달 순서대로)**
+
+1. **단순 이분법 승격(MEDIUM→HIGH 전부/개별)** — 두 룰의 성격이 실제로는 판이함이 드러나 기각. MISSING_TRANSACTIONAL_DELETE는 실제 런타임 크래시(BE-15, `InvalidDataAccessApiUsageException`)를 일으키는 진짜 버그인 반면, INTERFACES_IMPORTS_INFRA는 코드가 작동은 하되 결합도가 나빠지는 설계 위생 문제 — 하나의 잣대로 같이 승격/보류를 결정하는 게 부적절했다.
+2. **프로젝트별 Loose/Strict 토글(2단계, 룰 목록 하드코딩)** — Core(기존 HIGH 8종+MISSING_TRANSACTIONAL_DELETE)/Extended(INTERFACES_IMPORTS_INFRA) 두 그룹으로 나누고 프로젝트가 옵트인하는 안. 분류 기준을 "Codeprint 자신의 도그푸딩 이력"으로 잡았다가, **다른 프로젝트에선 얼마든지 자주 걸릴 수 있고 Codeprint 자신과 구조적으로 무관할 수 있다**는 반박으로 기각(표본이 Codeprint 하나뿐이라 편향).
+3. **(프로젝트, 룰타입)별 위반 건수 카운트 래칫(baseline)** — "채택 시점 위반 건수를 얼려두고, 그보다 늘면만 막는다"는 안. 레거시 안전성은 확보되지만 **"보편적이고 지속적으로 발전하는 게이트를 만들 수 있냐"**는 질문에 막혔다 — 프로젝트마다 기준선이 달라 사실상 팀별 맞춤 게이트가 되고, "안 나빠지면 통과"라 발전 압력 자체가 없다.
+4. **줄 단위 diff-scope(SonarQube "Clean as You Code" 방식)** — 프로젝트별 기준선 대신 "바뀐 코드에만 절대 기준 적용"으로 보편성을 확보하려 한 안. 그러나 IMPORT 기반 룰(HIGH 8종 중 6개 — DB_LAYER_BYPASS·CROSS_CONTEXT_IMPORT·DOMAIN_IMPORTS_INFRA·INTERFACES_IMPORTS_INFRA·LAYERED_REVERSE_DEPENDENCY·CROSS_FEATURE_IMPORT·FEATURE_LAYER_VIOLATION)는 import 문 자체의 줄 번호를 추적하지 않아 정밀 적용이 안 되고(다국어 확장 필요, 별도 과제 규모), 헝크 컨텍스트까지 "변경"으로 보면 "옆줄만 고쳐도 옛날 위반이 걸리는" 문제가 재발할 위험도 있었다.
+
+**최종안 — correctness(0단계)/architecture(1단계)/experimental(2단계) 3단 분류.** 핵심 통찰은 "작동하는가"(correctness)와 "잘 짜여졌는가"(architecture)가 애초에 다른 축이라는 것 — 이걸 분리하니 나머지 문제가 자연히 풀렸다.
+
+- **0단계(correctness)**: 아키텍처 의견이 아니라 실행 시점에 실제로 깨지는 버그. **프로젝트 설정과 무관하게 항상 게이팅** — "스파게티든 뭐든 작동만 하면 안 막는다"는 원칙의 반대편, 즉 "작동 안 하면 스타일 무관하게 막는다". `MISSING_TRANSACTIONAL_DELETE`(런타임 크래시)와 `ASYNC_SELF_CALL`(승격 — `@Async`가 프록시 우회로 조용히 무시되는 것도 "설계 취향"이 아니라 "의도한 동작이 실행 안 됨") 둘 다 여기.
+- **1단계(architecture)**: 기존 HIGH 8종(CYCLIC_IMPORT·DB_LAYER_BYPASS·CROSS_CONTEXT_IMPORT·DOMAIN_IMPORTS_INFRA·LAYERED_REVERSE_DEPENDENCY·CROSS_FEATURE_IMPORT·FEATURE_LAYER_VIOLATION·INTENT_DRIFT). **기본 켜짐**(PR 게이트 설치 자체가 이미 옵트인 행위라, 설치 후 또 꺼야 한다면 게이트 설치 의미가 옅어진다는 판단), 레거시 프로젝트가 도입 즉시 마이그레이션을 강제당하지 않도록 프로젝트가 끌 수 있음(`gate_architecture_enabled`).
+- **2단계(experimental)**: `INTERFACES_IMPORTS_INFRA`. **기본 꺼짐**(`gate_experimental_enabled`), 옵트인. 승격 기준은 대안 2에서 걸렸던 "Codeprint 자신의 이력"이 아니라 **여러 프로젝트를 가로지르는 fp_reports 실사용 데이터**(가드레일 지표, 위 항목에서 이미 구축) — 2단계를 켠 팀들의 오탐 신고율이 낮게 유지되면 1단계로 승격 검토. 이 승격 파이프라인 자체가 앞으로 추가되는 모든 신규 룰이 항상 거치는 절차가 된다("지속적으로 발전하는 게이트").
+
+**구현.**
+- `projects` 테이블에 `gate_architecture_enabled BOOLEAN DEFAULT true`·`gate_experimental_enabled BOOLEAN DEFAULT false` 추가(V58). 기존 프로젝트는 전부 1단계 켜짐·2단계 꺼짐으로 시작 — 기존 게이팅 동작 무변경.
+- `Project` 도메인에 두 필드 + setter. `ProjectQueryService.getProjectInternal`(소유권 검증 없는 내부 전용 조회) 신설 — `AnalysisFacade.getGateSettings`가 이걸 감싸 `PrReviewService`에 `ProjectGateSettings` 값 객체로 전달(analysis 컨텍스트가 project 컨텍스트를 직접 주입받지 않도록 Facade 경유 — 기존 `resolveOwnedRepoUrl` 패턴 재사용).
+- `PrReviewService.isGating(warning, settings)` — severity=HIGH 중 `EXPERIMENTAL_GATE_TYPES`는 `experimentalGateEnabled`, `ARCHITECTURE_GATE_TYPES`는 `architectureGateEnabled`일 때만, 나머지(0단계)는 무조건 게이팅. `gateState`/`postCommitStatus`의 `highCount`도 "게이팅에 실제로 기여한 건수"로 의미를 좁힘(전체 HIGH 건수가 아님 — PR 코멘트·GateCheckLog·가드레일 지표 분모가 전부 이 값을 씀).
+- 프로젝트 설정 UI(`ProjectCard.tsx`) — "게이트 설정" 패널에 1·2단계 체크박스(0단계는 설명만, 토글 없음).
+
+**검증.** TDD로 `gateState`에 5개 케이스 신규(0단계 항상 게이팅·1단계 기본 게이팅·1단계 끄면 통과·2단계 기본 미게이팅·2단계 켜면 게이팅) — 전부 GREEN. 백엔드 전체 테스트 green(V58 마이그레이션 검증 포함), `compileJava`/`npx tsc -b` 에러 0. **브라우저 실측** — `/mypage`에서 "게이트 설정" 패널을 열어 1·2단계 체크박스 토글 → 새로고침 후에도 상태 유지 확인(실제 DB 저장·재조회 확인).
+
+**한계.** 0단계 분류가 지금은 화이트리스트가 아니라 "1·2단계 집합에 없으면 전부 0단계"라는 기본값(fallback)이다 — 안전한 방향(새 HIGH 룰이 실수로 미분류돼도 느슨해지는 대신 항상 게이팅되는 쪽으로 실패)이지만, 룰이 늘어나면 명시적 화이트리스트로 바꾸는 걸 재검토할 것. 2단계→1단계 실제 승격은 가드레일 지표에 충분한 fp_reports 데이터가 쌓여야 가능 — 지금은 파이프라인만 마련, 실제 승격 판단은 미래 세션.

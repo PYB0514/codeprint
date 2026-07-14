@@ -12,6 +12,8 @@ interface Project {
   isPublic: boolean
   createdAt: string
   primaryBranch: string | null
+  gateArchitectureEnabled: boolean
+  gateExperimentalEnabled: boolean
 }
 
 interface Props {
@@ -52,6 +54,12 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
   const [prReviewing, setPrReviewing] = useState(false)
   const [prResult, setPrResult] = useState<{ prNumber: number; warningCount: number; lowFilteredCount: number; outOfScopeCount: number; commentUrl: string } | null>(null)
   const [prError, setPrError] = useState<string | null>(null)
+
+  // PR 게이트 등급 설정 상태 (0단계는 항상 게이팅이라 설정 없음, 1단계/2단계만 토글)
+  const [showGateSettings, setShowGateSettings] = useState(false)
+  const [gateArchitectureEnabled, setGateArchitectureEnabled] = useState(project.gateArchitectureEnabled)
+  const [gateExperimentalEnabled, setGateExperimentalEnabled] = useState(project.gateExperimentalEnabled)
+  const [gateSettingsSaving, setGateSettingsSaving] = useState(false)
 
   const pickerRef = useRef<HTMLDivElement>(null)
   const primaryPickerRef = useRef<HTMLDivElement>(null)
@@ -128,6 +136,21 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
       { isPublic: next }
     )
     onVisibilityChange(project.id, next)
+  }
+
+  // PR 게이트 등급(1단계 architecture·2단계 experimental) 설정을 서버에 반영
+  const handleGateSettingsChange = async (architectureEnabled: boolean, experimentalEnabled: boolean) => {
+    setGateSettingsSaving(true)
+    try {
+      await axios.patch(
+        `/api/projects/${project.id}/gate-settings`,
+        { architectureEnabled, experimentalEnabled }
+      )
+      setGateArchitectureEnabled(architectureEnabled)
+      setGateExperimentalEnabled(experimentalEnabled)
+    } finally {
+      setGateSettingsSaving(false)
+    }
   }
 
   // 공유 URL을 클립보드에 복사
@@ -477,6 +500,49 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
         </div>
       )}
 
+      {/* PR 게이트 등급 설정 패널 — 0단계(correctness)는 항상 게이팅이라 설정 없음, 1·2단계만 토글 */}
+      {showGateSettings && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
+          <p className="text-xs text-gray-400">
+            0단계(실행 시점에 실제로 깨지는 버그)는 항상 PR을 막습니다. 아래 두 단계만 프로젝트별로 켜고 끌 수 있습니다.
+          </p>
+          <label className="flex items-start gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={gateArchitectureEnabled}
+              disabled={gateSettingsSaving}
+              onChange={(e) => handleGateSettingsChange(e.target.checked, gateExperimentalEnabled)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="text-gray-200 font-medium">1단계(architecture, 기본 켜짐)</span>
+              <br />
+              <span className="text-gray-500">순환 참조·계층 위반 등 검증된 구조 위반 — 끄면 레거시 코드에 즉시 마이그레이션을 강제하지 않습니다.</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={gateExperimentalEnabled}
+              disabled={gateSettingsSaving}
+              onChange={(e) => handleGateSettingsChange(gateArchitectureEnabled, e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="text-gray-200 font-medium">2단계(experimental, 기본 꺼짐)</span>
+              <br />
+              <span className="text-gray-500">아직 교차 프로젝트 실사용 검증이 부족한 신규 룰 — 최신 규칙까지 적용받고 싶은 팀만 켜세요.</span>
+            </span>
+          </label>
+          <button
+            onClick={() => setShowGateSettings(false)}
+            className="text-xs text-gray-500 hover:text-gray-300 self-end"
+          >
+            닫기
+          </button>
+        </div>
+      )}
+
       {status === 'FAILED' && (
         <p className="text-xs text-red-400">분석 실패. 다시 시도해주세요.</p>
       )}
@@ -510,6 +576,13 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
             className="text-xs text-purple-400 hover:text-purple-300 disabled:opacity-40"
           >
             PR 리뷰
+          </button>
+          <button
+            onClick={() => setShowGateSettings(true)}
+            className="text-xs text-amber-400 hover:text-amber-300"
+            title="PR 게이트 등급 설정"
+          >
+            게이트 설정
           </button>
         </div>
 

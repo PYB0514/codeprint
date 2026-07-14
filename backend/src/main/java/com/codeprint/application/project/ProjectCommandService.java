@@ -56,6 +56,19 @@ public class ProjectCommandService {
         return projectRepository.save(project);
     }
 
+    // 소유자 확인 후 PR 게이트 등급(1단계 architecture·2단계 experimental) 설정 변경
+    public Project setGateSettings(UUID projectId, UUID requestingUserId,
+                                    boolean architectureEnabled, boolean experimentalEnabled) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+        if (!project.getUserId().equals(requestingUserId)) {
+            throw new IllegalStateException("Not authorized to modify this project");
+        }
+        project.setGateArchitectureEnabled(architectureEnabled);
+        project.setGateExperimentalEnabled(experimentalEnabled);
+        return projectRepository.save(project);
+    }
+
     // 소유자 확인 후 프로젝트 삭제
     public void deleteProject(UUID projectId, UUID requestingUserId) {
         Project project = projectRepository.findById(projectId)

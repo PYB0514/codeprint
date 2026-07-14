@@ -36,7 +36,7 @@ const WARNING_GUIDE: Record<string, { example: string; limitation: string }> = {
   },
   INTERFACES_IMPORTS_INFRA: {
     example: 'interfaces/(Controller 등) 가 infrastructure/ 를 직접 import — Application Service를 건너뛴 계층 위반.',
-    limitation: 'shared/는 허용, 컴포지션 루트(*Configuration 등)는 배선이 설계 의도라 예외. DDD 구조 프로젝트에서만 활성화, 초기 도입이라 severity MEDIUM.',
+    limitation: 'shared/는 허용, 컴포지션 루트(*Configuration 등)는 배선이 설계 의도라 예외. DDD 구조 프로젝트에서만 활성화. 아직 교차 프로젝트 실사용 검증이 부족해 2단계(실험적) 게이트로 분류 — 프로젝트 설정에서 켜야 PR을 막습니다.',
   },
   CROSS_DOMAIN_CALL: {
     example: '함수 호출이 도메인 경계를 직접 넘음 — port/ 인터페이스를 경유해야 함.',

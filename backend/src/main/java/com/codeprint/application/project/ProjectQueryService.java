@@ -40,6 +40,12 @@ public class ProjectQueryService {
         return project;
     }
 
+    // 내부 시스템 호출 전용 조회(소유권 검증 없음) — PR 게이트처럼 앞단에서 이미 소유권을 검증한 흐름에서만 사용
+    public Project getProjectInternal(UUID projectId) {
+        return projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+    }
+
     // 공개 프로젝트 조회 (비인증 허용)
     public Project getPublicProject(UUID projectId) {
         Project project = projectRepository.findById(projectId)

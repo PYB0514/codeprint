@@ -107,6 +107,17 @@ public class ProjectController {
         return ResponseEntity.ok(projectFacade.getPrimaryFreshness(projectId, user.getId(), user.getGithubAccessToken()));
     }
 
+    // PR 게이트 등급(1단계 architecture·2단계 experimental) 설정 변경
+    @PatchMapping("/{projectId}/gate-settings")
+    public ResponseEntity<ProjectResponse> updateGateSettings(
+            @PathVariable UUID projectId,
+            @RequestBody GateSettingsRequest request,
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(ProjectResponse.from(
+                projectCommandService.setGateSettings(
+                        projectId, user.getId(), request.architectureEnabled(), request.experimentalEnabled())));
+    }
+
     // 프로젝트 삭제
     @DeleteMapping("/{projectId}")
     public ResponseEntity<Void> deleteProject(
@@ -127,4 +138,7 @@ public class ProjectController {
 
     // 주요 브랜치 설정 요청 DTO (null이면 해제)
     public record PrimaryBranchRequest(String branch) {}
+
+    // PR 게이트 등급 설정 요청 DTO
+    public record GateSettingsRequest(boolean architectureEnabled, boolean experimentalEnabled) {}
 }

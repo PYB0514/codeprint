@@ -11,6 +11,8 @@ interface Project {
   isPublic: boolean
   createdAt: string
   primaryBranch: string | null
+  gateArchitectureEnabled: boolean
+  gateExperimentalEnabled: boolean
 }
 
 interface GitHubRepo {
