@@ -46,6 +46,7 @@ public class PrReviewService {
     // PR 리뷰 실행 — 소유권 검증 → PR head 분석 → 경고 감지 → PR 코멘트 게시 (LOW 제외)
     @Transactional
     public Map<String, Object> review(UUID projectId, int prNumber, UUID userId, String githubToken) {
+        ProjectGateSettings gateSettings = analysisFacade.getGateSettings(projectId);
         String repoUrl = analysisFacade.resolveOwnedRepoUrl(projectId, userId);
         String headBranch = gitHubApiClient.fetchPullRequestHeadBranch(repoUrl, prNumber, githubToken);
 
@@ -70,7 +71,7 @@ public class PrReviewService {
                 repoUrl, prNumber, warnings.size(), lowFilteredCount, outOfScopeCount, diffScoped);
 
         // CI 게이트 — PR head 커밋에 구조 검사 상태 게시. 브랜치 보호의 required check로 등록하면 머지를 막을 수 있음.
-        String gateState = postCommitStatus(projectId, repoUrl, prNumber, warnings, commentUrl, githubToken);
+        String gateState = postCommitStatus(projectId, repoUrl, prNumber, warnings, commentUrl, githubToken, gateSettings);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("prNumber", prNumber);
@@ -85,32 +86,50 @@ public class PrReviewService {
         return result;
     }
 
-    // PR head 커밋에 구조 검사 commit status 게시 — HIGH 경고가 있으면 failure(머지 차단 가능), 없으면 success.
+    // PR head 커밋에 구조 검사 commit status 게시 — 게이팅 대상 HIGH 경고가 있으면 failure(머지 차단 가능), 없으면 success.
     // head SHA는 PR API의 head.sha로 조회 — fork PR도 base repo의 refs/pull/{N}/head로 도달 가능해 게이트가 동작한다
     // (브랜치명 조회는 fork 브랜치가 base repo에 없어 fork PR에서 실패했음). 동일repo PR도 head.sha가 정확.
     // 상태 게시 실패는 리뷰를 깨뜨리지 않도록 graceful 처리(코멘트는 이미 게시됨). 게시한 state를 반환.
     // 게이트 판정은 GitHub 게시 성공 여부와 무관하게 항상 로컬에 기록(지표 대시보드 집계용 데이터 소스).
     private String postCommitStatus(UUID projectId, String repoUrl, int prNumber, List<Map<String, Object>> warnings,
-                                    String targetUrl, String githubToken) {
-        String state = gateState(warnings);
-        long highCount = warnings.stream().filter(w -> "HIGH".equals(w.get("severity"))).count();
+                                    String targetUrl, String githubToken, ProjectGateSettings gateSettings) {
+        String state = gateState(warnings, gateSettings);
+        long gatingHighCount = warnings.stream().filter(w -> isGating(w, gateSettings)).count();
         try {
             String headSha = gitHubApiClient.fetchPullRequestHeadSha(repoUrl, prNumber, githubToken);
-            String description = highCount > 0
-                    ? highCount + "건의 구조 위반(HIGH)이 변경 파일에 있습니다"
+            String description = gatingHighCount > 0
+                    ? gatingHighCount + "건의 구조 위반(HIGH)이 변경 파일에 있습니다"
                     : "구조 위반(HIGH) 없음";
             gitHubApiClient.createCommitStatus(repoUrl, headSha, state, description, targetUrl, githubToken);
         } catch (Exception e) {
             log.warn("CI 게이트 상태 게시 실패(리뷰 코멘트는 유지): repo={}, pr={}", repoUrl, prNumber, e);
         }
-        gateCheckLogRepository.save(GateCheckLog.create(projectId, prNumber, state, (int) highCount, warnings.size()));
+        gateCheckLogRepository.save(GateCheckLog.create(projectId, prNumber, state, (int) gatingHighCount, warnings.size()));
         return state;
     }
 
-    // 게이트 판정 — diff-scope된 경고 중 HIGH가 하나라도 있으면 failure, 없으면 success (순수 함수)
-    static String gateState(List<Map<String, Object>> warnings) {
-        boolean hasHigh = warnings.stream().anyMatch(w -> "HIGH".equals(w.get("severity")));
-        return hasHigh ? "failure" : "success";
+    // 0단계(correctness) — 아키텍처 의견이 아니라 실행 시점에 실제로 깨지는 버그. 프로젝트 설정과 무관하게 항상 게이팅.
+    // (MISSING_TRANSACTIONAL_DELETE·ASYNC_SELF_CALL은 이 집합에 없어도 기본값(항상 게이팅)으로 떨어진다 — 아래 isGating 참조.)
+    // 1단계(architecture) — 기본 켜짐, 레거시 코드베이스가 도입 즉시 마이그레이션을 강제당하지 않도록 프로젝트가 끌 수 있음.
+    private static final Set<String> ARCHITECTURE_GATE_TYPES = Set.of(
+            "CYCLIC_IMPORT", "DB_LAYER_BYPASS", "CROSS_CONTEXT_IMPORT", "DOMAIN_IMPORTS_INFRA",
+            "LAYERED_REVERSE_DEPENDENCY", "CROSS_FEATURE_IMPORT", "FEATURE_LAYER_VIOLATION", "INTENT_DRIFT");
+    // 2단계(experimental) — 기본 꺼짐, 교차 프로젝트 실사용 검증(가드레일 지표)이 쌓여야 1단계로 승격 검토.
+    private static final Set<String> EXPERIMENTAL_GATE_TYPES = Set.of("INTERFACES_IMPORTS_INFRA");
+
+    // 게이트 판정 — diff-scope된 경고 중 게이팅 대상 HIGH가 하나라도 있으면 failure, 없으면 success (순수 함수)
+    static String gateState(List<Map<String, Object>> warnings, ProjectGateSettings gateSettings) {
+        boolean hasGatingHigh = warnings.stream().anyMatch(w -> isGating(w, gateSettings));
+        return hasGatingHigh ? "failure" : "success";
+    }
+
+    // 이 경고가 실제로 머지를 막는지 — severity=HIGH 중에서도 등급(0/1/2단계)과 프로젝트 설정에 따라 갈린다
+    private static boolean isGating(Map<String, Object> w, ProjectGateSettings gateSettings) {
+        if (!"HIGH".equals(w.get("severity"))) return false;
+        String type = String.valueOf(w.get("type"));
+        if (EXPERIMENTAL_GATE_TYPES.contains(type)) return gateSettings.experimentalGateEnabled();
+        if (ARCHITECTURE_GATE_TYPES.contains(type)) return gateSettings.architectureGateEnabled();
+        return true; // 0단계(correctness) — 분류 안 된 HIGH도 안전하게 항상 게이팅
     }
 
     // PR 변경 파일 집합을 조회 — 실패 시 null 반환(리뷰를 깨뜨리지 않고 전체 게시로 폴백)

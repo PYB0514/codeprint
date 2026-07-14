@@ -358,7 +358,9 @@ public class GraphWarningService {
             if (!sourceFile.isEmpty() && sourceFile.equals(targetFile)) {
                 Map<String, Object> w = new LinkedHashMap<>();
                 w.put("type", "ASYNC_SELF_CALL");
-                w.put("severity", "MEDIUM");
+                // ★0단계(correctness) 승격(2026-07-14) — @Async가 조용히 무시되는 건 설계 취향이 아니라
+                // 개발자가 의도한 비동기 동작 자체가 실행되지 않는 것(작동 실패) — 항상 게이팅 대상.
+                w.put("severity", "HIGH");
                 w.put("nodeIds", List.of(source.toString(), target.toString()));
                 w.put("edgeIds", List.of(e.getId().toString()));
                 w.put("message", "@Async 자기 호출: " + nameMap.getOrDefault(source, source.toString())
@@ -378,7 +380,8 @@ public class GraphWarningService {
     // JpaRepository 파생 삭제 쿼리에 @Transactional 누락 — 같은 원인 클래스가 3번 반복된 뒤([반복] BE-15,
     // decisions/DECISIONS_BACKEND.md) 발견 즉시 InvalidDataAccessApiUsageException(500)으로 이어짐.
     // Java/Kotlin 전용(Spring 개념) + infra∩persistence 레이어로 한정해 무관한 deleteBy* 오탐 배제.
-    // 신규 규칙이라 severity는 MEDIUM(관찰 기간 확보) — 자기 레포 0 확인 후 HIGH 승격 검토.
+    // ★HIGH 승격(2026-07-14) — 벤치 무오탐(bench/rules/MISSING_TRANSACTIONAL_DELETE) + 자기 레포 0건 확인,
+    // 다른 MEDIUM 룰(설계 위생)과 달리 방치하면 실제 런타임 크래시(500)로 이어지는 진짜 버그라 머지 차단 대상으로 승격.
     //
     // ★도그푸딩 실측(2026-07-12)에서 15건 오탐 발견 후 2단계 정밀도 가드 추가:
     // ①deleteById/removeById는 CrudRepository 기본 메서드라 SimpleJpaRepository가 프레임워크 차원에서
@@ -419,7 +422,7 @@ public class GraphWarningService {
 
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "MISSING_TRANSACTIONAL_DELETE");
-            w.put("severity", "MEDIUM");
+            w.put("severity", "HIGH");
             w.put("nodeIds", List.of(n.getId().toString()));
             w.put("edgeIds", List.of());
             w.put("message", "@Transactional 누락: " + name

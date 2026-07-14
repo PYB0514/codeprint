@@ -179,21 +179,59 @@ class PrReviewServiceTest {
         assertThat(empty).contains(PrReviewService.REVIEW_MARKER);
     }
 
+    // 0/1/2단계 게이트 등급 — 기본 설정(1단계 켬·2단계 끔, 신규 프로젝트 기본값)
+    private static final ProjectGateSettings DEFAULT_SETTINGS = new ProjectGateSettings(true, false);
+
     @Test
-    @DisplayName("게이트 판정 — HIGH 경고가 있으면 failure")
-    void gateState_failsOnHigh() {
+    @DisplayName("게이트 판정 — 0단계(correctness, 미분류 HIGH)는 프로젝트 설정과 무관하게 항상 failure")
+    void gateState_correctnessAlwaysGates() {
+        List<Map<String, Object>> warnings = List.of(
+                warning("MISSING_TRANSACTIONAL_DELETE", "트랜잭션 누락", "HIGH"));
+        assertThat(PrReviewService.gateState(warnings, DEFAULT_SETTINGS)).isEqualTo("failure");
+        // 1단계·2단계를 전부 꺼도 0단계는 여전히 막는다
+        assertThat(PrReviewService.gateState(warnings, new ProjectGateSettings(false, false))).isEqualTo("failure");
+    }
+
+    @Test
+    @DisplayName("게이트 판정 — 1단계(architecture)는 기본 켬 상태에서 failure")
+    void gateState_architectureGatesByDefault() {
         List<Map<String, Object>> warnings = List.of(
                 warning("HIGH_FAN_OUT", "호출 8개", "MEDIUM"),
-                warning("CROSS_CONTEXT_IMPORT", "경계 위반", "HIGH")
-        );
-        assertThat(PrReviewService.gateState(warnings)).isEqualTo("failure");
+                warning("CROSS_CONTEXT_IMPORT", "경계 위반", "HIGH"));
+        assertThat(PrReviewService.gateState(warnings, DEFAULT_SETTINGS)).isEqualTo("failure");
+    }
+
+    @Test
+    @DisplayName("게이트 판정 — 1단계를 끄면 architecture 위반은 안 막는다(레거시 완충)")
+    void gateState_architectureDisabled_noFailure() {
+        List<Map<String, Object>> warnings = List.of(
+                warning("CROSS_CONTEXT_IMPORT", "경계 위반", "HIGH"));
+        ProjectGateSettings architectureOff = new ProjectGateSettings(false, false);
+        assertThat(PrReviewService.gateState(warnings, architectureOff)).isEqualTo("success");
+    }
+
+    @Test
+    @DisplayName("게이트 판정 — 2단계(experimental)는 기본 꺼짐이라 안 막는다")
+    void gateState_experimentalDisabledByDefault_noFailure() {
+        List<Map<String, Object>> warnings = List.of(
+                warning("INTERFACES_IMPORTS_INFRA", "인프라 직접 의존", "HIGH"));
+        assertThat(PrReviewService.gateState(warnings, DEFAULT_SETTINGS)).isEqualTo("success");
+    }
+
+    @Test
+    @DisplayName("게이트 판정 — 2단계를 켜면 experimental 위반도 막는다")
+    void gateState_experimentalEnabled_failure() {
+        List<Map<String, Object>> warnings = List.of(
+                warning("INTERFACES_IMPORTS_INFRA", "인프라 직접 의존", "HIGH"));
+        ProjectGateSettings experimentalOn = new ProjectGateSettings(true, true);
+        assertThat(PrReviewService.gateState(warnings, experimentalOn)).isEqualTo("failure");
     }
 
     @Test
     @DisplayName("게이트 판정 — HIGH가 없으면(MEDIUM만/빈 목록) success")
     void gateState_successWithoutHigh() {
         assertThat(PrReviewService.gateState(List.of(
-                warning("HIGH_FAN_OUT", "호출 8개", "MEDIUM")))).isEqualTo("success");
-        assertThat(PrReviewService.gateState(List.of())).isEqualTo("success");
+                warning("HIGH_FAN_OUT", "호출 8개", "MEDIUM")), DEFAULT_SETTINGS)).isEqualTo("success");
+        assertThat(PrReviewService.gateState(List.of(), DEFAULT_SETTINGS)).isEqualTo("success");
     }
 }

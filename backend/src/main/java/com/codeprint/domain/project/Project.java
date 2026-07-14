@@ -43,6 +43,14 @@ public class Project {
     @Column(name = "primary_branch", length = 255)
     private String primaryBranch;
 
+    // 1단계(architecture) 게이트 — 기본 켜짐. 레거시 코드베이스가 도입 즉시 마이그레이션을 강제당하지 않도록 끌 수 있음.
+    @Column(name = "gate_architecture_enabled", nullable = false)
+    private boolean gateArchitectureEnabled;
+
+    // 2단계(experimental) 게이트 — 기본 꺼짐. 아직 교차 프로젝트 실사용 검증이 부족한 신규 룰까지 적용받고 싶은 팀만 켬.
+    @Column(name = "gate_experimental_enabled", nullable = false)
+    private boolean gateExperimentalEnabled;
+
     // 사용자 ID와 GitHub URL로 새 프로젝트 인스턴스 생성
     public static Project create(UUID userId, String githubRepoUrl, String name, String description) {
         Project project = new Project();
@@ -54,6 +62,8 @@ public class Project {
         project.isPublic = false;
         project.createdAt = Instant.now();
         project.updatedAt = Instant.now();
+        project.gateArchitectureEnabled = true;
+        project.gateExperimentalEnabled = false;
         return project;
     }
 
@@ -78,6 +88,18 @@ public class Project {
     // 레포 owner가 프로젝트 소유자의 GitHub 계정과 일치하는지 (내 레포 vs 외부 레포 분석 판정)
     public boolean isOwnRepo(String ownerUsername) {
         return com.codeprint.shared.GithubRepoOwner.matches(githubRepoUrl, ownerUsername);
+    }
+
+    // 1단계(architecture) 게이트 켬/끔 전환
+    public void setGateArchitectureEnabled(boolean enabled) {
+        this.gateArchitectureEnabled = enabled;
+        this.updatedAt = Instant.now();
+    }
+
+    // 2단계(experimental) 게이트 켬/끔 전환
+    public void setGateExperimentalEnabled(boolean enabled) {
+        this.gateExperimentalEnabled = enabled;
+        this.updatedAt = Instant.now();
     }
 
     // UUID를 ProjectId Value Object로 변환하여 반환

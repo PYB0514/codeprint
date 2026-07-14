@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.129.0',
+    date: '2026-07-14',
+    title: 'PR 게이트 등급 설정 추가',
+    type: 'feature',
+    items: [
+      { category: '경고 감지', desc: '프로젝트 설정에서 PR 게이트가 막을 위반 범위를 고를 수 있습니다 — 검증된 구조 위반(1단계)은 기본 켜짐, 아직 검증 중인 신규 룰(2단계)은 기본 꺼짐(옵트인)입니다. 실행 시점에 실제로 문제를 일으키는 위반(@Transactional 누락·@Async 자기 호출)은 설정과 무관하게 항상 막습니다.' },
+    ],
+  },
+  {
     version: 'v0.128.0',
     date: '2026-07-13',
     title: '커뮤니티 공유 그래프에도 오탐 신고 연결',
