@@ -1,5 +1,5 @@
 // 커뮤니티 게시글에 첨부된 그래프 — 숨김 필터 적용 읽기 전용 뷰어
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
@@ -224,7 +224,8 @@ interface NodeCommentView {
 
 // 게시글 다중 스냅샷 중 하나를 읽기 전용으로 렌더링하는 내부 컴포넌트
 function CommunityPostSnapshotInner() {
-  const { t } = useTranslation('workspace')
+  const { t, i18n } = useTranslation('workspace')
+  const { t: tCommon } = useTranslation('common')
   const { postId, position } = useParams<{ postId: string; position: string }>()
   const navigate = useNavigate()
 
@@ -265,6 +266,30 @@ function CommunityPostSnapshotInner() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   // 내가 오탐 신고한 fingerprint 집합 — 신고 버튼 상태 표시용 (비소유자도 신고 가능)
   const [reportedFingerprints, setReportedFingerprints] = useState<Set<string>>(new Set())
+  // 언어·테마 드롭다운 — AppHeader와 동일한 UI(공유 컴포넌트 없는 페이지라 인라인 복제)
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light')
+  const [showLangMenu, setShowLangMenu] = useState(false)
+  const langMenuRef = useRef<HTMLDivElement>(null)
+  const [showThemeMenu, setShowThemeMenu] = useState(false)
+  const themeMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+  }, [isDark])
+
+  const setTheme = (dark: boolean) => {
+    setIsDark(dark)
+    localStorage.setItem('theme', dark ? 'dark' : 'light')
+  }
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target as globalThis.Node)) setShowLangMenu(false)
+      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as globalThis.Node)) setShowThemeMenu(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   useEffect(() => {
     axios.get<{ id: string }>('/api/auth/me').then(res => setCurrentUserId(res.data.id)).catch(() => {})
@@ -559,6 +584,61 @@ function CommunityPostSnapshotInner() {
         <div className="flex items-center gap-3">
           <LayoutPresetToggle layoutPreset={layoutPreset} onToggle={toggleLayoutPreset} />
           <LabelModeToggle labelMode={labelMode} onToggle={toggleLabelMode} />
+
+          {/* 언어 드롭다운 — AppHeader와 동일 */}
+          <div className="relative" ref={langMenuRef}>
+            <button
+              onClick={() => setShowLangMenu(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-xs"
+              title={tCommon('language.toggle')}
+            >
+              <span>🌐</span>
+              <span>{i18n.language.startsWith('ko') ? tCommon('language.ko') : tCommon('language.en')}</span>
+            </button>
+            {showLangMenu && (
+              <div className="absolute right-0 top-9 w-32 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+                {(['ko', 'en'] as const).map((lng) => (
+                  <button
+                    key={lng}
+                    onClick={() => { i18n.changeLanguage(lng); setShowLangMenu(false) }}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                  >
+                    {tCommon(`language.${lng}`)}
+                    {i18n.language.startsWith(lng) && <span className="text-xs">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 테마 드롭다운 — AppHeader와 동일 */}
+          <div className="relative" ref={themeMenuRef}>
+            <button
+              onClick={() => setShowThemeMenu(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-xs"
+            >
+              <span>{isDark ? '🌙' : '☀️'}</span>
+              <span>{isDark ? tCommon('header.darkMode') : tCommon('header.lightMode')}</span>
+            </button>
+            {showThemeMenu && (
+              <div className="absolute right-0 top-9 w-28 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+                <button
+                  onClick={() => { setTheme(false); setShowThemeMenu(false) }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                >
+                  {tCommon('header.lightMode')}
+                  {!isDark && <span className="text-xs">✓</span>}
+                </button>
+                <button
+                  onClick={() => { setTheme(true); setShowThemeMenu(false) }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                >
+                  {tCommon('header.darkMode')}
+                  {isDark && <span className="text-xs">✓</span>}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
