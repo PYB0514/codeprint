@@ -1,0 +1,61 @@
+{
+  "badge": "13 languages supported · tree-sitter AST analysis",
+  "heroTitle1": "Turn a GitHub repo into an",
+  "heroTitle2": "interactive circuit diagram",
+  "heroTitle3": "",
+  "heroDesc": "One URL visualizes file structure, function call flow, and DB relationships. Structural warning detection included — all free.",
+  "urlPlaceholder": "github.com/owner/repo",
+  "analyzeButton": "Analyze",
+  "urlErrorEmpty": "Please enter a repo URL.",
+  "urlHint": "Doesn't have to be your own repo — any public repo works.",
+  "urlHintLoginSuffix": " Sign in with GitHub to start analysis automatically.",
+  "viewMyProjects": "View My Projects",
+  "browseCommunity": "Browse Community",
+  "loginWithGithub": "Start Free with GitHub",
+  "howToUseTitle": "How does it work?",
+  "steps": [
+    { "step": "01", "title": "Paste a GitHub repo URL", "desc": "Enter a public repo URL, or a connected private one." },
+    { "step": "02", "title": "Automatic analysis — ~10–60s", "desc": "A tree-sitter AST-based static analysis engine extracts file, function, and DB relationships across 13 languages including Java, TypeScript, Python, and Go." },
+    { "step": "03", "title": "Get an interactive diagram", "desc": "Click nodes to trace flow, review warnings, and share with teammates." }
+  ],
+  "featuresTitle": "Key Features",
+  "features": [
+    { "title": "File & Function Structure View", "desc": "Renders import relationships and function call flow as a clear diagram." },
+    { "title": "End-to-End Flow Tracing", "desc": "One click on an API endpoint auto-traces the call flow. See where it starts and where it ends in the sidebar, and replay the flow." },
+    { "title": "Structural Warning Detection", "desc": "Statically detects 15 risky patterns ahead of time — circular dependencies, DDD boundary violations, DB layer bypasses, and more." },
+    { "title": "Live Collaboration & Community", "desc": "Invite teammates with an invite code and co-edit with cursor overlays. Publish graphs to the community for architecture review." },
+    { "title": "Image & AI Context Export", "desc": "Save the full graph as a full-resolution PNG, or export function-name-and-comment style Markdown to use directly as AI prompt context." }
+  ],
+  "featuredReposTitle": "Today's Featured Repos",
+  "featuredReposDesc": "We analyze popular open source projects every day — click to jump straight to the results",
+  "pricingTitle": "Pricing",
+  "free": {
+    "name": "Free",
+    "price": "₩0",
+    "period": "Forever free",
+    "features": [
+      "Unlimited private projects",
+      "Full graph visualization",
+      "15 warning types (incl. 8 HIGH severity)",
+      "Graph version history · export warnings as Markdown",
+      "Collaboration sessions up to 6 people (incl. owner)",
+      "Community gallery"
+    ],
+    "cta": "Start for Free"
+  },
+  "pro": {
+    "badge": "Recommended",
+    "name": "Pro · Desktop",
+    "price": "₩9,900",
+    "period": "One-time payment (KRW only) · teams ₩4,900/seat",
+    "features": [
+      "No collaboration session member limit",
+      "Create real teams · manage seats",
+      "Choose 1 personal seat or N team seats",
+      "Everything in Free",
+      "🖥 Desktop app (local folder analysis) coming soon"
+    ],
+    "cta": "Individual billing coming soon",
+    "note": "Individual billing is temporarily paused while we build recurring subscriptions. Team billing is still available on the Teams page."
+  }
+}

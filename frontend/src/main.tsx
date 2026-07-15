@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import * as Sentry from '@sentry/react'
 import axios from 'axios'
 import './index.css'
+import './i18n'
 import App from './App.tsx'
 
 // 운영 환경에서만 Sentry 활성화 — DSN 없으면 비활성
