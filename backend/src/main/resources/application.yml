@@ -7,6 +7,12 @@ spring:
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:1234}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # 트래픽이 적은 규모라 기본값(10)은 과함 — 유휴 커넥션을 줄여 상시 RAM 점유를 낮추고,
+      # Railway Serverless(유휴 10분 기준 sleep)보다 짧게 반납해 sleep을 방해하지 않도록 함
+      maximum-pool-size: 5
+      minimum-idle: 1
+      idle-timeout: 300000
 
   jpa:
     hibernate:
@@ -62,6 +68,10 @@ jwt:
 github:
   # GitHub webhook HMAC-SHA256 서명 검증 시크릿. 미설정 시 webhook 요청은 전부 거부됨.
   webhook-secret: ${GITHUB_WEBHOOK_SECRET:}
+
+cron:
+  # GitHub Actions 스케줄 워크플로가 /api/cron/** 호출 시 보내는 공유 시크릿. 미설정 시 요청은 전부 거부됨.
+  secret: ${CRON_SECRET:}
 
 toss:
   client-key: ${TOSS_CLIENT_KEY:}

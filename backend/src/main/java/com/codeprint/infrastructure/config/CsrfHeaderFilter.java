@@ -33,7 +33,8 @@ public class CsrfHeaderFilter implements Filter {
             "/oauth2/**",
             "/login/**",
             "/mcp/**",
-            "/api/dev/**"
+            "/api/dev/**",
+            "/api/cron/**"
     );
 
     private boolean isExempt(String path) {

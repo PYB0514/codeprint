@@ -440,4 +440,73 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 - Railway Hobby 플랜 기본 Postgres 볼륨(500MB)이 이 프로젝트의 그래프 재생성 write 패턴(재분석마다 노드·엣지 전량 삭제 후 재생성)엔 처음부터 너무 작았다 — "혼자 테스트만 해도" 채워질 수준. **v1.0 공개 런칭 전 볼륨 증설(유료)이 필수 선행 작업**으로 재확인.
 - `edges`/`nodes`의 dead tuple 회수(`VACUUM FULL`)는 여전히 미해결 — 다음에 여유공간이 충분할 때(볼륨 증설 직후가 적기) 마무리할 것.
 - **진단 중 실수**: `java -version` 진단하다 로컬에서 크래시가 나서 그 크래시 로그를 지우다가, 원래 조사하려던 프로덕션 백엔드 크래시 로그(`hs_err_pid7512.log`, 진짜 증거)까지 같이 지워버림. 다행히 재시도 크래시 로그에서 동일 OOM 패턴이 재확인돼 원인 규명엔 지장 없었지만, 진단 로그 삭제는 신중해야 한다는 교훈.
+
+---
+
+## §18.8-⑤ 잔여 실측 2개 완료 + 3단계(blob화) 보류 판단 (2026-07-15, codeprint_129)
+
+**문제.** `PRODUCT_STRATEGY.md` §18.8-④가 확정한 갤러리 저장 축소 로드맵 중 3단계(읽기 전용 그래프 gzip blob화, 15MB→2~3MB 목표)는 착수 전 실측 2개가 선결 조건이었음(§18.8-⑤): ①소유자별(시스템/개인) nodes+edges 저장 분해 ②Railway 청구서 상시(RAM) vs 스파이크(CPU) 비중.
+
+**실측 방법.** ①은 `railway link`로 이미 연결된 프로젝트의 Postgres `DATABASE_PUBLIC_URL`을 `railway variables --service Postgres --kv`로 가져와 `docker run --rm postgres:16 psql`(기존 디스크 풀 사고 진단과 동일 방법, 위 항목 참조)로 접속, `pg_column_size` 합산 쿼리 실행. `FeaturedProjectProvisioningAdapter.SYSTEM_USER_ID`(`00000000-0000-0000-0000-000000000000`)로 시스템 계정 프로젝트를 식별. ②는 사용자가 Railway Usage 탭 스크린샷을 직접 제공.
+
+**실측 결과.**
+- 소유자별 분해: `system(gallery)` 99MB(node 25MB+edge 74MB, 80.5%) vs `individual` 24MB(node 9.7MB+edge 15MB, 19.5%), 총 123MB. §18.8-④ 배경 추정(81~84%)과 일치.
+- Railway 청구(2026-07-03~08-03 누적 $4.59): Memory **96.6%**($4.4367) / CPU 1.6%($0.0727) / Egress 1.3%($0.0610) / Volume **0.5%**($0.0225).
+
+**결정.** 3단계는 **보류**(폐기 아님). 근거: 저장(Volume)이 소유자 분포와 무관하게 총 청구액의 0.5%뿐이라, 갤러리 99MB를 blob화로 75~85% 줄여도 총 청구액 영향은 소수점 이하 %. 이미 완료된 1단계(커밋 스킵)의 CPU 절감 효과도 CPU 자체가 1.6%뿐이라 총 청구액 기준 1% 미만 — §18.8-①이 "총 청구액 지배 항은 상시 RAM"이라 예견했던 것이 실측으로 확정됨. 재평가 조건: 실사용자 유입으로 저장·컴퓨트 규모가 지금과 다른 자릿수가 될 때.
+
+**검토한 대안.** 실측 없이 원래 로드맵대로 3단계 바로 착수 — 기각(사용자가 §18.8-⑤에서 이미 "착수 전 실측 확인" 조건을 걸어뒀고, 이번 실측으로 실익이 없음이 정량 확인돼 그대로 진행했다면 헛수고였을 것).
+
+**결과.** `PRODUCT_STRATEGY.md` §18.8-⑤·⑦ 갱신(실측치 반영, 3단계 보류 판단 기록). 진짜 비용 지배 항인 RAM 조사로 전환 — 아래 "백엔드 상시 메모리 사용량 조사" 참조.
+
+---
+
+## 백엔드 상시 메모리 사용량 조사 — 원인 후보 확인, 조치는 사용자 승인 대기 (2026-07-15, codeprint_129)
+
+**배경.** 위 §18.8-⑤ 실측으로 Railway 청구액의 96.6%가 Memory(상시 RAM)임이 확정. Postgres·백엔드 중 어느 쪽이 지배적인지 서비스별 청구 분해는 Railway CLI(`railway usage --json`)·API 모두 프로젝트 합산만 제공해 직접 확인 불가.
+
+**조사 결과(간접 근거).**
+- Postgres 자체 설정은 스톡 기본값 — `shared_buffers=128MB`, `work_mem=4MB`, `max_connections=100`(실측 psql `SHOW`). DB 크기도 229MB로 작음. Postgres가 GB 단위 RAM을 상시 점유할 근거가 없음.
+- 백엔드는 `application.yml`·Railway 환경변수 어디에도 `-Xmx`/`JAVA_TOOL_OPTIONS`/`MaxRAMPercentage` 등 JVM 힙 상한 설정이 없음(Nixpacks 기본 빌드, Dockerfile도 없음) — JVM이 컨테이너 감지 힙(기본 컨테이너 메모리의 상당 비율)을 그대로 씀, HikariCP `maximum-pool-size`도 미설정(기본 10).
+- `/actuator/metrics/jvm.memory.*`로 실제 힙 사용량을 직접 확인하려 했으나 인증 필요(`{"error":"Unauthorized"}`) — `SECURITY_POLICY.md` "그 외 모든 actuator 엔드포인트 비활성화" 원칙대로 정상 동작(정책 위반 아님), 대신 실측이 아닌 정황 근거로만 판단.
+
+**결론(잠정).** Postgres는 스톡 설정이라 배제, 백엔드 JVM의 무제한 힙 상한이 유력 원인 후보 — 단 `/actuator/metrics` 인증 우회 없이는 실측 확정 불가. Railway "Cost by Service" 상세 확인 결과 백엔드 RAM $3.1071(청구액의 69.3%) vs Postgres RAM $1.3072(30.5%) — 백엔드가 압도적 지배 항으로 재확인.
+
+**검토한 대안 — 고정 `-Xmx512m` vs `-XX:MaxRAMPercentage=50`.** 고정값은 절대 상한이 예측 가능해 절감 효과가 크지만, 이 서비스 핵심 워크로드(레포 클론+전체 그래프 인메모리 구성, `GraphBuilder.build()`)가 메모리 스파이크형이라 대규모 레포 분석 중 512MB를 넘기면 OutOfMemoryError로 서비스 전체가 죽을 위험이 있음 — "대규모 레포 부하" 자체가 PROGRESS.md v1.0 크리티컬 패스 #3에 미해결로 남아있어 지금 조이는 건 순서상 리스크. `MaxRAMPercentage`는 컨테이너 감지 메모리에 비례해 스파이크 여유(headroom)를 남기는 컨테이너화 JVM 관례값(50~75%)이라 채택.
+
+**적용·검증(2026-07-15).** `railway variables --service codeprint --set "JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=50"` → Railway가 자동 재배포 트리거(BUILDING→DEPLOYING→SUCCESS). 배포 후 `/actuator/health` UP, `/api/community/posts` 실제 API 200 정상 응답으로 재기동 확인. 다음 청구 주기(Aug 3 마감)에 Memory 청구액 감소 폭 재확인 예정 — 부족하면 percentage를 더 낮추는 후속 조정 검토.
+
+---
+
+## 호스팅 플랫폼 이전(Railway → 대안) 검토 — 지금은 보류, v1.0 단계 후보만 기록 (2026-07-15, codeprint_129)
+
+**배경.** 위 RAM 조사 도중 "Railway를 다른 서비스로 갈아타는 게 낫지 않나"는 질문이 나와 대안 3개를 웹 검색으로 비교.
+
+**비교 결과.**
+- **Fly.io** — 2024-10 이후 신규 가입자 무료 티어 폐지, 실사용 후기 기준 소규모 앱도 월 $8~25 — 오히려 Railway보다 비쌀 가능성. 후보 제외.
+- **Render** — 무료 티어(512MB, 15분 유휴 후 슬립, 콜드스타트 30~60초) 있으나 "데모·포트폴리오용으로만 권장"이라고 공식 문서에도 명시. 유료 전환 시 $7/월~로 Railway 대비 이점 불분명.
+- **Google Cloud Run** — 월 200만 요청+360,000 GB-초+180,000 vCPU-초 무료, 유휴 시 컴퓨트 과금 0(진짜 스케일-투-제로). 이 프로젝트 트래픽 규모면 사실상 $0 가능. **가장 유력한 후보.**
+
+**결정.** 지금은 마이그레이션 미착수. 근거: ①아끼려는 금액이 실질 $0(플랜 포함 크레딧으로 상쇄 중, 위 §18.8-⑤ 참조) ②Dockerfile 신규 작성·GCP 설정·OAuth 콜백 URL 변경·WebSocket(`/ws/**`) 동작 재검증·Postgres 별도 이전(Cloud SQL은 상시과금이라 부적합, Neon 등 서버리스 Postgres 검토 필요) 등 마이그레이션 공수가 실재 ③플랫폼을 바꿔도 "유휴 시 GitHub 웹훅 콜드스타트" 근본 트레이드오프는 안 사라짐(스케일-투-제로의 본질적 성질).
+
+**v1.0 단계 후보로 기록.** GitHub 웹훅 타임아웃은 10초 확정(공식 문서). 지금은 이 프로젝트 자체 PR에만 영향이라 가끔 수동 Redeliver로 넘어갈 수 있지만, v1.0 이후 타 레포가 게이트에 의존하면 이 정도로는 부족. **Cloud Run `min-instances=1`**(인스턴스 1개 상시 예열, 콜드스타트 완전 제거, 유휴 시에도 월 ~$10 고정 + 그 위에 무료 요청 티어)이 유력 후보. 대안으로 "빠른 ACK 전용 경량 레이어"(예: Cloudflare Workers처럼 콜드스타트 거의 없는 엣지 함수가 웹훅을 즉시 ACK하고 실제 처리는 백엔드가 깨어날 때 처리) 아키텍처도 검토 가치 있음 — 두 안 다 v1.0 착수 시점에 다시 판단.
+
+---
+
+## Railway Serverless(구 App Sleeping) 준비 — 내부 스케줄러 외부화 + HikariCP 유휴 커넥션 축소 (2026-07-15, codeprint_129)
+
+**문제.** 위 실측에서 RAM이 청구액의 96.6%로 확정된 뒤, "12일에 $4.59면 남은 18일도 비슷한 속도로 늘 텐데 90%대로 줄일 수 있냐"는 질문이 나왔다. 조사 결과 Railway의 "Serverless"(구 App Sleeping)는 **서비스별로 켤 수 있어 Postgres도 재울 수 있음**을 확인(당초 "Postgres는 상시과금 불가피"라 판단했던 게 부정확했음 — 정정). 단 이걸 켜려면 두 가지 선결 조건이 있었다: ①내부 `@Scheduled`(매일 06:00 갤러리 갱신·09:00 다이제스트)가 유휴 시간에 강제로 깨어나 sleep을 방해 ②HikariCP 기본 설정(`minimum-idle`=`maximum-pool-size`=10)이 유휴 커넥션을 상시 유지.
+
+**결정.** Railway/Cloud Run 어느 환경에서도 유효한(플랫폼 비의존적인) 작업부터 우선 진행 — 플랫폼 이전 여부와 무관하게 필요한 개선이라 순서상 먼저 해도 손해가 없음.
+1. **스케줄러 외부화**: `FeaturedRepoScheduler`/`DailyDigestScheduler`(내부 `@Scheduled`) 삭제, 대신 `FeaturedRepoCronController`(`POST /api/cron/refresh-featured`)·`AdminDigestCronController`(`POST /api/cron/daily-digest`) 신설 — GitHub Actions `schedule:` cron(`.github/workflows/scheduled-jobs.yml`, 06:00/09:00 KST=UTC 21:00/00:00)이 호출. 더 이상 `@Scheduled`가 없어 `CodeprintApplication`의 `@EnableScheduling`도 함께 제거(미사용).
+2. **인증 방식**: 기존 `WebhookSignatureVerifier`(HMAC) 패턴을 참고해 `CronSecretVerifier`(domain/analysis, 상수시간 비교) 신설 — GitHub Actions는 로그인 세션이 없어 기존 `/api/admin/**`(ROLE_ADMIN) 재사용 불가, `X-Cron-Secret` 헤더 대 서버 설정값(`CRON_SECRET` 환경변수) 비교로 별도 인증. `/api/webhooks/github`와 동일하게 `SecurityConfig` permitAll + 컨트롤러 내부 자체 검증 패턴(SECURITY_POLICY.md permitAll 기준 중 "소유권 개념 없는 공개 리소스"에는 엄밀히 안 맞지만, 실제 인가는 Spring Security가 아니라 내부 시크릿 검증이 담당 — 웹훅과 동일 구조로 기존에 이미 승인된 패턴).
+3. **Controller 단일 컨텍스트 준수**: `refresh-featured`(featured 컨텍스트)와 `daily-digest`(admin 컨텍스트)를 하나의 컨트롤러로 합치지 않고 컨트롤러 2개로 분리 — CLAUDE.md §10 "Controller는 자기 컨텍스트 외 Application Service 직접 호출 금지" 준수.
+4. **CsrfHeaderFilter 예외 추가**: `/api/cron/**`을 `exemptPatterns`에 추가(서버-투-서버 호출은 `X-Requested-With` 커스텀 헤더를 못 보냄 — `/api/webhooks/github`·`/mcp/**`와 동일 사유). 로컬 curl 검증 중 이 필터에 막혀 403 나는 걸 실측으로 발견 후 수정, `CsrfHeaderFilterTest`에 회귀 테스트 추가.
+5. **HikariCP 튜닝**: `maximum-pool-size: 5`, `minimum-idle: 1`, `idle-timeout: 300000`(5분) — 기본값(10/10)은 이 트래픽 규모엔 과함, 유휴 커넥션을 줄여 RAM 직접 절감 + Railway sleep 10분 기준보다 짧게 반납.
+
+**검토한 대안.** ①두 트리거를 하나의 `CronJobController`로 합침 — 기각(§10 Controller 단일 컨텍스트 위반). ②기존 `/api/admin/digest/run`(ROLE_ADMIN)을 GitHub Actions가 장기 보관 admin JWT로 호출 — 기각(JWT는 1시간 만료로 자동화에 부적합, 별도 장기 자격증명을 또 만드는 게 오히려 시크릿 관리 원칙 위반).
+
+**검증.** `CronSecretVerifierTest` 4건·`CsrfHeaderFilterTest` 신규 1건 포함 전체 테스트 green(로컬 Docker DB 통합 테스트 포함). `analyzeLocal` 기존 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1)과 정확히 일치, 신규 위반 0. **로컬 런타임 검증**(`application-local.yml`에 테스트용 `cron.secret` 추가, gitignore 처리라 커밋 안 됨) — 시크릿 없음/오답 시 403, 정답 시 200 + 실제 `featuredRepoService.refreshDailyFeatured()`(실제 분석 트리거 확인)·`adminDigestService.runFor()`(daily_stats 삽입 확인) 정상 실행 로그로 확인.
+
+**남은 것(사용자 액션 대기)**: ①GitHub repo secrets `BACKEND_URL`·`CRON_SECRET` 등록 ②Railway `CRON_SECRET` 환경변수 등록(배포 후) ③Railway 대시보드에서 codeprint·Postgres 두 서비스 모두 Serverless 토글 — 전부 이 세션에서는 미착수, SecurityConfig 변경이라 독립 적대적 검증 후 머지·배포 예정.
 - 근본적 비용 구조 논의(그래프 생성 트리거 분리·쿼타·압축저장 등)는 별도 절 참조(`PRODUCT_STRATEGY.md` §18) — 이 사고가 그 논의의 직접적 계기.
