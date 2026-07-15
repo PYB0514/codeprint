@@ -1,0 +1,149 @@
+{
+  "settings": {
+    "title": "Settings",
+    "imageHeading": "Profile Image / Background Image",
+    "profileLabel": "Profile",
+    "backgroundLabel": "Background",
+    "deleteImage": "Delete",
+    "saved": "Saved.",
+    "uploadFailed": "Upload failed. Please check the file type and size (5MB max).",
+    "imageDeleted": "Deleted.",
+    "imageDeleteFailed": "Delete failed.",
+    "deleteAccount": {
+      "heading": "Delete Account",
+      "descLine1": "Deleting your account permanently removes all projects, graphs, posts, and comments immediately.",
+      "descLine2": "This action cannot be undone.",
+      "confirmBefore": "Type ",
+      "confirmWord": "DELETE",
+      "confirmAfter": " below to confirm.",
+      "deleteButton": "Delete Account",
+      "deleting": "Deleting...",
+      "deleteFailed": "Failed to delete account. Please try again."
+    }
+  },
+  "howItWorks": {
+    "title": "How It Works",
+    "subtitle": "How Codeprint turns code into a graph and detects risk patterns — and its limitations",
+    "graphParts": [
+      { "k": "Nodes", "v": "FILE · FUNCTION (function/method) · DB_TABLE (entity/table) · API_ENDPOINT (route)" },
+      { "k": "Edges", "v": "IMPORT (dependency) · CONTAINS (file→function) · FUNCTION_CALL (call) · INSTANTIATION (creation) · DB_READ/WRITE · API_CALL" },
+      { "k": "Comments", "v": "Extracts the one-line comment above each file/function and shows it as the node label (toggle between name and comment)" }
+    ],
+    "section1": {
+      "heading": "1. How the graph is built",
+      "bodyBefore": "After cloning the GitHub repo, Codeprint extracts functions, imports, DB entities, API routes, and comments from each source file using ",
+      "bodyHighlight": "static analysis that combines the tree-sitter AST (functions/calls) with regex (DB/API/import, etc.)",
+      "bodyAfter": ". It supports 13 languages and only reads source text — no compiling or running. The extracted results are wired together as nodes and edges to form the graph.",
+      "limitationLabel": "Limitation.",
+      "limitationBefore": " Being static analysis, it can't track some connections that are only decided at runtime, like dynamic calls or reflection. So some of the warnings below can be false positives, and each one can be ",
+      "limitationHighlight": "hidden individually",
+      "limitationAfter": "."
+    },
+    "section2": {
+      "heading": "2. What risk patterns it detects",
+      "body": "It detects runtime and architectural risk patterns that static analysis can catch on the graph. Each warning carries a severity (HIGH/MEDIUM/LOW).",
+      "limitationLabel": "Limitations & false positives."
+    },
+    "section3": {
+      "heading": "3. Hiding false positives or intentional warnings",
+      "bodyBefore": "Every warning is a heuristic — not a compiler. False positives or intentional patterns (functions kept for future use, an orchestrator's high call count, etc.) can be hidden from the warning panel on the graph screen using each item's",
+      "bodyHighlight1": " ✕ button",
+      "bodyMid": ". Hiding is saved per project and persists across re-analysis, and can be restored anytime from the ",
+      "bodyHighlight2": "\"Hidden warnings\"",
+      "bodyAfter": " list at the bottom of the panel."
+    },
+    "warningGuide": {
+      "CYCLIC_IMPORT": {
+        "example": "File A imports B, and B imports A back — a cycle. A sign of initialization-order issues and tight coupling.",
+        "limitation": "High confidence since it's based on IMPORT edges. If the cycle is intentional (rare), just hide it."
+      },
+      "BROKEN_INTERFACE_CHAIN": {
+        "example": "An interface method exists but no corresponding implementation call edge is found — may break at runtime as unimplemented.",
+        "limitation": "Can false-positive when the analysis fails to link the implementation. Hide it if the implementation is clearly present."
+      },
+      "ASYNC_SELF_CALL": {
+        "example": "An @Async method is called directly from within the same class — this bypasses the Spring proxy, so the async behavior is ignored (runs synchronously).",
+        "limitation": "Only detects direct calls within the same file. Whether the call actually goes through the proxy can't be confirmed 100% statically."
+      },
+      "DB_LAYER_BYPASS": {
+        "example": "A Controller/Service calls the persistence layer (e.g. JpaRepository) directly, bypassing the Repository — a layer boundary violation.",
+        "limitation": "Judged from IMPORT edges only (FUNCTION_CALL is excluded due to same-name matching limitations) to minimize false positives."
+      },
+      "CROSS_CONTEXT_IMPORT": {
+        "example": "application/order directly imports domain/payment — different bounded contexts should reference each other by ID only (DDD).",
+        "limitation": "Only active in projects with a DDD folder structure (/application/, /domain/)."
+      },
+      "DOMAIN_IMPORTS_INFRA": {
+        "example": "domain/ directly imports infrastructure/ — a dependency-direction inversion (the domain shouldn't know about infrastructure).",
+        "limitation": "shared/ (shared kernel) is allowed. Only active in projects with a DDD structure."
+      },
+      "INTERFACES_IMPORTS_INFRA": {
+        "example": "interfaces/ (e.g. Controllers) directly imports infrastructure/ — a layer violation that skips the Application Service.",
+        "limitation": "shared/ is allowed, and composition roots (e.g. *Configuration) are excluded since wiring is intentional there. Only active in projects with a DDD structure. Still lacks cross-project real-world validation, so it's classified as a stage-2 (experimental) gate — it only blocks PRs once turned on in project settings."
+      },
+      "CROSS_DOMAIN_CALL": {
+        "example": "A function call crosses a domain boundary directly — it should go through a port/ interface instead.",
+        "limitation": "Unqualified calls are matched by same-named functions, a limitation that excludes getters, JPA, JDK, and same-named functions. Some false positives are still possible."
+      },
+      "MISSING_CONVERTER_MIGRATION": {
+        "example": "A column has @Convert (e.g. encryption) but there's likely no Flyway migration converting the existing plaintext data — reads may fail with a 500 due to decryption errors.",
+        "limitation": "Can't actually confirm whether the migration exists — this only flags a possibility. Hide it if you've already handled it."
+      },
+      "MISSING_TRANSACTIONAL_DELETE": {
+        "example": "A JpaRepository deleteBy*/removeBy* derived query is missing @Transactional — calling it throws a runtime exception due to a missing EntityManager.",
+        "limitation": "Only checks methods under Java/Kotlin's infrastructure/persistence (or adapter) paths — delete methods in other languages or paths aren't covered."
+      },
+      "DEAD_CODE": {
+        "example": "A function with no incoming FUNCTION_CALL edges — a candidate for never being called anywhere.",
+        "limitation": "Calls that aren't visible statically — like reflection (JPA converters) or polymorphic dispatch — aren't caught, which can cause false positives (many of these are already excluded). Hide it if the function is intentionally kept for future use."
+      },
+      "HIGH_FAN_OUT": {
+        "example": "A function calls too many other functions — a possible Single Responsibility Principle (SRP) violation.",
+        "limitation": "Orchestrators (analysis pipelines, response assembly, etc.) are naturally high fan-out. The count can be inflated by counting getters and library calls too, so treat it as informational (LOW)."
+      },
+      "CROSS_FEATURE_IMPORT": {
+        "example": "features/order directly imports features/payment — feature folders shouldn't know about each other, and shared code should live in shared/ (a common rule in bulletproof-react and FSD).",
+        "limitation": "Only active in frontend projects with 2 or more distinct feature folders. Redux-style projects, where cross-feature references are conventional, are automatically excluded."
+      },
+      "FEATURE_LAYER_VIOLATION": {
+        "example": "shared/ imports features/, reversing the app → features → shared direction — shared code ends up coupled to a specific feature.",
+        "limitation": "Only active in frontend projects with a feature-folder structure (same condition as above)."
+      },
+      "LAYERED_REVERSE_DEPENDENCY": {
+        "example": "A Repository imports a Controller, for example — a lower layer referencing a higher layer, a sign the layering is inverted.",
+        "limitation": "Layers are determined from folder names, so projects that don't use conventional names (controller/service/repository, etc.) won't be detected."
+      },
+      "LAYERED_BYPASS": {
+        "example": "A Controller imports a Repository directly without a Service — a pattern where business logic leaks into the Controller.",
+        "limitation": "May be an intentional omission for simple CRUD screens (MEDIUM). If it's a team convention, hide it or set a pattern exception."
+      },
+      "INTENT_DRIFT": {
+        "example": "An actual import violates a forbidden rule declared under the graph sidebar's \"Architecture Intent\" (e.g. domain → infrastructure forbidden).",
+        "limitation": "Only works in projects that have declared a rule — this check doesn't run if none has been declared."
+      }
+    }
+  },
+  "donate": {
+    "title": "Support Us ☕",
+    "desc": "Support Codeprint's development. Donations go toward server costs and feature development.",
+    "amountSectionLabel": "Choose an amount",
+    "customAmountButton": "Custom",
+    "customAmountPlaceholder": "Enter amount (min 1,000 KRW)",
+    "minAmountAlert": "The minimum donation amount is 1,000 KRW.",
+    "maxAmountAlert": "The maximum donation amount is 1,000,000 KRW.",
+    "paymentError": "An error occurred while requesting payment.",
+    "openingPayment": "Opening payment window...",
+    "donateButton": "Donate {{amount}}",
+    "loginRequiredBefore": "",
+    "loginRequiredLink": "Log in",
+    "loginRequiredAfter": " to donate.",
+    "donorsHeading": "Donors 🙏",
+    "currencySuffix": " KRW",
+    "timeAgo": {
+      "daysAgo": "{{count}}d ago",
+      "hoursAgo": "{{count}}h ago",
+      "minsAgo": "{{count}}m ago",
+      "justNow": "just now"
+    }
+  }
+}
