@@ -159,6 +159,8 @@
 
 **Preview 도구(`preview_*`) — 기본 검증 수단.** 서버 기동(§0)과 프론트엔드 확인의 기본값. 스냅샷·콘솔로그·네트워크·스크린샷이 Preview로 해결되면 Chrome 불필요. 규칙4 "직접 동작 확인"의 1순위.
 
+**도그푸딩·기능 테스트는 로컬 기본, 프로덕션은 예외.** 일반적인 기능 검증·도그푸딩(직접 써보며 확인)은 로컬 서버(Preview) 대상으로 한다 — 프로덕션 URL을 습관적으로 두드리면 Railway Serverless(유휴 시 sleep)를 깨워 비용 절감 취지와 충돌한다(경위 `decisions/DECISIONS_INFRA.md` "Railway Serverless 준비" 참조). 프로덕션이 구조적으로 필요한 경우만 예외: ①GitHub 웹훅 기반 PR 게이트(로컬호스트로 웹훅 수신 불가) ②배포 자체의 정상 동작 확인(재배포 직후 헬스체크·실제 API 응답 확인 — "도그푸딩"이 아니라 "배포 검증"이라 프로덕션이 맞음). GitHub OAuth·Toss 등은 로컬 전용 자격증명이 이미 분리돼 있어(SECURITY_POLICY.md "시크릿 관리 원칙") 대부분의 플로우가 로컬에서 그대로 재현된다.
+
 **Claude in Chrome — Preview로 안 되는 경우.**
 - GitHub OAuth 등 실제 쿠키·세션 필요 플로우(사용자 Chrome 기존 로그인 재사용)
 - API 연동 결과를 실브라우저 상태에서 확인해야 할 때
