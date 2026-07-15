@@ -1,8 +1,10 @@
 ﻿// 커뮤니티 게시판 — 게시글 목록/상세/작성 통합 페이지
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
+import { currentDateLocale } from '../i18n/dateLocale'
 
 interface UserInfo {
   id: string
@@ -56,21 +58,19 @@ interface PostSnapshotMeta {
   config: { layoutPreset?: string; labelMode?: string }
 }
 
-// 스냅샷 config로 카드에 표시할 짧은 라벨 생성
-function snapshotLabel(config: PostSnapshotMeta['config']): string {
-  const layout = config.layoutPreset === 'domain' ? '도메인' : '계층'
-  const label = config.labelMode === 'comment' ? '주석' : '이름'
-  return `${layout}-${label}`
-}
-
-const FEEDBACK_LABELS: Record<string, string> = {
-  ARCHITECTURE_REVIEW: '아키텍처 리뷰',
-  GENERAL: '일반',
-  DEBUG: '디버그',
-}
-
 // 커뮤니티 게시판 페이지
 export default function CommunityPage() {
+  const { t } = useTranslation('workspace')
+  const { t: tMisc } = useTranslation('misc')
+  const FEEDBACK_LABELS = tMisc('bookmarks.feedbackLabels', { returnObjects: true }) as Record<string, string>
+
+  // 스냅샷 config로 카드에 표시할 짧은 라벨 생성
+  const snapshotLabel = (config: PostSnapshotMeta['config']): string => {
+    const layout = config.layoutPreset === 'domain' ? t('community.snapshotLabel.layoutDomain') : t('community.snapshotLabel.layoutLayer')
+    const label = config.labelMode === 'comment' ? t('community.snapshotLabel.modeComment') : t('community.snapshotLabel.modeName')
+    return `${layout}-${label}`
+  }
+
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [user, setUser] = useState<UserInfo | null>(null)
@@ -197,7 +197,7 @@ export default function CommunityPage() {
       setPresetOptions(presetRes.data.map((p) => ({ slot: p.slot, name: p.name })))
       setSelectedPresetSlot(1)
     } catch {
-      alert('그래프를 불러오지 못했습니다. 먼저 분석을 완료해주세요.')
+      alert(t('community.linkGraphFailed'))
       setLinkedProjectId(null)
       setLinkedProjectName(null)
       setPresetOptions([])
@@ -269,7 +269,7 @@ export default function CommunityPage() {
       setComments((prev) => [...prev, res.data])
       setNewComment('')
     } catch {
-      alert('댓글 등록에 실패했습니다. 다시 시도해주세요.')
+      alert(t('community.detail.commentSubmitFailed'))
     }
   }
 
@@ -323,7 +323,7 @@ export default function CommunityPage() {
 
   // 게시글 삭제
   const handleDeletePost = async (postId: string) => {
-    if (!confirm('게시글을 삭제할까요?')) return
+    if (!confirm(t('community.deletePostConfirm'))) return
     await axios.delete(`/api/community/posts/${postId}`)
     setPosts((prev) => prev.filter((p) => p.id !== postId))
     if (selectedPost?.id === postId) setSelectedPost(null)
@@ -339,11 +339,11 @@ export default function CommunityPage() {
         targetId: reportTarget.id,
         reason: reportReason.trim(),
       })
-      alert('신고가 접수됐습니다.')
+      alert(t('community.reportModal.success'))
       setReportTarget(null)
       setReportReason('')
     } catch {
-      alert('신고 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+      alert(t('community.reportModal.failed'))
     } finally {
       setReportSubmitting(false)
     }
@@ -357,13 +357,13 @@ export default function CommunityPage() {
         {/* 게시글 목록 */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-3">
-            <h1 className="text-xl font-semibold">커뮤니티</h1>
+            <h1 className="text-xl font-semibold">{t('community.title')}</h1>
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="게시글 검색..."
+                placeholder={t('community.searchPlaceholder')}
                 className="bg-gray-800 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-gray-500 w-44 placeholder-gray-500"
               />
               {user && (
@@ -371,7 +371,7 @@ export default function CommunityPage() {
                   onClick={() => navigate('/bookmarks')}
                   className="text-sm text-gray-400 hover:text-white px-3 py-1.5 rounded-lg"
                 >
-                  ★ 북마크
+                  {t('community.bookmarksButton')}
                 </button>
               )}
               {user && (
@@ -379,7 +379,7 @@ export default function CommunityPage() {
                   onClick={() => setShowWriteForm((v) => !v)}
                   className="text-sm bg-white text-black font-medium px-3 py-1.5 rounded-lg hover:bg-gray-200"
                 >
-                  {showWriteForm ? '취소' : '글쓰기'}
+                  {showWriteForm ? t('community.cancelButton') : t('community.writeButton')}
                 </button>
               )}
             </div>
@@ -395,7 +395,7 @@ export default function CommunityPage() {
                   : 'border-transparent text-gray-400 hover:text-white'
               }`}
             >
-              전체
+              {t('community.tabs.all')}
             </button>
             {user && (
               <button
@@ -406,7 +406,7 @@ export default function CommunityPage() {
                     : 'border-transparent text-gray-400 hover:text-white'
                 }`}
               >
-                팔로잉
+                {t('community.tabs.following')}
               </button>
             )}
             <button
@@ -417,7 +417,7 @@ export default function CommunityPage() {
                   : 'border-transparent text-gray-400 hover:text-white'
               }`}
             >
-              📊 갤러리
+              {t('community.tabs.gallery')}
             </button>
           </div>
 
@@ -434,7 +434,7 @@ export default function CommunityPage() {
                       : 'border-gray-700 text-gray-500 hover:text-gray-300'
                   }`}
                 >
-                  {s === 'latest' ? '최신순' : s === 'likes' ? '좋아요순' : '조회순'}
+                  {s === 'latest' ? t('community.sort.latest') : s === 'likes' ? t('community.sort.likes') : t('community.sort.views')}
                 </button>
               ))}
             </div>
@@ -446,7 +446,7 @@ export default function CommunityPage() {
               <input
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="제목"
+                placeholder={t('community.writeForm.titlePlaceholder')}
                 className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none"
               />
               <select
@@ -454,21 +454,21 @@ export default function CommunityPage() {
                 onChange={(e) => setNewFeedbackType(e.target.value)}
                 className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none"
               >
-                <option value="GENERAL">일반</option>
-                <option value="ARCHITECTURE_REVIEW">아키텍처 리뷰</option>
-                <option value="DEBUG">디버그</option>
+                <option value="GENERAL">{FEEDBACK_LABELS.GENERAL}</option>
+                <option value="ARCHITECTURE_REVIEW">{FEEDBACK_LABELS.ARCHITECTURE_REVIEW}</option>
+                <option value="DEBUG">{FEEDBACK_LABELS.DEBUG}</option>
               </select>
               <textarea
                 value={newContent}
                 onChange={(e) => setNewContent(e.target.value)}
-                placeholder="내용을 입력하세요"
+                placeholder={t('community.writeForm.contentPlaceholder')}
                 rows={5}
                 className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none resize-none"
               />
               {/* 그래프 연결 — 프로젝트+프리셋을 선택하면 등록 시점의 설정을 스냅샷으로 캡처(이후 프리셋을 바꿔도 게시글엔 영향 없음) */}
               {myProjects.length > 0 && (
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-gray-400">그래프 연결 (선택)</label>
+                  <label className="text-xs text-gray-400">{t('community.writeForm.graphLinkLabel')}</label>
                   {linkedProjectName ? (
                     <div className="flex flex-col gap-2 bg-gray-800 px-3 py-2 rounded-lg border border-blue-600/40">
                       <div className="flex items-center gap-2">
@@ -477,7 +477,7 @@ export default function CommunityPage() {
                           onClick={() => { setLinkedProjectId(null); setLinkedProjectName(null); setPresetOptions([]) }}
                           className="text-xs text-gray-500 hover:text-red-400"
                         >
-                          해제
+                          {t('community.writeForm.unlinkButton')}
                         </button>
                       </div>
                       <select
@@ -497,7 +497,7 @@ export default function CommunityPage() {
                       disabled={linkingGraph}
                       className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none disabled:opacity-50"
                     >
-                      <option value="">— 그래프 선택 안 함 —</option>
+                      <option value="">{t('community.writeForm.noGraphOption')}</option>
                       {myProjects.map((p) => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
@@ -508,7 +508,7 @@ export default function CommunityPage() {
 
               {/* 공개범위 */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400">공개범위</label>
+                <label className="text-xs text-gray-400">{t('community.writeForm.visibilityLabel')}</label>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setPostVisibility('PUBLIC')}
@@ -518,7 +518,7 @@ export default function CommunityPage() {
                         : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
                     }`}
                   >
-                    공개 — 커뮤니티 피드에 표시
+                    {t('community.writeForm.visibilityPublic')}
                   </button>
                   <button
                     onClick={() => setPostVisibility('PRIVATE')}
@@ -528,12 +528,12 @@ export default function CommunityPage() {
                         : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
                     }`}
                   >
-                    링크 공유
+                    {t('community.writeForm.visibilityPrivate')}
                   </button>
                 </div>
                 {postVisibility === 'PRIVATE' && (
                   <p className="text-[11px] text-gray-500">
-                    피드에 표시되지 않으며, 링크가 있는 사람은 누구나 볼 수 있습니다.
+                    {t('community.writeForm.visibilityPrivateNote')}
                   </p>
                 )}
               </div>
@@ -541,7 +541,7 @@ export default function CommunityPage() {
               {/* 파일 첨부 */}
               <div className="flex flex-col gap-2">
                 <label className="text-xs text-gray-400 cursor-pointer hover:text-gray-200 w-fit">
-                  + 이미지 첨부
+                  {t('community.writeForm.attachImage')}
                   <input type="file" accept="image/*" multiple onChange={handleFileChange} className="hidden" />
                 </label>
                 {attachedFiles.length > 0 && (
@@ -550,7 +550,7 @@ export default function CommunityPage() {
                       <div key={file.name} className="flex items-center gap-1 bg-gray-800 px-2 py-1 rounded text-xs text-gray-300">
                         <span>{file.name}</span>
                         {uploading ? (
-                          <span className="text-gray-500">업로드 중...</span>
+                          <span className="text-gray-500">{t('community.writeForm.uploading')}</span>
                         ) : (
                           <button onClick={() => handleRemoveFile(file)} className="text-gray-500 hover:text-red-400 ml-1">✕</button>
                         )}
@@ -564,16 +564,16 @@ export default function CommunityPage() {
                 disabled={attachedFiles.some((f) => f.uploading)}
                 className="self-end text-sm bg-white text-black font-medium px-4 py-1.5 rounded-lg hover:bg-gray-200 disabled:opacity-50"
               >
-                등록
+                {t('community.writeForm.submitButton')}
               </button>
             </div>
           )}
 
           {loading ? (
-            <p className="text-gray-500 text-sm">로딩 중...</p>
+            <p className="text-gray-500 text-sm">{t('community.loading')}</p>
           ) : feedTab === 'gallery' ? (
             posts.length === 0 ? (
-              <p className="text-gray-500 text-sm">그래프가 첨부된 게시글이 없습니다.</p>
+              <p className="text-gray-500 text-sm">{t('community.galleryEmpty')}</p>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {posts.map((post) => (
@@ -584,7 +584,7 @@ export default function CommunityPage() {
                   >
                     <div className="flex items-center gap-1 text-indigo-400 text-xs">
                       <span>📊</span>
-                      <span>그래프 첨부</span>
+                      <span>{t('community.graphAttachedTag')}</span>
                     </div>
                     <p className="text-white text-sm font-medium line-clamp-2 leading-snug">{post.title}</p>
                     <p className="text-gray-500 text-xs line-clamp-2">{post.content}</p>
@@ -602,8 +602,8 @@ export default function CommunityPage() {
           ) : posts.length === 0 ? (
             <p className="text-gray-500 text-sm">
               {feedTab === 'following'
-                ? '팔로우한 유저의 게시글이 없습니다. 다른 유저를 팔로우해보세요.'
-                : '아직 게시글이 없습니다.'}
+                ? t('community.followingEmpty')
+                : t('community.noPosts')}
             </p>
           ) : (
             <>
@@ -626,15 +626,15 @@ export default function CommunityPage() {
                         )}
                         {post.hasGraph && (
                           <span className="text-xs text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded">
-                            📊 그래프
+                            {t('userProfile.graphBadge')}
                           </span>
                         )}
                         {post.repoUrl && (
                           <span
-                            title={post.ownRepo ? '작성자 본인 소유 레포' : '작성자 소유가 아닌 공개 레포 분석'}
+                            title={post.ownRepo ? t('userProfile.ownRepoTitle') : t('userProfile.externalRepoTitle')}
                             className={`text-xs px-2 py-0.5 rounded ${post.ownRepo ? 'text-blue-400 bg-blue-500/10' : 'text-gray-500 bg-gray-800'}`}
                           >
-                            {post.ownRepo ? '내 레포' : '외부 레포'}
+                            {post.ownRepo ? t('userProfile.ownRepoBadge') : t('userProfile.externalRepoBadge')}
                           </span>
                         )}
                         {post.repoUrl && (
@@ -657,7 +657,7 @@ export default function CommunityPage() {
                         >
                           {post.authorUsername}
                         </button>
-                        {' · '}{new Date(post.createdAt).toLocaleDateString('ko-KR')}
+                        {' · '}{new Date(post.createdAt).toLocaleDateString(currentDateLocale())}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -690,7 +690,7 @@ export default function CommunityPage() {
                           onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id) }}
                           className="text-xs text-gray-600 hover:text-red-400"
                         >
-                          삭제
+                          {t('community.deletePostButton')}
                         </button>
                       )}
                     </div>
@@ -705,7 +705,7 @@ export default function CommunityPage() {
                   disabled={loadingMore}
                   className="text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
                 >
-                  {loadingMore ? '불러오는 중...' : '더 보기'}
+                  {loadingMore ? t('community.loadingMore') : t('community.loadMoreButton')}
                 </button>
               </div>
             )}
@@ -730,18 +730,18 @@ export default function CommunityPage() {
                     value={editTitle}
                     onChange={e => setEditTitle(e.target.value)}
                     className="w-full bg-gray-800 text-white text-sm px-3 py-1.5 rounded border border-gray-700 focus:outline-none"
-                    placeholder="제목"
+                    placeholder={t('community.writeForm.titlePlaceholder')}
                   />
                   <textarea
                     value={editContent}
                     onChange={e => setEditContent(e.target.value)}
                     rows={5}
                     className="w-full bg-gray-800 text-white text-sm px-3 py-1.5 rounded border border-gray-700 focus:outline-none resize-none"
-                    placeholder="내용"
+                    placeholder={t('community.writeForm.contentPlaceholder')}
                   />
                   <div className="flex gap-2">
-                    <button onClick={handleUpdatePost} className="text-xs bg-white text-black font-medium px-3 py-1 rounded hover:bg-gray-200">저장</button>
-                    <button onClick={() => setEditingPost(false)} className="text-xs text-gray-400 hover:text-white">취소</button>
+                    <button onClick={handleUpdatePost} className="text-xs bg-white text-black font-medium px-3 py-1 rounded hover:bg-gray-200">{t('community.detail.saveButton')}</button>
+                    <button onClick={() => setEditingPost(false)} className="text-xs text-gray-400 hover:text-white">{t('community.cancelButton')}</button>
                   </div>
                 </div>
               ) : (
@@ -755,7 +755,7 @@ export default function CommunityPage() {
                   >
                     {selectedPost.authorUsername}
                   </button>
-                  {' · '}{new Date(selectedPost.createdAt).toLocaleDateString('ko-KR')}
+                  {' · '}{new Date(selectedPost.createdAt).toLocaleDateString(currentDateLocale())}
                 </p>
                 <div className="flex items-center gap-3">
                   <button
@@ -785,7 +785,7 @@ export default function CommunityPage() {
                       onClick={() => { setEditTitle(selectedPost.title); setEditContent(selectedPost.content ?? ''); setEditingPost(true) }}
                       className="text-xs text-gray-500 hover:text-white transition-colors"
                     >
-                      수정
+                      {t('community.detail.editButton')}
                     </button>
                   )}
                   {user && user.username !== selectedPost.authorUsername && (
@@ -793,7 +793,7 @@ export default function CommunityPage() {
                       onClick={() => setReportTarget({ type: 'POST', id: selectedPost.id })}
                       className="text-xs text-gray-600 hover:text-red-400 transition-colors"
                     >
-                      신고
+                      {t('community.detail.reportButton')}
                     </button>
                   )}
                 </div>
@@ -836,7 +836,7 @@ export default function CommunityPage() {
                       onClick={() => navigate(`/community/posts/${selectedPost.id}/graph/${snap.position}`)}
                       className="text-left bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 hover:border-gray-500 transition-colors"
                     >
-                      <span className="text-xs text-blue-300 font-medium">📊 스냅샷 {snap.position + 1}</span>
+                      <span className="text-xs text-blue-300 font-medium">{t('community.detail.snapshotButton', { n: snap.position + 1 })}</span>
                       <p className="text-[10px] text-gray-500 mt-0.5">{snapshotLabel(snap.config)}</p>
                     </button>
                   ))}
@@ -846,13 +846,13 @@ export default function CommunityPage() {
                   onClick={() => navigate(`/community/posts/${selectedPost.id}/graph`)}
                   className="mt-3 text-xs text-blue-400 hover:text-blue-300"
                 >
-                  그래프 보기 →
+                  {t('community.detail.viewGraphButton')}
                 </button>
               )}
             </div>
 
             <div className="border-t border-gray-800 pt-3 flex flex-col gap-2">
-              <p className="text-xs font-medium text-gray-400">댓글 {comments.length}</p>
+              <p className="text-xs font-medium text-gray-400">{t('community.detail.commentsHeading', { count: comments.length })}</p>
               {comments.map((c) => (
                 <div key={c.id} className="text-xs text-gray-300 flex items-start justify-between gap-2 group">
                   <span>
@@ -867,7 +867,7 @@ export default function CommunityPage() {
                         setComments(prev => prev.filter(x => x.id !== c.id))
                       }}
                       className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                      title="댓글 삭제"
+                      title={t('community.detail.deleteCommentTitle')}
                     >
                       ✕
                     </button>
@@ -876,7 +876,7 @@ export default function CommunityPage() {
                     <button
                       onClick={() => setReportTarget({ type: 'COMMENT', id: c.id })}
                       className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                      title="댓글 신고"
+                      title={t('community.detail.reportCommentTitle')}
                     >
                       🚩
                     </button>
@@ -888,7 +888,7 @@ export default function CommunityPage() {
                   <input
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="댓글 입력"
+                    placeholder={t('community.detail.commentPlaceholder')}
                     className="flex-1 bg-gray-800 text-white text-xs px-2 py-1.5 rounded border border-gray-700 focus:outline-none"
                     onKeyDown={(e) => e.key === 'Enter' && handleSubmitComment()}
                   />
@@ -896,7 +896,7 @@ export default function CommunityPage() {
                     onClick={handleSubmitComment}
                     className="text-xs bg-white text-black font-medium px-2 py-1 rounded hover:bg-gray-200"
                   >
-                    등록
+                    {t('community.writeForm.submitButton')}
                   </button>
                 </div>
               )}
@@ -909,11 +909,11 @@ export default function CommunityPage() {
       {reportTarget && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-bold mb-4">{reportTarget.type === 'POST' ? '게시글 신고' : '댓글 신고'}</h2>
+            <h2 className="text-lg font-bold mb-4">{reportTarget.type === 'POST' ? t('community.reportModal.postTitle') : t('community.reportModal.commentTitle')}</h2>
             <textarea
               value={reportReason}
               onChange={(e) => setReportReason(e.target.value)}
-              placeholder="신고 사유를 입력해주세요"
+              placeholder={t('community.reportModal.placeholder')}
               maxLength={500}
               rows={4}
               autoFocus
@@ -924,14 +924,14 @@ export default function CommunityPage() {
                 onClick={() => { setReportTarget(null); setReportReason('') }}
                 className="text-sm text-gray-400 hover:text-white px-4 py-2 transition"
               >
-                취소
+                {t('community.cancelButton')}
               </button>
               <button
                 onClick={handleSubmitReport}
                 disabled={reportSubmitting || !reportReason.trim()}
                 className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition"
               >
-                {reportSubmitting ? '제출 중…' : '신고하기'}
+                {reportSubmitting ? t('community.reportModal.submitting') : t('community.reportModal.submitButton')}
               </button>
             </div>
           </div>
