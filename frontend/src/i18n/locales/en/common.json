@@ -1,0 +1,44 @@
+{
+  "header": {
+    "community": "Community",
+    "service": "Service",
+    "serviceLinks": {
+      "howItWorks": "How it Works",
+      "changelog": "Changelog",
+      "evolution": "Evolution",
+      "dogfooding": "Dogfooding"
+    },
+    "teams": "Teams",
+    "donate": "Donate",
+    "search": "Search",
+    "searchPlaceholder": "Search username...",
+    "noResults": "No results",
+    "lightMode": "Light",
+    "darkMode": "Dark",
+    "messages": "Messages",
+    "notifications": "Notifications",
+    "noNotifications": "No notifications.",
+    "settings": "Settings",
+    "logout": "Log out",
+    "login": "Log in"
+  },
+  "footer": {
+    "copyright": "© 2025 Codeprint",
+    "terms": "Terms",
+    "privacy": "Privacy Policy",
+    "contact": "Contact",
+    "changelog": "Changelog"
+  },
+  "language": {
+    "toggle": "Language",
+    "ko": "한국어",
+    "en": "English"
+  },
+  "cookieBanner": {
+    "message": "We use cookies to improve our service, including keeping you signed in and analytics. See our",
+    "messageSuffix": "for details.",
+    "privacyLink": "Privacy Policy",
+    "decline": "Decline",
+    "accept": "Accept"
+  }
+}

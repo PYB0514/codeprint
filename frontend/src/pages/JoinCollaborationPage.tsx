@@ -1,10 +1,12 @@
 ﻿// 초대 코드로 협업 세션에 참가하는 페이지
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 
 // 협업 세션 참가 페이지 컴포넌트
 export default function JoinCollaborationPage() {
+  const { t } = useTranslation('misc')
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const { inviteCode: codeFromPath } = useParams<{ inviteCode?: string }>()
@@ -27,7 +29,7 @@ export default function JoinCollaborationPage() {
       const res = await axios.post(`/api/collaboration/sessions/${code.toUpperCase()}/join`, {})
       navigate(`/projects/${res.data.graphId}/graph?collab=${res.data.sessionId}&code=${res.data.inviteCode}`)
     } catch {
-      setError('유효하지 않은 초대 코드입니다.')
+      setError(t('joinCollaboration.invalidCode'))
     } finally {
       setLoading(false)
     }
@@ -37,8 +39,8 @@ export default function JoinCollaborationPage() {
     <div className="app-page min-h-screen bg-gray-950 flex items-center justify-center">
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 flex flex-col gap-5 w-80">
         <div className="flex flex-col gap-1">
-          <h1 className="text-white font-bold text-lg">협업 세션 참가</h1>
-          <p className="text-gray-400 text-sm">팀원에게 받은 초대 코드를 입력하세요.</p>
+          <h1 className="text-white font-bold text-lg">{t('joinCollaboration.title')}</h1>
+          <p className="text-gray-400 text-sm">{t('joinCollaboration.desc')}</p>
         </div>
 
         <input
@@ -57,7 +59,7 @@ export default function JoinCollaborationPage() {
           disabled={loading || code.length < 6}
           className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium disabled:opacity-50 transition-colors"
         >
-          {loading ? '참가 중...' : '세션 참가'}
+          {loading ? t('joinCollaboration.joining') : t('joinCollaboration.join')}
         </button>
       </div>
     </div>

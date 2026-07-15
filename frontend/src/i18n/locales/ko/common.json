@@ -1,0 +1,44 @@
+{
+  "header": {
+    "community": "커뮤니티",
+    "service": "서비스",
+    "serviceLinks": {
+      "howItWorks": "작동 방식",
+      "changelog": "패치노트",
+      "evolution": "발전사",
+      "dogfooding": "자체 사용 사례"
+    },
+    "teams": "팀",
+    "donate": "후원",
+    "search": "검색",
+    "searchPlaceholder": "사용자명 검색...",
+    "noResults": "결과 없음",
+    "lightMode": "라이트",
+    "darkMode": "다크",
+    "messages": "쪽지",
+    "notifications": "알림",
+    "noNotifications": "알림이 없습니다.",
+    "settings": "설정",
+    "logout": "로그아웃",
+    "login": "로그인"
+  },
+  "footer": {
+    "copyright": "© 2025 Codeprint",
+    "terms": "이용약관",
+    "privacy": "개인정보처리방침",
+    "contact": "문의하기",
+    "changelog": "패치노트"
+  },
+  "language": {
+    "toggle": "언어",
+    "ko": "한국어",
+    "en": "English"
+  },
+  "cookieBanner": {
+    "message": "저희는 서비스 개선을 위해 쿠키를 사용합니다. 로그인 유지·분석 통계 등에 활용되며, 자세한 내용은",
+    "messageSuffix": "에서 확인할 수 있습니다.",
+    "privacyLink": "개인정보처리방침",
+    "decline": "거부",
+    "accept": "동의"
+  }
+}

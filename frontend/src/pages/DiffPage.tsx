@@ -1,7 +1,9 @@
 ﻿// 두 그래프 버전의 변경 사항을 색상으로 시각화하는 diff 페이지
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
+import { currentDateLocale } from '../i18n/dateLocale'
 import {
   ReactFlow,
   Background,
@@ -99,6 +101,7 @@ function applyDiffEdgeStyles(edges: Edge[], diffEdges: RawDiffEdge[]): Edge[] {
 
 // diff 그래프 내부 컴포넌트
 function DiffPageInner() {
+  const { t } = useTranslation('misc')
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
@@ -124,7 +127,7 @@ function DiffPageInner() {
           setToId(list[0].graphId)
         }
       })
-      .catch(() => setError('버전 목록을 불러오지 못했습니다.'))
+      .catch(() => setError(t('diff.loadVersionsError')))
   }, [projectId])
 
   // diff 불러오기
@@ -148,7 +151,7 @@ function DiffPageInner() {
       setEdges(styledEdges)
       setTimeout(() => fitView({ padding: 0.1 }), 100)
     } catch {
-      setError('diff를 불러오지 못했습니다.')
+      setError(t('diff.loadDiffError'))
     } finally {
       setLoading(false)
     }
@@ -158,7 +161,7 @@ function DiffPageInner() {
 
   // 버전 레이블 — branch + 날짜
   const versionLabel = (v: GraphVersion) =>
-    `${v.branch} · ${new Date(v.createdAt).toLocaleDateString('ko-KR')}`
+    `${v.branch} · ${new Date(v.createdAt).toLocaleDateString(currentDateLocale())}`
 
   return (
     <div className="app-page flex flex-col h-screen bg-gray-950 text-white">
@@ -169,13 +172,13 @@ function DiffPageInner() {
           onClick={() => navigate(`/projects/${projectId}/graph`)}
           className="text-gray-400 hover:text-white text-sm transition-colors"
         >
-          ← 그래프로
+          {t('diff.backToGraph')}
         </button>
-        <span className="font-semibold">버전 비교</span>
+        <span className="font-semibold">{t('diff.title')}</span>
 
         {/* From 선택 */}
         <div className="flex items-center gap-2 ml-auto">
-          <span className="text-xs text-gray-500">기준</span>
+          <span className="text-xs text-gray-500">{t('diff.baseLabel')}</span>
           <select
             value={fromId}
             onChange={(e) => setFromId(e.target.value)}
@@ -189,7 +192,7 @@ function DiffPageInner() {
           <span className="text-gray-500">→</span>
 
           {/* To 선택 */}
-          <span className="text-xs text-gray-500">비교</span>
+          <span className="text-xs text-gray-500">{t('diff.compareLabel')}</span>
           <select
             value={toId}
             onChange={(e) => setToId(e.target.value)}
@@ -204,9 +207,9 @@ function DiffPageInner() {
         {/* 요약 배지 */}
         {summary && (
           <div className="flex items-center gap-3 ml-4 text-xs font-medium">
-            <span className="text-green-400">+{summary.added} 추가</span>
-            <span className="text-red-400">-{summary.removed} 삭제</span>
-            <span className="text-gray-500">{summary.unchanged} 유지</span>
+            <span className="text-green-400">+{summary.added} {t('diff.added')}</span>
+            <span className="text-red-400">-{summary.removed} {t('diff.removed')}</span>
+            <span className="text-gray-500">{summary.unchanged} {t('diff.unchanged')}</span>
           </div>
         )}
       </header>
@@ -215,23 +218,23 @@ function DiffPageInner() {
       <div className="flex items-center gap-4 px-5 py-2 border-b border-gray-800 text-xs text-gray-400 shrink-0">
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded border-2 border-green-500 bg-green-500/15" />
-          <span>추가됨</span>
+          <span>{t('diff.legendAdded')}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded border-2 border-red-500 bg-red-500/15" />
-          <span>삭제됨</span>
+          <span>{t('diff.legendRemoved')}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded border-2 border-gray-600" />
-          <span>변경 없음</span>
+          <span>{t('diff.legendUnchanged')}</span>
         </div>
         <div className="flex items-center gap-1.5 ml-2">
           <div className="w-5 h-0.5 bg-green-500" />
-          <span>추가된 연결</span>
+          <span>{t('diff.legendAddedEdge')}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-5 h-0.5 bg-red-500" />
-          <span>삭제된 연결</span>
+          <span>{t('diff.legendRemovedEdge')}</span>
         </div>
       </div>
 
@@ -239,7 +242,7 @@ function DiffPageInner() {
       <div className="flex-1 relative">
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center z-10 bg-gray-950/70">
-            <span className="text-gray-400 text-sm">비교 중…</span>
+            <span className="text-gray-400 text-sm">{t('diff.comparing')}</span>
           </div>
         )}
         {error && (
@@ -249,7 +252,7 @@ function DiffPageInner() {
         )}
         {fromId === toId && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
-            <span className="text-gray-500 text-sm">기준과 비교 버전을 다르게 선택하세요.</span>
+            <span className="text-gray-500 text-sm">{t('diff.selectDifferentVersions')}</span>
           </div>
         )}
         <ReactFlow

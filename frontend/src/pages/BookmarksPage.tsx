@@ -1,8 +1,10 @@
 ﻿// 내 북마크 목록 페이지
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
+import { currentDateLocale } from '../i18n/dateLocale'
 
 interface Post {
   id: string
@@ -17,14 +19,10 @@ interface Post {
   bookmarkedByMe: boolean
 }
 
-const FEEDBACK_LABELS: Record<string, string> = {
-  ARCHITECTURE_REVIEW: '아키텍처 리뷰',
-  GENERAL: '일반',
-  DEBUG: '디버그',
-}
-
 // 내 북마크 목록 페이지
 export default function BookmarksPage() {
+  const { t } = useTranslation('misc')
+  const FEEDBACK_LABELS = t('bookmarks.feedbackLabels', { returnObjects: true }) as Record<string, string>
   const navigate = useNavigate()
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -50,15 +48,15 @@ export default function BookmarksPage() {
       <main className="max-w-2xl mx-auto px-6 py-10">
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => navigate('/community')} className="text-gray-500 hover:text-white text-sm">
-            ← 커뮤니티
+            {t('bookmarks.backToCommunity')}
           </button>
-          <h1 className="text-xl font-semibold">내 북마크</h1>
+          <h1 className="text-xl font-semibold">{t('bookmarks.title')}</h1>
         </div>
 
         {loading ? (
-          <p className="text-gray-500 text-sm">로딩 중...</p>
+          <p className="text-gray-500 text-sm">{t('bookmarks.loading')}</p>
         ) : posts.length === 0 ? (
-          <p className="text-gray-500 text-sm">북마크한 게시글이 없습니다.</p>
+          <p className="text-gray-500 text-sm">{t('bookmarks.empty')}</p>
         ) : (
           <div className="flex flex-col gap-2">
             {posts.map((post) => (
@@ -77,7 +75,7 @@ export default function BookmarksPage() {
                       )}
                       {post.graphId && (
                         <span className="text-xs text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded">
-                          📊 그래프
+                          {t('bookmarks.graphBadge')}
                         </span>
                       )}
                       <span className="font-medium text-sm truncate">{post.title}</span>
@@ -89,13 +87,13 @@ export default function BookmarksPage() {
                       >
                         {post.authorUsername}
                       </button>
-                      {' · '}{new Date(post.createdAt).toLocaleDateString('ko-KR')}
+                      {' · '}{new Date(post.createdAt).toLocaleDateString(currentDateLocale())}
                     </p>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleRemoveBookmark(post.id) }}
                     className="text-yellow-400 hover:text-gray-500 text-sm shrink-0"
-                    title="북마크 취소"
+                    title={t('bookmarks.removeBookmark')}
                   >
                     ★
                   </button>

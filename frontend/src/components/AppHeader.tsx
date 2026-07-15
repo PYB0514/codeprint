@@ -1,7 +1,9 @@
 // 모든 페이지에서 공통으로 사용하는 상단 헤더 — 인증 상태를 자체적으로 관리
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
+import { currentDateLocale } from '../i18n/dateLocale'
 
 interface Props {
   onLogin?: () => void
@@ -28,17 +30,23 @@ interface UserSearchResult {
   avatarUrl: string
 }
 
-// "서비스" 드롭다운에 묶이는 정보성 페이지 링크
+// "서비스" 드롭다운에 묶이는 정보성 페이지 링크 — 라벨은 i18n 키로 조회
 const SERVICE_LINKS = [
-  { label: '작동 방식', path: '/how-it-works' },
-  { label: '패치노트', path: '/changelog' },
-  { label: '발전사', path: '/evolution' },
-  { label: '자체 사용 사례', path: '/dogfooding' },
+  { key: 'howItWorks', path: '/how-it-works' },
+  { key: 'changelog', path: '/changelog' },
+  { key: 'evolution', path: '/evolution' },
+  { key: 'dogfooding', path: '/dogfooding' },
 ]
 
 // 공통 앱 헤더 — 어느 페이지에서든 <AppHeader /> 한 줄로 동작
 export default function AppHeader({ onLogin }: Props) {
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation('common')
+
+  // 언어 전환 — localStorage에 저장돼 다음 방문에도 유지됨(i18n/index.ts LanguageDetector 설정)
+  const toggleLanguage = () => {
+    i18n.changeLanguage(i18n.language.startsWith('ko') ? 'en' : 'ko')
+  }
   const [user, setUser] = useState<UserInfo | null>(null)
   const [checked, setChecked] = useState(false)
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light')
@@ -148,12 +156,12 @@ export default function AppHeader({ onLogin }: Props) {
       </button>
       <nav className="flex items-center gap-5 text-sm">
         <button onClick={() => navigate('/community')} className="text-gray-400 hover:text-white transition-colors">
-          커뮤니티
+          {t('header.community')}
         </button>
         {/* 서비스 드롭다운 — 호버 시 아래로 펼침 */}
         <div className="relative group">
           <button className="text-gray-400 group-hover:text-white transition-colors flex items-center gap-1">
-            서비스
+            {t('header.service')}
             <span className="text-[9px] text-gray-600 group-hover:text-gray-400">▾</span>
           </button>
           <div className="absolute left-1/2 -translate-x-1/2 top-full pt-3 hidden group-hover:block z-50">
@@ -164,17 +172,17 @@ export default function AppHeader({ onLogin }: Props) {
                   onClick={() => navigate(link.path)}
                   className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
                 >
-                  {link.label}
+                  {t(`header.serviceLinks.${link.key}`)}
                 </button>
               ))}
             </div>
           </div>
         </div>
         <button onClick={() => navigate('/teams')} className="text-gray-400 hover:text-white transition-colors">
-          팀
+          {t('header.teams')}
         </button>
         <button onClick={() => navigate('/donate')} className="text-gray-400 hover:text-white transition-colors">
-          후원
+          {t('header.donate')}
         </button>
 
         {/* 유저 검색 */}
@@ -183,7 +191,7 @@ export default function AppHeader({ onLogin }: Props) {
             onClick={() => { setShowSearch(v => !v); setSearchQuery(''); setSearchResults([]) }}
             className="text-gray-400 hover:text-white transition-colors"
           >
-            검색
+            {t('header.search')}
           </button>
           {showSearch && (
             <div className="absolute right-0 top-8 w-64 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 overflow-hidden">
@@ -192,7 +200,7 @@ export default function AppHeader({ onLogin }: Props) {
                   autoFocus
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="사용자명 검색..."
+                  placeholder={t('header.searchPlaceholder')}
                   className="w-full bg-gray-800 text-sm text-white rounded-lg px-3 py-2 outline-none placeholder-gray-600"
                 />
               </div>
@@ -211,25 +219,34 @@ export default function AppHeader({ onLogin }: Props) {
                 </div>
               )}
               {searchQuery.trim() && searchResults.length === 0 && (
-                <p className="text-xs text-gray-600 text-center py-4 border-t border-gray-800">결과 없음</p>
+                <p className="text-xs text-gray-600 text-center py-4 border-t border-gray-800">{t('header.noResults')}</p>
               )}
             </div>
           )}
         </div>
+
+        {/* 언어 토글 */}
+        <button
+          onClick={toggleLanguage}
+          className="text-gray-400 hover:text-white transition-colors"
+          title={t('language.toggle')}
+        >
+          {i18n.language.startsWith('ko') ? 'EN' : '한국어'}
+        </button>
 
         {/* 테마 토글 */}
         <button
           onClick={toggleTheme}
           className="text-gray-400 hover:text-white transition-colors"
         >
-          {isDark ? '라이트' : '다크'}
+          {isDark ? t('header.lightMode') : t('header.darkMode')}
         </button>
 
         {user ? (
           <>
             {/* 쪽지 버튼 */}
             <button onClick={() => navigate('/messages')} className="relative text-gray-400 hover:text-white transition-colors">
-              쪽지
+              {t('header.messages')}
               {unreadMessages > 0 && (
                 <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-xs rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5 leading-none">
                   {unreadMessages > 99 ? '99+' : unreadMessages}
@@ -243,7 +260,7 @@ export default function AppHeader({ onLogin }: Props) {
                 onClick={handleOpenNotifs}
                 className="relative text-gray-400 hover:text-white transition-colors"
               >
-                알림
+                {t('header.notifications')}
                 {unreadNotifs > 0 && (
                   <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-xs rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5 leading-none">
                     {unreadNotifs > 99 ? '99+' : unreadNotifs}
@@ -254,11 +271,11 @@ export default function AppHeader({ onLogin }: Props) {
               {showNotifs && (
                 <div className="absolute right-0 top-8 w-72 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 overflow-hidden">
                   <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">알림</span>
+                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{t('header.notifications')}</span>
                   </div>
                   <div className="max-h-80 overflow-y-auto">
                     {notifications.length === 0 ? (
-                      <p className="text-gray-600 text-xs text-center py-8">알림이 없습니다.</p>
+                      <p className="text-gray-600 text-xs text-center py-8">{t('header.noNotifications')}</p>
                     ) : (
                       notifications.map(n => (
                         <button
@@ -266,9 +283,10 @@ export default function AppHeader({ onLogin }: Props) {
                           onClick={() => handleNotifClick(n)}
                           className={`w-full text-left px-4 py-3 hover:bg-gray-800 transition-colors border-b border-gray-800/50 last:border-0 ${!n.isRead ? 'bg-gray-800/40' : ''}`}
                         >
+                          {/* 알림 문구(n.message)는 백엔드가 생성하는 동적 텍스트라 이번 스코프 밖(한국어 유지) */}
                           <p className="text-xs text-gray-200 leading-relaxed">{n.message}</p>
                           <p className="text-[10px] text-gray-600 mt-0.5">
-                            {new Date(n.createdAt).toLocaleDateString('ko-KR')}
+                            {new Date(n.createdAt).toLocaleDateString(currentDateLocale())}
                           </p>
                         </button>
                       ))
@@ -292,10 +310,10 @@ export default function AppHeader({ onLogin }: Props) {
               <span className="bg-gray-800 px-2 py-0.5 rounded text-xs text-gray-300">{user.plan}</span>
             )}
             <button onClick={() => navigate('/settings')} className="text-gray-400 hover:text-white transition-colors">
-              설정
+              {t('header.settings')}
             </button>
             <button onClick={handleLogout} className="text-gray-400 hover:text-white transition-colors">
-              로그아웃
+              {t('header.logout')}
             </button>
           </>
         ) : (
@@ -303,7 +321,7 @@ export default function AppHeader({ onLogin }: Props) {
             onClick={onLogin ?? (() => navigate('/login'))}
             className="px-4 py-1.5 bg-white text-black rounded-md font-medium hover:bg-gray-100 transition-colors text-sm"
           >
-            로그인
+            {t('header.login')}
           </button>
         )}
       </nav>

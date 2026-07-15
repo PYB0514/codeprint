@@ -1,10 +1,12 @@
 ﻿// Desktop 라이센스 결제 성공 처리 페이지 — 토스 리다이렉트 후 백엔드 승인 요청
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 
 // 결제 성공 처리 페이지
 export default function PaymentSuccessPage() {
+  const { t } = useTranslation('misc')
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
@@ -30,35 +32,35 @@ export default function PaymentSuccessPage() {
         {status === 'loading' && (
           <>
             <div className="text-4xl mb-4">⏳</div>
-            <p className="text-gray-400">결제 확인 중...</p>
+            <p className="text-gray-400">{t('paymentSuccess.confirming')}</p>
           </>
         )}
         {status === 'success' && (
           <>
             <div className="text-5xl mb-4">🎉</div>
-            <h1 className="text-2xl font-bold mb-2">Pro · Desktop 업그레이드 완료!</h1>
-            <p className="text-gray-400 mb-2">협업 세션 인원 제한이 해제되고 정식 팀을 만들 수 있어요.</p>
-            <p className="text-gray-500 text-sm mb-6">결제 금액: 9,900원</p>
+            <h1 className="text-2xl font-bold mb-2">{t('paymentSuccess.successTitle')}</h1>
+            <p className="text-gray-400 mb-2">{t('paymentSuccess.successDesc')}</p>
+            <p className="text-gray-500 text-sm mb-6">{t('paymentSuccess.amountLabel')}</p>
             <button
               onClick={() => navigate('/mypage')}
               className="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium transition-colors"
             >
-              마이페이지로 이동
+              {t('paymentSuccess.goToMyPage')}
             </button>
           </>
         )}
         {status === 'error' && (
           <>
             <div className="text-4xl mb-4">❌</div>
-            <h1 className="text-xl font-bold mb-2">결제 확인 실패</h1>
+            <h1 className="text-xl font-bold mb-2">{t('paymentSuccess.errorTitle')}</h1>
             <p className="text-gray-400 mb-6 text-sm">
-              결제는 완료됐을 수 있습니다. 고객센터로 문의해 주세요.
+              {t('paymentSuccess.errorDesc')}
             </p>
             <button
               onClick={() => navigate('/mypage')}
               className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors"
             >
-              마이페이지로 돌아가기
+              {t('paymentSuccess.backToMyPage')}
             </button>
           </>
         )}
