@@ -163,5 +163,34 @@
     "externalRepoBadge": "External Repo",
     "ownRepoTitle": "A repo owned by the author",
     "externalRepoTitle": "A public repo not owned by the author"
+  },
+  "myPage": {
+    "loading": "Loading...",
+    "githubReconnect": {
+      "title": "GitHub reconnection needed",
+      "desc": "Reconnect your GitHub account to use branch lookup and analysis.",
+      "button": "Reconnect GitHub"
+    },
+    "tabs": {
+      "projects": "Projects",
+      "posts": "Posts"
+    },
+    "teamManagement": "Team Management",
+    "settings": "Settings",
+    "newProject": "+ New Project",
+    "emptyState": {
+      "title": "Create your first project",
+      "desc": "Enter a GitHub repository URL and Codeprint automatically analyzes the file structure, function call flow, and DB connections.",
+      "steps": [
+        "Enter a GitHub repo URL (e.g. github.com/owner/repo)",
+        "Automatic analysis — takes about 10-30 seconds on average",
+        "Explore the structure as an interactive diagram"
+      ],
+      "createButton": "+ Create First Project",
+      "note": "Public repos can be analyzed without a GitHub token."
+    },
+    "noPosts": "No posts yet.",
+    "graphBadge": "📊 Graph",
+    "deleteConfirm": "Delete this project?"
   }
 }

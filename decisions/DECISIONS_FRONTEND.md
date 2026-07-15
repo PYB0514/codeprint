@@ -909,3 +909,9 @@ const fetchGraph = useCallback(async () => {
 **결정.** `workspace` 네임스페이스에 중복 정의하지 않고 `useTranslation('misc')`를 별도로 호출해 `tMisc('bookmarks.feedbackLabels', {returnObjects:true})`로 교차 참조 — i18next는 네임스페이스별 `useTranslation` 훅을 컴포넌트당 여러 개 호출 가능. §1 "재사용성 먼저 확인" 원칙 적용(코드 작성 전 이미 검증된 번역이 있는지 확인 후 재사용).
 
 **결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 실 로그인 세션) — `/users/{실제 UUID}` 한국어("일반"·"2026년 가입"·"공개 프로젝트 (1)")·영어("General"·"Joined 2026"·"Public Projects (1)") 전환 모두 확인, `misc` 네임스페이스 재사용 라벨도 정상 표시.
+
+## MyPage i18n 이관 (2026-07-15, codeprint_130)
+
+**범위.** `MyPage.tsx` 자체 문자열만 대상 — 내부에서 렌더링하는 `ProjectCard`·`CreateProjectModal`은 별도 공용 컴포넌트 트랙(PROGRESS.md 백로그 "공용 컴포넌트 17개")이라 이번엔 한국어로 남김. `FEEDBACK_LABELS`는 UserProfilePage와 동일하게 `misc.bookmarks.feedbackLabels` 교차 참조로 중복 제거.
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 실 로그인 세션) — `/mypage` 프로젝트 탭(한국어 "프로젝트/글/팀 관리/설정/+ 새 프로젝트" ↔ 영어 "Projects/Posts/Team Management/Settings/+ New Project")과 글 탭(피드백 라벨·그래프 배지·날짜 포맷 en-US "7/4/2026") 양쪽 확인. `ProjectCard` 내부(예: "비공개"·"PR 리뷰")는 의도대로 한국어 유지 확인.

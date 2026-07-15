@@ -1,10 +1,12 @@
 // 마이페이지 — 내 프로젝트·내 글 통합 허브 (헤더 닉네임 클릭 진입점)
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import CreateProjectModal from '../components/CreateProjectModal'
 import ProjectCard from '../components/ProjectCard'
 import AppHeader from '../components/AppHeader'
+import { currentDateLocale } from '../i18n/dateLocale'
 
 interface UserInfo {
   id: string
@@ -37,16 +39,13 @@ interface PostSummary {
   hasGraph: boolean
 }
 
-const FEEDBACK_LABELS: Record<string, string> = {
-  ARCHITECTURE_REVIEW: '아키텍처 리뷰',
-  GENERAL: '일반',
-  DEBUG: '디버그',
-}
-
 type MyPageTab = 'projects' | 'posts'
 
 // 마이페이지 — 프로젝트/글 탭 전환 허브
 export default function MyPage() {
+  const { t } = useTranslation('workspace')
+  const { t: tMisc } = useTranslation('misc')
+  const FEEDBACK_LABELS = tMisc('bookmarks.feedbackLabels', { returnObjects: true }) as Record<string, string>
   const navigate = useNavigate()
   const [user, setUser] = useState<UserInfo | null>(null)
   const [tab, setTab] = useState<MyPageTab>('projects')
@@ -94,7 +93,7 @@ export default function MyPage() {
 
   // 확인 후 프로젝트를 삭제하고 목록에서 제거
   const handleDeleteProject = async (projectId: string) => {
-    if (!confirm('프로젝트를 삭제할까요?')) return
+    if (!confirm(t('myPage.deleteConfirm'))) return
     await axios.delete(`/api/projects/${projectId}`)
     setProjects((prev) => prev.filter((p) => p.id !== projectId))
   }
@@ -122,7 +121,7 @@ export default function MyPage() {
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-400">로딩 중...</p>
+        <p className="text-gray-400">{t('myPage.loading')}</p>
       </div>
     )
   }
@@ -137,8 +136,8 @@ export default function MyPage() {
         {user.hasGithubToken === false && (
           <div className="flex items-center justify-between bg-yellow-900/30 border border-yellow-700/60 rounded-xl px-5 py-4 mb-6">
             <div>
-              <p className="text-sm font-medium text-yellow-300">GitHub 재연결이 필요합니다</p>
-              <p className="text-xs text-yellow-500 mt-0.5">브랜치 조회·분석을 사용하려면 GitHub 계정을 다시 연결해주세요.</p>
+              <p className="text-sm font-medium text-yellow-300">{t('myPage.githubReconnect.title')}</p>
+              <p className="text-xs text-yellow-500 mt-0.5">{t('myPage.githubReconnect.desc')}</p>
             </div>
             <button
               onClick={() => {
@@ -147,7 +146,7 @@ export default function MyPage() {
               }}
               className="bg-yellow-400 text-black text-sm font-medium px-4 py-2 rounded-lg hover:bg-yellow-300 shrink-0"
             >
-              GitHub 재연결
+              {t('myPage.githubReconnect.button')}
             </button>
           </div>
         )}
@@ -159,24 +158,24 @@ export default function MyPage() {
               onClick={() => setTab('projects')}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === 'projects' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'}`}
             >
-              프로젝트
+              {t('myPage.tabs.projects')}
             </button>
             <button
               onClick={() => setTab('posts')}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === 'posts' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'}`}
             >
-              글
+              {t('myPage.tabs.posts')}
             </button>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <button onClick={() => navigate('/teams')} className="text-gray-400 hover:text-white transition-colors">팀 관리</button>
-            <button onClick={() => navigate('/settings')} className="text-gray-400 hover:text-white transition-colors">설정</button>
+            <button onClick={() => navigate('/teams')} className="text-gray-400 hover:text-white transition-colors">{t('myPage.teamManagement')}</button>
+            <button onClick={() => navigate('/settings')} className="text-gray-400 hover:text-white transition-colors">{t('myPage.settings')}</button>
             {tab === 'projects' && (
               <button
                 onClick={() => setShowModal(true)}
                 className="bg-white text-black text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-200"
               >
-                + 새 프로젝트
+                {t('myPage.newProject')}
               </button>
             )}
           </div>
@@ -186,19 +185,15 @@ export default function MyPage() {
           projects.length === 0 ? (
             <div className="border border-dashed border-gray-700 rounded-xl p-10 text-center">
               <div className="text-4xl mb-4">🔌</div>
-              <p className="text-white font-semibold text-lg mb-2">첫 프로젝트를 만들어보세요</p>
+              <p className="text-white font-semibold text-lg mb-2">{t('myPage.emptyState.title')}</p>
               <p className="text-gray-500 text-sm mb-6 max-w-sm mx-auto">
-                GitHub 레포지토리 URL을 입력하면 파일 구조, 함수 호출 흐름, DB 연결을 자동으로 분석합니다.
+                {t('myPage.emptyState.desc')}
               </p>
               <div className="flex flex-col items-center gap-3 mb-8">
-                {[
-                  { step: '1', text: 'GitHub 레포 URL 입력 (예: github.com/owner/repo)' },
-                  { step: '2', text: '자동 분석 — 평균 10~30초 소요' },
-                  { step: '3', text: '인터랙티브 회로도로 구조 탐색' },
-                ].map(({ step, text }) => (
-                  <div key={step} className="flex items-center gap-3 text-sm text-gray-400">
+                {(t('myPage.emptyState.steps', { returnObjects: true }) as string[]).map((text, i) => (
+                  <div key={text} className="flex items-center gap-3 text-sm text-gray-400">
                     <span className="w-6 h-6 rounded-full bg-blue-600/30 border border-blue-600/50 text-blue-400 text-xs flex items-center justify-center font-semibold flex-shrink-0">
-                      {step}
+                      {i + 1}
                     </span>
                     <span>{text}</span>
                   </div>
@@ -208,9 +203,9 @@ export default function MyPage() {
                 onClick={() => setShowModal(true)}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition"
               >
-                + 첫 프로젝트 만들기
+                {t('myPage.emptyState.createButton')}
               </button>
-              <p className="text-xs text-gray-600 mt-4">공개 레포라면 GitHub 토큰 없이도 분석 가능합니다.</p>
+              <p className="text-xs text-gray-600 mt-4">{t('myPage.emptyState.note')}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -229,7 +224,7 @@ export default function MyPage() {
 
         {tab === 'posts' && (
           postsLoaded && posts.length === 0 ? (
-            <p className="text-gray-600 text-sm">작성한 글이 없습니다.</p>
+            <p className="text-gray-600 text-sm">{t('myPage.noPosts')}</p>
           ) : (
             <div className="flex flex-col gap-2">
               {posts.map((post) => (
@@ -248,13 +243,13 @@ export default function MyPage() {
                         )}
                         {post.hasGraph && (
                           <span className="text-xs text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded">
-                            📊 그래프
+                            {t('myPage.graphBadge')}
                           </span>
                         )}
                         <span className="font-medium text-sm truncate">{post.title}</span>
                       </div>
                       <p className="text-xs text-gray-500">
-                        {new Date(post.createdAt).toLocaleDateString('ko-KR')}
+                        {new Date(post.createdAt).toLocaleDateString(currentDateLocale())}
                       </p>
                     </div>
                     <button

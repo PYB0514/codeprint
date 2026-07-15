@@ -163,5 +163,34 @@
     "externalRepoBadge": "외부 레포",
     "ownRepoTitle": "작성자 본인 소유 레포",
     "externalRepoTitle": "작성자 소유가 아닌 공개 레포 분석"
+  },
+  "myPage": {
+    "loading": "로딩 중...",
+    "githubReconnect": {
+      "title": "GitHub 재연결이 필요합니다",
+      "desc": "브랜치 조회·분석을 사용하려면 GitHub 계정을 다시 연결해주세요.",
+      "button": "GitHub 재연결"
+    },
+    "tabs": {
+      "projects": "프로젝트",
+      "posts": "글"
+    },
+    "teamManagement": "팀 관리",
+    "settings": "설정",
+    "newProject": "+ 새 프로젝트",
+    "emptyState": {
+      "title": "첫 프로젝트를 만들어보세요",
+      "desc": "GitHub 레포지토리 URL을 입력하면 파일 구조, 함수 호출 흐름, DB 연결을 자동으로 분석합니다.",
+      "steps": [
+        "GitHub 레포 URL 입력 (예: github.com/owner/repo)",
+        "자동 분석 — 평균 10~30초 소요",
+        "인터랙티브 회로도로 구조 탐색"
+      ],
+      "createButton": "+ 첫 프로젝트 만들기",
+      "note": "공개 레포라면 GitHub 토큰 없이도 분석 가능합니다."
+    },
+    "noPosts": "작성한 글이 없습니다.",
+    "graphBadge": "📊 그래프",
+    "deleteConfirm": "프로젝트를 삭제할까요?"
   }
 }
