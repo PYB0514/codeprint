@@ -508,5 +508,7 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 
 **검증.** `CronSecretVerifierTest` 4건·`CsrfHeaderFilterTest` 신규 1건 포함 전체 테스트 green(로컬 Docker DB 통합 테스트 포함). `analyzeLocal` 기존 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1)과 정확히 일치, 신규 위반 0. **로컬 런타임 검증**(`application-local.yml`에 테스트용 `cron.secret` 추가, gitignore 처리라 커밋 안 됨) — 시크릿 없음/오답 시 403, 정답 시 200 + 실제 `featuredRepoService.refreshDailyFeatured()`(실제 분석 트리거 확인)·`adminDigestService.runFor()`(daily_stats 삽입 확인) 정상 실행 로그로 확인.
 
-**남은 것(사용자 액션 대기)**: ①GitHub repo secrets `BACKEND_URL`·`CRON_SECRET` 등록 ②Railway `CRON_SECRET` 환경변수 등록(배포 후) ③Railway 대시보드에서 codeprint·Postgres 두 서비스 모두 Serverless 토글 — 전부 이 세션에서는 미착수, SecurityConfig 변경이라 독립 적대적 검증 후 머지·배포 예정.
+**독립 적대적 보안 검증 결과(PR #569) — PASS WITH NOTES.** Critical/High 0건. Medium 1건(시크릿 유출 시 `refresh-featured`가 다른 쓰기 API와 달리 레이트리밋이 없어 무제한 반복 호출 가능 — `RateLimitFilter.rules`에 `cron-refresh`(시간당 2회)·`cron-digest`(시간당 5회) 추가로 즉시 수정, PR #569 후속 커밋)와 Low 3건(①`MessageDigest.isEqual` 길이 불일치 타이밍 사이드채널 — 기존 `WebhookSignatureVerifier`와 동일 컨벤션이라 이 PR이 새로 만든 리스크 아님, 미수정 ②`/api/cron/**` permitAll이 전체 HTTP 메서드에 열려있던 것 — `HttpMethod.POST`로 스코프 좁혀 수정 ③`CronSecretVerifier`가 `domain/analysis`에 있어 featured/admin 컨트롤러의 cross-context import — `WebhookSignatureVerifier` 선례를 그대로 따른 것이고 보안 결함은 아니라 미수정, 구조적 스멜로만 기록).
+
+**남은 것(사용자 액션 대기)**: ①GitHub repo secrets `BACKEND_URL`·`CRON_SECRET` 등록 ②Railway `CRON_SECRET` 환경변수 등록(배포 후) ③Railway 대시보드에서 codeprint·Postgres 두 서비스 모두 Serverless 토글.
 - 근본적 비용 구조 논의(그래프 생성 트리거 분리·쿼타·압축저장 등)는 별도 절 참조(`PRODUCT_STRATEGY.md` §18) — 이 사고가 그 논의의 직접적 계기.
