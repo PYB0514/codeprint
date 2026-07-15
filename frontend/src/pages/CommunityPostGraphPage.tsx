@@ -1,6 +1,7 @@
 // 커뮤니티 게시글에 첨부된 그래프 — 숨김 필터 적용 읽기 전용 뷰어
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import {
   ReactFlow,
@@ -93,6 +94,7 @@ const NODE_TYPE_LABEL: Record<string, string> = {
 
 // 게시글 첨부 그래프 뷰어 내부 컴포넌트 (레거시 — post.graphId 단일 첨부 전용)
 function CommunityPostGraphInner() {
+  const { t } = useTranslation('workspace')
   const { postId } = useParams<{ postId: string }>()
   const navigate = useNavigate()
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
@@ -128,19 +130,19 @@ function CommunityPostGraphInner() {
 
         // 숨겨진 항목 요약
         const summary: string[] = []
-        if (hiddenLayers.length > 0) summary.push(`레이어: ${hiddenLayers.join(', ')}`)
-        if (hiddenGroups.length > 0) summary.push(`그룹: ${hiddenGroups.join(', ')}`)
-        if (hiddenNodeNames.length > 0) summary.push(`노드 ${hiddenNodeNames.length}개`)
+        if (hiddenLayers.length > 0) summary.push(`${t('communityPostGraph.hiddenLayersPrefix')}${hiddenLayers.join(', ')}`)
+        if (hiddenGroups.length > 0) summary.push(`${t('communityPostGraph.hiddenGroupsPrefix')}${hiddenGroups.join(', ')}`)
+        if (hiddenNodeNames.length > 0) summary.push(t('communityPostGraph.hiddenNodesCount', { count: hiddenNodeNames.length }))
         setHiddenSummary(summary)
       })
-      .catch(() => setError('그래프를 불러오지 못했습니다.'))
+      .catch(() => setError(t('communityPostGraph.loadFailed')))
       .finally(() => setLoading(false))
   }, [postId])
 
   if (loading) {
     return (
       <div className="app-page min-h-screen bg-gray-950 text-white flex items-center justify-center">
-        <p className="text-gray-400">로딩 중...</p>
+        <p className="text-gray-400">{t('graphViewer.loading')}</p>
       </div>
     )
   }
@@ -150,7 +152,7 @@ function CommunityPostGraphInner() {
       <div className="app-page min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
         <p className="text-red-400">{error}</p>
         <button onClick={() => navigate('/community')} className="text-sm underline text-gray-400">
-          커뮤니티로
+          {t('communityPostGraph.backToCommunity')}
         </button>
       </div>
     )
@@ -163,11 +165,11 @@ function CommunityPostGraphInner() {
           <button onClick={() => navigate('/community')} className="font-bold text-white text-sm hover:text-gray-300">
             Codeprint
           </button>
-          <span className="text-gray-500 text-xs">커뮤니티 그래프 뷰어</span>
+          <span className="text-gray-500 text-xs">{t('communityPostGraph.viewerLabel')}</span>
         </div>
         {hiddenSummary.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">일부 비공개:</span>
+            <span className="text-xs text-gray-500">{t('communityPostGraph.hiddenSummaryPrefix')}</span>
             <span className="text-xs text-yellow-500">{hiddenSummary.join(' / ')}</span>
           </div>
         )}
@@ -220,20 +222,22 @@ interface NodeCommentView {
   createdAt: number
 }
 
-// 엣지 타입 토글 항목 정의 (구조 파악 목적 — GraphPage 엣지 섹션과 동일 라벨)
-const EDGE_TOGGLE_DEFS: { key: 'se' | 'sc' | 'si' | 'sb' | 'sdb' | 'sapi'; label: string }[] = [
-  { key: 'se', label: '의존성' },
-  { key: 'sc', label: '콜 체인' },
-  { key: 'si', label: '생성' },
-  { key: 'sb', label: '끊긴 연결' },
-  { key: 'sdb', label: 'DB 연결' },
-  { key: 'sapi', label: 'API 호출' },
-]
-
 // 게시글 다중 스냅샷 중 하나를 읽기 전용으로 렌더링하는 내부 컴포넌트
 function CommunityPostSnapshotInner() {
+  const { t, i18n } = useTranslation('workspace')
+  const { t: tCommon } = useTranslation('common')
   const { postId, position } = useParams<{ postId: string; position: string }>()
   const navigate = useNavigate()
+
+  // 엣지 타입 토글 항목 정의 (구조 파악 목적 — GraphPage 엣지 섹션과 동일 라벨)
+  const EDGE_TOGGLE_DEFS: { key: 'se' | 'sc' | 'si' | 'sb' | 'sdb' | 'sapi'; label: string }[] = [
+    { key: 'se', label: t('communityPostGraph.edgeTypes.import') },
+    { key: 'sc', label: t('communityPostGraph.edgeTypes.call') },
+    { key: 'si', label: t('communityPostGraph.edgeTypes.inst') },
+    { key: 'sb', label: t('communityPostGraph.edgeTypes.broken') },
+    { key: 'sdb', label: t('communityPostGraph.edgeTypes.db') },
+    { key: 'sapi', label: t('communityPostGraph.edgeTypes.api') },
+  ]
   const { fitView } = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
@@ -262,6 +266,30 @@ function CommunityPostSnapshotInner() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   // 내가 오탐 신고한 fingerprint 집합 — 신고 버튼 상태 표시용 (비소유자도 신고 가능)
   const [reportedFingerprints, setReportedFingerprints] = useState<Set<string>>(new Set())
+  // 언어·테마 드롭다운 — AppHeader와 동일한 UI(공유 컴포넌트 없는 페이지라 인라인 복제)
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light')
+  const [showLangMenu, setShowLangMenu] = useState(false)
+  const langMenuRef = useRef<HTMLDivElement>(null)
+  const [showThemeMenu, setShowThemeMenu] = useState(false)
+  const themeMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+  }, [isDark])
+
+  const setTheme = (dark: boolean) => {
+    setIsDark(dark)
+    localStorage.setItem('theme', dark ? 'dark' : 'light')
+  }
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target as globalThis.Node)) setShowLangMenu(false)
+      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as globalThis.Node)) setShowThemeMenu(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   useEffect(() => {
     axios.get<{ id: string }>('/api/auth/me').then(res => setCurrentUserId(res.data.id)).catch(() => {})
@@ -283,7 +311,7 @@ function CommunityPostSnapshotInner() {
       })
       setReportedFingerprints(prev => new Set(prev).add(w.fingerprint!))
     } catch {
-      alert('오탐 신고에 실패했습니다.')
+      alert(t('communityPostGraph.reportFpFailed'))
     }
   }, [snapshotProjectId, graphId])
 
@@ -331,7 +359,7 @@ function CommunityPostSnapshotInner() {
       .then((res) => {
         const snapshot = res.data.find((s) => s.position === targetPosition)
         if (!snapshot) {
-          setError('스냅샷을 찾을 수 없습니다.')
+          setError(t('communityPostGraph.snapshotNotFound'))
           return
         }
 
@@ -364,7 +392,7 @@ function CommunityPostSnapshotInner() {
         setWarnings(snapshot.warnings ?? [])
         setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
       })
-      .catch(() => setError('그래프를 불러오지 못했습니다.'))
+      .catch(() => setError(t('communityPostGraph.loadFailed')))
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId, position])
@@ -527,7 +555,7 @@ function CommunityPostSnapshotInner() {
   if (loading) {
     return (
       <div className="app-page min-h-screen bg-gray-950 text-white flex items-center justify-center">
-        <p className="text-gray-400">로딩 중...</p>
+        <p className="text-gray-400">{t('graphViewer.loading')}</p>
       </div>
     )
   }
@@ -537,7 +565,7 @@ function CommunityPostSnapshotInner() {
       <div className="app-page min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
         <p className="text-red-400">{error}</p>
         <button onClick={() => navigate('/community')} className="text-sm underline text-gray-400">
-          커뮤니티로
+          {t('communityPostGraph.backToCommunity')}
         </button>
       </div>
     )
@@ -551,11 +579,66 @@ function CommunityPostSnapshotInner() {
           <button onClick={() => navigate('/community')} className="font-bold text-white text-sm hover:text-gray-300">
             Codeprint
           </button>
-          <span className="text-gray-500 text-xs">커뮤니티 그래프 뷰어</span>
+          <span className="text-gray-500 text-xs">{t('communityPostGraph.viewerLabel')}</span>
         </div>
         <div className="flex items-center gap-3">
           <LayoutPresetToggle layoutPreset={layoutPreset} onToggle={toggleLayoutPreset} />
           <LabelModeToggle labelMode={labelMode} onToggle={toggleLabelMode} />
+
+          {/* 언어 드롭다운 — AppHeader와 동일 */}
+          <div className="relative" ref={langMenuRef}>
+            <button
+              onClick={() => setShowLangMenu(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-xs"
+              title={tCommon('language.toggle')}
+            >
+              <span>🌐</span>
+              <span>{i18n.language.startsWith('ko') ? tCommon('language.ko') : tCommon('language.en')}</span>
+            </button>
+            {showLangMenu && (
+              <div className="absolute right-0 top-9 w-32 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+                {(['ko', 'en'] as const).map((lng) => (
+                  <button
+                    key={lng}
+                    onClick={() => { i18n.changeLanguage(lng); setShowLangMenu(false) }}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                  >
+                    {tCommon(`language.${lng}`)}
+                    {i18n.language.startsWith(lng) && <span className="text-xs">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 테마 드롭다운 — AppHeader와 동일 */}
+          <div className="relative" ref={themeMenuRef}>
+            <button
+              onClick={() => setShowThemeMenu(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-xs"
+            >
+              <span>{isDark ? '🌙' : '☀️'}</span>
+              <span>{isDark ? tCommon('header.darkMode') : tCommon('header.lightMode')}</span>
+            </button>
+            {showThemeMenu && (
+              <div className="absolute right-0 top-9 w-28 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+                <button
+                  onClick={() => { setTheme(false); setShowThemeMenu(false) }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                >
+                  {tCommon('header.lightMode')}
+                  {!isDark && <span className="text-xs">✓</span>}
+                </button>
+                <button
+                  onClick={() => { setTheme(true); setShowThemeMenu(false) }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                >
+                  {tCommon('header.darkMode')}
+                  {isDark && <span className="text-xs">✓</span>}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -566,7 +649,7 @@ function CommunityPostSnapshotInner() {
           <div className="w-6 shrink-0 bg-gray-950 border-r border-gray-800 flex items-start justify-center pt-3">
             <button
               onClick={() => setLeftOpen(true)}
-              title="사이드바 펼치기"
+              title={t('graphViewer.expandSidebar')}
               className="w-5 h-5 flex items-center justify-center rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white text-xs leading-none"
             >
               ›
@@ -580,7 +663,7 @@ function CommunityPostSnapshotInner() {
           <div className="flex items-center justify-end px-2 py-1.5 border-b border-gray-800/60 shrink-0">
             <button
               onClick={() => setLeftOpen(false)}
-              title="사이드바 접기"
+              title={t('graphViewer.collapseSidebar')}
               className="w-6 h-6 flex items-center justify-center rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white text-sm leading-none"
             >
               ‹
@@ -594,16 +677,16 @@ function CommunityPostSnapshotInner() {
 
           {/* 노드 검색 */}
           <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">노드 검색</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('graphViewer.nodeSearchHeading')}</p>
             <input
               value={nodeSearch}
               onChange={e => setNodeSearch(e.target.value)}
-              placeholder="파일명 / 함수명 검색..."
+              placeholder={t('graphViewer.searchPlaceholder')}
               className="w-full text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500"
             />
             <div className="flex flex-col gap-0.5 max-h-64 overflow-y-auto">
               {indexItems.length === 0 ? (
-                <p className="text-[10px] text-gray-600 px-1">결과 없음</p>
+                <p className="text-[10px] text-gray-600 px-1">{t('graphViewer.noResults')}</p>
               ) : (
                 indexItems.map(n => (
                   <button
@@ -625,26 +708,26 @@ function CommunityPostSnapshotInner() {
             <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
               {layoutPreset === 'domain' && (
                 <GraphLegend
-                  headerText="범례 (○ 클릭 = 가리기, 이름 클릭 = 해당 도메인만 보기)"
+                  headerText={t('graphViewer.legendDomainHeader')}
                   entries={domainSections.map(({ key, color }) => ({ key, label: key.charAt(0).toUpperCase() + key.slice(1), color }))}
                   opaqueSet={opaqueDomainSet}
                   onToggleOpaque={toggleDomainOpaque}
                   isActive={(entry) => activeDomainTab === entry.label}
                   onLabelClick={(entry) => activateTab(entry.label)}
-                  labelTitle="이 도메인만 보기"
+                  labelTitle={t('graphViewer.showOnlyDomain')}
                   onReset={() => activateTab('전체')}
                   resetActive={activeDomainTab === '전체'}
                 />
               )}
               {layoutPreset === 'layer' && (
                 <GraphLegend
-                  headerText="범례 (○ 클릭 = 가리기, 이름 클릭 = 해당 레이어만 보기)"
+                  headerText={t('graphViewer.legendLayerHeader')}
                   entries={layerSections}
                   opaqueSet={opaqueLayerSet}
                   onToggleOpaque={toggleLayerOpaque}
                   isActive={(entry) => activeDomainTab === entry.label}
                   onLabelClick={(entry) => activateTab(entry.label)}
-                  labelTitle="이 레이어만 보기"
+                  labelTitle={t('graphViewer.showOnlyLayer')}
                   onReset={() => activateTab('전체')}
                   resetActive={activeDomainTab === '전체'}
                 />
@@ -654,7 +737,7 @@ function CommunityPostSnapshotInner() {
 
           {/* 엣지 타입 토글 — 구조 파악 목적 */}
           <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">엣지</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('communityPostGraph.edgeTypes.heading')}</p>
             <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
               {EDGE_TOGGLE_DEFS.map(({ key, label }) => {
                 const active = edgeVisibility[key]
@@ -686,7 +769,7 @@ function CommunityPostSnapshotInner() {
                     : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
                 }`}
               >
-                전체
+                {t('graphViewer.allTab')}
               </button>
               {availableTabs.filter(t => t !== '전체').map(tab => (
                 <button
@@ -732,16 +815,16 @@ function CommunityPostSnapshotInner() {
               onOpen={() => setWarningPanelOpen(true)}
               onClose={() => setWarningPanelOpen(false)}
               icon="🔎"
-              title="경고"
+              title={t('graphViewer.warningsTitle')}
               count={warnings.length}
               panelClassName="w-72 max-h-[60vh]"
               style={{ right: '16px' }}
               headerExtra={warnings.length > 0 ? (
-                <button onClick={() => downloadWarningsMd(warnings)} title="경고 마크다운 내보내기" className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
+                <button onClick={() => downloadWarningsMd(warnings)} title={t('graphViewer.exportWarningsTooltip')} className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
               ) : undefined}
             >
               {warnings.length === 0 ? (
-                <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
+                <p className="text-[11px] text-gray-500 px-1 pt-1">{t('graphViewer.noWarnings')}</p>
               ) : (
                 <WarningPanel
                   warnings={warnings}
@@ -759,7 +842,7 @@ function CommunityPostSnapshotInner() {
           <div className="w-6 shrink-0 bg-gray-900 border-l border-gray-800 flex items-start justify-center pt-3">
             <button
               onClick={() => setRightOpen(true)}
-              title="사이드바 펼치기"
+              title={t('graphViewer.expandSidebar')}
               className="w-5 h-5 flex items-center justify-center rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white text-xs leading-none"
             >
               ‹
@@ -778,14 +861,14 @@ function CommunityPostSnapshotInner() {
 
           <div className="flex flex-col overflow-hidden flex-1">
             <div className="px-3 py-2.5 border-b border-gray-800 shrink-0 flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">노드 정보</span>
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{t('graphViewer.nodeInfoHeading')}</span>
               <div className="flex items-center gap-1.5">
                 {selectedNode && (
                   <button onClick={() => setSelectedNode(null)} className="text-gray-600 hover:text-gray-300 text-xs">✕</button>
                 )}
                 <button
                   onClick={() => setRightOpen(false)}
-                  title="사이드바 접기"
+                  title={t('graphViewer.collapseSidebar')}
                   className="w-6 h-6 flex items-center justify-center rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white text-sm leading-none"
                 >
                   ›
@@ -818,7 +901,7 @@ function CommunityPostSnapshotInner() {
                 </p>
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-500 w-10 shrink-0">타입</span>
+                    <span className="text-[10px] text-gray-500 w-10 shrink-0">{t('graphViewer.typeLabel')}</span>
                     <span className="text-xs font-mono bg-gray-800 text-blue-300 px-1.5 py-0.5 rounded">
                       {(() => {
                         const rawType = rawNodesCache.find(n => n.id === selectedNode.id)?.type ?? selectedNode.type
@@ -828,19 +911,19 @@ function CommunityPostSnapshotInner() {
                   </div>
                   {!!selectedNode.data?.domain && String(selectedNode.data.domain) !== 'common' && (
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-500 w-10 shrink-0">도메인</span>
+                      <span className="text-[10px] text-gray-500 w-10 shrink-0">{t('graphViewer.domainLabel')}</span>
                       <span className="text-xs text-gray-300">{String(selectedNode.data.domain)}</span>
                     </div>
                   )}
                   {!!selectedNode.data?.filePath && (
                     <div className="flex items-start gap-2">
-                      <span className="text-[10px] text-gray-500 w-10 shrink-0 mt-0.5">경로</span>
+                      <span className="text-[10px] text-gray-500 w-10 shrink-0 mt-0.5">{t('graphViewer.pathLabel')}</span>
                       <span className="text-[10px] text-gray-500 break-all font-mono">{String(selectedNode.data.filePath)}</span>
                     </div>
                   )}
                   {!!selectedNode.data?.comment && (
                     <div className="flex items-start gap-2">
-                      <span className="text-[10px] text-gray-500 w-10 shrink-0 mt-0.5">설명</span>
+                      <span className="text-[10px] text-gray-500 w-10 shrink-0 mt-0.5">{t('graphViewer.descLabel')}</span>
                       <span className="text-xs text-gray-300 break-words">{String(selectedNode.data.comment)}</span>
                     </div>
                   )}
@@ -848,9 +931,9 @@ function CommunityPostSnapshotInner() {
 
                 {/* 노드 코멘트 — 읽기 전용(작성·삭제는 GraphPage 소유자 전용) */}
                 <div className="border-t border-gray-800 pt-2.5 flex flex-col gap-1.5">
-                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">코멘트 {nodeComments.length > 0 && `(${nodeComments.length})`}</p>
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{t('communityPostGraph.commentsHeading')} {nodeComments.length > 0 && `(${nodeComments.length})`}</p>
                   {nodeComments.length === 0 ? (
-                    <p className="text-[11px] text-gray-600">코멘트가 없습니다.</p>
+                    <p className="text-[11px] text-gray-600">{t('communityPostGraph.noComments')}</p>
                   ) : (
                     nodeComments.map((c) => (
                       <div key={c.id} className="text-xs text-gray-300 bg-gray-800/60 rounded px-2 py-1.5 break-words">
@@ -862,7 +945,7 @@ function CommunityPostSnapshotInner() {
               </div>
             ) : (
               <div className="flex-1 flex items-center justify-center">
-                <p className="text-xs text-gray-600 text-center">노드를 클릭하면<br />상세 정보가 표시됩니다.</p>
+                <p className="text-xs text-gray-600 text-center">{t('graphViewer.clickNodeHintLine1')}<br />{t('graphViewer.clickNodeHintLine2')}</p>
               </div>
             )}
             </div>

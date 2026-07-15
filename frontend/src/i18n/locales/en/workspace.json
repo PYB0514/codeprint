@@ -323,5 +323,27 @@
       "step4Title": "Analyze your own repo too",
       "step4Content": "Log in with GitHub to analyze your own repo the same way, and share graphs like this one."
     }
+  },
+  "communityPostGraph": {
+    "loadFailed": "Failed to load the graph.",
+    "backToCommunity": "Back to Community",
+    "viewerLabel": "Community Graph Viewer",
+    "hiddenSummaryPrefix": "Partially private:",
+    "hiddenLayersPrefix": "Layers: ",
+    "hiddenGroupsPrefix": "Groups: ",
+    "hiddenNodesCount": "{{count}} nodes",
+    "edgeTypes": {
+      "heading": "Edges",
+      "import": "Dependency",
+      "call": "Call Chain",
+      "inst": "Instantiation",
+      "broken": "Broken Link",
+      "db": "DB Connection",
+      "api": "API Call"
+    },
+    "snapshotNotFound": "Snapshot not found.",
+    "commentsHeading": "Comments",
+    "noComments": "No comments.",
+    "reportFpFailed": "Failed to report false positive."
   }
 }

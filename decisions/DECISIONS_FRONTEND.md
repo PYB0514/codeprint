@@ -938,14 +938,22 @@ const fetchGraph = useCallback(async () => {
 
 **결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — 로컬 DB에서 공개 프로젝트(`pallets/flask`) ID 직접 조회해 `/share/{projectId}` 접근, 한국어("읽기 전용"·"외부 레포 분석"·"노드 검색"·"범례"·"경고"·"노드 정보")·영어("Read-only"·"External Repo Analysis"·"NODE SEARCH"·"Warnings"·"NODE INFO") 전환 확인, 온보딩 투어 1단계 제목·본문 번역 확인.
 
-## GraphViewerPage에 언어·테마 토글 부재 — 부수 발견 및 수정 (2026-07-15, codeprint_130)
+## CommunityPostGraphPage i18n 이관 — graphViewer 네임스페이스 재사용 (2026-07-15, codeprint_130)
 
-**문제.** 사용자가 CommunityPostGraphPage 스크린샷을 보고 "언어 토글이 어디 있냐"고 질문 — 확인 결과 `GraphViewerPage.tsx`가 공용 `AppHeader`를 안 쓰고 자체 경량 상단 배너만 사용 중이었고, 그 배너엔 애초에 언어·테마 토글 UI 자체가 없었음(같은 문제를 겪는 `CommunityPostGraphPage.tsx`는 별도 PR에서 수정, 이 PR은 GraphViewerPage 쪽). 텍스트는 번역해뒀지만 실제 사용자가 전환할 방법이 없었음 — 이번 세션 브라우저 검증이 `localStorage.setItem`으로 직접 상태를 주입해 확인했기 때문에 이 갭을 놓쳤음(교훈: 언어 전환 검증은 실제 UI 클릭으로 해야 이런 갭을 잡는다).
+**범위.** 커뮤니티 게시글 첨부 그래프 뷰어(886줄) — 레거시 단일 첨부(`CommunityPostGraphInner`)와 다중 스냅샷(`CommunityPostSnapshotInner`) 두 컴포넌트. 로컬 DB 확인 결과 레거시 경로(`posts.graph_id`)는 실사용 데이터가 없어(스냅샷 방식으로 전환 완료, `decisions/DECISIONS_BACKEND.md` 관련 이력 참조) 코드 리뷰로만 확인, 스냅샷 경로는 실측.
 
-**범위 확인.** `GraphPage.tsx`(로그인 후 본인 그래프 보는 화면)는 `AppHeader`를 그대로 쓰고 있어 문제없음 — 갭은 비로그인 접근 가능한 읽기 전용 뷰어에만 국한.
+**재사용 판단.** GraphViewerPage.tsx와 사이드바·범례·경고 패널·노드 정보 UI가 거의 동일해(사이드바 접기/펼치기, 노드 검색, 범례 헤더, "전체" 탭, 경고 패널, 타입/도메인/경로/설명 라벨, 노드 클릭 안내 문구까지 문자열이 1:1 동일) 새 키를 만들지 않고 `graphViewer.*` 키를 그대로 재사용 — §1 "재사용성 먼저 확인" 원칙. 이 페이지에만 있는 문자열(엣지 타입 토글 6종 라벨, 코멘트 섹션, 숨김 요약, 스냅샷 없음 에러 등)만 `communityPostGraph` 네임스페이스로 신설.
 
-**결정.** 새 공유 컴포넌트 생성 없이(사용처 2곳) `AppHeader.tsx`의 언어·테마 드롭다운을 인라인 복제. `useTranslation('workspace')`가 기본이라 `common` 네임스페이스 소속 키(`language.*`, `header.darkMode/lightMode`)는 `useTranslation('common')`(`tCommon`)으로 교차 참조.
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — `/community/posts/{id}/graph/{position}`(sinatra/sinatra 스냅샷)에서 `read_page` interactive 필터로 헤더·사이드바·엣지 토글 6종·탭바·경고 패널 텍스트 전부 한/영 전환 확인("의존성"↔"Dependency" 등). `LayoutPresetToggle`·`GraphLegend`·React Flow `Controls` 내부(레이아웃 전환/전체 보기/확대·축소 등)는 공용 컴포넌트·라이브러리라 스코프 밖, 계속 한국어.
 
-**부수 버그 — `Node` 타입 충돌.** `@xyflow/react`의 `Node` 타입을 이미 import한 파일이라, AppHeader의 바깥 클릭 감지 코드(`e.target as Node`, DOM 타입 의도)가 리액트플로우 `Node`로 잘못 해석돼 컴파일 에러. `e.target as globalThis.Node`로 명시해 해결.
+## GraphViewerPage·CommunityPostGraphPage에 언어·테마 토글 부재 — 부수 발견 및 수정 (2026-07-15, codeprint_130)
 
-**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — 언어 드롭다운 클릭→열림→"English" 선택→헤더/사이드바/노드정보 전체 즉시 영어 전환 확인(스크린샷).
+**문제.** 사용자가 CommunityPostGraphPage 스크린샷을 보고 "언어 토글이 어디 있냐"고 질문 — 확인 결과 `GraphViewerPage.tsx`·`CommunityPostGraphPage.tsx` 둘 다 공용 `AppHeader`를 쓰지 않고 자체 경량 상단 배너만 사용 중이었고, 그 배너엔 애초에 언어·테마 토글 UI 자체가 없었음. 텍스트는 번역해뒀지만 실제 사용자가 전환할 방법이 없는 상태 — 이번 세션 브라우저 검증이 `localStorage.setItem('codeprint_lang', ...)`로 직접 상태를 주입해 확인했기 때문에 이 갭을 놓쳤었음(교훈: 언어 전환 검증은 실제 UI 클릭으로 해야 이런 갭을 잡는다).
+
+**범위 확인.** 사용자에게 `GraphPage.tsx`(로그인 후 본인 그래프 보는 화면)도 같은 문제인지 질문받아 확인 — `GraphPage.tsx`는 `AppHeader`를 그대로 쓰고 있어 문제없음. 갭은 비로그인 접근 가능한 두 읽기 전용 뷰어에만 국한.
+
+**결정.** 새 공유 컴포넌트를 만들지 않고(사용처 2곳, 완전한 네비게이션은 불필요) `AppHeader.tsx`의 언어·테마 드롭다운 JSX·상태·로직을 두 페이지에 각각 인라인으로 복제 — 사용자가 "인라인 복제"를 명시적으로 선택. 각 페이지는 `useTranslation('workspace')`가 기본이라, `language.*`·`header.darkMode`·`header.lightMode`는 `common` 네임스페이스 소속이라 `useTranslation('common')`을 추가로 호출(`tCommon`)해 교차 참조 — UserProfilePage의 `misc` 교차 참조와 동일 패턴.
+
+**부수 버그 — `Node` 타입 충돌.** 두 파일 모두 `@xyflow/react`의 `Node` 타입을 이미 import하고 있어, AppHeader의 바깥 클릭 감지 코드(`e.target as Node`, DOM `Node` 타입 의도)가 리액트플로우의 `Node`로 잘못 해석돼 컴파일 에러 발생. `e.target as globalThis.Node`로 명시해 DOM 타입임을 분명히 해 해결.
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — GraphViewerPage에서 언어 드롭다운 클릭→열림→"English" 선택→헤더/사이드바/노드정보 전체 즉시 영어 전환 확인(스크린샷). CommunityPostGraphPage는 드롭다운 존재·상태 반영(`read_page`로 "Language" 버튼 노출) 확인 — 동일 코드라 클릭 상호작용은 GraphViewerPage 검증으로 갈음.
