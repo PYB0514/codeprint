@@ -49,7 +49,10 @@ public class RateLimitFilter implements Filter {
             new RateLimitRule("POST", "/api/reports", "report", 5, 1),
             new RateLimitRule("POST", "/api/messages/*", "message-send", 30, 1),
             new RateLimitRule("POST", "/api/users/*/follow", "follow", 30, 1),
-            new RateLimitRule("POST", "/api/push/subscribe", "push-subscribe", 10, 1)
+            new RateLimitRule("POST", "/api/push/subscribe", "push-subscribe", 10, 1),
+            // 시크릿 인증이 1차 방어선이나, 유출 시에도 남용 폭을 제한하는 2차 방어(독립 보안검증 권고, PR #569)
+            new RateLimitRule("POST", "/api/cron/refresh-featured", "cron-refresh", 2, 60), // 레포 최대 5개 클론+분석
+            new RateLimitRule("POST", "/api/cron/daily-digest", "cron-digest", 5, 60)
     );
 
     // 요청 IP 추출 — Railway 프록시가 실제 접속 IP를 X-Forwarded-For 맨 끝에 추가하므로 마지막 값을 사용

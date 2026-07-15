@@ -95,4 +95,16 @@ class CsrfHeaderFilterTest {
         verify(chain).doFilter(request, response);
         verify(response, never()).setStatus(403);
     }
+
+    @Test
+    @DisplayName("cron 경로는 헤더 없어도 통과 (GitHub Actions 서버-투-서버, 공유 시크릿으로 별도 인증)")
+    void cronPath_withoutHeader_passes() throws Exception {
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getRequestURI()).thenReturn("/api/cron/refresh-featured");
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        verify(response, never()).setStatus(403);
+    }
 }

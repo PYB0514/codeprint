@@ -1,0 +1,35 @@
+# 백엔드 내부 @Scheduled(App Sleeping을 막던 상시 트리거)를 대체하는 외부 cron
+name: Scheduled Jobs
+
+on:
+  schedule:
+    - cron: '0 21 * * *'  # 매일 06:00 KST(UTC 21:00) — 오늘의 공개레포 갱신
+    - cron: '0 0 * * *'   # 매일 09:00 KST(UTC 00:00) — 일일 다이제스트 발송
+  workflow_dispatch:
+    inputs:
+      job:
+        description: '수동 실행할 작업'
+        required: true
+        type: choice
+        options: [refresh-featured, daily-digest]
+
+jobs:
+  refresh-featured:
+    if: github.event_name == 'workflow_dispatch' && inputs.job == 'refresh-featured' || github.event.schedule == '0 21 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/refresh-featured
+        run: |
+          set -euo pipefail
+          curl -sf -X POST "${{ secrets.BACKEND_URL }}/api/cron/refresh-featured" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}"
+
+  daily-digest:
+    if: github.event_name == 'workflow_dispatch' && inputs.job == 'daily-digest' || github.event.schedule == '0 0 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/daily-digest
+        run: |
+          set -euo pipefail
+          curl -sf -X POST "${{ secrets.BACKEND_URL }}/api/cron/daily-digest" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}"
