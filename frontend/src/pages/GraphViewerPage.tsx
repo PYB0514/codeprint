@@ -2,6 +2,7 @@
 // ⚠️ GraphPage.tsx에 새 "보기"(필터·조회·전환) 기능이 추가되면 여기도 반영 검토 — 저장/수정 액션(프리셋 저장·코멘트·suppress 등)만 GraphPage 전용, 보기는 동등해야 함(2026-07-02 결정, 백로그: PROGRESS.md "GraphViewerPage 뷰어 기능 확장")
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import { useSidebarResize } from '../hooks/useSidebarResize'
 import {
@@ -32,37 +33,6 @@ import OnboardingTour, { isTourDone } from '../components/OnboardingTour'
 import type { Step } from 'react-joyride'
 
 const SHARE_TOUR_STORAGE_KEY = 'onboarding_tour_share_done'
-
-const SHARE_TOUR_STEPS: Step[] = [
-  {
-    target: 'body',
-    placement: 'center',
-    title: '👋 그래프 뷰어입니다',
-    content: '다른 사람이 GitHub 레포를 분석해 공유한 화면입니다. 파일 구조와 함수 호출 흐름을 그대로 둘러볼 수 있어요.',
-    skipBeacon: true,
-  },
-  {
-    target: 'body',
-    placement: 'center',
-    title: '함수 노드를 클릭해보세요',
-    content: '함수나 DB 노드를 클릭하면 호출 흐름이 단계별로 재생됩니다. 분기가 있으면 경로를 선택할 수도 있어요.',
-    skipBeacon: true,
-  },
-  {
-    target: '#tour-share-warning',
-    placement: 'left',
-    title: '구조 경고',
-    content: '순환 의존, 레이어 위반 등 15종의 구조 경고를 여기서 확인할 수 있습니다.',
-    skipBeacon: true,
-  },
-  {
-    target: '#tour-share-login',
-    placement: 'bottom',
-    title: '내 레포도 분석해보세요',
-    content: 'GitHub으로 로그인하면 내 레포를 똑같이 분석하고, 이렇게 그래프를 공유할 수 있습니다.',
-    skipBeacon: true,
-  },
-]
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode }
 
@@ -98,8 +68,40 @@ const NODE_TYPE_LABEL: Record<string, string> = {
 
 // 공개 프로젝트 그래프를 읽기 전용으로 표시하는 페이지
 function GraphViewerInner() {
+  const { t } = useTranslation('workspace')
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+
+  const SHARE_TOUR_STEPS: Step[] = [
+    {
+      target: 'body',
+      placement: 'center',
+      title: t('graphViewer.tour.step1Title'),
+      content: t('graphViewer.tour.step1Content'),
+      skipBeacon: true,
+    },
+    {
+      target: 'body',
+      placement: 'center',
+      title: t('graphViewer.tour.step2Title'),
+      content: t('graphViewer.tour.step2Content'),
+      skipBeacon: true,
+    },
+    {
+      target: '#tour-share-warning',
+      placement: 'left',
+      title: t('graphViewer.tour.step3Title'),
+      content: t('graphViewer.tour.step3Content'),
+      skipBeacon: true,
+    },
+    {
+      target: '#tour-share-login',
+      placement: 'bottom',
+      title: t('graphViewer.tour.step4Title'),
+      content: t('graphViewer.tour.step4Content'),
+      skipBeacon: true,
+    },
+  ]
   const [searchParams] = useSearchParams()
   const { fitView } = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
@@ -220,7 +222,7 @@ function GraphViewerInner() {
         setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
         if (!isTourDone(SHARE_TOUR_STORAGE_KEY)) setTimeout(() => setTourRunning(true), 800)
       })
-      .catch(() => setError('프로젝트를 찾을 수 없거나 비공개 상태입니다.'))
+      .catch(() => setError(t('graphViewer.notFound')))
       .finally(() => setLoading(false))
   }, [projectId, searchParams, fitView])
 
@@ -388,7 +390,7 @@ function GraphViewerInner() {
   if (loading) {
     return (
       <div className="app-page min-h-screen bg-gray-950 text-white flex items-center justify-center">
-        <p className="text-gray-400">로딩 중...</p>
+        <p className="text-gray-400">{t('graphViewer.loading')}</p>
       </div>
     )
   }
@@ -397,7 +399,7 @@ function GraphViewerInner() {
     return (
       <div className="app-page min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
         <p className="text-red-400">{error}</p>
-        <button onClick={() => navigate('/')} className="text-sm underline text-gray-400">홈으로</button>
+        <button onClick={() => navigate('/')} className="text-sm underline text-gray-400">{t('graphViewer.goHome')}</button>
       </div>
     )
   }
@@ -409,28 +411,28 @@ function GraphViewerInner() {
       <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 shrink-0">
         <div className="flex items-center gap-3">
           <span className="font-bold text-white text-sm">Codeprint</span>
-          <span className="text-gray-500 text-xs">읽기 전용</span>
+          <span className="text-gray-500 text-xs">{t('graphViewer.readOnly')}</span>
           {ownRepo !== null && (
             <span
-              title={ownRepo ? '레포 소유자가 자신의 GitHub 계정으로 분석했습니다' : '레포 소유자가 아닌 사람이 공개 레포를 분석했습니다'}
+              title={ownRepo ? t('graphViewer.ownRepoTooltip') : t('graphViewer.externalRepoTooltip')}
               className={`text-[11px] px-2 py-0.5 rounded-full border ${
                 ownRepo ? 'bg-blue-900/40 border-blue-700/50 text-blue-300' : 'bg-gray-800 border-gray-700 text-gray-400'
               }`}
             >
-              {ownRepo ? '내 레포' : '외부 레포 분석'}
+              {ownRepo ? t('graphViewer.ownRepoBadge') : t('graphViewer.externalRepoBadge')}
             </span>
           )}
         </div>
         <div className="flex items-center gap-3">
           <LayoutPresetToggle layoutPreset={layoutPreset} onToggle={toggleLayoutPreset} />
           <LabelModeToggle labelMode={labelMode} onToggle={toggleLabelMode} />
-          <span className="text-gray-400 text-xs">그래프 뷰어</span>
+          <span className="text-gray-400 text-xs">{t('graphViewer.viewerLabel')}</span>
           <button
             id="tour-share-login"
             onClick={() => navigate('/')}
             className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200"
           >
-            로그인하기
+            {t('graphViewer.loginButton')}
           </button>
         </div>
       </div>
@@ -439,8 +441,9 @@ function GraphViewerInner() {
       {truncation && (
         <div className="flex items-center justify-between px-4 py-1.5 bg-orange-900/80 border-b border-orange-700 text-orange-300 text-xs shrink-0">
           <span>
-            📦 대형 레포 — 전체 <strong>{truncation.total.toLocaleString()}</strong>개 파일 중 <strong>{truncation.analyzed.toLocaleString()}</strong>개만 분석되었습니다. 그래프는 일부 구조만 표시합니다.
+            {t('graphViewer.truncationBanner', { total: truncation.total.toLocaleString(), analyzed: truncation.analyzed.toLocaleString() })}
           </span>
+          {/* 원문의 <strong> 강조는 언어별 어순 차이로 named interpolation과 함께 쓰기 어려워 생략 */}
           <button onClick={() => setTruncation(null)} className="text-orange-500 hover:text-orange-200 ml-4">✕</button>
         </div>
       )}
@@ -453,7 +456,7 @@ function GraphViewerInner() {
           <div className="w-6 shrink-0 bg-gray-950 border-r border-gray-800 flex items-start justify-center pt-3">
             <button
               onClick={() => setLeftOpen(true)}
-              title="사이드바 펼치기"
+              title={t('graphViewer.expandSidebar')}
               className="w-5 h-5 flex items-center justify-center rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white text-xs leading-none"
             >
               ›
@@ -467,7 +470,7 @@ function GraphViewerInner() {
           <div className="flex items-center justify-end px-2 py-1.5 border-b border-gray-800/60 shrink-0">
             <button
               onClick={() => setLeftOpen(false)}
-              title="사이드바 접기"
+              title={t('graphViewer.collapseSidebar')}
               className="w-6 h-6 flex items-center justify-center rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white text-sm leading-none"
             >
               ‹
@@ -482,17 +485,17 @@ function GraphViewerInner() {
 
           {/* 노드 검색 섹션 */}
           <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">노드 검색</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('graphViewer.nodeSearchHeading')}</p>
             <input
               value={nodeSearch}
               onChange={e => setNodeSearch(e.target.value)}
-              placeholder="파일명 / 함수명 검색..."
+              placeholder={t('graphViewer.searchPlaceholder')}
               className="w-full text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500"
             />
             <div className="flex flex-col gap-0.5 max-h-64 overflow-y-auto">
               {nodeSearch.trim() ? (
                 indexItems.length === 0 ? (
-                  <p className="text-[10px] text-gray-600 px-1">결과 없음</p>
+                  <p className="text-[10px] text-gray-600 px-1">{t('graphViewer.noResults')}</p>
                 ) : (
                   indexItems.map(n => (
                     <button
@@ -514,7 +517,7 @@ function GraphViewerInner() {
                         <button
                           onClick={() => toggleFileExpanded(file.id)}
                           className="text-gray-600 hover:text-gray-300 w-3 shrink-0"
-                          title={expandedFiles.has(file.id) ? '접기' : `함수 ${file.funcs.length}개 펼치기`}
+                          title={expandedFiles.has(file.id) ? t('graphViewer.collapseFuncs') : t('graphViewer.expandFuncs', { count: file.funcs.length })}
                         >
                           {file.funcs.length > 0 ? (expandedFiles.has(file.id) ? '▾' : '▸') : ' '}
                         </button>
@@ -560,26 +563,26 @@ function GraphViewerInner() {
             <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
               {layoutPreset === 'domain' && (
                 <GraphLegend
-                  headerText="범례 (○ 클릭 = 가리기, 이름 클릭 = 해당 도메인만 보기)"
+                  headerText={t('graphViewer.legendDomainHeader')}
                   entries={domainSections.map(({ key, color }) => ({ key, label: key.charAt(0).toUpperCase() + key.slice(1), color }))}
                   opaqueSet={opaqueDomainSet}
                   onToggleOpaque={toggleDomainOpaque}
                   isActive={(entry) => activeDomainTab === entry.label}
                   onLabelClick={(entry) => activateTab(entry.label)}
-                  labelTitle="이 도메인만 보기"
+                  labelTitle={t('graphViewer.showOnlyDomain')}
                   onReset={() => activateTab('전체')}
                   resetActive={activeDomainTab === '전체'}
                 />
               )}
               {layoutPreset === 'layer' && (
                 <GraphLegend
-                  headerText="범례 (○ 클릭 = 가리기, 이름 클릭 = 해당 레이어만 보기)"
+                  headerText={t('graphViewer.legendLayerHeader')}
                   entries={layerSections}
                   opaqueSet={opaqueLayerSet}
                   onToggleOpaque={toggleLayerOpaque}
                   isActive={(entry) => activeDomainTab === entry.label}
                   onLabelClick={(entry) => activateTab(entry.label)}
-                  labelTitle="이 레이어만 보기"
+                  labelTitle={t('graphViewer.showOnlyLayer')}
                   onReset={() => activateTab('전체')}
                   resetActive={activeDomainTab === '전체'}
                 />
@@ -590,7 +593,7 @@ function GraphViewerInner() {
           {/* 배경이미지 토글 — 오너 배경이 있을 때만 표시 */}
           {ownerBgUrl && (
             <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">보기</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('graphViewer.viewSectionHeading')}</p>
               <button
                 onClick={() => setBgEnabled(v => !v)}
                 className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
@@ -599,7 +602,7 @@ function GraphViewerInner() {
                     : 'bg-gray-800/60 text-gray-500 hover:bg-gray-800'
                 }`}
               >
-                {bgEnabled ? '🖼 배경이미지 켜짐' : '□ 배경이미지 꺼짐'}
+                {bgEnabled ? t('graphViewer.bgOn') : t('graphViewer.bgOff')}
               </button>
             </div>
           )}
@@ -619,7 +622,7 @@ function GraphViewerInner() {
                     : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
                 }`}
               >
-                전체
+                {t('graphViewer.allTab')}
               </button>
               {availableTabs.filter(t => t !== '전체').map(tab => (
                 <button
@@ -665,17 +668,17 @@ function GraphViewerInner() {
             onOpen={() => setWarningPanelOpen(true)}
             onClose={() => setWarningPanelOpen(false)}
             icon="🔎"
-            title="경고"
+            title={t('graphViewer.warningsTitle')}
             count={warnings.length}
             panelClassName="w-72 max-h-[60vh]"
             style={{ right: '16px' }}
             triggerId="tour-share-warning"
             headerExtra={warnings.length > 0 ? (
-              <button onClick={() => downloadWarningsMd(warnings)} title="경고 마크다운 내보내기" className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
+              <button onClick={() => downloadWarningsMd(warnings)} title={t('graphViewer.exportWarningsTooltip')} className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
             ) : undefined}
           >
             {warnings.length === 0 ? (
-              <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
+              <p className="text-[11px] text-gray-500 px-1 pt-1">{t('graphViewer.noWarnings')}</p>
             ) : (
               <WarningPanel warnings={warnings} />
             )}
@@ -688,7 +691,7 @@ function GraphViewerInner() {
           <div className="w-6 shrink-0 bg-gray-900 border-l border-gray-800 flex items-start justify-center pt-3">
             <button
               onClick={() => setRightOpen(true)}
-              title="사이드바 펼치기"
+              title={t('graphViewer.expandSidebar')}
               className="w-5 h-5 flex items-center justify-center rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white text-xs leading-none"
             >
               ‹
@@ -709,14 +712,14 @@ function GraphViewerInner() {
           {/* 노드 상세 */}
           <div className="flex flex-col overflow-hidden flex-1">
             <div className="px-3 py-2.5 border-b border-gray-800 shrink-0 flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">노드 정보</span>
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{t('graphViewer.nodeInfoHeading')}</span>
               <div className="flex items-center gap-1.5">
                 {selectedNode && (
                   <button onClick={() => setSelectedNode(null)} className="text-gray-600 hover:text-gray-300 text-xs">✕</button>
                 )}
                 <button
                   onClick={() => setRightOpen(false)}
-                  title="사이드바 접기"
+                  title={t('graphViewer.collapseSidebar')}
                   className="w-6 h-6 flex items-center justify-center rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white text-sm leading-none"
                 >
                   ›
@@ -749,7 +752,7 @@ function GraphViewerInner() {
                 </p>
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-500 w-10 shrink-0">타입</span>
+                    <span className="text-[10px] text-gray-500 w-10 shrink-0">{t('graphViewer.typeLabel')}</span>
                     <span className="text-xs font-mono bg-gray-800 text-blue-300 px-1.5 py-0.5 rounded">
                       {(() => {
                         const rawType = rawNodesCache.find(n => n.id === selectedNode.id)?.type ?? selectedNode.type
@@ -759,19 +762,19 @@ function GraphViewerInner() {
                   </div>
                   {!!selectedNode.data?.domain && String(selectedNode.data.domain) !== 'common' && (
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-500 w-10 shrink-0">도메인</span>
+                      <span className="text-[10px] text-gray-500 w-10 shrink-0">{t('graphViewer.domainLabel')}</span>
                       <span className="text-xs text-gray-300">{String(selectedNode.data.domain)}</span>
                     </div>
                   )}
                   {!!selectedNode.data?.filePath && (
                     <div className="flex items-start gap-2">
-                      <span className="text-[10px] text-gray-500 w-10 shrink-0 mt-0.5">경로</span>
+                      <span className="text-[10px] text-gray-500 w-10 shrink-0 mt-0.5">{t('graphViewer.pathLabel')}</span>
                       <span className="text-[10px] text-gray-500 break-all font-mono">{String(selectedNode.data.filePath)}</span>
                     </div>
                   )}
                   {!!selectedNode.data?.comment && (
                     <div className="flex items-start gap-2">
-                      <span className="text-[10px] text-gray-500 w-10 shrink-0 mt-0.5">설명</span>
+                      <span className="text-[10px] text-gray-500 w-10 shrink-0 mt-0.5">{t('graphViewer.descLabel')}</span>
                       <span className="text-xs text-gray-300 break-words">{String(selectedNode.data.comment)}</span>
                     </div>
                   )}
@@ -779,7 +782,7 @@ function GraphViewerInner() {
               </div>
             ) : (
               <div className="flex-1 flex items-center justify-center">
-                <p className="text-xs text-gray-600 text-center">노드를 클릭하면<br />상세 정보가 표시됩니다.</p>
+                <p className="text-xs text-gray-600 text-center">{t('graphViewer.clickNodeHintLine1')}<br />{t('graphViewer.clickNodeHintLine2')}</p>
               </div>
             )}
             </div>
