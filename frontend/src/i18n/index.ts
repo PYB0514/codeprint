@@ -9,18 +9,20 @@ import landingKo from './locales/ko/landing.json'
 import landingEn from './locales/en/landing.json'
 import miscKo from './locales/ko/misc.json'
 import miscEn from './locales/en/misc.json'
+import legalKo from './locales/ko/legal.json'
+import legalEn from './locales/en/legal.json'
 
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
     resources: {
-      ko: { common: commonKo, landing: landingKo, misc: miscKo },
-      en: { common: commonEn, landing: landingEn, misc: miscEn },
+      ko: { common: commonKo, landing: landingKo, misc: miscKo, legal: legalKo },
+      en: { common: commonEn, landing: landingEn, misc: miscEn, legal: legalEn },
     },
     fallbackLng: 'ko',
     supportedLngs: ['ko', 'en'],
-    ns: ['common', 'landing', 'misc'],
+    ns: ['common', 'landing', 'misc', 'legal'],
     defaultNS: 'common',
     detection: {
       // localStorage에 사용자가 직접 고른 값이 있으면 그걸 우선, 없으면 브라우저 언어 감지
