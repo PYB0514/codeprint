@@ -937,3 +937,15 @@ const fetchGraph = useCallback(async () => {
 **`activeDomainTab` 내부 sentinel 값 유지.** `useState<string>('전체')`와 비교 로직(`activeDomainTab === '전체'`, `activateTab('전체')`)은 그대로 두고, 탭 버튼에 보이는 라벨 텍스트만 `t('graphViewer.allTab')`로 감쌈 — SettingsPage의 `confirmWord`(사용자 입력과 매칭돼야 해서 값 자체를 지역화 필요)와 달리, 이 값은 순수 내부 필터 키라 표시와 저장을 분리해도 안전.
 
 **결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — 로컬 DB에서 공개 프로젝트(`pallets/flask`) ID 직접 조회해 `/share/{projectId}` 접근, 한국어("읽기 전용"·"외부 레포 분석"·"노드 검색"·"범례"·"경고"·"노드 정보")·영어("Read-only"·"External Repo Analysis"·"NODE SEARCH"·"Warnings"·"NODE INFO") 전환 확인, 온보딩 투어 1단계 제목·본문 번역 확인.
+
+## GraphViewerPage에 언어·테마 토글 부재 — 부수 발견 및 수정 (2026-07-15, codeprint_130)
+
+**문제.** 사용자가 CommunityPostGraphPage 스크린샷을 보고 "언어 토글이 어디 있냐"고 질문 — 확인 결과 `GraphViewerPage.tsx`가 공용 `AppHeader`를 안 쓰고 자체 경량 상단 배너만 사용 중이었고, 그 배너엔 애초에 언어·테마 토글 UI 자체가 없었음(같은 문제를 겪는 `CommunityPostGraphPage.tsx`는 별도 PR에서 수정, 이 PR은 GraphViewerPage 쪽). 텍스트는 번역해뒀지만 실제 사용자가 전환할 방법이 없었음 — 이번 세션 브라우저 검증이 `localStorage.setItem`으로 직접 상태를 주입해 확인했기 때문에 이 갭을 놓쳤음(교훈: 언어 전환 검증은 실제 UI 클릭으로 해야 이런 갭을 잡는다).
+
+**범위 확인.** `GraphPage.tsx`(로그인 후 본인 그래프 보는 화면)는 `AppHeader`를 그대로 쓰고 있어 문제없음 — 갭은 비로그인 접근 가능한 읽기 전용 뷰어에만 국한.
+
+**결정.** 새 공유 컴포넌트 생성 없이(사용처 2곳) `AppHeader.tsx`의 언어·테마 드롭다운을 인라인 복제. `useTranslation('workspace')`가 기본이라 `common` 네임스페이스 소속 키(`language.*`, `header.darkMode/lightMode`)는 `useTranslation('common')`(`tCommon`)으로 교차 참조.
+
+**부수 버그 — `Node` 타입 충돌.** `@xyflow/react`의 `Node` 타입을 이미 import한 파일이라, AppHeader의 바깥 클릭 감지 코드(`e.target as Node`, DOM 타입 의도)가 리액트플로우 `Node`로 잘못 해석돼 컴파일 에러. `e.target as globalThis.Node`로 명시해 해결.
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — 언어 드롭다운 클릭→열림→"English" 선택→헤더/사이드바/노드정보 전체 즉시 영어 전환 확인(스크린샷).

@@ -1,6 +1,6 @@
 ﻿// 공개 프로젝트 읽기 전용 그래프 뷰어 (비인증 접근 허용)
 // ⚠️ GraphPage.tsx에 새 "보기"(필터·조회·전환) 기능이 추가되면 여기도 반영 검토 — 저장/수정 액션(프리셋 저장·코멘트·suppress 등)만 GraphPage 전용, 보기는 동등해야 함(2026-07-02 결정, 백로그: PROGRESS.md "GraphViewerPage 뷰어 기능 확장")
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
@@ -68,7 +68,8 @@ const NODE_TYPE_LABEL: Record<string, string> = {
 
 // 공개 프로젝트 그래프를 읽기 전용으로 표시하는 페이지
 function GraphViewerInner() {
-  const { t } = useTranslation('workspace')
+  const { t, i18n } = useTranslation('workspace')
+  const { t: tCommon } = useTranslation('common')
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
 
@@ -132,6 +133,30 @@ function GraphViewerInner() {
   const [edgeVisibility, setEdgeVisibility] = useState({ se: false, sc: false, si: false, sb: true, sdb: false, sapi: true })
   const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
   const [opaqueDomainSet, setOpaqueDomainSet] = useState<Set<string>>(new Set())
+  // 언어·테마 드롭다운 — AppHeader와 동일한 UI(공유 컴포넌트 없는 페이지라 인라인 복제)
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light')
+  const [showLangMenu, setShowLangMenu] = useState(false)
+  const langMenuRef = useRef<HTMLDivElement>(null)
+  const [showThemeMenu, setShowThemeMenu] = useState(false)
+  const themeMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+  }, [isDark])
+
+  const setTheme = (dark: boolean) => {
+    setIsDark(dark)
+    localStorage.setItem('theme', dark ? 'dark' : 'light')
+  }
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target as globalThis.Node)) setShowLangMenu(false)
+      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as globalThis.Node)) setShowThemeMenu(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   // 흐름 재생 — 종료 시 레이아웃 재빌드로 기본 엣지 스타일 복원 (dasharray 등 타입별 스타일 보존)
   const restorePlaybackEdgeStyles = useCallback(() => {
@@ -427,6 +452,62 @@ function GraphViewerInner() {
           <LayoutPresetToggle layoutPreset={layoutPreset} onToggle={toggleLayoutPreset} />
           <LabelModeToggle labelMode={labelMode} onToggle={toggleLabelMode} />
           <span className="text-gray-400 text-xs">{t('graphViewer.viewerLabel')}</span>
+
+          {/* 언어 드롭다운 — AppHeader와 동일 */}
+          <div className="relative" ref={langMenuRef}>
+            <button
+              onClick={() => setShowLangMenu(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-xs"
+              title={tCommon('language.toggle')}
+            >
+              <span>🌐</span>
+              <span>{i18n.language.startsWith('ko') ? tCommon('language.ko') : tCommon('language.en')}</span>
+            </button>
+            {showLangMenu && (
+              <div className="absolute right-0 top-9 w-32 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+                {(['ko', 'en'] as const).map((lng) => (
+                  <button
+                    key={lng}
+                    onClick={() => { i18n.changeLanguage(lng); setShowLangMenu(false) }}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                  >
+                    {tCommon(`language.${lng}`)}
+                    {i18n.language.startsWith(lng) && <span className="text-xs">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 테마 드롭다운 — AppHeader와 동일 */}
+          <div className="relative" ref={themeMenuRef}>
+            <button
+              onClick={() => setShowThemeMenu(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-xs"
+            >
+              <span>{isDark ? '🌙' : '☀️'}</span>
+              <span>{isDark ? tCommon('header.darkMode') : tCommon('header.lightMode')}</span>
+            </button>
+            {showThemeMenu && (
+              <div className="absolute right-0 top-9 w-28 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+                <button
+                  onClick={() => { setTheme(false); setShowThemeMenu(false) }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                >
+                  {tCommon('header.lightMode')}
+                  {!isDark && <span className="text-xs">✓</span>}
+                </button>
+                <button
+                  onClick={() => { setTheme(true); setShowThemeMenu(false) }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                >
+                  {tCommon('header.darkMode')}
+                  {isDark && <span className="text-xs">✓</span>}
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
             id="tour-share-login"
             onClick={() => navigate('/')}
