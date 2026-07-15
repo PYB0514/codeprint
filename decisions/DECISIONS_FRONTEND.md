@@ -901,3 +901,11 @@ const fetchGraph = useCallback(async () => {
 **부수 발견 — 라이트 테마 드롭다운 패널 가독성 결함.** 실측 중 라이트 모드에서 새 드롭다운 패널이 어두운 배경(`bg-gray-900`)에 어두운 텍스트로 렌더링돼 거의 안 보이는 문제 발견. 원인은 `index.css`의 `html[data-theme="light"] header button` 규칙이 버튼 텍스트 색만 오버라이드하고 패널 `<div>` 배경은 손대지 않았던 기존 공백 — 이 공백은 신규 드롭다운뿐 아니라 기존 검색·알림·서비스 드롭다운에도 동일하게 존재했을 잠재 결함(우연히 지금까지 발견 안 됨). `header div[class*="bg-gray-900"]` 속성 선택자로 헤더 내 모든 드롭다운 패널에 공통 적용되는 라이트 테마 배경 오버라이드를 추가해 신규·기존 드롭다운 전부 동시 수정(범위를 넓혀 찾아간 게 아니라, 신규 기능에 필요한 CSS 규칙이 기존 컴포넌트와 셀렉터를 공유해 자연스럽게 같이 고쳐짐).
 
 **결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — 언어 드롭다운 열기/선택/닫힘, 테마 드롭다운 열기/선택/닫힘(다크→라이트→다크) 확인. 라이트 모드에서 드롭다운 패널 배경 수정 전/후 스크린샷으로 가독성 결함 재현 및 수정 확인.
+
+## UserProfilePage i18n 이관 — misc 네임스페이스 교차 참조 (2026-07-15, codeprint_130)
+
+**배경.** i18n 2차 두 번째 페이지. `FEEDBACK_LABELS`(ARCHITECTURE_REVIEW/GENERAL/DEBUG) 상수가 `BookmarksPage.tsx`(1차, `misc.bookmarks.feedbackLabels`)에 이미 동일한 값으로 번역돼 있음을 발견.
+
+**결정.** `workspace` 네임스페이스에 중복 정의하지 않고 `useTranslation('misc')`를 별도로 호출해 `tMisc('bookmarks.feedbackLabels', {returnObjects:true})`로 교차 참조 — i18next는 네임스페이스별 `useTranslation` 훅을 컴포넌트당 여러 개 호출 가능. §1 "재사용성 먼저 확인" 원칙 적용(코드 작성 전 이미 검증된 번역이 있는지 확인 후 재사용).
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 실 로그인 세션) — `/users/{실제 UUID}` 한국어("일반"·"2026년 가입"·"공개 프로젝트 (1)")·영어("General"·"Joined 2026"·"Public Projects (1)") 전환 모두 확인, `misc` 네임스페이스 재사용 라벨도 정상 표시.

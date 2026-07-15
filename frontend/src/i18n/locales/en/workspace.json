@@ -145,5 +145,23 @@
       "minsAgo": "{{count}}m ago",
       "justNow": "just now"
     }
+  },
+  "userProfile": {
+    "loading": "Loading...",
+    "notFound": "User not found.",
+    "back": "Back",
+    "joinedYear": "Joined {{year}}",
+    "followers": "Followers",
+    "following": "Following",
+    "followButton": "Follow",
+    "followingButton": "Following",
+    "publicProjects": "Public Projects",
+    "communityPosts": "Community Posts",
+    "noPosts": "No posts yet.",
+    "graphBadge": "📊 Graph",
+    "ownRepoBadge": "My Repo",
+    "externalRepoBadge": "External Repo",
+    "ownRepoTitle": "A repo owned by the author",
+    "externalRepoTitle": "A public repo not owned by the author"
   }
 }

@@ -1,8 +1,10 @@
 ﻿// 공개 유저 프로필 페이지 — /users/:id
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
+import { currentDateLocale } from '../i18n/dateLocale'
 
 interface UserInfo {
   id: string
@@ -42,14 +44,11 @@ interface PostSummary {
   ownRepo: boolean
 }
 
-const FEEDBACK_LABELS: Record<string, string> = {
-  ARCHITECTURE_REVIEW: '아키텍처 리뷰',
-  GENERAL: '일반',
-  DEBUG: '디버그',
-}
-
 // 공개 유저 프로필 페이지
 export default function UserProfilePage() {
+  const { t } = useTranslation('workspace')
+  const { t: tMisc } = useTranslation('misc')
+  const FEEDBACK_LABELS = tMisc('bookmarks.feedbackLabels', { returnObjects: true }) as Record<string, string>
   const { userId } = useParams<{ userId: string }>()
   const navigate = useNavigate()
   const [currentUser, setCurrentUser] = useState<UserInfo | null>(null)
@@ -121,7 +120,7 @@ export default function UserProfilePage() {
   if (loading) {
     return (
       <div className="app-page min-h-screen bg-gray-950 text-white flex items-center justify-center">
-        <p className="text-gray-400">로딩 중...</p>
+        <p className="text-gray-400">{t('userProfile.loading')}</p>
       </div>
     )
   }
@@ -129,8 +128,8 @@ export default function UserProfilePage() {
   if (error || !profile) {
     return (
       <div className="app-page min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
-        <p className="text-red-400">사용자를 찾을 수 없습니다.</p>
-        <button onClick={() => navigate(-1)} className="text-sm underline text-gray-400">뒤로가기</button>
+        <p className="text-red-400">{t('userProfile.notFound')}</p>
+        <button onClick={() => navigate(-1)} className="text-sm underline text-gray-400">{t('userProfile.back')}</button>
       </div>
     )
   }
@@ -152,10 +151,10 @@ export default function UserProfilePage() {
             />
             <div>
               <h1 className="text-xl font-semibold">{profile.username}</h1>
-              <p className="text-sm text-gray-500">{joinedYear}년 가입</p>
+              <p className="text-sm text-gray-500">{t('userProfile.joinedYear', { year: joinedYear })}</p>
               <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                <span><strong className="text-gray-300">{followStatus.followers}</strong> 팔로워</span>
-                <span><strong className="text-gray-300">{followStatus.followingCount}</strong> 팔로잉</span>
+                <span><strong className="text-gray-300">{followStatus.followers}</strong> {t('userProfile.followers')}</span>
+                <span><strong className="text-gray-300">{followStatus.followingCount}</strong> {t('userProfile.following')}</span>
               </div>
             </div>
           </div>
@@ -170,7 +169,7 @@ export default function UserProfilePage() {
                   : 'bg-white text-black hover:bg-gray-100'
               }`}
             >
-              {followStatus.following ? '팔로잉' : '팔로우'}
+              {followStatus.following ? t('userProfile.followingButton') : t('userProfile.followButton')}
             </button>
           )}
         </div>
@@ -179,7 +178,7 @@ export default function UserProfilePage() {
         {projects.length > 0 && (
           <div className="mb-8">
             <h2 className="text-sm font-medium text-gray-400 mb-3">
-              공개 프로젝트 <span className="text-gray-600">({projects.length})</span>
+              {t('userProfile.publicProjects')} <span className="text-gray-600">({projects.length})</span>
             </h2>
             <div className="flex flex-col gap-2">
               {projects.map((project) => (
@@ -193,7 +192,7 @@ export default function UserProfilePage() {
                     <p className="text-xs text-gray-500 mt-1 truncate">{project.description}</p>
                   )}
                   <p className="text-xs text-gray-600 mt-1">
-                    {new Date(project.createdAt).toLocaleDateString('ko-KR')}
+                    {new Date(project.createdAt).toLocaleDateString(currentDateLocale())}
                   </p>
                 </div>
               ))}
@@ -204,10 +203,10 @@ export default function UserProfilePage() {
         {/* 게시글 목록 */}
         <div>
           <h2 className="text-sm font-medium text-gray-400 mb-3">
-            커뮤니티 게시글 {posts.length > 0 && <span className="text-gray-600">({posts.length})</span>}
+            {t('userProfile.communityPosts')} {posts.length > 0 && <span className="text-gray-600">({posts.length})</span>}
           </h2>
           {posts.length === 0 ? (
-            <p className="text-gray-600 text-sm">작성한 게시글이 없습니다.</p>
+            <p className="text-gray-600 text-sm">{t('userProfile.noPosts')}</p>
           ) : (
             <div className="flex flex-col gap-2">
               {posts.map((post) => (
@@ -226,21 +225,21 @@ export default function UserProfilePage() {
                         )}
                         {post.hasGraph && (
                           <span className="text-xs text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded">
-                            📊 그래프
+                            {t('userProfile.graphBadge')}
                           </span>
                         )}
                         {post.hasGraph && (
                           <span
-                            title={post.ownRepo ? '작성자 본인 소유 레포' : '작성자 소유가 아닌 공개 레포 분석'}
+                            title={post.ownRepo ? t('userProfile.ownRepoTitle') : t('userProfile.externalRepoTitle')}
                             className={`text-xs px-2 py-0.5 rounded ${post.ownRepo ? 'text-blue-400 bg-blue-500/10' : 'text-gray-500 bg-gray-800'}`}
                           >
-                            {post.ownRepo ? '내 레포' : '외부 레포'}
+                            {post.ownRepo ? t('userProfile.ownRepoBadge') : t('userProfile.externalRepoBadge')}
                           </span>
                         )}
                         <span className="font-medium text-sm truncate">{post.title}</span>
                       </div>
                       <p className="text-xs text-gray-500">
-                        {new Date(post.createdAt).toLocaleDateString('ko-KR')}
+                        {new Date(post.createdAt).toLocaleDateString(currentDateLocale())}
                       </p>
                     </div>
                     <button
