@@ -937,3 +937,11 @@ const fetchGraph = useCallback(async () => {
 **`activeDomainTab` 내부 sentinel 값 유지.** `useState<string>('전체')`와 비교 로직(`activeDomainTab === '전체'`, `activateTab('전체')`)은 그대로 두고, 탭 버튼에 보이는 라벨 텍스트만 `t('graphViewer.allTab')`로 감쌈 — SettingsPage의 `confirmWord`(사용자 입력과 매칭돼야 해서 값 자체를 지역화 필요)와 달리, 이 값은 순수 내부 필터 키라 표시와 저장을 분리해도 안전.
 
 **결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — 로컬 DB에서 공개 프로젝트(`pallets/flask`) ID 직접 조회해 `/share/{projectId}` 접근, 한국어("읽기 전용"·"외부 레포 분석"·"노드 검색"·"범례"·"경고"·"노드 정보")·영어("Read-only"·"External Repo Analysis"·"NODE SEARCH"·"Warnings"·"NODE INFO") 전환 확인, 온보딩 투어 1단계 제목·본문 번역 확인.
+
+## CommunityPostGraphPage i18n 이관 — graphViewer 네임스페이스 재사용 (2026-07-15, codeprint_130)
+
+**범위.** 커뮤니티 게시글 첨부 그래프 뷰어(886줄) — 레거시 단일 첨부(`CommunityPostGraphInner`)와 다중 스냅샷(`CommunityPostSnapshotInner`) 두 컴포넌트. 로컬 DB 확인 결과 레거시 경로(`posts.graph_id`)는 실사용 데이터가 없어(스냅샷 방식으로 전환 완료, `decisions/DECISIONS_BACKEND.md` 관련 이력 참조) 코드 리뷰로만 확인, 스냅샷 경로는 실측.
+
+**재사용 판단.** GraphViewerPage.tsx와 사이드바·범례·경고 패널·노드 정보 UI가 거의 동일해(사이드바 접기/펼치기, 노드 검색, 범례 헤더, "전체" 탭, 경고 패널, 타입/도메인/경로/설명 라벨, 노드 클릭 안내 문구까지 문자열이 1:1 동일) 새 키를 만들지 않고 `graphViewer.*` 키를 그대로 재사용 — §1 "재사용성 먼저 확인" 원칙. 이 페이지에만 있는 문자열(엣지 타입 토글 6종 라벨, 코멘트 섹션, 숨김 요약, 스냅샷 없음 에러 등)만 `communityPostGraph` 네임스페이스로 신설.
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — `/community/posts/{id}/graph/{position}`(sinatra/sinatra 스냅샷)에서 `read_page` interactive 필터로 헤더·사이드바·엣지 토글 6종·탭바·경고 패널 텍스트 전부 한/영 전환 확인("의존성"↔"Dependency" 등). `LayoutPresetToggle`·`GraphLegend`·React Flow `Controls` 내부(레이아웃 전환/전체 보기/확대·축소 등)는 공용 컴포넌트·라이브러리라 스코프 밖, 계속 한국어.

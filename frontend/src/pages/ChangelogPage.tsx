@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.134.0',
+    date: '2026-07-15',
+    title: '영어 번역 확대 — 커뮤니티 게시글 첨부 그래프 뷰어',
+    type: 'feature',
+    items: [
+      { category: '다국어', desc: '커뮤니티 게시글에 첨부된 그래프 뷰어가 영어로도 제공됩니다.' },
+    ],
+  },
+  {
     version: 'v0.133.0',
     date: '2026-07-15',
     title: '영어 번역 확대 — 공개 그래프 뷰어',
