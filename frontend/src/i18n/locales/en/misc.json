@@ -1,0 +1,119 @@
+{
+  "authCallback": {
+    "loading": "Signing you in..."
+  },
+  "login": {
+    "tagline": "Visualize a GitHub repo like a circuit diagram",
+    "button": "Sign in with GitHub"
+  },
+  "notFound": {
+    "title": "Page not found.",
+    "desc": "The address may be wrong, or the page may have been removed or moved.",
+    "home": "Go Home",
+    "contact": "Contact"
+  },
+  "donateFail": {
+    "defaultMessage": "Payment was canceled or an error occurred.",
+    "title": "Payment Failed",
+    "retry": "Try Again"
+  },
+  "paymentCancel": {
+    "title": "Payment was canceled.",
+    "desc": "You can upgrade anytime.",
+    "backToMyPage": "Back to My Page"
+  },
+  "joinCollaboration": {
+    "title": "Join Collaboration Session",
+    "desc": "Enter the invite code you got from a teammate.",
+    "invalidCode": "Invalid invite code.",
+    "joining": "Joining...",
+    "join": "Join Session"
+  },
+  "teamPaymentSuccess": {
+    "confirming": "Confirming payment...",
+    "successTitle": "Payment Complete!",
+    "successDesc": "Your team info has been updated.",
+    "goToTeams": "Go to Team Management",
+    "errorTitle": "Payment Confirmation Failed",
+    "errorDesc": "The payment may have gone through. Please contact support.",
+    "backToTeams": "Back to Team Management"
+  },
+  "donateSuccess": {
+    "confirming": "Confirming payment...",
+    "successTitle": "Thank you for your support!",
+    "successDesc": "Your warm support helps us build a better Codeprint.",
+    "backToDonate": "Back to Donate Page",
+    "errorTitle": "Payment Confirmation Failed",
+    "errorDesc": "The payment may have gone through. Please let us know via the Contact page."
+  },
+  "paymentSuccess": {
+    "confirming": "Confirming payment...",
+    "successTitle": "Pro · Desktop Upgrade Complete!",
+    "successDesc": "The collaboration session member limit is lifted and you can create a real team.",
+    "amountLabel": "Amount: ₩9,900",
+    "goToMyPage": "Go to My Page",
+    "errorTitle": "Payment Confirmation Failed",
+    "errorDesc": "The payment may have gone through. Please contact support.",
+    "backToMyPage": "Back to My Page"
+  },
+  "bookmarks": {
+    "backToCommunity": "← Community",
+    "title": "My Bookmarks",
+    "loading": "Loading...",
+    "empty": "No bookmarked posts.",
+    "graphBadge": "📊 Graph",
+    "removeBookmark": "Remove bookmark",
+    "feedbackLabels": {
+      "ARCHITECTURE_REVIEW": "Architecture Review",
+      "GENERAL": "General",
+      "DEBUG": "Debug"
+    }
+  },
+  "contact": {
+    "title": "Contact",
+    "desc": "Bug reports, feature requests, privacy-related requests — all inquiries welcome.",
+    "categories": {
+      "BUG": "Bug Report",
+      "FEATURE": "Feature Request",
+      "PRIVACY": "Privacy Related",
+      "OTHER": "Other"
+    },
+    "loginRequired": "Please sign in to use Contact.",
+    "submitError": "An error occurred while submitting. Please try again shortly.",
+    "doneTitle": "Your inquiry has been received.",
+    "doneDesc": "We'll reply within 3 business days.",
+    "newInquiry": "Write New Inquiry",
+    "categoryLabel": "Inquiry Type",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Enter a title for your inquiry",
+    "contentLabel": "Content",
+    "contentPlaceholder": "Describe your inquiry in detail",
+    "emailLabel": "Email",
+    "emailOptional": "(optional — address to reply to)",
+    "submitting": "Submitting...",
+    "submit": "Submit",
+    "otherMethods": "Other Ways to Reach Us",
+    "githubIssuesTitle": "GitHub Issues",
+    "githubIssuesDesc": "Bug reports and feature requests tracked publicly",
+    "emailDirectTitle": "Email Directly",
+    "emailDirectDesc": "For sensitive matters like privacy or account issues"
+  },
+  "diff": {
+    "loadVersionsError": "Failed to load version list.",
+    "loadDiffError": "Failed to load diff.",
+    "backToGraph": "← Back to Graph",
+    "title": "Compare Versions",
+    "baseLabel": "Base",
+    "compareLabel": "Compare",
+    "added": "added",
+    "removed": "removed",
+    "unchanged": "unchanged",
+    "legendAdded": "Added",
+    "legendRemoved": "Removed",
+    "legendUnchanged": "Unchanged",
+    "legendAddedEdge": "Added connection",
+    "legendRemovedEdge": "Removed connection",
+    "comparing": "Comparing…",
+    "selectDifferentVersions": "Please select different base and compare versions."
+  }
+}

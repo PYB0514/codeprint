@@ -1,6 +1,7 @@
 // 쿠키 동의 배너 — GDPR/개보법 대응, localStorage 기반 상태 유지
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 const STORAGE_KEY = 'cookie-consent'
 const BODY_PB = '80px'
@@ -12,6 +13,7 @@ export function hasCookieConsent(): boolean {
 
 // 쿠키 배너 렌더링
 export default function CookieBanner() {
+  const { t } = useTranslation('common')
   const navigate = useNavigate()
   const [visible, setVisible] = useState(!hasCookieConsent())
 
@@ -42,28 +44,27 @@ export default function CookieBanner() {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 border-t border-gray-700 px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
       <p className="text-sm text-gray-300 flex-1">
-        저희는 서비스 개선을 위해 쿠키를 사용합니다. 로그인 유지·분석 통계 등에 활용되며,
-        자세한 내용은{' '}
+        {t('cookieBanner.message')}{' '}
         <button
           onClick={() => navigate('/privacy')}
           className="underline text-gray-400 hover:text-white transition-colors"
         >
-          개인정보처리방침
+          {t('cookieBanner.privacyLink')}
         </button>
-        에서 확인할 수 있습니다.
+        {' '}{t('cookieBanner.messageSuffix')}
       </p>
       <div className="flex items-center gap-3 shrink-0">
         <button
           onClick={decline}
           className="px-4 py-1.5 text-sm text-gray-400 border border-gray-700 rounded-md hover:border-gray-500 hover:text-white transition-colors"
         >
-          거부
+          {t('cookieBanner.decline')}
         </button>
         <button
           onClick={accept}
           className="px-4 py-1.5 text-sm bg-white text-black rounded-md font-medium hover:bg-gray-100 transition-colors"
         >
-          동의
+          {t('cookieBanner.accept')}
         </button>
       </div>
     </div>
