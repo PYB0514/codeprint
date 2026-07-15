@@ -192,5 +192,88 @@
     "noPosts": "작성한 글이 없습니다.",
     "graphBadge": "📊 그래프",
     "deleteConfirm": "프로젝트를 삭제할까요?"
+  },
+  "teams": {
+    "title": "팀 관리",
+    "subtitle": "Pro · Desktop 좌석으로 협업자를 초대하고 석수를 관리하세요.",
+    "createTeamButton": "+ 팀 만들기",
+    "currencySuffix": "원",
+    "empty": {
+      "title": "아직 팀이 없습니다",
+      "desc": "팀을 만들어 협업자를 초대하세요.",
+      "createFirstButton": "첫 팀 만들기"
+    },
+    "sidebarPlan": "Pro · Desktop · {{seats}}석",
+    "planBadge": "Pro · Desktop",
+    "seatsCount": "{{count}}석",
+    "remainingSeats": "{{count}}석 남음",
+    "usedSeatsLabel": "사용 중: {{count}}석",
+    "totalSeatsLabel": "총 {{count}}석",
+    "members": {
+      "heading": "멤버 관리",
+      "invitePlaceholder": "초대할 사용자 UUID",
+      "inviteButton": "초대",
+      "inviting": "초대 중…",
+      "roleOwner": "팀장",
+      "roleMember": "멤버",
+      "joinedPrefix": "가입 ",
+      "removeButton": "제거",
+      "noMembers": "아직 멤버가 없습니다."
+    },
+    "allocations": {
+      "heading": "프로젝트별 석수 배분"
+    },
+    "apiKeys": {
+      "heading": "API 키",
+      "desc": "이 팀에 배분된 프로젝트를 AI 에이전트가 원격으로 조회할 때 사용합니다. (/mcp/team/** 엔드포인트)",
+      "namePlaceholder": "키 이름 (예: ci-agent)",
+      "issueButton": "발급",
+      "issuing": "발급 중…",
+      "issuedPrefix": "발급 ",
+      "lastUsedPrefix": " · 최근 사용 ",
+      "revoked": "폐기됨",
+      "revokeButton": "폐기",
+      "noKeys": "아직 발급된 API 키가 없습니다."
+    },
+    "seatIncrease": {
+      "heading": "좌석 증가",
+      "desc": "좌석당 {{price}} · 1회 결제 · 현재 {{seats}}석",
+      "addLabel": "석 추가",
+      "payButton": "{{price}} 결제하고 증설",
+      "navigating": "결제 페이지 이동 중…",
+      "decreaseNote": "좌석 감소는 고객센터를 통해 요청해주세요.",
+      "subscriptionNote": "월 자동갱신(정기결제)은 아직 지원되지 않습니다. 도입 시 기존 구매는 그대로 유지됩니다."
+    },
+    "dangerZone": {
+      "heading": "위험 구역",
+      "desc": "팀을 삭제하면 멤버·석수 배분 정보가 모두 함께 삭제되며 되돌릴 수 없습니다.",
+      "deleteButton": "팀 삭제"
+    },
+    "createModal": {
+      "title": "새 팀 만들기",
+      "nameLabel": "팀 이름",
+      "namePlaceholder": "팀 이름을 입력하세요",
+      "seatsLabel": "석수",
+      "priceInfo": "Pro · Desktop · 좌석당 {{price}} · 총 {{total}} (1회 결제)",
+      "cancelButton": "취소",
+      "createButton": "팀 만들기",
+      "creating": "생성 중…"
+    },
+    "issuedKeyModal": {
+      "title": "API 키가 발급되었습니다",
+      "desc": "이 키는 지금만 표시됩니다. 안전한 곳에 복사해두세요.",
+      "copyButton": "복사",
+      "confirmButton": "확인했습니다"
+    },
+    "confirmRevokeKey": "이 API 키를 폐기하시겠습니까? 되돌릴 수 없습니다.",
+    "confirmDeleteTeam": "\"{{name}}\" 팀을 삭제하시겠습니까? 되돌릴 수 없습니다.",
+    "errors": {
+      "connectPaymentFailed": "결제 페이지 연결에 실패했습니다.",
+      "inviteFailed": "초대에 실패했습니다.",
+      "removeMemberFailed": "멤버 제거에 실패했습니다.",
+      "issueKeyFailed": "API 키 발급에 실패했습니다.",
+      "revokeKeyFailed": "API 키 폐기에 실패했습니다.",
+      "deleteTeamFailed": "팀 삭제에 실패했습니다."
+    }
   }
 }

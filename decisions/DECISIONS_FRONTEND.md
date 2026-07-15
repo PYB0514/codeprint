@@ -915,3 +915,9 @@ const fetchGraph = useCallback(async () => {
 **범위.** `MyPage.tsx` 자체 문자열만 대상 — 내부에서 렌더링하는 `ProjectCard`·`CreateProjectModal`은 별도 공용 컴포넌트 트랙(PROGRESS.md 백로그 "공용 컴포넌트 17개")이라 이번엔 한국어로 남김. `FEEDBACK_LABELS`는 UserProfilePage와 동일하게 `misc.bookmarks.feedbackLabels` 교차 참조로 중복 제거.
 
 **결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 실 로그인 세션) — `/mypage` 프로젝트 탭(한국어 "프로젝트/글/팀 관리/설정/+ 새 프로젝트" ↔ 영어 "Projects/Posts/Team Management/Settings/+ New Project")과 글 탭(피드백 라벨·그래프 배지·날짜 포맷 en-US "7/4/2026") 양쪽 확인. `ProjectCard` 내부(예: "비공개"·"PR 리뷰")는 의도대로 한국어 유지 확인.
+
+## TeamsPage i18n 이관 (2026-07-15, codeprint_130)
+
+**범위.** 팀 대시보드 전체(석수 현황·멤버 관리·API 키·좌석 증가 결제·팀 생성/삭제 모달) — 592줄 중 가장 문자열 밀도가 높은 페이지. 금액 포맷은 DonatePage와 동일한 `currencySuffix`("원"/" KRW") + `toLocaleString('en-US')` 패턴 재사용, 날짜는 `currentDateLocale()` 재사용.
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 실 로그인 세션) — 팀 상세 페이지 전체(석수 현황·멤버·API 키·좌석 증가·위험 구역) 한국어 원문과 1:1 동일 확인(리팩토링 전/후 텍스트 비교), 영어 렌더링도 전체 확인("Team Management"·"5 seats remaining"·"4,900 KRW per seat"·"Danger Zone" 등). 팀 생성/API 키 발급 모달은 코드 리뷰로 확인(동일 `t()` 패턴 재사용, 클릭 실측은 도구 상의 이유로 생략).
