@@ -118,4 +118,21 @@ class RateLimitFilterTest {
         filter.doFilter(request, response, chain); // post-create 버킷은 별도라 통과
         verify(chain, times(6)).doFilter(request, response); // 5(feedback 성공) + 1(post-create 성공)
     }
+
+    @Test
+    @DisplayName("cron-refresh 카테고리는 시간당 2회 — 시크릿 유출 시에도 남용 폭 제한(PR #569 보안검증 권고)")
+    void cronRefreshCategory_limitedToTwoPerHour() throws Exception {
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getRequestURI()).thenReturn("/api/cron/refresh-featured");
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("5.5.5.5");
+
+        filter.doFilter(request, response, chain);
+        filter.doFilter(request, response, chain);
+        verify(chain, times(2)).doFilter(request, response);
+
+        filter.doFilter(request, response, chain); // 3번째 — 초과
+        verify(response).setStatus(429);
+        verify(chain, times(2)).doFilter(request, response);
+    }
 }
