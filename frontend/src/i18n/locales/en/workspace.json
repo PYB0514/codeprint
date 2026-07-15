@@ -192,5 +192,88 @@
     "noPosts": "No posts yet.",
     "graphBadge": "📊 Graph",
     "deleteConfirm": "Delete this project?"
+  },
+  "teams": {
+    "title": "Team Management",
+    "subtitle": "Invite collaborators and manage seats with your Pro · Desktop seats.",
+    "createTeamButton": "+ Create Team",
+    "currencySuffix": " KRW",
+    "empty": {
+      "title": "No teams yet",
+      "desc": "Create a team to invite collaborators.",
+      "createFirstButton": "Create First Team"
+    },
+    "sidebarPlan": "Pro · Desktop · {{seats}} seats",
+    "planBadge": "Pro · Desktop",
+    "seatsCount": "{{count}} seats",
+    "remainingSeats": "{{count}} seats remaining",
+    "usedSeatsLabel": "Used: {{count}} seats",
+    "totalSeatsLabel": "Total {{count}} seats",
+    "members": {
+      "heading": "Member Management",
+      "invitePlaceholder": "User UUID to invite",
+      "inviteButton": "Invite",
+      "inviting": "Inviting…",
+      "roleOwner": "Owner",
+      "roleMember": "Member",
+      "joinedPrefix": "Joined ",
+      "removeButton": "Remove",
+      "noMembers": "No members yet."
+    },
+    "allocations": {
+      "heading": "Seat Allocation by Project"
+    },
+    "apiKeys": {
+      "heading": "API Keys",
+      "desc": "Used when an AI agent remotely queries projects allocated to this team. (/mcp/team/** endpoint)",
+      "namePlaceholder": "Key name (e.g. ci-agent)",
+      "issueButton": "Issue",
+      "issuing": "Issuing…",
+      "issuedPrefix": "Issued ",
+      "lastUsedPrefix": " · Last used ",
+      "revoked": "Revoked",
+      "revokeButton": "Revoke",
+      "noKeys": "No API keys issued yet."
+    },
+    "seatIncrease": {
+      "heading": "Add Seats",
+      "desc": "{{price}} per seat · one-time payment · currently {{seats}} seats",
+      "addLabel": "more seats",
+      "payButton": "Pay {{price}} and add seats",
+      "navigating": "Redirecting to payment…",
+      "decreaseNote": "To reduce seats, please contact support.",
+      "subscriptionNote": "Monthly auto-renewal (subscription) isn't supported yet. Existing purchases stay as-is once it's introduced."
+    },
+    "dangerZone": {
+      "heading": "Danger Zone",
+      "desc": "Deleting a team also deletes all member and seat allocation info, and cannot be undone.",
+      "deleteButton": "Delete Team"
+    },
+    "createModal": {
+      "title": "Create New Team",
+      "nameLabel": "Team Name",
+      "namePlaceholder": "Enter a team name",
+      "seatsLabel": "Seats",
+      "priceInfo": "Pro · Desktop · {{price}} per seat · {{total}} total (one-time payment)",
+      "cancelButton": "Cancel",
+      "createButton": "Create Team",
+      "creating": "Creating…"
+    },
+    "issuedKeyModal": {
+      "title": "API Key Issued",
+      "desc": "This key is shown only now. Copy it somewhere safe.",
+      "copyButton": "Copy",
+      "confirmButton": "Got it"
+    },
+    "confirmRevokeKey": "Revoke this API key? This cannot be undone.",
+    "confirmDeleteTeam": "Delete team \"{{name}}\"? This cannot be undone.",
+    "errors": {
+      "connectPaymentFailed": "Failed to connect to the payment page.",
+      "inviteFailed": "Failed to send invite.",
+      "removeMemberFailed": "Failed to remove member.",
+      "issueKeyFailed": "Failed to issue API key.",
+      "revokeKeyFailed": "Failed to revoke API key.",
+      "deleteTeamFailed": "Failed to delete team."
+    }
   }
 }

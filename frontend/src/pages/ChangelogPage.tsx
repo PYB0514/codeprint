@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.132.0',
+    date: '2026-07-15',
+    title: '영어 번역 확대 — 팀 관리 페이지',
+    type: 'feature',
+    items: [
+      { category: '다국어', desc: '팀 관리 페이지(멤버·API 키·좌석 관리)가 영어로도 제공됩니다.' },
+    ],
+  },
+  {
     version: 'v0.131.0',
     date: '2026-07-15',
     title: '영어 번역 확대 — 설정·작동 방식·후원 페이지',

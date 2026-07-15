@@ -1,9 +1,11 @@
 // 팀 Desktop 라이센스 대시보드 — 팀 생성, 멤버 관리, 석수 배분
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
 import AppHeader from '../components/AppHeader'
+import { currentDateLocale } from '../i18n/dateLocale'
 
 interface PreparePaymentResponse {
   orderId: string; amount: number; orderName: string
@@ -61,7 +63,11 @@ const PRICE_PER_SEAT = 4_900
 
 // 팀 대시보드 페이지 렌더링
 export default function TeamsPage() {
+  const { t } = useTranslation('workspace')
   const navigate = useNavigate()
+
+  // 금액을 언어별 형식으로 포맷
+  const formatPrice = (amount: number) => amount.toLocaleString('en-US') + t('teams.currencySuffix')
   const [teams, setTeams] = useState<TeamResponse[]>([])
   const [selectedTeam, setSelectedTeam] = useState<TeamResponse | null>(null)
   const [members, setMembers] = useState<MemberResponse[]>([])
@@ -123,7 +129,7 @@ export default function TeamsPage() {
       await requestTeamPayment(res.data)
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      setError(err.response?.data?.message ?? '결제 페이지 연결에 실패했습니다.')
+      setError(err.response?.data?.message ?? t('teams.errors.connectPaymentFailed'))
       setCreating(false)
     }
   }
@@ -142,7 +148,7 @@ export default function TeamsPage() {
       await requestTeamPayment(res.data)
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      setError(err.response?.data?.message ?? '결제 페이지 연결에 실패했습니다.')
+      setError(err.response?.data?.message ?? t('teams.errors.connectPaymentFailed'))
       setIncreasingSeats(false)
     }
   }
@@ -162,7 +168,7 @@ export default function TeamsPage() {
       if (updated) setSelectedTeam(updated)
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      setError(err.response?.data?.message ?? '초대에 실패했습니다.')
+      setError(err.response?.data?.message ?? t('teams.errors.inviteFailed'))
     } finally {
       setInviting(false)
     }
@@ -176,7 +182,7 @@ export default function TeamsPage() {
       setMembers((prev) => prev.filter((m) => m.userId !== userId))
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      setError(err.response?.data?.message ?? '멤버 제거에 실패했습니다.')
+      setError(err.response?.data?.message ?? t('teams.errors.removeMemberFailed'))
     }
   }
 
@@ -196,7 +202,7 @@ export default function TeamsPage() {
       setApiKeys(keysRes.data)
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      setError(err.response?.data?.message ?? 'API 키 발급에 실패했습니다.')
+      setError(err.response?.data?.message ?? t('teams.errors.issueKeyFailed'))
     } finally {
       setIssuingKey(false)
     }
@@ -205,33 +211,33 @@ export default function TeamsPage() {
   // API 키 폐기 처리
   const handleRevokeKey = async (keyId: string) => {
     if (!selectedTeam) return
-    if (!window.confirm('이 API 키를 폐기하시겠습니까? 되돌릴 수 없습니다.')) return
+    if (!window.confirm(t('teams.confirmRevokeKey'))) return
     try {
       await axios.delete(`/api/teams/${selectedTeam.id}/api-keys/${keyId}`)
       const keysRes = await axios.get<ApiKeyResponse[]>(`/api/teams/${selectedTeam.id}/api-keys`)
       setApiKeys(keysRes.data)
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      setError(err.response?.data?.message ?? 'API 키 폐기에 실패했습니다.')
+      setError(err.response?.data?.message ?? t('teams.errors.revokeKeyFailed'))
     }
   }
 
   // 팀 삭제 처리
   const handleDeleteTeam = async () => {
     if (!selectedTeam) return
-    if (!window.confirm(`"${selectedTeam.name}" 팀을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return
+    if (!window.confirm(t('teams.confirmDeleteTeam', { name: selectedTeam.name }))) return
     try {
       await axios.delete(`/api/teams/${selectedTeam.id}`)
       setSelectedTeam(null)
       await fetchTeams()
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      setError(err.response?.data?.message ?? '팀 삭제에 실패했습니다.')
+      setError(err.response?.data?.message ?? t('teams.errors.deleteTeamFailed'))
     }
   }
 
   const remainingSeats = selectedTeam
-    ? `${selectedTeam.totalSeats - selectedTeam.usedSeats}석 남음`
+    ? t('teams.remainingSeats', { count: selectedTeam.totalSeats - selectedTeam.usedSeats })
     : ''
 
   return (
@@ -242,14 +248,14 @@ export default function TeamsPage() {
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold">팀 관리</h1>
-            <p className="text-gray-400 text-sm mt-1">Pro · Desktop 좌석으로 협업자를 초대하고 석수를 관리하세요.</p>
+            <h1 className="text-2xl font-bold">{t('teams.title')}</h1>
+            <p className="text-gray-400 text-sm mt-1">{t('teams.subtitle')}</p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition"
           >
-            + 팀 만들기
+            {t('teams.createTeamButton')}
           </button>
         </div>
 
@@ -263,13 +269,13 @@ export default function TeamsPage() {
         {teams.length === 0 ? (
           <div className="text-center py-24 text-gray-500">
             <p className="text-4xl mb-4">🏢</p>
-            <p className="text-lg font-medium mb-2">아직 팀이 없습니다</p>
-            <p className="text-sm mb-6">팀을 만들어 협업자를 초대하세요.</p>
+            <p className="text-lg font-medium mb-2">{t('teams.empty.title')}</p>
+            <p className="text-sm mb-6">{t('teams.empty.desc')}</p>
             <button
               onClick={() => setShowCreateModal(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-6 py-2 rounded-lg transition"
             >
-              첫 팀 만들기
+              {t('teams.empty.createFirstButton')}
             </button>
           </div>
         ) : (
@@ -287,7 +293,7 @@ export default function TeamsPage() {
                   }`}
                 >
                   <div className="font-medium truncate">{team.name}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">Pro · Desktop · {team.totalSeats}석</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{t('teams.sidebarPlan', { seats: team.totalSeats })}</div>
                 </button>
               ))}
             </div>
@@ -301,20 +307,20 @@ export default function TeamsPage() {
                     <div>
                       <h2 className="text-xl font-bold">{selectedTeam.name}</h2>
                       <span className="text-xs bg-blue-600/20 text-blue-400 border border-blue-600/40 px-2 py-0.5 rounded mt-1 inline-block">
-                        Pro · Desktop
+                        {t('teams.planBadge')}
                       </span>
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold text-blue-400">
-                        {selectedTeam.totalSeats}석
+                        {t('teams.seatsCount', { count: selectedTeam.totalSeats })}
                       </div>
                       <div className="text-xs text-gray-400">{remainingSeats}</div>
                     </div>
                   </div>
                   <div>
                     <div className="flex justify-between text-xs text-gray-400 mb-1">
-                      <span>사용 중: {selectedTeam.usedSeats}석</span>
-                      <span>총 {selectedTeam.totalSeats}석</span>
+                      <span>{t('teams.usedSeatsLabel', { count: selectedTeam.usedSeats })}</span>
+                      <span>{t('teams.totalSeatsLabel', { count: selectedTeam.totalSeats })}</span>
                     </div>
                     <div className="w-full bg-gray-800 rounded-full h-2">
                       <div
@@ -327,7 +333,7 @@ export default function TeamsPage() {
 
                 {/* 멤버 관리 */}
                 <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-                  <h3 className="font-semibold mb-4">멤버 관리</h3>
+                  <h3 className="font-semibold mb-4">{t('teams.members.heading')}</h3>
 
                   {/* 초대 입력 */}
                   <div className="flex gap-2 mb-4">
@@ -335,7 +341,7 @@ export default function TeamsPage() {
                       type="text"
                       value={inviteUserId}
                       onChange={(e) => setInviteUserId(e.target.value)}
-                      placeholder="초대할 사용자 UUID"
+                      placeholder={t('teams.members.invitePlaceholder')}
                       className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
                       onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
                     />
@@ -344,7 +350,7 @@ export default function TeamsPage() {
                       disabled={inviting || !inviteUserId.trim()}
                       className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition"
                     >
-                      {inviting ? '초대 중…' : '초대'}
+                      {inviting ? t('teams.members.inviting') : t('teams.members.inviteButton')}
                     </button>
                   </div>
 
@@ -358,7 +364,7 @@ export default function TeamsPage() {
                         <div>
                           <div className="text-sm font-mono text-gray-300">{m.userId}</div>
                           <div className="text-xs text-gray-500 mt-0.5">
-                            {m.role === 'OWNER' ? '팀장' : '멤버'} · 가입 {new Date(m.joinedAt).toLocaleDateString('ko-KR')}
+                            {m.role === 'OWNER' ? t('teams.members.roleOwner') : t('teams.members.roleMember')} · {t('teams.members.joinedPrefix')}{new Date(m.joinedAt).toLocaleDateString(currentDateLocale())}
                           </div>
                         </div>
                         {m.role !== 'OWNER' && (
@@ -366,18 +372,18 @@ export default function TeamsPage() {
                             onClick={() => handleRemoveMember(m.userId)}
                             className="text-xs text-red-400 hover:text-red-300 transition"
                           >
-                            제거
+                            {t('teams.members.removeButton')}
                           </button>
                         )}
                         {m.role === 'OWNER' && (
                           <span className="text-xs bg-yellow-600/20 text-yellow-400 border border-yellow-600/40 px-2 py-0.5 rounded">
-                            팀장
+                            {t('teams.members.roleOwner')}
                           </span>
                         )}
                       </div>
                     ))}
                     {members.length === 0 && (
-                      <p className="text-sm text-gray-500 text-center py-4">아직 멤버가 없습니다.</p>
+                      <p className="text-sm text-gray-500 text-center py-4">{t('teams.members.noMembers')}</p>
                     )}
                   </div>
                 </div>
@@ -385,12 +391,12 @@ export default function TeamsPage() {
                 {/* 프로젝트 석수 배분 */}
                 {allocations.length > 0 && (
                   <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-                    <h3 className="font-semibold mb-4">프로젝트별 석수 배분</h3>
+                    <h3 className="font-semibold mb-4">{t('teams.allocations.heading')}</h3>
                     <div className="space-y-2">
                       {allocations.map((a) => (
                         <div key={a.projectId} className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
                           <div className="text-sm font-mono text-gray-300 truncate">{a.projectId}</div>
-                          <div className="text-sm font-semibold text-blue-400 ml-4 shrink-0">{a.allocatedSeats}석</div>
+                          <div className="text-sm font-semibold text-blue-400 ml-4 shrink-0">{t('teams.seatsCount', { count: a.allocatedSeats })}</div>
                         </div>
                       ))}
                     </div>
@@ -399,9 +405,9 @@ export default function TeamsPage() {
 
                 {/* API 키 — 비공개 프로젝트 교차 조회(AI 에이전트 인증)용 */}
                 <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-                  <h3 className="font-semibold mb-1">API 키</h3>
+                  <h3 className="font-semibold mb-1">{t('teams.apiKeys.heading')}</h3>
                   <p className="text-xs text-gray-500 mb-4">
-                    이 팀에 배분된 프로젝트를 AI 에이전트가 원격으로 조회할 때 사용합니다. (/mcp/team/** 엔드포인트)
+                    {t('teams.apiKeys.desc')}
                   </p>
 
                   <div className="flex gap-2 mb-4">
@@ -409,7 +415,7 @@ export default function TeamsPage() {
                       type="text"
                       value={newKeyName}
                       onChange={(e) => setNewKeyName(e.target.value)}
-                      placeholder="키 이름 (예: ci-agent)"
+                      placeholder={t('teams.apiKeys.namePlaceholder')}
                       className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
                       onKeyDown={(e) => e.key === 'Enter' && handleIssueKey()}
                     />
@@ -418,7 +424,7 @@ export default function TeamsPage() {
                       disabled={issuingKey || !newKeyName.trim()}
                       className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition"
                     >
-                      {issuingKey ? '발급 중…' : '발급'}
+                      {issuingKey ? t('teams.apiKeys.issuing') : t('teams.apiKeys.issueButton')}
                     </button>
                   </div>
 
@@ -433,35 +439,35 @@ export default function TeamsPage() {
                             {k.name} <span className="font-mono text-gray-500">{k.keyPrefix}…</span>
                           </div>
                           <div className="text-xs text-gray-500 mt-0.5">
-                            발급 {new Date(k.createdAt).toLocaleDateString('ko-KR')}
-                            {k.lastUsedAt && ` · 최근 사용 ${new Date(k.lastUsedAt).toLocaleDateString('ko-KR')}`}
+                            {t('teams.apiKeys.issuedPrefix')}{new Date(k.createdAt).toLocaleDateString(currentDateLocale())}
+                            {k.lastUsedAt && `${t('teams.apiKeys.lastUsedPrefix')}${new Date(k.lastUsedAt).toLocaleDateString(currentDateLocale())}`}
                           </div>
                         </div>
                         {k.revoked ? (
                           <span className="text-xs bg-gray-700 text-gray-400 border border-gray-600 px-2 py-0.5 rounded">
-                            폐기됨
+                            {t('teams.apiKeys.revoked')}
                           </span>
                         ) : (
                           <button
                             onClick={() => handleRevokeKey(k.id)}
                             className="text-xs text-red-400 hover:text-red-300 transition"
                           >
-                            폐기
+                            {t('teams.apiKeys.revokeButton')}
                           </button>
                         )}
                       </div>
                     ))}
                     {apiKeys.length === 0 && (
-                      <p className="text-sm text-gray-500 text-center py-4">아직 발급된 API 키가 없습니다.</p>
+                      <p className="text-sm text-gray-500 text-center py-4">{t('teams.apiKeys.noKeys')}</p>
                     )}
                   </div>
                 </div>
 
                 {/* 좌석 증가 결제 */}
                 <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-                  <h3 className="font-semibold mb-3">좌석 증가</h3>
+                  <h3 className="font-semibold mb-3">{t('teams.seatIncrease.heading')}</h3>
                   <p className="text-sm text-gray-400 mb-3">
-                    좌석당 {PRICE_PER_SEAT.toLocaleString('ko-KR')}원 · 1회 결제 · 현재 {selectedTeam.totalSeats}석
+                    {t('teams.seatIncrease.desc', { price: formatPrice(PRICE_PER_SEAT), seats: selectedTeam.totalSeats })}
                   </p>
                   <div className="flex items-center gap-2">
                     <input
@@ -471,28 +477,28 @@ export default function TeamsPage() {
                       onChange={(e) => setAdditionalSeats(Math.max(1, Number(e.target.value)))}
                       className="w-24 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                     />
-                    <span className="text-sm text-gray-400">석 추가</span>
+                    <span className="text-sm text-gray-400">{t('teams.seatIncrease.addLabel')}</span>
                     <button
                       onClick={handleIncreaseSeats}
                       disabled={increasingSeats}
                       className="ml-auto bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition"
                     >
-                      {increasingSeats ? '결제 페이지 이동 중…' : `${(additionalSeats * PRICE_PER_SEAT).toLocaleString('ko-KR')}원 결제하고 증설`}
+                      {increasingSeats ? t('teams.seatIncrease.navigating') : t('teams.seatIncrease.payButton', { price: formatPrice(additionalSeats * PRICE_PER_SEAT) })}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-3">좌석 감소는 고객센터를 통해 요청해주세요.</p>
-                  <p className="text-xs text-gray-500 mt-1">월 자동갱신(정기결제)은 아직 지원되지 않습니다. 도입 시 기존 구매는 그대로 유지됩니다.</p>
+                  <p className="text-xs text-gray-500 mt-3">{t('teams.seatIncrease.decreaseNote')}</p>
+                  <p className="text-xs text-gray-500 mt-1">{t('teams.seatIncrease.subscriptionNote')}</p>
                 </div>
 
                 {/* 위험 구역 — 팀 삭제 */}
                 <div className="bg-gray-900 border border-red-900/50 rounded-xl p-6">
-                  <h3 className="font-semibold mb-3 text-red-400">위험 구역</h3>
-                  <p className="text-sm text-gray-400 mb-3">팀을 삭제하면 멤버·석수 배분 정보가 모두 함께 삭제되며 되돌릴 수 없습니다.</p>
+                  <h3 className="font-semibold mb-3 text-red-400">{t('teams.dangerZone.heading')}</h3>
+                  <p className="text-sm text-gray-400 mb-3">{t('teams.dangerZone.desc')}</p>
                   <button
                     onClick={handleDeleteTeam}
                     className="text-sm bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-900/50 rounded-lg px-4 py-2 transition"
                   >
-                    팀 삭제
+                    {t('teams.dangerZone.deleteButton')}
                   </button>
                 </div>
               </div>
@@ -505,16 +511,16 @@ export default function TeamsPage() {
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-bold mb-4">새 팀 만들기</h2>
+            <h2 className="text-lg font-bold mb-4">{t('teams.createModal.title')}</h2>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">팀 이름</label>
+                <label className="block text-sm text-gray-400 mb-1">{t('teams.createModal.nameLabel')}</label>
                 <input
                   type="text"
                   value={newTeamName}
                   onChange={(e) => setNewTeamName(e.target.value)}
-                  placeholder="팀 이름을 입력하세요"
+                  placeholder={t('teams.createModal.namePlaceholder')}
                   className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
                   onKeyDown={(e) => e.key === 'Enter' && handleCreateTeam()}
                   autoFocus
@@ -522,7 +528,7 @@ export default function TeamsPage() {
               </div>
 
               <div>
-                <label className="block text-sm text-gray-400 mb-1">석수</label>
+                <label className="block text-sm text-gray-400 mb-1">{t('teams.createModal.seatsLabel')}</label>
                 <input
                   type="number"
                   min={1}
@@ -531,10 +537,9 @@ export default function TeamsPage() {
                   className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Pro · Desktop · 좌석당 {PRICE_PER_SEAT.toLocaleString('ko-KR')}원 · 총{' '}
-                  {(newTeamSeats * PRICE_PER_SEAT).toLocaleString('ko-KR')}원 (1회 결제)
+                  {t('teams.createModal.priceInfo', { price: formatPrice(PRICE_PER_SEAT), total: formatPrice(newTeamSeats * PRICE_PER_SEAT) })}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">월 자동갱신(정기결제)은 아직 지원되지 않습니다. 도입 시 기존 구매는 그대로 유지됩니다.</p>
+                <p className="text-xs text-gray-500 mt-1">{t('teams.seatIncrease.subscriptionNote')}</p>
               </div>
             </div>
 
@@ -547,14 +552,14 @@ export default function TeamsPage() {
                 onClick={() => { setShowCreateModal(false); setError(null) }}
                 className="text-sm text-gray-400 hover:text-white px-4 py-2 transition"
               >
-                취소
+                {t('teams.createModal.cancelButton')}
               </button>
               <button
                 onClick={handleCreateTeam}
                 disabled={creating || !newTeamName.trim()}
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm px-5 py-2 rounded-lg transition"
               >
-                {creating ? '생성 중…' : '팀 만들기'}
+                {creating ? t('teams.createModal.creating') : t('teams.createModal.createButton')}
               </button>
             </div>
           </div>
@@ -565,8 +570,8 @@ export default function TeamsPage() {
       {issuedRawKey && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
-            <h2 className="text-lg font-bold mb-2">API 키가 발급되었습니다</h2>
-            <p className="text-sm text-gray-400 mb-4">이 키는 지금만 표시됩니다. 안전한 곳에 복사해두세요.</p>
+            <h2 className="text-lg font-bold mb-2">{t('teams.issuedKeyModal.title')}</h2>
+            <p className="text-sm text-gray-400 mb-4">{t('teams.issuedKeyModal.desc')}</p>
             <div className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 font-mono text-sm text-blue-300 break-all select-all">
               {issuedRawKey}
             </div>
@@ -575,13 +580,13 @@ export default function TeamsPage() {
                 onClick={() => navigator.clipboard.writeText(issuedRawKey)}
                 className="text-sm text-gray-400 hover:text-white px-4 py-2 transition"
               >
-                복사
+                {t('teams.issuedKeyModal.copyButton')}
               </button>
               <button
                 onClick={() => setIssuedRawKey(null)}
                 className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-5 py-2 rounded-lg transition"
               >
-                확인했습니다
+                {t('teams.issuedKeyModal.confirmButton')}
               </button>
             </div>
           </div>
