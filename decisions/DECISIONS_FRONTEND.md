@@ -877,3 +877,41 @@ const fetchGraph = useCallback(async () => {
 **PR 분할.** 페이지 51개·한글 포함 약 2,600줄 규모를 한 PR로 묶으면 리뷰·회귀 위험이 커져 우선순위별로 분할: 1차(PR #571) 공개 페이지+공용 UI+법적 문서+소규모 페이지 13개, 2차 이후 핵심 기능 화면(MyPage/GraphPage/SettingsPage/TeamsPage/CommunityPage 등)+공용 컴포넌트, ChangelogPage·EvolutionPage(서사형 장문)는 최우선순위 아님으로 후순위.
 
 **결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — 언어 토글 클릭 시 랜딩페이지 전체(hero·steps·features·pricing)·헤더·푸터·쿠키배너 즉시 전환 확인, 새로고침 후 선택 유지(`localStorage`) 확인, Terms/Privacy 페이지 영어 렌더링(11개 조항+9개 섹션) 직접 확인. 부수로 `npm audit fix`가 무관한 기존 취약점(axios 하위 `form-data`)도 해결.
+
+## i18n 2차 — 네임스페이스 단일화(workspace) + SettingsPage 계정삭제 확인어 지역화 (2026-07-15, codeprint_130)
+
+**배경.** i18n 2차(핵심 기능 화면 11개: MyPage/GraphPage/SettingsPage/TeamsPage/CommunityPage 등) 착수 전 새 네임스페이스 파일 생성이 CLAUDE.md "새 파일 생성 전 허락" 규칙 대상이라 사용자에게 먼저 확인.
+
+**검토한 대안(네임스페이스 이름).** ①`app`(신규) — 사용자가 "뭔 기능인지 모를 것 같다"며 기각 ②도메인별 세분화(`graph.json`·`team.json`·`community.json`·`admin.json` 등) — 파일 수 증가, 매번 새 파일 생성 승인 필요 ③사용자가 "eng/kor로 나누는 게 맞지 않냐"고 재질문 → 이미 `locales/{en,ko}/`가 언어 최상위 폴더라 네임스페이스 분할과 무관하게 3번째 언어 확장이 항상 쉽다는 점을 설명, 재질문 결과 "기존 원칙에 맞게" 결정 위임받음.
+
+**결정.** `workspace` 네임스페이스(`locales/{ko,en}/workspace.json`) 단일 파일로 11개 페이지 전체 수용 — 1차 `misc.json`이 여러 소규모 페이지를 하나로 묶었던 전례(§2 단순성 우선, 파일 수 최소화)를 따름. 페이지별 진행 순서는 파일 크기 오름차순(SettingsPage 164줄 → ... → GraphPage 3338줄)으로 확정, 위험이 큰 GraphPage를 마지막에 별도 다룸. 페이지 단위 커밋 분리(Context129 지침 반영).
+
+**SettingsPage 부수 발견 — 계정삭제 확인어 하드코딩.** 기존 코드가 "삭제"라는 한국어 리터럴을 입력값 비교(`deleteConfirm !== '삭제'`)에 직접 사용하고 있어, 그대로 두면 영어 UI에서도 사용자가 한국어 "삭제"를 입력해야 하는 불일치가 생김(버튼 라벨만 번역하면 실제 확인 로직과 어긋남). `settings.deleteAccount.confirmWord` 키를 신설해 ko="삭제"/en="DELETE"로 지역화하고, 비교·placeholder·안내 문구(`confirmBefore`+`<strong>`+`confirmAfter`) 전부 이 값을 참조하도록 통일 — TermsPage의 `listBold`(강조 텍스트를 별도 필드로 분리) 전례와 동일한 패턴.
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 백엔드+Docker DB 기동 후 실 로그인 세션) — SettingsPage/DonatePage/HowItWorksPage 3개 페이지 한국어·영어 전환 모두 확인. SettingsPage는 영어 모드에서 입력창에 "DELETE" 입력 시 삭제 버튼이 실제로 활성화(`disabled=false`)됨을 JS로 직접 확인(실제 삭제는 실행하지 않음). HowItWorksPage의 경고 타입 라벨(`WARNING_META.label`, 예: "순환 의존")은 아직 한국어로 남음 — `WarningPanel.tsx` 등 공용 컴포넌트 17개는 별도 트랙(PROGRESS.md 백로그)이라 이번 스코프 밖, 알려진 갭으로 기록.
+
+## AppHeader 언어·테마 드롭다운 UI 전환 (2026-07-15, codeprint_130)
+
+**배경.** i18n 2차 작업 도중 사용자가 다른 서비스 스크린샷(🌐 Korean/📍 kms/🌙 Dark 형태의 알약형 버튼 + 클릭 시 드롭다운, 체크마크로 현재 선택 표시)을 제시하며 언어·테마 전환 UI를 이 방식으로 바꿔달라고 요청 — 기존엔 텍스트 토글 버튼 하나로 한/영, 라이트/다크를 즉시 전환하는 방식이었음.
+
+**스코프 확인.** 스크린샷에 중국어·일본어·System(OS 설정 따름) 옵션도 보여 실제 추가 여부를 먼저 확인 — 사용자가 "UI만 드롭다운으로, 한/영만 실제 작동" 및 "드롭다운만 적용"(System 등 새 기능은 제외)으로 명확히 스코프를 좁힘. 중국어·일본어 실제 지원은 `common`·`landing`·`misc`·`legal`·`workspace` 전 네임스페이스 재번역이 필요한 별도 규모의 작업이라 이번 스코프에서 제외.
+
+**결정.** `AppHeader.tsx`의 `toggleLanguage`/`toggleTheme`(즉시 반전 토글)를 제거하고, 기존 검색·알림 드롭다운과 동일한 패턴(`useRef`+바깥 클릭 감지)으로 언어(🌐)·테마(☀️/🌙) 드롭다운 2개를 신설. 각 드롭다운은 한국어/영어, Light/Dark 2개 옵션만 나열하고 현재 선택 항목에 ✓ 표시. 테마는 `setTheme(dark: boolean)` 명시적 setter로 교체(기존 `toggleTheme` 이진 반전 로직 대체).
+
+**부수 발견 — 라이트 테마 드롭다운 패널 가독성 결함.** 실측 중 라이트 모드에서 새 드롭다운 패널이 어두운 배경(`bg-gray-900`)에 어두운 텍스트로 렌더링돼 거의 안 보이는 문제 발견. 원인은 `index.css`의 `html[data-theme="light"] header button` 규칙이 버튼 텍스트 색만 오버라이드하고 패널 `<div>` 배경은 손대지 않았던 기존 공백 — 이 공백은 신규 드롭다운뿐 아니라 기존 검색·알림·서비스 드롭다운에도 동일하게 존재했을 잠재 결함(우연히 지금까지 발견 안 됨). `header div[class*="bg-gray-900"]` 속성 선택자로 헤더 내 모든 드롭다운 패널에 공통 적용되는 라이트 테마 배경 오버라이드를 추가해 신규·기존 드롭다운 전부 동시 수정(범위를 넓혀 찾아간 게 아니라, 신규 기능에 필요한 CSS 규칙이 기존 컴포넌트와 셀렉터를 공유해 자연스럽게 같이 고쳐짐).
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — 언어 드롭다운 열기/선택/닫힘, 테마 드롭다운 열기/선택/닫힘(다크→라이트→다크) 확인. 라이트 모드에서 드롭다운 패널 배경 수정 전/후 스크린샷으로 가독성 결함 재현 및 수정 확인.
+
+## UserProfilePage i18n 이관 — misc 네임스페이스 교차 참조 (2026-07-15, codeprint_130)
+
+**배경.** i18n 2차 두 번째 페이지. `FEEDBACK_LABELS`(ARCHITECTURE_REVIEW/GENERAL/DEBUG) 상수가 `BookmarksPage.tsx`(1차, `misc.bookmarks.feedbackLabels`)에 이미 동일한 값으로 번역돼 있음을 발견.
+
+**결정.** `workspace` 네임스페이스에 중복 정의하지 않고 `useTranslation('misc')`를 별도로 호출해 `tMisc('bookmarks.feedbackLabels', {returnObjects:true})`로 교차 참조 — i18next는 네임스페이스별 `useTranslation` 훅을 컴포넌트당 여러 개 호출 가능. §1 "재사용성 먼저 확인" 원칙 적용(코드 작성 전 이미 검증된 번역이 있는지 확인 후 재사용).
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 실 로그인 세션) — `/users/{실제 UUID}` 한국어("일반"·"2026년 가입"·"공개 프로젝트 (1)")·영어("General"·"Joined 2026"·"Public Projects (1)") 전환 모두 확인, `misc` 네임스페이스 재사용 라벨도 정상 표시.
+
+## MyPage i18n 이관 (2026-07-15, codeprint_130)
+
+**범위.** `MyPage.tsx` 자체 문자열만 대상 — 내부에서 렌더링하는 `ProjectCard`·`CreateProjectModal`은 별도 공용 컴포넌트 트랙(PROGRESS.md 백로그 "공용 컴포넌트 17개")이라 이번엔 한국어로 남김. `FEEDBACK_LABELS`는 UserProfilePage와 동일하게 `misc.bookmarks.feedbackLabels` 교차 참조로 중복 제거.
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 실 로그인 세션) — `/mypage` 프로젝트 탭(한국어 "프로젝트/글/팀 관리/설정/+ 새 프로젝트" ↔ 영어 "Projects/Posts/Team Management/Settings/+ New Project")과 글 탭(피드백 라벨·그래프 배지·날짜 포맷 en-US "7/4/2026") 양쪽 확인. `ProjectCard` 내부(예: "비공개"·"PR 리뷰")는 의도대로 한국어 유지 확인.

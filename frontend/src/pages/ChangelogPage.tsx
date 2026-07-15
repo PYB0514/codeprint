@@ -11,6 +11,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.131.0',
+    date: '2026-07-15',
+    title: '영어 번역 확대 — 설정·작동 방식·후원 페이지',
+    type: 'feature',
+    items: [
+      { category: '다국어', desc: '설정, 작동 방식, 후원, 유저 프로필, 마이페이지가 영어로도 제공됩니다. 헤더의 언어 토글로 전환할 수 있습니다.' },
+      { category: 'UI', desc: '헤더의 언어·테마 전환이 토글 버튼에서 드롭다운 메뉴 방식으로 바뀌었습니다.' },
+    ],
+  },
+  {
     version: 'v0.130.0',
     date: '2026-07-15',
     title: '팀 API 키 — 비공개 프로젝트 교차 조회',

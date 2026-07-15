@@ -1,11 +1,13 @@
 ﻿// 사용자 설정 페이지 — 프로필 이미지, 배경 이미지 관리
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
 
 // 설정 페이지 렌더링
 export default function SettingsPage() {
+  const { t } = useTranslation('workspace')
   const navigate = useNavigate()
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [bgUrl, setBgUrl] = useState<string | null>(null)
@@ -39,9 +41,9 @@ export default function SettingsPage() {
         document.body.style.backgroundAttachment = 'fixed'
         document.body.style.backgroundPosition = 'center'
       }
-      setImageMsg('저장됐습니다.')
+      setImageMsg(t('settings.saved'))
     } catch {
-      setImageMsg('업로드 실패. 파일 형식과 크기(5MB 이하)를 확인해주세요.')
+      setImageMsg(t('settings.uploadFailed'))
     } finally {
       setTimeout(() => setImageMsg(null), 3000)
     }
@@ -63,15 +65,16 @@ export default function SettingsPage() {
     }
   }
 
-  // 계정 탈퇴 처리 — "삭제" 입력 확인 후 DELETE /api/auth/account 호출
+  // 계정 탈퇴 처리 — 확인어 입력 확인 후 DELETE /api/auth/account 호출
+  const confirmWord = t('settings.deleteAccount.confirmWord')
   const handleDeleteAccount = async () => {
-    if (deleteConfirm !== '삭제') return
+    if (deleteConfirm !== confirmWord) return
     setDeleteLoading(true)
     try {
       await axios.delete('/api/auth/account')
       window.location.href = '/'
     } catch {
-      alert('계정 삭제에 실패했습니다. 다시 시도해주세요.')
+      alert(t('settings.deleteAccount.deleteFailed'))
       setDeleteLoading(false)
     }
   }
@@ -81,11 +84,11 @@ export default function SettingsPage() {
       <AppHeader />
 
       <main className="max-w-xl mx-auto px-6 py-10">
-        <h1 className="text-xl font-semibold mb-1">설정</h1>
+        <h1 className="text-xl font-semibold mb-1">{t('settings.title')}</h1>
 
         {/* 이미지 설정 */}
         <section className="mb-8">
-          <h2 className="text-sm font-medium text-gray-400 mb-4">프로필 이미지 / 배경 이미지</h2>
+          <h2 className="text-sm font-medium text-gray-400 mb-4">{t('settings.imageHeading')}</h2>
           {imageMsg && (
             <p className="text-xs text-green-400 mb-3">{imageMsg}</p>
           )}
@@ -97,16 +100,16 @@ export default function SettingsPage() {
                 onClick={() => avatarRef.current?.click()}
               >
                 {avatarUrl
-                  ? <img src={avatarUrl} alt="프로필" className="w-full h-full object-cover" />
+                  ? <img src={avatarUrl} alt={t('settings.profileLabel')} className="w-full h-full object-cover" />
                   : <span className="text-2xl text-gray-600">+</span>
                 }
               </div>
-              <span className="text-xs text-gray-500">프로필</span>
+              <span className="text-xs text-gray-500">{t('settings.profileLabel')}</span>
               <input ref={avatarRef} type="file" accept="image/*" className="hidden"
                 onChange={(e) => e.target.files?.[0] && uploadImage(e.target.files[0], '/api/users/me/avatar', setAvatarUrl)} />
               {avatarUrl && (
                 <button onClick={() => deleteImage('/api/users/me/avatar', () => setAvatarUrl(null))}
-                  className="text-xs text-red-400 hover:text-red-300">삭제</button>
+                  className="text-xs text-red-400 hover:text-red-300">{t('settings.deleteImage')}</button>
               )}
             </div>
 
@@ -117,16 +120,16 @@ export default function SettingsPage() {
                 onClick={() => bgRef.current?.click()}
               >
                 {bgUrl
-                  ? <img src={bgUrl} alt="배경" className="w-full h-full object-cover" />
+                  ? <img src={bgUrl} alt={t('settings.backgroundLabel')} className="w-full h-full object-cover" />
                   : <span className="text-2xl text-gray-600">+</span>
                 }
               </div>
-              <span className="text-xs text-gray-500">배경 이미지</span>
+              <span className="text-xs text-gray-500">{t('settings.backgroundLabel')}</span>
               <input ref={bgRef} type="file" accept="image/*" className="hidden"
                 onChange={(e) => e.target.files?.[0] && uploadImage(e.target.files[0], '/api/users/me/background', setBgUrl)} />
               {bgUrl && (
                 <button onClick={() => deleteImage('/api/users/me/background', () => setBgUrl(null))}
-                  className="text-xs text-red-400 hover:text-red-300">삭제</button>
+                  className="text-xs text-red-400 hover:text-red-300">{t('settings.deleteImage')}</button>
               )}
             </div>
 
@@ -135,26 +138,27 @@ export default function SettingsPage() {
 
         {/* 계정 삭제 */}
         <section className="mt-12 border border-red-800/50 rounded-xl p-5">
-          <h2 className="text-sm font-medium text-red-400 mb-1">계정 삭제</h2>
+          <h2 className="text-sm font-medium text-red-400 mb-1">{t('settings.deleteAccount.heading')}</h2>
           <p className="text-xs text-gray-500 mb-4">
-            계정을 삭제하면 모든 프로젝트, 그래프, 게시글, 댓글이 즉시 영구 삭제됩니다.
-            이 작업은 되돌릴 수 없습니다.
+            {t('settings.deleteAccount.descLine1')} {t('settings.deleteAccount.descLine2')}
           </p>
-          <p className="text-xs text-gray-400 mb-2">확인을 위해 아래에 <strong className="text-white">삭제</strong>를 입력하세요.</p>
+          <p className="text-xs text-gray-400 mb-2">
+            {t('settings.deleteAccount.confirmBefore')}<strong className="text-white">{confirmWord}</strong>{t('settings.deleteAccount.confirmAfter')}
+          </p>
           <div className="flex gap-2">
             <input
               type="text"
               value={deleteConfirm}
               onChange={(e) => setDeleteConfirm(e.target.value)}
-              placeholder="삭제"
+              placeholder={confirmWord}
               className="flex-1 bg-gray-900 text-white text-xs px-3 py-2 rounded border border-gray-700 focus:outline-none focus:border-red-700 placeholder-gray-600"
             />
             <button
               onClick={handleDeleteAccount}
-              disabled={deleteConfirm !== '삭제' || deleteLoading}
+              disabled={deleteConfirm !== confirmWord || deleteLoading}
               className="text-xs bg-red-700 text-white font-medium px-4 py-2 rounded hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {deleteLoading ? '삭제 중...' : '계정 삭제'}
+              {deleteLoading ? t('settings.deleteAccount.deleting') : t('settings.deleteAccount.deleteButton')}
             </button>
           </div>
         </section>

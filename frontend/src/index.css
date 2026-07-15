@@ -56,6 +56,16 @@ html[data-theme="light"] header button:hover {
   color: #111827;
 }
 
+/* 헤더 드롭다운 패널(언어·테마·검색·알림 등) — 어두운 배경이 라이트 테마에서도 그대로 남는 문제 수정 */
+html[data-theme="light"] header div[class*="bg-gray-900"] {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+}
+
+html[data-theme="light"] header div[class*="bg-gray-900"] button:hover {
+  background-color: #f3f4f6 !important;
+}
+
 body {
   font-family: system-ui, -apple-system, sans-serif;
   background: #0f0f0f;
