@@ -921,3 +921,19 @@ const fetchGraph = useCallback(async () => {
 **범위.** 팀 대시보드 전체(석수 현황·멤버 관리·API 키·좌석 증가 결제·팀 생성/삭제 모달) — 592줄 중 가장 문자열 밀도가 높은 페이지. 금액 포맷은 DonatePage와 동일한 `currencySuffix`("원"/" KRW") + `toLocaleString('en-US')` 패턴 재사용, 날짜는 `currentDateLocale()` 재사용.
 
 **결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 실 로그인 세션) — 팀 상세 페이지 전체(석수 현황·멤버·API 키·좌석 증가·위험 구역) 한국어 원문과 1:1 동일 확인(리팩토링 전/후 텍스트 비교), 영어 렌더링도 전체 확인("Team Management"·"5 seats remaining"·"4,900 KRW per seat"·"Danger Zone" 등). 팀 생성/API 키 발급 모달은 코드 리뷰로 확인(동일 `t()` 패턴 재사용, 클릭 실측은 도구 상의 이유로 생략).
+
+## AdminPage — i18n 2차 스코프에서 제외 (2026-07-15, codeprint_130)
+
+**결정.** AdminPage.tsx(791줄, ROLE_ADMIN 전용 운영 대시보드)는 실질적으로 사이트 운영자 본인만 접근하는 화면이라, "해외 유입자가 서비스를 이해하게"라는 i18n 도입 목적과 무관 — 사용자 확인 후 이번 2차 스코프에서 제외하고 PROGRESS.md 백로그로 이동. 재추진 조건: 운영진이 여러 명이 되거나 영어권 공동 운영자가 생길 때.
+
+## GraphViewerPage i18n 이관 (2026-07-15, codeprint_130)
+
+**범위.** 공개 그래프 공유 뷰어(802줄) — 로그인 없이 접근 가능해 실질적으로 i18n 2차 중 가장 국제 방문자 접점이 큰 페이지(공유 링크 클릭 시 첫 화면). `LayoutPresetToggle`·`LabelModeToggle`·`GraphLegend`·`OnboardingTour` 등 공용 컴포넌트 내부 문자열은 별도 트랙(공용 컴포넌트 17개)이라 이번 스코프 밖.
+
+**온보딩 투어 콘텐츠.** `SHARE_TOUR_STEPS`가 모듈 최상단 상수였으나 `t()` 참조를 위해 컴포넌트 내부로 이동(HowItWorksPage의 `WARNING_GUIDE` 이전과 동일 패턴).
+
+**대형 레포 절단 안내 — `<strong>` 강조 포기.** 원문은 파일 수 두 개를 `<strong>`로 감쌌으나, 한국어("전체 A개 파일 중 B개만")와 영어("only B of A files")가 두 숫자의 어순이 반대라 고정 슬롯(before/mid/after) 분할 방식이 통하지 않음(TermsPage류 패턴은 어순이 같을 때만 안전). Named interpolation(`{{total}}`/`{{analyzed}}`) 단일 문자열로 되돌리고 굵게 강조는 포기 — 어순이 다른 언어 간에는 위치 기반 분할과 인라인 스타일을 동시에 satisfy할 수 없다는 걸 확인한 사례, 후속 페이지에서 같은 패턴 만나면 인터폴레이션 우선.
+
+**`activeDomainTab` 내부 sentinel 값 유지.** `useState<string>('전체')`와 비교 로직(`activeDomainTab === '전체'`, `activateTab('전체')`)은 그대로 두고, 탭 버튼에 보이는 라벨 텍스트만 `t('graphViewer.allTab')`로 감쌈 — SettingsPage의 `confirmWord`(사용자 입력과 매칭돼야 해서 값 자체를 지역화 필요)와 달리, 이 값은 순수 내부 필터 키라 표시와 저장을 분리해도 안전.
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — 로컬 DB에서 공개 프로젝트(`pallets/flask`) ID 직접 조회해 `/share/{projectId}` 접근, 한국어("읽기 전용"·"외부 레포 분석"·"노드 검색"·"범례"·"경고"·"노드 정보")·영어("Read-only"·"External Repo Analysis"·"NODE SEARCH"·"Warnings"·"NODE INFO") 전환 확인, 온보딩 투어 1단계 제목·본문 번역 확인.
