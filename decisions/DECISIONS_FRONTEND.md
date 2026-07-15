@@ -957,3 +957,9 @@ const fetchGraph = useCallback(async () => {
 **부수 버그 — `Node` 타입 충돌.** 두 파일 모두 `@xyflow/react`의 `Node` 타입을 이미 import하고 있어, AppHeader의 바깥 클릭 감지 코드(`e.target as Node`, DOM `Node` 타입 의도)가 리액트플로우의 `Node`로 잘못 해석돼 컴파일 에러 발생. `e.target as globalThis.Node`로 명시해 DOM 타입임을 분명히 해 해결.
 
 **결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — GraphViewerPage에서 언어 드롭다운 클릭→열림→"English" 선택→헤더/사이드바/노드정보 전체 즉시 영어 전환 확인(스크린샷). CommunityPostGraphPage는 드롭다운 존재·상태 반영(`read_page`로 "Language" 버튼 노출) 확인 — 동일 코드라 클릭 상호작용은 GraphViewerPage 검증으로 갈음.
+
+## CommunityPage i18n 이관 (2026-07-16, codeprint_130)
+
+**범위.** 커뮤니티 게시판(942줄) — 목록/탭/정렬/글쓰기 폼/상세 패널/댓글/신고 모달 전체. `FEEDBACK_LABELS`·그래프/레포 배지는 UserProfilePage·misc 네임스페이스 재사용(select option 텍스트도 `FEEDBACK_LABELS.GENERAL` 등으로 통일 — 하드코딩된 `<option>일반</option>`이 `tMisc` 값과 어긋날 여지 제거). `snapshotLabel()`(도메인/계층·이름/주석 조합 함수)은 `t()` 참조 위해 컴포넌트 내부로 이동(SHARE_TOUR_STEPS 등과 동일 패턴).
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 로그아웃+로그인 양쪽) — 익명 보기(목록·정렬·탭·상세 패널·스냅샷 라벨) 한/영 전환, 로그인 후 글쓰기 폼 전체(제목/내용/피드백타입 셀렉트/그래프연결/공개범위 토글+안내문구/이미지첨부/등록) 영어 렌더링, 타인 게시글 신고 모달("Report Post"→placeholder→"Cancel"/"Report") 열기까지 실제 클릭으로 확인(제출은 안 함, 취소로 종료).

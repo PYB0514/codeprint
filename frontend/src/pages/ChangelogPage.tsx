@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.135.0',
+    date: '2026-07-16',
+    title: '영어 번역 확대 — 커뮤니티 게시판',
+    type: 'feature',
+    items: [
+      { category: '다국어', desc: '커뮤니티 게시판(목록·글쓰기·상세·댓글·신고)이 영어로도 제공됩니다.' },
+    ],
+  },
+  {
     version: 'v0.134.0',
     date: '2026-07-15',
     title: '영어 번역 확대 — 커뮤니티 게시글 첨부 그래프 뷰어',

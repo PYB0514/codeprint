@@ -345,5 +345,73 @@
     "commentsHeading": "Comments",
     "noComments": "No comments.",
     "reportFpFailed": "Failed to report false positive."
+  },
+  "community": {
+    "title": "Community",
+    "searchPlaceholder": "Search posts...",
+    "bookmarksButton": "★ Bookmarks",
+    "cancelButton": "Cancel",
+    "writeButton": "Write",
+    "tabs": {
+      "all": "All",
+      "following": "Following",
+      "gallery": "📊 Gallery"
+    },
+    "sort": {
+      "latest": "Latest",
+      "likes": "Most Liked",
+      "views": "Most Viewed"
+    },
+    "writeForm": {
+      "titlePlaceholder": "Title",
+      "contentPlaceholder": "Write your content",
+      "graphLinkLabel": "Link a Graph (optional)",
+      "unlinkButton": "Unlink",
+      "noGraphOption": "— No graph selected —",
+      "visibilityLabel": "Visibility",
+      "visibilityPublic": "Public — shown in the community feed",
+      "visibilityPrivate": "Link only",
+      "visibilityPrivateNote": "Won't show up in the feed. Anyone with the link can view it.",
+      "attachImage": "+ Attach Image",
+      "uploading": "Uploading...",
+      "submitButton": "Post"
+    },
+    "loading": "Loading...",
+    "galleryEmpty": "No posts with an attached graph.",
+    "graphAttachedTag": "Graph attached",
+    "followingEmpty": "No posts from people you follow. Try following other users.",
+    "noPosts": "No posts yet.",
+    "deletePostButton": "Delete",
+    "deletePostConfirm": "Delete this post?",
+    "loadingMore": "Loading...",
+    "loadMoreButton": "Load more",
+    "detail": {
+      "saveButton": "Save",
+      "editButton": "Edit",
+      "reportButton": "Report",
+      "snapshotButton": "📊 Snapshot {{n}}",
+      "viewGraphButton": "View Graph →",
+      "commentsHeading": "{{count}} Comments",
+      "deleteCommentTitle": "Delete comment",
+      "reportCommentTitle": "Report comment",
+      "commentPlaceholder": "Write a comment",
+      "commentSubmitFailed": "Failed to post comment. Please try again."
+    },
+    "reportModal": {
+      "postTitle": "Report Post",
+      "commentTitle": "Report Comment",
+      "placeholder": "Please enter a reason for reporting",
+      "submitting": "Submitting…",
+      "submitButton": "Report",
+      "success": "Your report has been submitted.",
+      "failed": "An error occurred while submitting the report. Please try again later."
+    },
+    "linkGraphFailed": "Failed to load the graph. Please complete analysis first.",
+    "snapshotLabel": {
+      "layoutDomain": "Domain",
+      "layoutLayer": "Layer",
+      "modeComment": "Comment",
+      "modeName": "Name"
+    }
   }
 }

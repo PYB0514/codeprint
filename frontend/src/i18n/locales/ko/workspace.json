@@ -345,5 +345,73 @@
     "commentsHeading": "코멘트",
     "noComments": "코멘트가 없습니다.",
     "reportFpFailed": "오탐 신고에 실패했습니다."
+  },
+  "community": {
+    "title": "커뮤니티",
+    "searchPlaceholder": "게시글 검색...",
+    "bookmarksButton": "★ 북마크",
+    "cancelButton": "취소",
+    "writeButton": "글쓰기",
+    "tabs": {
+      "all": "전체",
+      "following": "팔로잉",
+      "gallery": "📊 갤러리"
+    },
+    "sort": {
+      "latest": "최신순",
+      "likes": "좋아요순",
+      "views": "조회순"
+    },
+    "writeForm": {
+      "titlePlaceholder": "제목",
+      "contentPlaceholder": "내용을 입력하세요",
+      "graphLinkLabel": "그래프 연결 (선택)",
+      "unlinkButton": "해제",
+      "noGraphOption": "— 그래프 선택 안 함 —",
+      "visibilityLabel": "공개범위",
+      "visibilityPublic": "공개 — 커뮤니티 피드에 표시",
+      "visibilityPrivate": "링크 공유",
+      "visibilityPrivateNote": "피드에 표시되지 않으며, 링크가 있는 사람은 누구나 볼 수 있습니다.",
+      "attachImage": "+ 이미지 첨부",
+      "uploading": "업로드 중...",
+      "submitButton": "등록"
+    },
+    "loading": "로딩 중...",
+    "galleryEmpty": "그래프가 첨부된 게시글이 없습니다.",
+    "graphAttachedTag": "그래프 첨부",
+    "followingEmpty": "팔로우한 유저의 게시글이 없습니다. 다른 유저를 팔로우해보세요.",
+    "noPosts": "아직 게시글이 없습니다.",
+    "deletePostButton": "삭제",
+    "deletePostConfirm": "게시글을 삭제할까요?",
+    "loadingMore": "불러오는 중...",
+    "loadMoreButton": "더 보기",
+    "detail": {
+      "saveButton": "저장",
+      "editButton": "수정",
+      "reportButton": "신고",
+      "snapshotButton": "📊 스냅샷 {{n}}",
+      "viewGraphButton": "그래프 보기 →",
+      "commentsHeading": "댓글 {{count}}",
+      "deleteCommentTitle": "댓글 삭제",
+      "reportCommentTitle": "댓글 신고",
+      "commentPlaceholder": "댓글 입력",
+      "commentSubmitFailed": "댓글 등록에 실패했습니다. 다시 시도해주세요."
+    },
+    "reportModal": {
+      "postTitle": "게시글 신고",
+      "commentTitle": "댓글 신고",
+      "placeholder": "신고 사유를 입력해주세요",
+      "submitting": "제출 중…",
+      "submitButton": "신고하기",
+      "success": "신고가 접수됐습니다.",
+      "failed": "신고 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+    },
+    "linkGraphFailed": "그래프를 불러오지 못했습니다. 먼저 분석을 완료해주세요.",
+    "snapshotLabel": {
+      "layoutDomain": "도메인",
+      "layoutLayer": "계층",
+      "modeComment": "주석",
+      "modeName": "이름"
+    }
   }
 }
