@@ -512,3 +512,13 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 
 **남은 것(사용자 액션 대기)**: ①GitHub repo secrets `BACKEND_URL`·`CRON_SECRET` 등록 ②Railway `CRON_SECRET` 환경변수 등록(배포 후) ③Railway 대시보드에서 codeprint·Postgres 두 서비스 모두 Serverless 토글.
 - 근본적 비용 구조 논의(그래프 생성 트리거 분리·쿼타·압축저장 등)는 별도 절 참조(`PRODUCT_STRATEGY.md` §18) — 이 사고가 그 논의의 직접적 계기.
+
+## Railway Serverless 배선 직후 PR 게이트 웹훅 504 — GATE_GAPS.md [G-5]로 이관 (2026-07-15, codeprint_130)
+
+**문제.** 위 Serverless 배선 완료 후 처음으로 콜드스타트를 거친 PR(#573)에서 `codeprint/structure` 필수 체크가 아예 게시되지 않아 `mergeStateStatus: BLOCKED`로 머지가 막힘. `gh api repos/.../hooks/.../deliveries`로 확인한 결과 GitHub → Railway 웹훅 HTTP 요청 자체가 504로 끊김(백엔드 코드 도달 여부 불명) — 유휴 시간(약 1시간 45분) 동안 컨테이너가 완전히 슬립된 뒤 콜드 스타트가 웹훅 타임아웃보다 오래 걸린 것으로 추정.
+
+**의미.** 이번 세션 앞부분에서 "비용 절감"으로 켠 Serverless가 "PR 게이트 신뢰성"이라는 제품의 핵심 강제 메커니즘과 정면으로 충돌한다는 게 실제 사고로 확인됨 — Context129에서 이미 추상적으로 언급했던 우려("Cloud Run min-instances=1이 웹훅 신뢰성 확보용 후보")가 현실화된 사례.
+
+**당장 조치.** 새 커밋 push로 `synchronize` 이벤트 재트리거(콜드스타트로 한 번 깨어난 뒤 재시도는 성공할 가능성 높음) — 우회일 뿐 근본 해결 아님.
+
+**재발 방지 — 미착수, 사용자 판단 대기.** 상세 사건 기록·근본 원인·재발방지 옵션(웹훅 전용 경량 레이어 분리 / PR 게이트만 상시 기동 예외 / Serverless 재검토)은 `GATE_GAPS.md` [G-5]에 기록(이 파일은 인프라 결정 기록, 그쪽은 게이트 신뢰성 사건 로그라 사건 자체는 거기가 단일 소스 — 여기선 인프라 변경과의 인과관계만 남김).

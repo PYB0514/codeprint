@@ -889,3 +889,15 @@ const fetchGraph = useCallback(async () => {
 **SettingsPage 부수 발견 — 계정삭제 확인어 하드코딩.** 기존 코드가 "삭제"라는 한국어 리터럴을 입력값 비교(`deleteConfirm !== '삭제'`)에 직접 사용하고 있어, 그대로 두면 영어 UI에서도 사용자가 한국어 "삭제"를 입력해야 하는 불일치가 생김(버튼 라벨만 번역하면 실제 확인 로직과 어긋남). `settings.deleteAccount.confirmWord` 키를 신설해 ko="삭제"/en="DELETE"로 지역화하고, 비교·placeholder·안내 문구(`confirmBefore`+`<strong>`+`confirmAfter`) 전부 이 값을 참조하도록 통일 — TermsPage의 `listBold`(강조 텍스트를 별도 필드로 분리) 전례와 동일한 패턴.
 
 **결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 백엔드+Docker DB 기동 후 실 로그인 세션) — SettingsPage/DonatePage/HowItWorksPage 3개 페이지 한국어·영어 전환 모두 확인. SettingsPage는 영어 모드에서 입력창에 "DELETE" 입력 시 삭제 버튼이 실제로 활성화(`disabled=false`)됨을 JS로 직접 확인(실제 삭제는 실행하지 않음). HowItWorksPage의 경고 타입 라벨(`WARNING_META.label`, 예: "순환 의존")은 아직 한국어로 남음 — `WarningPanel.tsx` 등 공용 컴포넌트 17개는 별도 트랙(PROGRESS.md 백로그)이라 이번 스코프 밖, 알려진 갭으로 기록.
+
+## AppHeader 언어·테마 드롭다운 UI 전환 (2026-07-15, codeprint_130)
+
+**배경.** i18n 2차 작업 도중 사용자가 다른 서비스 스크린샷(🌐 Korean/📍 kms/🌙 Dark 형태의 알약형 버튼 + 클릭 시 드롭다운, 체크마크로 현재 선택 표시)을 제시하며 언어·테마 전환 UI를 이 방식으로 바꿔달라고 요청 — 기존엔 텍스트 토글 버튼 하나로 한/영, 라이트/다크를 즉시 전환하는 방식이었음.
+
+**스코프 확인.** 스크린샷에 중국어·일본어·System(OS 설정 따름) 옵션도 보여 실제 추가 여부를 먼저 확인 — 사용자가 "UI만 드롭다운으로, 한/영만 실제 작동" 및 "드롭다운만 적용"(System 등 새 기능은 제외)으로 명확히 스코프를 좁힘. 중국어·일본어 실제 지원은 `common`·`landing`·`misc`·`legal`·`workspace` 전 네임스페이스 재번역이 필요한 별도 규모의 작업이라 이번 스코프에서 제외.
+
+**결정.** `AppHeader.tsx`의 `toggleLanguage`/`toggleTheme`(즉시 반전 토글)를 제거하고, 기존 검색·알림 드롭다운과 동일한 패턴(`useRef`+바깥 클릭 감지)으로 언어(🌐)·테마(☀️/🌙) 드롭다운 2개를 신설. 각 드롭다운은 한국어/영어, Light/Dark 2개 옵션만 나열하고 현재 선택 항목에 ✓ 표시. 테마는 `setTheme(dark: boolean)` 명시적 setter로 교체(기존 `toggleTheme` 이진 반전 로직 대체).
+
+**부수 발견 — 라이트 테마 드롭다운 패널 가독성 결함.** 실측 중 라이트 모드에서 새 드롭다운 패널이 어두운 배경(`bg-gray-900`)에 어두운 텍스트로 렌더링돼 거의 안 보이는 문제 발견. 원인은 `index.css`의 `html[data-theme="light"] header button` 규칙이 버튼 텍스트 색만 오버라이드하고 패널 `<div>` 배경은 손대지 않았던 기존 공백 — 이 공백은 신규 드롭다운뿐 아니라 기존 검색·알림·서비스 드롭다운에도 동일하게 존재했을 잠재 결함(우연히 지금까지 발견 안 됨). `header div[class*="bg-gray-900"]` 속성 선택자로 헤더 내 모든 드롭다운 패널에 공통 적용되는 라이트 테마 배경 오버라이드를 추가해 신규·기존 드롭다운 전부 동시 수정(범위를 넓혀 찾아간 게 아니라, 신규 기능에 필요한 CSS 규칙이 기존 컴포넌트와 셀렉터를 공유해 자연스럽게 같이 고쳐짐).
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome) — 언어 드롭다운 열기/선택/닫힘, 테마 드롭다운 열기/선택/닫힘(다크→라이트→다크) 확인. 라이트 모드에서 드롭다운 패널 배경 수정 전/후 스크린샷으로 가독성 결함 재현 및 수정 확인.

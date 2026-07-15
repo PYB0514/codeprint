@@ -43,10 +43,6 @@ export default function AppHeader({ onLogin }: Props) {
   const navigate = useNavigate()
   const { t, i18n } = useTranslation('common')
 
-  // 언어 전환 — localStorage에 저장돼 다음 방문에도 유지됨(i18n/index.ts LanguageDetector 설정)
-  const toggleLanguage = () => {
-    i18n.changeLanguage(i18n.language.startsWith('ko') ? 'en' : 'ko')
-  }
   const [user, setUser] = useState<UserInfo | null>(null)
   const [checked, setChecked] = useState(false)
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light')
@@ -60,18 +56,20 @@ export default function AppHeader({ onLogin }: Props) {
   const [searchResults, setSearchResults] = useState<UserSearchResult[]>([])
   const searchRef = useRef<HTMLDivElement>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [showLangMenu, setShowLangMenu] = useState(false)
+  const langMenuRef = useRef<HTMLDivElement>(null)
+  const [showThemeMenu, setShowThemeMenu] = useState(false)
+  const themeMenuRef = useRef<HTMLDivElement>(null)
 
-  // 테마 초기화 및 토글
+  // 테마 초기화 및 적용
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
   }, [isDark])
 
-  const toggleTheme = () => {
-    setIsDark(prev => {
-      const next = !prev
-      localStorage.setItem('theme', next ? 'dark' : 'light')
-      return next
-    })
+  // 테마 선택 — localStorage에 저장돼 다음 방문에도 유지됨
+  const setTheme = (dark: boolean) => {
+    setIsDark(dark)
+    localStorage.setItem('theme', dark ? 'dark' : 'light')
   }
 
   // 쿠키 기반 인증 — /api/auth/me로 로그인 상태 확인
@@ -102,6 +100,12 @@ export default function AppHeader({ onLogin }: Props) {
       }
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setShowSearch(false)
+      }
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
+        setShowLangMenu(false)
+      }
+      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as Node)) {
+        setShowThemeMenu(false)
       }
     }
     document.addEventListener('mousedown', handler)
@@ -225,22 +229,60 @@ export default function AppHeader({ onLogin }: Props) {
           )}
         </div>
 
-        {/* 언어 토글 */}
-        <button
-          onClick={toggleLanguage}
-          className="text-gray-400 hover:text-white transition-colors"
-          title={t('language.toggle')}
-        >
-          {i18n.language.startsWith('ko') ? 'EN' : '한국어'}
-        </button>
+        {/* 언어 드롭다운 */}
+        <div className="relative" ref={langMenuRef}>
+          <button
+            onClick={() => setShowLangMenu(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-xs"
+            title={t('language.toggle')}
+          >
+            <span>🌐</span>
+            <span>{i18n.language.startsWith('ko') ? t('language.ko') : t('language.en')}</span>
+          </button>
+          {showLangMenu && (
+            <div className="absolute right-0 top-9 w-32 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+              {(['ko', 'en'] as const).map((lng) => (
+                <button
+                  key={lng}
+                  onClick={() => { i18n.changeLanguage(lng); setShowLangMenu(false) }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                >
+                  {t(`language.${lng}`)}
+                  {i18n.language.startsWith(lng) && <span className="text-xs">✓</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
-        {/* 테마 토글 */}
-        <button
-          onClick={toggleTheme}
-          className="text-gray-400 hover:text-white transition-colors"
-        >
-          {isDark ? t('header.lightMode') : t('header.darkMode')}
-        </button>
+        {/* 테마 드롭다운 */}
+        <div className="relative" ref={themeMenuRef}>
+          <button
+            onClick={() => setShowThemeMenu(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-xs"
+          >
+            <span>{isDark ? '🌙' : '☀️'}</span>
+            <span>{isDark ? t('header.darkMode') : t('header.lightMode')}</span>
+          </button>
+          {showThemeMenu && (
+            <div className="absolute right-0 top-9 w-28 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+              <button
+                onClick={() => { setTheme(false); setShowThemeMenu(false) }}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+              >
+                {t('header.lightMode')}
+                {!isDark && <span className="text-xs">✓</span>}
+              </button>
+              <button
+                onClick={() => { setTheme(true); setShowThemeMenu(false) }}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+              >
+                {t('header.darkMode')}
+                {isDark && <span className="text-xs">✓</span>}
+              </button>
+            </div>
+          )}
+        </div>
 
         {user ? (
           <>
