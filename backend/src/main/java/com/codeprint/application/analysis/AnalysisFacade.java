@@ -3,12 +3,14 @@ package com.codeprint.application.analysis;
 
 import com.codeprint.application.project.ProjectCommandService;
 import com.codeprint.application.project.ProjectQueryService;
+import com.codeprint.application.user.UserQueryService;
 import com.codeprint.domain.analysis.AnalysisResult;
 import com.codeprint.domain.analysis.GateCheckLog;
 import com.codeprint.domain.analysis.GateCheckLogRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -20,6 +22,7 @@ public class AnalysisFacade {
     private final ProjectQueryService projectQueryService;
     private final ProjectCommandService projectCommandService;
     private final GateCheckLogRepository gateCheckLogRepository;
+    private final UserQueryService userQueryService;
 
     // 프로젝트 소유권 확인 후 레포 URL 반환 — PR 리뷰가 project 컨텍스트를 직접 의존하지 않도록 경유
     public String resolveOwnedRepoUrl(UUID projectId, UUID userId) {
@@ -91,5 +94,17 @@ public class AnalysisFacade {
     private PrGateStatus.LastCheck toLastCheck(GateCheckLog log) {
         return new PrGateStatus.LastCheck(
                 log.getPrNumber(), log.getState(), log.getHighCount(), log.getWarningCount(), log.getCreatedAt());
+    }
+
+    // PR 게이트가 연결된 프로젝트 전체를 소유자 GitHub 토큰과 함께 조회 — 토큰 없는 소유자는 제외(G-5 리컨실리에이션 cron 전용)
+    public List<PrGateConnectedProject> listPrGateConnectedProjects() {
+        return projectQueryService.getAllPrGateConnectedInternal().stream()
+                .map(project -> userQueryService.findGithubAccessToken(project.getUserId())
+                        .filter(token -> !token.isBlank())
+                        .map(token -> new PrGateConnectedProject(
+                                project.getId(), project.getUserId(), project.getGithubRepoUrl(), token)))
+                .filter(java.util.Optional::isPresent)
+                .map(java.util.Optional::get)
+                .toList();
     }
 }

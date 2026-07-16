@@ -17,4 +17,5 @@ final class NoOpProjectRepository implements ProjectRepository {
     @Override public List<Project> findPublicByUserId(UUID userId) { return List.of(); }
     @Override public void deleteById(UUID id) { }
     @Override public long count() { return 0; }
+    @Override public List<Project> findAllWithPrGateConnected() { return List.of(); }
 }

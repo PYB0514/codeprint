@@ -22,4 +22,7 @@ public interface ProjectJpaRepository extends JpaRepository<Project, UUID> {
     @Query("select p from Project p where lower(p.githubRepoUrl) = lower(:url) "
             + "or lower(p.githubRepoUrl) = lower(concat(:url, '.git'))")
     List<Project> findByRepoUrlNormalized(@Param("url") String url);
+
+    // PR 게이트 webhook이 연결된(시크릿 발급된) 프로젝트 전체 조회
+    List<Project> findByWebhookSecretIsNotNull();
 }

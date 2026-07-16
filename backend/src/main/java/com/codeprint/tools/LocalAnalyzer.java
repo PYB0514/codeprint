@@ -209,6 +209,7 @@ public class LocalAnalyzer {
         @Override public List<Project> findPublicByUserId(UUID userId) { return List.of(); }
         @Override public void deleteById(UUID id) { }
         @Override public long count() { return 0; }
+        @Override public List<Project> findAllWithPrGateConnected() { return List.of(); }
     }
 
     // DB 없이 GraphBuilder를 구동하기 위한 더미 — CLI엔 공유 게시물 개념이 없어 항상 빈 집합

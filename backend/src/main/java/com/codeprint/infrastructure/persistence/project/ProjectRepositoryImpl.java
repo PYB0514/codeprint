@@ -63,4 +63,10 @@ public class ProjectRepositoryImpl implements ProjectRepository {
     public List<Project> findPublicByUserId(UUID userId) {
         return jpa.findByUserIdAndIsPublicTrue(userId);
     }
+
+    // PR 게이트 webhook이 연결된 프로젝트 전체 조회
+    @Override
+    public List<Project> findAllWithPrGateConnected() {
+        return jpa.findByWebhookSecretIsNotNull();
+    }
 }

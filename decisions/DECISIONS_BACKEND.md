@@ -2,6 +2,22 @@
 
 ---
 
+## G-5 웹훅 리컨실리에이션 — cron 안전망(2026-07-17)
+
+**문제.** GATE_GAPS.md [G-5](Railway Serverless 콜드스타트로 PR 게이트 webhook 자체가 504)가 5·6회차까지 재발(PR #585·#586). Context132에서 재해석: 콜드스타트는 Serverless 비용 절감의 의식적 트레이드오프고, 진짜 갭은 "원인 불문(콜드스타트·네트워크·디스크 풀 등) 유실을 자가 복구하는 장치가 없다"는 것 — 지금까지는 close→reopen 수동 우회에만 의존했다.
+
+**결정.** 기존 `scheduled-jobs.yml`(GitHub Actions cron)에 시간당(`0 * * * *`) `reconcile-pr-gate` 잡 추가. `PrGateReconciliationService.reconcile()`이 PR 게이트 연결된 프로젝트 전체를 순회 — 프로젝트마다 열린 PR을 조회해 GitHub combined status(`GET /commits/{sha}/status`)에 `codeprint/structure` 컨텍스트가 없으면 `PrReviewRunner.reviewAsync`로 재트리거한다. 판정 시간창은 `withinReconcileWindow`(순수 함수, TDD)로 분리 — 유예시간(`GRACE_PERIOD=10분`, 정상 처리 중일 수 있어 제외) ~ 상한(`MAX_AGE=24시간`, 이미 다른 경로로 해소됐다고 보고 제외) 사이만 대상. 프로젝트 하나의 GitHub API 실패가 전체 순회를 막지 않도록 프로젝트별로 예외를 격리(`reconcileProject`).
+
+**설계 근거 — 왜 이 방식인가.** commit status는 SHA에 스코프되므로 "현재 head SHA에 codeprint/structure가 없다"는 것 자체가 "이 정확한 커밋에 대해 한 번도 처리되지 않았다"는 깨끗한 신호다 — PR별로 상태를 별도 저장할 필요 없이 GitHub API 조회만으로 판정 가능(추가 DB 테이블 불필요).
+
+**DDD 설계 — 크로스 컨텍스트 데이터 조회.** 리컨실리에이션은 analysis 컨텍스트의 행위(PR 리뷰 재트리거)지만 "연결된 프로젝트 전체 + 소유자 GitHub 토큰"은 project·user 컨텍스트 데이터다. `AnalysisFacade`(기존 크로스 컨텍스트 브릿지)에 `listPrGateConnectedProjects()`를 추가해 `ProjectQueryService.getAllPrGateConnectedInternal()`(신규, `getProjectInternal`과 동일한 "내부 시스템 호출 전용" 패턴) + `UserQueryService.findGithubAccessToken()`을 조합, `PrGateConnectedProject` 값 객체(신규 파일, `ProjectGateSettings.java`와 동일 패턴)로 반환 — `PrGateReconciliationService`는 `Project` 도메인 타입을 전혀 알 필요가 없다(V1 PR 게이트 PR에서 겪은 CROSS_CONTEXT_IMPORT 위반을 애초에 피하는 설계).
+
+**검증.** 단위 테스트: `PrGateReconciliationServiceTest` 신규 6건(시간창 판정 3건 + reconcile 분기 3건, 프로젝트별 격리 포함) TDD로 작성, `GitHubApiClientTest`에 `parseOpenPullRequests`/`hasContext` 파싱 로직 5건 추가. 백엔드 전체 테스트 green, `analyzeLocal` 신규 위반 0(베이스라인 유지). **런타임 검증**: 로컬 서버로 실제 GitHub API 호출 — `PYB0514/codeprint`(연결된 실 프로젝트)를 대상으로 `POST /api/cron/reconcile-pr-gate` 호출 → 실제 열린 PR 0개(사전에 `gh pr list`로 확인)와 일치하는 `{"status":"done","triggered":0}` 확인, 서버 로그로 실제 처리 경로를 탔음을 확인.
+
+**한계·다음.** 시간당 주기라 최악의 경우 최대 1시간 지연 — 사용자가 즉시 머지를 원하면 여전히 close→reopen 수동 우회가 필요(문서화됨, 폐기 아님). GitHub API 레이트리밋은 연결 프로젝트 수가 적은 현재 규모에선 무시 가능하나, 프로젝트 수가 크게 늘면 재검토 필요.
+
+---
+
 ## V1 PR 게이트 셀프서비스 UI — 프로젝트별 webhook 시크릿 신설(2026-07-17)
 
 **문제.** V1_UX_GAP_REVIEW.md 설계 A는 "프로젝트별 webhook secret 발급/표시"를 전제로 했으나, 실제 코드(`GitHubWebhookService`)는 `github.webhook-secret` 전역 단일 시크릿(환경변수 1개)으로 서명을 검증하고 repo URL 매칭으로 프로젝트를 역해석하는 구조였다. 셀프서비스로 만들면 이 전역 시크릿을 모든 사용자에게 노출해야 하는데, 그러면 시크릿을 본 사용자 누구나 다른 등록 저장소로 위조 서명된 webhook을 보내 가짜 PR 리뷰를 트리거할 수 있는 스푸핑 벡터가 생긴다.
