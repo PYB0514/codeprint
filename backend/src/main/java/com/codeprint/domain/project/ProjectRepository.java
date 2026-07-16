@@ -19,6 +19,9 @@ public interface ProjectRepository {
     // GitHub 레포 URL로 프로젝트 목록 조회 (.git 접미사·대소문자 무시) — webhook이 repo로 프로젝트 역해석
     List<Project> findByRepoUrl(String repoHttpsUrl);
 
+    // PR 게이트 webhook이 연결된(시크릿 발급된) 프로젝트 전체 조회 — G-5 리컨실리에이션 대상
+    List<Project> findAllWithPrGateConnected();
+
     // 사용자 ID로 비공개 프로젝트 수 조회 (공개 프로젝트는 제한 제외)
     int countPrivateByUserId(UUID userId);
 

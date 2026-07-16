@@ -11,6 +11,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -409,6 +410,76 @@ public class GitHubApiClient {
         int endIdx = Math.min(allLines.length, line + contextLines);
         if (startIdx >= endIdx) return null;
         return String.join("\n", java.util.Arrays.asList(allLines).subList(startIdx, endIdx));
+    }
+
+    // 열린 PR 목록 조회(최대 100개) — G-5 리컨실리에이션이 유실된 webhook을 찾는 데 사용
+    public List<OpenPullRequest> fetchOpenPullRequests(String githubRepoUrl, String githubAccessToken) {
+        String ownerRepo = extractOwnerRepo(githubRepoUrl);
+        String apiUrl = "https://api.github.com/repos/" + ownerRepo + "/pulls?state=open&per_page=100";
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28");
+            if (githubAccessToken != null && !githubAccessToken.isBlank()) {
+                builder.header("Authorization", "Bearer " + githubAccessToken);
+            }
+            HttpResponse<String> response = httpClient.send(builder.GET().build(), HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new RuntimeException("GitHub API " + response.statusCode() + " — " + response.body());
+            }
+            return parseOpenPullRequests(objectMapper.readTree(response.body()));
+        } catch (Exception e) {
+            throw new RuntimeException("GitHub 열린 PR 목록 조회 실패: " + ownerRepo, e);
+        }
+    }
+
+    // 열린 PR 목록 JSON에서 번호·head SHA·최종 갱신 시각을 추출 — 순수 함수(단위 테스트 대상)
+    static List<OpenPullRequest> parseOpenPullRequests(JsonNode arr) {
+        List<OpenPullRequest> result = new ArrayList<>();
+        if (!arr.isArray()) return result;
+        for (JsonNode node : arr) {
+            JsonNode head = node.get("head");
+            JsonNode number = node.get("number");
+            JsonNode updatedAt = node.get("updated_at");
+            if (head == null || head.get("sha") == null || number == null || updatedAt == null) continue;
+            result.add(new OpenPullRequest(number.asInt(), head.get("sha").asText(), Instant.parse(updatedAt.asText())));
+        }
+        return result;
+    }
+
+    public record OpenPullRequest(int number, String headSha, Instant updatedAt) {}
+
+    // 커밋의 combined status에 codeprint/structure 컨텍스트가 존재하는지 — 없으면 webhook이 도달 못 했다는 신호
+    public boolean hasStructureCommitStatus(String githubRepoUrl, String sha, String githubAccessToken) {
+        String ownerRepo = extractOwnerRepo(githubRepoUrl);
+        String apiUrl = "https://api.github.com/repos/" + ownerRepo + "/commits/" + sha + "/status";
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28");
+            if (githubAccessToken != null && !githubAccessToken.isBlank()) {
+                builder.header("Authorization", "Bearer " + githubAccessToken);
+            }
+            HttpResponse<String> response = httpClient.send(builder.GET().build(), HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new RuntimeException("GitHub API " + response.statusCode() + " — " + response.body());
+            }
+            return hasContext(objectMapper.readTree(response.body()).get("statuses"), "codeprint/structure");
+        } catch (Exception e) {
+            throw new RuntimeException("GitHub commit status 조회 실패: " + ownerRepo + "@" + sha, e);
+        }
+    }
+
+    // statuses 배열에 주어진 context가 존재하는지 — 순수 함수(단위 테스트 대상)
+    static boolean hasContext(JsonNode statusesArray, String context) {
+        if (statusesArray == null || !statusesArray.isArray()) return false;
+        for (JsonNode s : statusesArray) {
+            JsonNode c = s.get("context");
+            if (c != null && context.equals(c.asText())) return true;
+        }
+        return false;
     }
 
     // GitHub URL에서 owner/repo 경로를 추출

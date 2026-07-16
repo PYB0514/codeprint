@@ -46,6 +46,11 @@ public class ProjectQueryService {
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
     }
 
+    // 내부 시스템 호출 전용 — PR 게이트가 연결된 프로젝트 전체 조회 (G-5 리컨실리에이션 cron 전용)
+    public List<Project> getAllPrGateConnectedInternal() {
+        return projectRepository.findAllWithPrGateConnected();
+    }
+
     // 공개 프로젝트 조회 (비인증 허용)
     public Project getPublicProject(UUID projectId) {
         Project project = projectRepository.findById(projectId)

@@ -103,4 +103,56 @@ class GitHubApiClientTest {
 
         assertThat(GitHubApiClient.extractSnippet(content, 100, 2)).isNull();
     }
+
+    @Test
+    @DisplayName("parseOpenPullRequests — number/head.sha/updated_at을 추출한다")
+    void parseOpenPullRequests_extractsFields() {
+        JsonNode arr = parse("[{\"number\": 42, \"updated_at\": \"2026-07-17T01:00:00Z\","
+                + " \"head\": {\"sha\": \"abc123\"}}]");
+
+        var result = GitHubApiClient.parseOpenPullRequests(arr);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).number()).isEqualTo(42);
+        assertThat(result.get(0).headSha()).isEqualTo("abc123");
+        assertThat(result.get(0).updatedAt()).isEqualTo(java.time.Instant.parse("2026-07-17T01:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("parseOpenPullRequests — head.sha 누락 항목은 건너뛴다")
+    void parseOpenPullRequests_missingHeadSha_skipped() {
+        JsonNode arr = parse("[{\"number\": 1, \"updated_at\": \"2026-07-17T01:00:00Z\", \"head\": {}}]");
+
+        var result = GitHubApiClient.parseOpenPullRequests(arr);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("parseOpenPullRequests — 빈 배열이면 빈 목록을 반환한다")
+    void parseOpenPullRequests_emptyArray() {
+        assertThat(GitHubApiClient.parseOpenPullRequests(parse("[]"))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("hasContext — 일치하는 context가 있으면 true")
+    void hasContext_found() {
+        JsonNode arr = parse("[{\"context\": \"other/check\"}, {\"context\": \"codeprint/structure\"}]");
+
+        assertThat(GitHubApiClient.hasContext(arr, "codeprint/structure")).isTrue();
+    }
+
+    @Test
+    @DisplayName("hasContext — 일치하는 context가 없으면 false")
+    void hasContext_notFound() {
+        JsonNode arr = parse("[{\"context\": \"other/check\"}]");
+
+        assertThat(GitHubApiClient.hasContext(arr, "codeprint/structure")).isFalse();
+    }
+
+    @Test
+    @DisplayName("hasContext — 배열이 null이면 false")
+    void hasContext_nullArray() {
+        assertThat(GitHubApiClient.hasContext(null, "codeprint/structure")).isFalse();
+    }
 }
