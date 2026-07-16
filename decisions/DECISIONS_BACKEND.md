@@ -2,6 +2,16 @@
 
 ---
 
+## 프로덕션 안정성 갭 D — @Async 실행기 백프레셔 도입(2026-07-17)
+
+**문제.** `CodeprintApplication`에 `@EnableAsync`만 있고 커스텀 `TaskExecutor`가 없었다. 세션 중 로그(`AnnotationAsyncExecutionInterceptor`)에서 "More than one TaskExecutor bean found within the context, and none is named 'taskExecutor'"가 관찰됐는데 — WebSocket STOMP 설정이 등록한 `clientInboundChannelExecutor`·`clientOutboundChannelExecutor`·`brokerChannelExecutor` 등과 후보가 겹쳐 Spring이 유일한 `TaskExecutor` 빈을 특정하지 못하고 **무제한 스레드-per-태스크 `SimpleAsyncTaskExecutor`로 폴백**하고 있었다. `AnalysisRunner.run`(클론+파싱)·`PrReviewRunner.reviewAsync`(PR 리뷰)처럼 CPU·메모리 부담이 큰 `@Async` 작업이 동시에 여러 건 들어오면 스레드 수 제한이 전혀 없어 Railway의 제한된 메모리에서 OOM 위험이 있었다.
+
+**결정.** `infrastructure/config/AsyncConfig`를 신설해 `AsyncConfigurer`를 구현 — `@Async`가 항상 이 executor 하나로 명시 고정되게 해 다른 `TaskExecutor` 빈과의 모호성 자체를 제거했다. `ThreadPoolTaskExecutor`(core=4, max=8, queue=50) + `CallerRunsPolicy`(큐까지 가득 차면 작업을 버리는 대신 호출자 스레드에서 직접 실행 — webhook 응답 등 요청 스레드가 일시적으로 블로킹될 수 있지만 작업 유실은 없음). `AsyncUncaughtExceptionHandler`도 함께 등록해 void 반환 `@Async` 메서드가 예외를 조용히 삼키지 않도록 로깅 안전망 추가(현재 각 메서드가 자체 try/catch로 흡수하고 있어 실질 발동 빈도는 낮지만, 누락 시 대비).
+
+**검증.** 백엔드 전체 테스트 green, `analyzeLocal` 베이스라인 변화 없음(Spring 설정 클래스라 TDD 대상 도메인 로직 없음). **런타임 검증**: 로컬 서버로 실제 webhook을 트리거해 `PrReviewRunner.reviewAsync` 실행 로그의 스레드명이 `[deprint-async-1]`(`codeprint-async-1` 축약 표시)로 찍히는 것을 확인 — 수정 전 관찰됐던 "More than one TaskExecutor bean found" 경고도 재현되지 않음(커스텀 executor가 명시적으로 지정돼 모호성 탐색 자체를 건너뜀).
+
+---
+
 ## G-5 웹훅 리컨실리에이션 — cron 안전망(2026-07-17)
 
 **문제.** GATE_GAPS.md [G-5](Railway Serverless 콜드스타트로 PR 게이트 webhook 자체가 504)가 5·6회차까지 재발(PR #585·#586). Context132에서 재해석: 콜드스타트는 Serverless 비용 절감의 의식적 트레이드오프고, 진짜 갭은 "원인 불문(콜드스타트·네트워크·디스크 풀 등) 유실을 자가 복구하는 장치가 없다"는 것 — 지금까지는 close→reopen 수동 우회에만 의존했다.
