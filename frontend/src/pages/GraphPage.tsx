@@ -2,6 +2,7 @@
 // ⚠️ 새 "보기"(필터·조회·전환) 기능 추가 시 GraphViewerPage.tsx도 반영 검토 — 저장/수정 액션만 여기 전용, 보기는 비로그인도 동등해야 함(2026-07-02 결정)
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import {
   ReactFlow,
@@ -40,6 +41,7 @@ import { FlowPlaybackPanel } from '../components/FlowPlaybackPanel'
 import { type IgnoreRule, loadIgnoreRules, saveIgnoreRules } from '../utils/ignoreRules'
 import { CALL_FLOW_TYPES } from '../utils/flowPlayback'
 import { useFlowPlayback } from '../hooks/useFlowPlayback'
+import { currentDateLocale } from '../i18n/dateLocale'
 
 const nodeTypes = { groupNode: GroupNode, sectionNode: SectionNode, fileNode: FileNode, sketch: SketchNode }
 
@@ -241,6 +243,7 @@ function GraphPageInner() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { t } = useTranslation('workspace')
 
   // 협업 세션 상태 — URL query param에서 초기화
   const [collabSessionId, setCollabSessionId] = useState<string | null>(searchParams.get('collab'))
@@ -700,11 +703,11 @@ function GraphPageInner() {
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
       if (!isTourDone(GRAPH_TOUR_STORAGE_KEY)) setTimeout(() => setTourRunning(true), 800)
     } catch {
-      setError('그래프를 불러오지 못했습니다.')
+      setError(t('communityPostGraph.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [projectId, setNodes, setEdges, applyEdgeVisibility, fitView])
+  }, [projectId, setNodes, setEdges, applyEdgeVisibility, fitView, t])
   // 예외 규칙 변경 후 경고를 재조회하기 위해 최신 fetchGraph를 ref에 보관
   fetchGraphRef.current = fetchGraph
 
@@ -920,11 +923,11 @@ function GraphPageInner() {
       })
       setShowVersions(false)
     } catch {
-      setError('버전을 불러오지 못했습니다.')
+      setError(t('graphPage.versionLoadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges])
+  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges, t])
 
   // 현재 보는 버전 라벨 표시용 — 버전 목록을 조용히 로드 (graphId 변경 시 갱신)
   useEffect(() => {
@@ -950,9 +953,9 @@ function GraphPageInner() {
       setPinMenuGraphId(null)
       await refreshVersions()
     } catch {
-      setError('버전 고정에 실패했습니다.')
+      setError(t('graphPage.pinFailed'))
     }
-  }, [projectId, refreshVersions])
+  }, [projectId, refreshVersions, t])
 
   // 버전 고정 해제
   const handleUnpin = useCallback(async (gId: string) => {
@@ -960,9 +963,9 @@ function GraphPageInner() {
       await axios.delete(`/api/projects/${projectId}/graphs/${gId}/pin`)
       await refreshVersions()
     } catch {
-      setError('고정 해제에 실패했습니다.')
+      setError(t('graphPage.unpinFailed'))
     }
-  }, [projectId, refreshVersions])
+  }, [projectId, refreshVersions, t])
 
   // 스케치 노드를 프로젝트별 localStorage에서 로드 — 프로젝트 전환 시 save 준비 플래그 초기화
   useEffect(() => {
@@ -1736,15 +1739,15 @@ function GraphPageInner() {
 
   // 엣지 토글 섹션 — drag 중 nodes 변경과 무관하게 memoize하여 불필요한 reconcile 방지
   const edgeToggleSectionJsx = useMemo(() => (
-    <LeftSection title="엣지" id="tour-edges">
+    <LeftSection title={t('communityPostGraph.edgeTypes.heading')} id="tour-edges">
       <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
       {[
-        { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: '의존성',    textCls: showEdges ? 'text-gray-300' : 'text-gray-600',        active: showEdges,        onToggle: toggleEdges },
-        { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="5 4" /></svg>,                                label: '콜 체인',   textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600',    active: showCallEdges,    onToggle: toggleCallEdges },
-        { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: '생성',      textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600',   active: showInstEdges,    onToggle: toggleInstEdges },
-        { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: '끊긴 연결', textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600',   active: showBrokenEdges,  onToggle: toggleBrokenEdges },
-        { key: 'db',      icon: <svg width="16" height="4"><line x1="0" y1="2" x2="3.5" y2="2" stroke={showDbEdges ? '#22d3ee' : '#374151'} strokeWidth="1.5"/><line x1="4.5" y1="2" x2="8" y2="2" stroke={showDbEdges ? '#4ade80' : '#374151'} strokeWidth="1.5"/><line x1="9" y1="2" x2="12.5" y2="2" stroke={showDbEdges ? '#facc15' : '#374151'} strokeWidth="1.5"/><line x1="13.5" y1="2" x2="16" y2="2" stroke={showDbEdges ? '#f87171' : '#374151'} strokeWidth="1.5"/></svg>, label: 'DB 연결',   textCls: showDbEdges ? 'text-cyan-400' : 'text-gray-600',       active: showDbEdges,      onToggle: toggleDbEdges },
-        { key: 'api',     icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showApiCallEdges ? '#e879f9' : '#701a75'} strokeWidth="1.5" strokeDasharray="6 3" /></svg>,                              label: 'API 호출',  textCls: showApiCallEdges ? 'text-fuchsia-400' : 'text-gray-600', active: showApiCallEdges, onToggle: toggleApiCallEdges },
+        { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: t('communityPostGraph.edgeTypes.import'),    textCls: showEdges ? 'text-gray-300' : 'text-gray-600',        active: showEdges,        onToggle: toggleEdges },
+        { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="5 4" /></svg>,                                label: t('communityPostGraph.edgeTypes.call'),   textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600',    active: showCallEdges,    onToggle: toggleCallEdges },
+        { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: t('communityPostGraph.edgeTypes.inst'),      textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600',   active: showInstEdges,    onToggle: toggleInstEdges },
+        { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: t('communityPostGraph.edgeTypes.broken'), textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600',   active: showBrokenEdges,  onToggle: toggleBrokenEdges },
+        { key: 'db',      icon: <svg width="16" height="4"><line x1="0" y1="2" x2="3.5" y2="2" stroke={showDbEdges ? '#22d3ee' : '#374151'} strokeWidth="1.5"/><line x1="4.5" y1="2" x2="8" y2="2" stroke={showDbEdges ? '#4ade80' : '#374151'} strokeWidth="1.5"/><line x1="9" y1="2" x2="12.5" y2="2" stroke={showDbEdges ? '#facc15' : '#374151'} strokeWidth="1.5"/><line x1="13.5" y1="2" x2="16" y2="2" stroke={showDbEdges ? '#f87171' : '#374151'} strokeWidth="1.5"/></svg>, label: t('communityPostGraph.edgeTypes.db'),   textCls: showDbEdges ? 'text-cyan-400' : 'text-gray-600',       active: showDbEdges,      onToggle: toggleDbEdges },
+        { key: 'api',     icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showApiCallEdges ? '#e879f9' : '#701a75'} strokeWidth="1.5" strokeDasharray="6 3" /></svg>,                              label: t('communityPostGraph.edgeTypes.api'),  textCls: showApiCallEdges ? 'text-fuchsia-400' : 'text-gray-600', active: showApiCallEdges, onToggle: toggleApiCallEdges },
       ].map(({ key, icon, label, textCls, active, onToggle }) => (
         <div key={key} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}
           className={`flex items-center gap-1.5 px-1.5 py-1 rounded cursor-pointer hover:bg-gray-800/60 ${active ? '' : 'opacity-40'}`}>
@@ -1754,11 +1757,11 @@ function GraphPageInner() {
       ))}
       </div>
     </LeftSection>
-  ), [showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges, toggleEdges, toggleCallEdges, toggleInstEdges, toggleBrokenEdges, toggleDbEdges, toggleApiCallEdges])
+  ), [showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges, toggleEdges, toggleCallEdges, toggleInstEdges, toggleBrokenEdges, toggleDbEdges, toggleApiCallEdges, t])
 
   // 노드 타입 필터 섹션 — drag 중 변경 없음
   const nodeFilterSectionJsx = useMemo(() => (
-    <LeftSection title="노드">
+    <LeftSection title={t('graphPage.nodeFilterTitle')}>
       <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
         {([
           { type: 'FILE',         label: 'FILE',     color: '#6b7280' },
@@ -1780,7 +1783,7 @@ function GraphPageInner() {
         })}
       </div>
     </LeftSection>
-  ), [hiddenNodeTypes, toggleNodeType])
+  ), [hiddenNodeTypes, toggleNodeType, t])
 
   if (loading) {
     return (
@@ -1789,7 +1792,7 @@ function GraphPageInner() {
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
         </svg>
-        <p className="text-sm">코드 구조를 불러오는 중...</p>
+        <p className="text-sm">{t('graphPage.loadingCode')}</p>
       </div>
     )
   }
@@ -1798,11 +1801,11 @@ function GraphPageInner() {
     return (
       <div className="app-page min-h-screen bg-gray-950 flex flex-col items-center justify-center gap-4">
         <div className="text-4xl">⚠️</div>
-        <p className="text-gray-300 font-medium">그래프를 불러오지 못했습니다</p>
+        <p className="text-gray-300 font-medium">{t('graphPage.errorHeading')}</p>
         <p className="text-gray-500 text-sm">{error}</p>
         <div className="flex gap-3 mt-2">
-          <button onClick={() => window.location.reload()} className="text-sm bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-1.5 rounded-lg">다시 시도</button>
-          <button onClick={() => navigate('/mypage')} className="text-sm text-gray-400 hover:text-gray-200 underline">마이페이지로</button>
+          <button onClick={() => window.location.reload()} className="text-sm bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-1.5 rounded-lg">{t('graphPage.retryButton')}</button>
+          <button onClick={() => navigate('/mypage')} className="text-sm text-gray-400 hover:text-gray-200 underline">{t('graphPage.toMyPageButton')}</button>
         </div>
       </div>
     )
@@ -1826,8 +1829,8 @@ function GraphPageInner() {
         <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-1.5 bg-gray-800/80 border-b border-gray-700 text-gray-400 text-xs backdrop-blur-sm">
           <span>
             {freshnessError === 'rate_limit'
-              ? '⏳ GitHub API 요청 한도 초과 — 잠시 후 자동으로 최신 여부를 확인합니다.'
-              : 'GitHub 연결 오류 — 최신 커밋 확인에 실패했습니다.'}
+              ? t('graphPage.rateLimitBanner')
+              : t('graphPage.githubErrorBanner')}
           </span>
           <button onClick={() => setFreshnessError(null)} className="text-gray-600 hover:text-gray-300 ml-4">✕</button>
         </div>
@@ -1837,7 +1840,10 @@ function GraphPageInner() {
       {outdated && (
         <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-2 bg-yellow-900/80 border-b border-yellow-700 text-yellow-300 text-xs backdrop-blur-sm">
           <span>
-            ⚠️ <strong>{outdated.branch}</strong> 브랜치에 새 커밋이 있습니다. 마지막 분석: {new Date(outdated.lastAnalyzedAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+            {t('graphPage.outdatedBanner', {
+              branch: outdated.branch,
+              date: new Date(outdated.lastAnalyzedAt).toLocaleString(currentDateLocale(), { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+            })}
           </span>
           <div className="flex items-center gap-3">
             <button
@@ -1845,7 +1851,7 @@ function GraphPageInner() {
               disabled={reanalyzing}
               className="px-2 py-0.5 rounded bg-yellow-700/60 hover:bg-yellow-600/80 disabled:opacity-50 text-yellow-100 font-medium"
             >
-              {reanalyzing ? '분석 중...' : '지금 재분석'}
+              {reanalyzing ? t('graphPage.reanalyzing') : t('graphPage.reanalyzeNowButton')}
             </button>
             <button onClick={() => setOutdated(null)} className="text-yellow-500 hover:text-yellow-200">✕</button>
           </div>
@@ -1856,7 +1862,7 @@ function GraphPageInner() {
       {!outdated && !freshnessError && truncation && (
         <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-1.5 bg-orange-900/80 border-b border-orange-700 text-orange-300 text-xs backdrop-blur-sm">
           <span>
-            📦 대형 레포 — 전체 <strong>{truncation.total.toLocaleString()}</strong>개 파일 중 <strong>{truncation.analyzed.toLocaleString()}</strong>개만 분석되었습니다. 그래프는 일부 구조만 표시합니다.
+            {t('graphViewer.truncationBanner', { total: truncation.total.toLocaleString(), analyzed: truncation.analyzed.toLocaleString() })}
           </span>
           <button onClick={() => setTruncation(null)} className="text-orange-500 hover:text-orange-200 ml-4">✕</button>
         </div>
@@ -1868,19 +1874,19 @@ function GraphPageInner() {
           onClick={() => navigate('/mypage')}
           className="bg-gray-800 hover:bg-gray-700 text-white text-sm px-3 py-1.5 rounded-lg"
         >
-          ← 마이페이지
+          {t('graphPage.backToMyPageButton')}
         </button>
         <span className="text-gray-500 text-sm">
-          파일 {counts.files} · 함수 {counts.funcs} · 엣지 {counts.edges}
+          {t('graphPage.statsLabel', { files: counts.files, funcs: counts.funcs, edges: counts.edges })}
         </span>
         {ownRepo !== null && (
           <span
-            title={ownRepo ? '내 GitHub 계정 소유 레포입니다' : '내 소유가 아닌 공개 레포를 분석했습니다'}
+            title={ownRepo ? t('graphPage.ownRepoTooltip') : t('graphPage.externalRepoTooltip')}
             className={`text-[11px] px-2 py-0.5 rounded-full border ${
               ownRepo ? 'bg-blue-900/40 border-blue-700/50 text-blue-300' : 'bg-gray-800 border-gray-700 text-gray-400'
             }`}
           >
-            {ownRepo ? '내 레포' : '외부 레포 분석'}
+            {ownRepo ? t('graphViewer.ownRepoBadge') : t('graphViewer.externalRepoBadge')}
           </span>
         )}
 
@@ -1893,25 +1899,25 @@ function GraphPageInner() {
             onClick={() => setOpenToolbarMenu(m => m === 'preset' ? null : 'preset')}
             className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${openToolbarMenu === 'preset' ? 'bg-gray-700 text-white border-gray-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}
           >
-            🔖 프리셋 <span className="text-gray-500">▾</span>
+            {t('graphPage.presetButton')} <span className="text-gray-500">▾</span>
           </button>
           {openToolbarMenu === 'preset' && (
             <div className="absolute left-0 top-9 z-50 w-60 bg-gray-900 border border-gray-700 rounded-lg p-2 shadow-xl flex flex-col gap-1">
-              <p className="text-[10px] text-gray-500 px-1 pb-0.5">저장된 뷰 (클릭 = 적용, 💾 = 현재 뷰 저장)</p>
+              <p className="text-[10px] text-gray-500 px-1 pb-0.5">{t('graphPage.presetHint')}</p>
               {presets.map((p) => (
                 <div key={p.slot} className="flex items-center gap-1">
                   <button
                     onClick={() => { applyPresetConfig(p.config); setOpenToolbarMenu(null) }}
-                    title={`슬롯 ${p.slot} 불러오기`}
+                    title={t('graphPage.presetLoadTitle', { slot: p.slot })}
                     className="flex-1 text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 truncate"
                   >
                     <span className="text-gray-500 mr-1">{p.slot}.</span>
                     {p.name}
-                    {p.isDefault && <span className="ml-1 text-gray-600 text-[10px]">기본</span>}
+                    {p.isDefault && <span className="ml-1 text-gray-600 text-[10px]">{t('graphPage.presetDefaultBadge')}</span>}
                   </button>
                   <button
                     onClick={() => { setPendingSaveSlot(p.slot); setPresetSaveName(p.name); setShowSavePresetModal(true); setOpenToolbarMenu(null) }}
-                    title={`슬롯 ${p.slot}에 현재 뷰 저장`}
+                    title={t('graphPage.presetSaveTitle', { slot: p.slot })}
                     className="text-gray-600 hover:text-gray-300 text-xs px-1.5 py-1 rounded hover:bg-gray-800 flex-shrink-0"
                   >
                     💾
@@ -1927,7 +1933,7 @@ function GraphPageInner() {
             onClick={() => setOpenToolbarMenu(m => m === 'export' ? null : 'export')}
             className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${openToolbarMenu === 'export' ? 'bg-gray-700 text-white border-gray-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}
           >
-            ↓ 내보내기 <span className="text-gray-500">▾</span>
+            {t('graphPage.exportButton')} <span className="text-gray-500">▾</span>
           </button>
           {openToolbarMenu === 'export' && (
             <div className="absolute left-0 top-9 z-50 w-48 bg-gray-900 border border-gray-700 rounded-lg p-2 shadow-xl flex flex-col gap-1">
@@ -1936,21 +1942,21 @@ function GraphPageInner() {
                 disabled={exportingContextMd || rawNodes.length === 0}
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {exportingContextMd ? '생성 중...' : '↓ AI 컨텍스트 - 전체 (.md)'}
+                {exportingContextMd ? t('graphPage.generating') : t('graphPage.exportContextFull')}
               </button>
               <button
                 onClick={() => { handleDownloadContextMd('summary'); setOpenToolbarMenu(null) }}
                 disabled={exportingContextMd || rawNodes.length === 0}
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {exportingContextMd ? '생성 중...' : '↓ AI 컨텍스트 - 요약 (.md)'}
+                {exportingContextMd ? t('graphPage.generating') : t('graphPage.exportContextSummary')}
               </button>
               <button
                 onClick={() => { handleExportImage(); setOpenToolbarMenu(null) }}
                 disabled={exporting || rawNodes.length === 0}
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {exporting ? '저장 중...' : '↓ 이미지 (.png)'}
+                {exporting ? t('graphPage.savingImage') : t('graphPage.exportImage')}
               </button>
             </div>
           )}
@@ -1965,7 +1971,7 @@ function GraphPageInner() {
             onClick={() => setShowShareModal(true)}
             className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 py-1.5 rounded-lg"
           >
-            커뮤니티에 공유
+            {t('graphPage.shareToCommunityButton')}
           </button>
         )}
         {/* 팀채팅 패널 토글 */}
@@ -1977,7 +1983,7 @@ function GraphPageInner() {
               : 'text-gray-400 border-gray-700 hover:border-gray-500 hover:text-white bg-gray-800'
           }`}
         >
-          💬 팀채팅
+          💬 {t('graphPage.teamChatButton')}
         </button>
         {/* 협업 세션 — 팀채팅 옆 */}
         {projectId && currentUserId && (
@@ -1997,8 +2003,8 @@ function GraphPageInner() {
             ?
           </button>
           <div className="absolute left-0 top-8 hidden group-hover:block bg-gray-900 border border-gray-700 rounded-lg p-3 text-xs text-gray-300 whitespace-nowrap z-50 shadow-xl">
-            <div className="font-semibold text-gray-200 mb-2">키보드 단축키</div>
-            {([['/', '검색창 포커스'], ['Esc', '사이드바 닫기'], ['F', '전체 화면 맞춤'], ['L', '라벨 이름/주석 전환']] as [string, string][]).map(([key, desc]) => (
+            <div className="font-semibold text-gray-200 mb-2">{t('graphPage.shortcutsHeading')}</div>
+            {([['/', t('graphPage.shortcuts.searchFocus')], ['Esc', t('graphPage.shortcuts.closeSidebar')], ['F', t('graphPage.shortcuts.fitView')], ['L', t('graphPage.shortcuts.toggleLabel')]] as [string, string][]).map(([key, desc]) => (
               <div key={key} className="flex items-center gap-3 py-0.5">
                 <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-[10px] font-mono min-w-[24px] text-center">{key}</kbd>
                 <span className="text-gray-400">{desc}</span>
@@ -2030,25 +2036,25 @@ function GraphPageInner() {
             >
               Codeprint
             </button>
-            <button onClick={() => setLeftOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-md bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white text-lg leading-none transition-colors" title="사이드바 접기">‹</button>
+            <button onClick={() => setLeftOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-md bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white text-lg leading-none transition-colors" title={t('graphViewer.collapseSidebar')}>‹</button>
           </div>
 
           <div className="flex flex-col gap-0 flex-1">
 
             {/* 노드 검색 */}
-            <LeftSection title="노드 검색">
+            <LeftSection title={t('graphViewer.nodeSearchHeading')}>
               <input
                 ref={searchInputRef}
                 type="text"
                 value={nodeSearchQuery}
                 onChange={e => setNodeSearchQuery(e.target.value)}
-                placeholder="파일명 / 함수명 검색... (/)"
+                placeholder={t('graphPage.searchPlaceholder')}
                 className="w-full text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500"
               />
               {nodeSearchQuery.trim() && (() => {
                 const results = searchNodes(rawNodes, nodeSearchQuery)
                 return results.length === 0 ? (
-                  <p className="text-[10px] text-gray-600 mt-1 px-1">결과 없음</p>
+                  <p className="text-[10px] text-gray-600 mt-1 px-1">{t('graphViewer.noResults')}</p>
                 ) : (
                   <div className="mt-1 flex flex-col gap-0.5 max-h-48 overflow-y-auto">
                     {results.map(n => (
@@ -2072,7 +2078,7 @@ function GraphPageInner() {
 
             {/* 보기 옵션 */}
             {(layoutPreset === 'domain' || bgUrl) && (
-              <LeftSection title="보기">
+              <LeftSection title={t('graphViewer.viewSectionHeading')}>
                 {layoutPreset === 'domain' && (
                   <button
                     onClick={() => setShowDomainBoxes(v => !v)}
@@ -2082,7 +2088,7 @@ function GraphPageInner() {
                         : 'bg-gray-800/60 text-gray-500 hover:bg-gray-800'
                     }`}
                   >
-                    {showDomainBoxes ? '⬡ 도메인 박스 켜짐' : '⬡ 도메인 박스 꺼짐'}
+                    {showDomainBoxes ? t('graphPage.domainBoxOn') : t('graphPage.domainBoxOff')}
                   </button>
                 )}
                 {/* 배경이미지 토글 — 배경사진 설정한 경우만 표시 */}
@@ -2095,21 +2101,21 @@ function GraphPageInner() {
                         : 'bg-gray-800/60 text-gray-500 hover:bg-gray-800'
                     }`}
                   >
-                    {bgEnabled ? '🖼 배경이미지 켜짐' : '□ 배경이미지 꺼짐'}
+                    {bgEnabled ? t('graphViewer.bgOn') : t('graphViewer.bgOff')}
                   </button>
                 )}
               </LeftSection>
             )}
 
             {/* 스케치 (슈퍼 바이브 코딩 P0, 베타) */}
-            <LeftSection title="✏️ 스케치 (베타)">
+            <LeftSection title={t('graphPage.sketchSectionTitle')}>
               <button
                 onClick={() => setSketchMode(v => !v)}
                 className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
                   sketchMode ? 'bg-purple-900/50 text-purple-200 hover:bg-purple-900/70' : 'bg-gray-800/60 text-gray-300 hover:bg-gray-800'
                 }`}
               >
-                {sketchMode ? '✓ 스케치 모드 켜짐' : '○ 스케치 모드 켜기'}
+                {sketchMode ? t('graphPage.sketchModeOn') : t('graphPage.sketchModeOff')}
               </button>
               {sketchMode && (
                 <div className="mt-1 flex flex-col gap-1">
@@ -2117,21 +2123,21 @@ function GraphPageInner() {
                     onClick={addSketchNode}
                     className="w-full text-left text-xs px-2 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white"
                   >
-                    + 설계 노드 추가
+                    {t('graphPage.addSketchNodeButton')}
                   </button>
                   <p className="text-[11px] text-gray-500 leading-relaxed px-1">
-                    기존 구조 위에 새 노드를 자유롭게 배치·이동. 점선 보라색이 설계 노드입니다. 현재 이 브라우저에만 임시 저장됩니다.
-                    {sketchNodes.length > 0 && <span className="text-purple-400"> · {sketchNodes.length}개</span>}
+                    {t('graphPage.sketchDesc')}
+                    {sketchNodes.length > 0 && <span className="text-purple-400">{t('graphPage.sketchCount', { count: sketchNodes.length })}</span>}
                   </p>
                 </div>
               )}
             </LeftSection>
 
             {/* 버전 기록 */}
-            <LeftSection title="버전 기록" headerRight={
+            <LeftSection title={t('graphPage.versionHistoryTitle')} headerRight={
               <button
                 onClick={() => setShowRetentionInfo(v => !v)}
-                title="버전 보관 정책"
+                title={t('graphPage.retentionPolicyTitle')}
                 className={`w-4 h-4 rounded-full border text-[10px] leading-none flex items-center justify-center ${showRetentionInfo ? 'border-blue-500 text-blue-400' : 'border-gray-600 text-gray-500 hover:text-gray-300'}`}
               >
                 ?
@@ -2139,22 +2145,22 @@ function GraphPageInner() {
             }>
               {showRetentionInfo && (
                 <div className="text-[11px] text-gray-400 bg-gray-800/60 rounded p-2 mb-1.5 leading-relaxed">
-                  최근 <span className="text-gray-200">10개</span> 버전만 자동 보관됩니다. 그보다 오래된 버전은 새 분석 시 <span className="text-gray-200">자동 삭제</span>(노드 메모·색상 포함)됩니다. 계속 보관하려면 아래 <span className="text-amber-400">📌</span> 로 최대 <span className="text-gray-200">5개</span>까지 슬롯에 고정하세요.
+                  {t('graphPage.retentionInfoText', { count: 10, maxPin: 5 })}
                 </div>
               )}
               {currentVersion && (
                 <div className="text-[11px] px-1 pb-1 leading-tight">
-                  <span className="text-gray-500">현재 보는 버전</span><br />
+                  <span className="text-gray-500">{t('graphPage.currentVersionLabel')}</span><br />
                   <span className="text-blue-400">{currentVersion.branch}</span>{' '}
                   <span className="text-gray-500">
-                    {new Date(currentVersion.createdAt).toLocaleString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    {new Date(currentVersion.createdAt).toLocaleString(currentDateLocale(), { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                   </span>
-                  {currentVersion.pinnedSlot && <span className="text-amber-400"> · 📌{currentVersion.pinnedSlot} 고정됨</span>}
+                  {currentVersion.pinnedSlot && <span className="text-amber-400">{t('graphPage.pinnedBadge', { slot: currentVersion.pinnedSlot })}</span>}
                 </div>
               )}
               {/* 고정 슬롯 표시 — 채워진 슬롯 클릭 시 해당 버전 로드 */}
               <div className="px-1 pb-1.5">
-                <span className="text-[10px] text-gray-500">고정 슬롯</span>
+                <span className="text-[10px] text-gray-500">{t('graphPage.pinnedSlotsLabel')}</span>
                 <div className="flex gap-1 mt-0.5">
                   {[1, 2, 3, 4, 5].map((slot) => {
                     const g = versions.find((x) => x.pinnedSlot === slot)
@@ -2163,7 +2169,7 @@ function GraphPageInner() {
                         key={slot}
                         disabled={!g}
                         onClick={() => g && handleLoadVersion(g.graphId)}
-                        title={g ? `슬롯 ${slot}: ${g.branch} ${new Date(g.createdAt).toLocaleDateString('ko-KR')}` : `슬롯 ${slot}: 비어 있음`}
+                        title={g ? t('graphPage.slotFilledTitle', { slot, branch: g.branch, date: new Date(g.createdAt).toLocaleDateString(currentDateLocale()) }) : t('graphPage.slotEmptyTitle', { slot })}
                         className={`w-6 h-6 text-[10px] rounded border flex items-center justify-center transition-colors ${
                           g ? 'bg-amber-900/40 border-amber-700 text-amber-300 hover:bg-amber-900/70' : 'border-gray-700 text-gray-600'
                         }`}
@@ -2178,14 +2184,14 @@ function GraphPageInner() {
                 onClick={handleLoadVersions}
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300"
               >
-                {showVersions ? '▲ 닫기' : '▼ 버전 목록 보기'}
+                {showVersions ? t('graphPage.toggleVersionsClose') : t('graphPage.toggleVersionsOpen')}
               </button>
               {showVersions && (
                 <div className="mt-1 flex flex-col gap-1 max-h-60 overflow-y-auto">
                   {loadingVersions ? (
-                    <p className="text-xs text-gray-500 px-1">불러오는 중...</p>
+                    <p className="text-xs text-gray-500 px-1">{t('graphPage.loadingVersions')}</p>
                   ) : versions.length === 0 ? (
-                    <p className="text-xs text-gray-500 px-1">버전 없음</p>
+                    <p className="text-xs text-gray-500 px-1">{t('graphPage.noVersions')}</p>
                   ) : (
                     versions.map((v, i) => (
                       <div key={v.graphId} className="flex flex-col">
@@ -2196,17 +2202,17 @@ function GraphPageInner() {
                               v.graphId === graphId ? 'bg-gray-700 text-white' : 'bg-gray-800/40 text-gray-400'
                             }`}
                           >
-                            <span className="text-gray-300">{i === 0 ? '최신 ' : ''}</span>
+                            <span className="text-gray-300">{i === 0 ? t('graphPage.latestPrefix') : ''}</span>
                             <span className="text-blue-400">{v.branch}</span>
                             {v.pinnedSlot && <span className="text-amber-400"> 📌{v.pinnedSlot}</span>}
                             <br />
                             <span className="text-gray-500">
-                              {new Date(v.createdAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              {new Date(v.createdAt).toLocaleString(currentDateLocale(), { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </button>
                           <button
                             onClick={() => v.pinnedSlot ? handleUnpin(v.graphId) : setPinMenuGraphId(pinMenuGraphId === v.graphId ? null : v.graphId)}
-                            title={v.pinnedSlot ? `슬롯 ${v.pinnedSlot} 고정 해제` : '슬롯에 고정'}
+                            title={v.pinnedSlot ? t('graphPage.unpinTitle', { slot: v.pinnedSlot }) : t('graphPage.pinTitle')}
                             className={`px-2 rounded text-sm flex-shrink-0 transition-colors ${
                               v.pinnedSlot ? 'bg-amber-900/50 text-amber-300 hover:bg-amber-900/80' : 'bg-gray-800/60 text-gray-500 hover:text-amber-300'
                             }`}
@@ -2216,7 +2222,7 @@ function GraphPageInner() {
                         </div>
                         {pinMenuGraphId === v.graphId && !v.pinnedSlot && (
                           <div className="mt-1 ml-1 p-2 bg-gray-800 rounded flex flex-col gap-1">
-                            <span className="text-[10px] text-gray-500">고정할 슬롯 선택 (사용 중 슬롯 선택 시 덮어쓰기)</span>
+                            <span className="text-[10px] text-gray-500">{t('graphPage.pinMenuHint')}</span>
                             {[1, 2, 3, 4, 5].map((slot) => {
                               const occupant = versions.find((x) => x.pinnedSlot === slot)
                               return (
@@ -2225,10 +2231,10 @@ function GraphPageInner() {
                                   onClick={() => handlePin(v.graphId, slot)}
                                   className="text-left text-[11px] px-2 py-1 rounded bg-gray-900/60 hover:bg-gray-700 text-gray-300"
                                 >
-                                  <span className="text-amber-400 mr-1">슬롯 {slot}</span>
+                                  <span className="text-amber-400 mr-1">{t('graphPage.pinMenuSlotLabel', { slot })}</span>
                                   {occupant
-                                    ? <span className="text-gray-500">{occupant.branch} {new Date(occupant.createdAt).toLocaleDateString('ko-KR')} (덮어쓰기)</span>
-                                    : <span className="text-gray-600">비어 있음</span>}
+                                    ? <span className="text-gray-500">{t('graphPage.pinMenuOccupant', { branch: occupant.branch, date: new Date(occupant.createdAt).toLocaleDateString(currentDateLocale()) })}</span>
+                                    : <span className="text-gray-600">{t('graphPage.pinMenuEmpty')}</span>}
                                 </button>
                               )
                             })}
@@ -2242,12 +2248,12 @@ function GraphPageInner() {
             </LeftSection>
 
             {/* 버전 비교 */}
-            <LeftSection title="버전 비교">
+            <LeftSection title={t('graphPage.versionDiffTitle')}>
               <button
                 onClick={() => navigate(`/projects/${projectId}/diff`)}
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300"
               >
-                🔀 버전 diff 보기
+                {t('graphPage.versionDiffButton')}
               </button>
             </LeftSection>
 
@@ -2258,17 +2264,17 @@ function GraphPageInner() {
             {edgeToggleSectionJsx}
 
             {/* 범례 — 계층형/도메인 레이어 + 노드 */}
-            <LeftSection title="범례">
+            <LeftSection title={t('graphPage.legendTitle')}>
               {layoutPreset === 'domain' && (
                 <>
                   <GraphLegend
-                    headerText="도메인 (클릭 = 해당 도메인만 보기)"
+                    headerText={t('graphPage.legendDomainHeading')}
                     entries={availableTabs.map((key) => ({ key, label: key.charAt(0).toUpperCase() + key.slice(1), color: domainColorMap.get(key)?.color ?? '#6b7280' }))}
                     opaqueSet={opaqueDomainSet}
                     onToggleOpaque={toggleDomainOpaque}
                     isActive={(entry) => activeDomainTab === entry.key}
                     onLabelClick={(entry) => activateDomain(entry.key)}
-                    labelTitle="이 도메인만 보기 + 흐름 목록"
+                    labelTitle={t('graphPage.domainOnlyFlowsTitle')}
                     onReset={resetDomainTab}
                     resetActive={activeDomainTab === null}
                   />
@@ -2279,10 +2285,10 @@ function GraphPageInner() {
                       className="text-gray-400 text-xs truncate cursor-pointer hover:text-white transition-colors flex-1 min-w-0"
                       onClick={() => {
                         const dbFlows = rawNodes.filter(n => n.type === 'DB_TABLE').map(n => ({ id: n.id, label: n.comment || n.name, preview: [n.comment || n.name] }))
-                        setSidebar({ kind: 'domain-summary', domainName: 'DB 테이블', color: '#22d3ee', flows: dbFlows })
+                        setSidebar({ kind: 'domain-summary', domainName: t('graphPage.dbTableDomainName'), color: '#22d3ee', flows: dbFlows })
                         setRightCollapsed(false)
                       }}
-                      title="DB 테이블 목록 보기"
+                      title={t('graphPage.dbTableListTitle')}
                     >DB</span>
                   </div>
                   <div className="border-t border-gray-800 my-2" />
@@ -2291,13 +2297,13 @@ function GraphPageInner() {
               {layoutPreset === 'layer' && (
                 <>
                   <GraphLegend
-                    headerText="계층형 레이어 (클릭 = 해당 레이어만 보기)"
+                    headerText={t('graphPage.legendLayerHeading')}
                     entries={layerSections}
                     opaqueSet={opaqueLayerSet}
                     onToggleOpaque={toggleLayerOpaque}
                     isActive={(entry) => activeDomainTab === entry.key}
                     onLabelClick={(entry) => activateDomain(entry.key)}
-                    labelTitle="이 레이어만 보기"
+                    labelTitle={t('graphViewer.showOnlyLayer')}
                     onReset={resetDomainTab}
                     resetActive={activeDomainTab === null}
                   />
@@ -2350,18 +2356,18 @@ function GraphPageInner() {
         <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none">
           <div className="bg-gray-900 border border-gray-700 rounded-xl px-8 py-6 flex flex-col items-center gap-3 max-w-sm text-center pointer-events-auto">
             <div className="text-3xl">🔍</div>
-            <p className="text-gray-200 font-medium">분석 결과가 없습니다</p>
-            <p className="text-gray-500 text-sm">지원되는 소스 파일을 찾지 못했거나, 분석이 아직 완료되지 않았을 수 있습니다.</p>
+            <p className="text-gray-200 font-medium">{t('graphPage.emptyGraphTitle')}</p>
+            <p className="text-gray-500 text-sm">{t('graphPage.emptyGraphDesc')}</p>
             <ul className="text-left text-xs text-gray-500 space-y-1 mt-1">
-              <li>• GitHub 레포 루트 URL인지 확인 (서브폴더 URL이면 파일 감지 제한)</li>
-              <li>• 지원 언어: Java, TypeScript, JavaScript, Python, Go, Ruby, PHP, C#</li>
-              <li>• 빈 레포 또는 README만 있는 레포는 노드가 생성되지 않음</li>
+              <li>• {t('graphPage.emptyGraphTip1')}</li>
+              <li>• {t('graphPage.emptyGraphTip2')}</li>
+              <li>• {t('graphPage.emptyGraphTip3')}</li>
             </ul>
             <div className="flex gap-2 mt-2">
               <button
                 onClick={() => navigate('/mypage')}
                 className="text-sm bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-1.5 rounded-lg"
-              >마이페이지에서 재분석</button>
+              >{t('graphPage.reanalyzeFromMyPageButton')}</button>
             </div>
           </div>
         </div>
@@ -2374,7 +2380,7 @@ function GraphPageInner() {
           onOpen={() => setArchPanelOpen(true)}
           onClose={() => setArchPanelOpen(false)}
           icon="🏛"
-          title="아키텍처 의도"
+          title={t('graphPage.archIntentPanelTitle')}
           panelClassName="w-72 max-h-[55vh]"
           style={{ left: leftOpen ? `${leftWidth + 16}px` : '20px' }}
         >
@@ -2392,12 +2398,12 @@ function GraphPageInner() {
         onOpen={() => setAnalysisPanelOpen(true)}
         onClose={() => setAnalysisPanelOpen(false)}
         icon="🔎"
-        title="분석 · 경고"
+        title={t('graphPage.analysisPanelTitle')}
         count={warnings.length}
         panelClassName="w-80 max-h-[60vh]"
         style={{ right: rightCollapsed ? '16px' : `${rightWidth + 16}px` }}
         headerExtra={warnings.length > 0 ? (
-          <button onClick={() => downloadWarningsMd(warnings)} title="경고 마크다운 내보내기" className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
+          <button onClick={() => downloadWarningsMd(warnings)} title={t('graphViewer.exportWarningsTooltip')} className="text-gray-500 hover:text-gray-300 text-[10px] px-1.5 py-0.5 rounded hover:bg-gray-800">↓ MD</button>
         ) : undefined}
       >
         {(warnings.length > 0 || suppressedWarnings.length > 0) ? (
@@ -2419,7 +2425,7 @@ function GraphPageInner() {
             }}
           />
         ) : (
-          <p className="text-[11px] text-gray-500 px-1 pt-1">감지된 구조 경고가 없습니다.</p>
+          <p className="text-[11px] text-gray-500 px-1 pt-1">{t('graphViewer.noWarnings')}</p>
         )}
       </CornerPanel>
 
@@ -2427,23 +2433,23 @@ function GraphPageInner() {
       {resultCard && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 w-[340px] bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden pointer-events-auto">
           <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-800">
-            <span className="text-sm font-semibold text-gray-100">분석 완료</span>
-            <button onClick={() => setResultCard(null)} className="text-gray-600 hover:text-gray-300 text-sm" title="닫기">✕</button>
+            <span className="text-sm font-semibold text-gray-100">{t('graphPage.resultCardTitle')}</span>
+            <button onClick={() => setResultCard(null)} className="text-gray-600 hover:text-gray-300 text-sm" title={t('graphPage.closeTooltip')}>✕</button>
           </div>
           <div className="px-4 py-3 flex flex-col gap-3">
             {/* 구조 카운트 */}
             <div className="text-xs text-gray-400">
-              파일 <strong className="text-gray-200">{resultCard.files}</strong> · 함수 <strong className="text-gray-200">{resultCard.funcs}</strong>
+              {t('graphPage.filesLabel')} <strong className="text-gray-200">{resultCard.files}</strong> · {t('graphPage.funcsLabel')} <strong className="text-gray-200">{resultCard.funcs}</strong>
               {resultCard.db > 0 && <> · DB <strong className="text-gray-200">{resultCard.db}</strong></>}
               {resultCard.api > 0 && <> · API <strong className="text-gray-200">{resultCard.api}</strong></>}
             </div>
 
             {/* 경고 가치 — 핵심 */}
             {resultCard.warnTotal === 0 ? (
-              <div className="text-sm text-green-300">✅ 구조 문제가 발견되지 않았습니다</div>
+              <div className="text-sm text-green-300">{t('graphPage.noIssuesFound')}</div>
             ) : (
               <div className="flex flex-col gap-2">
-                <div className="text-sm text-yellow-300">⚠️ 잠재 문제 <strong>{resultCard.warnTotal}</strong>개 발견</div>
+                <div className="text-sm text-yellow-300">{t('graphPage.issuesFoundBanner', { count: resultCard.warnTotal })}</div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {resultCard.high > 0 && (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-900/60 text-red-300 border border-red-700/50">HIGH {resultCard.high}</span>
@@ -2462,14 +2468,14 @@ function GraphPageInner() {
                     setResultCard(null)
                   }}
                   className="text-sm bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg self-start"
-                >경고 보기 →</button>
+                >{t('graphPage.viewWarningsButton')}</button>
               </div>
             )}
 
             {/* 저커버리지 안내 */}
             {resultCard.lowCoverage && (
               <div className="text-[11px] text-gray-500 border-t border-gray-800 pt-2">
-                파일 수가 적습니다. 레포 루트 URL인지 확인해주세요.
+                {t('graphPage.lowCoverageNotice')}
               </div>
             )}
           </div>
