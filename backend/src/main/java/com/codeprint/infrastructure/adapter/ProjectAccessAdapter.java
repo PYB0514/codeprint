@@ -1,6 +1,7 @@
 // Graph ProjectAccessPort의 project 컨텍스트 어댑터 — 소유·공개 검증 위임 + view 변환
 package com.codeprint.infrastructure.adapter;
 
+import com.codeprint.application.project.ProjectCommandService;
 import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.graph.port.ProjectAccessPort;
 import com.codeprint.domain.project.Project;
@@ -14,6 +15,7 @@ import java.util.UUID;
 public class ProjectAccessAdapter implements ProjectAccessPort {
 
     private final ProjectQueryService projectQueryService;
+    private final ProjectCommandService projectCommandService;
 
     @Override
     public void verifyOwnership(UUID projectId, UUID userId) {
@@ -53,8 +55,14 @@ public class ProjectAccessAdapter implements ProjectAccessPort {
         }
     }
 
+    @Override
+    public void setDddMigrationEnabled(UUID projectId, UUID userId, boolean enabled) {
+        projectCommandService.setDddMigrationEnabled(projectId, userId, enabled);
+    }
+
     // project 도메인 엔티티를 graph 도메인 소유 view로 변환 — 필요한 필드만 추림
     private ProjectAccessView toView(Project project) {
-        return new ProjectAccessView(project.getId(), project.getUserId(), project.getName(), project.getGithubRepoUrl());
+        return new ProjectAccessView(project.getId(), project.getUserId(), project.getName(),
+                project.getGithubRepoUrl(), project.isDddMigrationEnabled());
     }
 }

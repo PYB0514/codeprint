@@ -1,7 +1,9 @@
 // 그래프 컨트롤러가 analysis·project 컨텍스트를 직접 주입하지 않도록 조율하는 Facade
 package com.codeprint.application.graph;
 
+import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
+import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.graph.port.AnalysisReadPort;
 import com.codeprint.domain.graph.port.GraphUserInfoPort;
 import com.codeprint.domain.graph.port.ProjectAccessPort;
@@ -20,6 +22,7 @@ import java.util.UUID;
 public class GraphFacade {
 
     private final GraphQueryService graphQueryService;
+    private final GraphWarningService graphWarningService;
     private final ProjectAccessPort projectAccessPort;
     private final AnalysisReadPort analysisReadPort;
     private final GraphUserInfoPort graphUserInfoPort;
@@ -103,5 +106,23 @@ public class GraphFacade {
     // analysis에서 브랜치 조회 — 분석 없으면 "default"
     private String getBranchSafely(Graph graph) {
         return analysisReadPort.findBranch(graph.getAnalysisId()).orElse("default");
+    }
+
+    // 소유권 확인 후 현재 적용 중인 게이트 테마(DDD/LAYERED/GENERIC) + 규칙 목록 조회(1단계 표면화)
+    public GraphWarningService.ActiveTheme getGateTheme(UUID projectId, UUID userId) {
+        ProjectAccessView project = projectAccessPort.getOwnedProject(projectId, userId);
+        Graph graph = graphQueryService.findLatestByProject(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("No graph found for project: " + projectId));
+        List<Node> nodes = graphQueryService.getNodes(graph.getId());
+        List<Edge> edges = graphQueryService.getEdges(graph.getId());
+        return graphWarningService.detectActiveTheme(nodes, edges, project.dddMigrationEnabled());
+    }
+
+    // 소유권 확인 후 DDD 마이그레이션 플래그 켬/끔 + 경고 캐시 무효화(detect() 결과가 바로 반영되도록) + 갱신된 테마 반환
+    public GraphWarningService.ActiveTheme setDddMigrationEnabled(UUID projectId, UUID userId, boolean enabled) {
+        projectAccessPort.verifyOwnership(projectId, userId);
+        projectAccessPort.setDddMigrationEnabled(projectId, userId, enabled);
+        graphQueryService.evictWarningsCache();
+        return getGateTheme(projectId, userId);
     }
 }

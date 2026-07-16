@@ -15,6 +15,15 @@ import java.util.*;
 @RequiredArgsConstructor
 public class GraphWarningService {
 
+    // 게이트 테마별 규칙 타입 — detectActiveTheme()과 detect()의 분기가 항상 같은 목록을 참조하도록 단일 소스로 고정
+    private static final List<String> DDD_RULE_TYPES = List.of(
+            "DB_LAYER_BYPASS", "CROSS_CONTEXT_IMPORT", "DOMAIN_IMPORTS_INFRA", "INTERFACES_IMPORTS_INFRA", "CROSS_DOMAIN_CALL");
+    private static final List<String> LAYERED_RULE_TYPES = List.of("LAYERED_REVERSE_DEPENDENCY", "LAYERED_BYPASS");
+    private static final List<String> FEATURE_SLICE_RULE_TYPES = List.of("CROSS_FEATURE_IMPORT", "FEATURE_LAYER_VIOLATION");
+    private static final List<String> UNIVERSAL_RULE_TYPES = List.of(
+            "CYCLIC_IMPORT", "BROKEN_INTERFACE_CHAIN", "ASYNC_SELF_CALL", "MISSING_CONVERTER_MIGRATION",
+            "MISSING_TRANSACTIONAL_DELETE", "DEAD_CODE", "HIGH_FAN_OUT");
+
     // 그래프 노드·엣지에서 경고 목록을 생성
     public List<Map<String, Object>> detect(List<Node> nodes, List<Edge> edges) {
         return detect(nodes, edges, null);
@@ -22,6 +31,11 @@ public class GraphWarningService {
 
     // 의도 아키텍처(intent)를 함께 받아 INTENT_DRIFT까지 검사 — intent가 null/빈값이면 기존 경고만 생성(하위호환)
     public List<Map<String, Object>> detect(List<Node> nodes, List<Edge> edges, ArchitectureIntent intent) {
+        return detect(nodes, edges, intent, false);
+    }
+
+    // dddMigrationEnabled — 자동감지와 무관하게 사용자가 "DDD로 마이그레이션"을 선택했을 때 DDD 게이트 규칙을 강제 적용
+    public List<Map<String, Object>> detect(List<Node> nodes, List<Edge> edges, ArchitectureIntent intent, boolean dddMigrationEnabled) {
         List<Map<String, Object>> warnings = new ArrayList<>();
         warnings.addAll(detectCyclicImports(nodes, edges));
         warnings.addAll(detectBrokenInterfaceChains(nodes, edges));
@@ -30,8 +44,8 @@ public class GraphWarningService {
         warnings.addAll(detectMissingTransactionalDelete(nodes, edges));
         warnings.addAll(detectDeadCode(nodes, edges));
         warnings.addAll(detectHighFanOut(nodes, edges));
-        // DDD 폴더 구조(/domain/, /application/, /infrastructure/)를 사용하는 프로젝트에만 적용
-        if (isDddProject(nodes)) {
+        // DDD 폴더 구조(/domain/, /application/, /infrastructure/)를 사용하는 프로젝트에만 적용 — 또는 마이그레이션 플래그로 강제
+        if (isDddProject(nodes) || dddMigrationEnabled) {
             warnings.addAll(detectDbLayerBypass(nodes, edges));
             warnings.addAll(detectCrossContextDomainImport(nodes, edges));
             warnings.addAll(detectDomainInfraImport(nodes, edges));
@@ -169,6 +183,55 @@ public class GraphWarningService {
             if (foundLayers.size() >= 2) return true;
         }
         return false;
+    }
+
+    // 프론트 언어 + 서로 다른 features/{X}/ 디렉터리 2개 이상이면 피처-슬라이스 프로젝트로 판단(CROSS_FEATURE·FEATURE_LAYER 공용 게이트)
+    private boolean isFeatureSliceProject(List<Node> nodes) {
+        Set<String> features = new HashSet<>();
+        boolean hasFrontend = false;
+        for (Node n : nodes) {
+            String f = featureOf(n.getFilePath());
+            if (f != null) features.add(f);
+            if (isFrontendLanguage(n.getLanguage())) hasFrontend = true;
+        }
+        return features.size() >= 2 && hasFrontend;
+    }
+
+    // 게이트 테마 표면화용 값 객체 — 현재 적용 중인 규칙 그룹과 각 그룹의 규칙 타입 목록(1단계, PROGRESS.md "게이트 테마" 참조)
+    public record ActiveTheme(String theme, List<String> themeRuleTypes, boolean featureSliceActive,
+                               List<String> featureSliceRuleTypes, List<String> universalRuleTypes,
+                               boolean dddDetected, boolean dddMigrationEnabled) {}
+
+    // 현재 프로젝트에 적용 중인 게이트 테마(DDD/LAYERED/GENERIC) + 규칙 목록을 계산 — detect()의 분기와 동일 조건 재사용
+    public ActiveTheme detectActiveTheme(List<Node> nodes, List<Edge> edges, boolean dddMigrationEnabled) {
+        boolean dddDetected = isDddProject(nodes);
+        boolean featureSliceActive = isFeatureSliceProject(nodes);
+        if (dddDetected || dddMigrationEnabled) {
+            return new ActiveTheme("DDD", DDD_RULE_TYPES, featureSliceActive, FEATURE_SLICE_RULE_TYPES,
+                    UNIVERSAL_RULE_TYPES, dddDetected, dddMigrationEnabled);
+        }
+        // 레이어드도 자체 게이트(분류된 레이어 2종 이상)가 있어 항상 적용되는 건 아님 — 조건 미충족이면 GENERIC
+        boolean layeredDetected = hasLayeredStructure(nodes);
+        if (layeredDetected) {
+            return new ActiveTheme("LAYERED", LAYERED_RULE_TYPES, featureSliceActive, FEATURE_SLICE_RULE_TYPES,
+                    UNIVERSAL_RULE_TYPES, false, false);
+        }
+        return new ActiveTheme("GENERIC", List.of(), featureSliceActive, FEATURE_SLICE_RULE_TYPES,
+                UNIVERSAL_RULE_TYPES, false, false);
+    }
+
+    // detectLayeredViolations의 "분류된 레이어 2종 이상" 게이트만 떼어내 재사용 — 실제 위반 목록 계산 없이 적용 여부만 판정
+    private boolean hasLayeredStructure(List<Node> nodes) {
+        if (isFeatureSliceProject(nodes)) return false;
+        EnumSet<Layer> present = EnumSet.noneOf(Layer.class);
+        for (Node n : nodes) {
+            if (n.getType() != NodeType.FILE) continue;
+            String fp = n.getFilePath() != null ? n.getFilePath() : "";
+            if (isTestPath(fp) || isTestArtifact(fp, n.getName() != null ? n.getName() : "")) continue;
+            Layer layer = classifyLayer(fp);
+            if (layer != null) present.add(layer);
+        }
+        return present.size() >= 2;
     }
 
     // IMPORT 엣지에서 순환 의존 탐지 (DFS 사이클 검출)
@@ -1508,14 +1571,7 @@ public class GraphWarningService {
         // 최하위 레이어)를 백엔드 Controller로 오분류해 entities→shared/api를 "레이어 역전"으로 오탐(fsd-examples
         // 실측, 2026-07-01). 이런 프로젝트는 전용 FEATURE_LAYER_VIOLATION(app→features→entities→shared 의미를
         // 정확히 앎)이 이미 커버하므로 동일 게이트(프론트 언어+피처 2개↑)로 이 검출기를 스킵한다.
-        Set<String> features = new HashSet<>();
-        boolean hasFrontend = false;
-        for (Node n : nodes) {
-            String f = featureOf(n.getFilePath());
-            if (f != null) features.add(f);
-            if (isFrontendLanguage(n.getLanguage())) hasFrontend = true;
-        }
-        if (features.size() >= 2 && hasFrontend) return List.of();
+        if (isFeatureSliceProject(nodes)) return List.of();
 
         Map<UUID, Layer> nodeLayer = new HashMap<>();
         Map<UUID, String> nameMap = new HashMap<>();

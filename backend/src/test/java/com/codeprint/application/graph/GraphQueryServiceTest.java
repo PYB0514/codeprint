@@ -6,6 +6,7 @@ import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.GraphRepository;
 import com.codeprint.domain.graph.Node;
+import com.codeprint.domain.graph.port.ProjectAccessPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,9 +36,11 @@ class GraphQueryServiceTest {
     private GraphWarningService graphWarningService;
     @Mock
     private ArchitectureIntentService architectureIntentService;
+    @Mock
+    private ProjectAccessPort projectAccessPort;
 
     private GraphQueryService service() {
-        return new GraphQueryService(graphRepository, graphWarningService, architectureIntentService);
+        return new GraphQueryService(graphRepository, graphWarningService, architectureIntentService, projectAccessPort);
     }
 
     // 지정 createdAt를 가진 그래프 생성 (정렬 검증용 — createdAt은 create()에서 now()라 리플렉션으로 덮어씀)
@@ -97,12 +100,12 @@ class GraphQueryServiceTest {
         when(graphRepository.findEdgesByGraphId(graphId)).thenReturn(edges);
         when(graphRepository.findById(graphId)).thenReturn(Optional.of(graph));
         when(architectureIntentService.findByProjectId(projectId)).thenReturn(Optional.of(intent));
-        when(graphWarningService.detect(eq(nodes), eq(edges), any())).thenReturn(List.of(Map.of("type", "X")));
+        when(graphWarningService.detect(eq(nodes), eq(edges), any(), eq(false))).thenReturn(List.of(Map.of("type", "X")));
 
         List<Map<String, Object>> result = service().getWarnings(graphId);
 
         ArgumentCaptor<ArchitectureIntent> captor = ArgumentCaptor.forClass(ArchitectureIntent.class);
-        org.mockito.Mockito.verify(graphWarningService).detect(eq(nodes), eq(edges), captor.capture());
+        org.mockito.Mockito.verify(graphWarningService).detect(eq(nodes), eq(edges), captor.capture(), eq(false));
         assertThat(captor.getValue()).isSameAs(intent);
         assertThat(result).hasSize(1);
     }
@@ -115,12 +118,12 @@ class GraphQueryServiceTest {
         when(graphRepository.findEdgesByGraphId(graphId)).thenReturn(List.of());
         when(graphRepository.findById(graphId)).thenReturn(Optional.empty());
         lenient().when(architectureIntentService.findByProjectId(any())).thenReturn(Optional.empty());
-        when(graphWarningService.detect(any(), any(), any())).thenReturn(List.of());
+        when(graphWarningService.detect(any(), any(), any(), eq(false))).thenReturn(List.of());
 
         service().getWarnings(graphId);
 
         ArgumentCaptor<ArchitectureIntent> captor = ArgumentCaptor.forClass(ArchitectureIntent.class);
-        org.mockito.Mockito.verify(graphWarningService).detect(any(), any(), captor.capture());
+        org.mockito.Mockito.verify(graphWarningService).detect(any(), any(), captor.capture(), eq(false));
         assertThat(captor.getValue()).isNull();
     }
 }

@@ -59,6 +59,10 @@ public class Project {
     @Column(name = "webhook_secret", length = 64)
     private String webhookSecret;
 
+    // 자동감지(폴더 구조)와 무관하게 DDD 게이트 규칙을 강제 적용 — "DDD로 마이그레이션" 사용자 선택
+    @Column(name = "ddd_migration_enabled", nullable = false)
+    private boolean dddMigrationEnabled;
+
     // 사용자 ID와 GitHub URL로 새 프로젝트 인스턴스 생성
     public static Project create(UUID userId, String githubRepoUrl, String name, String description) {
         Project project = new Project();
@@ -72,6 +76,7 @@ public class Project {
         project.updatedAt = Instant.now();
         project.gateArchitectureEnabled = true;
         project.gateExperimentalEnabled = false;
+        project.dddMigrationEnabled = false;
         return project;
     }
 
@@ -132,5 +137,11 @@ public class Project {
     // PR 게이트 연결 여부 — 시크릿 발급 완료 상태
     public boolean isPrGateConnected() {
         return webhookSecret != null;
+    }
+
+    // DDD 마이그레이션 플래그 켬/끔 전환
+    public void setDddMigrationEnabled(boolean enabled) {
+        this.dddMigrationEnabled = enabled;
+        this.updatedAt = Instant.now();
     }
 }
