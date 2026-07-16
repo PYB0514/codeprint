@@ -490,6 +490,21 @@
       "fullFlowTitle": "Full Flow",
       "altRoutesCount": "+{{count}} other routes",
       "noCallChainFound": "No function calls"
+    },
+    "modals": {
+      "presetSaveTitle": "Save to slot {{slot}}",
+      "presetSaveDesc": "Save the current layout, label, and edge settings to this slot.",
+      "presetNamePlaceholder": "Preset name (max 30 chars)",
+      "feedbackGeneral": "General",
+      "feedbackArchitectureReview": "Architecture Review",
+      "feedbackDebug": "Debug",
+      "shareViewLabel": "View to Share",
+      "shareViewNote": "The selected preset is attached as a snapshot of the entire graph at this point in time. Viewers can freely zoom, search, and replay flows, but cannot make edits.",
+      "shareSubmitting": "Posting...",
+      "shareSubmitButton": "Post to Community",
+      "shareSuccessAlert": "Your post has been added to the community.",
+      "shareFailedAlert": "Failed to post. Please try again.",
+      "presetSaveFailedAlert": "Failed to save. Please try again."
     }
   },
   "community": {

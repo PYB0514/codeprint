@@ -490,6 +490,21 @@
       "fullFlowTitle": "전체 흐름",
       "altRoutesCount": "+{{count}}개 다른 경로",
       "noCallChainFound": "함수 호출 없음"
+    },
+    "modals": {
+      "presetSaveTitle": "슬롯 {{slot}}에 저장",
+      "presetSaveDesc": "현재 레이아웃, 라벨, 엣지 설정을 이 슬롯에 저장합니다.",
+      "presetNamePlaceholder": "프리셋 이름 (최대 30자)",
+      "feedbackGeneral": "일반",
+      "feedbackArchitectureReview": "아키텍처 리뷰",
+      "feedbackDebug": "디버그",
+      "shareViewLabel": "공유할 뷰",
+      "shareViewNote": "선택한 프리셋이 이 시점의 그래프 전체를 담은 스냅샷으로 첨부됩니다. 보는 사람은 확대·검색·흐름 재생까지 자유롭고, 수정만 할 수 없습니다.",
+      "shareSubmitting": "등록 중...",
+      "shareSubmitButton": "커뮤니티에 등록",
+      "shareSuccessAlert": "커뮤니티에 게시글이 등록되었습니다.",
+      "shareFailedAlert": "게시 실패. 다시 시도해주세요.",
+      "presetSaveFailedAlert": "저장 실패. 다시 시도해주세요."
     }
   },
   "community": {

@@ -780,9 +780,9 @@ function GraphPageInner() {
       setShareContent('')
       setSharePresetSlot(1)
       setShareVisibility('PUBLIC')
-      alert('커뮤니티에 게시글이 등록되었습니다.')
+      alert(t('graphPage.modals.shareSuccessAlert'))
     } catch {
-      alert('게시 실패. 다시 시도해주세요.')
+      alert(t('graphPage.modals.shareFailedAlert'))
     } finally {
       setShareSubmitting(false)
     }
@@ -885,11 +885,11 @@ function GraphPageInner() {
       setPendingSaveSlot(null)
       setPresetSaveName('')
     } catch {
-      alert('저장 실패. 다시 시도해주세요.')
+      alert(t('graphPage.modals.presetSaveFailedAlert'))
     } finally {
       setPresetSaving(false)
     }
-  }, [graphId, pendingSaveSlot, presetSaveName, buildCurrentConfig, loadPresets])
+  }, [graphId, pendingSaveSlot, presetSaveName, buildCurrentConfig, loadPresets, t])
 
   // 버전 목록을 서버에서 불러오는 함수
   const handleLoadVersions = useCallback(async () => {
@@ -3043,17 +3043,17 @@ function GraphPageInner() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
           <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-80 flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-sm">슬롯 {pendingSaveSlot}에 저장</h2>
+              <h2 className="font-semibold text-sm">{t('graphPage.modals.presetSaveTitle', { slot: pendingSaveSlot })}</h2>
               <button
                 onClick={() => { setShowSavePresetModal(false); setPendingSaveSlot(null); setPresetSaveName('') }}
                 className="text-gray-500 hover:text-white text-lg leading-none"
               >✕</button>
             </div>
-            <p className="text-xs text-gray-400">현재 레이아웃, 라벨, 엣지 설정을 이 슬롯에 저장합니다.</p>
+            <p className="text-xs text-gray-400">{t('graphPage.modals.presetSaveDesc')}</p>
             <input
               value={presetSaveName}
               onChange={(e) => setPresetSaveName(e.target.value)}
-              placeholder="프리셋 이름 (최대 30자)"
+              placeholder={t('graphPage.modals.presetNamePlaceholder')}
               maxLength={30}
               autoFocus
               className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none"
@@ -3063,13 +3063,13 @@ function GraphPageInner() {
               <button
                 onClick={() => { setShowSavePresetModal(false); setPendingSaveSlot(null); setPresetSaveName('') }}
                 className="text-sm text-gray-500 hover:text-white px-3 py-1.5"
-              >취소</button>
+              >{t('community.cancelButton')}</button>
               <button
                 onClick={handleSavePreset}
                 disabled={presetSaving || !presetSaveName.trim()}
                 className="text-sm bg-white text-black font-medium px-4 py-1.5 rounded-lg hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {presetSaving ? '저장 중...' : '저장'}
+                {presetSaving ? t('graphPage.sidebar.saving') : t('graphPage.sidebar.saveButton')}
               </button>
             </div>
           </div>
@@ -3081,7 +3081,7 @@ function GraphPageInner() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
           <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-[560px] max-h-[85vh] overflow-y-auto flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-base">커뮤니티에 공유</h2>
+              <h2 className="font-semibold text-base">{t('graphPage.shareToCommunityButton')}</h2>
               <button onClick={() => setShowShareModal(false)} className="text-gray-500 hover:text-white text-lg leading-none">✕</button>
             </div>
 
@@ -3089,7 +3089,7 @@ function GraphPageInner() {
             <input
               value={shareTitle}
               onChange={(e) => setShareTitle(e.target.value)}
-              placeholder="제목"
+              placeholder={t('community.writeForm.titlePlaceholder')}
               className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none"
             />
 
@@ -3099,23 +3099,23 @@ function GraphPageInner() {
               onChange={(e) => setShareFeedbackType(e.target.value)}
               className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none"
             >
-              <option value="GENERAL">일반</option>
-              <option value="ARCHITECTURE_REVIEW">아키텍처 리뷰</option>
-              <option value="DEBUG">디버그</option>
+              <option value="GENERAL">{t('graphPage.modals.feedbackGeneral')}</option>
+              <option value="ARCHITECTURE_REVIEW">{t('graphPage.modals.feedbackArchitectureReview')}</option>
+              <option value="DEBUG">{t('graphPage.modals.feedbackDebug')}</option>
             </select>
 
             {/* 내용 */}
             <textarea
               value={shareContent}
               onChange={(e) => setShareContent(e.target.value)}
-              placeholder="내용을 입력하세요"
+              placeholder={t('community.writeForm.contentPlaceholder')}
               rows={4}
               className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none resize-none"
             />
 
             {/* 공유할 뷰(프리셋) 선택 — 등록 시점의 설정을 스냅샷으로 고정, 이후 프리셋을 바꿔도 게시글엔 영향 없음 */}
             <div>
-              <p className="text-xs text-gray-400 mb-2 font-medium">공유할 뷰</p>
+              <p className="text-xs text-gray-400 mb-2 font-medium">{t('graphPage.modals.shareViewLabel')}</p>
               <select
                 value={sharePresetSlot}
                 onChange={(e) => setSharePresetSlot(Number(e.target.value))}
@@ -3126,13 +3126,13 @@ function GraphPageInner() {
                 ))}
               </select>
               <p className="text-[11px] text-gray-500 mt-1.5">
-                선택한 프리셋이 이 시점의 그래프 전체를 담은 스냅샷으로 첨부됩니다. 보는 사람은 확대·검색·흐름 재생까지 자유롭고, 수정만 할 수 없습니다.
+                {t('graphPage.modals.shareViewNote')}
               </p>
             </div>
 
             {/* 공개범위 */}
             <div>
-              <p className="text-xs text-gray-400 mb-2 font-medium">공개범위</p>
+              <p className="text-xs text-gray-400 mb-2 font-medium">{t('community.writeForm.visibilityLabel')}</p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShareVisibility('PUBLIC')}
@@ -3142,7 +3142,7 @@ function GraphPageInner() {
                       : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
                   }`}
                 >
-                  공개 — 커뮤니티 피드에 표시
+                  {t('community.writeForm.visibilityPublic')}
                 </button>
                 <button
                   onClick={() => setShareVisibility('PRIVATE')}
@@ -3152,24 +3152,24 @@ function GraphPageInner() {
                       : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
                   }`}
                 >
-                  링크 공유
+                  {t('community.writeForm.visibilityPrivate')}
                 </button>
               </div>
               {shareVisibility === 'PRIVATE' && (
                 <p className="text-[11px] text-gray-500 mt-1.5">
-                  피드에 표시되지 않으며, 링크가 있는 사람은 누구나 볼 수 있습니다.
+                  {t('community.writeForm.visibilityPrivateNote')}
                 </p>
               )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-gray-800">
-              <button onClick={() => setShowShareModal(false)} className="text-sm text-gray-500 hover:text-white px-4 py-2">취소</button>
+              <button onClick={() => setShowShareModal(false)} className="text-sm text-gray-500 hover:text-white px-4 py-2">{t('community.cancelButton')}</button>
               <button
                 onClick={handleShareSubmit}
                 disabled={shareSubmitting || !shareTitle.trim() || !shareContent.trim()}
                 className="text-sm bg-white text-black font-medium px-4 py-2 rounded-lg hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {shareSubmitting ? '등록 중...' : '커뮤니티에 등록'}
+                {shareSubmitting ? t('graphPage.modals.shareSubmitting') : t('graphPage.modals.shareSubmitButton')}
               </button>
             </div>
           </div>
