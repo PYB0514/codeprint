@@ -4,6 +4,16 @@
 
 ---
 
+## 프로덕션 안정성 갭 A — SourceFileWalker 500개 절단 결정론 보장(2026-07-17)
+
+**문제.** `SourceFileWalker.walk()`가 `Files.walkFileTree`로 수집한 `eligible` 목록을 정렬 없이 그대로 최대 500개로 절단(`subList(0, MAX_FILES)`)했다. 파일시스템 디렉터리 순회 순서는 OS·파일시스템마다 다르고 정렬을 보장하지 않는다(예: ext4는 보통 정렬 안 됨, NTFS는 우연히 정렬돼 보이는 경우가 있음) — 500개를 초과하는 대형 레포에서 "어떤 500개가 분석되는지"가 실행 환경에 좌우돼, 같은 커밋을 다시 분석해도 노드/엣지가 달라질 수 있는 결정론 위반이었다.
+
+**결정.** 절단 직전에 `eligible.sort(Comparator.comparing(Path::toString))` 추가 — 경로 문자열 기준 정렬 후 앞 500개를 선택하도록 변경. 절단이 발생하지 않는 경우(500개 이하)도 정렬은 항상 적용(그래프 노드 생성 순서 자체도 결정론에 기여).
+
+**검증.** `SourceFileWalkerTest`에 TDD로 정렬 검증 테스트 추가 — 파일을 역순(502→0)으로 생성해도 결과가 항상 경로 정렬 순(`File000.java`~`File499.java`)임을 확인. 로컬(Windows/NTFS)에서는 기존 코드도 우연히 정렬된 순서를 반환해 이 테스트가 수정 전에도 통과했다 — 이 갭이 로컬에서 재현되지 않고 실 프로덕션(Railway, Linux 컨테이너)에서만 드러날 수 있는 종류임을 시사(플랫폼 의존 버그의 전형). `analyzeLocal` 베이스라인 변화 없음, 백엔드 전체 테스트 green.
+
+---
+
 ## INTERFACES_IMPORTS_INFRA — Interfaces→Infrastructure 직접 import 검출기 신설 (2026-07-11, codeprint_115)
 
 **배경.** `GATE_GAPS.md` [G-3](2026-07-07 발견) — CLAUDE.md §10이 `Interfaces → Application → Domain` 단방향을 명문화하지만, 기존 검출기는 `DOMAIN_IMPORTS_INFRA`(domain→infra)만 있어 Controller가 infrastructure를 직접 import해도 게이트가 못 잡음. "선행 리팩토링 9건 완료 → 검출기 신설 → 자기분석 0 확인" 순서(먼저 검출기를 만들면 자기 리팩토링 PR이 자기 게이트에 걸림)로 계획됐고, 이번 세션에 9/9 리팩토링이 끝나 착수.
