@@ -69,6 +69,42 @@ public class ProjectCommandService {
         return projectRepository.save(project);
     }
 
+    // 소유자 확인 후 PR 게이트 webhook 연결(시크릿이 없을 때만 신규 발급 — 이미 연결돼 있으면 그대로 반환)
+    public Project connectPrGate(UUID projectId, UUID requestingUserId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+        if (!project.getUserId().equals(requestingUserId)) {
+            throw new IllegalStateException("Not authorized to modify this project");
+        }
+        if (!project.isPrGateConnected()) {
+            project.generateWebhookSecret();
+            project = projectRepository.save(project);
+        }
+        return project;
+    }
+
+    // 소유자 확인 후 PR 게이트 webhook 시크릿 재발급(기존 시크릿 무효화)
+    public Project rotatePrGateSecret(UUID projectId, UUID requestingUserId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+        if (!project.getUserId().equals(requestingUserId)) {
+            throw new IllegalStateException("Not authorized to modify this project");
+        }
+        project.generateWebhookSecret();
+        return projectRepository.save(project);
+    }
+
+    // 소유자 확인 후 PR 게이트 연결 해제
+    public Project disconnectPrGate(UUID projectId, UUID requestingUserId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+        if (!project.getUserId().equals(requestingUserId)) {
+            throw new IllegalStateException("Not authorized to modify this project");
+        }
+        project.disconnectPrGate();
+        return projectRepository.save(project);
+    }
+
     // 소유자 확인 후 프로젝트 삭제
     public void deleteProject(UUID projectId, UUID requestingUserId) {
         Project project = projectRepository.findById(projectId)

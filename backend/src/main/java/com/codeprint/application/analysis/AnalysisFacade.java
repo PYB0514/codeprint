@@ -1,8 +1,11 @@
 // analysis 컨트롤러가 project 컨텍스트를 직접 주입하지 않도록 조율하는 Facade
 package com.codeprint.application.analysis;
 
+import com.codeprint.application.project.ProjectCommandService;
 import com.codeprint.application.project.ProjectQueryService;
 import com.codeprint.domain.analysis.AnalysisResult;
+import com.codeprint.domain.analysis.GateCheckLog;
+import com.codeprint.domain.analysis.GateCheckLogRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +18,8 @@ public class AnalysisFacade {
 
     private final AnalysisApplicationService analysisApplicationService;
     private final ProjectQueryService projectQueryService;
+    private final ProjectCommandService projectCommandService;
+    private final GateCheckLogRepository gateCheckLogRepository;
 
     // 프로젝트 소유권 확인 후 레포 URL 반환 — PR 리뷰가 project 컨텍스트를 직접 의존하지 않도록 경유
     public String resolveOwnedRepoUrl(UUID projectId, UUID userId) {
@@ -49,5 +54,42 @@ public class AnalysisFacade {
                 "progress", result.getProgress(),
                 "errorMsg", result.getErrorMsg() != null ? result.getErrorMsg() : ""
         );
+    }
+
+    // 프로젝트 소유권 확인 후 PR 게이트 연결 상태 조회
+    public PrGateStatus getPrGateStatus(UUID projectId, UUID userId) {
+        var project = projectQueryService.getProject(projectId, userId);
+        return new PrGateStatus(project.isPrGateConnected(), project.getWebhookSecret(), findLastCheck(projectId));
+    }
+
+    // 프로젝트 소유권 확인 후 PR 게이트 연결(시크릿 미발급 시에만 신규 발급)
+    public PrGateStatus connectPrGate(UUID projectId, UUID userId) {
+        var project = projectCommandService.connectPrGate(projectId, userId);
+        return new PrGateStatus(project.isPrGateConnected(), project.getWebhookSecret(), findLastCheck(projectId));
+    }
+
+    // 프로젝트 소유권 확인 후 PR 게이트 시크릿 재발급
+    public PrGateStatus rotatePrGateSecret(UUID projectId, UUID userId) {
+        var project = projectCommandService.rotatePrGateSecret(projectId, userId);
+        return new PrGateStatus(project.isPrGateConnected(), project.getWebhookSecret(), findLastCheck(projectId));
+    }
+
+    // 프로젝트 소유권 확인 후 PR 게이트 연결 해제
+    public PrGateStatus disconnectPrGate(UUID projectId, UUID userId) {
+        var project = projectCommandService.disconnectPrGate(projectId, userId);
+        return new PrGateStatus(project.isPrGateConnected(), project.getWebhookSecret(), findLastCheck(projectId));
+    }
+
+    // 가장 최근 게이트 체크 결과를 응답용 요약으로 변환
+    private PrGateStatus.LastCheck findLastCheck(UUID projectId) {
+        return gateCheckLogRepository.findLatestByProjectId(projectId)
+                .map(this::toLastCheck)
+                .orElse(null);
+    }
+
+    // GateCheckLog 엔티티를 응답용 요약으로 변환
+    private PrGateStatus.LastCheck toLastCheck(GateCheckLog log) {
+        return new PrGateStatus.LastCheck(
+                log.getPrNumber(), log.getState(), log.getHighCount(), log.getWarningCount(), log.getCreatedAt());
     }
 }

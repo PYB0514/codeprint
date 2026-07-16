@@ -1,31 +1,29 @@
-// GitHubWebhookService 단위 테스트 — 서명 검증·이벤트/액션 필터·repo 역해석·비동기 트리거 분기 회귀 방지
+// GitHubWebhookService 단위 테스트 — 이벤트/액션 필터·repo 역해석·비동기 트리거 분기 회귀 방지 (서명 검증 자체는 PrWebhookTargetAdapter 책임)
 package com.codeprint.application.analysis;
 
 import com.codeprint.domain.analysis.port.PrWebhookTargetPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 
 class GitHubWebhookServiceTest {
 
-    private static final String SECRET = "test-webhook-secret";
+    private static final String SIG = "sha256=irrelevant-for-this-layer";
 
     private PrWebhookTargetPort targetPort;
     private PrReviewRunner reviewRunner;
@@ -36,7 +34,6 @@ class GitHubWebhookServiceTest {
         targetPort = mock(PrWebhookTargetPort.class);
         reviewRunner = mock(PrReviewRunner.class);
         service = new GitHubWebhookService(targetPort, reviewRunner);
-        ReflectionTestUtils.setField(service, "webhookSecret", SECRET);
     }
 
     // pull_request payload JSON 바이트 생성
@@ -46,43 +43,15 @@ class GitHubWebhookServiceTest {
         return json.getBytes(StandardCharsets.UTF_8);
     }
 
-    // SECRET으로 계산한 유효 X-Hub-Signature-256 헤더 (verify가 기대하는 HMAC-SHA256 16진)
-    private String validSig(byte[] body) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] digest = mac.doFinal(body);
-            StringBuilder sb = new StringBuilder(digest.length * 2);
-            for (byte b : digest) {
-                sb.append(Character.forDigit((b >> 4) & 0xF, 16));
-                sb.append(Character.forDigit(b & 0xF, 16));
-            }
-            return "sha256=" + sb;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     @Test
-    @DisplayName("서명이 유효하지 않으면 UNAUTHORIZED — 리뷰를 트리거하지 않는다")
-    void handle_invalidSignature_unauthorized() {
-        byte[] body = prPayload("opened", "owner/repo", 1);
-
-        GitHubWebhookService.Result result = service.handle("pull_request", "sha256=deadbeef", body);
-
-        assertThat(result).isEqualTo(GitHubWebhookService.Result.UNAUTHORIZED);
-        verifyNoInteractions(targetPort);
-        verifyNoInteractions(reviewRunner);
-    }
-
-    @Test
-    @DisplayName("pull_request 이외 이벤트는 IGNORED (서명은 유효)")
+    @DisplayName("pull_request 이외 이벤트는 IGNORED — repo 역해석 자체를 시도하지 않는다")
     void handle_nonPullRequestEvent_ignored() {
         byte[] body = prPayload("opened", "owner/repo", 1);
 
-        GitHubWebhookService.Result result = service.handle("push", validSig(body), body);
+        GitHubWebhookService.Result result = service.handle("push", SIG, body);
 
         assertThat(result).isEqualTo(GitHubWebhookService.Result.IGNORED);
+        verifyNoInteractions(targetPort);
         verifyNoInteractions(reviewRunner);
     }
 
@@ -91,7 +60,7 @@ class GitHubWebhookServiceTest {
     void handle_malformedJson_ignored() {
         byte[] body = "{ this is not json".getBytes(StandardCharsets.UTF_8);
 
-        GitHubWebhookService.Result result = service.handle("pull_request", validSig(body), body);
+        GitHubWebhookService.Result result = service.handle("pull_request", SIG, body);
 
         assertThat(result).isEqualTo(GitHubWebhookService.Result.IGNORED);
         verifyNoInteractions(reviewRunner);
@@ -102,7 +71,7 @@ class GitHubWebhookServiceTest {
     void handle_nonReviewableAction_ignored() {
         byte[] body = prPayload("closed", "owner/repo", 1);
 
-        GitHubWebhookService.Result result = service.handle("pull_request", validSig(body), body);
+        GitHubWebhookService.Result result = service.handle("pull_request", SIG, body);
 
         assertThat(result).isEqualTo(GitHubWebhookService.Result.IGNORED);
         verifyNoInteractions(reviewRunner);
@@ -113,7 +82,7 @@ class GitHubWebhookServiceTest {
     void handle_missingRepository_ignored() {
         byte[] body = "{\"action\":\"opened\",\"number\":1}".getBytes(StandardCharsets.UTF_8);
 
-        GitHubWebhookService.Result result = service.handle("pull_request", validSig(body), body);
+        GitHubWebhookService.Result result = service.handle("pull_request", SIG, body);
 
         assertThat(result).isEqualTo(GitHubWebhookService.Result.IGNORED);
         verifyNoInteractions(reviewRunner);
@@ -124,21 +93,21 @@ class GitHubWebhookServiceTest {
     void handle_invalidNumber_ignored() {
         byte[] body = prPayload("opened", "owner/repo", 0);
 
-        GitHubWebhookService.Result result = service.handle("pull_request", validSig(body), body);
+        GitHubWebhookService.Result result = service.handle("pull_request", SIG, body);
 
         assertThat(result).isEqualTo(GitHubWebhookService.Result.IGNORED);
         verifyNoInteractions(reviewRunner);
     }
 
     @Test
-    @DisplayName("매칭되는 리뷰 대상 프로젝트가 없으면 IGNORED — 리뷰 미트리거")
-    void handle_noTarget_ignored() {
+    @DisplayName("서명 불일치 또는 연결된 프로젝트 없음(포트가 빈 값 반환)이면 UNAUTHORIZED — 리뷰 미트리거")
+    void handle_noTarget_unauthorized() {
         byte[] body = prPayload("opened", "owner/repo", 5);
-        when(targetPort.resolve("owner/repo")).thenReturn(Optional.empty());
+        when(targetPort.resolve(eq("owner/repo"), any(), anyString())).thenReturn(Optional.empty());
 
-        GitHubWebhookService.Result result = service.handle("pull_request", validSig(body), body);
+        GitHubWebhookService.Result result = service.handle("pull_request", SIG, body);
 
-        assertThat(result).isEqualTo(GitHubWebhookService.Result.IGNORED);
+        assertThat(result).isEqualTo(GitHubWebhookService.Result.UNAUTHORIZED);
         verify(reviewRunner, never()).reviewAsync(any(), anyInt(), any(), anyString());
     }
 
@@ -148,10 +117,10 @@ class GitHubWebhookServiceTest {
         UUID projectId = UUID.randomUUID();
         UUID ownerId = UUID.randomUUID();
         byte[] body = prPayload("opened", "owner/repo", 7);
-        when(targetPort.resolve("owner/repo"))
+        when(targetPort.resolve(eq("owner/repo"), any(), anyString()))
                 .thenReturn(Optional.of(new PrWebhookTargetPort.Target(projectId, ownerId, "gh-token")));
 
-        GitHubWebhookService.Result result = service.handle("pull_request", validSig(body), body);
+        GitHubWebhookService.Result result = service.handle("pull_request", SIG, body);
 
         assertThat(result).isEqualTo(GitHubWebhookService.Result.ACCEPTED);
         verify(reviewRunner).reviewAsync(projectId, 7, ownerId, "gh-token");
@@ -163,10 +132,10 @@ class GitHubWebhookServiceTest {
         UUID projectId = UUID.randomUUID();
         UUID ownerId = UUID.randomUUID();
         byte[] body = prPayload("synchronize", "owner/repo", 9);
-        when(targetPort.resolve("owner/repo"))
+        when(targetPort.resolve(eq("owner/repo"), any(), anyString()))
                 .thenReturn(Optional.of(new PrWebhookTargetPort.Target(projectId, ownerId, "tok")));
 
-        GitHubWebhookService.Result result = service.handle("pull_request", validSig(body), body);
+        GitHubWebhookService.Result result = service.handle("pull_request", SIG, body);
 
         assertThat(result).isEqualTo(GitHubWebhookService.Result.ACCEPTED);
         verify(reviewRunner).reviewAsync(projectId, 9, ownerId, "tok");

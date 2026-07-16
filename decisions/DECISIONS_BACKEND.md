@@ -2,6 +2,26 @@
 
 ---
 
+## V1 PR 게이트 셀프서비스 UI — 프로젝트별 webhook 시크릿 신설(2026-07-17)
+
+**문제.** V1_UX_GAP_REVIEW.md 설계 A는 "프로젝트별 webhook secret 발급/표시"를 전제로 했으나, 실제 코드(`GitHubWebhookService`)는 `github.webhook-secret` 전역 단일 시크릿(환경변수 1개)으로 서명을 검증하고 repo URL 매칭으로 프로젝트를 역해석하는 구조였다. 셀프서비스로 만들면 이 전역 시크릿을 모든 사용자에게 노출해야 하는데, 그러면 시크릿을 본 사용자 누구나 다른 등록 저장소로 위조 서명된 webhook을 보내 가짜 PR 리뷰를 트리거할 수 있는 스푸핑 벡터가 생긴다.
+
+**결정.** 사용자 확정(AskUserQuestion)으로 **프로젝트별 시크릿 신규 도입**을 선택. `Project.webhookSecret`(V62 마이그레이션, nullable) 신설 + `generateWebhookSecret()`(SecureRandom 32byte hex). `GitHubWebhookService.handle`의 검증 순서를 재구성 — 기존엔 "전역 시크릿으로 먼저 검증 → repo로 프로젝트 조회"였는데, 이제는 "payload 파싱 → repo로 후보 프로젝트들 조회 → 각 후보의 프로젝트별 시크릿으로 서명 검증 → 매칭되는 것을 대상으로 채택"으로 뒤집었다(`PrWebhookTargetPort.resolve`에 rawBody·signature를 전달). 전역 `github.webhook-secret` 설정은 완전 제거.
+
+**탈락한 대안.** "전역 시크릿 유지 + UI에만 노출" — 사용자 수가 늘수록 스푸핑 리스크가 커지는 근본 결함을 UI로 가릴 뿐이라 기각.
+
+**PR 게이트 연결 상태 표시 — 신규 테이블 대신 기존 재사용.** "마지막 검사 결과" 표시를 위해 `Project`에 컬럼을 추가하는 대신, 이미 존재하는 `gate_check_logs`(V55, PR 게이트 체크마다 기록)에 `findLatestByProjectId` 조회 메서드만 추가해 재사용 — 데이터 중복 없이 해결(§1 재사용성 원칙).
+
+**런타임 검증에서 구현이 의도와 다르게 동작한 것 — Payload URL 계산 오류.** 최초 구현은 프론트에서 `axios.defaults.baseURL || window.location.origin`으로 webhook Payload URL을 계산했는데, 이는 백엔드가 아니라 **프론트 자신의 오리진**을 가리키는 버그였다(dev에선 `:3000`, 프로덕션에선 Vercel 프론트 도메인 — `index.html`의 `og:url` 확인 결과 프론트는 `codeprint-iota.vercel.app`, 백엔드는 Railway로 서로 다른 오리진이며 `SecurityConfig`의 CORS 설정이 이를 뒷받침). 코드베이스에 이미 동일 문제를 푸는 관례(`AppHeader.tsx`·`LoginPage.tsx`·`MyPage.tsx` 등에서 `import.meta.env.VITE_API_URL ?? 'http://localhost:8080'`)가 있었는데 처음엔 놓쳤다가, 브라우저 실측 중 Payload URL이 `localhost:3000`으로 뜨는 걸 보고 발견·즉시 동일 관례로 수정.
+
+**push 전 자가검사에서 발견·수정 — CROSS_CONTEXT_IMPORT 위반.** `AnalysisFacade`(application/analysis)에 `domain.project.Project`를 명시적으로 import해 메서드 파라미터/지역변수 타입으로 썼더니 `analyzeLocal`이 신규 위반 1건으로 잡았다. 같은 파일의 기존 메서드들(`getGateSettings` 등)은 `var project = ...`로 받아 명시적 import 없이 동일한 타입을 다루는 관례를 이미 쓰고 있었는데, 신규 메서드에서 private 헬퍼로 `Project`를 파라미터로 넘기려다 이 관례를 깨뜨린 것 — 헬퍼를 없애고 각 메서드에서 `var`로 직접 값을 추출하도록 인라인해 해결. `analyzeLocal` 재실행으로 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1)과 정확히 일치, 신규 위반 0 확인.
+
+**검증.** 단위 테스트: `PrWebhookTargetAdapterTest` 신규 5건(미연결/서명불일치/토큰없음/정상/다중후보 중 매칭) TDD로 작성, `GitHubWebhookServiceTest` 기존 9건을 새 시그니처에 맞게 재작성(서명 검증 책임이 어댑터로 이동했으므로 전역 시크릿 관련 테스트 제거). 백엔드 전체 테스트 green, `compileJava`/`npx tsc -b` 에러 0. **브라우저 실측**(claude-in-chrome, 실 로그인 세션, codeprint 자기분석 프로젝트) — ①UI로 최초 연결 → Payload URL·시크릿 표시 확인 ②`window.confirm()`이 CDP 자동화를 블로킹해(기존 팀 API 키 결정과 동일한 한계, TeamsPage·ArchitectureIntentPanel도 같은 패턴이라 신규 결함 아님) rotate/disconnect/reconnect는 fetch로 우회 검증 — 시크릿 재발급 시 값 변경, 연결 해제 시 `connected:false`·`secret:null`, 재연결 시 신규 시크릿 발급 전부 확인 ③curl로 실제 GitHub webhook 시그니처를 흉내내 프로젝트별 시크릿으로 서명한 요청 → `202 review queued`, 틀린 시크릿으로 서명 → `401 invalid signature` 확인(async 리뷰 실행 자체는 존재하지 않는 PR 번호라 GitHub API 404로 실패했지만 이는 예상된 동작 — 서명 검증 로직 자체는 검증 완료).
+
+**한계·다음.** 기존 도그푸딩 프로젝트(codeprint 자기 레포)의 실제 GitHub webhook 설정은 구 전역 시크릿 기반이라 이 PR 배포 후 끊긴다 — 배포 직후 새 UI로 재연결하고 GitHub 저장소 설정도 새 시크릿으로 갱신 필요(수동, 다음 세션 최우선). 게이트 테마 배지(1단계 표면화)는 이번 스코프에서 의도적으로 제외 — PR 리뷰 가능한 크기 유지를 위해 별도 후속 작업으로 분리.
+
+---
+
 ## GATE_GAPS.md [G-4] 재발방지 — PR 리뷰 실패 상태 명시 + 일일 다이제스트 DB 크기 지표(2026-07-15)
 
 **문제.** [G-4] 사고(`decisions/DECISIONS_INFRA.md` "프로덕션 Postgres 디스크 풀 사고")의 근본 원인은 두 가지가 겹쳐서 발견이 늦어진 것 — ①`PrReviewRunner.reviewAsync`가 예외를 로그로만 남기고 삼켜, `codeprint/structure` 체크가 실패가 아니라 아예 응답 없음(`mergeStateStatus: BLOCKED`)으로 나타나 원인 파악이 어려웠음. ②디스크 사용량을 사전에 알 방법이 없어 사고가 터지고 나서야 발견.

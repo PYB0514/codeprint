@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.139.0',
+    date: '2026-07-17',
+    title: 'PR 검사 셀프서비스 연결',
+    type: 'feature',
+    items: [
+      { category: 'PR 게이트', desc: '프로젝트 카드에서 "PR 검사 연결" 버튼으로 직접 webhook을 연결할 수 있습니다. Payload URL·시크릿을 발급받아 GitHub 저장소 설정에 등록하면 Pull Request마다 구조 경고가 자동으로 코멘트·상태 체크로 게시됩니다. 시크릿은 프로젝트별로 발급되며 언제든 재발급·연결 해제할 수 있습니다.' },
+    ],
+  },
+  {
     version: 'v0.138.1',
     date: '2026-07-16',
     title: '영어 번역 누락 보강 — 쪽지함·프로젝트 카드',

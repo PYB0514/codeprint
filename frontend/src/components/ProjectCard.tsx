@@ -25,6 +25,16 @@ interface Props {
   autoStart?: boolean
 }
 
+// GitHub webhook Payload URL — 프론트와 다른 오리진에 배포되는 백엔드 주소(다른 파일들과 동일한 관례)
+const webhookPayloadUrl = `${import.meta.env.VITE_API_URL ?? 'http://localhost:8080'}/api/webhooks/github`
+
+// PR 검사 연결 상태 응답 (백엔드 PrGateStatus와 동일 형태)
+interface PrGateStatus {
+  connected: boolean
+  secret: string | null
+  lastCheck: { prNumber: number; state: string; highCount: number; warningCount: number; checkedAt: string } | null
+}
+
 // 프로젝트 카드 — 분석 시작/재분석, 진행률 표시, 그래프 이동
 export default function ProjectCard({ project, onDelete, onVisibilityChange, autoStart }: Props) {
   const { t } = useTranslation('workspace')
@@ -63,6 +73,14 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
   const [gateArchitectureEnabled, setGateArchitectureEnabled] = useState(project.gateArchitectureEnabled)
   const [gateExperimentalEnabled, setGateExperimentalEnabled] = useState(project.gateExperimentalEnabled)
   const [gateSettingsSaving, setGateSettingsSaving] = useState(false)
+
+  // PR 검사 셀프서비스 연결 상태 (webhook 시크릿 발급/조회/재발급/해제)
+  const [showPrGate, setShowPrGate] = useState(false)
+  const [prGateStatus, setPrGateStatus] = useState<PrGateStatus | null>(null)
+  const [prGateLoading, setPrGateLoading] = useState(false)
+  const [prGateActionLoading, setPrGateActionLoading] = useState(false)
+  const [prGateError, setPrGateError] = useState<string | null>(null)
+  const [prGateCopied, setPrGateCopied] = useState<'url' | 'secret' | null>(null)
 
   const pickerRef = useRef<HTMLDivElement>(null)
   const primaryPickerRef = useRef<HTMLDivElement>(null)
@@ -154,6 +172,72 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
     } finally {
       setGateSettingsSaving(false)
     }
+  }
+
+  // PR 검사 연결 패널 열기 — 상태 조회
+  const handleOpenPrGate = async () => {
+    setShowPrGate(true)
+    setPrGateError(null)
+    setPrGateLoading(true)
+    try {
+      const res = await axios.get(`/api/projects/${project.id}/pr-gate`)
+      setPrGateStatus(res.data)
+    } catch {
+      setPrGateError(t('projectCard.prGate.failed'))
+    } finally {
+      setPrGateLoading(false)
+    }
+  }
+
+  // PR 검사 최초 연결
+  const handleConnectPrGate = async () => {
+    setPrGateActionLoading(true)
+    setPrGateError(null)
+    try {
+      const res = await axios.post(`/api/projects/${project.id}/pr-gate/connect`)
+      setPrGateStatus(res.data)
+    } catch {
+      setPrGateError(t('projectCard.prGate.failed'))
+    } finally {
+      setPrGateActionLoading(false)
+    }
+  }
+
+  // PR 검사 시크릿 재발급 (기존 GitHub webhook 설정 즉시 무효화 — 확인 필요)
+  const handleRotatePrGateSecret = async () => {
+    if (!window.confirm(t('projectCard.prGate.rotateConfirm'))) return
+    setPrGateActionLoading(true)
+    setPrGateError(null)
+    try {
+      const res = await axios.post(`/api/projects/${project.id}/pr-gate/rotate`)
+      setPrGateStatus(res.data)
+    } catch {
+      setPrGateError(t('projectCard.prGate.failed'))
+    } finally {
+      setPrGateActionLoading(false)
+    }
+  }
+
+  // PR 검사 연결 해제
+  const handleDisconnectPrGate = async () => {
+    if (!window.confirm(t('projectCard.prGate.disconnectConfirm'))) return
+    setPrGateActionLoading(true)
+    setPrGateError(null)
+    try {
+      const res = await axios.delete(`/api/projects/${project.id}/pr-gate`)
+      setPrGateStatus(res.data)
+    } catch {
+      setPrGateError(t('projectCard.prGate.failed'))
+    } finally {
+      setPrGateActionLoading(false)
+    }
+  }
+
+  // webhook Payload URL·Secret을 클립보드에 복사
+  const handleCopyPrGateValue = async (kind: 'url' | 'secret', value: string) => {
+    await navigator.clipboard.writeText(value)
+    setPrGateCopied(kind)
+    setTimeout(() => setPrGateCopied(null), 1500)
   }
 
   // 공유 URL을 클립보드에 복사
@@ -548,6 +632,96 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
         </div>
       )}
 
+      {/* PR 검사 셀프서비스 연결 패널 */}
+      {showPrGate && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
+          {prGateLoading ? (
+            <p className="text-xs text-gray-400">{t('projectCard.loadingBranches')}</p>
+          ) : !prGateStatus?.connected ? (
+            <>
+              <p className="text-xs text-gray-400">{t('projectCard.prGate.notConnected')}</p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowPrGate(false)}
+                  className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
+                >
+                  {t('projectCard.prGate.close')}
+                </button>
+                <button
+                  onClick={handleConnectPrGate}
+                  disabled={prGateActionLoading}
+                  className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200 disabled:opacity-40"
+                >
+                  {prGateActionLoading ? t('projectCard.prGate.connecting') : t('projectCard.prGate.connectButton')}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-gray-400">{t('projectCard.prGate.connectedIntro')}</p>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-gray-500">{t('projectCard.prGate.webhookUrlLabel')}</span>
+                <div className="flex gap-2 items-center">
+                  <code className="flex-1 bg-gray-900 text-gray-200 text-xs rounded px-2 py-1.5 truncate">
+                    {webhookPayloadUrl}
+                  </code>
+                  <button
+                    onClick={() => handleCopyPrGateValue('url', webhookPayloadUrl)}
+                    className="text-xs text-blue-400 hover:text-blue-300 shrink-0"
+                  >
+                    {prGateCopied === 'url' ? t('projectCard.prGate.copied') : t('projectCard.prGate.copy')}
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-gray-500">{t('projectCard.prGate.secretLabel')}</span>
+                <div className="flex gap-2 items-center">
+                  <code className="flex-1 bg-gray-900 text-gray-200 text-xs rounded px-2 py-1.5 truncate">
+                    {prGateStatus.secret}
+                  </code>
+                  <button
+                    onClick={() => handleCopyPrGateValue('secret', prGateStatus.secret ?? '')}
+                    className="text-xs text-blue-400 hover:text-blue-300 shrink-0"
+                  >
+                    {prGateCopied === 'secret' ? t('projectCard.prGate.copied') : t('projectCard.prGate.copy')}
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">{t('projectCard.prGate.instructions')}</p>
+              <p className="text-xs text-gray-400">
+                {t('projectCard.prGate.lastCheckLabel')}:{' '}
+                {prGateStatus.lastCheck
+                  ? `PR #${prGateStatus.lastCheck.prNumber} · ${prGateStatus.lastCheck.state} · ${new Date(prGateStatus.lastCheck.checkedAt).toLocaleString(currentDateLocale())}`
+                  : t('projectCard.prGate.lastCheckNone')}
+              </p>
+              <div className="flex gap-2 justify-end flex-wrap">
+                <button
+                  onClick={handleDisconnectPrGate}
+                  disabled={prGateActionLoading}
+                  className="text-xs text-red-400 hover:text-red-300 disabled:opacity-40"
+                >
+                  {t('projectCard.prGate.disconnectButton')}
+                </button>
+                <button
+                  onClick={handleRotatePrGateSecret}
+                  disabled={prGateActionLoading}
+                  className="text-xs text-amber-400 hover:text-amber-300 disabled:opacity-40"
+                >
+                  {prGateActionLoading ? t('projectCard.prGate.rotating') : t('projectCard.prGate.rotateButton')}
+                </button>
+                <button
+                  onClick={() => setShowPrGate(false)}
+                  className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
+                >
+                  {t('projectCard.prGate.close')}
+                </button>
+              </div>
+            </>
+          )}
+          {prGateError && <p className="text-xs text-red-400">{prGateError}</p>}
+        </div>
+      )}
+
       {status === 'FAILED' && (
         <p className="text-xs text-red-400">{t('projectCard.analysisFailed')}</p>
       )}
@@ -588,6 +762,13 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
             title={t('projectCard.gateSettings.title')}
           >
             {t('projectCard.gateSettings.button')}
+          </button>
+          <button
+            onClick={handleOpenPrGate}
+            className="text-xs text-green-400 hover:text-green-300"
+            title={t('projectCard.prGate.title')}
+          >
+            {t('projectCard.prGate.button')}
           </button>
         </div>
 
