@@ -4,6 +4,20 @@
 
 ---
 
+## 프로덕션 안정성 갭 C+F — 스테일 RUNNING 분석 리컨실리에이션 cron(2026-07-17)
+
+**문제.** 갭 C: `AnalysisRunner.run()`이 클론(`RepoCloner`, 120s 타임아웃 있음) 이후 파일 수집→파싱→그래프빌드 구간에는 타임아웃이 전혀 없다 — 파서가 특정 파일에서 무한루프·행에 빠지면 분석이 영구 RUNNING 상태로 남는다. 갭 F: `StuckAnalysisCleaner`가 서버 기동 시점(`ApplicationReadyEvent`)의 stuck 분석만 정리해, 서버가 재시작 없이 계속 떠 있는 동안 파이프라인이 멈추는 경우는 감지 수단이 전혀 없었다.
+
+**결정.** G-5 리컨실리에이션과 동일한 패턴으로 15분마다 실행되는 `reconcile-stale-analyses` cron 추가. `StaleAnalysisReconciliationService.reconcile()`이 `AnalysisRepository.findByStatusIn(RUNNING)`(기존 `StuckAnalysisCleaner`가 쓰던 것과 같은 메서드)을 조회해 `startedAt`이 20분(`STALE_THRESHOLD`, 정상 분석은 수 분 내 완료돼 충분히 넉넉함)을 넘은 것을 FAILED로 전환 + 프런트에 WebSocket 진행률 알림(`AnalysisProgressHandler`)까지 보낸다.
+
+**갭 C를 "타임아웃"이 아니라 "감지"로 해결한 이유.** Java에서 CPU-바운드 tree-sitter 파싱 스레드를 진짜로 강제 종료하려면 `Thread.interrupt()`가 파싱 루프 내부에서 응답하도록 인터럽트 체크 지점을 곳곳에 심어야 하는데(파서 라이브러리 내부 코드까지 손대야 함), 응답하지 않는 코드에 대해 `Thread.stop()`류를 쓰는 건 JVM 자체를 불안정하게 만들 위험이 있어 배제. 대신 "일정 시간 내 완료되지 않으면 DB 상태를 정정한다"는 사후 감지 방식을 택함 — 실제 스레드가 백그라운드에서 계속 CPU를 쓸 수는 있지만(진짜 자원 누수는 남을 수 있음), 사용자에게 "영구 RUNNING으로 보이는" 체감 문제는 최대 35분(15분 주기 + 20분 상한) 내로 해소되고 재시도가 가능해진다 — G-5와 동일한 "예방보다 감지·복구" 철학.
+
+**검증.** TDD로 `StaleAnalysisReconciliationServiceTest` 신규 4건(`isStale` 순수 함수 2건 + reconcile 분기 2건). `AnalysisResult.startedAt`은 프로덕션 코드에 테스트 전용 setter를 추가하지 않기 위해 `ReflectionTestUtils`로 조작(기존 테스트 파일들의 관례 재사용). 백엔드 전체 테스트 green, `analyzeLocal` 베이스라인 변화 없음. 로컬 서버로 실제 엔드포인트 호출 확인(`{"status":"done","reconciled":0}`, 서버 로그로 실제 DB 조회 경로 확인).
+
+**한계·다음.** "분석 실패율/소요시간 파이프라인 지표"(갭 F의 나머지 절반, 대시보드성)는 이번 스코프에서 제외 — 스테일 감지(사용자 영향 직접 해소)를 우선하고, 지표 대시보드 확장은 별도 후속 판단.
+
+---
+
 ## 프로덕션 안정성 갭 E — CachedParsedFileLoader 파일 크기 가드(2026-07-17)
 
 **문제.** `CachedParsedFileLoader.digest()`가 `Files.readAllBytes(file)`를 크기 제한 없이 호출했다. 미니파이드 번들(`bundle.min.js`)·생성 파일(대형 lock 파일 등)이 레포에 섞여 있으면 — `LanguageDetector`가 확장자만으로 지원 언어 여부를 판정하므로 이런 파일도 수백 MB에 달할 수 있는데 — `sourceFiles.parallelStream()`이 여러 파일을 동시에 통째로 메모리에 올려 메모리 스파이크·GC 압박을 일으킬 수 있다.
