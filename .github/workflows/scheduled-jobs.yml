@@ -6,13 +6,14 @@ on:
     - cron: '0 21 * * *'  # 매일 06:00 KST(UTC 21:00) — 오늘의 공개레포 갱신
     - cron: '0 0 * * *'   # 매일 09:00 KST(UTC 00:00) — 일일 다이제스트 발송
     - cron: '0 * * * *'   # 매시 정각 — G-5 웹훅 유실 리컨실리에이션
+    - cron: '*/15 * * * *' # 15분마다 — 안정성 갭 C+F 스테일 RUNNING 분석 리컨실리에이션
   workflow_dispatch:
     inputs:
       job:
         description: '수동 실행할 작업'
         required: true
         type: choice
-        options: [refresh-featured, daily-digest, reconcile-pr-gate]
+        options: [refresh-featured, daily-digest, reconcile-pr-gate, reconcile-stale-analyses]
 
 jobs:
   refresh-featured:
@@ -43,4 +44,14 @@ jobs:
         run: |
           set -euo pipefail
           curl -sf -X POST "${{ secrets.BACKEND_URL }}/api/cron/reconcile-pr-gate" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}"
+
+  reconcile-stale-analyses:
+    if: github.event_name == 'workflow_dispatch' && inputs.job == 'reconcile-stale-analyses' || github.event.schedule == '*/15 * * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/reconcile-stale-analyses
+        run: |
+          set -euo pipefail
+          curl -sf -X POST "${{ secrets.BACKEND_URL }}/api/cron/reconcile-stale-analyses" \
             -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}"
