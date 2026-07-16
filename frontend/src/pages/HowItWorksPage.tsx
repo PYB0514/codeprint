@@ -64,7 +64,7 @@ export default function HowItWorksPage() {
               return (
                 <div key={type} style={{ borderLeft: `3px solid ${meta?.color ?? '#6b7280'}` }} className="pl-3 py-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-semibold text-sm" style={{ color: meta?.color }}>{meta?.label ?? type}</span>
+                    <span className="font-semibold text-sm" style={{ color: meta?.color }}>{t(`warningPanel.types.${type}.label`, { defaultValue: type })}</span>
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${sev.cls}`}>{sev.label}</span>
                   </div>
                   <p className="text-gray-300 text-sm leading-relaxed mb-1">{guide.example}</p>

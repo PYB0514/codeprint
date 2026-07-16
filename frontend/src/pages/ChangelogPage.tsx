@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.137.0',
+    date: '2026-07-16',
+    title: '영어 번역 확대 — 구조 경고 패널',
+    type: 'feature',
+    items: [
+      { category: '다국어', desc: '경고 패널(경고 타입명·설명·예외 규칙·변경 이력·MD 내보내기)이 영어로도 제공됩니다.' },
+    ],
+  },
+  {
     version: 'v0.136.0',
     date: '2026-07-16',
     title: '영어 번역 확대 — 그래프 페이지(내 프로젝트)',
