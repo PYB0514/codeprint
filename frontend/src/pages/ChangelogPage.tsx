@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.136.0',
+    date: '2026-07-16',
+    title: '영어 번역 확대 — 그래프 페이지(내 프로젝트)',
+    type: 'feature',
+    items: [
+      { category: '다국어', desc: '로그인 후 내 프로젝트를 분석하는 그래프 페이지(왼쪽 사이드바·상단 툴바·오른쪽 사이드바 상세뷰·프리셋 저장·커뮤니티 공유 모달 전체)가 영어로도 제공됩니다.' },
+    ],
+  },
+  {
     version: 'v0.135.0',
     date: '2026-07-16',
     title: '영어 번역 확대 — 커뮤니티 게시판',
