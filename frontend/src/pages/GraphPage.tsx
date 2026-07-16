@@ -2504,7 +2504,7 @@ function GraphPageInner() {
         <button
           onClick={() => setRightCollapsed((v) => !v)}
           className="absolute -left-3 top-1/2 -translate-y-1/2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white rounded-full w-7 h-7 flex items-center justify-center text-sm z-10 shadow-lg"
-          title={rightCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
+          title={rightCollapsed ? t('graphViewer.expandSidebar') : t('graphViewer.collapseSidebar')}
         >
           {rightCollapsed ? '‹' : '›'}
         </button>
@@ -2514,17 +2514,17 @@ function GraphPageInner() {
             {/* 사이드바 헤더 */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                {!sidebar ? '상세 정보'
-                  : sidebar.kind === 'edge' ? '연결 상세'
-                  : sidebar.kind === 'file' ? '파일 연결'
-                  : sidebar.kind === 'func' ? '함수 상세'
-                  : sidebar.kind === 'func-call' ? '함수 호출'
-                  : sidebar.kind === 'db-table' ? 'DB 테이블'
-                  : sidebar.kind === 'db-edge' ? 'DB 연결'
-                  : sidebar.kind === 'api-call' ? 'API 호출'
-                  : sidebar.kind === 'warning' ? '⚠️ 경고 상세'
-                  : sidebar.kind === 'domain-summary' ? '도메인 흐름'
-                  : '인스턴스화'}
+                {!sidebar ? t('graphPage.sidebar.defaultTitle')
+                  : sidebar.kind === 'edge' ? t('graphPage.sidebar.edgeTitle')
+                  : sidebar.kind === 'file' ? t('graphPage.sidebar.fileTitle')
+                  : sidebar.kind === 'func' ? t('graphPage.sidebar.funcTitle')
+                  : sidebar.kind === 'func-call' ? t('graphPage.sidebar.funcCallTitle')
+                  : sidebar.kind === 'db-table' ? t('graphPage.dbTableDomainName')
+                  : sidebar.kind === 'db-edge' ? t('communityPostGraph.edgeTypes.db')
+                  : sidebar.kind === 'api-call' ? t('communityPostGraph.edgeTypes.api')
+                  : sidebar.kind === 'warning' ? t('graphPage.sidebar.warningTitle')
+                  : sidebar.kind === 'domain-summary' ? t('graphPage.sidebar.domainSummaryTitle')
+                  : t('graphPage.sidebar.instantiationTitle')}
               </span>
               {sidebar && <button onClick={() => setSidebar(null)} className="text-gray-600 hover:text-white text-sm">✕</button>}
             </div>
@@ -2554,7 +2554,7 @@ function GraphPageInner() {
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-center pb-10">
                     <span className="text-3xl opacity-20">↗</span>
                     <p className="text-gray-600 text-xs leading-relaxed">
-                      엣지나 노드를 클릭하면<br />상세 정보가 여기에 표시됩니다.
+                      {t('graphPage.sidebar.emptyStateLine1')}<br />{t('graphPage.sidebar.emptyStateLine2')}
                     </p>
                   </div>
                 )}
@@ -2566,7 +2566,7 @@ function GraphPageInner() {
                   <div className="flex flex-col gap-3">
                     <div className="bg-gray-800 rounded-lg p-3 flex flex-col gap-2">
                       <div>
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">호출하는 함수</p>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{t('graphPage.sidebar.callerFuncLabel')}</p>
                         <p className="text-emerald-400 font-mono text-sm font-semibold cursor-pointer hover:text-emerald-200"
                           onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.callerNodeId }], duration: 500, padding: 0.4 }), 50) }}
                         >{sidebar.callerComment ?? sidebar.callerName}</p>
@@ -2576,7 +2576,7 @@ function GraphPageInner() {
                       </div>
                       <div className="text-amber-500 text-sm text-center">↓</div>
                       <div>
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">호출받는 함수</p>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{t('graphPage.sidebar.calleeFuncLabel')}</p>
                         <p className="text-emerald-400 font-mono text-sm font-semibold cursor-pointer hover:text-emerald-200"
                           onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.calleeNodeId }], duration: 500, padding: 0.4 }), 50) }}
                         >{sidebar.calleeComment ?? sidebar.calleeName}</p>
@@ -2597,14 +2597,14 @@ function GraphPageInner() {
                   <div className="flex flex-col gap-3">
                     <div className="bg-gray-800 rounded-lg p-3 flex flex-col gap-2">
                       <div>
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">생성하는 파일</p>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{t('graphPage.sidebar.creatingFileLabel')}</p>
                         <p className="text-blue-300 font-mono text-sm font-semibold cursor-pointer hover:text-white"
                           onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.sourceNodeId }], duration: 500, padding: 0.3 }), 50) }}
                         >{sidebar.sourceFile}</p>
                       </div>
                       <div className="text-purple-400 text-sm text-center">↓ new</div>
                       <div>
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">인스턴스화 대상</p>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{t('graphPage.sidebar.instantiationTargetLabel')}</p>
                         <p className="text-blue-300 font-mono text-sm font-semibold cursor-pointer hover:text-white"
                           onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.targetNodeId }], duration: 500, padding: 0.3 }), 50) }}
                         >{sidebar.targetClass}</p>
@@ -2634,9 +2634,9 @@ function GraphPageInner() {
                     <FlowChainSection steps={sidebar.flowChain} edgeColor="#4b5563"
                       onNav={(id) => { openFuncNode(id); setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
                     />
-                    <SidebarSection title={`함수 호출 체인${sidebar.callChain.length > 0 ? ` (${sidebar.callChain.length})` : ''}`}>
+                    <SidebarSection title={`${t('graphPage.sidebar.callChainTitle')}${sidebar.callChain.length > 0 ? ` (${sidebar.callChain.length})` : ''}`}>
                       {sidebar.callChain.length === 0
-                        ? <p className="text-gray-700 text-xs">분석된 함수 호출 없음</p>
+                        ? <p className="text-gray-700 text-xs">{t('graphPage.sidebar.noCallsFound')}</p>
                         : sidebar.callChain.map((e, i) => (
                           <CallChainRow key={i}
                             leftLabel={e.callerLabel} leftNodeId={e.callerNodeId}
@@ -2656,17 +2656,17 @@ function GraphPageInner() {
                       <p className="text-white font-mono font-semibold text-sm">{sidebar.data.name}</p>
                       {sidebar.data.comment && <p className="text-gray-500 text-xs mt-0.5">{sidebar.data.comment}</p>}
                     </div>
-                    <SidebarSection title="커스텀 이름 / 메모">
+                    <SidebarSection title={t('graphPage.sidebar.customNameMemoTitle')}>
                       <input
                         value={annotationLabel}
                         onChange={e => setAnnotationLabel(e.target.value)}
-                        placeholder="표시 이름 (비워두면 원래 이름 사용)"
+                        placeholder={t('graphPage.sidebar.displayNamePlaceholder')}
                         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500"
                       />
                       <textarea
                         value={annotationNote}
                         onChange={e => setAnnotationNote(e.target.value)}
-                        placeholder="메모 (수정 필요, 요구사항 등)"
+                        placeholder={t('graphPage.sidebar.memoPlaceholder')}
                         rows={3}
                         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500 mt-1 resize-none"
                       />
@@ -2675,12 +2675,12 @@ function GraphPageInner() {
                         disabled={annotationSaving}
                         className="mt-1 w-full text-xs bg-blue-600 hover:bg-blue-500 text-white rounded px-2 py-1 disabled:opacity-40"
                       >
-                        {annotationSaving ? '저장 중...' : '저장'}
+                        {annotationSaving ? t('graphPage.sidebar.saving') : t('graphPage.sidebar.saveButton')}
                       </button>
                     </SidebarSection>
-                    <SidebarSection title={`의존하는 파일 — import${sidebar.data.outgoing.length > 0 ? ` (${sidebar.data.outgoing.length})` : ''}`}>
+                    <SidebarSection title={`${t('graphPage.sidebar.dependsOnTitle')}${sidebar.data.outgoing.length > 0 ? ` (${sidebar.data.outgoing.length})` : ''}`}>
                       {sidebar.data.outgoing.length === 0
-                        ? <p className="text-gray-700 text-xs">없음</p>
+                        ? <p className="text-gray-700 text-xs">{t('graphPage.sidebar.noneFound')}</p>
                         : sidebar.data.outgoing.map((c, i) => (
                           <FileConnGroup key={i} entry={c} direction="out"
                             onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
@@ -2688,9 +2688,9 @@ function GraphPageInner() {
                         ))
                       }
                     </SidebarSection>
-                    <SidebarSection title={`이 파일을 import하는 곳${sidebar.data.incoming.length > 0 ? ` (${sidebar.data.incoming.length})` : ''}`}>
+                    <SidebarSection title={`${t('graphPage.sidebar.importedByTitle')}${sidebar.data.incoming.length > 0 ? ` (${sidebar.data.incoming.length})` : ''}`}>
                       {sidebar.data.incoming.length === 0
-                        ? <p className="text-gray-700 text-xs">없음</p>
+                        ? <p className="text-gray-700 text-xs">{t('graphPage.sidebar.noneFound')}</p>
                         : sidebar.data.incoming.map((c, i) => (
                           <FileConnGroup key={i} entry={c} direction="in"
                             onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.3 }), 50) }}
@@ -2726,23 +2726,23 @@ function GraphPageInner() {
                             navigator.clipboard.writeText(url.toString())
                           }}
                           className="shrink-0 text-xs text-gray-500 hover:text-gray-300 border border-gray-700 hover:border-gray-500 rounded px-2 py-0.5 transition-colors"
-                          title="이 노드 링크 복사"
+                          title={t('graphPage.sidebar.copyNodeLinkTitle')}
                         >
                           🔗
                         </button>
                       </div>
                     </div>
-                    <SidebarSection title="커스텀 이름 / 메모">
+                    <SidebarSection title={t('graphPage.sidebar.customNameMemoTitle')}>
                       <input
                         value={annotationLabel}
                         onChange={e => setAnnotationLabel(e.target.value)}
-                        placeholder="표시 이름 (비워두면 원래 이름 사용)"
+                        placeholder={t('graphPage.sidebar.displayNamePlaceholder')}
                         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500"
                       />
                       <textarea
                         value={annotationNote}
                         onChange={e => setAnnotationNote(e.target.value)}
-                        placeholder="메모 (수정 필요, 요구사항 등)"
+                        placeholder={t('graphPage.sidebar.memoPlaceholder')}
                         rows={3}
                         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-500 mt-1 resize-none"
                       />
@@ -2751,12 +2751,12 @@ function GraphPageInner() {
                         disabled={annotationSaving}
                         className="mt-1 w-full text-xs bg-blue-600 hover:bg-blue-500 text-white rounded px-2 py-1 disabled:opacity-40"
                       >
-                        {annotationSaving ? '저장 중...' : '저장'}
+                        {annotationSaving ? t('graphPage.sidebar.saving') : t('graphPage.sidebar.saveButton')}
                       </button>
                     </SidebarSection>
-                    <SidebarSection title={`호출하는 함수${sidebar.callers.length > 0 ? ` (${sidebar.callers.length})` : ''}`}>
+                    <SidebarSection title={`${t('graphPage.sidebar.callerFuncLabel')}${sidebar.callers.length > 0 ? ` (${sidebar.callers.length})` : ''}`}>
                       {sidebar.callers.length === 0
-                        ? <p className="text-gray-700 text-xs">없음</p>
+                        ? <p className="text-gray-700 text-xs">{t('graphPage.sidebar.noneFound')}</p>
                         : sidebar.callers.map((c, i) => (
                           <FuncChainRow key={i} entry={c} direction="caller" labelMode={labelMode}
                             onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
@@ -2765,9 +2765,9 @@ function GraphPageInner() {
                         ))
                       }
                     </SidebarSection>
-                    <SidebarSection title={`호출받는 함수${sidebar.callees.length > 0 ? ` (${sidebar.callees.length})` : ''}`}>
+                    <SidebarSection title={`${t('graphPage.sidebar.calleeFuncLabel')}${sidebar.callees.length > 0 ? ` (${sidebar.callees.length})` : ''}`}>
                       {sidebar.callees.length === 0
-                        ? <p className="text-gray-700 text-xs">없음</p>
+                        ? <p className="text-gray-700 text-xs">{t('graphPage.sidebar.noneFound')}</p>
                         : sidebar.callees.map((c, i) => (
                           <FuncChainRow key={i} entry={c} direction="callee" labelMode={labelMode}
                             onNav={(id) => { setTimeout(() => fitView({ nodes: [{ id }], duration: 500, padding: 0.4 }), 50) }}
@@ -2778,13 +2778,13 @@ function GraphPageInner() {
                     </SidebarSection>
 
                     {/* 노드 코멘트 */}
-                    <SidebarSection title={`코멘트${nodeComments.length > 0 ? ` (${nodeComments.length})` : ''}`}>
+                    <SidebarSection title={`${t('graphPage.sidebar.commentsTitle')}${nodeComments.length > 0 ? ` (${nodeComments.length})` : ''}`}>
                       <div className="flex flex-col gap-2">
                         {nodeComments.map((c) => (
                           <div key={c.id} className="bg-gray-800 rounded-lg px-3 py-2 flex flex-col gap-1">
                             <p className="text-gray-200 text-xs leading-relaxed">{c.content}</p>
                             <div className="flex items-center justify-between">
-                              <span className="text-gray-600 text-[10px]">{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span>
+                              <span className="text-gray-600 text-[10px]">{new Date(c.createdAt).toLocaleDateString(currentDateLocale())}</span>
                               {currentUserId === c.userId && (
                                 <button
                                   onClick={() => {
@@ -2794,12 +2794,12 @@ function GraphPageInner() {
                                       .catch(() => {})
                                   }}
                                   className="text-gray-600 hover:text-red-400 text-[10px]"
-                                >삭제</button>
+                                >{t('graphPage.sidebar.deleteButton')}</button>
                               )}
                             </div>
                           </div>
                         ))}
-                        {nodeComments.length === 0 && <p className="text-gray-700 text-xs">코멘트 없음</p>}
+                        {nodeComments.length === 0 && <p className="text-gray-700 text-xs">{t('graphPage.sidebar.noComments')}</p>}
                         <div className="flex gap-2 mt-1">
                           <input
                             value={commentInput}
@@ -2817,7 +2817,7 @@ function GraphPageInner() {
                                 }).catch(() => {})
                               }
                             }}
-                            placeholder="코멘트 입력 후 Enter"
+                            placeholder={t('graphPage.sidebar.commentPlaceholder')}
                             className="flex-1 bg-gray-800 text-white text-xs px-2 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-gray-500"
                           />
                         </div>
@@ -2826,18 +2826,18 @@ function GraphPageInner() {
 
                     {/* 노드 색상 */}
                     {clickedNodeId && (
-                      <SidebarSection title="노드 색상">
+                      <SidebarSection title={t('graphPage.sidebar.nodeColorTitle')}>
                         <div className="flex flex-wrap gap-1.5">
                           {[
-                            { color: '', label: '없음' },
-                            { color: '#ef4444', label: '빨강' },
-                            { color: '#f97316', label: '주황' },
-                            { color: '#eab308', label: '노랑' },
-                            { color: '#22c55e', label: '초록' },
-                            { color: '#3b82f6', label: '파랑' },
-                            { color: '#a855f7', label: '보라' },
-                            { color: '#ec4899', label: '분홍' },
-                            { color: '#6b7280', label: '회색' },
+                            { color: '', label: t('graphPage.sidebar.colorNone') },
+                            { color: '#ef4444', label: t('graphPage.sidebar.colorRed') },
+                            { color: '#f97316', label: t('graphPage.sidebar.colorOrange') },
+                            { color: '#eab308', label: t('graphPage.sidebar.colorYellow') },
+                            { color: '#22c55e', label: t('graphPage.sidebar.colorGreen') },
+                            { color: '#3b82f6', label: t('graphPage.sidebar.colorBlue') },
+                            { color: '#a855f7', label: t('graphPage.sidebar.colorPurple') },
+                            { color: '#ec4899', label: t('graphPage.sidebar.colorPink') },
+                            { color: '#6b7280', label: t('graphPage.sidebar.colorGray') },
                           ].map(({ color, label }) => (
                             <button
                               key={label}
@@ -2864,13 +2864,13 @@ function GraphPageInner() {
                   <div className="flex flex-col gap-3">
                     <div>
                       <p className="text-white font-mono font-semibold text-sm">{sidebar.tableName}</p>
-                      <p className="text-gray-500 text-xs mt-0.5">DB 테이블</p>
+                      <p className="text-gray-500 text-xs mt-0.5">{t('graphPage.dbTableDomainName')}</p>
                     </div>
 
                     {/* 연결된 Repository */}
-                    <SidebarSection title={`Repository (${sidebar.repos.length})`}>
+                    <SidebarSection title={t('graphPage.sidebar.repositoryTitle', { count: sidebar.repos.length })}>
                       {sidebar.repos.length === 0
-                        ? <p className="text-gray-700 text-xs">연결 없음</p>
+                        ? <p className="text-gray-700 text-xs">{t('graphPage.sidebar.noRepoConnection')}</p>
                         : sidebar.repos.map((r, i) => (
                           <div key={i} className="flex items-center gap-2">
                             <span
@@ -2890,9 +2890,9 @@ function GraphPageInner() {
                     </SidebarSection>
 
                     {/* 칼럼 목록 */}
-                    <SidebarSection title={`칼럼${sidebar.columns.length > 0 ? ` (${sidebar.columns.length})` : ''}`}>
+                    <SidebarSection title={`${t('graphPage.sidebar.columnsTitle')}${sidebar.columns.length > 0 ? ` (${sidebar.columns.length})` : ''}`}>
                       {sidebar.columns.length === 0
-                        ? <p className="text-gray-700 text-xs">칼럼 정보 없음</p>
+                        ? <p className="text-gray-700 text-xs">{t('graphPage.sidebar.noColumnInfo')}</p>
                         : <div className="flex flex-col gap-0.5">
                             {sidebar.columns.map((col, i) => (
                               <div key={i} className="flex items-baseline gap-2 py-0.5">
@@ -2920,7 +2920,7 @@ function GraphPageInner() {
                         ↓ {sidebar.crudType.replace('DB_', '')}
                       </div>
                       <div>
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">DB 테이블</p>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{t('graphPage.dbTableDomainName')}</p>
                         <p className="text-cyan-400 font-mono text-sm font-semibold cursor-pointer hover:text-white"
                           onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.tableNodeId }], duration: 500, padding: 0.3 }), 50) }}
                         >{sidebar.tableName}</p>
@@ -2941,14 +2941,14 @@ function GraphPageInner() {
                   <div className="flex flex-col gap-3">
                     <div className="flex gap-4 items-start">
                       <div>
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">프론트 파일</p>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{t('graphPage.sidebar.frontFileLabel')}</p>
                         <p className="text-fuchsia-400 font-mono text-sm font-semibold cursor-pointer hover:text-white"
                           onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.frontFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
                         >{sidebar.frontFile}</p>
                       </div>
                       <div className="text-gray-500 mt-5">→</div>
                       <div>
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">컨트롤러</p>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{t('graphPage.sidebar.controllerLabel')}</p>
                         <p className="text-fuchsia-400 font-mono text-sm font-semibold cursor-pointer hover:text-white"
                           onClick={() => { setTimeout(() => fitView({ nodes: [{ id: sidebar.ctrlFileNodeId }], duration: 500, padding: 0.3 }), 50) }}
                         >{sidebar.ctrlFile}</p>
@@ -2967,7 +2967,7 @@ function GraphPageInner() {
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-2">
                       <span className="text-yellow-400 font-semibold text-sm">{sidebar.nodeName}</span>
-                      <span className="text-xs text-gray-500">{sidebar.nodeWarnings.length}개 경고</span>
+                      <span className="text-xs text-gray-500">{t('graphPage.sidebar.warningCountLabel', { count: sidebar.nodeWarnings.length })}</span>
                     </div>
                     {sidebar.nodeWarnings.map((w, i) => {
                       const WARNING_COLORS: Record<string, string> = {
@@ -2993,9 +2993,9 @@ function GraphPageInner() {
                       <span className="text-sm font-bold uppercase tracking-widest" style={{ color: sidebar.color }}>
                         {sidebar.domainName}
                       </span>
-                      <span className="text-xs text-gray-500">{sidebar.domainName === 'DB 테이블' ? '테이블' : '도메인'}</span>
+                      <span className="text-xs text-gray-500">{sidebar.domainName === t('graphPage.dbTableDomainName') ? t('graphPage.sidebar.domainSummaryTypeTable') : t('graphPage.sidebar.domainSummaryTypeDomain')}</span>
                     </div>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">흐름 재생 목록</p>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">{t('graphPage.sidebar.flowPlaybackListTitle')}</p>
                     {sidebar.flows.length > 0 ? sidebar.flows.map(flow => (
                       <button key={flow.id}
                         className="flex flex-col gap-1 rounded-lg px-2.5 py-2.5 text-left transition-opacity hover:opacity-80"
@@ -3017,7 +3017,7 @@ function GraphPageInner() {
                         )}
                       </button>
                     )) : (
-                      <p className="text-xs text-gray-500">이 도메인에서 흐름을 찾지 못했습니다.</p>
+                      <p className="text-xs text-gray-500">{t('graphPage.sidebar.noFlowsFound')}</p>
                     )}
                   </div>
                 )}
@@ -3208,6 +3208,7 @@ function SidebarSection({ title, children }: { title: string; children: React.Re
 function FileConnGroup({ entry, direction, onNav }: {
   entry: ConnEntry; direction: 'in' | 'out'; onNav: (id: string) => void
 }) {
+  const { t } = useTranslation('workspace')
   const accent = direction === 'in' ? '#3b82f6' : '#10b981'
   return (
     <div className="bg-gray-900 rounded-lg p-2.5 mb-1">
@@ -3229,7 +3230,7 @@ function FileConnGroup({ entry, direction, onNav }: {
           ))}
         </div>
       ) : (
-        <p className="text-gray-700 text-[11px] pl-3">함수 호출 없음</p>
+        <p className="text-gray-700 text-[11px] pl-3">{t('graphPage.sidebar.noCallChainFound')}</p>
       )}
     </div>
   )
@@ -3281,10 +3282,11 @@ function FlowChainSection({ steps, edgeColor, onNav }: {
   edgeColor: string
   onNav: (id: string) => void
 }) {
+  const { t } = useTranslation('workspace')
   if (steps.length <= 2) return null  // source·target만 있으면 표시 의미 없음
   return (
     <div>
-      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">전체 흐름</p>
+      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">{t('graphPage.sidebar.fullFlowTitle')}</p>
       <div className="flex flex-col">
         {steps.map((step, i) => {
           const isLast = i === steps.length - 1
@@ -3317,7 +3319,7 @@ function FlowChainSection({ steps, edgeColor, onNav }: {
                   </span>
                 )}
                 {step.altCount && (
-                  <span className="text-[9px] text-gray-600 mt-0.5">+{step.altCount}개 다른 경로</span>
+                  <span className="text-[9px] text-gray-600 mt-0.5">{t('graphPage.sidebar.altRoutesCount', { count: step.altCount })}</span>
                 )}
               </div>
               {/* 화살표 */}
