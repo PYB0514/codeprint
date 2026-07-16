@@ -4,6 +4,16 @@
 
 ---
 
+## 프로덕션 안정성 갭 E — CachedParsedFileLoader 파일 크기 가드(2026-07-17)
+
+**문제.** `CachedParsedFileLoader.digest()`가 `Files.readAllBytes(file)`를 크기 제한 없이 호출했다. 미니파이드 번들(`bundle.min.js`)·생성 파일(대형 lock 파일 등)이 레포에 섞여 있으면 — `LanguageDetector`가 확장자만으로 지원 언어 여부를 판정하므로 이런 파일도 수백 MB에 달할 수 있는데 — `sourceFiles.parallelStream()`이 여러 파일을 동시에 통째로 메모리에 올려 메모리 스파이크·GC 압박을 일으킬 수 있다.
+
+**결정.** `digest()` 진입 시 `Files.readAllBytes` 전에 `Files.size(file)`로 먼저 크기를 확인, `MAX_FILE_SIZE_BYTES`(2MB) 초과면 바이트를 읽지 않고 즉시 null 반환(기존 "읽기 실패 시 해당 파일만 제외" 패턴과 동일하게 처리 — 전체 분석은 계속 진행). 2MB는 일반적인 손작성 소스 파일은 거의 넘지 않고, 미니파이드·생성 파일은 통상 이를 크게 초과하는 실측 경험치.
+
+**검증.** TDD로 `CachedParsedFileLoaderTest`에 회귀 테스트 추가 — 상한을 1byte 초과하는 파일이 `analyzer.analyze()` 호출 없이 제외되고, 같은 배치의 정상 파일은 영향받지 않음을 확인. `analyzeLocal` 베이스라인 변화 없음, 백엔드 전체 테스트 green.
+
+---
+
 ## 프로덕션 안정성 갭 A — SourceFileWalker 500개 절단 결정론 보장(2026-07-17)
 
 **문제.** `SourceFileWalker.walk()`가 `Files.walkFileTree`로 수집한 `eligible` 목록을 정렬 없이 그대로 최대 500개로 절단(`subList(0, MAX_FILES)`)했다. 파일시스템 디렉터리 순회 순서는 OS·파일시스템마다 다르고 정렬을 보장하지 않는다(예: ext4는 보통 정렬 안 됨, NTFS는 우연히 정렬돼 보이는 경우가 있음) — 500개를 초과하는 대형 레포에서 "어떤 500개가 분석되는지"가 실행 환경에 좌우돼, 같은 커밋을 다시 분석해도 노드/엣지가 달라질 수 있는 결정론 위반이었다.

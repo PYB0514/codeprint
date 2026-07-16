@@ -30,6 +30,8 @@ public class CachedParsedFileLoader {
     // 아예 실행되지 않는 채로 조용히 무효화됨(B-16과 같은 부류, 이번엔 역직렬화 실패가 아니라 스테일 값).
     static final int ANALYZER_VERSION = 3;
     private static final Duration CACHE_TTL = Duration.ofDays(30);
+    // 미니파이드 번들·생성 파일 등 비정상적으로 큰 파일이 파싱 파이프라인 메모리를 잡아먹는 것 방지 — 이 이상은 분석 제외
+    static final long MAX_FILE_SIZE_BYTES = 2L * 1024 * 1024;
 
     private final StaticCodeAnalyzer staticCodeAnalyzer;
     private final ParsedFileCachePort cache;
@@ -77,9 +79,14 @@ public class CachedParsedFileLoader {
         return result;
     }
 
-    // 단일 파일의 digest 계산 — 읽기 실패 시 null(해당 파일만 제외)
+    // 단일 파일의 digest 계산 — 크기 상한 초과·읽기 실패 시 null(해당 파일만 제외)
     private Digest digest(Path repoDir, Path file) {
         try {
+            long size = Files.size(file);
+            if (size > MAX_FILE_SIZE_BYTES) {
+                log.warn("파일 크기 상한 초과({}byte > {}byte) — 분석 제외: {}", size, MAX_FILE_SIZE_BYTES, file);
+                return null;
+            }
             byte[] bytes = Files.readAllBytes(file);
             String relPath = repoDir.relativize(file).toString().replace("\\", "/");
             return new Digest(file, relPath, ContentHash.sha256(bytes));
