@@ -512,13 +512,13 @@
     "gateTheme": {
       "themeLabel": { "DDD": "DDD", "LAYERED": "Layered", "GENERIC": "General" },
       "badge": "{{theme}} gate active — {{count}} rules",
-      "migrationSuffix": "(migrated)",
+      "selfDeclaredSuffix": "(self-declared)",
       "themeRulesLabel": "{{theme}} rules",
       "featureSliceRulesLabel": "Feature-slice rules",
       "universalRulesLabel": "Always-applied rules",
-      "migrateButton": "Migrate to DDD structure",
-      "migrating": "Applying...",
-      "undoMigrationButton": "Undo migration",
+      "policySelectorLabel": "Gate policy",
+      "policyLabel": { "AUTO": "Auto", "DDD": "DDD", "LAYERED": "Layered" },
+      "policyChanging": "Applying...",
       "toggleFailed": "Something went wrong processing the request."
     },
     "nodeFilterTitle": "Node",

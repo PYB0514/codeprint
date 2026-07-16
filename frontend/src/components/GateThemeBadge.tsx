@@ -1,7 +1,9 @@
-// 현재 프로젝트에 적용 중인 게이트 테마(DDD/레이어드/범용) 배지 + 규칙 목록 + DDD 마이그레이션 토글
+// 현재 프로젝트에 적용 중인 게이트 테마(DDD/레이어드/범용) 배지 + 규칙 목록 + 게이트 정책(자동/DDD/레이어드) 선택 바
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
+
+type GatePolicy = 'AUTO' | 'DDD' | 'LAYERED'
 
 interface ActiveTheme {
   theme: 'DDD' | 'LAYERED' | 'GENERIC'
@@ -10,7 +12,8 @@ interface ActiveTheme {
   featureSliceRuleTypes: string[]
   universalRuleTypes: string[]
   dddDetected: boolean
-  dddMigrationEnabled: boolean
+  gatePolicy: GatePolicy
+  selfDeclared: boolean
 }
 
 interface Props {
@@ -23,7 +26,9 @@ const THEME_COLOR: Record<ActiveTheme['theme'], string> = {
   GENERIC: 'text-gray-400 border-gray-700/60 bg-gray-800/60',
 }
 
-// 게이트 테마 배지 — 클릭하면 적용 규칙 목록 펼침, GENERIC/LAYERED면 DDD 마이그레이션 토글 노출
+const POLICIES: GatePolicy[] = ['AUTO', 'DDD', 'LAYERED']
+
+// 게이트 테마 배지 — 클릭하면 적용 규칙 목록 + 게이트 정책(자동/DDD/레이어드) 선택 바 펼침
 export default function GateThemeBadge({ projectId }: Props) {
   const { t } = useTranslation('workspace')
   const [theme, setTheme] = useState<ActiveTheme | null>(null)
@@ -39,11 +44,12 @@ export default function GateThemeBadge({ projectId }: Props) {
 
   useEffect(() => { load() }, [projectId])
 
-  const handleToggleMigration = async (enabled: boolean) => {
+  const handleSelectPolicy = async (policy: GatePolicy) => {
+    if (!theme || policy === theme.gatePolicy) return
     setSaving(true)
     setError(null)
     try {
-      const res = await axios.patch(`/api/projects/${projectId}/ddd-migration`, { enabled })
+      const res = await axios.patch(`/api/projects/${projectId}/gate-policy`, { policy })
       setTheme(res.data)
     } catch {
       setError(t('graphPage.gateTheme.toggleFailed'))
@@ -63,7 +69,7 @@ export default function GateThemeBadge({ projectId }: Props) {
         className={`text-left text-xs px-2 py-1.5 rounded border ${THEME_COLOR[theme.theme]}`}
       >
         {t('graphPage.gateTheme.badge', { theme: themeLabel, count: theme.themeRuleTypes.length })}
-        {theme.dddMigrationEnabled && <span className="ml-1 opacity-70">{t('graphPage.gateTheme.migrationSuffix')}</span>}
+        {theme.selfDeclared && <span className="ml-1 opacity-70">{t('graphPage.gateTheme.selfDeclaredSuffix')}</span>}
       </button>
 
       {expanded && (
@@ -85,24 +91,27 @@ export default function GateThemeBadge({ projectId }: Props) {
             <p className="text-gray-300 leading-relaxed">{theme.universalRuleTypes.join(', ')}</p>
           </div>
 
-          {theme.theme !== 'DDD' && !theme.dddMigrationEnabled && (
-            <button
-              onClick={() => handleToggleMigration(true)}
-              disabled={saving}
-              className="text-left text-emerald-400 hover:text-emerald-300 disabled:opacity-40 mt-1"
-            >
-              {saving ? t('graphPage.gateTheme.migrating') : t('graphPage.gateTheme.migrateButton')}
-            </button>
-          )}
-          {theme.dddMigrationEnabled && (
-            <button
-              onClick={() => handleToggleMigration(false)}
-              disabled={saving}
-              className="text-left text-gray-500 hover:text-red-400 disabled:opacity-40 mt-1"
-            >
-              {t('graphPage.gateTheme.undoMigrationButton')}
-            </button>
-          )}
+          <div>
+            <p className="text-gray-500 mb-1">{t('graphPage.gateTheme.policySelectorLabel')}</p>
+            <div className="flex rounded border border-gray-700 overflow-hidden w-fit">
+              {POLICIES.map(policy => (
+                <button
+                  key={policy}
+                  onClick={() => handleSelectPolicy(policy)}
+                  disabled={saving}
+                  aria-pressed={theme.gatePolicy === policy}
+                  className={`px-2 py-1 disabled:opacity-40 ${
+                    theme.gatePolicy === policy
+                      ? 'bg-emerald-700/60 text-emerald-100'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+                  }`}
+                >
+                  {t(`graphPage.gateTheme.policyLabel.${policy}`)}
+                </button>
+              ))}
+            </div>
+            {saving && <p className="text-gray-500 mt-1">{t('graphPage.gateTheme.policyChanging')}</p>}
+          </div>
           {error && <p className="text-red-400">{error}</p>}
         </div>
       )}

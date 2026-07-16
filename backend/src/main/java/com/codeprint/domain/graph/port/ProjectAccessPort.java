@@ -1,6 +1,8 @@
 // Graph 도메인에서 project 컨텍스트의 소유권·공개 여부를 확인/조회하는 포트 (project 도메인 모델 비노출)
 package com.codeprint.domain.graph.port;
 
+import com.codeprint.shared.gate.GatePolicy;
+
 import java.util.UUID;
 
 public interface ProjectAccessPort {
@@ -23,11 +25,11 @@ public interface ProjectAccessPort {
     // 접근 검증 없는 원시 조회 — 호출자가 별도 인가(팀 배분 등)를 이미 검증한 흐름 전용(MCP 팀 교차조회용)
     java.util.Optional<ProjectAccessView> getProjectById(UUID projectId);
 
-    // 소유자 확인 후 DDD 마이그레이션 플래그 켬/끔 — 게이트 테마 표면화 기능(1단계)
-    void setDddMigrationEnabled(UUID projectId, UUID userId, boolean enabled);
+    // 소유자 확인 후 게이트 정책(AUTO/DDD/LAYERED) 전환 — 게이트 테마 표면화 기능(1~2단계)
+    void setGatePolicy(UUID projectId, UUID userId, GatePolicy policy);
 
     // graph 도메인이 필요로 하는 project 필드만 추린 view
-    record ProjectAccessView(UUID id, UUID userId, String name, String githubRepoUrl, boolean dddMigrationEnabled) {
+    record ProjectAccessView(UUID id, UUID userId, String name, String githubRepoUrl, GatePolicy gatePolicy) {
         // 레포 owner가 프로젝트 소유자의 GitHub 계정과 일치하는지 (내 레포 vs 외부 레포 분석 판정)
         public boolean isOwnRepo(String ownerUsername) {
             return com.codeprint.shared.GithubRepoOwner.matches(githubRepoUrl, ownerUsername);

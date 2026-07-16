@@ -9,6 +9,7 @@ import com.codeprint.domain.graph.port.GraphUserInfoPort;
 import com.codeprint.domain.graph.port.ProjectAccessPort;
 import com.codeprint.domain.graph.port.ProjectAccessPort.ProjectAccessView;
 import com.codeprint.infrastructure.storage.S3Service;
+import com.codeprint.shared.gate.GatePolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -108,20 +109,20 @@ public class GraphFacade {
         return analysisReadPort.findBranch(graph.getAnalysisId()).orElse("default");
     }
 
-    // 소유권 확인 후 현재 적용 중인 게이트 테마(DDD/LAYERED/GENERIC) + 규칙 목록 조회(1단계 표면화)
+    // 소유권 확인 후 현재 적용 중인 게이트 테마(DDD/LAYERED/GENERIC) + 규칙 목록 조회(1~2단계 표면화)
     public GraphWarningService.ActiveTheme getGateTheme(UUID projectId, UUID userId) {
         ProjectAccessView project = projectAccessPort.getOwnedProject(projectId, userId);
         Graph graph = graphQueryService.findLatestByProject(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("No graph found for project: " + projectId));
         List<Node> nodes = graphQueryService.getNodes(graph.getId());
         List<Edge> edges = graphQueryService.getEdges(graph.getId());
-        return graphWarningService.detectActiveTheme(nodes, edges, project.dddMigrationEnabled());
+        return graphWarningService.detectActiveTheme(nodes, edges, project.gatePolicy());
     }
 
-    // 소유권 확인 후 DDD 마이그레이션 플래그 켬/끔 + 경고 캐시 무효화(detect() 결과가 바로 반영되도록) + 갱신된 테마 반환
-    public GraphWarningService.ActiveTheme setDddMigrationEnabled(UUID projectId, UUID userId, boolean enabled) {
+    // 소유권 확인 후 게이트 정책(AUTO/DDD/LAYERED) 전환 + 경고 캐시 무효화(detect() 결과가 바로 반영되도록) + 갱신된 테마 반환
+    public GraphWarningService.ActiveTheme setGatePolicy(UUID projectId, UUID userId, GatePolicy policy) {
         projectAccessPort.verifyOwnership(projectId, userId);
-        projectAccessPort.setDddMigrationEnabled(projectId, userId, enabled);
+        projectAccessPort.setGatePolicy(projectId, userId, policy);
         graphQueryService.evictWarningsCache();
         return getGateTheme(projectId, userId);
     }

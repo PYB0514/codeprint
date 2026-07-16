@@ -512,13 +512,13 @@
     "gateTheme": {
       "themeLabel": { "DDD": "DDD", "LAYERED": "레이어드", "GENERIC": "범용" },
       "badge": "{{theme}} 게이트 적용 중 — 규칙 {{count}}종",
-      "migrationSuffix": "(마이그레이션)",
+      "selfDeclaredSuffix": "(직접 선언)",
       "themeRulesLabel": "{{theme}} 규칙",
       "featureSliceRulesLabel": "피처슬라이스 규칙",
       "universalRulesLabel": "항상 적용되는 규칙",
-      "migrateButton": "DDD 구조로 마이그레이션",
-      "migrating": "적용 중...",
-      "undoMigrationButton": "마이그레이션 해제",
+      "policySelectorLabel": "게이트 정책",
+      "policyLabel": { "AUTO": "자동", "DDD": "DDD", "LAYERED": "레이어드" },
+      "policyChanging": "적용 중...",
       "toggleFailed": "요청 처리 중 오류가 발생했습니다."
     },
     "nodeFilterTitle": "노드",

@@ -3,6 +3,7 @@ package com.codeprint.application.project;
 
 import com.codeprint.domain.project.Project;
 import com.codeprint.domain.project.ProjectRepository;
+import com.codeprint.shared.gate.GatePolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -105,14 +106,14 @@ public class ProjectCommandService {
         return projectRepository.save(project);
     }
 
-    // 소유자 확인 후 DDD 마이그레이션 플래그 켬/끔 — 자동감지와 무관하게 DDD 게이트 규칙 강제 적용
-    public Project setDddMigrationEnabled(UUID projectId, UUID requestingUserId, boolean enabled) {
+    // 소유자 확인 후 게이트 정책(AUTO/DDD/LAYERED) 전환 — 자동감지와 무관하게 지정 방향의 게이트 규칙 강제 적용
+    public Project setGatePolicy(UUID projectId, UUID requestingUserId, GatePolicy policy) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
         if (!project.getUserId().equals(requestingUserId)) {
             throw new IllegalStateException("Not authorized to modify this project");
         }
-        project.setDddMigrationEnabled(enabled);
+        project.setGatePolicy(policy);
         return projectRepository.save(project);
     }
 

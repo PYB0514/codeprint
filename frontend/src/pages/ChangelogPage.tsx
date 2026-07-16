@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.141.0',
+    date: '2026-07-17',
+    title: '게이트 정책 선택 바 — 자동/DDD/레이어드',
+    type: 'feature',
+    items: [
+      { category: '게이트 테마', desc: '게이트 테마 배지에서 "자동/DDD/레이어드" 중 원하는 게이트 정책을 직접 선택할 수 있습니다. 레이어드 구조를 유지하고 싶은 프로젝트도 이제 명시적으로 선언할 수 있습니다(기존에는 DDD 방향만 강제 가능했습니다).' },
+    ],
+  },
+  {
     version: 'v0.140.0',
     date: '2026-07-17',
     title: '게이트 테마 표면화 + DDD 마이그레이션',

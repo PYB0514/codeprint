@@ -13,6 +13,7 @@ import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.user.User;
+import com.codeprint.shared.gate.GatePolicy;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -62,17 +63,17 @@ public class GraphController {
         return ResponseEntity.ok(graphFacade.getGateTheme(projectId, user.getId()));
     }
 
-    // DDD 마이그레이션 플래그 켬/끔 — 자동감지와 무관하게 DDD 게이트 규칙 강제 적용, 소유자만
-    @PatchMapping("/api/projects/{projectId}/ddd-migration")
-    public ResponseEntity<GraphWarningService.ActiveTheme> setDddMigration(
+    // 게이트 정책(AUTO/DDD/LAYERED) 전환 — 자동감지와 무관하게 지정 방향의 게이트 규칙 강제 적용, 소유자만
+    @PatchMapping("/api/projects/{projectId}/gate-policy")
+    public ResponseEntity<GraphWarningService.ActiveTheme> setGatePolicy(
             @PathVariable UUID projectId,
-            @RequestBody DddMigrationRequest request,
+            @Valid @RequestBody GatePolicyRequest request,
             @AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(graphFacade.setDddMigrationEnabled(projectId, user.getId(), request.enabled()));
+        return ResponseEntity.ok(graphFacade.setGatePolicy(projectId, user.getId(), request.policy()));
     }
 
-    // DDD 마이그레이션 토글 요청 DTO
-    public record DddMigrationRequest(boolean enabled) {}
+    // 게이트 정책 선택 요청 DTO
+    public record GatePolicyRequest(@NotNull GatePolicy policy) {}
 
     // 그래프 버전을 고정 슬롯(1~5)에 고정 — 소유자만, 같은 슬롯 기존 고정은 덮어쓰기
     @PutMapping("/api/projects/{projectId}/graphs/{graphId}/pin")
