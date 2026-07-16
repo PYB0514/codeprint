@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
@@ -54,6 +55,9 @@ public class SourceFileWalker {
                 return FileVisitResult.CONTINUE;
             }
         });
+        // 절단 여부와 무관하게 항상 정렬 — 파일시스템 순회 순서(플랫폼·OS마다 다름, 정렬 보장 없음)에
+        // 결과가 좌우되지 않도록 경로 문자열 기준 결정론을 보장한다(같은 커밋을 두 번 분석해도 같은 500개가 선택됨)
+        eligible.sort(Comparator.comparing(Path::toString));
         List<Path> files = eligible.size() > MAX_FILES ? eligible.subList(0, MAX_FILES) : eligible;
         return new WalkResult(files, eligible.size());
     }

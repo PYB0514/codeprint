@@ -130,4 +130,21 @@ class SourceFileWalkerTest {
         assertThat(result.files()).hasSize(2);
         assertThat(result.totalEligible()).isEqualTo(2);
     }
+
+    @Test
+    @DisplayName("절단 시 파일 경로 정렬 순으로 앞 500개가 선택된다 — 파일시스템 순회 순서에 의존하지 않는 결정론 보장")
+    void 절단_결정론_정렬순() throws IOException {
+        // 역순으로 생성해도(생성 순서가 곧 순회 순서가 되기 쉬운 일부 파일시스템 대비) 결과는 항상 경로 정렬 순이어야 한다
+        for (int i = 501; i >= 0; i--) {
+            Files.writeString(tempDir.resolve(String.format("File%03d.java", i)), "public class C {}");
+        }
+
+        WalkResult result = walker.walk(tempDir);
+
+        List<String> names = result.files().stream().map(p -> p.getFileName().toString()).toList();
+        assertThat(names).hasSize(500);
+        assertThat(names).isSorted();
+        assertThat(names.get(0)).isEqualTo("File000.java");
+        assertThat(names.get(499)).isEqualTo("File499.java");
+    }
 }
