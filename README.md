@@ -17,6 +17,10 @@
 
 </div>
 
+<p align="center">
+  <a href="README.en.md">🇺🇸 English</a> · <b>🇰🇷 한국어</b>
+</p>
+
 ---
 
 ## 📌 프로젝트 목적
