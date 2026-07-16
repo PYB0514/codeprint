@@ -975,3 +975,14 @@ const fetchGraph = useCallback(async () => {
 - **경고 마크다운 리포트도 함께 번역**: `downloadWarningsMd()`의 리포트 제목("# 구조 경고 리포트")·총계 줄도 `warningPanel.reportTitle`/`reportTotalLine` 키로 번역 — WARNING_META를 직접 건드리는 김에 함께 처리(범위 확장이 아니라 같은 데이터 소스의 자연스러운 부수 효과).
 
 **결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 로그인 세션) — GraphPage 우측 "Analysis · Warnings" 패널에서 경고 그룹 라벨/설명("Controller → Infra Direct Dependency", "Missing @Transactional" 등)·심각도 배지·개수 영어 렌더링, "Ignore" 버튼 클릭 → 인라인 폼("This rule will turn off 12 warnings", "Add Rule"/"Cancel") 확인 후 취소로 종료. `/how-it-works`·`/dogfooding` 재방문으로 회귀 없음 확인.
+
+## 공용 컴포넌트 나머지(GraphLegend·GraphViewToggles·OnboardingTour) i18n — GRAPH_TOUR_STEPS 모듈 스코프 상수를 함수로 전환 (2026-07-16, codeprint_131)
+
+**범위.** "공용 컴포넌트 17개" 백로그의 나머지 — `GraphLegend.tsx`("전체 보기"·"내용 표시/가리기")·`GraphViewToggles.tsx`(레이아웃/라벨 전환 버튼)·`OnboardingTour.tsx`(GraphPage 첫 방문 온보딩 투어 5단계 + Joyride 내비게이션 라벨). 신규 `graphShared` 네임스페이스(`legend`/`layoutToggle`/`labelToggle`/`tour`).
+
+**`GRAPH_TOUR_STEPS` 구조 변경(탈락 이유 포함).** 기존 `OnboardingTour.tsx`는 `GRAPH_TOUR_STEPS`를 모듈 스코프 `const` 배열로 export해 `GraphPage.tsx`가 그대로 import해 썼다. 모듈 스코프 상수는 import 시점에 딱 한 번만 평가되므로, 그 안에 `t()`(리액트 훅)를 넣을 수 없다(훅은 컴포넌트 렌더 중에만 호출 가능).
+- **탈락안**: `useTranslation`을 `OnboardingTour.tsx` 최상단에서 호출해 모듈 스코프에서 번역 — 애초에 불가능(훅은 컴포넌트/커스텀훅 내부에서만 호출 가능, React 규칙 위반으로 런타임 에러).
+- **채택안**: `GRAPH_TOUR_STEPS` export를 제거하고, 같은 파일에 함수 `getGraphTourSteps(): Step[]`을 새로 만들어 `i18n.t(key, { ns: 'workspace' })`로 직접 인스턴스 호출(`WarningPanel.tsx`의 `getWarningLabel`/`getWarningDesc`와 동일 패턴, `dateLocale.ts`의 `currentDateLocale()`이 원조). `GraphPage.tsx`는 JSX 안에서 `steps={getGraphTourSteps()}`처럼 렌더마다 새로 호출 — 메모이제이션 없이 매 렌더 재계산이라 언어 전환 시에도 최신 번역이 항상 반영됨(GraphPageInner가 이미 `t()`를 쓰고 있어 언어 전환마다 재렌더되는 것에 편승).
+- **Joyride 자체의 `locale`(이전/닫기/완료/다음/열기/건너뛰기 버튼 라벨)은 컴포넌트 내부에서 `useTranslation` 훅으로 정상 처리** — steps와 달리 이건 항상 컴포넌트 렌더링 중에만 쓰이므로 훅 사용에 문제없음.
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 로그인 세션) — 상단 툴바 "Switch Layout"/"Layer"·"Domain", "Label display mode"/"Name"·"Comment", 좌측 사이드바 범례 "Show All" 영어 렌더링 확인. `localStorage.removeItem('onboarding_tour_done')` 후 재접속해 온보딩 투어 1·2단계("👋 Welcome to Codeprint!"·"Switch Layout" 설명, "Skip"/"Back"/"Next (N of 5)" 버튼) 실제 클릭으로 확인.

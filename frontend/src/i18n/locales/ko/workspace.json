@@ -550,6 +550,41 @@
     "reportTotalLine": "> 총 {{count}}개 경고",
     "reportGroupCount": "{{count}}개"
   },
+  "graphShared": {
+    "legend": {
+      "showAll": "전체 보기",
+      "showContent": "내용 표시",
+      "hideContent": "내용 가리기"
+    },
+    "layoutToggle": {
+      "title": "레이아웃 전환",
+      "layer": "계층형",
+      "domain": "도메인"
+    },
+    "labelToggle": {
+      "title": "라벨 표시 모드",
+      "name": "이름",
+      "comment": "주석"
+    },
+    "tour": {
+      "welcomeTitle": "👋 Codeprint에 오신 걸 환영합니다!",
+      "welcomeContent": "프로젝트의 파일 구조와 함수 호출 흐름을 인터랙티브 회로도로 탐색할 수 있습니다. 주요 기능을 소개합니다.",
+      "layoutTitle": "레이아웃 전환",
+      "layoutContent": "계층형 모드는 DDD 레이어(interfaces → application → domain → infrastructure)를 기준으로 정렬합니다. 도메인 모드는 같은 도메인(프로젝트·결제 등)끼리 묶어 배치합니다.",
+      "edgesTitle": "엣지 필터",
+      "edgesContent": "콜 체인, DB 연결, API 호출 등 연결선 종류를 토글로 켜고 끌 수 있습니다. 복잡해 보이면 필요한 연결만 남겨보세요.",
+      "clickNodeTitle": "노드를 클릭해보세요",
+      "clickNodeContent": "함수 노드를 클릭하면 우측 사이드바에서 상세 정보와 호출 흐름(콜 체인)을 확인할 수 있습니다. 흐름 재생 버튼으로 실행 경로를 애니메이션으로 볼 수 있어요.",
+      "exportTitle": "내보내기",
+      "exportContent": "상단 툴바의 내보내기 버튼에서 현재 그래프를 PNG 이미지 또는 AI 컨텍스트(.md)로 내보낼 수 있습니다. 문서나 팀 공유용으로 활용해보세요.",
+      "back": "이전",
+      "close": "닫기",
+      "last": "완료",
+      "next": "다음",
+      "open": "열기",
+      "skip": "건너뛰기"
+    }
+  },
   "community": {
     "title": "커뮤니티",
     "searchPlaceholder": "게시글 검색...",

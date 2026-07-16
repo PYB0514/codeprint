@@ -550,6 +550,41 @@
     "reportTotalLine": "> {{count}} warnings total",
     "reportGroupCount": "{{count}}"
   },
+  "graphShared": {
+    "legend": {
+      "showAll": "Show All",
+      "showContent": "Show content",
+      "hideContent": "Hide content"
+    },
+    "layoutToggle": {
+      "title": "Switch layout",
+      "layer": "Layer",
+      "domain": "Domain"
+    },
+    "labelToggle": {
+      "title": "Label display mode",
+      "name": "Name",
+      "comment": "Comment"
+    },
+    "tour": {
+      "welcomeTitle": "👋 Welcome to Codeprint!",
+      "welcomeContent": "Explore your project's file structure and function call flow as an interactive circuit diagram. Here's a quick tour of the main features.",
+      "layoutTitle": "Switch Layout",
+      "layoutContent": "Layer mode sorts by DDD layer (interfaces → application → domain → infrastructure). Domain mode groups nodes that belong to the same domain (e.g. project, payment) together.",
+      "edgesTitle": "Edge Filters",
+      "edgesContent": "Toggle connection types like call chains, DB connections, and API calls on and off. If it looks too busy, keep only the connections you need.",
+      "clickNodeTitle": "Try clicking a node",
+      "clickNodeContent": "Clicking a function node shows its details and call flow (call chain) in the right sidebar. Use the flow playback button to animate the execution path.",
+      "exportTitle": "Export",
+      "exportContent": "Use the export button in the top toolbar to save the current graph as a PNG image or an AI context (.md) file. Great for docs or sharing with your team.",
+      "back": "Back",
+      "close": "Close",
+      "last": "Done",
+      "next": "Next",
+      "open": "Open",
+      "skip": "Skip"
+    }
+  },
   "community": {
     "title": "Community",
     "searchPlaceholder": "Search posts...",
