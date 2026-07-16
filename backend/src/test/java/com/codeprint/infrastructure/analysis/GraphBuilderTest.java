@@ -1342,6 +1342,67 @@ class GraphBuilderTest {
         assertThat(resolved).isTrue();
     }
 
+    // 안정성 갭 B — 같은 입력을 두 번 빌드해도 노드/엣지 구성이 완전히 동일해야 한다(결정론 회귀 테스트).
+    // 동명 함수가 여러 파일에 존재하는 모호한 호출(전역 폴백 후보 선택)을 포함시켜, 후보 목록 순회 순서가
+    // Map/Set 반복 순서에 우연히 좌우되는 잠재적 비결정성까지 노출되도록 구성.
+    @Test
+    @DisplayName("동일 입력을 두 번 빌드해도 노드·엣지 구성이 완전히 동일하다(결정론)")
+    void 같은_입력_두번_빌드_결과_동일() throws Exception {
+        List<ParsedFile> parsedFiles = List.of(
+                parsedFileWithCalls("src/a.js", "JavaScript", List.of("run"), Map.of("run", List.of("handle"))),
+                parsedFileWithCalls("src/handlers/one.js", "JavaScript", List.of("handle"), Map.of()),
+                parsedFileWithCalls("src/handlers/two.js", "JavaScript", List.of("handle"), Map.of()),
+                parsedFileWithCalls("src/handlers/three.js", "JavaScript", List.of("handle"), Map.of()),
+                parsedFileWithCallsAndImports("src/b.js", "JavaScript", List.of("dispatch"),
+                        Map.of("dispatch", List.of("handle")), List.of())
+        );
+
+        // 1차 빌드 — 클래스 공용 graphBuilder/mock 사용
+        graphBuilder.build(UUID.randomUUID(), UUID.randomUUID(), parsedFiles);
+        ArgumentCaptor<Node> nodeCaptor1 = ArgumentCaptor.forClass(Node.class);
+        ArgumentCaptor<Edge> edgeCaptor1 = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor1.capture());
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor1.capture());
+        Set<String> nodesA = toNodeKeys(nodeCaptor1.getAllValues());
+        Set<String> edgesA = toEdgeKeys(edgeCaptor1.getAllValues());
+
+        // 2차 빌드 — 완전히 독립된 GraphBuilder+mock으로 같은 입력을 다시 빌드
+        GraphRepository repo2 = mock(GraphRepository.class);
+        ProjectRepository projRepo2 = mock(ProjectRepository.class);
+        SnapshotReferencePort snapshotPort2 = mock(SnapshotReferencePort.class);
+        when(repo2.save(any(Graph.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(repo2.saveNode(any(Node.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(repo2.saveEdge(any(Edge.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(projRepo2.findById(any())).thenReturn(Optional.empty());
+        when(snapshotPort2.findReferencedGraphIds(any())).thenReturn(Set.of());
+        new GraphBuilder(repo2, projRepo2, snapshotPort2)
+                .build(UUID.randomUUID(), UUID.randomUUID(), parsedFiles);
+        ArgumentCaptor<Node> nodeCaptor2 = ArgumentCaptor.forClass(Node.class);
+        ArgumentCaptor<Edge> edgeCaptor2 = ArgumentCaptor.forClass(Edge.class);
+        verify(repo2, atLeastOnce()).saveNode(nodeCaptor2.capture());
+        verify(repo2, atLeastOnce()).saveEdge(edgeCaptor2.capture());
+        Set<String> nodesB = toNodeKeys(nodeCaptor2.getAllValues());
+        Set<String> edgesB = toEdgeKeys(edgeCaptor2.getAllValues());
+
+        assertThat(nodesA).isEqualTo(nodesB);
+        assertThat(edgesA).isEqualTo(edgesB);
+    }
+
+    // 노드를 (type, name, filePath) 안정 키 집합으로 변환 — 매 빌드마다 새로 발급되는 랜덤 UUID는 비교에서 제외
+    private Set<String> toNodeKeys(List<Node> nodes) {
+        return nodes.stream()
+                .map(n -> n.getType() + "|" + n.getName() + "|" + n.getFilePath())
+                .collect(Collectors.toSet());
+    }
+
+    // 엣지를 (edgeIdentifier, type) 안정 키 집합으로 변환 — sourceNodeId/targetNodeId는 빌드마다 새 랜덤 UUID라
+    // 비교 불가하므로 제외하고, 파일명·함수명 기반 edgeIdentifier로 동일성을 판정
+    private Set<String> toEdgeKeys(List<Edge> edges) {
+        return edges.stream()
+                .map(e -> e.getEdgeIdentifier() + "|" + e.getType())
+                .collect(Collectors.toSet());
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private ParsedFile parsedFile(String path, String lang, List<String> functions, Map<String, String> comments) {
