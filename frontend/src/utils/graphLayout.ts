@@ -3,7 +3,8 @@ import React from 'react'
 
 import type { Node, Edge, AriaLabelConfig } from '@xyflow/react'
 import { MarkerType } from '@xyflow/react'
-import { WARNING_META } from '../components/WarningPanel'
+import { WARNING_META, getWarningLabel, getWarningDesc } from '../components/WarningPanel'
+import i18n from '../i18n'
 
 // DDD 레이어별 색상 팔레트 — 파일/함수 노드 색상 구분용 (계층형·도메인 공통 적용)
 const LAYER_PALETTE: Record<string, { accent: string; fileBg: string; fileText: string; funcBg: string; funcText: string }> = {
@@ -1165,12 +1166,16 @@ export function downloadWarningsMd(warningList: { type: string; nodeIds: string[
     if (!grouped.has(w.type)) grouped.set(w.type, [])
     grouped.get(w.type)!.push(w.message)
   }
-  const lines = [`# 구조 경고 리포트\n`, `> 총 ${warningList.length}개 경고\n`]
+  const lines = [
+    `${i18n.t('warningPanel.reportTitle', { ns: 'workspace' })}\n`,
+    `${i18n.t('warningPanel.reportTotalLine', { ns: 'workspace', count: warningList.length })}\n`,
+  ]
   for (const [type, msgs] of grouped.entries()) {
     const meta = WARNING_META[type]
-    const label = meta ? `${meta.label} (${type})` : type
-    lines.push(`\n## ${label} (${msgs.length}개)\n`)
-    if (meta?.desc) lines.push(`> ${meta.desc}\n`)
+    const label = meta ? `${getWarningLabel(type)} (${type})` : type
+    const desc = meta ? getWarningDesc(type) : ''
+    lines.push(`\n## ${label} (${i18n.t('warningPanel.reportGroupCount', { ns: 'workspace', count: msgs.length })})\n`)
+    if (desc) lines.push(`> ${desc}\n`)
     msgs.forEach(m => lines.push(`- ${m.replace(/^[^:]+:\s*/, '')}`))
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })

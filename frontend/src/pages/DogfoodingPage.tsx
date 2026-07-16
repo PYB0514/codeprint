@@ -1,6 +1,6 @@
 // Codeprint가 자기 코드의 구조 결함을 스스로 적발한 사례(도그푸딩)를 보여주는 페이지
 import AppHeader from '../components/AppHeader'
-import { WARNING_META } from '../components/WarningPanel'
+import { WARNING_META, getWarningLabel } from '../components/WarningPanel'
 
 const SEVERITY_STYLE: Record<string, string> = {
   HIGH: 'bg-red-900/40 text-red-400',
@@ -113,7 +113,7 @@ export default function DogfoodingPage() {
               >
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   {c.highlight && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-900/50 text-cyan-300">★ 대표</span>}
-                  <span className="font-semibold text-sm" style={{ color }}>{meta?.label ?? c.type}</span>
+                  <span className="font-semibold text-sm" style={{ color }}>{getWarningLabel(c.type)}</span>
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${SEVERITY_STYLE[c.severity]}`}>{c.severity}</span>
                   <span className="text-[10px] text-gray-600 ml-auto">{c.ref}</span>
                 </div>
