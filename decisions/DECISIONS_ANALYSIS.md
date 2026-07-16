@@ -4,6 +4,20 @@
 
 ---
 
+## 게이트 테마 1단계 — 자동 감지 표면화 + DDD 마이그레이션(2026-07-17)
+
+**배경.** 엔진은 이미 암묵적 테마제로 동작 중이었다(`GraphWarningService.detect()` 내부에서 `isDddProject()` 하나로 DDD 5종/레이어드 2종이 상호배타적으로 갈리고, 피처슬라이스 2종은 별도 자체 게이트로 추가 적용) — 문제는 사용자에게 이게 전혀 안 보인다는 것.
+
+**오버라이드 설계 — 사용자 재정의로 확정.** 처음엔 "자동감지가 틀렸을 때 수정하는 오버라이드"로 설계했으나(옵션 검토 과정에서 세 가지 안 제시), 사용자가 "'마이그레이션'이라고 바꾸고, 이 구조로 바꾸고 싶은 사용자가 눌러서 적용"으로 재정의 — 오판정 정정이 아니라 **아직 그 구조가 아닌 프로젝트가 목표 구조를 미리 선언하고 그에 맞춰 게이팅 받기 시작하는 기능**으로 성격이 바뀌었다. 메커니즘은 동일(자동감지 결과를 강제 override하는 boolean 플래그 하나)이지만 UI 카피·프레이밍이 "정정"에서 "지향점 선언"으로 바뀐다. 방향은 DDD로 가는 것만 지원(레이어드로 강제 전환하는 반대 방향은 요구되지 않아 스코프 제외).
+
+**규칙 그룹 목록 — 코드에서 역으로 확인.** `detect()`의 분기·게이트를 전수 확인해 PROGRESS.md의 "DDD 5종/레이어드 2종/피처슬라이스 2종"이 실제 `w.put("type", ...)` 리터럴과 정확히 일치함을 검증(DDD: DB_LAYER_BYPASS·CROSS_CONTEXT_IMPORT·DOMAIN_IMPORTS_INFRA·INTERFACES_IMPORTS_INFRA·CROSS_DOMAIN_CALL / 레이어드: LAYERED_REVERSE_DEPENDENCY·LAYERED_BYPASS / 피처슬라이스: CROSS_FEATURE_IMPORT·FEATURE_LAYER_VIOLATION). 이 목록을 `GraphWarningService`에 상수로 고정해 `detect()`와 `detectActiveTheme()`가 항상 같은 소스를 참조하게 했다(목록이 둘로 갈라져 배지엔 있는데 실제 게이팅은 안 되는 불일치 방지).
+
+**구현.** `Project.dddMigrationEnabled`(V63) 신설. `isDddProject(nodes) || dddMigrationEnabled`로 DDD 강제. 크로스 컨텍스트(graph→project) 데이터는 기존 `ProjectAccessPort`(도메인 포트, `GraphFacade`가 이미 쓰던 브릿지)를 확장해 재사용 — `ProjectAccessView`에 필드 추가 + 포트에 write 메서드 추가, 새 포트를 만들지 않음. `graphWarnings` 캐시는 기존 `ArchitectureIntentService`의 전체무효화 관례를 그대로 재사용(`GraphQueryService.evictWarningsCache()`).
+
+**검증.** TDD로 `GraphWarningServiceTest`에 `detectActiveTheme` 5건(DDD/레이어드/GENERIC/마이그레이션 강제/detect() 실제 반영) 추가 — 마이그레이션 검증 픽스처는 domain+infra 조합이 자동감지 자체를 트리거해버려(2종 이상) 플래그 효과를 순수 분리 못 하는 것을 발견, interfaces+infrastructure 조합(자동감지 레이어 카운트 1개뿐)으로 교체해 해결. 백엔드 전체 테스트 green, `analyzeLocal` 베이스라인 변화 없음. **브라우저 실측**(claude-in-chrome, 실 로그인) — codeprint 자기 레포(DDD, 5종 배지 정상) + Spring PetClinic(레이어드, 2종 배지 정상) 두 실제 프로젝트에서 배지·규칙 목록 확인, PetClinic에서 마이그레이션 토글 on/off 왕복까지 실제 클릭으로 검증(DDD 5종으로 전환 후 다시 레이어드 2종으로 정상 복귀).
+
+---
+
 ## 프로덕션 안정성 갭 B — GraphBuilder 결정론 회귀 테스트(2026-07-17)
 
 **문제.** "같은 커밋을 두 번 분석해도 노드/엣지/경고가 완전히 같아야 한다"는 결정론 요구사항을 자동으로 검증하는 테스트가 없었다 — 지금까지 결정론 위반(갭 A 등)은 전부 코드 리뷰·수동 관찰로 사후 발견됐다.

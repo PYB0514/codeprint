@@ -36,6 +36,7 @@ import TeamChatPanel from '../components/TeamChatPanel'
 import ArchitectureIntentPanel from '../components/ArchitectureIntentPanel'
 import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewToggles'
 import { GraphLegend } from '../components/GraphLegend'
+import GateThemeBadge from '../components/GateThemeBadge'
 import { CornerPanel } from '../components/CornerPanel'
 import { FlowPlaybackPanel } from '../components/FlowPlaybackPanel'
 import { type IgnoreRule, loadIgnoreRules, saveIgnoreRules } from '../utils/ignoreRules'
@@ -2245,6 +2246,11 @@ function GraphPageInner() {
                   )}
                 </div>
               )}
+            </LeftSection>
+
+            {/* 게이트 테마 — 감지된 아키텍처 테마 배지 + 규칙 목록 + DDD 마이그레이션 토글 */}
+            <LeftSection title={t('graphPage.gateThemeTitle')}>
+              <GateThemeBadge projectId={projectId!} />
             </LeftSection>
 
             {/* 버전 비교 */}

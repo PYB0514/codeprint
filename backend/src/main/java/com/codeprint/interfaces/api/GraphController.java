@@ -54,6 +54,26 @@ public class GraphController {
         return ResponseEntity.ok(graphFacade.getGraphVersionsWithBranch(projectId, user.getId()));
     }
 
+    // 현재 적용 중인 게이트 테마(DDD/LAYERED/GENERIC) + 규칙 목록 조회 — 소유자만(게이트 테마 1단계 표면화)
+    @GetMapping("/api/projects/{projectId}/gate-theme")
+    public ResponseEntity<GraphWarningService.ActiveTheme> getGateTheme(
+            @PathVariable UUID projectId,
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(graphFacade.getGateTheme(projectId, user.getId()));
+    }
+
+    // DDD 마이그레이션 플래그 켬/끔 — 자동감지와 무관하게 DDD 게이트 규칙 강제 적용, 소유자만
+    @PatchMapping("/api/projects/{projectId}/ddd-migration")
+    public ResponseEntity<GraphWarningService.ActiveTheme> setDddMigration(
+            @PathVariable UUID projectId,
+            @RequestBody DddMigrationRequest request,
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(graphFacade.setDddMigrationEnabled(projectId, user.getId(), request.enabled()));
+    }
+
+    // DDD 마이그레이션 토글 요청 DTO
+    public record DddMigrationRequest(boolean enabled) {}
+
     // 그래프 버전을 고정 슬롯(1~5)에 고정 — 소유자만, 같은 슬롯 기존 고정은 덮어쓰기
     @PutMapping("/api/projects/{projectId}/graphs/{graphId}/pin")
     public ResponseEntity<Void> pinGraph(

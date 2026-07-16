@@ -105,6 +105,17 @@ public class ProjectCommandService {
         return projectRepository.save(project);
     }
 
+    // 소유자 확인 후 DDD 마이그레이션 플래그 켬/끔 — 자동감지와 무관하게 DDD 게이트 규칙 강제 적용
+    public Project setDddMigrationEnabled(UUID projectId, UUID requestingUserId, boolean enabled) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+        if (!project.getUserId().equals(requestingUserId)) {
+            throw new IllegalStateException("Not authorized to modify this project");
+        }
+        project.setDddMigrationEnabled(enabled);
+        return projectRepository.save(project);
+    }
+
     // 소유자 확인 후 프로젝트 삭제
     public void deleteProject(UUID projectId, UUID requestingUserId) {
         Project project = projectRepository.findById(projectId)

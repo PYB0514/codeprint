@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.140.0',
+    date: '2026-07-17',
+    title: '게이트 테마 표면화 + DDD 마이그레이션',
+    type: 'feature',
+    items: [
+      { category: '게이트 테마', desc: '그래프 화면에 현재 적용 중인 게이트 테마(DDD·레이어드·범용) 배지와 적용 규칙 목록이 표시됩니다. 아직 DDD 구조가 아닌 프로젝트는 "DDD 구조로 마이그레이션" 버튼으로 자동감지와 무관하게 DDD 게이트 규칙을 미리 적용받을 수 있습니다(언제든 해제 가능).' },
+    ],
+  },
+  {
     version: 'v0.139.0',
     date: '2026-07-17',
     title: 'PR 검사 셀프서비스 연결',

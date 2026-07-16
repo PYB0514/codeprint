@@ -2,7 +2,9 @@
 package com.codeprint.application.graph;
 
 import com.codeprint.domain.graph.*;
+import com.codeprint.domain.graph.port.ProjectAccessPort;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,7 @@ public class GraphQueryService {
     private final GraphRepository graphRepository;
     private final GraphWarningService graphWarningService;
     private final ArchitectureIntentService architectureIntentService;
+    private final ProjectAccessPort projectAccessPort;
 
     // 프로젝트의 가장 최근 그래프를 조회
     public Optional<Graph> findLatestByProject(UUID projectId) {
@@ -58,10 +61,19 @@ public class GraphQueryService {
     public List<Map<String, Object>> getWarnings(UUID graphId) {
         List<Node> nodes = getNodes(graphId);
         List<Edge> edges = getEdges(graphId);
-        ArchitectureIntent intent = graphRepository.findById(graphId)
-                .flatMap(g -> architectureIntentService.findByProjectId(g.getProjectId()))
-                .orElse(null);
-        return graphWarningService.detect(nodes, edges, intent);
+        UUID projectId = graphRepository.findById(graphId).map(Graph::getProjectId).orElse(null);
+        ArchitectureIntent intent = projectId == null ? null
+                : architectureIntentService.findByProjectId(projectId).orElse(null);
+        boolean dddMigrationEnabled = projectId != null && projectAccessPort.getProjectById(projectId)
+                .map(ProjectAccessPort.ProjectAccessView::dddMigrationEnabled)
+                .orElse(false);
+        return graphWarningService.detect(nodes, edges, intent, dddMigrationEnabled);
+    }
+
+    // 경고 캐시 전체 무효화 — 프로젝트 설정(DDD 마이그레이션 플래그 등)이 바뀌어 detect() 결과가 달라질 때 사용
+    // (ArchitectureIntentService의 기존 전체무효화 관례와 동일)
+    @CacheEvict(value = "graphWarnings", allEntries = true)
+    public void evictWarningsCache() {
     }
 
 }

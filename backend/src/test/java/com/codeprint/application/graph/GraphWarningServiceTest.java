@@ -1982,4 +1982,79 @@ class GraphWarningServiceTest {
 
         assertThat(warnings).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("HIGH_FAN_OUT"));
     }
+
+    // ── 게이트 테마(detectActiveTheme) — 안정성 갭 이후 신규 기능(PROGRESS.md "게이트 테마") ──────────────
+
+    @Test
+    @DisplayName("detectActiveTheme — domain/application/infrastructure 폴더가 있으면 DDD 테마, 규칙 5종")
+    void detectActiveTheme_dddStructure_returnsDdd() {
+        List<Node> nodes = List.of(
+                fileNodeWithPath("A", "src/domain/user/User.java"),
+                fileNodeWithPath("B", "src/application/user/UserService.java"),
+                fileNodeWithPath("C", "src/infrastructure/UserRepositoryImpl.java"));
+
+        var theme = service.detectActiveTheme(nodes, List.of(), false);
+
+        assertThat(theme.theme()).isEqualTo("DDD");
+        assertThat(theme.themeRuleTypes()).hasSize(5);
+        assertThat(theme.dddDetected()).isTrue();
+        assertThat(theme.dddMigrationEnabled()).isFalse();
+    }
+
+    @Test
+    @DisplayName("detectActiveTheme — DDD 폴더가 없어도 마이그레이션 플래그가 켜져 있으면 DDD 테마로 강제 적용")
+    void detectActiveTheme_migrationFlag_forcesDdd() {
+        List<Node> nodes = List.of(fileNodeWithPath("A", "src/main/Flat.java"));
+
+        var theme = service.detectActiveTheme(nodes, List.of(), true);
+
+        assertThat(theme.theme()).isEqualTo("DDD");
+        assertThat(theme.dddDetected()).isFalse();
+        assertThat(theme.dddMigrationEnabled()).isTrue();
+    }
+
+    @Test
+    @DisplayName("detectActiveTheme — Controller/Service/Repository 2종 이상이면 레이어드 테마, 규칙 2종")
+    void detectActiveTheme_layeredStructure_returnsLayered() {
+        List<Node> nodes = List.of(
+                fileNodeWithPath("UserController", "src/controllers/UserController.java"),
+                fileNodeWithPath("UserService", "src/services/UserService.java"));
+
+        var theme = service.detectActiveTheme(nodes, List.of(), false);
+
+        assertThat(theme.theme()).isEqualTo("LAYERED");
+        assertThat(theme.themeRuleTypes()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("detectActiveTheme — 어느 구조에도 안 걸리면 GENERIC, 테마 규칙 0종")
+    void detectActiveTheme_flatStructure_returnsGeneric() {
+        List<Node> nodes = List.of(fileNodeWithPath("A", "src/Main.java"));
+
+        var theme = service.detectActiveTheme(nodes, List.of(), false);
+
+        assertThat(theme.theme()).isEqualTo("GENERIC");
+        assertThat(theme.themeRuleTypes()).isEmpty();
+        assertThat(theme.universalRuleTypes()).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("마이그레이션 플래그가 켜지면 실제 detect()도 DDD 규칙(INTERFACES_IMPORTS_INFRA)을 적용한다")
+    void detect_migrationFlagEnabled_appliesDddRules() {
+        // interfaces/+infrastructure/ 조합은 isDddProject() 판정용 3종(domain/application/infrastructure) 중
+        // infrastructure 하나만 걸쳐 자동감지로는 DDD 프로젝트로 잡히지 않는다 — 마이그레이션 플래그 자체의 효과만 순수하게 검증
+        List<Node> nodes = new ArrayList<>();
+        List<Edge> edges = new ArrayList<>();
+        Node controllerFile = fileNodeWithPath("OrderController", "src/interfaces/OrderController.java");
+        Node infraFile = fileNodeWithPath("OrderJpa", "src/infrastructure/OrderJpaRepository.java");
+        nodes.add(controllerFile);
+        nodes.add(infraFile);
+        edges.add(importEdge(controllerFile.getId(), infraFile.getId()));
+
+        List<Map<String, Object>> withoutMigration = service.detect(nodes, edges, null, false);
+        List<Map<String, Object>> withMigration = service.detect(nodes, edges, null, true);
+
+        assertThat(withoutMigration).noneSatisfy(w -> assertThat(w.get("type")).isEqualTo("INTERFACES_IMPORTS_INFRA"));
+        assertThat(withMigration).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("INTERFACES_IMPORTS_INFRA"));
+    }
 }
