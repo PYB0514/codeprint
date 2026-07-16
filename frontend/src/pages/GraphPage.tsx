@@ -25,7 +25,7 @@ import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
 import SketchNode from '../components/SketchNode'
-import OnboardingTour, { isTourDone, GRAPH_TOUR_STEPS, GRAPH_TOUR_STORAGE_KEY } from '../components/OnboardingTour'
+import OnboardingTour, { isTourDone, getGraphTourSteps, GRAPH_TOUR_STORAGE_KEY } from '../components/OnboardingTour'
 import AppHeader from '../components/AppHeader'
 import { useCollaboration } from '../hooks/useCollaboration'
 import { useSidebarResize } from '../hooks/useSidebarResize'
@@ -1820,7 +1820,7 @@ function GraphPageInner() {
       </div>
     <div ref={flowRef} style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
-      <OnboardingTour run={tourRunning} onFinish={() => setTourRunning(false)} steps={GRAPH_TOUR_STEPS} storageKey={GRAPH_TOUR_STORAGE_KEY} />
+      <OnboardingTour run={tourRunning} onFinish={() => setTourRunning(false)} steps={getGraphTourSteps()} storageKey={GRAPH_TOUR_STORAGE_KEY} />
       <CursorOverlay cursors={collabState.cursors} />
 
 

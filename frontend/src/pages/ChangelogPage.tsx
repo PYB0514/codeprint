@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.138.0',
+    date: '2026-07-16',
+    title: '영어 번역 확대 — 그래프 공용 컨트롤·온보딩 투어',
+    type: 'feature',
+    items: [
+      { category: '다국어', desc: '레이아웃/라벨 전환 버튼, 범례, 첫 방문 온보딩 투어가 영어로도 제공됩니다.' },
+    ],
+  },
+  {
     version: 'v0.137.0',
     date: '2026-07-16',
     title: '영어 번역 확대 — 구조 경고 패널',

@@ -1,46 +1,51 @@
 // 최초 방문 사용자 대상 온보딩 투어 — 페이지별 steps/storageKey를 props로 받는 범용 컴포넌트
+import { useTranslation } from 'react-i18next'
 import { Joyride, STATUS } from 'react-joyride'
 import type { Step, EventData } from 'react-joyride'
+import i18n from '../i18n'
 
 export const GRAPH_TOUR_STORAGE_KEY = 'onboarding_tour_done'
 
-export const GRAPH_TOUR_STEPS: Step[] = [
-  {
-    target: 'body',
-    placement: 'center',
-    title: '👋 Codeprint에 오신 걸 환영합니다!',
-    content: '프로젝트의 파일 구조와 함수 호출 흐름을 인터랙티브 회로도로 탐색할 수 있습니다. 주요 기능을 소개합니다.',
-    skipBeacon: true,
-  },
-  {
-    target: '#tour-layout',
-    placement: 'bottom',
-    title: '레이아웃 전환',
-    content: '계층형 모드는 DDD 레이어(interfaces → application → domain → infrastructure)를 기준으로 정렬합니다. 도메인 모드는 같은 도메인(프로젝트·결제 등)끼리 묶어 배치합니다.',
-    skipBeacon: true,
-  },
-  {
-    target: '#tour-edges',
-    placement: 'right',
-    title: '엣지 필터',
-    content: '콜 체인, DB 연결, API 호출 등 연결선 종류를 토글로 켜고 끌 수 있습니다. 복잡해 보이면 필요한 연결만 남겨보세요.',
-    skipBeacon: true,
-  },
-  {
-    target: '.react-flow__node',
-    placement: 'top',
-    title: '노드를 클릭해보세요',
-    content: '함수 노드를 클릭하면 우측 사이드바에서 상세 정보와 호출 흐름(콜 체인)을 확인할 수 있습니다. 흐름 재생 버튼으로 실행 경로를 애니메이션으로 볼 수 있어요.',
-    skipBeacon: true,
-  },
-  {
-    target: '#tour-export',
-    placement: 'bottom',
-    title: '내보내기',
-    content: '상단 툴바의 내보내기 버튼에서 현재 그래프를 PNG 이미지 또는 AI 컨텍스트(.md)로 내보낼 수 있습니다. 문서나 팀 공유용으로 활용해보세요.',
-    skipBeacon: true,
-  },
-]
+// GraphPage 온보딩 투어 steps — 컴포넌트 밖(모듈 스코프)에서 쓰이므로 훅 대신 i18n 인스턴스 직접 사용
+export function getGraphTourSteps(): Step[] {
+  return [
+    {
+      target: 'body',
+      placement: 'center',
+      title: i18n.t('graphShared.tour.welcomeTitle', { ns: 'workspace' }),
+      content: i18n.t('graphShared.tour.welcomeContent', { ns: 'workspace' }),
+      skipBeacon: true,
+    },
+    {
+      target: '#tour-layout',
+      placement: 'bottom',
+      title: i18n.t('graphShared.tour.layoutTitle', { ns: 'workspace' }),
+      content: i18n.t('graphShared.tour.layoutContent', { ns: 'workspace' }),
+      skipBeacon: true,
+    },
+    {
+      target: '#tour-edges',
+      placement: 'right',
+      title: i18n.t('graphShared.tour.edgesTitle', { ns: 'workspace' }),
+      content: i18n.t('graphShared.tour.edgesContent', { ns: 'workspace' }),
+      skipBeacon: true,
+    },
+    {
+      target: '.react-flow__node',
+      placement: 'top',
+      title: i18n.t('graphShared.tour.clickNodeTitle', { ns: 'workspace' }),
+      content: i18n.t('graphShared.tour.clickNodeContent', { ns: 'workspace' }),
+      skipBeacon: true,
+    },
+    {
+      target: '#tour-export',
+      placement: 'bottom',
+      title: i18n.t('graphShared.tour.exportTitle', { ns: 'workspace' }),
+      content: i18n.t('graphShared.tour.exportContent', { ns: 'workspace' }),
+      skipBeacon: true,
+    },
+  ]
+}
 
 interface OnboardingTourProps {
   run: boolean
@@ -51,6 +56,7 @@ interface OnboardingTourProps {
 
 // 온보딩 투어 컴포넌트 — run=true 시 투어 시작, 완료/종료 시 onFinish 호출
 export default function OnboardingTour({ run, onFinish, steps, storageKey }: OnboardingTourProps) {
+  const { t } = useTranslation('workspace')
   // 투어 완료/종료 이벤트 처리
   const handleEvent = (data: EventData) => {
     if (data.status === STATUS.FINISHED || data.status === STATUS.SKIPPED) {
@@ -77,12 +83,12 @@ export default function OnboardingTour({ run, onFinish, steps, storageKey }: Onb
         showProgress: true,
       }}
       locale={{
-        back: '이전',
-        close: '닫기',
-        last: '완료',
-        next: '다음',
-        open: '열기',
-        skip: '건너뛰기',
+        back: t('graphShared.tour.back'),
+        close: t('graphShared.tour.close'),
+        last: t('graphShared.tour.last'),
+        next: t('graphShared.tour.next'),
+        open: t('graphShared.tour.open'),
+        skip: t('graphShared.tour.skip'),
       }}
     />
   )

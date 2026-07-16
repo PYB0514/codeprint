@@ -1,4 +1,6 @@
 // 도메인/레이어 범례 — opaque 토글 + (옵션) 라벨 클릭 필터 + (옵션) 전체보기 리셋 (GraphPage·GraphViewerPage 공유)
+import { useTranslation } from 'react-i18next'
+
 export interface LegendEntry {
   key: string
   label: string
@@ -26,6 +28,7 @@ export function GraphLegend({
   onReset?: () => void
   resetActive?: boolean
 }) {
+  const { t } = useTranslation('workspace')
   return (
     <>
       <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">{headerText}</p>
@@ -36,7 +39,7 @@ export function GraphLegend({
             resetActive ? 'bg-blue-700/40 text-blue-200' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
           }`}
         >
-          전체 보기
+          {t('graphShared.legend.showAll')}
         </button>
       )}
       <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mb-2">
@@ -48,7 +51,7 @@ export function GraphLegend({
             <div key={key} className={`flex items-center gap-1.5 py-0.5 px-1 rounded ${active ? 'bg-gray-800/80' : ''}`}>
               <button
                 onClick={() => onToggleOpaque(key)}
-                title={opaque ? '내용 표시' : '내용 가리기'}
+                title={opaque ? t('graphShared.legend.showContent') : t('graphShared.legend.hideContent')}
                 style={{
                   width: 16, height: 16, borderRadius: 3,
                   border: `1px solid ${color}88`,
