@@ -1,6 +1,7 @@
 // 프로젝트 Aggregate Root 엔티티
 package com.codeprint.domain.project;
 
+import com.codeprint.shared.gate.GatePolicy;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -59,9 +60,10 @@ public class Project {
     @Column(name = "webhook_secret", length = 64)
     private String webhookSecret;
 
-    // 자동감지(폴더 구조)와 무관하게 DDD 게이트 규칙을 강제 적용 — "DDD로 마이그레이션" 사용자 선택
-    @Column(name = "ddd_migration_enabled", nullable = false)
-    private boolean dddMigrationEnabled;
+    // 자동감지(폴더 구조)와 무관하게 게이트 테마를 강제 선언 — AUTO(자동감지)/DDD/LAYERED 3택
+    @Column(name = "gate_policy", nullable = false, length = 10)
+    @Enumerated(EnumType.STRING)
+    private GatePolicy gatePolicy;
 
     // 사용자 ID와 GitHub URL로 새 프로젝트 인스턴스 생성
     public static Project create(UUID userId, String githubRepoUrl, String name, String description) {
@@ -76,7 +78,7 @@ public class Project {
         project.updatedAt = Instant.now();
         project.gateArchitectureEnabled = true;
         project.gateExperimentalEnabled = false;
-        project.dddMigrationEnabled = false;
+        project.gatePolicy = GatePolicy.AUTO;
         return project;
     }
 
@@ -139,9 +141,9 @@ public class Project {
         return webhookSecret != null;
     }
 
-    // DDD 마이그레이션 플래그 켬/끔 전환
-    public void setDddMigrationEnabled(boolean enabled) {
-        this.dddMigrationEnabled = enabled;
+    // 게이트 정책 전환(AUTO/DDD/LAYERED)
+    public void setGatePolicy(GatePolicy policy) {
+        this.gatePolicy = policy;
         this.updatedAt = Instant.now();
     }
 }

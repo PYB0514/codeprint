@@ -6,6 +6,7 @@ import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.EdgeType;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.graph.NodeType;
+import com.codeprint.shared.gate.GatePolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -31,11 +32,11 @@ public class GraphWarningService {
 
     // 의도 아키텍처(intent)를 함께 받아 INTENT_DRIFT까지 검사 — intent가 null/빈값이면 기존 경고만 생성(하위호환)
     public List<Map<String, Object>> detect(List<Node> nodes, List<Edge> edges, ArchitectureIntent intent) {
-        return detect(nodes, edges, intent, false);
+        return detect(nodes, edges, intent, GatePolicy.AUTO);
     }
 
-    // dddMigrationEnabled — 자동감지와 무관하게 사용자가 "DDD로 마이그레이션"을 선택했을 때 DDD 게이트 규칙을 강제 적용
-    public List<Map<String, Object>> detect(List<Node> nodes, List<Edge> edges, ArchitectureIntent intent, boolean dddMigrationEnabled) {
+    // gatePolicy — AUTO(자동감지)/DDD/LAYERED 중 사용자가 명시 선언한 방향으로 자동감지를 오버라이드
+    public List<Map<String, Object>> detect(List<Node> nodes, List<Edge> edges, ArchitectureIntent intent, GatePolicy gatePolicy) {
         List<Map<String, Object>> warnings = new ArrayList<>();
         warnings.addAll(detectCyclicImports(nodes, edges));
         warnings.addAll(detectBrokenInterfaceChains(nodes, edges));
@@ -44,15 +45,18 @@ public class GraphWarningService {
         warnings.addAll(detectMissingTransactionalDelete(nodes, edges));
         warnings.addAll(detectDeadCode(nodes, edges));
         warnings.addAll(detectHighFanOut(nodes, edges));
-        // DDD 폴더 구조(/domain/, /application/, /infrastructure/)를 사용하는 프로젝트에만 적용 — 또는 마이그레이션 플래그로 강제
-        if (isDddProject(nodes) || dddMigrationEnabled) {
+        // DDD 폴더 구조(/domain/, /application/, /infrastructure/)를 사용하는 프로젝트에만 적용 — 또는 정책으로 DDD 강제
+        boolean useDdd = gatePolicy == GatePolicy.DDD
+                || (gatePolicy == GatePolicy.AUTO && isDddProject(nodes));
+        if (useDdd) {
             warnings.addAll(detectDbLayerBypass(nodes, edges));
             warnings.addAll(detectCrossContextDomainImport(nodes, edges));
             warnings.addAll(detectDomainInfraImport(nodes, edges));
             warnings.addAll(detectInterfaceInfraImport(nodes, edges));
             warnings.addAll(detectCrossDomainFunctionCall(nodes, edges));
         } else {
-            // 비DDD 프로젝트 — Controller/Service/Repository 레이어 컨벤션을 자동 감지해 위반 검사
+            // 비DDD(AUTO 미감지 또는 LAYERED 강제) — Controller/Service/Repository 레이어 컨벤션 위반 검사
+            // (레이어 2종 미만이면 detectLayeredViolations 자체 게이트로 빈 목록 — LAYERED 강제 시에도 안전)
             warnings.addAll(detectLayeredViolations(nodes, edges));
         }
         // React/JS 피처-슬라이스(features/{X}/) 경계 위반 — 자체 게이트(피처 2개↑ + 프론트 언어)로 해당 레포만 발화
@@ -197,27 +201,30 @@ public class GraphWarningService {
         return features.size() >= 2 && hasFrontend;
     }
 
-    // 게이트 테마 표면화용 값 객체 — 현재 적용 중인 규칙 그룹과 각 그룹의 규칙 타입 목록(1단계, PROGRESS.md "게이트 테마" 참조)
+    // 게이트 테마 표면화용 값 객체 — 현재 적용 중인 규칙 그룹과 각 그룹의 규칙 타입 목록(1~2단계, PROGRESS.md "게이트 테마" 참조)
+    // selfDeclared — gatePolicy가 AUTO가 아니라 사용자가 직접 방향을 선언했는지(프론트 "직접 선언" 표시용)
     public record ActiveTheme(String theme, List<String> themeRuleTypes, boolean featureSliceActive,
                                List<String> featureSliceRuleTypes, List<String> universalRuleTypes,
-                               boolean dddDetected, boolean dddMigrationEnabled) {}
+                               boolean dddDetected, GatePolicy gatePolicy, boolean selfDeclared) {}
 
     // 현재 프로젝트에 적용 중인 게이트 테마(DDD/LAYERED/GENERIC) + 규칙 목록을 계산 — detect()의 분기와 동일 조건 재사용
-    public ActiveTheme detectActiveTheme(List<Node> nodes, List<Edge> edges, boolean dddMigrationEnabled) {
+    public ActiveTheme detectActiveTheme(List<Node> nodes, List<Edge> edges, GatePolicy gatePolicy) {
         boolean dddDetected = isDddProject(nodes);
         boolean featureSliceActive = isFeatureSliceProject(nodes);
-        if (dddDetected || dddMigrationEnabled) {
+        boolean selfDeclared = gatePolicy != GatePolicy.AUTO;
+        boolean useDdd = gatePolicy == GatePolicy.DDD || (gatePolicy == GatePolicy.AUTO && dddDetected);
+        if (useDdd) {
             return new ActiveTheme("DDD", DDD_RULE_TYPES, featureSliceActive, FEATURE_SLICE_RULE_TYPES,
-                    UNIVERSAL_RULE_TYPES, dddDetected, dddMigrationEnabled);
+                    UNIVERSAL_RULE_TYPES, dddDetected, gatePolicy, selfDeclared);
         }
-        // 레이어드도 자체 게이트(분류된 레이어 2종 이상)가 있어 항상 적용되는 건 아님 — 조건 미충족이면 GENERIC
-        boolean layeredDetected = hasLayeredStructure(nodes);
-        if (layeredDetected) {
+        // LAYERED 강제 시엔 실제 레이어 구조 무관하게 표시(강제 자체가 목적) — AUTO면 자체 게이트(레이어 2종 이상) 충족해야 표시
+        boolean useLayered = gatePolicy == GatePolicy.LAYERED || (gatePolicy == GatePolicy.AUTO && hasLayeredStructure(nodes));
+        if (useLayered) {
             return new ActiveTheme("LAYERED", LAYERED_RULE_TYPES, featureSliceActive, FEATURE_SLICE_RULE_TYPES,
-                    UNIVERSAL_RULE_TYPES, false, false);
+                    UNIVERSAL_RULE_TYPES, dddDetected, gatePolicy, selfDeclared);
         }
         return new ActiveTheme("GENERIC", List.of(), featureSliceActive, FEATURE_SLICE_RULE_TYPES,
-                UNIVERSAL_RULE_TYPES, false, false);
+                UNIVERSAL_RULE_TYPES, dddDetected, gatePolicy, selfDeclared);
     }
 
     // detectLayeredViolations의 "분류된 레이어 2종 이상" 게이트만 떼어내 재사용 — 실제 위반 목록 계산 없이 적용 여부만 판정

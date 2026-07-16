@@ -6,6 +6,7 @@ import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.EdgeType;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.graph.NodeType;
+import com.codeprint.shared.gate.GatePolicy;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -1986,31 +1987,33 @@ class GraphWarningServiceTest {
     // ── 게이트 테마(detectActiveTheme) — 안정성 갭 이후 신규 기능(PROGRESS.md "게이트 테마") ──────────────
 
     @Test
-    @DisplayName("detectActiveTheme — domain/application/infrastructure 폴더가 있으면 DDD 테마, 규칙 5종")
+    @DisplayName("detectActiveTheme — domain/application/infrastructure 폴더가 있으면 DDD 테마, 규칙 5종, AUTO는 selfDeclared false")
     void detectActiveTheme_dddStructure_returnsDdd() {
         List<Node> nodes = List.of(
                 fileNodeWithPath("A", "src/domain/user/User.java"),
                 fileNodeWithPath("B", "src/application/user/UserService.java"),
                 fileNodeWithPath("C", "src/infrastructure/UserRepositoryImpl.java"));
 
-        var theme = service.detectActiveTheme(nodes, List.of(), false);
+        var theme = service.detectActiveTheme(nodes, List.of(), GatePolicy.AUTO);
 
         assertThat(theme.theme()).isEqualTo("DDD");
         assertThat(theme.themeRuleTypes()).hasSize(5);
         assertThat(theme.dddDetected()).isTrue();
-        assertThat(theme.dddMigrationEnabled()).isFalse();
+        assertThat(theme.gatePolicy()).isEqualTo(GatePolicy.AUTO);
+        assertThat(theme.selfDeclared()).isFalse();
     }
 
     @Test
-    @DisplayName("detectActiveTheme — DDD 폴더가 없어도 마이그레이션 플래그가 켜져 있으면 DDD 테마로 강제 적용")
-    void detectActiveTheme_migrationFlag_forcesDdd() {
+    @DisplayName("detectActiveTheme — DDD 폴더가 없어도 DDD 정책이면 DDD 테마로 강제 적용, selfDeclared true")
+    void detectActiveTheme_dddPolicy_forcesDdd() {
         List<Node> nodes = List.of(fileNodeWithPath("A", "src/main/Flat.java"));
 
-        var theme = service.detectActiveTheme(nodes, List.of(), true);
+        var theme = service.detectActiveTheme(nodes, List.of(), GatePolicy.DDD);
 
         assertThat(theme.theme()).isEqualTo("DDD");
         assertThat(theme.dddDetected()).isFalse();
-        assertThat(theme.dddMigrationEnabled()).isTrue();
+        assertThat(theme.gatePolicy()).isEqualTo(GatePolicy.DDD);
+        assertThat(theme.selfDeclared()).isTrue();
     }
 
     @Test
@@ -2020,10 +2023,27 @@ class GraphWarningServiceTest {
                 fileNodeWithPath("UserController", "src/controllers/UserController.java"),
                 fileNodeWithPath("UserService", "src/services/UserService.java"));
 
-        var theme = service.detectActiveTheme(nodes, List.of(), false);
+        var theme = service.detectActiveTheme(nodes, List.of(), GatePolicy.AUTO);
 
         assertThat(theme.theme()).isEqualTo("LAYERED");
         assertThat(theme.themeRuleTypes()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("detectActiveTheme — LAYERED 정책 강제 시 DDD 폴더가 있어도 LAYERED 테마로 전환, selfDeclared true")
+    void detectActiveTheme_layeredPolicy_forcesLayeredOverDddDetection() {
+        List<Node> nodes = List.of(
+                fileNodeWithPath("A", "src/domain/user/User.java"),
+                fileNodeWithPath("B", "src/application/user/UserService.java"),
+                fileNodeWithPath("C", "src/infrastructure/UserRepositoryImpl.java"));
+
+        var theme = service.detectActiveTheme(nodes, List.of(), GatePolicy.LAYERED);
+
+        assertThat(theme.theme()).isEqualTo("LAYERED");
+        assertThat(theme.themeRuleTypes()).hasSize(2);
+        assertThat(theme.dddDetected()).isTrue();
+        assertThat(theme.gatePolicy()).isEqualTo(GatePolicy.LAYERED);
+        assertThat(theme.selfDeclared()).isTrue();
     }
 
     @Test
@@ -2031,7 +2051,7 @@ class GraphWarningServiceTest {
     void detectActiveTheme_flatStructure_returnsGeneric() {
         List<Node> nodes = List.of(fileNodeWithPath("A", "src/Main.java"));
 
-        var theme = service.detectActiveTheme(nodes, List.of(), false);
+        var theme = service.detectActiveTheme(nodes, List.of(), GatePolicy.AUTO);
 
         assertThat(theme.theme()).isEqualTo("GENERIC");
         assertThat(theme.themeRuleTypes()).isEmpty();
@@ -2039,10 +2059,10 @@ class GraphWarningServiceTest {
     }
 
     @Test
-    @DisplayName("마이그레이션 플래그가 켜지면 실제 detect()도 DDD 규칙(INTERFACES_IMPORTS_INFRA)을 적용한다")
-    void detect_migrationFlagEnabled_appliesDddRules() {
+    @DisplayName("DDD 정책이 켜지면 실제 detect()도 DDD 규칙(INTERFACES_IMPORTS_INFRA)을 적용한다")
+    void detect_dddPolicy_appliesDddRules() {
         // interfaces/+infrastructure/ 조합은 isDddProject() 판정용 3종(domain/application/infrastructure) 중
-        // infrastructure 하나만 걸쳐 자동감지로는 DDD 프로젝트로 잡히지 않는다 — 마이그레이션 플래그 자체의 효과만 순수하게 검증
+        // infrastructure 하나만 걸쳐 자동감지로는 DDD 프로젝트로 잡히지 않는다 — 정책 자체의 효과만 순수하게 검증
         List<Node> nodes = new ArrayList<>();
         List<Edge> edges = new ArrayList<>();
         Node controllerFile = fileNodeWithPath("OrderController", "src/interfaces/OrderController.java");
@@ -2051,10 +2071,33 @@ class GraphWarningServiceTest {
         nodes.add(infraFile);
         edges.add(importEdge(controllerFile.getId(), infraFile.getId()));
 
-        List<Map<String, Object>> withoutMigration = service.detect(nodes, edges, null, false);
-        List<Map<String, Object>> withMigration = service.detect(nodes, edges, null, true);
+        List<Map<String, Object>> withAuto = service.detect(nodes, edges, null, GatePolicy.AUTO);
+        List<Map<String, Object>> withDdd = service.detect(nodes, edges, null, GatePolicy.DDD);
 
-        assertThat(withoutMigration).noneSatisfy(w -> assertThat(w.get("type")).isEqualTo("INTERFACES_IMPORTS_INFRA"));
-        assertThat(withMigration).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("INTERFACES_IMPORTS_INFRA"));
+        assertThat(withAuto).noneSatisfy(w -> assertThat(w.get("type")).isEqualTo("INTERFACES_IMPORTS_INFRA"));
+        assertThat(withDdd).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("INTERFACES_IMPORTS_INFRA"));
+    }
+
+    @Test
+    @DisplayName("LAYERED 정책이 켜지면 DDD 폴더가 있어도 실제 detect()는 레이어드 규칙(LAYERED_REVERSE_DEPENDENCY)을 적용한다")
+    void detect_layeredPolicy_appliesLayeredRulesOverDddDetection() {
+        List<Node> nodes = new ArrayList<>();
+        List<Edge> edges = new ArrayList<>();
+        Node domainFile = fileNodeWithPath("Marker", "src/domain/Marker.java");
+        Node appFile = fileNodeWithPath("MarkerApp", "src/application/MarkerApp.java");
+        Node controllerFile = fileNodeWithPath("OrderController", "src/infrastructure/OrderController.java");
+        Node repoFile = fileNodeWithPath("OrderRepository", "src/infrastructure/OrderRepository.java");
+        nodes.add(domainFile);
+        nodes.add(appFile);
+        nodes.add(controllerFile);
+        nodes.add(repoFile);
+        // Repository → Controller 직접 import = 하위 레이어가 상위 레이어를 아는 역전
+        edges.add(importEdge(repoFile.getId(), controllerFile.getId()));
+
+        List<Map<String, Object>> withAuto = service.detect(nodes, edges, null, GatePolicy.AUTO);
+        List<Map<String, Object>> withLayered = service.detect(nodes, edges, null, GatePolicy.LAYERED);
+
+        assertThat(withAuto).noneSatisfy(w -> assertThat(w.get("type")).isEqualTo("LAYERED_REVERSE_DEPENDENCY"));
+        assertThat(withLayered).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("LAYERED_REVERSE_DEPENDENCY"));
     }
 }

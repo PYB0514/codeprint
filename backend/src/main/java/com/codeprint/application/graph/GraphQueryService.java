@@ -3,6 +3,7 @@ package com.codeprint.application.graph;
 
 import com.codeprint.domain.graph.*;
 import com.codeprint.domain.graph.port.ProjectAccessPort;
+import com.codeprint.shared.gate.GatePolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -64,13 +65,13 @@ public class GraphQueryService {
         UUID projectId = graphRepository.findById(graphId).map(Graph::getProjectId).orElse(null);
         ArchitectureIntent intent = projectId == null ? null
                 : architectureIntentService.findByProjectId(projectId).orElse(null);
-        boolean dddMigrationEnabled = projectId != null && projectAccessPort.getProjectById(projectId)
-                .map(ProjectAccessPort.ProjectAccessView::dddMigrationEnabled)
-                .orElse(false);
-        return graphWarningService.detect(nodes, edges, intent, dddMigrationEnabled);
+        GatePolicy gatePolicy = projectId == null ? GatePolicy.AUTO : projectAccessPort.getProjectById(projectId)
+                .map(ProjectAccessPort.ProjectAccessView::gatePolicy)
+                .orElse(GatePolicy.AUTO);
+        return graphWarningService.detect(nodes, edges, intent, gatePolicy);
     }
 
-    // 경고 캐시 전체 무효화 — 프로젝트 설정(DDD 마이그레이션 플래그 등)이 바뀌어 detect() 결과가 달라질 때 사용
+    // 경고 캐시 전체 무효화 — 프로젝트 설정(게이트 정책 등)이 바뀌어 detect() 결과가 달라질 때 사용
     // (ArchitectureIntentService의 기존 전체무효화 관례와 동일)
     @CacheEvict(value = "graphWarnings", allEntries = true)
     public void evictWarningsCache() {

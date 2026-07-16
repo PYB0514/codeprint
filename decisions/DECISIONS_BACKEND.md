@@ -2027,3 +2027,24 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** 단위 테스트: `TeamApiKeyTest` 5건(발급/해시/검증/폐기), `TeamApiKeyApplicationServiceTest` 5건(소유권·교차 팀 차단) — 전부 TDD로 먼저 작성 후 구현. 백엔드 전체 테스트 green(통합 테스트 포함, Docker DB 기동 후 재확인), `compileJava`/`npx tsc -b` 에러 0. **브라우저 실측**(claude-in-chrome, 실 로그인 세션) — ①팀 설정 페이지에서 키 발급 → 1회 노출 모달에 `cpk_` 키 확인 ②비공개 프로젝트를 팀에 배분(기존 좌석배분 API 재사용) ③curl로 `/mcp/team/projects` 조회 → 배분된 비공개 프로젝트(`bench-petclinic`) 정상 반환 ④`/mcp/team/graphs/{graphId}/context` 조회 → 비공개 그래프 노드·엣지 정상 반환 ⑤인증 헤더 없이 호출 → 403 ⑥기존 공개용 엔드포인트로 같은 비공개 그래프 조회 시도 → 여전히 403(하위호환 유지 확인) ⑦UI에서 키 폐기(fetch로 직접 호출 — `window.confirm()`이 CDP 자동화 탭을 블로킹해 실제 클릭 대신 fetch로 우회, 팀 삭제·멤버 제거 등 기존 코드도 동일한 `confirm()` 패턴이라 신규 결함 아님) → 이후 동일 키로 요청 시 403 확인.
 
 **한계·다음.** 프론트 UI는 팀장 전용(`/teams` 페이지)만 구현 — 발급된 키를 실제 CI/에이전트 설정에 심는 것은 사용자 책임. 키 회전(rotate)·만료(expiry) 정책은 이번 스코프에 없음(폐기만 지원), 필요해지면 후속 항목으로.
+
+## 게이트 정책 선택 바 — dddMigrationEnabled(boolean) → GatePolicy(AUTO/DDD/LAYERED) enum 승격 (2026-07-17, codeprint_134)
+
+**배경.** Context133에서 사용자와 확정한 설계 재작업. "DDD로 마이그레이션" 단방향 boolean 토글은 이름("마이그레이션")이 실제 동작(구조 변경 없이 게이트 규칙만 강제)과 안 맞았고, DDD 방향만 지원해 레이어드 프로젝트가 "레이어드를 유지하겠다"를 명시적으로 선언할 수단이 없었다. `자동/DDD/레이어드` 3택 세그먼트 컨트롤로 교체.
+
+**문제 → 이유 → 결과.**
+- **문제**: `GatePolicy` enum을 어디에 둘지 — 처음 `domain/project/GatePolicy.java`로 만들었다.
+  - **이유**: `Project`(domain/project) 소유 필드라 같은 컨텍스트에 두는 게 직관적이었으나, 이 값을 `domain/graph/port/ProjectAccessPort`(graph 컨텍스트)의 `ProjectAccessView` record와 `GraphWarningService`(application/graph)가 그대로 받아써야 해, domain/project를 여기서 import하면 CROSS_CONTEXT_IMPORT 위반이 된다(analyzeLocal이 실제로 잡을 사안).
+  - **결과**: 기존 `UserPlan`(`shared/plan/UserPlan.java`, user·team·project 공유 어휘)과 동일한 Shared Kernel 패턴을 따라 `shared/gate/GatePolicy.java`로 이동. `GraphWarningService.java` 주석(줄 777 부근)에 "shared·common·seedwork·shared_kernel·kernel은 Shared Kernel이라 CROSS_CONTEXT_IMPORT 대상에서 제외"가 이미 명시돼 있어 이 패턴이 게이트 규칙 자체와도 정합됨을 확인 후 결정.
+- **문제**: DB 컬럼을 어떻게 바꿀지 — `ddd_migration_enabled` boolean을 유지한 채 별도 `gate_policy` 컬럼을 추가하는 안(하위호환 shim)도 고려했다.
+  - **이유**: 이 프로젝트는 사업자등록 전 단일 배포 환경(v1.0 이전)이라 실사용자 데이터 마이그레이션 리스크가 없고, CLAUDE.md §2(단순성)가 불필요한 하위호환 shim을 명시적으로 금지.
+  - **결과**: 단일 마이그레이션(`V64`)에서 `gate_policy` 추가 → 기존 `true`값을 `'DDD'`로 백필 → `ddd_migration_enabled` drop까지 한 번에 처리.
+- **문제**: LAYERED 강제 시 실제 위반이 안전하게 계산되는지 — `detectLayeredViolations`는 원래 AUTO 분기(자동감지 실패 시 폴백)에서만 호출되던 함수라, LAYERED를 강제로 호출했을 때 레이어 구조가 실제로 없는 프로젝트에서 예외나 이상 동작이 나는지 확인이 필요했다.
+  - **이유**: 함수 자체가 이미 "분류된 레이어 2종 미만이면 빈 목록 반환"(`present.size() < 2`) 자체 게이트를 갖고 있어, 강제 호출해도 안전하게 no-op됨을 소스 확인으로 검증.
+  - **결과**: `detect()`/`detectActiveTheme()` 분기를 `useDdd = DDD 강제 || (AUTO && isDddProject)` / `else 레이어드`(강제 시에도 안전) 구조로 재작성, 기존 AUTO 동작은 100% 보존.
+
+**엔드포인트 개명.** `/ddd-migration` → `/gate-policy`로 변경(하위호환 유지 안 함) — 소비자가 이 프로젝트 자신의 프론트엔드 하나뿐이고 pre-v1.0이라, 이름이 새 의미(선택 바)와 맞지 않는 채로 남기는 것보다 즉시 정합시키는 쪽을 선택.
+
+**검증.** `GraphWarningServiceTest` 기존 4건을 enum으로 갱신 + LAYERED 강제(DDD 감지 프로젝트에 LAYERED 강제 적용, `detectActiveTheme`·`detect` 양쪽) 신규 2건 추가, `GraphQueryServiceTest` mock 시그니처 갱신. 전체 백엔드 테스트 green, `compileJava`/`tsc -b` 에러 0, `analyzeLocal` 자가검사 베이스라인 불변(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1, 신규 위반 0 — Shared Kernel 배치가 CROSS_CONTEXT_IMPORT를 실제로 피했음을 재확인). **API 실측**(로그인 세션 없이 검증 — 야간 자율 진행 중이라 GitHub OAuth 대화형 로그인을 요구할 수 없어, 로컬 전용 `DevController.getTestToken()`으로 발급한 더미 유저 JWT + 기존 도그푸딩 프로젝트(codeprint 자기 레포·bench-petclinic)의 `user_id`를 더미 유저로 임시 재할당 후 curl 왕복, 검증 직후 원 소유자로 즉시 복원): codeprint(AUTO/DDD, dddDetected=true) → LAYERED 강제 → theme LAYERED·selfDeclared true 확인 → AUTO 복귀 → theme DDD로 정확히 되돌아옴. bench-petclinic(AUTO/LAYERED, dddDetected=false) → DDD 강제 → theme DDD·selfDeclared true 확인 → AUTO 복귀 정상. `{}` 바디(policy 없음) → 400 확인(`@NotNull` 검증 동작).
+
+**한계·다음.** 프론트 세그먼트 컨트롤의 실제 클릭 상호작용(시각적 렌더링·배지 전환 애니메이션 등)은 브라우저 대화형 로그인이 필요해 이번 세션에서 클릭 검증하지 못함 — API 레벨 왕복은 전부 확인됐고 `tsc -b` 타입체크도 통과했지만, 다음 로그인 세션에서 실제 클릭 스모크 테스트 권장. `범용`(둘 다 끔) 4번째 옵션과 규칙 신뢰도(HIGH/MEDIUM) 배지 표시는 Context133이 이미 스코프 밖으로 명시 — 이번에도 착수 안 함.

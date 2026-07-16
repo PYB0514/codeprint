@@ -1013,3 +1013,11 @@ const fetchGraph = useCallback(async () => {
 **언어 전환 UX 한계 — 사용자에게 사전 고지.** README는 GitHub가 정적으로 렌더링하는 마크다운이라 JavaScript가 실행되지 않음 — 웹앱의 `react-i18next` 드롭다운처럼 같은 화면에서 즉시 토글되는 방식은 애초에 불가능. 대신 각 파일 상단에 `🇺🇸 English / 🇰🇷 한국어` 상호 링크를 넣어 클릭 시 다른 파일로 이동하는 방식(다수 오픈소스 저장소의 관례)으로 구현 — "이것도 웹페이지처럼 즉시 전환되냐"는 질문에 기술적 한계를 먼저 설명하고 진행 동의를 받음.
 
 **결과.** `README.en.md` 신규 생성(기존 `README.md`와 섹션·배지·링크 구조 1:1 대응, 코드 블록·기술 고유명사는 원문 유지), `README.md` 상단에 언어 전환 링크 추가. 순수 마크다운 문서 변경이라 `tsc -b`·브라우저 실측 대상 아님(규칙 4 런타임 검증은 코드 변경에만 적용, 정적 문서는 프리뷰 대상 없음).
+
+## 게이트 테마 배지 — 자동/DDD/레이어드 3택 세그먼트 컨트롤로 재설계 (2026-07-17, codeprint_134)
+
+**배경.** 백엔드 `dddMigrationEnabled`(boolean) → `GatePolicy` enum 승격에 맞춰 `GateThemeBadge.tsx`의 "DDD로 마이그레이션" 단방향 버튼을 자동/DDD/레이어드 세그먼트 컨트롤로 교체. 배경·백엔드 측 결정(enum 배치·DB 마이그레이션·엔드포인트 개명 등)은 `decisions/DECISIONS_BACKEND.md` "게이트 정책 선택 바" 참조.
+
+**결과.** `migrateButton`/`undoMigrationButton`(단방향 토글 2개 버튼) → `POLICIES` 배열(`AUTO`/`DDD`/`LAYERED`) 순회로 렌더링하는 3버튼 세그먼트 컨트롤 1개로 교체, 현재 선택값은 `aria-pressed` + 배경색으로 표시. 배지 접미사 `migrationSuffix`("(마이그레이션)")도 `selfDeclaredSuffix`("(직접 선언)")로 이름·의미 변경 — 백엔드의 `selfDeclared`(policy != AUTO) 필드를 그대로 반영. PATCH 요청 바디도 `{enabled: boolean}` → `{policy: string}`으로 변경.
+
+**한계·다음.** 야간 자율 진행(사용자 취침) 중이라 GitHub OAuth 대화형 로그인을 요구할 수 없어 브라우저 클릭 상호작용(세그먼트 전환 시 배지 색상·문구 변화)은 실측하지 못함 — `npx tsc -b` 타입체크 통과, i18n JSON 유효성 확인, 백엔드 API 왕복(`decisions/DECISIONS_BACKEND.md` 참조)으로 컴포넌트가 호출하는 엔드포인트 자체는 검증됐으나, 실제 렌더링·클릭 스모크 테스트는 다음 로그인 세션 권장.
