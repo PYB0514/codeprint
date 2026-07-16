@@ -193,6 +193,63 @@
     "graphBadge": "📊 Graph",
     "deleteConfirm": "Delete this project?"
   },
+  "projectCard": {
+    "freshnessNew": "New commit",
+    "freshnessLatest": "Latest",
+    "reanalyze": "Reanalyze",
+    "delete": "Delete",
+    "analyzingProgress": "Analyzing{{branchSuffix}}...",
+    "stalledNotice": "This is taking longer than expected.",
+    "retry": "Retry",
+    "loadingBranches": "Loading branches...",
+    "cancel": "Cancel",
+    "startAnalysisConfirm": "Start Analysis",
+    "primaryBranchPickerHeading": "Branch to always track",
+    "unset": "Unset",
+    "setButton": "Set",
+    "prReview": {
+      "desc": "Enter a PR number to analyze that PR branch and post structural warnings as a PR comment.",
+      "placeholder": "PR number (e.g. 42)",
+      "reviewing": "Reviewing...",
+      "run": "Run",
+      "close": "Close",
+      "cloningNotice": "Cloning and analyzing the PR branch. This may take a while.",
+      "resultPrefix": "PR #{{prNumber}} review complete — {{count}} warning(s) in changed files",
+      "lowFilteredSuffix": " ({{count}} LOW omitted)",
+      "outOfScopeSuffix": " · {{count}} outside changes excluded",
+      "viewComment": "View comment",
+      "invalidNumber": "Please enter a valid PR number.",
+      "failed": "PR review failed. Please check the PR number and your GitHub connection."
+    },
+    "gateSettings": {
+      "desc": "Stage 0 (bugs that actually break at runtime) always blocks the PR. Only the two stages below can be toggled per project.",
+      "architectureLabel": "Stage 1 (architecture, on by default)",
+      "architectureDesc": "Verified structural violations like circular references and layer violations — turning this off won't force immediate migration on legacy code.",
+      "experimentalLabel": "Stage 2 (experimental, off by default)",
+      "experimentalDesc": "New rules that haven't been cross-project validated yet — enable only if you want the latest rules applied.",
+      "close": "Close",
+      "title": "PR gate stage settings",
+      "button": "Gate Settings"
+    },
+    "analysisFailed": "Analysis failed. Please try again.",
+    "public": "Public",
+    "private": "Private",
+    "copied": "Copied!",
+    "copyLink": "Copy Link",
+    "prReviewButton": "PR Review",
+    "primaryBranchTitle": "Set primary branch",
+    "otherBranch": "Other Branch",
+    "viewGraph": "View Graph",
+    "analyzingButton": "Analyzing",
+    "startingButton": "Starting...",
+    "startAnalysis": "Start Analysis",
+    "errors": {
+      "githubReconnectNeeded": "GitHub connection required. Please reconnect from the dashboard.",
+      "branchListFailed": "Failed to load branch list. Please check your GitHub connection.",
+      "startAnalysisFailed": "Failed to start analysis.",
+      "primaryBranchFailed": "Failed to set primary branch."
+    }
+  },
   "teams": {
     "title": "Team Management",
     "subtitle": "Invite collaborators and manage seats with your Pro · Desktop seats.",
@@ -275,6 +332,22 @@
       "revokeKeyFailed": "Failed to revoke API key.",
       "deleteTeamFailed": "Failed to delete team."
     }
+  },
+  "messages": {
+    "inboxTitle": "Inbox",
+    "notifSettingsHeading": "Notification Settings",
+    "dmNotif": "Message notifications",
+    "teamChatNotif": "Team chat notifications",
+    "browserPush": "Browser push",
+    "emptyInbox": "No messages yet.",
+    "unblock": "Unblock",
+    "block": "Block",
+    "readSuffix": " · Read",
+    "blockedNotice": "You've blocked this user. Unblock them to exchange messages again.",
+    "inputPlaceholder": "Type a message...",
+    "send": "Send",
+    "selectPrompt": "Select someone to chat with.",
+    "blockConfirm": "Block {{username}}? You won't be able to exchange messages anymore."
   },
   "graphViewer": {
     "loading": "Loading...",
