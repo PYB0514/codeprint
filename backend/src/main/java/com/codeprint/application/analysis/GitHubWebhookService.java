@@ -1,13 +1,11 @@
 // GitHub pull_request webhook을 검증·파싱해 PR 리뷰를 비동기 트리거하는 서비스 (Tier 1 자동화)
 package com.codeprint.application.analysis;
 
-import com.codeprint.domain.analysis.WebhookSignatureVerifier;
 import com.codeprint.domain.analysis.port.PrWebhookTargetPort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -26,18 +24,11 @@ public class GitHubWebhookService {
     private final PrReviewRunner prReviewRunner;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${github.webhook-secret:}")
-    private String webhookSecret;
-
     // webhook 처리 결과 — 컨트롤러가 HTTP 상태로 매핑
     public enum Result { UNAUTHORIZED, IGNORED, ACCEPTED }
 
-    // 서명 검증 → 이벤트/액션 필터 → repo 역해석 → PR 리뷰 비동기 트리거
+    // 이벤트/액션 필터 → repo 역해석(프로젝트별 시크릿으로 서명 검증 포함) → PR 리뷰 비동기 트리거
     public Result handle(String eventType, String signatureHeader, byte[] rawBody) {
-        if (!WebhookSignatureVerifier.verify(webhookSecret, rawBody, signatureHeader)) {
-            log.warn("webhook 서명 검증 실패 (event={})", eventType);
-            return Result.UNAUTHORIZED;
-        }
         if (!"pull_request".equals(eventType)) {
             return Result.IGNORED;
         }
@@ -63,10 +54,10 @@ public class GitHubWebhookService {
             return Result.IGNORED;
         }
 
-        Optional<PrWebhookTargetPort.Target> target = prWebhookTargetPort.resolve(ownerRepo);
+        Optional<PrWebhookTargetPort.Target> target = prWebhookTargetPort.resolve(ownerRepo, rawBody, signatureHeader);
         if (target.isEmpty()) {
-            log.info("webhook 대상 프로젝트 없음 (또는 소유자 토큰 없음): repo={}", ownerRepo);
-            return Result.IGNORED;
+            log.warn("webhook 대상 없음(서명 불일치 또는 연결된 프로젝트 없음): repo={}", ownerRepo);
+            return Result.UNAUTHORIZED;
         }
 
         PrWebhookTargetPort.Target t = target.get();

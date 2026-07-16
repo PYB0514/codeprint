@@ -6,7 +6,9 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.UUID;
 
 @Entity
@@ -14,6 +16,8 @@ import java.util.UUID;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Project {
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @Id
     @Column(columnDefinition = "uuid")
@@ -50,6 +54,10 @@ public class Project {
     // 2단계(experimental) 게이트 — 기본 꺼짐. 아직 교차 프로젝트 실사용 검증이 부족한 신규 룰까지 적용받고 싶은 팀만 켬.
     @Column(name = "gate_experimental_enabled", nullable = false)
     private boolean gateExperimentalEnabled;
+
+    // PR 게이트 webhook 서명 시크릿 — 프로젝트별 발급, 연결 전엔 null
+    @Column(name = "webhook_secret", length = 64)
+    private String webhookSecret;
 
     // 사용자 ID와 GitHub URL로 새 프로젝트 인스턴스 생성
     public static Project create(UUID userId, String githubRepoUrl, String name, String description) {
@@ -105,5 +113,24 @@ public class Project {
     // UUID를 ProjectId Value Object로 변환하여 반환
     public ProjectId getProjectId() {
         return ProjectId.of(id);
+    }
+
+    // PR 게이트 webhook 시크릿 신규 발급(이미 있어도 교체) — 32byte 난수를 hex로 인코딩
+    public void generateWebhookSecret() {
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        this.webhookSecret = HexFormat.of().formatHex(bytes);
+        this.updatedAt = Instant.now();
+    }
+
+    // PR 게이트 연결 해제 — 시크릿 제거로 webhook 서명 검증 불가 상태로 전환
+    public void disconnectPrGate() {
+        this.webhookSecret = null;
+        this.updatedAt = Instant.now();
+    }
+
+    // PR 게이트 연결 여부 — 시크릿 발급 완료 상태
+    public boolean isPrGateConnected() {
+        return webhookSecret != null;
     }
 }
