@@ -90,6 +90,24 @@ class CachedParsedFileLoaderTest {
         verify(cache).saveAll(eq(projectId), eq(CachedParsedFileLoader.ANALYZER_VERSION), anyList());
     }
 
+    // 파일 크기 상한(2MB) 초과 파일은 읽지 않고 제외되며, 정상 파일은 그대로 처리된다
+    @Test
+    @DisplayName("파일 크기 상한 초과 — 분석에서 제외되고 정상 파일은 영향받지 않는다")
+    void oversizedFile_excluded_othersUnaffected() throws Exception {
+        loader = newLoader();
+        Path small = write(repoDir, "small.java", "class A {}");
+        Path huge = repoDir.resolve("huge.java");
+        Files.write(huge, new byte[(int) CachedParsedFileLoader.MAX_FILE_SIZE_BYTES + 1]);
+        when(cache.findAll(eq(projectId), anyInt(), anyMap())).thenReturn(Map.of());
+        when(analyzer.analyze(any(), eq(repoDir), anyString()))
+                .thenAnswer(inv -> pf(rel(inv.getArgument(0))));
+
+        List<ParsedFile> result = loader.load(projectId, repoDir, List.of(small, huge));
+
+        assertThat(result).extracting(ParsedFile::filePath).containsExactly("small.java");
+        verify(analyzer, never()).analyze(eq(huge), any(), any());
+    }
+
     @TempDir
     Path repoDir;
 
