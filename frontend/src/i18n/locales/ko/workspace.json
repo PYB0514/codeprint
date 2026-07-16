@@ -193,6 +193,63 @@
     "graphBadge": "📊 그래프",
     "deleteConfirm": "프로젝트를 삭제할까요?"
   },
+  "projectCard": {
+    "freshnessNew": "새 커밋",
+    "freshnessLatest": "최신",
+    "reanalyze": "재분석",
+    "delete": "삭제",
+    "analyzingProgress": "분석 중{{branchSuffix}}...",
+    "stalledNotice": "분석이 예상보다 오래 걸립니다.",
+    "retry": "재시도",
+    "loadingBranches": "브랜치 로딩 중...",
+    "cancel": "취소",
+    "startAnalysisConfirm": "분석 시작",
+    "primaryBranchPickerHeading": "항상 추적할 주요 브랜치",
+    "unset": "해제",
+    "setButton": "설정",
+    "prReview": {
+      "desc": "PR 번호를 입력하면 해당 PR 브랜치를 분석해 구조 경고를 PR 코멘트로 게시합니다.",
+      "placeholder": "PR 번호 (예: 42)",
+      "reviewing": "리뷰 중...",
+      "run": "실행",
+      "close": "닫기",
+      "cloningNotice": "PR 브랜치를 클론·분석 중입니다. 시간이 걸릴 수 있습니다.",
+      "resultPrefix": "PR #{{prNumber}} 리뷰 완료 — 변경 파일 경고 {{count}}개",
+      "lowFilteredSuffix": " (LOW {{count}}개 생략)",
+      "outOfScopeSuffix": " · 변경 외 {{count}}개 제외",
+      "viewComment": "코멘트 보기",
+      "invalidNumber": "올바른 PR 번호를 입력해주세요.",
+      "failed": "PR 리뷰에 실패했습니다. PR 번호와 GitHub 연결을 확인해주세요."
+    },
+    "gateSettings": {
+      "desc": "0단계(실행 시점에 실제로 깨지는 버그)는 항상 PR을 막습니다. 아래 두 단계만 프로젝트별로 켜고 끌 수 있습니다.",
+      "architectureLabel": "1단계(architecture, 기본 켜짐)",
+      "architectureDesc": "순환 참조·계층 위반 등 검증된 구조 위반 — 끄면 레거시 코드에 즉시 마이그레이션을 강제하지 않습니다.",
+      "experimentalLabel": "2단계(experimental, 기본 꺼짐)",
+      "experimentalDesc": "아직 교차 프로젝트 실사용 검증이 부족한 신규 룰 — 최신 규칙까지 적용받고 싶은 팀만 켜세요.",
+      "close": "닫기",
+      "title": "PR 게이트 등급 설정",
+      "button": "게이트 설정"
+    },
+    "analysisFailed": "분석 실패. 다시 시도해주세요.",
+    "public": "공개",
+    "private": "비공개",
+    "copied": "복사됨!",
+    "copyLink": "링크 복사",
+    "prReviewButton": "PR 리뷰",
+    "primaryBranchTitle": "주요 브랜치 설정",
+    "otherBranch": "다른 브랜치",
+    "viewGraph": "그래프 보기",
+    "analyzingButton": "분석 중",
+    "startingButton": "시작 중...",
+    "startAnalysis": "분석 시작",
+    "errors": {
+      "githubReconnectNeeded": "GitHub 연결이 필요합니다. 대시보드에서 재연결해주세요.",
+      "branchListFailed": "브랜치 목록을 불러오지 못했습니다. GitHub 연결을 확인해주세요.",
+      "startAnalysisFailed": "분석 시작에 실패했습니다.",
+      "primaryBranchFailed": "주요 브랜치 설정에 실패했습니다."
+    }
+  },
   "teams": {
     "title": "팀 관리",
     "subtitle": "Pro · Desktop 좌석으로 협업자를 초대하고 석수를 관리하세요.",
@@ -275,6 +332,22 @@
       "revokeKeyFailed": "API 키 폐기에 실패했습니다.",
       "deleteTeamFailed": "팀 삭제에 실패했습니다."
     }
+  },
+  "messages": {
+    "inboxTitle": "받은 쪽지함",
+    "notifSettingsHeading": "알림 설정",
+    "dmNotif": "쪽지 알림",
+    "teamChatNotif": "팀채팅 알림",
+    "browserPush": "브라우저 푸시",
+    "emptyInbox": "쪽지가 없습니다.",
+    "unblock": "차단 해제",
+    "block": "차단",
+    "readSuffix": " · 읽음",
+    "blockedNotice": "차단한 사용자입니다. 차단을 해제하면 다시 쪽지를 주고받을 수 있습니다.",
+    "inputPlaceholder": "쪽지 입력...",
+    "send": "전송",
+    "selectPrompt": "대화할 상대를 선택하세요.",
+    "blockConfirm": "{{username}}님을 차단할까요? 서로 쪽지를 주고받을 수 없게 됩니다."
   },
   "graphViewer": {
     "loading": "로딩 중...",

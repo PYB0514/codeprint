@@ -57,9 +57,9 @@ export default function SettingsPage() {
       if (endpoint.includes('background')) {
         document.body.style.backgroundImage = ''
       }
-      setImageMsg('삭제됐습니다.')
+      setImageMsg(t('settings.imageDeleted'))
     } catch {
-      setImageMsg('삭제 실패.')
+      setImageMsg(t('settings.imageDeleteFailed'))
     } finally {
       setTimeout(() => setImageMsg(null), 3000)
     }

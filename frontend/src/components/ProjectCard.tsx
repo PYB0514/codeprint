@@ -1,8 +1,10 @@
 // 프로젝트 카드 — 분석 시작/그래프 보기 버튼 및 진행률 표시 포함
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import { useAnalysisProgress } from '../hooks/useAnalysisProgress'
+import { currentDateLocale } from '../i18n/dateLocale'
 
 interface Project {
   id: string
@@ -25,6 +27,7 @@ interface Props {
 
 // 프로젝트 카드 — 분석 시작/재분석, 진행률 표시, 그래프 이동
 export default function ProjectCard({ project, onDelete, onVisibilityChange, autoStart }: Props) {
+  const { t } = useTranslation('workspace')
   const navigate = useNavigate()
   const [hasGraph, setHasGraph] = useState(false)
   const [freshnessStatus, setFreshnessStatus] = useState<'latest' | 'outdated' | null>(null)
@@ -169,7 +172,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
       const list: string[] = res.data
       if (list.length === 0) {
         // 빈 배열 응답 = 토큰 null 가능성이 높음
-        setAnalysisError('GitHub 연결이 필요합니다. 대시보드에서 재연결해주세요.')
+        setAnalysisError(t('projectCard.errors.githubReconnectNeeded'))
         return []
       }
       const sorted = [
@@ -180,7 +183,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
       setSelectedBranch(sorted[0] ?? '')
       return sorted
     } catch {
-      setAnalysisError('브랜치 목록을 불러오지 못했습니다. GitHub 연결을 확인해주세요.')
+      setAnalysisError(t('projectCard.errors.branchListFailed'))
       return []
     } finally {
       setLoadingBranches(false)
@@ -213,7 +216,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
       )
       setAnalysisId(res.data.analysisId)
     } catch {
-      setAnalysisError('분석 시작에 실패했습니다.')
+      setAnalysisError(t('projectCard.errors.startAnalysisFailed'))
     } finally {
       setStarting(false)
     }
@@ -244,7 +247,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
       setPrimaryBranch(branch)
       setPrimaryFreshness(null)
     } catch {
-      setAnalysisError('주요 브랜치 설정에 실패했습니다.')
+      setAnalysisError(t('projectCard.errors.primaryBranchFailed'))
     }
   }
 
@@ -252,7 +255,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
   const handlePrReview = async () => {
     const n = parseInt(prNumber, 10)
     if (!Number.isInteger(n) || n <= 0) {
-      setPrError('올바른 PR 번호를 입력해주세요.')
+      setPrError(t('projectCard.prReview.invalidNumber'))
       return
     }
     setPrReviewing(true)
@@ -268,7 +271,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
         commentUrl: res.data.commentUrl,
       })
     } catch {
-      setPrError('PR 리뷰에 실패했습니다. PR 번호와 GitHub 연결을 확인해주세요.')
+      setPrError(t('projectCard.prReview.failed'))
     } finally {
       setPrReviewing(false)
     }
@@ -290,7 +293,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
                 ? 'bg-yellow-900/60 text-yellow-400 border-yellow-700/60'
                 : 'bg-green-900/60 text-green-400 border-green-700/60'
             }`}>
-              {freshnessStatus === 'outdated' ? '새 커밋' : '최신'}
+              {freshnessStatus === 'outdated' ? t('projectCard.freshnessNew') : t('projectCard.freshnessLatest')}
             </span>
           )}
 
@@ -313,7 +316,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
                   disabled={isAnalyzing || starting}
                   className="text-xs text-yellow-400 hover:text-yellow-200 disabled:opacity-40"
                 >
-                  재분석
+                  {t('projectCard.reanalyze')}
                 </button>
               )}
             </div>
@@ -323,7 +326,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
           onClick={() => onDelete(project.id)}
           className="text-gray-600 hover:text-red-400 text-xs shrink-0 mt-0.5"
         >
-          삭제
+          {t('projectCard.delete')}
         </button>
       </div>
 
@@ -344,7 +347,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
       {isAnalyzing && (
         <div className="flex flex-col gap-1">
           <div className="flex justify-between text-xs text-gray-400">
-            <span>분석 중{lastAnalyzedBranch ? ` (${lastAnalyzedBranch})` : ''}...</span>
+            <span>{t('projectCard.analyzingProgress', { branchSuffix: lastAnalyzedBranch ? ` (${lastAnalyzedBranch})` : '' })}</span>
             <span>{progress}%</span>
           </div>
           <div className="w-full bg-gray-700 rounded-full h-1.5">
@@ -356,13 +359,13 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
           {/* 비정상적으로 오래 걸리면 재시도 권유 (폴링은 계속됨) */}
           {stalled && (
             <div className="flex items-center justify-between gap-2 text-xs bg-yellow-900/30 border border-yellow-700/50 rounded px-2 py-1.5 mt-1">
-              <span className="text-yellow-400">분석이 예상보다 오래 걸립니다.</span>
+              <span className="text-yellow-400">{t('projectCard.stalledNotice')}</span>
               <button
                 onClick={() => handleStartAnalysis(lastAnalyzedBranch ?? '')}
                 disabled={starting}
                 className="text-yellow-300 hover:text-yellow-100 font-medium shrink-0 disabled:opacity-40"
               >
-                재시도
+                {t('projectCard.retry')}
               </button>
             </div>
           )}
@@ -373,7 +376,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
       {showBranchPicker && (
         <div ref={pickerRef} className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
           {loadingBranches ? (
-            <p className="text-xs text-gray-400">브랜치 로딩 중...</p>
+            <p className="text-xs text-gray-400">{t('projectCard.loadingBranches')}</p>
           ) : (
             <>
               <select
@@ -390,13 +393,13 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
                   onClick={() => setShowBranchPicker(false)}
                   className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
                 >
-                  취소
+                  {t('projectCard.cancel')}
                 </button>
                 <button
                   onClick={() => handleStartAnalysis(selectedBranch)}
                   className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200"
                 >
-                  분석 시작
+                  {t('projectCard.startAnalysisConfirm')}
                 </button>
               </div>
             </>
@@ -407,9 +410,9 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
       {/* primary branch 설정 피커 */}
       {showPrimaryPicker && (
         <div ref={primaryPickerRef} className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
-          <p className="text-xs text-gray-400">항상 추적할 주요 브랜치</p>
+          <p className="text-xs text-gray-400">{t('projectCard.primaryBranchPickerHeading')}</p>
           {loadingBranches ? (
-            <p className="text-xs text-gray-400">브랜치 로딩 중...</p>
+            <p className="text-xs text-gray-400">{t('projectCard.loadingBranches')}</p>
           ) : (
             <>
               <select
@@ -427,20 +430,20 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
                     onClick={() => handleSetPrimaryBranch(null)}
                     className="text-xs text-gray-500 hover:text-red-400 px-2 py-1"
                   >
-                    해제
+                    {t('projectCard.unset')}
                   </button>
                 )}
                 <button
                   onClick={() => setShowPrimaryPicker(false)}
                   className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
                 >
-                  취소
+                  {t('projectCard.cancel')}
                 </button>
                 <button
                   onClick={() => handleSetPrimaryBranch(selectedBranch)}
                   className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200"
                 >
-                  설정
+                  {t('projectCard.setButton')}
                 </button>
               </div>
             </>
@@ -452,7 +455,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
       {showPrReview && (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
           <p className="text-xs text-gray-400">
-            PR 번호를 입력하면 해당 PR 브랜치를 분석해 구조 경고를 PR 코멘트로 게시합니다.
+            {t('projectCard.prReview.desc')}
           </p>
           <div className="flex gap-2">
             <input
@@ -460,7 +463,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
               min="1"
               value={prNumber}
               onChange={(e) => setPrNumber(e.target.value)}
-              placeholder="PR 번호 (예: 42)"
+              placeholder={t('projectCard.prReview.placeholder')}
               disabled={prReviewing}
               className="flex-1 bg-gray-700 text-white text-xs rounded px-2 py-1.5 border border-gray-600 focus:outline-none disabled:opacity-50"
             />
@@ -469,21 +472,23 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
               disabled={prReviewing}
               className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200 disabled:opacity-40"
             >
-              {prReviewing ? '리뷰 중...' : '실행'}
+              {prReviewing ? t('projectCard.prReview.reviewing') : t('projectCard.prReview.run')}
             </button>
             <button
               onClick={() => { setShowPrReview(false); setPrResult(null); setPrError(null) }}
               className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
             >
-              닫기
+              {t('projectCard.prReview.close')}
             </button>
           </div>
           {prReviewing && (
-            <p className="text-xs text-gray-500">PR 브랜치를 클론·분석 중입니다. 시간이 걸릴 수 있습니다.</p>
+            <p className="text-xs text-gray-500">{t('projectCard.prReview.cloningNotice')}</p>
           )}
           {prResult && (
             <p className="text-xs text-green-400">
-              PR #{prResult.prNumber} 리뷰 완료 — 변경 파일 경고 {prResult.warningCount}개{prResult.lowFilteredCount > 0 ? ` (LOW ${prResult.lowFilteredCount}개 생략)` : ''}{prResult.outOfScopeCount > 0 ? ` · 변경 외 ${prResult.outOfScopeCount}개 제외` : ''}.{' '}
+              {t('projectCard.prReview.resultPrefix', { prNumber: prResult.prNumber, count: prResult.warningCount })}
+              {prResult.lowFilteredCount > 0 ? t('projectCard.prReview.lowFilteredSuffix', { count: prResult.lowFilteredCount }) : ''}
+              {prResult.outOfScopeCount > 0 ? t('projectCard.prReview.outOfScopeSuffix', { count: prResult.outOfScopeCount }) : ''}.{' '}
               {prResult.commentUrl && (
                 <a
                   href={prResult.commentUrl}
@@ -491,7 +496,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
                   rel="noreferrer"
                   className="text-blue-400 hover:text-blue-300 underline"
                 >
-                  코멘트 보기
+                  {t('projectCard.prReview.viewComment')}
                 </a>
               )}
             </p>
@@ -504,7 +509,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
       {showGateSettings && (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
           <p className="text-xs text-gray-400">
-            0단계(실행 시점에 실제로 깨지는 버그)는 항상 PR을 막습니다. 아래 두 단계만 프로젝트별로 켜고 끌 수 있습니다.
+            {t('projectCard.gateSettings.desc')}
           </p>
           <label className="flex items-start gap-2 text-xs">
             <input
@@ -515,9 +520,9 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
               className="mt-0.5"
             />
             <span>
-              <span className="text-gray-200 font-medium">1단계(architecture, 기본 켜짐)</span>
+              <span className="text-gray-200 font-medium">{t('projectCard.gateSettings.architectureLabel')}</span>
               <br />
-              <span className="text-gray-500">순환 참조·계층 위반 등 검증된 구조 위반 — 끄면 레거시 코드에 즉시 마이그레이션을 강제하지 않습니다.</span>
+              <span className="text-gray-500">{t('projectCard.gateSettings.architectureDesc')}</span>
             </span>
           </label>
           <label className="flex items-start gap-2 text-xs">
@@ -529,22 +534,22 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
               className="mt-0.5"
             />
             <span>
-              <span className="text-gray-200 font-medium">2단계(experimental, 기본 꺼짐)</span>
+              <span className="text-gray-200 font-medium">{t('projectCard.gateSettings.experimentalLabel')}</span>
               <br />
-              <span className="text-gray-500">아직 교차 프로젝트 실사용 검증이 부족한 신규 룰 — 최신 규칙까지 적용받고 싶은 팀만 켜세요.</span>
+              <span className="text-gray-500">{t('projectCard.gateSettings.experimentalDesc')}</span>
             </span>
           </label>
           <button
             onClick={() => setShowGateSettings(false)}
             className="text-xs text-gray-500 hover:text-gray-300 self-end"
           >
-            닫기
+            {t('projectCard.gateSettings.close')}
           </button>
         </div>
       )}
 
       {status === 'FAILED' && (
-        <p className="text-xs text-red-400">분석 실패. 다시 시도해주세요.</p>
+        <p className="text-xs text-red-400">{t('projectCard.analysisFailed')}</p>
       )}
       {analysisError && (
         <p className="text-xs text-red-400">{analysisError}</p>
@@ -554,20 +559,20 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
       <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-800">
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-600">
-            {new Date(project.createdAt).toLocaleDateString('ko-KR')}
+            {new Date(project.createdAt).toLocaleDateString(currentDateLocale())}
           </span>
           <button
             onClick={handleToggleVisibility}
             className="text-xs text-gray-500 hover:text-gray-200 border border-gray-700 px-2 py-0.5 rounded"
           >
-            {project.isPublic ? '공개' : '비공개'}
+            {project.isPublic ? t('projectCard.public') : t('projectCard.private')}
           </button>
           {project.isPublic && (
             <button
               onClick={handleCopyLink}
               className="text-xs text-blue-400 hover:text-blue-300"
             >
-              {copying ? '복사됨!' : '링크 복사'}
+              {copying ? t('projectCard.copied') : t('projectCard.copyLink')}
             </button>
           )}
           <button
@@ -575,14 +580,14 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
             disabled={isAnalyzing || prReviewing}
             className="text-xs text-purple-400 hover:text-purple-300 disabled:opacity-40"
           >
-            PR 리뷰
+            {t('projectCard.prReviewButton')}
           </button>
           <button
             onClick={() => setShowGateSettings(true)}
             className="text-xs text-amber-400 hover:text-amber-300"
-            title="PR 게이트 등급 설정"
+            title={t('projectCard.gateSettings.title')}
           >
-            게이트 설정
+            {t('projectCard.gateSettings.button')}
           </button>
         </div>
 
@@ -592,7 +597,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
               onClick={handlePrimaryPickerOpen}
               disabled={showPrimaryPicker}
               className="text-xs text-gray-600 hover:text-gray-400 disabled:opacity-40"
-              title="주요 브랜치 설정"
+              title={t('projectCard.primaryBranchTitle')}
             >
               ★
             </button>
@@ -601,20 +606,20 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
               disabled={starting || showBranchPicker}
               className="text-xs text-gray-500 hover:text-gray-300 disabled:opacity-40"
             >
-              다른 브랜치
+              {t('projectCard.otherBranch')}
             </button>
             <button
               onClick={handleReanalyze}
               disabled={starting || showBranchPicker}
               className={`text-xs disabled:opacity-40 ${freshnessStatus === 'outdated' ? 'text-yellow-400 hover:text-yellow-200' : 'text-gray-500 hover:text-gray-300'}`}
             >
-              재분석
+              {t('projectCard.reanalyze')}
             </button>
             <button
               onClick={() => navigate(`/projects/${project.id}/graph`)}
               className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200"
             >
-              그래프 보기
+              {t('projectCard.viewGraph')}
             </button>
           </div>
         ) : (
@@ -623,7 +628,7 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
             disabled={isAnalyzing || starting || showBranchPicker}
             className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {isAnalyzing ? '분석 중' : starting ? '시작 중...' : '분석 시작'}
+            {isAnalyzing ? t('projectCard.analyzingButton') : starting ? t('projectCard.startingButton') : t('projectCard.startAnalysis')}
           </button>
         )}
       </div>

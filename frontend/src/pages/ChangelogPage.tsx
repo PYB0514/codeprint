@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.138.1',
+    date: '2026-07-16',
+    title: '영어 번역 누락 보강 — 쪽지함·프로젝트 카드',
+    type: 'fix',
+    items: [
+      { category: '다국어', desc: '쪽지함(알림 설정·차단·대화창)과 마이페이지 프로젝트 카드(분석 진행·PR 리뷰·게이트 설정)가 이전 번역 작업에서 누락돼 있던 것을 영어로도 제공합니다.' },
+    ],
+  },
+  {
     version: 'v0.138.0',
     date: '2026-07-16',
     title: '영어 번역 확대 — 그래프 공용 컨트롤·온보딩 투어',

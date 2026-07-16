@@ -986,3 +986,17 @@ const fetchGraph = useCallback(async () => {
 - **Joyride 자체의 `locale`(이전/닫기/완료/다음/열기/건너뛰기 버튼 라벨)은 컴포넌트 내부에서 `useTranslation` 훅으로 정상 처리** — steps와 달리 이건 항상 컴포넌트 렌더링 중에만 쓰이므로 훅 사용에 문제없음.
 
 **결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 로그인 세션) — 상단 툴바 "Switch Layout"/"Layer"·"Domain", "Label display mode"/"Name"·"Comment", 좌측 사이드바 범례 "Show All" 영어 렌더링 확인. `localStorage.removeItem('onboarding_tour_done')` 후 재접속해 온보딩 투어 1·2단계("👋 Welcome to Codeprint!"·"Switch Layout" 설명, "Skip"/"Back"/"Next (N of 5)" 버튼) 실제 클릭으로 확인.
+
+## "i18n 사실상 완료" 기록이 스테일 — MessagesPage 전체 누락 + ProjectCard 미포함 발견·수정 (2026-07-16, codeprint_132)
+
+**문제.** codeprint_131 종료 시점 PROGRESS.md·Context131이 "i18n 도입이 GraphPage.tsx + 공용 컴포넌트 전체까지 완료돼 사실상 마무리"로 기록했으나, 사용자 질문("사용자 페이지 영어버전 다 끝났어?")에 `useTranslation` import 여부로 전체 페이지 전수 재확인한 결과 두 가지 누락 발견.
+- **`MessagesPage.tsx`**: `useTranslation` import 자체가 없어 헤더·알림 설정·차단 확인 대화상자·입력 placeholder·전송 버튼 등 전체가 하드코딩 한글. "핵심 기능 화면 9개"(PR #573~578) 스코프에서 이 페이지만 통째로 빠진 것으로 추정 — 원인 특정은 안 됨(당시 세션 기록에 언급 자체가 없음).
+- **`components/ProjectCard.tsx`**: codeprint_130의 "MyPage i18n 이관" 결정(위 항목)에서 "`ProjectCard`는 별도 공용 컴포넌트 트랙(PROGRESS.md 백로그 '공용 컴포넌트 17개')이라 이번엔 한국어로 남김"이라고 명시적으로 스코프 아웃했는데, 정작 codeprint_131의 "공용 컴포넌트 17개 종료" 커밋(PR #583·#584)이 실제로는 `WarningPanel`·`GraphLegend`·`GraphViewToggles`·`OnboardingTour` 4개만 처리하고 `ProjectCard`를 빠뜨린 채 백로그를 "종료"로 정리 — PROGRESS.md 상 "완료" 표시와 실제 코드 상태가 어긋남.
+
+**원인 공통점.** 둘 다 "리스트에서 빠짐" 종류의 누락이라 `analyzeLocal`/`tsc` 등 정적 검증으로는 못 잡음(컴파일 관점에서 결함이 아니라 그냥 한국어 문자열이 남아있는 것) — 완료 보고를 코드 재확인 없이 그대로 믿었다면 계속 스테일 상태로 남았을 사례. `[[feedback_adversarial_verification]]`(자가보고 불신, 코드로 반증) 원칙이 정확히 이런 경우를 겨냥한 것.
+
+**수정.** `MessagesPage.tsx`(신규 `workspace.messages` 네임스페이스, `graphViewer.loading` 키 교차 참조) + `components/ProjectCard.tsx`(신규 `workspace.projectCard` 네임스페이스, 약 35개 키 — 뱃지·분석 진행률·브랜치 피커·PR 리뷰 패널·게이트 설정 패널·하단 액션 버튼 전체) 전면 이관. 날짜/시간 포맷은 기존 `currentDateLocale()` 패턴 재사용(`MessagesPage`의 `toLocaleTimeString('ko-KR')` 하드코딩도 함께 교정).
+
+**결과.** `tsc -b` 통과. 브라우저 실측(claude-in-chrome, 실 로그인 세션, 한국어/영어 양쪽) — MessagesPage 전체(받은 쪽지함·알림 설정 토글 3종·빈 상태 문구) + `/mypage` 프로젝트 카드 4장(신선도 뱃지·날짜 포맷 en-US·공개/비공개·PR 리뷰 패널·게이트 설정 패널·다른 브랜치 피커까지 실제 클릭으로 하위 패널 전개) 확인, 콘솔 에러 0건. `SettingsPage.tsx`의 이미지 삭제 성공/실패 메시지 2곳도 같은 세션에서 기존 미사용 키(`settings.imageDeleted`/`imageDeleteFailed`)로 마저 연결.
+
+**교훈.** "N개 항목 백로그"를 종료 처리할 때 실제로 N개를 다 건드렸는지 커밋 diff로 재확인 없이 "종료"로 정리하면 이번처럼 누락이 완료 기록에 묻힌다 — 백로그 종료 커밋은 대상 목록과 실제 변경 파일을 대조하는 습관화가 필요.

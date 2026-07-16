@@ -1,9 +1,11 @@
 ﻿// 유저 간 쪽지 받은 함 및 대화 스레드 + 알림 설정 페이지
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
 import { useWebPush } from '../hooks/useWebPush'
+import { currentDateLocale } from '../i18n/dateLocale'
 
 interface MessageItem {
   id: string
@@ -20,6 +22,7 @@ interface MessageItem {
 
 // 쪽지 전송 후 대화 목록 갱신
 export default function MessagesPage() {
+  const { t } = useTranslation('workspace')
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [myId, setMyId] = useState<string | null>(null)
@@ -96,7 +99,7 @@ export default function MessagesPage() {
   // 현재 대화 상대 차단
   const handleBlock = async () => {
     if (!activeUserId) return
-    if (!confirm(`${activeUsername}님을 차단할까요? 서로 쪽지를 주고받을 수 없게 됩니다.`)) return
+    if (!confirm(t('messages.blockConfirm', { username: activeUsername }))) return
     await axios.post(`/api/messages/block/${activeUserId}`)
     setBlockedIds(prev => new Set(prev).add(activeUserId))
   }
@@ -112,7 +115,7 @@ export default function MessagesPage() {
     return (
       <div className="app-page min-h-screen bg-gray-950 text-white flex flex-col">
         <AppHeader />
-        <div className="flex-1 flex items-center justify-center text-gray-500">로딩 중...</div>
+        <div className="flex-1 flex items-center justify-center text-gray-500">{t('graphViewer.loading')}</div>
       </div>
     )
   }
@@ -125,13 +128,13 @@ export default function MessagesPage() {
         {/* 받은 쪽지함 */}
         <div className="w-72 shrink-0 border-r border-gray-800 flex flex-col">
           <div className="px-4 py-3 border-b border-gray-800">
-            <h2 className="text-sm font-semibold text-white">받은 쪽지함</h2>
+            <h2 className="text-sm font-semibold text-white">{t('messages.inboxTitle')}</h2>
           </div>
           {/* 알림 설정 */}
           {notifSettings && (
             <div className="px-4 py-3 border-b border-gray-800 flex flex-col gap-2">
-              <span className="text-xs font-semibold text-gray-500">알림 설정</span>
-              {([['dm', '쪽지 알림'], ['teamChat', '팀채팅 알림']] as const).map(([key, label]) => (
+              <span className="text-xs font-semibold text-gray-500">{t('messages.notifSettingsHeading')}</span>
+              {([['dm', t('messages.dmNotif')], ['teamChat', t('messages.teamChatNotif')]] as const).map(([key, label]) => (
                 <label key={key} className="flex items-center justify-between cursor-pointer">
                   <span className="text-xs text-gray-400">{label}</span>
                   <button
@@ -144,7 +147,7 @@ export default function MessagesPage() {
               ))}
               {/* Web Push 구독 토글 */}
               <label className="flex items-center justify-between cursor-pointer">
-                <span className="text-xs text-gray-400">브라우저 푸시</span>
+                <span className="text-xs text-gray-400">{t('messages.browserPush')}</span>
                 <button
                   onClick={subscribed ? unsubscribe : subscribe}
                   disabled={pushLoading}
@@ -157,7 +160,7 @@ export default function MessagesPage() {
           )}
           <div className="flex-1 overflow-y-auto">
             {inbox.length === 0 ? (
-              <p className="text-center text-gray-600 text-sm mt-8">쪽지가 없습니다.</p>
+              <p className="text-center text-gray-600 text-sm mt-8">{t('messages.emptyInbox')}</p>
             ) : (
               inbox.map(msg => {
                 const otherId = msg.senderId === myId ? msg.receiverId : msg.senderId
@@ -203,14 +206,14 @@ export default function MessagesPage() {
                     onClick={handleUnblock}
                     className="text-xs text-gray-500 hover:text-white border border-gray-700 rounded-lg px-2.5 py-1 transition-colors"
                   >
-                    차단 해제
+                    {t('messages.unblock')}
                   </button>
                 ) : (
                   <button
                     onClick={handleBlock}
                     className="text-xs text-gray-500 hover:text-red-400 border border-gray-700 rounded-lg px-2.5 py-1 transition-colors"
                   >
-                    차단
+                    {t('messages.block')}
                   </button>
                 )}
               </div>
@@ -224,8 +227,8 @@ export default function MessagesPage() {
                       }`}>
                         {msg.content}
                         <div className={`text-xs mt-1 ${isMine ? 'text-blue-200' : 'text-gray-500'}`}>
-                          {new Date(msg.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                          {isMine && msg.readAt && ' · 읽음'}
+                          {new Date(msg.createdAt).toLocaleTimeString(currentDateLocale(), { hour: '2-digit', minute: '2-digit' })}
+                          {isMine && msg.readAt && t('messages.readSuffix')}
                         </div>
                       </div>
                     </div>
@@ -235,14 +238,14 @@ export default function MessagesPage() {
               </div>
               {blockedIds.has(activeUserId) ? (
                 <div className="p-4 border-t border-gray-800 text-center text-xs text-gray-600">
-                  차단한 사용자입니다. 차단을 해제하면 다시 쪽지를 주고받을 수 있습니다.
+                  {t('messages.blockedNotice')}
                 </div>
               ) : (
               <form onSubmit={sendMessage} className="p-4 border-t border-gray-800 flex gap-2">
                 <input
                   value={input}
                   onChange={e => setInput(e.target.value)}
-                  placeholder="쪽지 입력..."
+                  placeholder={t('messages.inputPlaceholder')}
                   maxLength={1000}
                   className="flex-1 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none focus:border-gray-500 placeholder-gray-600"
                 />
@@ -251,14 +254,14 @@ export default function MessagesPage() {
                   disabled={!input.trim()}
                   className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  전송
+                  {t('messages.send')}
                 </button>
               </form>
               )}
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
-              대화할 상대를 선택하세요.
+              {t('messages.selectPrompt')}
             </div>
           )}
         </div>
