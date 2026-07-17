@@ -593,3 +593,13 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 4. `gh workflow run db-backup.yml`로 실제 워크플로 2회(정정 전 1회는 미실행 상태로 확인 안 함, 정정 후 1회 실행) 트리거해 실측 — `pg_dump` 성공 + S3 업로드 성공(`s3://codeprint-uploads/db-backups/codeprint-20260717T144251Z.sql.gz`, 25.1MiB) 확인.
 
 **교훈.** GitHub Secret은 write-only라 "지금 뭘 쓰고 있는지" 확인이 원천적으로 불가능한 경우, "확인 후 교체"가 아니라 "무조건 새로 발급해서 교체" 전략이 더 빠르고 확실하다 — 어차피 새 값이 기존보다 나쁠 수 없다면(이번엔 읽기 전용으로 범위를 더 좁혔으므로) 현재값 조사에 시간 쓸 필요가 없었다.
+
+## application.yml의 spring.async.executor.* 죽은 설정 제거 (2026-07-18, codeprint_136, ERROR_TRACKER.md BE-17)
+
+**문제.** `DataSourceConfig`(BE-16) 발견을 계기로 "수동 `@Bean`이 YAML 설정을 조용히 무시하는 다른 사례가 더 있나" 점검하다가, `application.yml`의 `spring.async.executor.*`(core-pool-size 4·max-pool-size 16·queue-capacity 500)가 `AsyncConfig.java`의 `taskExecutor()`에서 전혀 안 읽히고 있음을 발견. `git log`로 도입 시점을 추적한 결과 프로젝트 최초 스캐폴딩 커밋에서 생긴 값이고, 이후 작성된 `AsyncConfig.java`가 별도의 하드코딩 상수(4·8·50)를 쓰면서 YAML을 정리 안 하고 방치한 것으로 확인.
+
+**BE-16과의 결정적 차이 — "고칠 것"이 아니라 "지울 것".** BE-16(HikariCP)은 YAML 값이 의도된 튜닝값인데 프로덕션에 반영이 안 되는 게 문제였다(바인딩 추가로 해결). 이번 건은 정반대 — `AsyncConfig.java`의 하드코딩 상수 옆에 "Railway 메모리 제약 하에서의 안전선"이라는 명시적 설계 근거 주석이 있어, **하드코딩 쪽이 의도된 최종 결정**임이 코드 자체로 확인된다. 만약 여기에 YAML 바인딩을 추가해 외부에서 값을 바꿀 수 있게 하면, 오히려 이 안전장치(메모리 제약을 지키기 위한 상한)를 우회할 새 경로를 만드는 셈이 된다 — 그래서 바인딩을 추가하는 대신 죽은 YAML 블록 자체를 삭제했다.
+
+**확인.** `grep`으로 `spring.async.executor`/`async.executor`를 코드베이스 전체에서 검색해 참조하는 곳이 없음을 확인(로컬 프로필 `application-local.yml`에도 없음). 삭제 후 `./gradlew compileJava` 정상, 백엔드 전체 1018개 테스트 green, `analyzeLocal` 자기분석 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변 — 애초에 아무도 안 읽던 값이라 동작 변화 자체가 없음(순수 정리).
+
+**교훈.** "설정 파일에 있는 값 = 실제로 적용되는 값"이라는 가정이 이번 세션에서 두 번 깨졌다(BE-16·BE-17) — 한 번은 "적용돼야 하는데 안 됨"(버그), 한 번은 "적용 안 되는 게 맞는데 YAML만 안 지워짐"(잔재). 수동으로 `@Bean`을 만드는 설정 클래스는 표준 Spring Boot 자동설정과 달리 YAML 바인딩이 "자동으로 되는 게 아니라 명시적으로 연결해야 하는 일"이라는 게 이 프로젝트에서 반복 확인된 패턴 — 새 수동 `@Bean` 설정 클래스를 작성할 때 이 점을 체크리스트로 남겨둘 만하다.
