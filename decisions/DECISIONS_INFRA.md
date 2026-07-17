@@ -603,3 +603,13 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 **확인.** `grep`으로 `spring.async.executor`/`async.executor`를 코드베이스 전체에서 검색해 참조하는 곳이 없음을 확인(로컬 프로필 `application-local.yml`에도 없음). 삭제 후 `./gradlew compileJava` 정상, 백엔드 전체 1018개 테스트 green, `analyzeLocal` 자기분석 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변 — 애초에 아무도 안 읽던 값이라 동작 변화 자체가 없음(순수 정리).
 
 **교훈.** "설정 파일에 있는 값 = 실제로 적용되는 값"이라는 가정이 이번 세션에서 두 번 깨졌다(BE-16·BE-17) — 한 번은 "적용돼야 하는데 안 됨"(버그), 한 번은 "적용 안 되는 게 맞는데 YAML만 안 지워짐"(잔재). 수동으로 `@Bean`을 만드는 설정 클래스는 표준 Spring Boot 자동설정과 달리 YAML 바인딩이 "자동으로 되는 게 아니라 명시적으로 연결해야 하는 일"이라는 게 이 프로젝트에서 반복 확인된 패턴 — 새 수동 `@Bean` 설정 클래스를 작성할 때 이 점을 체크리스트로 남겨둘 만하다.
+
+## VAPID 키 생성·Railway 프로덕션 등록 완료 — Web Push 활성화 (2026-07-18, codeprint_137)
+
+**배경.** `application.yml`(`vapid.public-key`/`vapid.private-key` → `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` 환경변수 바인딩)과 `PushController`/`nl.martijndwars:web-push` 라이브러리 의존성은 이미 코드에 구현돼 있었으나, 실제 키 값이 없어 프로덕션에서 항상 빈 문자열로 부팅 — Web Push 기능 자체가 동작 불가 상태였다(PROGRESS.md "중장기 로드맵"에 미착수로 남아있던 항목).
+
+**조치.** `npx web-push generate-vapid-keys`(표준 web-push CLI)로 키 쌍 생성 → `railway variables --set VAPID_PUBLIC_KEY=... --set VAPID_PRIVATE_KEY=... --service codeprint --environment production`으로 등록(`--skip-deploys`로 즉시 재배포 방지 후, 검증을 위해 `railway redeploy`로 명시적 재배포). 개인키는 이 문서·git 어디에도 남기지 않음(Railway 환경변수에만 존재).
+
+**검증.** 재배포 후 인스턴스 `RUNNING` 확인 → `GET /api/push/vapid-public-key`가 새로 등록한 공개키를 정상 반환 → `GET /actuator/health` `{"status":"UP"}` 확인(회귀 없음). 브라우저 알림 구독(프론트엔드 사용자 플로우)까지는 이번 조치 범위 밖 — 백엔드가 유효한 키를 서빙하는 것까지 확인.
+
+**한계.** 실제 알림 발송(구독 → 이벤트 트리거 → 수신)까지의 end-to-end 플로우는 별도 검증 필요, 이번엔 키 활성화만 확인.
