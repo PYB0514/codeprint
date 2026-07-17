@@ -522,3 +522,18 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 **당장 조치.** 새 커밋 push로 `synchronize` 이벤트 재트리거(콜드스타트로 한 번 깨어난 뒤 재시도는 성공할 가능성 높음) — 우회일 뿐 근본 해결 아님.
 
 **재발 방지 — 미착수, 사용자 판단 대기.** 상세 사건 기록·근본 원인·재발방지 옵션(웹훅 전용 경량 레이어 분리 / PR 게이트만 상시 기동 예외 / Serverless 재검토)은 `GATE_GAPS.md` [G-5]에 기록(이 파일은 인프라 결정 기록, 그쪽은 게이트 신뢰성 사건 로그라 사건 자체는 거기가 단일 소스 — 여기선 인프라 변경과의 인과관계만 남김).
+
+## PR #604 자체 게이트 교착 — ANALYZER_VERSION 버그가 프로덕션 PR 분석을 크래시시켜 자기 자신을 막음 (2026-07-17, codeprint_136, GATE_GAPS.md [G-7])
+
+**문제.** PR #604(`ParsedFile.serviceCalls` 필드 추가 후 `ANALYZER_VERSION` 미인상 버그 수정)의 `codeprint/structure` 체크가 웹훅 504(G-5) 재전송 후에도 `error`로 게시됨. `railway logs`로 확인한 원인은 놀랍게도 **PR #604가 고치려는 바로 그 버그**였다 — PR #603(오늘 이미 배포됨)이 `ParsedFile`에 `serviceCalls` 필드를 추가하며 `ANALYZER_VERSION`을 안 올려서, 프로덕션 `parsed_file_cache`에 PR #603 이전/이후 데이터가 같은 버전 번호(3)로 뒤섞여 있었다. PR #604의 구조 분석이 이 오염된 캐시(500개 중 495 hit)를 읽다가 구스키마 항목에서 `GraphBuilder.build()` NPE로 죽음 — 자신을 고치는 PR이 자기 게이트를 통과 못 하는 교착 상태.
+- 이 버그는 `codeprint` 자기 레포뿐 아니라 **오늘(2026-07-17) 이후 재분석된 모든 프로젝트**에 동일하게 잠재해 있었을 것으로 추정(`parsed_file_cache`가 `project_id`별로 분리돼 있어 프로젝트마다 개별적으로 영향).
+
+**교착 해소.** `enforce_admins: true`([G-2] 재발방지)라 관리자 강제 병합도 막혀 있어, 유일한 합법적 출구는 프로덕션 캐시를 직접 정리해 **현재 배포된(버전 미인상) 코드가 정상 동작하도록 만드는 것**이었다. 사용자 승인(옵션 1) 하에 Railway Postgres(`DATABASE_PUBLIC_URL`, `railway variables --service Postgres --kv`로 조회)에 `docker run --rm postgres:16 psql <url>`로 직접 접속해 `DELETE FROM parsed_file_cache WHERE analyzer_version = 3;`(3898행) 실행 → 웹훅 재전송(`gh api .../deliveries/{id}/attempts`) → `codeprint/structure` success 전환 확인 → 정상 병합. 삭제는 캐시 테이블만 대상(원본 데이터 무손상) — 다음 분석이 현재 코드로 다시 채우므로 안전.
+
+**재발 방지 — CI 게이트 신설(같은 PR 세션에서 착수).** B-16(2026-07-10)·이번(2026-07-17) 모두 "ANALYZER_VERSION을 반드시 함께 올릴 것"이라는 코드 주석·회귀 테스트(트립와이어)만으로는 막지 못했다 — 둘 다 로컬에서 사람이 인지해야만 작동하는 안전장치였는데, 두 번 다 안 지켜졌다. `.github/workflows/ci.yml`에 `analyzer-version-guard` 잡 신설 — PR diff에 `ParsedFile.java` 변경이 있는데 `CachedParsedFileLoader.java` 변경이 없으면 CI 자체를 fail시켜 **PR 단계에서 기계적으로 차단**(사람이 알아채길 기다리지 않음). 과탐지(단순 주석 수정 등)여도 버전을 한 번 더 올리는 건 안전한 조작(추가 재파싱 비용만 발생, 정확도엔 무해)이라 정밀도보다 재현율 우선으로 설계.
+
+**검토한 대안.** ①테스트 트립와이어만 유지(이번 세션 앞부분에 이미 추가) — 기각. 로컬에서 테스트를 실제로 돌려야만 작동하는데, B-16도 이번도 "PR 단계에서 놓친" 사건이라 로컬 실행 여부에 의존하는 안전장치는 신뢰할 수 없음이 실증됨. ②`ParsedFile` record를 별도 파일로 쪼개 필드 추가 시 강제로 리뷰어 눈에 띄게(예: 필드 목록을 별도 상수 배열로) — 기각, 과설계(§2 단순성). ③PR 템플릿에 체크박스 추가 — 기각, 체크박스는 강제력이 없어(사람이 그냥 체크만 하고 넘어갈 수 있음) 이번 사건과 같은 종류의 실패를 못 막음.
+
+**연쇄 관계.** GATE_GAPS.md [G-6](HikariCP 커넥션 불안정)과 증상이 똑같이 "codeprint/structure = error"로 나타나 처음엔 G-6 재발로 오인할 뻔했다 — `railway logs`로 실제 스택트레이스를 확인해야만 두 원인(커넥션 풀 vs NPE)을 구분할 수 있다는 게 이번에 재확인됨. G-6은 이번 사건과 무관(원인 다름), 여전히 미해결.
+
+**검증.** `analyzer-version-guard` 잡을 신설 커밋 자체에 대해 CI로 실행해 정상 통과 확인(이 커밋은 `ParsedFile.java`를 안 건드리므로 가드가 발동하지 않는 것까지 함께 확인). 프로덕션은 웹훅 재전송 후 `codeprint/structure` success·PR #604 정상 병합으로 실측 검증 완료.

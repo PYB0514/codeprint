@@ -8,6 +8,29 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  analyzer-version-guard:
+    name: ANALYZER_VERSION Guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ParsedFile.java(파싱 결과 스키마)가 바뀌었는데 CachedParsedFileLoader.java(ANALYZER_VERSION)가
+      # 함께 안 바뀌면, 구버전 캐시 JSON이 신필드를 null로 역직렬화해 GraphBuilder가 NPE로 죽는다
+      # (B-16 2026-07-10 · 반복-G 2026-07-17 재발 — 2회 다 프로덕션까지 영향, 상세는 ERROR_TRACKER.md 로컬 참조).
+      # 오탐(단순 주석 수정 등)이어도 ANALYZER_VERSION을 한 번 더 올리는 건 안전한 조작(재파싱만 유발)이라
+      # 과탐지 방향으로 설계한다.
+      - name: ParsedFile 스키마 변경 시 ANALYZER_VERSION 동반 증가 확인
+        run: |
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD -- backend/src/main/java/com/codeprint/infrastructure/analysis/ParsedFile.java | grep -q .; then
+            if ! git diff --name-only origin/${{ github.base_ref }}...HEAD -- backend/src/main/java/com/codeprint/infrastructure/analysis/CachedParsedFileLoader.java | grep -q .; then
+              echo "::error::ParsedFile.java가 변경됐는데 CachedParsedFileLoader.java(ANALYZER_VERSION)는 변경되지 않았습니다."
+              echo "::error::필드 추가/제거/의미 변경이면 ANALYZER_VERSION을 반드시 올리세요. 단순 주석/포맷 수정뿐이라도 CachedParsedFileLoader.java를 함께 커밋(예: 버전 상수 옆 주석 갱신)하면 이 검사를 통과합니다."
+              exit 1
+            fi
+          fi
+
   backend:
     name: Backend Build & Test
     runs-on: ubuntu-latest
