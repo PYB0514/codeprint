@@ -17,13 +17,17 @@ import java.util.*;
 public class GraphWarningService {
 
     // 게이트 테마별 규칙 타입 — detectActiveTheme()과 detect()의 분기가 항상 같은 목록을 참조하도록 단일 소스로 고정
+    // DDD_RULE_TYPES는 "바운디드 컨텍스트" 축(다중 컨텍스트 전제)만 남긴다 — "의존 방향" 축(도메인이 인프라를
+    // 몰라야 함)은 DDD/헥사고날/클린 아키텍처 등 어떤 테마에서도 보편이라 UNIVERSAL_RULE_TYPES로 승격했다
+    // (DOMAIN_IMPORTS_INFRA·INTERFACES_IMPORTS_INFRA, 2026-07-17 — decisions/DECISIONS_ANALYSIS.md 참조).
     private static final List<String> DDD_RULE_TYPES = List.of(
-            "DB_LAYER_BYPASS", "CROSS_CONTEXT_IMPORT", "DOMAIN_IMPORTS_INFRA", "INTERFACES_IMPORTS_INFRA", "CROSS_DOMAIN_CALL");
+            "DB_LAYER_BYPASS", "CROSS_CONTEXT_IMPORT", "CROSS_DOMAIN_CALL");
     private static final List<String> LAYERED_RULE_TYPES = List.of("LAYERED_REVERSE_DEPENDENCY", "LAYERED_BYPASS");
     private static final List<String> FEATURE_SLICE_RULE_TYPES = List.of("CROSS_FEATURE_IMPORT", "FEATURE_LAYER_VIOLATION");
     private static final List<String> UNIVERSAL_RULE_TYPES = List.of(
             "CYCLIC_IMPORT", "BROKEN_INTERFACE_CHAIN", "ASYNC_SELF_CALL", "MISSING_CONVERTER_MIGRATION",
-            "MISSING_TRANSACTIONAL_DELETE", "DEAD_CODE", "HIGH_FAN_OUT");
+            "MISSING_TRANSACTIONAL_DELETE", "DEAD_CODE", "HIGH_FAN_OUT",
+            "DOMAIN_IMPORTS_INFRA", "INTERFACES_IMPORTS_INFRA");
 
     // 그래프 노드·엣지에서 경고 목록을 생성
     public List<Map<String, Object>> detect(List<Node> nodes, List<Edge> edges) {
@@ -45,14 +49,15 @@ public class GraphWarningService {
         warnings.addAll(detectMissingTransactionalDelete(nodes, edges));
         warnings.addAll(detectDeadCode(nodes, edges));
         warnings.addAll(detectHighFanOut(nodes, edges));
+        // 의존 방향(도메인→인프라) 위반은 테마 선택과 무관한 보편 원칙이라 정책 분기 밖에서 항상 실행
+        warnings.addAll(detectDomainInfraImport(nodes, edges));
+        warnings.addAll(detectInterfaceInfraImport(nodes, edges));
         // DDD 폴더 구조(/domain/, /application/, /infrastructure/)를 사용하는 프로젝트에만 적용 — 또는 정책으로 DDD 강제
         boolean useDdd = gatePolicy == GatePolicy.DDD
                 || (gatePolicy == GatePolicy.AUTO && isDddProject(nodes));
         if (useDdd) {
             warnings.addAll(detectDbLayerBypass(nodes, edges));
             warnings.addAll(detectCrossContextDomainImport(nodes, edges));
-            warnings.addAll(detectDomainInfraImport(nodes, edges));
-            warnings.addAll(detectInterfaceInfraImport(nodes, edges));
             warnings.addAll(detectCrossDomainFunctionCall(nodes, edges));
         } else {
             // 비DDD(AUTO 미감지 또는 LAYERED 강제) — Controller/Service/Repository 레이어 컨벤션 위반 검사
@@ -1266,6 +1271,13 @@ public class GraphWarningService {
         return warnings;
     }
 
+    // detectDomainInfraImport/detectInterfaceInfraImport와 동일 판정 로직 재사용 — detectLayeredViolations 중복 가드용
+    private boolean coveredByUniversalDependencyRule(String srcPath, String tgtPath) {
+        boolean tgtIsInfra = containsLayerSegment(tgtPath, INFRA_LAYER_DIRS) && !tgtPath.contains("/shared/");
+        if (!tgtIsInfra) return false;
+        return containsLayerSegment(srcPath, DOMAIN_LAYER_DIRS) || containsLayerSegment(srcPath, INTERFACE_LAYER_DIRS);
+    }
+
     // FUNCTION_CALL 엣지가 도메인 경계를 넘을 때 — Cross-Domain 직접 호출 위반
     // 수정 방법: 호출하는 도메인에 port/ 인터페이스 선언 → infrastructure/adapter/ 에서 구현
     private List<Map<String, Object>> detectCrossDomainFunctionCall(List<Node> nodes, List<Edge> edges) {
@@ -1582,6 +1594,7 @@ public class GraphWarningService {
 
         Map<UUID, Layer> nodeLayer = new HashMap<>();
         Map<UUID, String> nameMap = new HashMap<>();
+        Map<UUID, String> nodeFilePaths = new HashMap<>();
         EnumSet<Layer> present = EnumSet.noneOf(Layer.class);
         for (Node n : nodes) {
             if (n.getType() != NodeType.FILE) continue;
@@ -1592,6 +1605,7 @@ public class GraphWarningService {
             if (layer == null) continue;
             nodeLayer.put(n.getId(), layer);
             nameMap.put(n.getId(), n.getName());
+            nodeFilePaths.put(n.getId(), fp);
             present.add(layer);
         }
         // 레이어가 2종 미만이면 레이어드 아키텍처로 보지 않음 — 게이트
@@ -1604,6 +1618,10 @@ public class GraphWarningService {
             Layer src = nodeLayer.get(e.getSourceNodeId());
             Layer tgt = nodeLayer.get(e.getTargetNodeId());
             if (src == null || tgt == null || src == tgt) continue;
+            // 공통 게이트(DOMAIN_IMPORTS_INFRA/INTERFACES_IMPORTS_INFRA)가 이미 잡는 엣지는 중복 라벨링하지 않음 —
+            // INFRA_LAYER_DIRS가 REPOSITORY_DIRS와 persistence/dao 별칭을 공유해 같은 엣지가 두 규칙에 겹칠 수 있음.
+            if (coveredByUniversalDependencyRule(nodeFilePaths.getOrDefault(e.getSourceNodeId(), ""),
+                    nodeFilePaths.getOrDefault(e.getTargetNodeId(), ""))) continue;
 
             String srcName = nameMap.getOrDefault(e.getSourceNodeId(), "?");
             String tgtName = nameMap.getOrDefault(e.getTargetNodeId(), "?");
