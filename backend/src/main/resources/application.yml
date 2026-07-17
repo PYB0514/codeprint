@@ -49,12 +49,6 @@ spring:
             client-secret: ${GITHUB_CLIENT_SECRET:placeholder}
             scope: read:user,user:email,repo
 
-  async:
-    executor:
-      core-pool-size: 4
-      max-pool-size: 16
-      queue-capacity: 500
-
 server:
   port: 8080
   forward-headers-strategy: native
