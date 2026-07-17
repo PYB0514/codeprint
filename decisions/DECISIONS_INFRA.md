@@ -537,3 +537,20 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 **연쇄 관계.** GATE_GAPS.md [G-6](HikariCP 커넥션 불안정)과 증상이 똑같이 "codeprint/structure = error"로 나타나 처음엔 G-6 재발로 오인할 뻔했다 — `railway logs`로 실제 스택트레이스를 확인해야만 두 원인(커넥션 풀 vs NPE)을 구분할 수 있다는 게 이번에 재확인됨. G-6은 이번 사건과 무관(원인 다름), 여전히 미해결.
 
 **검증.** `analyzer-version-guard` 잡을 신설 커밋 자체에 대해 CI로 실행해 정상 통과 확인(이 커밋은 `ParsedFile.java`를 안 건드리므로 가드가 발동하지 않는 것까지 함께 확인). 프로덕션은 웹훅 재전송 후 `codeprint/structure` success·PR #604 정상 병합으로 실측 검증 완료.
+
+## GATE_GAPS.md [G-6] HikariCP 근본 원인 튜닝 — minimum-idle 2·max-lifetime 120000 (2026-07-17, codeprint_136)
+
+**문제.** [G-6](2026-07-17 최초 발견, 세션당 1회씩 2회 재발 확인됨)의 근본 원인이 "사용자 판단 필요"로 미착수 상태였다. 이번 세션 앞부분(PR #604 사건, [G-7])에서 `railway logs`로 정확한 실패 타이밍을 다시 확보할 기회가 생겨, 사용자가 이 참에 근본 원인 튜닝을 진행하기로 결정.
+
+**진단.** `application.yml`의 `idle-timeout: 300000`(5분)은 HikariCP 자체 동작상 **`minimum-idle` 이하로 유지되는 커넥션에는 적용되지 않는다** — 즉 `minimum-idle: 1`이던 그 1개는 이론상 무기한 살아있다가, Railway/Postgres 쪽에서 먼저 끊어버리면(관측: 커넥션 생성 후 3~3.5분, PR #600 사건과 PR #604 사건 두 관측치가 비슷한 범위) HikariCP는 모른 채 들고 있다가 다음 사용 시점에야 `EOFException`/`Failed to validate connection`으로 실패가 드러난다. `max-lifetime`이 명시적으로 설정 안 돼 있어 HikariCP 기본값(30분)을 쓰고 있었던 것도 원인 — HikariCP 자체 경고 메시지("Possibly consider using a shorter maxLifetime value")가 정확히 이 처방을 가리키고 있었다.
+
+**결정.** `minimum-idle: 1→2`, `max-lifetime: 120000`(2분) 추가.
+- **max-lifetime이 핵심 처방**: 관측된 3~3.5분보다 확실히 짧게 잡아, `minimum-idle` 유지분을 포함한 모든 커넥션을 HikariCP가 Railway/Postgres보다 먼저 선제 교체하도록 강제. `max-lifetime`은 `idle-timeout`과 달리 `minimum-idle` 이하 커넥션에도 예외 없이 적용된다(HikariCP 공식 동작).
+- **minimum-idle 2는 보조적**: max-lifetime이 제대로 작동하면 1개만으로도 이론상 안 죽지만, 동시 웹훅 처리 여유분으로 추가. 비용 영향은 유휴 커넥션 1개(수백 KB~수 MB 메모리) 수준이라 무시 가능 — 기존 실측(Railway 청구 비중 Memory 96.6%는 JVM 힙이 대부분이고 DB 커넥션 개수와 무관)과 배치됨.
+- **비용 트레이드오프 재평가**: 애초에 이 설정을 1로 낮췄던 이유(Serverless sleep 방해 방지)가 실제로는 minimum-idle 값과 무관했다는 게 이번에 정황상 확인됨 — `minimum-idle: 1`이던 현재도 sleep이 반복적으로 잘 일어나고 있었으므로([G-5]·[G-6] 콜드스타트 이력 자체가 증거), sleep 여부는 커넥션 개수가 아니라 앱 서비스 자체의 HTTP 트래픽 유휴 여부로 결정되는 것으로 보인다. 이 재평가 덕분에 "비용 vs 신뢰성 트레이드오프"로 미뤄왔던 이 튜닝이 사실상 트레이드오프가 거의 없는 결정이었음이 드러났다.
+
+**검토한 대안.** ①minimum-idle만 올리고 max-lifetime은 그대로(30분 기본값) — 기각, 관측된 3~3.5분보다 훨씬 길어 근본 문제(Railway가 먼저 끊음)를 그대로 방치. ②max-lifetime만 짧게 잡고 minimum-idle은 1 유지 — 채택 가능한 대안이었으나(이게 진짜 핵심 처방이라 이것만으로도 충분했을 것), minimum-idle 2도 비용이 사실상 0이라 함께 적용 안 할 이유가 없어 둘 다 반영.
+
+**한계 — 확정적 보장 아님.** max-lifetime=120000은 **관측 2회**(PR #600 약 3분, PR #604 3분 30초)에서 역산한 값이라, Railway/Postgres 쪽의 실제 idle timeout 임계값이 정확히 고정된 상수라는 보장은 없다(인프라 벤더의 내부 동작이라 문서화돼 있지 않음). 검증은 배포 후 다음 콜드스타트 몇 차례를 `railway logs`로 관찰해 "Failed to validate connection" 경고가 재발하는지로 확인해야 한다 — 재발하면 max-lifetime을 더 줄이는 후속 조정이 필요할 수 있음.
+
+**검증.** 로컬 Docker Postgres로 `ParsedFileCacheIntegrationTest` 등 통합테스트 재실행 — Spring 컨텍스트가 새 Hikari 설정으로 정상 부팅됨을 확인(프로퍼티 바인딩 오류 없음), 백엔드 전체 1008개 테스트 green. 프로덕션 실제 효과는 배포 후 관찰 필요(위 한계 참조).
