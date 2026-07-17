@@ -1991,4 +1991,16 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 
 **검증.** `StaticCodeAnalyzerTest` 3건(name/value 추출·바레 인자·미선언 null) + `GraphBuilderTest` 2건(FeignClient IMPORT → SERVICE_CALL 엣지·동일서비스 자기호출 제외) + `GraphWarningServiceTest` 1건(FeignClient 인터페이스 BROKEN_INTERFACE_CHAIN 미발화) + 벤치 2건(`p-feign-client-chain`·`n-feign-client-unused`, 풀 파이프라인) 신규. 백엔드 전체 1016개 테스트(Docker Postgres 기동 상태) green, `analyzeLocal` 자기분석 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변 확인(자기 레포는 FeignClient 미사용이라 회귀 없음).
 
+## SERVICE_CALL_CHAIN — Python requests·JS/TS axios 지원 확장 (2026-07-18, codeprint_137)
+
+**배경.** Context136 "다음 컨텍스트에서 할 것 ②MSA 규칙 후속 확장" — FeignClient(Java 생태계) 다음으로 남은 후보 중 "①Python requests·JS axios" 착수. `docs/PROJECT.md` §7 non-trivial 기준(3개 이상 파일 수정)에 해당해 코딩 전 Plan을 대화로 제시 후 진행.
+
+**설계 — FeignClient보다 훨씬 단순했던 이유.** FeignClient는 인터페이스 선언과 호출부가 다른 파일이라 IMPORT 재사용이라는 별도 설계가 필요했지만, Python `requests`·JS/TS `axios`는 WebClient/RestTemplate과 동일하게 **호출부 코드에 `http://서비스명`이 리터럴로 직접 나타나는 컨벤션**이라 기존 `extractServiceCalls()` 정규식 패턴을 언어 분기만 추가해 그대로 확장했다(`StaticCodeAnalyzer.java`). `GraphBuilder`·`GraphWarningService`는 `pf.serviceCalls()` 필드만 소비하고 언어를 모르므로 하류 로직은 전혀 손대지 않음 — 순수하게 상류 추출기(정규식 매칭)만 넓힌 변경.
+1. **host 리터럴 + path 변수는 허용, host 자체가 변수면 스코프 밖**: JS 템플릿 리터럴(`` axios.get(`http://order-service/orders/${id}`) ``)과 Python f-string(`requests.get(f"http://order-service/pay/{id}")`)은 host 부분("order-service" 앞)이 리터럴이라 매칭 — Java 케이스에서 이미 문자열 연결(`"http://order-service/" + id`)을 지원하던 것과 동일한 원칙(host만 고정이면 됨). `http://{service}/...`처럼 host 자체가 변수 조합인 서비스 디스커버리 패턴(`decisions/DECISIONS_ANALYSIS.md` "모노레포 MSA 신규 규칙군 스코프 조사" 참조)은 여전히 완전 신규 분석기가 필요해 미착수로 유지.
+2. **JS는 axios만, `fetch()`는 계속 스코프 밖**: `fetch()`는 이미 API_ENDPOINT_CALL 판정용 `extractApiCalls()`가 별도 목적(로컬 컨트롤러 라우트 매칭)으로 처리 중이고, MSA 서비스 호출 컨벤션으로는 axios만큼 일관되지 않아(임의 URL을 어디서나 fetch 가능, "서비스 클라이언트" 성격이 약함) precision 우선으로 제외 — `serviceCalls_fetch_스코프밖` 테스트로 이 경계를 명시.
+
+**검증.** `StaticCodeAnalyzerTest` 4건 신규(axios 추출·Python requests 추출·Python 로컬경로 제외·fetch 스코프밖으로 기존 테스트명 갱신) + 벤치 1건(`p-python-js-mixed-chain`: JS axios→Python requests→Java 3서비스 언어혼합 2홉 체인, 풀 파이프라인). `StaticCodeAnalyzerTest` 210개·`BenchSuiteTest` 90개 전부 green. `analyzeLocal` 자기분석 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1, 전부 결제 도메인 기존 코드로 이번 변경과 무관함을 `confirmPayment` 참조 위치로 확인) 불변 — 자기 레포는 Java 전용이라 회귀 없음.
+
+**한계.** 여전히 미착수: host 자체가 변수 조합인 서비스 디스커버리 패턴, Go(gin 등)의 HTTP 클라이언트.
+
 **한계.** FeignClient의 `url` 속성만 쓰고 `name`/`value`가 없는 경우(직접 URL 지정)는 논리 서비스명을 못 뽑아 미탐지 — 실무에서 드문 패턴(`url`은 보통 테스트/로컬 오버라이드용). 남은 후속 후보(Python requests·JS axios, 변수 조합 URL)는 여전히 미착수.

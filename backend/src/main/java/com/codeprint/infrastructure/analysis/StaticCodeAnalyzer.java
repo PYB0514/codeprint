@@ -885,16 +885,31 @@ public class StaticCodeAnalyzer {
         return result;
     }
 
-    // 모노레포 서비스 간 동기 HTTP 호출(Java WebClient/RestTemplate)에서 대상 서비스 논리명만 추출.
-    // 정확한 엔드포인트 경로는 이 규칙(서비스 호출 체인 깊이)에 불필요해 서비스명만 뽑는다 — 메서드 체이닝이
-    // 여러 줄에 걸쳐도(.get()\n.uri(...)) 안전하게 매칭되도록 uri()/RestTemplate 메서드 자체만 앵커로 쓴다.
-    // 1차 스코프: Java/Kotlin만, FeignClient(인터페이스 선언+DI)·타 언어는 후속(decisions/DECISIONS_ANALYSIS.md 참조).
+    // 모노레포 서비스 간 동기 HTTP 호출에서 대상 서비스 논리명만 추출(Java WebClient/RestTemplate,
+    // Python requests, JS/TS axios). 정확한 엔드포인트 경로는 이 규칙(서비스 호출 체인 깊이)에 불필요해
+    // 서비스명만 뽑는다 — 메서드 체이닝이 여러 줄에 걸쳐도(.get()\n.uri(...)) 안전하게 매칭되도록
+    // uri()/RestTemplate 메서드 자체만 앵커로 쓴다. host(서비스명)가 리터럴로 직접 나타나는 컨벤션에만
+    // 의존 — path에 변수가 섞여도(JS 템플릿 리터럴 `${id}`, Python f-string `{id}`) host 앞부분(`http://서비스명`)이
+    // 리터럴이면 매칭. host 자체가 변수 조합(`http://{service}/...`)인 경우는 후속 스코프
+    // (decisions/DECISIONS_ANALYSIS.md 참조), FeignClient는 별도 필드(feignClientTarget)로 처리.
     private List<String> extractServiceCalls(String content, String language) {
-        if (!language.equals("Java") && !language.equals("Kotlin")) return List.of();
-        Pattern p = Pattern.compile(
-            "\\.(?:uri|getForObject|getForEntity|postForObject|postForEntity|put|delete|exchange)\\s*"
-                + "\\(\\s*[\"']http://([a-zA-Z0-9_-]+)"
-        );
+        Pattern p;
+        if (language.equals("Java") || language.equals("Kotlin")) {
+            p = Pattern.compile(
+                "\\.(?:uri|getForObject|getForEntity|postForObject|postForEntity|put|delete|exchange)\\s*"
+                    + "\\(\\s*[\"']http://([a-zA-Z0-9_-]+)"
+            );
+        } else if (language.equals("Python")) {
+            p = Pattern.compile(
+                "\\brequests\\.(?:get|post|put|delete|patch|head|options)\\s*\\(\\s*f?[\"']http://([a-zA-Z0-9_-]+)"
+            );
+        } else if (language.equals("JavaScript") || language.equals("TypeScript")) {
+            p = Pattern.compile(
+                "\\baxios\\.(?:get|post|put|delete|patch)\\s*\\(\\s*[`\"']http://([a-zA-Z0-9_-]+)"
+            );
+        } else {
+            return List.of();
+        }
         Matcher m = p.matcher(content);
         List<String> result = new ArrayList<>();
         while (m.find()) result.add(m.group(1));
