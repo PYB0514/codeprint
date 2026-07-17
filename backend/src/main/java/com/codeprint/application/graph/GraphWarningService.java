@@ -1403,10 +1403,11 @@ public class GraphWarningService {
         }
 
         List<Map<String, Object>> warnings = new ArrayList<>();
-        // 같은 (from모듈,to모듈,소스파일,타깃파일) 위반의 중복 엣지를 한 경고로 합침
+        // 같은 (엣지타입,from모듈,to모듈,소스파일,타깃파일) 위반의 중복 엣지를 한 경고로 합침
         Set<String> seen = new HashSet<>();
         for (Edge e : edges) {
-            if (e.getType() != EdgeType.IMPORT) continue;
+            // IMPORT(의존 선언)·FUNCTION_CALL(직접 호출)만 "모듈 간 의존" 의미가 있어 검사 대상
+            if (e.getType() != EdgeType.IMPORT && e.getType() != EdgeType.FUNCTION_CALL) continue;
             String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
             String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
             if (srcPath.isEmpty() || tgtPath.isEmpty()) continue;
@@ -1414,18 +1415,19 @@ public class GraphWarningService {
             String srcModule = intent.moduleOf(srcPath);
             String tgtModule = intent.moduleOf(tgtPath);
             if (srcModule == null || tgtModule == null || srcModule.equals(tgtModule)) continue;
-            if (!intent.isForbidden(srcModule, tgtModule)) continue;
+            if (!intent.isForbidden(srcModule, tgtModule, e.getType())) continue;
 
-            String key = srcModule + ">" + tgtModule + ">" + srcPath + ">" + tgtPath;
+            String key = e.getType() + ">" + srcModule + ">" + tgtModule + ">" + srcPath + ">" + tgtPath;
             if (!seen.add(key)) continue;
 
+            String verb = e.getType() == EdgeType.FUNCTION_CALL ? "직접 호출" : "의존";
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "INTENT_DRIFT");
             w.put("severity", "HIGH");
             w.put("nodeIds", List.of(e.getSourceNodeId().toString(), e.getTargetNodeId().toString()));
             w.put("edgeIds", List.of(e.getId().toString()));
             w.put("message", "의도 위반: 모듈 '" + srcModule + "' → '" + tgtModule
-                    + "' 의존 금지 (" + fileName(srcPath) + " → " + fileName(tgtPath)
+                    + "' " + verb + " 금지 (" + fileName(srcPath) + " → " + fileName(tgtPath)
                     + "). 수정: 의존을 제거하거나(port/adapter 역전 등) 선언한 아키텍처 규칙을 갱신하세요.");
             warnings.add(w);
         }

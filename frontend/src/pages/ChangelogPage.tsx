@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.147.0',
+    date: '2026-07-18',
+    title: '아키텍처 의도 규칙 — 직접 호출 금지 지원',
+    type: 'feature',
+    items: [
+      { category: '아키텍처 의도', desc: '금지 의존 규칙이 이제 import뿐 아니라 "직접 호출" 금지도 선언할 수 있습니다. 규칙마다 import/직접 호출 중 하나를 선택하세요.' },
+    ],
+  },
+  {
     version: 'v0.146.0',
     date: '2026-07-18',
     title: '아키텍처 의도 규칙 — LLM으로 만들기 지원',

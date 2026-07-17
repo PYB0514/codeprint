@@ -88,6 +88,29 @@ class ArchitectureIntentTest {
     }
 
     @Test
+    @DisplayName("isForbidden(edgeType) — 규칙의 엣지 타입과 일치해야 매칭")
+    void isForbidden_edgeTypeSpecific() {
+        ArchitectureIntent intent = new ArchitectureIntent(
+                List.of(new Module("domain", List.of("**/domain/**")), new Module("app", List.of("**/application/**"))),
+                List.of(new DependencyRule("domain", "app", "FUNCTION_CALL")));
+
+        assertThat(intent.isForbidden("domain", "app", EdgeType.FUNCTION_CALL)).isTrue();
+        assertThat(intent.isForbidden("domain", "app", EdgeType.IMPORT)).isFalse();
+        // 2-arg 오버로드는 IMPORT 기준 하위호환 — FUNCTION_CALL 전용 규칙엔 매칭 안 됨
+        assertThat(intent.isForbidden("domain", "app")).isFalse();
+    }
+
+    @Test
+    @DisplayName("effectiveEdgeType — 미지정·빈값·알 수 없는 값은 IMPORT로 안전 폴백")
+    void effectiveEdgeType_fallsBackToImport() {
+        assertThat(new DependencyRule("a", "b").effectiveEdgeType()).isEqualTo(EdgeType.IMPORT);
+        assertThat(new DependencyRule("a", "b", null).effectiveEdgeType()).isEqualTo(EdgeType.IMPORT);
+        assertThat(new DependencyRule("a", "b", "").effectiveEdgeType()).isEqualTo(EdgeType.IMPORT);
+        assertThat(new DependencyRule("a", "b", "NOT_A_REAL_TYPE").effectiveEdgeType()).isEqualTo(EdgeType.IMPORT);
+        assertThat(new DependencyRule("a", "b", "FUNCTION_CALL").effectiveEdgeType()).isEqualTo(EdgeType.FUNCTION_CALL);
+    }
+
+    @Test
     @DisplayName("isEmpty — 모듈 또는 규칙이 비면 빈 의도")
     void isEmpty_guardsNullAndEmpty() {
         assertThat(new ArchitectureIntent(null, null).isEmpty()).isTrue();

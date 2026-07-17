@@ -29,7 +29,8 @@ public final class BenchIntentLoader {
             }
             List<ArchitectureIntent.DependencyRule> rules = new ArrayList<>();
             for (JsonNode r : root.path("rules")) {
-                rules.add(new ArchitectureIntent.DependencyRule(r.path("from").asText(), r.path("to").asText()));
+                rules.add(new ArchitectureIntent.DependencyRule(
+                        r.path("from").asText(), r.path("to").asText(), r.path("edgeType").asText(null)));
             }
             List<ArchitectureIntent.IgnoreRule> ignores = new ArrayList<>();
             for (JsonNode g : root.path("ignore")) {

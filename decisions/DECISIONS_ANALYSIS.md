@@ -2020,3 +2020,15 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **결론 — 이번 세션엔 구현 안 함.** 사용자 지시대로 조사·기록까지만 진행, 착수는 다음 세션 이후로 보류. 착수 시 권장 순서: `docker-compose.yml`(`environment:` 블록) 파싱 → `ENV_VAR_NAME → 리터럴 URL` 맵 구성 → `process.env.X`/`os.environ['X']` 참조를 그 맵으로 역해소. Spring `application.yml`+`@Value` 조인은 여전히 별도 후속(스코프 더 큼).
 
 **검증.** 코드 읽기·웹 조사만 수행, 프로덕션 코드 변경 없음.
+
+## INTENT_DRIFT — FUNCTION_CALL 엣지 타입 지원 확장 (2026-07-18, codeprint_137)
+
+**배경.** 커스텀 게이트 규칙(LLM으로 만들기, `decisions/DECISIONS_FRONTEND.md` 참조) 작업 중 `detectIntentDrift`가 `EdgeType.IMPORT`만 하드코딩 검사하는 제약을 발견 — 사용자가 "A 모듈이 B 모듈을 직접 호출하면 안 된다"(FUNCTION_CALL 기준)를 선언할 방법이 없었다. PROGRESS.md에 남겨둔 "남은 후속" 항목을 이어서 착수.
+
+**설계.** `ArchitectureIntent.DependencyRule(from, to)` → `DependencyRule(from, to, edgeType)`로 확장 — `edgeType`은 `"IMPORT"`/`"FUNCTION_CALL"` 또는 null/빈 문자열(미지정 시 `effectiveEdgeType()`이 IMPORT로 안전 폴백, 알 수 없는 값도 예외 없이 IMPORT 폴백해 `detect()` 메인 경로가 절대 죽지 않게 방어). 2-arg 생성자는 하위호환용으로 유지. `isForbidden(from, to, edgeType)` 3-arg 오버로드 신설, 기존 2-arg는 IMPORT 기준으로 위임. `detectIntentDrift`는 이제 IMPORT·FUNCTION_CALL 두 엣지 타입을 순회하며 규칙별 `effectiveEdgeType()`과 매칭 — DB_READ/WRITE·API_CALL·SERVICE_CALL 등 다른 엣지 타입은 "모듈 간 의존" 의미가 약해 스코프 밖으로 유지(과확장 방지).
+
+**저장 포맷.** `architecture_intents.intent_json`이 TEXT 컬럼(수동 JsonNode 파싱, Jackson POJO 바인딩 아님)이라 DB 마이그레이션 불필요 — `edgeType` 필드를 파싱·직렬화하는 3곳(`ArchitectureIntentService`·`LocalAnalyzer`·`BenchIntentLoader`)만 동형으로 갱신. 기존에 edgeType 없이 저장된 레코드는 파싱 시 `edgeType=null`이 되어 그대로 IMPORT로 동작 — 회귀 없음.
+
+**보안.** 컨트롤러 `saveIntent`에 `edgeType`이 `IMPORT`/`FUNCTION_CALL`/빈값 외의 값이면 400 Bad Request를 반환하는 검증을 추가(CLAUDE.md 규칙2 "외부 입력값 검증"). `effectiveEdgeType()`의 방어적 폴백과 별개 계층 — 하나는 사용자에게 즉시 피드백(API 경계), 하나는 어떤 경로로든 잘못된 데이터가 들어와도 전체 경고 탐지가 죽지 않게 하는 안전망(런타임 방어).
+
+**검증.** `ArchitectureIntentTest` 2건 신규(`isForbidden_edgeTypeSpecific`·`effectiveEdgeType_fallsBackToImport`) + `GraphWarningServiceTest` 2건 신규(명시적 FUNCTION_CALL 규칙이 FUNCTION_CALL 엣지에서 발화·IMPORT 엣지에는 발화 안 함, 타입 특정성 확인) — 기존 `intentDrift_functionCallNotImport_silent`(포트/어댑터 해소 FUNCTION_CALL이 IMPORT 전용 규칙엔 안 걸림)도 그대로 green(엣지 타입 매칭이 암묵적으로 이미 이 보장을 포함). 백엔드 전체 1026개 테스트(Docker Postgres 기동) green, `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변. 프론트는 `npx tsc -b` + GitHub 로그인 상태 실측 — LLM으로 만들기에서 `edgeType: "FUNCTION_CALL"` JSON 가져오기 → 규칙 행의 드롭다운이 "직접 호출"로 정확히 선택됨을 확인.
