@@ -1913,3 +1913,15 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **판단 — 조사만 완료, 착수는 보류.** ①(shared DB)은 값싸고 스코프가 명확하지만, ②(호출 체인)는 신규 분석기가 필요해 원래 백로그가 암시한 규모보다 훨씬 크다 — 이 프로젝트 전례(헥사고날 스코프 조사 등)와 마찬가지로 스코프가 예상과 달라지는 발견 자체는 사용자 판단이 필요한 지점이라 임의로 착수하지 않는다. PROGRESS.md에 이 조사 결과를 반영.
 
 **검증.** 코드 읽기·분석만 수행, 프로덕션 코드 변경 없음.
+
+## 공통게이트 승격(#597) 실측 벤치마킹 — buckpal 대상 오탐 0건 확인 (2026-07-17, codeprint_135)
+
+**배경.** #597에서 `DOMAIN_IMPORTS_INFRA`·`INTERFACES_IMPORTS_INFRA`를 정책 무관 항상 실행되는 공통 게이트로 승격한 뒤, 사용자가 "다음 진행하되 정하기 애매하면 벤치마킹도 좋다"고 제안 — MSA 스코프처럼 사용자 판단이 필요한 새 착수 항목이 마땅치 않아, 방금 바꾼 규칙을 실제 레퍼런스 헥사고날 코드로 검증하는 쪽을 택했다.
+
+**방법.** `thombergs/buckpal`(이 프로젝트가 과거 `detectCrossDomainFunctionCall` 정밀도 튜닝에도 실측 근거로 썼던 레퍼런스 헥사고날 레포, 코드 주석 "buckpal 16건" 참조)을 로컬에 clone, `git worktree` R층 실측과 동일한 방식으로 `./gradlew analyzeLocal -PanalysisDir=<clone>/src/main/java` 실행 — DB·서버 기동 없이 순수 정적 분석만.
+
+**구조 확인.** `application/domain/{model,service}`·`application/port/{in,out}`·`adapter/{in/web, out/persistence}` — 교과서적인 Ports & Adapters 레이아웃. `domain/`이 `application/` 아래 중첩된 형태라 `DOMAIN_LAYER_DIRS`(domain 별칭)·`INFRA_LAYER_DIRS`(adapter·persistence 별칭) 둘 다 실제로 매치되는, 승격한 두 규칙이 시험받기에 적합한 구조.
+
+**결과.** 31개 소스 파일, 노드 84·엣지 147 — **17종 규칙 전부 위반 0건**(`DOMAIN_IMPORTS_INFRA`·`INTERFACES_IMPORTS_INFRA` 포함). buckpal 자체가 "도메인이 어댑터를 모른다"를 시범 보이는 교과서 레포라 실제로 이 위반이 없어야 정상 — 승격된 공통 게이트가 정상 레퍼런스 코드에 오탐을 만들지 않는다는 걸 확인.
+
+**한계.** `LocalAnalyzer`(analyzeLocal 진입점)는 `detect(nodes, edges)`(GatePolicy 인자 없음, 항상 AUTO)만 노출해 "LAYERED 강제 선언 시에도 공통 게이트가 계속 잡는다"는 #597의 핵심 개선(사각지대 해소)은 이 경로로 재현 못 함 — 그건 이미 `GraphWarningServiceTest`(`detect_layeredPolicyForced_stillAppliesUniversalDependencyRule`)가 코드 레벨 assertion으로 커버 중. 이번 실측은 "정책 무관 승격이 정상 코드에 새 오탐을 안 만드는가"만 확인하는 보완적 검증.
