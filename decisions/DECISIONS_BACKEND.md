@@ -2048,3 +2048,16 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `GraphWarningServiceTest` 기존 4건을 enum으로 갱신 + LAYERED 강제(DDD 감지 프로젝트에 LAYERED 강제 적용, `detectActiveTheme`·`detect` 양쪽) 신규 2건 추가, `GraphQueryServiceTest` mock 시그니처 갱신. 전체 백엔드 테스트 green, `compileJava`/`tsc -b` 에러 0, `analyzeLocal` 자가검사 베이스라인 불변(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1, 신규 위반 0 — Shared Kernel 배치가 CROSS_CONTEXT_IMPORT를 실제로 피했음을 재확인). **API 실측**(로그인 세션 없이 검증 — 야간 자율 진행 중이라 GitHub OAuth 대화형 로그인을 요구할 수 없어, 로컬 전용 `DevController.getTestToken()`으로 발급한 더미 유저 JWT + 기존 도그푸딩 프로젝트(codeprint 자기 레포·bench-petclinic)의 `user_id`를 더미 유저로 임시 재할당 후 curl 왕복, 검증 직후 원 소유자로 즉시 복원): codeprint(AUTO/DDD, dddDetected=true) → LAYERED 강제 → theme LAYERED·selfDeclared true 확인 → AUTO 복귀 → theme DDD로 정확히 되돌아옴. bench-petclinic(AUTO/LAYERED, dddDetected=false) → DDD 강제 → theme DDD·selfDeclared true 확인 → AUTO 복귀 정상. `{}` 바디(policy 없음) → 400 확인(`@NotNull` 검증 동작).
 
 **한계·다음.** 프론트 세그먼트 컨트롤의 실제 클릭 상호작용(시각적 렌더링·배지 전환 애니메이션 등)은 브라우저 대화형 로그인이 필요해 이번 세션에서 클릭 검증하지 못함 — API 레벨 왕복은 전부 확인됐고 `tsc -b` 타입체크도 통과했지만, 다음 로그인 세션에서 실제 클릭 스모크 테스트 권장. `범용`(둘 다 끔) 4번째 옵션과 규칙 신뢰도(HIGH/MEDIUM) 배지 표시는 Context133이 이미 스코프 밖으로 명시 — 이번에도 착수 안 함.
+
+## PR 게이트 리컨실리에이션 — error 상태 PR도 재시도 대상에 포함 (2026-07-17, codeprint_135)
+
+**배경.** `GATE_GAPS.md` [G-6](HikariCP 유휴 커넥션 재사용 시 EOFException)이 같은 세션에서 2회 재발(PR #597·#600) — 원인 자체(HikariCP 튜닝)는 비용 vs 신뢰성 트레이드오프라 사용자 판단이 필요하지만, G-6 기록에 이미 "결정 없이 착수 가능"으로 표시해뒀던 방안(reconcile 대상을 error 상태 PR까지 넓히기)이 있어 그것부터 구현.
+
+**문제.** `PrGateReconciliationService`(G-5 안전망)는 `GitHubApiClient.hasStructureCommitStatus()`(boolean)로 "commit status가 아예 없는 PR"만 재트리거 대상으로 삼았다. G-4의 재발방지(비동기 작업 실패 시 명시적 `error` status 게시)가 실전에서 작동하면, 오히려 그 `error` status의 "존재"가 reconcile을 막아버리는 역설이 생긴다 — PR #597이 정확히 이 경로로, 사람이 close→reopen으로 수동 우회해야 했다.
+
+**결정.** `hasStructureCommitStatus`(boolean)를 `structureCommitStatusState`(String, success/failure/error/null)로 교체 — `codeprint/structure` context의 최신 상태값 자체를 반환하도록 바꿨다. `PrGateReconciliationService`는 `success`/`failure`(정상 완료된 분석 결과)만 재시도에서 제외하고, `null`(G-5, 상태 없음)과 `error`(G-6, 비동기 작업이 인프라 오류로 죽음) 둘 다 재트리거 대상으로 삼는다.
+- **탈락한 대안**: `hasContext`를 `contextState`로 구현해 재사용하려 했으나, 기존 `hasContext_found` 테스트 픽스처가 `state` 필드 없이 `context`만 있는 케이스였다 — `contextState() != null`로 재정의하면 "context는 있는데 state가 없는" 경우를 false로 오판정해 기존 계약(순수 context 존재 여부)을 깨뜨림. `hasContext`는 프로덕션에서 더 이상 호출되지 않아(내 변경으로 unused) 재사용 대신 제거하고, `contextState` 전용 테스트로 교체.
+
+**검증.** `PrGateReconciliationServiceTest`에 신규 케이스(`reconcile_errorStatus_triggersReview`) + 기존 `reconcile_hasStatus_skipped`를 `reconcile_terminalStatus_skipped`(success/failure 둘 다 검증)로 확장, `GitHubApiClientTest`의 `hasContext_*` 3건을 `contextState_*` 3건으로 교체. 전체 백엔드 테스트 995개 green, `analyzeLocal` 자가검사 베이스라인 불변(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1).
+
+**한계.** HikariCP 커넥션 불안정 자체(근본 원인)는 여전히 미해결 — 이건 매 웹훅마다 최초 1회는 계속 실패한다는 뜻이고, 이번 변경은 "실패를 최대 1시간 내 자동 복구"로 완화할 뿐이다. 즉시 머지가 급한 경우엔 여전히 close→reopen 수동 우회가 더 빠르다.

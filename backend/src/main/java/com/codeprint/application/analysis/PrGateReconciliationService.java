@@ -1,4 +1,6 @@
-// G-5 웹훅 유실 안전망 — 연결된 프로젝트의 열린 PR 중 codeprint/structure 상태가 없는 것을 찾아 리뷰를 재트리거
+// G-5·G-6 웹훅 유실 안전망 — 연결된 프로젝트의 열린 PR 중 codeprint/structure 상태가 없거나(G-5) error로
+// 게시된(G-6, 비동기 분석 자체가 인프라 오류로 죽음) 것을 찾아 리뷰를 재트리거. success/failure는 정상 완료된
+// 분석 결과라 재시도 대상에서 제외(2026-07-17, GATE_GAPS.md [G-6] 재발 확인 2회차 이후 확장).
 package com.codeprint.application.analysis;
 
 import com.codeprint.infrastructure.github.GitHubApiClient;
@@ -45,8 +47,12 @@ public class PrGateReconciliationService {
             int triggered = 0;
             for (var pr : gitHubApiClient.fetchOpenPullRequests(project.repoUrl(), project.githubToken())) {
                 if (!withinReconcileWindow(pr.updatedAt(), now)) continue;
-                if (gitHubApiClient.hasStructureCommitStatus(project.repoUrl(), pr.headSha(), project.githubToken())) continue;
-                log.info("G-5 리컨실리에이션 — 유실 감지, 리뷰 재트리거: repo={}, pr={}", project.repoUrl(), pr.number());
+                String state = gitHubApiClient.structureCommitStatusState(project.repoUrl(), pr.headSha(), project.githubToken());
+                // success/failure = 정상 완료된 분석 결과, 재시도 대상 아님. null(상태 없음, G-5)·error(분석 자체가
+                // 인프라 오류로 죽음, G-6) 둘 다 유실이라 재트리거.
+                if ("success".equals(state) || "failure".equals(state)) continue;
+                log.info("G-5/G-6 리컨실리에이션 — 유실 감지(state={}), 리뷰 재트리거: repo={}, pr={}",
+                        state, project.repoUrl(), pr.number());
                 prReviewRunner.reviewAsync(project.projectId(), pr.number(), project.ownerId(), project.githubToken());
                 triggered++;
             }

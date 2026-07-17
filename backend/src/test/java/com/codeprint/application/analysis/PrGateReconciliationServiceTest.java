@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -56,7 +57,7 @@ class PrGateReconciliationServiceTest {
     }
 
     @Test
-    @DisplayName("codeprint/structure 상태가 없는 시간창 내 PR만 재트리거한다")
+    @DisplayName("codeprint/structure 상태가 없는 시간창 내 PR만 재트리거한다 (G-5)")
     void reconcile_missingStatus_triggersReview() {
         setUp();
         UUID projectId = UUID.randomUUID();
@@ -65,7 +66,7 @@ class PrGateReconciliationServiceTest {
         when(analysisFacade.listPrGateConnectedProjects()).thenReturn(List.of(project));
         when(gitHubApiClient.fetchOpenPullRequests("https://github.com/o/r", "tok")).thenReturn(List.of(
                 new GitHubApiClient.OpenPullRequest(7, "sha7", Instant.now().minusSeconds(3600))));
-        when(gitHubApiClient.hasStructureCommitStatus("https://github.com/o/r", "sha7", "tok")).thenReturn(false);
+        when(gitHubApiClient.structureCommitStatusState("https://github.com/o/r", "sha7", "tok")).thenReturn(null);
 
         int triggered = service.reconcile();
 
@@ -74,14 +75,34 @@ class PrGateReconciliationServiceTest {
     }
 
     @Test
-    @DisplayName("codeprint/structure 상태가 이미 있으면 재트리거하지 않는다")
-    void reconcile_hasStatus_skipped() {
+    @DisplayName("codeprint/structure 상태가 error면 재트리거한다 (G-6 — 분석 자체가 인프라 오류로 죽은 경우)")
+    void reconcile_errorStatus_triggersReview() {
+        setUp();
+        UUID projectId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        var project = new PrGateConnectedProject(projectId, ownerId, "https://github.com/o/r", "tok");
+        when(analysisFacade.listPrGateConnectedProjects()).thenReturn(List.of(project));
+        when(gitHubApiClient.fetchOpenPullRequests("https://github.com/o/r", "tok")).thenReturn(List.of(
+                new GitHubApiClient.OpenPullRequest(9, "sha9", Instant.now().minusSeconds(3600))));
+        when(gitHubApiClient.structureCommitStatusState("https://github.com/o/r", "sha9", "tok")).thenReturn("error");
+
+        int triggered = service.reconcile();
+
+        assertThat(triggered).isEqualTo(1);
+        verify(prReviewRunner).reviewAsync(projectId, 9, ownerId, "tok");
+    }
+
+    @Test
+    @DisplayName("codeprint/structure 상태가 success/failure(정상 완료)면 재트리거하지 않는다")
+    void reconcile_terminalStatus_skipped() {
         setUp();
         var project = new PrGateConnectedProject(UUID.randomUUID(), UUID.randomUUID(), "https://github.com/o/r", "tok");
         when(analysisFacade.listPrGateConnectedProjects()).thenReturn(List.of(project));
         when(gitHubApiClient.fetchOpenPullRequests(anyString(), anyString())).thenReturn(List.of(
-                new GitHubApiClient.OpenPullRequest(1, "sha1", Instant.now().minusSeconds(3600))));
-        when(gitHubApiClient.hasStructureCommitStatus(anyString(), anyString(), anyString())).thenReturn(true);
+                new GitHubApiClient.OpenPullRequest(1, "sha1", Instant.now().minusSeconds(3600)),
+                new GitHubApiClient.OpenPullRequest(2, "sha2", Instant.now().minusSeconds(3600))));
+        when(gitHubApiClient.structureCommitStatusState(anyString(), eq("sha1"), anyString())).thenReturn("success");
+        when(gitHubApiClient.structureCommitStatusState(anyString(), eq("sha2"), anyString())).thenReturn("failure");
 
         int triggered = service.reconcile();
 
@@ -103,7 +124,7 @@ class PrGateReconciliationServiceTest {
         int triggered = service.reconcile();
 
         assertThat(triggered).isEqualTo(0);
-        verify(gitHubApiClient, never()).hasStructureCommitStatus(anyString(), anyString(), anyString());
+        verify(gitHubApiClient, never()).structureCommitStatusState(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -119,7 +140,7 @@ class PrGateReconciliationServiceTest {
                 .thenThrow(new RuntimeException("GitHub API 500"));
         when(gitHubApiClient.fetchOpenPullRequests("https://github.com/b/ok", "tok2")).thenReturn(List.of(
                 new GitHubApiClient.OpenPullRequest(3, "sha3", Instant.now().minusSeconds(3600))));
-        when(gitHubApiClient.hasStructureCommitStatus("https://github.com/b/ok", "sha3", "tok2")).thenReturn(false);
+        when(gitHubApiClient.structureCommitStatusState("https://github.com/b/ok", "sha3", "tok2")).thenReturn(null);
 
         int triggered = service.reconcile();
 

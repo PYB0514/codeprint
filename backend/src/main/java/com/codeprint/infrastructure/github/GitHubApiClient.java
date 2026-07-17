@@ -450,8 +450,8 @@ public class GitHubApiClient {
 
     public record OpenPullRequest(int number, String headSha, Instant updatedAt) {}
 
-    // 커밋의 combined status에 codeprint/structure 컨텍스트가 존재하는지 — 없으면 webhook이 도달 못 했다는 신호
-    public boolean hasStructureCommitStatus(String githubRepoUrl, String sha, String githubAccessToken) {
+    // 커밋의 combined status에서 codeprint/structure 컨텍스트의 최신 상태값을 조회 — null이면 webhook이 도달 못 했다는 신호
+    public String structureCommitStatusState(String githubRepoUrl, String sha, String githubAccessToken) {
         String ownerRepo = extractOwnerRepo(githubRepoUrl);
         String apiUrl = "https://api.github.com/repos/" + ownerRepo + "/commits/" + sha + "/status";
         try {
@@ -466,20 +466,23 @@ public class GitHubApiClient {
             if (response.statusCode() != 200) {
                 throw new RuntimeException("GitHub API " + response.statusCode() + " — " + response.body());
             }
-            return hasContext(objectMapper.readTree(response.body()).get("statuses"), "codeprint/structure");
+            return contextState(objectMapper.readTree(response.body()).get("statuses"), "codeprint/structure");
         } catch (Exception e) {
             throw new RuntimeException("GitHub commit status 조회 실패: " + ownerRepo + "@" + sha, e);
         }
     }
 
-    // statuses 배열에 주어진 context가 존재하는지 — 순수 함수(단위 테스트 대상)
-    static boolean hasContext(JsonNode statusesArray, String context) {
-        if (statusesArray == null || !statusesArray.isArray()) return false;
+    // statuses 배열에서 주어진 context의 최신 상태값(success/failure/error)을 반환 — 없으면 null. 순수 함수(단위 테스트 대상)
+    static String contextState(JsonNode statusesArray, String context) {
+        if (statusesArray == null || !statusesArray.isArray()) return null;
         for (JsonNode s : statusesArray) {
             JsonNode c = s.get("context");
-            if (c != null && context.equals(c.asText())) return true;
+            if (c != null && context.equals(c.asText())) {
+                JsonNode state = s.get("state");
+                return state != null ? state.asText() : null;
+            }
         }
-        return false;
+        return null;
     }
 
     // GitHub URL에서 owner/repo 경로를 추출
