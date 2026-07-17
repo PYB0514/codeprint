@@ -11,8 +11,13 @@ spring:
       # 트래픽이 적은 규모라 기본값(10)은 과함 — 유휴 커넥션을 줄여 상시 RAM 점유를 낮추고,
       # Railway Serverless(유휴 10분 기준 sleep)보다 짧게 반납해 sleep을 방해하지 않도록 함
       maximum-pool-size: 5
-      minimum-idle: 1
+      minimum-idle: 2
       idle-timeout: 300000
+      # GATE_GAPS.md [G-6] 재발방지: idle-timeout은 minimum-idle 이하로는 적용 안 돼(HikariCP 자체 동작) 최소
+      # 유지분은 계속 오래 살아있다가 Railway/Postgres 쪽에서 유휴 커넥션을 먼저 끊어버림(실측: 커넥션 생성 후
+      # 3분 30초 만에 "Failed to validate connection ... closed" 발생, PR #604 사건). max-lifetime을 그보다
+      # 짧게 둬 minimum-idle 유지분까지 포함해 항상 먼저 교체되도록 강제.
+      max-lifetime: 120000
 
   jpa:
     hibernate:
