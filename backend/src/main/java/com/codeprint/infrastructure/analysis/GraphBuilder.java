@@ -426,7 +426,11 @@ public class GraphBuilder {
             UUID tableNodeId = entityClassToTableNodeId.get(pf.repositoryEntityClass());
             if (repoFileId == null || tableNodeId == null) continue;
 
-            String fileBase = extractFileName(pf.filePath());
+            // 파일명만 쓰면 서로 다른 서비스가 동일 파일명(예: 여러 서비스의 CustomerRepository.java)을 쓸 때
+            // usedDbEdgeIds가 전역 Set이라 두 번째 서비스의 엣지가 조용히 드롭된다 — 전체 상대경로로 유일성 보장
+            // (2026-07-17, SHARED_DATABASE_ACCESS 벤치 픽스처 작성 중 발견. 같은 엔티티를 다루는 서비스일수록
+            // 파일명이 같아지기 쉬워 하필 이 룰이 가장 필요한 시나리오에서 recall이 깨지는 조합이었다).
+            String fileBase = pf.filePath();
 
             // 파일 단위 엣지 (기존 방식 유지 — 그래프 시각화)
             Set<EdgeType> fileCrudTypes = detectCrudTypes(pf.functions());

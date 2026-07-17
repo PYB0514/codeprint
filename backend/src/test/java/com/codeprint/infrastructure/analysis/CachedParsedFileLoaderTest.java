@@ -108,6 +108,14 @@ class CachedParsedFileLoaderTest {
         verify(analyzer, never()).analyze(eq(huge), any(), any());
     }
 
+    // ParsedFile 필드 수가 바뀌면 실패 — 이 값을 갱신할 때 반드시 ANALYZER_VERSION도 함께 올릴 것
+    // (B-16 재발: 필드만 추가하고 버전 미인상 시 구캐시가 신필드 null 역직렬화 → NPE, serviceCalls로 2회차 발생)
+    @Test
+    @DisplayName("ParsedFile 필드 수 변경 시 ANALYZER_VERSION 동반 증가를 상기시킨다")
+    void parsedFileFieldCount_tripwireForAnalyzerVersion() {
+        assertThat(ParsedFile.class.getRecordComponents()).hasSize(30);
+    }
+
     @TempDir
     Path repoDir;
 

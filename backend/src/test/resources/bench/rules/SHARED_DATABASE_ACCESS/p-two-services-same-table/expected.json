@@ -1,0 +1,5 @@
+{
+  "warnings": [
+    { "type": "SHARED_DATABASE_ACCESS", "count": 1 }
+  ]
+}

@@ -28,7 +28,10 @@ public class CachedParsedFileLoader {
     // v3(2026-07-10): 스키마는 그대로지만 controllerMappingFunctions의 "출력 의미"가 바뀜(JS/TS·Python·Go
     // 처리 함수 해소 로직 추가) — 미인상 시 기존에 캐시된 파일은 여전히 구로직 결과(빈 맵)를 반환해 새 코드가
     // 아예 실행되지 않는 채로 조용히 무효화됨(B-16과 같은 부류, 이번엔 역직렬화 실패가 아니라 스테일 값).
-    static final int ANALYZER_VERSION = 3;
+    // v4(2026-07-17): ParsedFile에 serviceCalls 필드 추가(PR #603, SERVICE_CALL_CHAIN) — 미인상 시 구캐시가
+    // 신필드를 null로 역직렬화해 GraphBuilder.build()가 NPE로 죽음(B-16과 동일 원인 2회차, exploreLocal
+    // 자가분석 중 발견). CachedParsedFileLoaderTest의 필드 수 트립와이어 테스트로 재발 감지.
+    static final int ANALYZER_VERSION = 4;
     private static final Duration CACHE_TTL = Duration.ofDays(30);
     // 미니파이드 번들·생성 파일 등 비정상적으로 큰 파일이 파싱 파이프라인 메모리를 잡아먹는 것 방지 — 이 이상은 분석 제외
     static final long MAX_FILE_SIZE_BYTES = 2L * 1024 * 1024;

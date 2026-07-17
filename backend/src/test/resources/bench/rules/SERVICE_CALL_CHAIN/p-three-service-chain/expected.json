@@ -1,0 +1,5 @@
+{
+  "warnings": [
+    { "type": "SERVICE_CALL_CHAIN", "count": 1 }
+  ]
+}
