@@ -586,4 +586,10 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 
 **검토한 대안.** ①마이그레이션 전용 별도 계정(더 높은 권한) + 런타임 전용 별도 계정(CRUD만, DDL 없음) 이원화 — 기각. "이론적으로 더 정확한 최소권한"이지만 Spring 설정에 데이터소스 2개 배선이 필요해지는 구조 변경이라 이 프로젝트 규모(1인 개발, 트래픽 적음)엔 과설계(SECURITY_REVIEW.md가 이미 ABAC·Queue 등 여러 항목에서 채택한 "지금 규모엔 과설계" 판단 기준과 동일). ②`postgres` 계정 자체를 삭제하거나 비밀번호 변경 — 기각, 롤백 안전판을 잃는 데다 이번 조사에서 다른 자동화(백업 등)가 `postgres`를 참조하는지 완전히 확인 못 했으므로 더 보수적으로 접근.
 
-**남은 것(후속 후보, 이번 범위 밖).** DB 백업(`BACKUP_DATABASE_URL`)도 같은 슈퍼유저를 쓰는지 확인 후 읽기 전용 역할로 축소 — 스케줄 잡이라 급하지 않음, 다음 세션 후보.
+**남은 것 — 같은 세션에서 즉시 후속 완료(2026-07-17).** DB 백업(`BACKUP_DATABASE_URL`)이 실제로 어느 계정을 쓰는지는 GitHub Secret이 write-only라 값을 직접 확인할 수 없었다(`pg_stat_activity`로 접속 순간을 두 번 잡으려 시도했으나 접속 창이 너무 짧아 실패). 현재 값이 무엇이든 상관없이 개선되도록 접근 전환 — **순수 읽기 전용 백업 전용 역할 신설**로 우회.
+1. `CREATE ROLE codeprint_backup WITH LOGIN PASSWORD '...' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;` + `GRANT USAGE ON SCHEMA public TO codeprint_backup;` + `GRANT SELECT ON ALL TABLES IN SCHEMA public TO codeprint_backup;`(INSERT/UPDATE/DELETE/CREATE 전부 없음 — 백업은 읽기만 하면 됨).
+2. 실측: `codeprint_backup`으로 SELECT 성공, `INSERT`는 `permission denied for table users`로 정상 거부. `pg_dump`(버전 일치 확인차 `postgres:18` 이미지 사용, 로컬 `postgres:16` 이미지로는 서버(18.4)와 클라이언트 버전 불일치로 실패했던 것과 구분) 46만 줄 덤프 성공.
+3. `gh secret set BACKUP_DATABASE_URL`로 교체. **실수 1건 발생·즉시 수정**: 처음에 Railway 내부망 호스트(`postgres.railway.internal`)로 설정했다가, GitHub Actions 러너는 Railway 사설망 밖이라 접속 불가능함을 깨닫고 공개 프록시 호스트(`metro.proxy.rlwy.net:37491`, 지금까지 로컬 검증에 계속 썼던 것과 동일)로 즉시 정정 — 이 실수를 안 잡았으면 다음날 예약 백업이 조용히 실패했을 것.
+4. `gh workflow run db-backup.yml`로 실제 워크플로 2회(정정 전 1회는 미실행 상태로 확인 안 함, 정정 후 1회 실행) 트리거해 실측 — `pg_dump` 성공 + S3 업로드 성공(`s3://codeprint-uploads/db-backups/codeprint-20260717T144251Z.sql.gz`, 25.1MiB) 확인.
+
+**교훈.** GitHub Secret은 write-only라 "지금 뭘 쓰고 있는지" 확인이 원천적으로 불가능한 경우, "확인 후 교체"가 아니라 "무조건 새로 발급해서 교체" 전략이 더 빠르고 확실하다 — 어차피 새 값이 기존보다 나쁠 수 없다면(이번엔 읽기 전용으로 범위를 더 좁혔으므로) 현재값 조사에 시간 쓸 필요가 없었다.
