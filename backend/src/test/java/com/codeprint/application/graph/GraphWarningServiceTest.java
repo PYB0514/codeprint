@@ -2283,4 +2283,65 @@ class GraphWarningServiceTest {
 
         assertThat(theme.msaActive()).isFalse();
     }
+
+    // ===== SERVICE_CALL_CHAIN (모노레포 MSA 서비스 간 동기 호출 체인, 2026-07-17) =====
+
+    private Edge serviceCallEdge(UUID src, UUID tgt) {
+        return Edge.create(graphId, src + "->svccall->" + tgt, EdgeType.SERVICE_CALL, src, tgt);
+    }
+
+    @Test
+    @DisplayName("SERVICE_CALL_CHAIN — 서비스 3개(2홉) 연쇄 호출이면 발화")
+    void serviceCallChain_threeServices_detected() {
+        Node gateway = fileNodeWithPath("ApiGateway", "api-gateway/src/ApiGateway.java");
+        Node customers = fileNodeWithPath("CustomersController", "customers-service/src/CustomersController.java");
+        Node visits = fileNodeWithPath("VisitsController", "visits-service/src/VisitsController.java");
+        Edge gatewayToCustomers = serviceCallEdge(gateway.getId(), customers.getId());
+        Edge customersToVisits = serviceCallEdge(customers.getId(), visits.getId());
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(gateway, customers, visits), List.of(gatewayToCustomers, customersToVisits));
+
+        List<Map<String, Object>> found = warnings.stream()
+                .filter(w -> "SERVICE_CALL_CHAIN".equals(w.get("type"))).toList();
+        assertThat(found).hasSize(1);
+        assertThat(found.get(0).get("severity")).isEqualTo("MEDIUM");
+    }
+
+    @Test
+    @DisplayName("precision: 서비스 2개(1홉)만 호출하면 SERVICE_CALL_CHAIN 미발화 (임계 미달)")
+    void serviceCallChain_singleHop_notFlagged() {
+        Node gateway = fileNodeWithPath("ApiGateway", "api-gateway/src/ApiGateway.java");
+        Node customers = fileNodeWithPath("CustomersController", "customers-service/src/CustomersController.java");
+        Edge gatewayToCustomers = serviceCallEdge(gateway.getId(), customers.getId());
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(gateway, customers), List.of(gatewayToCustomers));
+
+        assertThat(warnings.stream().filter(w -> "SERVICE_CALL_CHAIN".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("precision: SERVICE_CALL 엣지가 없으면 SERVICE_CALL_CHAIN 미발화")
+    void serviceCallChain_noEdges_notFlagged() {
+        List<Node> nodes = List.of(fileNodeWithPath("A", "src/domain/user/User.java"));
+
+        List<Map<String, Object>> warnings = service.detect(nodes, List.of());
+
+        assertThat(warnings.stream().filter(w -> "SERVICE_CALL_CHAIN".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("detectActiveTheme — SERVICE_CALL 엣지만 있어도(shared DB 없이) msaActive=true")
+    void detectActiveTheme_serviceCallOnly_msaActive() {
+        Node gateway = fileNodeWithPath("ApiGateway", "api-gateway/src/ApiGateway.java");
+        Node customers = fileNodeWithPath("CustomersController", "customers-service/src/CustomersController.java");
+        Edge gatewayToCustomers = serviceCallEdge(gateway.getId(), customers.getId());
+
+        var theme = service.detectActiveTheme(
+                List.of(gateway, customers), List.of(gatewayToCustomers), GatePolicy.AUTO);
+
+        assertThat(theme.msaActive()).isTrue();
+        assertThat(theme.msaRuleTypes()).contains("SERVICE_CALL_CHAIN");
+    }
 }

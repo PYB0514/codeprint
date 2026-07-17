@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.143.0',
+    date: '2026-07-17',
+    title: '모노레포 MSA 서비스 간 동기 호출 체인 감지',
+    type: 'feature',
+    items: [
+      { category: '게이트 테마', desc: '서비스 간 동기 호출(WebClient/RestTemplate)이 2홉 이상 연쇄되면 분산 모놀리스 신호로 감지됩니다(SERVICE_CALL_CHAIN). 1차 스코프는 Java/Kotlin의 WebClient·RestTemplate만이며, 단일 서비스 프로젝트에서는 발화하지 않습니다.' },
+    ],
+  },
+  {
     version: 'v0.142.0',
     date: '2026-07-17',
     title: '모노레포 MSA 공유 데이터베이스 안티패턴 감지',

@@ -124,6 +124,10 @@
       "SHARED_DATABASE_ACCESS": {
         "example": "Two different services (top-level directories) in a monorepo both read and write the same DB table — the shared-database MSA antipattern that breaks service autonomy.",
         "limitation": "Treats the top-level directory as the service unit (services/apps/packages wrappers use the next segment instead) — never fires for a single-service monolith, only active in monorepos where 2+ services actually access a DB table."
+      },
+      "SERVICE_CALL_CHAIN": {
+        "example": "A synchronous service-to-service call chain (WebClient/RestTemplate) of 2+ hops, e.g. api-gateway → customers-service → visits-service — a distributed-monolith signal (one request synchronously threading through multiple services).",
+        "limitation": "Phase-1 scope is Java/Kotlin WebClient and RestTemplate calls only (when the URL is an inline string literal) — FeignClient (interface declaration + DI) and other languages' HTTP clients aren't recognized yet, so real chains can be missed (a recall limitation)."
       }
     }
   },
@@ -639,7 +643,8 @@
       "LAYERED_REVERSE_DEPENDENCY": { "label": "Reversed Layer Dependency", "desc": "A lower layer (e.g. Repository) imports an upper layer (e.g. Controller) — the layer structure is inverted, making reuse and testing harder." },
       "LAYERED_BYPASS": { "label": "Service Layer Bypass", "desc": "Controller skips Service and calls Repository directly — business logic risks scattering into the Controller." },
       "INTENT_DRIFT": { "label": "Declared Structure Rule Violation", "desc": "An import that violates a prohibition rule you declared yourself in \"Architecture Intent\" — code that has drifted from the structure rules you set." },
-      "SHARED_DATABASE_ACCESS": { "label": "Shared Database Antipattern", "desc": "Different services in a monorepo access the same DB table — consolidate table ownership into one service and have others query it through an API." }
+      "SHARED_DATABASE_ACCESS": { "label": "Shared Database Antipattern", "desc": "Different services in a monorepo access the same DB table — consolidate table ownership into one service and have others query it through an API." },
+      "SERVICE_CALL_CHAIN": { "label": "Cross-Service Synchronous Call Chain", "desc": "Synchronous service-to-service calls (WebClient/RestTemplate) chain 2+ hops — a distributed-monolith signal. Break the middle of the chain with an async event, or move data composition to a gateway layer." }
     },
     "ignoreRulesTitle": "Ignore Rules",
     "noTypeLabel": "All Types",
