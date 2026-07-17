@@ -135,24 +135,25 @@ class GitHubApiClientTest {
     }
 
     @Test
-    @DisplayName("hasContext — 일치하는 context가 있으면 true")
-    void hasContext_found() {
-        JsonNode arr = parse("[{\"context\": \"other/check\"}, {\"context\": \"codeprint/structure\"}]");
+    @DisplayName("contextState — 일치하는 context가 있으면 그 state를 반환")
+    void contextState_found() {
+        JsonNode arr = parse("[{\"context\": \"other/check\", \"state\": \"success\"}, "
+                + "{\"context\": \"codeprint/structure\", \"state\": \"error\"}]");
 
-        assertThat(GitHubApiClient.hasContext(arr, "codeprint/structure")).isTrue();
+        assertThat(GitHubApiClient.contextState(arr, "codeprint/structure")).isEqualTo("error");
     }
 
     @Test
-    @DisplayName("hasContext — 일치하는 context가 없으면 false")
-    void hasContext_notFound() {
-        JsonNode arr = parse("[{\"context\": \"other/check\"}]");
+    @DisplayName("contextState — 일치하는 context가 없으면 null")
+    void contextState_notFound() {
+        JsonNode arr = parse("[{\"context\": \"other/check\", \"state\": \"success\"}]");
 
-        assertThat(GitHubApiClient.hasContext(arr, "codeprint/structure")).isFalse();
+        assertThat(GitHubApiClient.contextState(arr, "codeprint/structure")).isNull();
     }
 
     @Test
-    @DisplayName("hasContext — 배열이 null이면 false")
-    void hasContext_nullArray() {
-        assertThat(GitHubApiClient.hasContext(null, "codeprint/structure")).isFalse();
+    @DisplayName("contextState — 배열이 null이면 null")
+    void contextState_nullArray() {
+        assertThat(GitHubApiClient.contextState(null, "codeprint/structure")).isNull();
     }
 }
