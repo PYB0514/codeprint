@@ -177,8 +177,9 @@ public class StaticCodeAnalyzer {
         String extendedClass = extractExtendedClass(masked, language);
         List<String> transactionalMethods = extractTransactionalMethods(masked, language);
         List<String> interfaceMethods = extractInterfaceMethods(masked, language, functions);
+        List<String> serviceCalls = extractServiceCalls(masked, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions, transactionalMethods, functionLines, functionColumns, interfaceMethods);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions, transactionalMethods, functionLines, functionColumns, interfaceMethods, serviceCalls);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함
@@ -866,6 +867,22 @@ public class StaticCodeAnalyzer {
             result.add(method + ":" + path);
         }
         return result;
+    }
+
+    // 모노레포 서비스 간 동기 HTTP 호출(Java WebClient/RestTemplate)에서 대상 서비스 논리명만 추출.
+    // 정확한 엔드포인트 경로는 이 규칙(서비스 호출 체인 깊이)에 불필요해 서비스명만 뽑는다 — 메서드 체이닝이
+    // 여러 줄에 걸쳐도(.get()\n.uri(...)) 안전하게 매칭되도록 uri()/RestTemplate 메서드 자체만 앵커로 쓴다.
+    // 1차 스코프: Java/Kotlin만, FeignClient(인터페이스 선언+DI)·타 언어는 후속(decisions/DECISIONS_ANALYSIS.md 참조).
+    private List<String> extractServiceCalls(String content, String language) {
+        if (!language.equals("Java") && !language.equals("Kotlin")) return List.of();
+        Pattern p = Pattern.compile(
+            "\\.(?:uri|getForObject|getForEntity|postForObject|postForEntity|put|delete|exchange)\\s*"
+                + "\\(\\s*[\"']http://([a-zA-Z0-9_-]+)"
+        );
+        Matcher m = p.matcher(content);
+        List<String> result = new ArrayList<>();
+        while (m.find()) result.add(m.group(1));
+        return result.stream().distinct().toList();
     }
 
     // 언어별 API 엔드포인트 경로 목록 추출 (Spring/Express/FastAPI/Flask/Gin 지원)

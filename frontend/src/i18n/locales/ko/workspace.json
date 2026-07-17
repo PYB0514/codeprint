@@ -124,6 +124,10 @@
       "SHARED_DATABASE_ACCESS": {
         "example": "모노레포 안의 서로 다른 서비스(최상위 디렉터리) 2개가 같은 DB 테이블을 함께 읽고 씁니다 — 서비스 자율성이 깨진 MSA 안티패턴(shared database).",
         "limitation": "최상위 디렉터리를 서비스 단위로 간주(services/apps/packages 래퍼는 그 다음 세그먼트) — 단일 서비스 모놀리스에서는 발화하지 않고, 서비스 2개 이상이 실제 DB 테이블에 접근하는 모노레포에서만 활성화."
+      },
+      "SERVICE_CALL_CHAIN": {
+        "example": "api-gateway → customers-service → visits-service 처럼 서비스 간 동기 호출(WebClient/RestTemplate)이 2홉 이상 연쇄됩니다 — distributed monolith 신호(한 요청이 여러 서비스를 동기로 순차 경유).",
+        "limitation": "1차 스코프는 Java/Kotlin의 WebClient·RestTemplate 호출만(URL이 인라인 문자열일 때) — FeignClient(인터페이스 선언+DI)·타 언어의 HTTP 클라이언트는 아직 인식하지 못해 실제 체인을 놓칠 수 있습니다(recall 한계)."
       }
     }
   },
@@ -639,7 +643,8 @@
       "LAYERED_REVERSE_DEPENDENCY": { "label": "레이어 역전 의존", "desc": "아래 계층(Repository 등)이 위 계층(Controller 등)을 import합니다 — 계층 구조가 뒤집혀 재사용과 테스트가 어려워집니다." },
       "LAYERED_BYPASS": { "label": "Service 계층 건너뛰기", "desc": "Controller가 Service를 건너뛰고 Repository를 직접 호출합니다 — 비즈니스 로직이 Controller에 흩어질 위험이 있습니다." },
       "INTENT_DRIFT": { "label": "선언한 구조 규칙 위반", "desc": "\"아키텍처 의도\"에서 직접 선언한 금지 규칙을 어긴 import입니다 — 내가 정한 구조 규칙에서 벗어난 코드입니다." },
-      "SHARED_DATABASE_ACCESS": { "label": "공유 데이터베이스 안티패턴", "desc": "모노레포의 서로 다른 서비스가 같은 DB 테이블을 함께 접근합니다 — 테이블 소유권을 한 서비스로 모으고 다른 서비스는 API로 조회하세요." }
+      "SHARED_DATABASE_ACCESS": { "label": "공유 데이터베이스 안티패턴", "desc": "모노레포의 서로 다른 서비스가 같은 DB 테이블을 함께 접근합니다 — 테이블 소유권을 한 서비스로 모으고 다른 서비스는 API로 조회하세요." },
+      "SERVICE_CALL_CHAIN": { "label": "서비스 간 동기 호출 체인", "desc": "서비스 간 동기 호출(WebClient/RestTemplate)이 2홉 이상 연쇄됩니다 — 분산 모놀리스 신호입니다. 체인 중간을 비동기 이벤트로 끊거나 데이터 조합을 게이트웨이 레이어로 옮기세요." }
     },
     "ignoreRulesTitle": "예외 규칙",
     "noTypeLabel": "모든 타입",

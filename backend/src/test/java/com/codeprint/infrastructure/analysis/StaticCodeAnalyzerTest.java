@@ -958,6 +958,74 @@ class StaticCodeAnalyzerTest {
         assertThat(result.apiCalls()).contains("GET:/api/first", "DELETE:/api/second");
     }
 
+    // ── 서비스 간 호출(serviceCalls, 모노레포 MSA) ──────────────────────────
+
+    @Test
+    @DisplayName("WebClient.uri()의 http:// 호스트에서 대상 서비스 논리명을 추출한다")
+    void serviceCalls_webClient_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example.api;
+                public class CustomersServiceClient {
+                    public Mono<OwnerDetails> getOwner(int id) {
+                        return webClientBuilder.build().get()
+                            .uri("http://customers-service/owners/{id}", id)
+                            .retrieve()
+                            .bodyToMono(OwnerDetails.class);
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.serviceCalls()).contains("customers-service");
+    }
+
+    @Test
+    @DisplayName("RestTemplate.getForObject()의 http:// 호스트에서 대상 서비스 논리명을 추출한다")
+    void serviceCalls_restTemplate_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example.api;
+                public class OrderClient {
+                    public Order getOrder(String id) {
+                        return restTemplate.getForObject("http://order-service/orders/" + id, Order.class);
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.serviceCalls()).contains("order-service");
+    }
+
+    @Test
+    @DisplayName("로컬 경로(http:// 없음) 호출은 serviceCalls로 추출하지 않는다")
+    void serviceCalls_로컬_경로_제외() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example.api;
+                public class LocalClient {
+                    public void call() {
+                        webClientBuilder.build().get().uri("/local/path").retrieve();
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.serviceCalls()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("TypeScript는 serviceCalls를 추출하지 않는다(1차 스코프 Java/Kotlin만)")
+    void serviceCalls_TypeScript_스코프밖() throws IOException {
+        Path file = writeTsFile("""
+                export const call = () => fetch('http://customers-service/owners/1');
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.serviceCalls()).isEmpty();
+    }
+
     // ── DB 테이블 추출 ─────────────────────────────────────────────────────
 
     @Test

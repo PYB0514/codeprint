@@ -5,6 +5,7 @@ import com.codeprint.domain.graph.*;
 import com.codeprint.domain.graph.port.SnapshotReferencePort;
 import com.codeprint.domain.project.ProjectRepository;
 import com.codeprint.infrastructure.adapter.FeaturedProjectProvisioningAdapter;
+import com.codeprint.shared.topology.ServiceBoundary;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -617,6 +618,47 @@ public class GraphBuilder {
                 if (!usedApiCallEdgeIds.contains(edgeId)) {
                     usedApiCallEdgeIds.add(edgeId);
                     graphRepository.saveEdge(Edge.create(graphId, edgeId, EdgeType.API_CALL, frontFileId, controllerFileId));
+                }
+            }
+        }
+
+        // 모노레포 서비스 간 동기 호출(WebClient/RestTemplate) → SERVICE_CALL 엣지 생성 — 대상 서비스의
+        // 대표 파일(해당 서비스에서 처음 발견된 파일, parsedFiles 순회 순서가 결정론적이라 대표 선택도 결정론적)에 연결.
+        // 정확한 엔드포인트 매칭이 아니라 "서비스 A→B 호출 존재"만 필요해 대표 파일 하나로 충분(서비스 호출 체인 깊이 판정용).
+        Map<String, UUID> serviceRepresentativeFile = new java.util.LinkedHashMap<>();
+        for (ParsedFile pf : parsedFiles) {
+            String service = ServiceBoundary.serviceOf(pf.filePath());
+            if (service == null) continue;
+            UUID fileId = fileNodeIds.get(pf.filePath());
+            if (fileId == null) continue;
+            serviceRepresentativeFile.putIfAbsent(service, fileId);
+        }
+
+        Set<String> usedServiceCallEdgeIds = new HashSet<>();
+        for (ParsedFile pf : parsedFiles) {
+            if (pf.serviceCalls().isEmpty()) continue;
+            UUID callerFileId = fileNodeIds.get(pf.filePath());
+            if (callerFileId == null) continue;
+            String callerService = ServiceBoundary.serviceOf(pf.filePath());
+
+            for (String logicalService : pf.serviceCalls()) {
+                UUID targetFileId = null;
+                String targetServiceName = null;
+                for (Map.Entry<String, UUID> entry : serviceRepresentativeFile.entrySet()) {
+                    if (entry.getKey().toLowerCase().contains(logicalService.toLowerCase())) {
+                        targetFileId = entry.getValue();
+                        targetServiceName = entry.getKey();
+                        break;
+                    }
+                }
+                // 대상 서비스를 못 찾았거나(외부 API 등) 같은 서비스 자기 호출이면 제외
+                if (targetFileId == null || targetFileId.equals(callerFileId)) continue;
+                if (targetServiceName.equalsIgnoreCase(callerService)) continue;
+
+                String edgeId = extractFileName(pf.filePath()) + "-servicecall-" + targetServiceName;
+                if (!usedServiceCallEdgeIds.contains(edgeId)) {
+                    usedServiceCallEdgeIds.add(edgeId);
+                    graphRepository.saveEdge(Edge.create(graphId, edgeId, EdgeType.SERVICE_CALL, callerFileId, targetFileId));
                 }
             }
         }

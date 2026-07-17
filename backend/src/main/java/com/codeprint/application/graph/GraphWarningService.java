@@ -7,6 +7,7 @@ import com.codeprint.domain.graph.EdgeType;
 import com.codeprint.domain.graph.Node;
 import com.codeprint.domain.graph.NodeType;
 import com.codeprint.shared.gate.GatePolicy;
+import com.codeprint.shared.topology.ServiceBoundary;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -27,7 +28,7 @@ public class GraphWarningService {
     // 모노레포 MSA 서비스 경계 축 — DDD(바운디드 컨텍스트)·의존방향과 독립된 세 번째 축(2026-07-17,
     // decisions/DECISIONS_ANALYSIS.md "모노레포 MSA 신규 규칙군" 참조). featureSlice와 동일하게 자체 게이트로
     // 해당 구조(서비스 2개 이상이 DB 접근)일 때만 발화.
-    private static final List<String> MSA_RULE_TYPES = List.of("SHARED_DATABASE_ACCESS");
+    private static final List<String> MSA_RULE_TYPES = List.of("SHARED_DATABASE_ACCESS", "SERVICE_CALL_CHAIN");
     private static final List<String> UNIVERSAL_RULE_TYPES = List.of(
             "CYCLIC_IMPORT", "BROKEN_INTERFACE_CHAIN", "ASYNC_SELF_CALL", "MISSING_CONVERTER_MIGRATION",
             "MISSING_TRANSACTIONAL_DELETE", "DEAD_CODE", "HIGH_FAN_OUT",
@@ -74,6 +75,8 @@ public class GraphWarningService {
         warnings.addAll(detectFeatureLayerViolation(nodes, edges));
         // 모노레포 MSA shared database 안티패턴 — 자체 게이트(서비스 2개 이상이 DB 접근)로 해당 구조만 발화
         warnings.addAll(detectSharedDatabaseAccess(nodes, edges));
+        // 모노레포 MSA 서비스 간 동기 호출 체인 — 자체 게이트(SERVICE_CALL 엣지 존재)로 해당 구조만 발화
+        warnings.addAll(detectServiceCallChain(nodes, edges));
         // 사용자가 선언한 의도 아키텍처와 실제 의존을 대조 (컨벤션 무관 — 비-DDD 프로젝트도 적용)
         warnings.addAll(detectIntentDrift(nodes, edges, intent));
         // 노드 위치 조회용 인덱스 — 경고에 발생 파일 경로를 부여하기 위함
@@ -224,7 +227,7 @@ public class GraphWarningService {
     public ActiveTheme detectActiveTheme(List<Node> nodes, List<Edge> edges, GatePolicy gatePolicy) {
         boolean dddDetected = isDddProject(nodes);
         boolean featureSliceActive = isFeatureSliceProject(nodes);
-        boolean msaActive = hasMultiServiceDbAccess(nodes, edges);
+        boolean msaActive = hasMultiServiceDbAccess(nodes, edges) || hasServiceCallEdges(edges);
         boolean selfDeclared = gatePolicy != GatePolicy.AUTO;
         boolean useDdd = gatePolicy == GatePolicy.DDD || (gatePolicy == GatePolicy.AUTO && dddDetected);
         if (useDdd) {
@@ -268,9 +271,17 @@ public class GraphWarningService {
         for (Edge e : edges) {
             if (!DB_ACCESS_EDGE_TYPES.contains(e.getType())) continue;
             if (!dbTableNodeIds.contains(e.getTargetNodeId())) continue;
-            String service = serviceOf(nodeFilePaths.getOrDefault(e.getSourceNodeId(), ""));
+            String service = ServiceBoundary.serviceOf(nodeFilePaths.getOrDefault(e.getSourceNodeId(), ""));
             if (service != null) services.add(service);
             if (services.size() >= 2) return true;
+        }
+        return false;
+    }
+
+    // SERVICE_CALL 엣지가 하나라도 있는지 — detectServiceCallChain의 적용 여부만 판정(위반 계산 없이)
+    private boolean hasServiceCallEdges(List<Edge> edges) {
+        for (Edge e : edges) {
+            if (e.getType() == EdgeType.SERVICE_CALL) return true;
         }
         return false;
     }
@@ -1556,21 +1567,6 @@ public class GraphWarningService {
     // DB 테이블 접근 엣지 타입 — 서비스가 테이블을 "쓰고 있다"는 사실 판정에는 CRUD 세부 구분이 무의미해 하나로 묶는다.
     private static final Set<EdgeType> DB_ACCESS_EDGE_TYPES = EnumSet.of(
             EdgeType.DB_READ, EdgeType.DB_WRITE, EdgeType.DB_CREATE, EdgeType.DB_UPDATE, EdgeType.DB_DELETE);
-    // 모노레포 서비스 경계 판별용 래퍼 디렉터리 별칭 — services/apps/packages/modules 뒤 세그먼트를 서비스명으로,
-    // 없으면(예: spring-petclinic-microservices처럼 서비스가 바로 최상위인 레포) 첫 세그먼트를 그대로 서비스명으로 쓴다.
-    private static final Set<String> SERVICE_WRAPPER_DIRS = Set.of("services", "apps", "packages", "modules");
-
-    // 파일 경로에서 모노레포 서비스(최상위 디렉터리) 식별자를 추출 — 판별 불가(세그먼트 부족)면 null
-    private static String serviceOf(String filePath) {
-        if (filePath == null) return null;
-        String p = filePath.replace("\\", "/");
-        while (p.startsWith("/")) p = p.substring(1);
-        String[] segments = p.split("/");
-        if (segments.length < 2) return null;
-        int idx = SERVICE_WRAPPER_DIRS.contains(segments[0].toLowerCase()) ? 1 : 0;
-        if (idx >= segments.length - 1) return null;
-        return segments[idx];
-    }
 
     // 서로 다른 서비스(최상위 디렉터리) 2개 이상이 같은 DB_TABLE에 접근 — MSA shared database 안티패턴.
     // 서비스 경계·의존방향(DDD/헥사고날)과 독립된 축이라 GatePolicy 선택과 무관하게 항상 평가한다(2026-07-17).
@@ -1597,7 +1593,7 @@ public class GraphWarningService {
             if (!dbTableNodeIds.contains(e.getTargetNodeId())) continue;
             String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
             if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))) continue;
-            String service = serviceOf(srcPath);
+            String service = ServiceBoundary.serviceOf(srcPath);
             if (service == null) continue;
             allServices.add(service);
             serviceEdgesByTable.computeIfAbsent(e.getTargetNodeId(), k -> new LinkedHashMap<>())
@@ -1627,6 +1623,85 @@ public class GraphWarningService {
             warnings.add(w);
         }
         return warnings;
+    }
+
+    // 서비스 간 동기 호출(SERVICE_CALL) 체인이 일정 길이 이상 — distributed monolith 신호.
+    // 서비스 경계·의존방향(DDD/헥사고날)과 독립된 축이라 GatePolicy 선택과 무관하게 항상 평가한다(2026-07-17).
+    private static final int SERVICE_CALL_CHAIN_MIN_HOPS = 2; // A→B→C(서비스 3개, 2홉)부터 발화
+
+    private List<Map<String, Object>> detectServiceCallChain(List<Node> nodes, List<Edge> edges) {
+        Map<UUID, String> nodeFilePaths = new HashMap<>();
+        for (Node n : nodes) {
+            nodeFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+        }
+
+        // 서비스 단위 인접 리스트(service → [(대상서비스, 대표 SERVICE_CALL 엣지)]) — 자기 서비스 호출은 제외
+        Map<String, List<Map.Entry<String, Edge>>> adjacency = new LinkedHashMap<>();
+        Set<String> allServices = new LinkedHashSet<>();
+        Set<String> hasIncoming = new HashSet<>();
+        for (Edge e : edges) {
+            if (e.getType() != EdgeType.SERVICE_CALL) continue;
+            String src = ServiceBoundary.serviceOf(nodeFilePaths.getOrDefault(e.getSourceNodeId(), ""));
+            String tgt = ServiceBoundary.serviceOf(nodeFilePaths.getOrDefault(e.getTargetNodeId(), ""));
+            if (src == null || tgt == null || src.equals(tgt)) continue;
+            allServices.add(src);
+            allServices.add(tgt);
+            hasIncoming.add(tgt);
+            adjacency.computeIfAbsent(src, k -> new ArrayList<>()).add(Map.entry(tgt, e));
+        }
+        if (allServices.size() < 2) return List.of();
+
+        // 진입점 후보 — 다른 서비스로부터 호출받지 않는 서비스(체인의 자연스러운 시작점). 전부 순환이면 전체를 후보로.
+        Set<String> roots = new LinkedHashSet<>(allServices);
+        roots.removeAll(hasIncoming);
+        if (roots.isEmpty()) roots = allServices;
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (String root : roots) {
+            List<Edge> chain = longestServiceCallChain(root, adjacency, new LinkedHashSet<>());
+            if (chain.size() < SERVICE_CALL_CHAIN_MIN_HOPS) continue;
+
+            List<String> serviceNames = new ArrayList<>();
+            serviceNames.add(root);
+            List<String> nodeIds = new ArrayList<>();
+            List<String> edgeIds = new ArrayList<>();
+            for (Edge e : chain) {
+                nodeIds.add(e.getSourceNodeId().toString());
+                edgeIds.add(e.getId().toString());
+                serviceNames.add(ServiceBoundary.serviceOf(nodeFilePaths.getOrDefault(e.getTargetNodeId(), "")));
+            }
+            nodeIds.add(chain.get(chain.size() - 1).getTargetNodeId().toString());
+
+            Map<String, Object> w = new LinkedHashMap<>();
+            w.put("type", "SERVICE_CALL_CHAIN");
+            w.put("severity", "MEDIUM");
+            w.put("nodeIds", nodeIds);
+            w.put("edgeIds", edgeIds);
+            w.put("message", "분산 모놀리스 신호: 서비스 간 동기 호출 체인 " + String.join(" → ", serviceNames)
+                    + "(" + chain.size() + "홉). 수정: 체인 중간을 비동기 이벤트로 끊거나"
+                    + " 데이터 조합을 게이트웨이 레이어로 옮겨 동기 의존을 줄이세요.");
+            warnings.add(w);
+        }
+        return warnings;
+    }
+
+    // DFS로 root 서비스에서 시작하는 가장 긴 SERVICE_CALL 체인(엣지 목록)을 반환 — 방문한 서비스 재방문 금지(순환 방지)
+    private List<Edge> longestServiceCallChain(String service, Map<String, List<Map.Entry<String, Edge>>> adjacency,
+                                                Set<String> visited) {
+        List<Map.Entry<String, Edge>> next = adjacency.get(service);
+        if (next == null || next.isEmpty() || visited.contains(service)) return List.of();
+        visited.add(service);
+        List<Edge> best = List.of();
+        for (Map.Entry<String, Edge> entry : next) {
+            if (visited.contains(entry.getKey())) continue;
+            List<Edge> sub = longestServiceCallChain(entry.getKey(), adjacency, visited);
+            List<Edge> candidate = new ArrayList<>();
+            candidate.add(entry.getValue());
+            candidate.addAll(sub);
+            if (candidate.size() > best.size()) best = candidate;
+        }
+        visited.remove(service);
+        return best;
     }
 
     // 비DDD 레이어드 아키텍처의 레이어 — 의존은 상위(낮은 ordinal)→하위(높은 ordinal) 방향만 정상.

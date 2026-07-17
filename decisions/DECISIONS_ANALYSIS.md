@@ -1944,3 +1944,19 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **검증.** `GraphWarningServiceTest` 8건 신규(발화·단일서비스 미발화·테이블 불일치 미발화·테스트코드 제외·래퍼 디렉터리 인식·정책 무관 적용·ActiveTheme 반영 2건), 백엔드 전체 987개 테스트 green. **실측**: `spring-petclinic-microservices` 저장소 루트 전체(84개 파일, 3개 서비스)를 `analyzeLocal`로 분석 — `SHARED_DATABASE_ACCESS` 0건(각 서비스가 서로 다른 테이블만 소유하는 정상 사례라 0건이 맞는 결과, 위 벤치마킹에서 확인한 테이블 소유권과 일치). `analyzeLocal` 자기분석 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변 — 자기 레포엔 서비스 2개 이상 DB 접근 패턴이 없어 회귀 없음.
 
 **남은 것 — ②동기 호출 체인 규칙, 착수 안 함.** 신규 `EdgeType`(예: `SERVICE_CALL`) + 언어·프레임워크별 HTTP 클라이언트 호출 추출기(Java WebClient/RestTemplate/FeignClient, Python requests, JS axios 등) + 논리 서비스명→디렉터리 퍼지 매칭이 전부 필요한 별도 착수 건. 스코프가 이번 ①보다 훨씬 크고 언어별 정밀도 튜닝이 반복될 가능성이 높아(이 프로젝트의 다른 룰들이 겪은 "동일 함정 반복 재발" 패턴), 착수 여부·순서는 별도 세션에서 사용자와 재확인 필요.
+
+## 모노레포 MSA 신규 규칙군 ② SERVICE_CALL_CHAIN 구현 (2026-07-17, codeprint_135)
+
+**배경.** 사용자가 "②동기 호출 체인 규칙부터 하자"고 명시적으로 지시 — CLAUDE.md §7(신규 도메인 모델·기존 API 계약 변경은 코딩 전 Plan+Checklist)에 따라 구현 전 스코프를 먼저 확정. 스코프 질문(Java WebClient/RestTemplate만 vs FeignClient까지)을 `AskUserQuestion`으로 명시적으로 물어 "WebClient/RestTemplate만"으로 확정 — FeignClient(인터페이스 선언+DI, BROKEN_INTERFACE_CHAIN 수준의 해소 로직 필요)는 후속으로 미룸.
+
+**설계 결정 4가지**:
+1. **신규 EdgeType은 DB 마이그레이션 불필요** — `edges.type` 컬럼이 Postgres ENUM이 아니라 `VARCHAR(30)`이라 Java enum에 값만 추가하면 됨(`V1__init_schema.sql` 확인).
+2. **`ServiceBoundary.serviceOf()`를 `shared/topology/`로 분리** — 기존 `serviceOf()`가 `GraphWarningService`(application) 안에 private static으로 있었는데, `GraphBuilder`(infrastructure)에서도 필요해지면서 infrastructure→application import(DDD 의존방향 위반)가 될 뻔했다. `GatePolicy`와 동일한 Shared Kernel 패턴(`shared/gate/`)을 따라 `shared/topology/ServiceBoundary.java`로 이동.
+3. **정확한 엔드포인트 경로 매칭은 하지 않는다** — WebClient의 `.get().uri(...)`가 여러 줄에 걸쳐 체이닝되는 경우가 흔해(`spring-petclinic-microservices`의 `CustomersServiceClient` 실측 확인) method+path를 안정적으로 파싱하기 어렵고, 이 규칙(체인 깊이 판정)엔 애초에 "어느 서비스를 부르는가"만 필요해 정확한 경로가 불필요하다는 걸 깨달음 — `extractServiceCalls()`는 `uri()`/`RestTemplate` 메서드 호출에서 `http://` 호스트(논리 서비스명)만 뽑는다. 대상 서비스 해소도 컨트롤러 라우트 매칭 대신, 논리 서비스명과 부분 문자열이 일치하는 서비스의 "대표 파일"(그 서비스에서 처음 발견된 파일) 하나로 단순화 — 정확한 목적지 파일이 아니라 "서비스 A→B 호출 존재"만 있으면 체인 판정이 가능하기 때문.
+4. **탐지 알고리즘 — DFS 최장경로, 진입점 후보 기반**. SERVICE_CALL 엣지를 서비스 단위로 축약한 뒤, 다른 서비스로부터 호출받지 않는 서비스(진입점 후보, 보통 api-gateway류)에서 DFS로 최장 체인을 구해 2홉(서비스 3개 연쇄) 이상이면 발화. 전부 순환이면(진입점 후보가 없으면) 전체 서비스를 후보로 폴백. 방문한 서비스는 재방문 안 함(순환 방지).
+
+**severity=MEDIUM**(SHARED_DATABASE_ACCESS와 동일 원칙 — 새 휴리스틱 관찰 기간, `PrReviewService.isGating()`이 HIGH만 게이팅해 자동으로 머지를 막지 않음).
+
+**검증.** `StaticCodeAnalyzerTest` 4건(WebClient·RestTemplate 추출·로컬 경로 제외·TS 스코프밖) + `GraphBuilderTest` 3건(엣지 생성·대상 없음 시 미생성·자기서비스 호출 제외) + `GraphWarningServiceTest` 4건(체인 발화·1홉 미달 미발화·엣지 없음 미발화·ActiveTheme msaActive) 신규, 백엔드 전체 테스트 green, `analyzeLocal` 자기분석 베이스라인 불변(자기 레포는 SERVICE_CALL 엣지가 없어 회귀 없음). 실측은 `spring-petclinic-microservices`로 진행(아래 별도 기록 예정).
+
+**한계.** 1차 스코프는 Java/Kotlin WebClient·RestTemplate뿐 — FeignClient·Python requests·JS axios(백엔드 간)는 미지원(recall 한계, 실제 체인이 있어도 못 잡을 수 있음). "대표 파일" 단순화 때문에 그래프 시각화에서 정확한 목적지 엔드포인트가 아닌 임의 파일로 엣지가 그려짐 — 서비스 단위 판정에는 문제없으나 파일 단위 정밀도가 필요해지면 재검토.

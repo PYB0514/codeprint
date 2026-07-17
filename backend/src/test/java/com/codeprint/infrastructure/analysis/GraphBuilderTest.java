@@ -1224,6 +1224,64 @@ class GraphBuilderTest {
         assertThat(hasApiCall).isTrue();
     }
 
+    // ── SERVICE_CALL 엣지 생성 (모노레포 MSA 서비스 간 호출) ──────────────────
+
+    @Test
+    @DisplayName("논리 서비스명이 대상 서비스 디렉터리와 부분 일치하면 SERVICE_CALL 엣지가 생성된다")
+    void 서비스_호출_엣지_생성() {
+        ParsedFile caller = parsedFileWithServiceCalls(
+                "api-gateway/src/CustomersServiceClient.java", "Java", List.of("customers-service"));
+        ParsedFile target = parsedFileWithImports(
+                "spring-petclinic-customers-service/src/OwnerController.java", "Java", List.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, target));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        assertThat(edgeCaptor.getAllValues()).anyMatch(e -> e.getType() == EdgeType.SERVICE_CALL);
+    }
+
+    @Test
+    @DisplayName("논리 서비스명과 일치하는 서비스 디렉터리가 없으면(외부 API 등) SERVICE_CALL 엣지를 만들지 않는다")
+    void 서비스_호출_대상_없으면_엣지_미생성() {
+        ParsedFile caller = parsedFileWithServiceCalls(
+                "api-gateway/src/PaymentClient.java", "Java", List.of("stripe-api"));
+        ParsedFile unrelated = parsedFileWithImports(
+                "spring-petclinic-customers-service/src/OwnerController.java", "Java", List.of());
+        // saveEdge 스텁이 실제로 쓰이도록 무관한 IMPORT 관계를 하나 동반(strict stubbing 대응)
+        ParsedFile importer = parsedFileWithImports("src/com/example/UserController.java", "Java",
+                List.of("com.example.UserService"));
+        ParsedFile importee = parsedFile("src/com/example/UserService.java", "Java", List.of("createUser"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, unrelated, importer, importee));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        assertThat(edgeCaptor.getAllValues()).noneMatch(e -> e.getType() == EdgeType.SERVICE_CALL);
+    }
+
+    @Test
+    @DisplayName("같은 서비스 안의 자기 호출은 SERVICE_CALL 엣지로 만들지 않는다")
+    void 서비스_호출_동일서비스_자기호출_제외() {
+        ParsedFile caller = parsedFileWithServiceCalls(
+                "spring-petclinic-customers-service/src/InternalClient.java", "Java", List.of("customers-service"));
+        ParsedFile target = parsedFileWithImports(
+                "spring-petclinic-customers-service/src/OwnerController.java", "Java", List.of());
+        // saveEdge 스텁이 실제로 쓰이도록 무관한 IMPORT 관계를 하나 동반(strict stubbing 대응)
+        ParsedFile importer = parsedFileWithImports("src/com/example/UserController.java", "Java",
+                List.of("com.example.UserService"));
+        ParsedFile importee = parsedFile("src/com/example/UserService.java", "Java", List.of("createUser"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, target, importer, importee));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        assertThat(edgeCaptor.getAllValues()).noneMatch(e -> e.getType() == EdgeType.SERVICE_CALL);
+    }
+
     // ── 프로덕션 경로 교차검증 (Phase 1 #2: Go 리시버 + 동일 패키지 CYCLIC) ──
 
     @Test
@@ -1455,6 +1513,13 @@ class GraphBuilderTest {
     private ParsedFile parsedFileWithApiCalls(String path, String lang, List<String> apiCalls) {
         return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), apiCalls, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
+    }
+
+    // 서비스 간 호출 파일 생성 헬퍼 — serviceCalls 포함(canonical 생성자, 나머지 필드는 전부 기본값)
+    private ParsedFile parsedFileWithServiceCalls(String path, String lang, List<String> serviceCalls) {
+        return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), serviceCalls);
     }
 
     // DB 테이블/ORM 접근 지정 헬퍼 — 비JPA ORM 코드→테이블 엣지 테스트용 (canonical 생성자: declaredTypes/testMethods/dbAccesses 포함)
