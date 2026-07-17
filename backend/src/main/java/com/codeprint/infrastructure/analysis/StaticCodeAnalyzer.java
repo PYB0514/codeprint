@@ -178,8 +178,9 @@ public class StaticCodeAnalyzer {
         List<String> transactionalMethods = extractTransactionalMethods(masked, language);
         List<String> interfaceMethods = extractInterfaceMethods(masked, language, functions);
         List<String> serviceCalls = extractServiceCalls(masked, language);
+        String feignClientTarget = extractFeignClientTarget(masked, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions, transactionalMethods, functionLines, functionColumns, interfaceMethods, serviceCalls);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions, transactionalMethods, functionLines, functionColumns, interfaceMethods, serviceCalls, feignClientTarget);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함
@@ -707,6 +708,21 @@ public class StaticCodeAnalyzer {
         }
 
         return result;
+    }
+
+    // Spring Cloud @FeignClient(name="customers-service") 선언에서 논리 서비스명 추출 — SERVICE_CALL_CHAIN의
+    // FeignClient 지원(1차 스코프 WebClient/RestTemplate 후속, 2026-07-17). name/value 속성 우선, 없으면
+    // 첫 위치 인자(바로 문자열, 예: @FeignClient("customers-service"))를 서비스명으로 — Spring이 name/value를
+    // alias로 취급하는 것과 동일. GraphBuilder가 이 인터페이스를 import하는 파일을 호출자로 간주(DI 대신 IMPORT 재사용).
+    private String extractFeignClientTarget(String content, String language) {
+        if (!language.equals("Java") && !language.equals("Kotlin")) return null;
+        Matcher m = Pattern.compile("@FeignClient\\s*\\(([^)]*)\\)").matcher(content);
+        if (!m.find()) return null;
+        String args = m.group(1);
+        Matcher named = Pattern.compile("(?:name|value)\\s*=\\s*[\"']([^\"']+)[\"']").matcher(args);
+        if (named.find()) return named.group(1);
+        Matcher bare = Pattern.compile("^\\s*[\"']([^\"']+)[\"']").matcher(args);
+        return bare.find() ? bare.group(1) : null;
     }
 
     // JPA Repository 인터페이스 확장에서 엔티티 클래스명 추출

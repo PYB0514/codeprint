@@ -113,7 +113,7 @@ class CachedParsedFileLoaderTest {
     @Test
     @DisplayName("ParsedFile 필드 수 변경 시 ANALYZER_VERSION 동반 증가를 상기시킨다")
     void parsedFileFieldCount_tripwireForAnalyzerVersion() {
-        assertThat(ParsedFile.class.getRecordComponents()).hasSize(30);
+        assertThat(ParsedFile.class.getRecordComponents()).hasSize(31);
     }
 
     @TempDir

@@ -250,6 +250,17 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("@FeignClient 인터페이스 메서드는 구현 엣지 없어도 경고 없음(Spring 런타임 프록시 생성, GraphBuilder가 isFrameworkInterface 표시)")
+    void interfaceChain_feignClient_noWarning() {
+        Node iface = Node.create(graphId, NodeType.FUNCTION, "getOwner", "/CustomersServiceClient.java", "java");
+        iface.updateMetadata(Map.of("isInterface", true, "isFrameworkInterface", true));
+
+        List<Map<String, Object>> warnings = service.detect(List.of(iface), List.of());
+
+        assertThat(warnings).noneMatch(w -> "BROKEN_INTERFACE_CHAIN".equals(w.get("type")));
+    }
+
+    @Test
     @DisplayName("같은 파일 내 @Async 메서드 직접 호출 — ASYNC_SELF_CALL 경고")
     void asyncSelfCall_sameFile() {
         String file = "/com/example/MyService.java";
