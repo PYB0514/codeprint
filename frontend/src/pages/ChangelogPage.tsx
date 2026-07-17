@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.141.1',
+    date: '2026-07-17',
+    title: '공통 게이트 규칙 정확도 개선',
+    type: 'fix',
+    items: [
+      { category: '게이트 테마', desc: '도메인이 인프라를 직접 참조하는 위반(DOMAIN_IMPORTS_INFRA·INTERFACES_IMPORTS_INFRA)은 이제 "레이어드"를 직접 선택해도 계속 감지됩니다. DDD 컨텍스트 구분과 무관한 보편 규칙이라 게이트 정책 선택과 상관없이 항상 적용되도록 분류를 바꿨습니다.' },
+    ],
+  },
+  {
     version: 'v0.141.0',
     date: '2026-07-17',
     title: '게이트 정책 선택 바 — 자동/DDD/레이어드',

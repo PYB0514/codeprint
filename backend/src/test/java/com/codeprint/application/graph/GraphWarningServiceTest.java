@@ -899,8 +899,9 @@ class GraphWarningServiceTest {
         assertThat(warnings.stream().filter(w -> "DOMAIN_IMPORTS_INFRA".equals(w.get("type"))).toList()).isEmpty();
     }
 
-    // isDddProject 게이트를 열기 위한 도메인 레이어 더미 노드 — INTERFACES_IMPORTS_INFRA 테스트 전용
-    // (interfaces+infrastructure 조합만으로는 domain/application 마커가 없어 DDD 게이트가 안 열린다).
+    // (레거시) INTERFACES_IMPORTS_INFRA가 DDD 전용이던 시절 isDddProject 게이트를 열던 더미 노드.
+    // 2026-07-17 공통 게이트 승격 이후엔 정책 무관 항상 실행돼 더 이상 필요 없지만, 기존 호출부는
+    // 있어도 무해해 유지한다(decisions/DECISIONS_ANALYSIS.md 참조).
     private Node dddGateNode() {
         return funcNodeWithPath("Dummy", "/com/example/domain/user/User.java");
     }
@@ -1987,8 +1988,11 @@ class GraphWarningServiceTest {
     // ── 게이트 테마(detectActiveTheme) — 안정성 갭 이후 신규 기능(PROGRESS.md "게이트 테마") ──────────────
 
     @Test
-    @DisplayName("detectActiveTheme — domain/application/infrastructure 폴더가 있으면 DDD 테마, 규칙 5종, AUTO는 selfDeclared false")
+    @DisplayName("detectActiveTheme — domain/application/infrastructure 폴더가 있으면 DDD 테마, 규칙 3종(바운디드 컨텍스트 축만), AUTO는 selfDeclared false")
     void detectActiveTheme_dddStructure_returnsDdd() {
+        // 의존 방향 축(DOMAIN_IMPORTS_INFRA·INTERFACES_IMPORTS_INFRA)은 공통 게이트로 승격돼 themeRuleTypes가 아닌
+        // universalRuleTypes에 포함된다(2026-07-17 — decisions/DECISIONS_ANALYSIS.md 참조) — DDD 테마 고유는 바운디드
+        // 컨텍스트 축(DB_LAYER_BYPASS·CROSS_CONTEXT_IMPORT·CROSS_DOMAIN_CALL) 3종만 남는다.
         List<Node> nodes = List.of(
                 fileNodeWithPath("A", "src/domain/user/User.java"),
                 fileNodeWithPath("B", "src/application/user/UserService.java"),
@@ -1997,7 +2001,8 @@ class GraphWarningServiceTest {
         var theme = service.detectActiveTheme(nodes, List.of(), GatePolicy.AUTO);
 
         assertThat(theme.theme()).isEqualTo("DDD");
-        assertThat(theme.themeRuleTypes()).hasSize(5);
+        assertThat(theme.themeRuleTypes()).hasSize(3);
+        assertThat(theme.universalRuleTypes()).contains("DOMAIN_IMPORTS_INFRA", "INTERFACES_IMPORTS_INFRA");
         assertThat(theme.dddDetected()).isTrue();
         assertThat(theme.gatePolicy()).isEqualTo(GatePolicy.AUTO);
         assertThat(theme.selfDeclared()).isFalse();
@@ -2059,23 +2064,58 @@ class GraphWarningServiceTest {
     }
 
     @Test
-    @DisplayName("DDD 정책이 켜지면 실제 detect()도 DDD 규칙(INTERFACES_IMPORTS_INFRA)을 적용한다")
-    void detect_dddPolicy_appliesDddRules() {
-        // interfaces/+infrastructure/ 조합은 isDddProject() 판정용 3종(domain/application/infrastructure) 중
-        // infrastructure 하나만 걸쳐 자동감지로는 DDD 프로젝트로 잡히지 않는다 — 정책 자체의 효과만 순수하게 검증
+    @DisplayName("DDD 정책이 켜지면 실제 detect()도 DDD 전용 규칙(DB_LAYER_BYPASS, 바운디드 컨텍스트 축)을 적용한다")
+    void detect_dddPolicy_appliesDddOnlyRules() {
+        // interfaces/+infrastructure/persistence/ 조합은 isDddProject() 판정용 3종(domain/application/infrastructure) 중
+        // infrastructure 하나만 걸쳐 자동감지로는 DDD 프로젝트로 잡히지 않는다 — 정책 자체의 효과만 순수하게 검증.
+        // (INTERFACES_IMPORTS_INFRA는 2026-07-17 공통 게이트로 승격돼 정책 무관 항상 적용되므로 더 이상 이 구분에 안 맞음
+        // — decisions/DECISIONS_ANALYSIS.md 참조. 대신 여전히 DDD 전용인 DB_LAYER_BYPASS로 검증한다.)
         List<Node> nodes = new ArrayList<>();
         List<Edge> edges = new ArrayList<>();
         Node controllerFile = fileNodeWithPath("OrderController", "src/interfaces/OrderController.java");
-        Node infraFile = fileNodeWithPath("OrderJpa", "src/infrastructure/OrderJpaRepository.java");
+        Node persistFile = fileNodeWithPath("OrderRepositoryImpl", "src/infrastructure/persistence/OrderRepositoryImpl.java");
         nodes.add(controllerFile);
-        nodes.add(infraFile);
-        edges.add(importEdge(controllerFile.getId(), infraFile.getId()));
+        nodes.add(persistFile);
+        edges.add(importEdge(controllerFile.getId(), persistFile.getId()));
 
         List<Map<String, Object>> withAuto = service.detect(nodes, edges, null, GatePolicy.AUTO);
         List<Map<String, Object>> withDdd = service.detect(nodes, edges, null, GatePolicy.DDD);
 
-        assertThat(withAuto).noneSatisfy(w -> assertThat(w.get("type")).isEqualTo("INTERFACES_IMPORTS_INFRA"));
-        assertThat(withDdd).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("INTERFACES_IMPORTS_INFRA"));
+        assertThat(withAuto).noneSatisfy(w -> assertThat(w.get("type")).isEqualTo("DB_LAYER_BYPASS"));
+        assertThat(withDdd).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("DB_LAYER_BYPASS"));
+    }
+
+    @Test
+    @DisplayName("LAYERED 정책을 강제 선언해도 공통 게이트(DOMAIN_IMPORTS_INFRA)는 계속 적용된다 (헥사고날 사각지대 해소)")
+    void detect_layeredPolicyForced_stillAppliesUniversalDependencyRule() {
+        // 사용자가 domain/infrastructure 구조를 가진(=구조상 DDD/헥사고날) 레포에 LAYERED를 직접 강제 선언해도,
+        // 의존 방향 축(도메인→인프라)은 정책 선택과 무관한 보편 원칙이라 계속 잡혀야 한다 — 2026-07-17 사용자 논의로
+        // 발견된 사각지대(공통게이트/특화게이트 축 분리) 해소를 검증. decisions/DECISIONS_ANALYSIS.md 참조.
+        Node domainFile = fileNodeWithPath("Order", "src/domain/Order.java");
+        Node infraFile = fileNodeWithPath("OrderAdapter", "src/adapter/OrderAdapter.java");
+        Edge imp = importEdge(domainFile.getId(), infraFile.getId());
+
+        List<Map<String, Object>> withLayered = service.detect(
+                List.of(domainFile, infraFile), List.of(imp), null, GatePolicy.LAYERED);
+
+        assertThat(withLayered).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("DOMAIN_IMPORTS_INFRA"));
+    }
+
+    @Test
+    @DisplayName("LAYERED 강제 시 공통 게이트와 겹치는 엣지는 LAYERED_REVERSE_DEPENDENCY로 중복 라벨링하지 않는다")
+    void detect_layeredPolicyForced_dedupesOverlapWithUniversalRule() {
+        // INFRA_LAYER_DIRS와 REPOSITORY_DIRS가 "persistence"를 공유해 domain→infrastructure/persistence/ 엣지가
+        // Layer.MODEL→Layer.REPOSITORY로도 분류돼 LAYERED_REVERSE_DEPENDENCY와 겹칠 수 있다 — coveredByUniversalDependencyRule
+        // 가드가 이 중복을 막는지 검증. decisions/DECISIONS_ANALYSIS.md 참조.
+        Node domainFile = fileNodeWithPath("Order", "src/domain/Order.java");
+        Node persistFile = fileNodeWithPath("OrderRepositoryImpl", "src/infrastructure/persistence/OrderRepositoryImpl.java");
+        Edge imp = importEdge(domainFile.getId(), persistFile.getId());
+
+        List<Map<String, Object>> withLayered = service.detect(
+                List.of(domainFile, persistFile), List.of(imp), null, GatePolicy.LAYERED);
+
+        assertThat(withLayered).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("DOMAIN_IMPORTS_INFRA"));
+        assertThat(withLayered).noneSatisfy(w -> assertThat(w.get("type")).isEqualTo("LAYERED_REVERSE_DEPENDENCY"));
     }
 
     @Test

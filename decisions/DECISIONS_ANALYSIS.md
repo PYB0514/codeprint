@@ -1864,6 +1864,8 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 
 **§4 전체(0~4단계) 완료.** BENCH_SPEC.md가 명세한 17개 룰의 P/N 케이스 코드화 + R층 실측 재베이스라인까지 전부 끝났다. 남은 후속 작업은 §4 마지막 항목(가드레일 카드 대시보드 연결, INTERFACES_IMPORTS_INFRA·MISSING_TRANSACTIONAL_DELETE HIGH 승격 재검토)뿐 — 이건 벤치 코드화가 아니라 별개의 제품/대시보드 작업이라 새 세션에서 이어간다.
 
+> ⚠️ **대체됨 (2026-07-17)** — "공통게이트/특화게이트 축 분리 — 의존방향 규칙 공통 게이트 승격"으로 대체. 헥사고날은 별도 배지가 아니라 "의존 방향" 축을 공통 게이트로 승격하는 방식으로 해소됐다. 아래 원문은 이력 보존용.
+
 ## 헥사고날 게이트 스코프 조사 — 착수는 사용자 판단 보류 (2026-07-17, codeprint_134)
 
 **배경.** Context133 "다음 컨텍스트에서 할 것" 2번 — 게이트 테마 2단계 후보인 헥사고날 아키텍처 게이트의 실제 착수 스코프를 조사(PROGRESS.md "게이트 테마" 참조). `GraphWarningService`에 `"adapter"`/`"port"` 문자열이 이미 여러 별칭 집합에 흩어져 있는 것만 확인된 상태에서 시작, `exploreLocal`(find 모드) + 소스 직접 확인으로 전수 조사.
@@ -1877,3 +1879,21 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **검증.** 코드 읽기·분석만 수행, 프로덕션 코드 변경 없음(`analyzeLocal`·테스트 실행 대상 아님). `exploreLocal find` 모드로 `port` 검색 시 이 저장소 자신의 DDD Port 인터페이스 15개+가 섞여 나와(이 프로젝트 자체가 Port-Adapter 패턴을 domain/graph/port 등에 광범위하게 쓰고 있어서) 원하는 신호(GraphWarningService 내부 별칭 정의)를 못 찾음 — Grep으로 GraphWarningService.java 파일 안의 `LAYER_TERMS`/`INFRA_LAYER_DIRS`/`APPLICATION_LAYER_DIRS` 정의부만 직접 좁혀 확인해 해결(같은 검색어라도 "이 저장소의 자기 구조"와 "분석 엔진이 인식하는 대상 프로젝트 구조"가 섞여 나올 수 있다는 점 — 향후 유사 조사 시 유의).
 
 **다음.** 사용자가 착수를 원하면: ①"HEXAGONAL"을 `GatePolicy`의 4번째 선택지로 넣을지, 아니면 순수 배지 라벨(선택 불가, DDD와 동일 취급)로만 둘지부터 확정 ②전자라면 `GateThemeBadge.tsx` 세그먼트 컨트롤·i18n·프론트 테스트 갱신까지 필요해 1.5단계(게이트 정책 선택 바) 규모의 작업이 됨.
+
+## 공통게이트/특화게이트 축 분리 — 의존방향 규칙 공통 게이트 승격 (2026-07-17, codeprint_135)
+
+**대체.** "헥사고날 게이트 스코프 조사"(2026-07-17, codeprint_134)를 대체한다 — 그 항목은 "HEXAGONAL을 DDD와 별개 배지로 노출할 가치가 있는가"라는 질문에 답을 못 찾아 사용자 판단 보류로 남았는데, 사용자가 "DDD/레이어드/헥사고날은 서로 배타적이지 않다, 공통게이트와 특화게이트를 구분해야 한다"는 관점을 제시해 문제 자체를 재정의했다 — 배지 신설이 아니라 **규칙 축 분리**로 풀린다는 게 이번 결정.
+
+**배경.** 기존 `GatePolicy`(AUTO/DDD/LAYERED) 3택은 DDD_RULE_TYPES 5종을 하나의 배타적 묶음으로 다뤘다. 그런데 이 5종은 실제로는 서로 다른 두 축을 검사한다 — ①**바운디드 컨텍스트 축**(다중 컨텍스트 존재를 전제, `CROSS_CONTEXT_IMPORT`·`CROSS_DOMAIN_CALL`·`DB_LAYER_BYPASS`) ②**의존 방향 축**(도메인이 인프라를 몰라야 함, `DOMAIN_IMPORTS_INFRA`·`INTERFACES_IMPORTS_INFRA`). `DOMAIN_IMPORTS_INFRA`의 소스 주석(798행 근처)은 이미 "도메인→인프라는 어떤 아키텍처에서도 위반(보편)"이라고 적어뒀었다 — 즉 코드 자체가 이 규칙이 DDD 전용이 아님을 암묵적으로 알고 있었는데, 정책 분기(`useDdd`)가 그 사실과 무관하게 두 축을 한 묶음으로 껐다 켰다 하고 있었다.
+
+**실제로 드러난 사각지대.** 사용자가 헥사고날(`domain/`+`adapter/`) 레포에 `LAYERED`를 직접 강제 선언하면: `useDdd=false`가 되어 `DOMAIN_IMPORTS_INFRA`가 꺼지고, 동시에 `classifyLayer()`(Controller/Service/Repository/Model 4종)는 `adapter/`를 아예 분류하지 못해(`REPOSITORY_DIRS`에 `adapter` 별칭 없음) `LAYERED_REVERSE_DEPENDENCY`도 못 잡는다 — **의존 방향 위반이 둘 다한테서 빠지는 진짜 사각지대**였다.
+
+**결정 — DOMAIN_IMPORTS_INFRA·INTERFACES_IMPORTS_INFRA를 UNIVERSAL_RULE_TYPES로 승격.** `GraphWarningService.java`의 `detect()`에서 두 검출기를 `useDdd` 분기 밖(정책 무관 항상 실행)으로 옮겼다. DDD_RULE_TYPES는 바운디드 컨텍스트 축 3종만 남는다. 이러면 별도 HEXAGONAL 배지·감지기 없이도 헥사고날의 핵심 위반이 정책 선택과 무관하게 항상 보호된다.
+
+**DB_LAYER_BYPASS·LAYERED_BYPASS는 승격하지 않고 유지.** 둘 다 "상위 레이어가 DB 접근을 우회한다"는 같은 원칙을 서로 다른 명명 컨벤션(DDD형 `interfaces/`→`infrastructure/persistence/` vs 클래식 `Controller`→`Repository` 클래스명)으로 구현한 쌍이다. `INFRA_LAYER_DIRS`와 `REPOSITORY_DIRS`가 `persistence`·`dao` 별칭을 공유해 두 규칙을 동시에 공통화하면 흔한 디렉터리 명명(`infrastructure/persistence/`)에서 같은 위반이 중복 라벨링될 위험이 컸다. 게다가 헥사고날 레포는 `domain/`+`adapter/`(또는 `usecase/`) 조합이 `isDddProject()`의 2종 이상 게이트를 이미 충족해 AUTO에서 자동으로 DDD 브랜치를 타므로, `DB_LAYER_BYPASS`는 이미 실질적으로 커버되고 있었다 — 승격 없이도 갭이 없다.
+
+**LAYERED_REVERSE_DEPENDENCY와의 중복 방지 가드.** `DOMAIN_IMPORTS_INFRA`가 공통 게이트로 승격되면서, 사용자가 `domain/`+`infrastructure/persistence/` 구조에 `LAYERED`를 강제 선언하는 좁은 경우(`INFRA_LAYER_DIRS`와 `REPOSITORY_DIRS`가 `persistence`를 공유해 같은 엣지가 `Layer.MODEL`→`Layer.REPOSITORY`로도 분류됨)에 `DOMAIN_IMPORTS_INFRA`와 `LAYERED_REVERSE_DEPENDENCY`가 같은 엣지를 중복 라벨링할 수 있다는 게 사용자와의 논의 중 드러났다. `detectLayeredViolations`에 `coveredByUniversalDependencyRule` 가드를 추가해, 이미 공통 게이트가 잡는 엣지는 LAYERED 규칙에서 스킵하도록 했다.
+
+**검증.** `GraphWarningServiceTest` 기존 케이스 중 이 분기에 의존하던 2개를 수정(`detectActiveTheme_dddStructure_returnsDdd` 규칙 수 5→3, `detect_dddPolicy_appliesDddRules`를 여전히 DDD 전용인 `DB_LAYER_BYPASS` 기준으로 교체) + 신규 케이스 2개 추가(LAYERED 강제 시에도 공통 게이트가 계속 적용됨 / 중복 방지 가드 동작). 백엔드 전체 테스트 980개 중 7개 실패는 전부 Docker Postgres 연결 오류(`ParsedFileCacheIntegrationTest`·`PaymentApplicationServiceConcurrencyIntegrationTest`·`PostGraphSnapshotIntegrationTest`, 이번 변경과 무관한 환경 이슈 — Docker 기동 후 재검증). `GraphWarningServiceTest`(이번 변경의 직접 대상) 전체 green.
+
+**프론트엔드 변경 불필요.** `GateThemeBadge.tsx`는 `universalRuleTypes`/`themeRuleTypes`를 백엔드가 준 그대로 범용 렌더링하고 있어, 새로 옮긴 2종은 코드 변경 없이 자동으로 "공통 규칙" 섹션에 나타난다.
