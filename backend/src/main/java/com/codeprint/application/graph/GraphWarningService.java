@@ -1631,8 +1631,10 @@ public class GraphWarningService {
 
     private List<Map<String, Object>> detectServiceCallChain(List<Node> nodes, List<Edge> edges) {
         Map<UUID, String> nodeFilePaths = new HashMap<>();
+        Map<UUID, String> nameMap = new HashMap<>();
         for (Node n : nodes) {
             nodeFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+            nameMap.put(n.getId(), n.getName());
         }
 
         // 서비스 단위 인접 리스트(service → [(대상서비스, 대표 SERVICE_CALL 엣지)]) — 자기 서비스 호출은 제외
@@ -1641,7 +1643,11 @@ public class GraphWarningService {
         Set<String> hasIncoming = new HashSet<>();
         for (Edge e : edges) {
             if (e.getType() != EdgeType.SERVICE_CALL) continue;
-            String src = ServiceBoundary.serviceOf(nodeFilePaths.getOrDefault(e.getSourceNodeId(), ""));
+            String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
+            // 테스트 코드의 서비스 간 호출(통합테스트가 WebClient로 다른 서비스를 직접 두드리는 경우)은
+            // 실제 프로덕션 호출 체인이 아니라 SHARED_DATABASE_ACCESS와 동일하게 제외(detectSharedDatabaseAccess 동형).
+            if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))) continue;
+            String src = ServiceBoundary.serviceOf(srcPath);
             String tgt = ServiceBoundary.serviceOf(nodeFilePaths.getOrDefault(e.getTargetNodeId(), ""));
             if (src == null || tgt == null || src.equals(tgt)) continue;
             allServices.add(src);

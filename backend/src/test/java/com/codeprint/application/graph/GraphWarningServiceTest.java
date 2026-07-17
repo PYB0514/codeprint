@@ -2332,6 +2332,22 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("precision: 테스트 코드의 서비스 간 호출은 체인 판정에서 제외 — SERVICE_CALL_CHAIN 미발화")
+    void serviceCallChain_testSource_excluded() {
+        Node gatewayTest = fileNodeWithPath("ApiGatewayIntegrationTest",
+                "api-gateway/src/test/java/ApiGatewayIntegrationTest.java");
+        Node customers = fileNodeWithPath("CustomersController", "customers-service/src/CustomersController.java");
+        Node visits = fileNodeWithPath("VisitsController", "visits-service/src/VisitsController.java");
+        Edge gatewayToCustomers = serviceCallEdge(gatewayTest.getId(), customers.getId());
+        Edge customersToVisits = serviceCallEdge(customers.getId(), visits.getId());
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(gatewayTest, customers, visits), List.of(gatewayToCustomers, customersToVisits));
+
+        assertThat(warnings.stream().filter(w -> "SERVICE_CALL_CHAIN".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
     @DisplayName("detectActiveTheme — SERVICE_CALL 엣지만 있어도(shared DB 없이) msaActive=true")
     void detectActiveTheme_serviceCallOnly_msaActive() {
         Node gateway = fileNodeWithPath("ApiGateway", "api-gateway/src/ApiGateway.java");

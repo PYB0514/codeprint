@@ -1960,3 +1960,19 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **검증.** `StaticCodeAnalyzerTest` 4건(WebClient·RestTemplate 추출·로컬 경로 제외·TS 스코프밖) + `GraphBuilderTest` 3건(엣지 생성·대상 없음 시 미생성·자기서비스 호출 제외) + `GraphWarningServiceTest` 4건(체인 발화·1홉 미달 미발화·엣지 없음 미발화·ActiveTheme msaActive) 신규, 백엔드 전체 테스트 green, `analyzeLocal` 자기분석 베이스라인 불변(자기 레포는 SERVICE_CALL 엣지가 없어 회귀 없음). 실측은 `spring-petclinic-microservices`로 진행(아래 별도 기록 예정).
 
 **한계.** 1차 스코프는 Java/Kotlin WebClient·RestTemplate뿐 — FeignClient·Python requests·JS axios(백엔드 간)는 미지원(recall 한계, 실제 체인이 있어도 못 잡을 수 있음). "대표 파일" 단순화 때문에 그래프 시각화에서 정확한 목적지 엔드포인트가 아닌 임의 파일로 엣지가 그려짐 — 서비스 단위 판정에는 문제없으나 파일 단위 정밀도가 필요해지면 재검토.
+
+## 모노레포 MSA 신규 규칙군 — DDD/레이어드 게이트 수준으로 성숙도 상향 (2026-07-17, codeprint_136)
+
+**배경.** 사용자가 "MSA 규칙군(①②)도 순차적으로 DDD/레이어드 게이트 수준까지 올려야 한다"고 지시. `exploreLocal`로 두 감지기 코드를 살펴보다 그 도구 자체가 크래시하는 실제 버그(아래 별도 항목)를 먼저 발견·수정한 뒤, 두 규칙을 기존 17종(DDD/레이어드)과 비교해 격차를 점검했다.
+
+**격차 점검 결과 — 이미 성숙한 부분(추가 작업 불요)**: `GraphWarningServiceTest` 단위 테스트(발화·게이트 미충족·precision·GatePolicy 독립성·ActiveTheme)는 SHARED_DATABASE_ACCESS 7건·SERVICE_CALL_CHAIN 3건으로 이미 DDD 규칙과 동급. `WARNING_META`(색상/severity)·i18n 설명(label/desc/example/limitation, ko+en)도 이미 완료돼 있었음(PR #600/#603에서 함께 배선됨) — 처음엔 미완료로 추정했으나 `frontend/src/i18n/locales/*/workspace.json` 확인으로 정정.
+
+**진짜 격차 2가지 — 이번 세션에서 해소**:
+1. **`detectServiceCallChain`에 `isTestArtifact` 필터 누락** — 형제 규칙 `detectSharedDatabaseAccess`는 테스트 코드의 DB 접근을 서비스 판정에서 제외하는데, SERVICE_CALL_CHAIN엔 동형 필터가 없어 통합테스트가 WebClient로 다른 서비스를 직접 두드리면 체인에 오염될 수 있었음. `nameMap` 추가 + `isTestArtifact(srcPath, name)` 가드로 동형화. 회귀 테스트(`serviceCallChain_testSource_excluded`) 추가.
+2. **BENCH_SPEC.md §2·풀 파이프라인 벤치 픽스처 부재** — 기존 17종은 `StaticCodeAnalyzer→GraphBuilder→GraphWarningService.detect()` 전체 경로를 실제 소스 파일로 검증하는 벤치(§0 "existing 테스트와의 관계" 참조 — 단위 테스트가 못 잡는 상류 레이어 결함용)가 있는데 신규 2종엔 없었음. `bench/rules/SHARED_DATABASE_ACCESS/`(P 1 + N 2) · `bench/rules/SERVICE_CALL_CHAIN/`(P 1 + N 2, 테스트 코드 제외 케이스 포함) 신설, BENCH_SPEC.md §2.18/§2.19로 문서화(17종→19종).
+
+**벤치 픽스처 작성 중 연쇄로 발견한 버그 2건(계획에 없던 부수 발견)**:
+- **A-2(ERROR_TRACKER.md) — `GraphBuilder` DB 접근 엣지 dedup 키가 파일명만 사용해 동일 파일명 다른 서비스 엣지 드롭.** SHARED_DATABASE_ACCESS의 P케이스(두 서비스가 똑같이 `CustomerJpaRepository.java`를 가짐 — Spring Data 관례상 흔한 이름)가 0건으로 실패해 발견. `usedDbEdgeIds` dedup 키의 `fileBase`를 `extractFileName(path)`(파일명만)에서 `pf.filePath()`(전체 경로)로 교체. 하필 이 규칙이 가장 필요한 시나리오(같은 엔티티를 다루는 서비스일수록 파일명이 같아지기 쉬움)에서 recall이 깨지는 조합이었다는 점에서 "코드화 안 했으면 계속 몰랐을 결함"의 좋은 예 — BENCH_SPEC.md §0의 벤치 존재 이유(상류 레이어 결함 포착)를 스스로 입증한 사례.
+- **반복-G(ERROR_TRACKER.md) — `ParsedFile.serviceCalls` 필드(PR #603) 추가 후 `CachedParsedFileLoader.ANALYZER_VERSION` 미인상, B-16(2026-07-10)과 동일 버그 클래스 2회차.** `exploreLocal` 실행 자체가 `GraphBuilder.build()`에서 NPE로 크래시(로컬 캐시 500개 전부 hit, 구스키마 JSON이 신필드를 null로 역직렬화). `ANALYZER_VERSION` 3→4 증가로 즉시 해소. **2회 반복이라 CLAUDE.md 규칙(같은 클래스 버그 2회 이상 → 테스트 의무)에 따라 `CachedParsedFileLoaderTest`에 트립와이어 테스트(`ParsedFile.class.getRecordComponents().length` 기대값 고정) 추가** — 다음에 필드를 추가하는 사람이 이 테스트를 열어보고 버전 증가를 상기하도록 강제.
+
+**검증.** 벤치 87케이스(신규 6 포함) green, `GraphWarningServiceTest` 155건(신규 1건 포함) green, `CachedParsedFileLoaderTest` 5건(신규 1건 포함) green, 백엔드 전체 1008개 테스트 중 Postgres 미기동으로 인한 기존 3개 통합테스트 클래스(DB 연결 필요)만 실패 — 이번 변경과 무관한 환경 문제(Docker 미기동), 코드 회귀 아님.
