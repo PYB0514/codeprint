@@ -95,7 +95,8 @@ public class ArchitectureIntentService {
             }
             List<ArchitectureIntent.DependencyRule> rules = new ArrayList<>();
             for (JsonNode r : root.path("rules")) {
-                rules.add(new ArchitectureIntent.DependencyRule(r.path("from").asText(), r.path("to").asText()));
+                rules.add(new ArchitectureIntent.DependencyRule(
+                        r.path("from").asText(), r.path("to").asText(), r.path("edgeType").asText(null)));
             }
             List<ArchitectureIntent.IgnoreRule> ignores = new ArrayList<>();
             for (JsonNode g : root.path("ignore")) {
@@ -125,6 +126,7 @@ public class ArchitectureIntentService {
                 ObjectNode rn = rules.addObject();
                 rn.put("from", r.from());
                 rn.put("to", r.to());
+                if (r.edgeType() != null) rn.put("edgeType", r.edgeType());
             }
             ArrayNode ignores = root.putArray("ignore");
             for (ArchitectureIntent.IgnoreRule g : intent.ignores()) {

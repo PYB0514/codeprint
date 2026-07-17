@@ -48,12 +48,19 @@ public class ArchitectureIntentController {
             @Valid @RequestBody IntentRequest request,
             @AuthenticationPrincipal User user) {
         graphFacade.verifyProjectOwnership(projectId, user.getId());
+        for (RuleDto r : request.rules()) {
+            if (r.edgeType() != null && !r.edgeType().isBlank()
+                    && !r.edgeType().equals("IMPORT") && !r.edgeType().equals("FUNCTION_CALL")) {
+                return ResponseEntity.badRequest().body(Map.of("error",
+                        "edgeType은 IMPORT 또는 FUNCTION_CALL만 가능합니다: " + r.edgeType()));
+            }
+        }
         ArchitectureIntent intent = new ArchitectureIntent(
                 request.modules().stream()
                         .map(m -> new ArchitectureIntent.Module(m.name(), m.globs()))
                         .toList(),
                 request.rules().stream()
-                        .map(r -> new ArchitectureIntent.DependencyRule(r.from(), r.to()))
+                        .map(r -> new ArchitectureIntent.DependencyRule(r.from(), r.to(), r.edgeType()))
                         .toList(),
                 // ignore 미지정(구버전 클라이언트)이면 빈 목록 — 기존 동작 보존
                 (request.ignore() == null ? List.<IgnoreDto>of() : request.ignore()).stream()
@@ -112,7 +119,7 @@ public class ArchitectureIntentController {
                         .map(m -> Map.of("name", m.name(), "globs", m.globs()))
                         .toList(),
                 "rules", intent.rules().stream()
-                        .map(r -> Map.of("from", r.from(), "to", r.to()))
+                        .map(r -> Map.of("from", r.from(), "to", r.to(), "edgeType", r.edgeType() == null ? "" : r.edgeType()))
                         .toList(),
                 "ignore", intent.ignores().stream()
                         .map(g -> Map.of(
@@ -135,7 +142,8 @@ public class ArchitectureIntentController {
 
     public record RuleDto(
             @NotBlank String from,
-            @NotBlank String to) {}
+            @NotBlank String to,
+            String edgeType) {}
 
     // 경고 예외 규칙 DTO — 세 필드 모두 선택(빈 값=와일드카드). 단 전부 비면 모든 경고를 억제하므로 최소 하나는 의미값 권장.
     public record IgnoreDto(String type, String from, String to) {}

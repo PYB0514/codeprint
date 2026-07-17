@@ -17,8 +17,25 @@ public record ArchitectureIntent(List<Module> modules, List<DependencyRule> rule
     // 모듈 — 이름 + 소속 파일을 판별하는 경로 글로브 목록 (예: ["**/domain/**"])
     public record Module(String name, List<String> globs) {}
 
-    // 금지 의존 규칙 — from 모듈에서 to 모듈로의 의존(import·호출)을 금지
-    public record DependencyRule(String from, String to) {}
+    // 금지 의존 규칙 — from 모듈에서 to 모듈로의 의존(import 또는 직접 호출)을 금지.
+    // edgeType 생략(null)이면 하위호환으로 IMPORT 취급 — 기존 저장 JSON·API 호출부가 그대로 동작한다.
+    public record DependencyRule(String from, String to, String edgeType) {
+        // 하위호환 생성자 — edgeType 없이 생성하던 기존 호출부(테스트·LocalAnalyzer 등) churn 0
+        public DependencyRule(String from, String to) {
+            this(from, to, null);
+        }
+
+        // 실제 비교에 쓸 엣지 타입 — 미지정(null/빈 문자열)이거나 알 수 없는 값이면 IMPORT로 안전 폴백
+        // (컨트롤러가 저장 시점에 검증하지만, 이 메서드는 detect() 메인 경로에서 호출되므로 방어적으로 절대 던지지 않는다)
+        public EdgeType effectiveEdgeType() {
+            if (edgeType == null || edgeType.isBlank()) return EdgeType.IMPORT;
+            try {
+                return EdgeType.valueOf(edgeType);
+            } catch (IllegalArgumentException e) {
+                return EdgeType.IMPORT;
+            }
+        }
+    }
 
     // 경고 예외(억제) 규칙 — 의도된 위반 패턴을 글로브로 선언해 그룹 억제한다(opt-out 모델).
     // type 비면 모든 경고 타입, fromGlob 비면 모든 출발 파일, toGlob 비면 모든 도착 파일에 매치(와일드카드).
@@ -62,11 +79,18 @@ public record ArchitectureIntent(List<Module> modules, List<DependencyRule> rule
         return null;
     }
 
-    // from→to 의존이 금지돼 있는지
+    // from→to 의존(IMPORT 기준)이 금지돼 있는지 — 하위호환 오버로드
     public boolean isForbidden(String fromModule, String toModule) {
+        return isForbidden(fromModule, toModule, EdgeType.IMPORT);
+    }
+
+    // from→to 의존이 주어진 엣지 타입 기준으로 금지돼 있는지
+    public boolean isForbidden(String fromModule, String toModule, EdgeType edgeType) {
         if (rules == null) return false;
         for (DependencyRule r : rules) {
-            if (r.from().equals(fromModule) && r.to().equals(toModule)) return true;
+            if (r.from().equals(fromModule) && r.to().equals(toModule) && r.effectiveEdgeType() == edgeType) {
+                return true;
+            }
         }
         return false;
     }

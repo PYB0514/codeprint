@@ -4,7 +4,7 @@ import { getGroupKey, findCommonPrefix } from '../utils/graphLayout'
 import { globMatch } from '../utils/ignoreRules'
 
 interface IntentModule { name: string; glob: string }
-interface IntentRule { from: string; to: string }
+interface IntentRule { from: string; to: string; edgeType: string }
 
 interface Props {
   projectId: string
@@ -21,11 +21,12 @@ const LLM_PROMPT_TEMPLATE = `아래는 Codeprint의 "의도 아키텍처" 규칙
     { "name": "모듈 이름", "globs": ["경로 글로브 패턴", "..."] }
   ],
   "rules": [
-    { "from": "출발 모듈 이름", "to": "도착 모듈 이름" }
+    { "from": "출발 모듈 이름", "to": "도착 모듈 이름", "edgeType": "IMPORT" }
   ]
 }
 
 규칙 의미: "from 모듈이 to 모듈을 import하면 안 된다"(금지 방향 의존)를 뜻합니다.
+edgeType은 "IMPORT"(import 금지, 기본값) 또는 "FUNCTION_CALL"(직접 호출 금지) 중 하나이며 생략하면 IMPORT입니다.
 글로브 문법: ** = 임의 경로(하위 폴더 포함), * = 폴더/파일명 세그먼트 하나, 파일 경로 전체 기준 매칭.
 
 예시:
@@ -35,7 +36,7 @@ const LLM_PROMPT_TEMPLATE = `아래는 Codeprint의 "의도 아키텍처" 규칙
     { "name": "legacy", "globs": ["**/legacy/**"] }
   ],
   "rules": [
-    { "from": "app", "to": "legacy" }
+    { "from": "app", "to": "legacy", "edgeType": "IMPORT" }
   ]
 }
 
@@ -72,7 +73,11 @@ function parseImportedJson(text: string): { modules: IntentModule[]; rules: Inte
     if (typeof ro.from !== 'string' || typeof ro.to !== 'string') {
       return { error: 'rules 항목에 from·to(문자열)가 필요합니다.' }
     }
-    rules.push({ from: ro.from, to: ro.to })
+    const edgeType = typeof ro.edgeType === 'string' ? ro.edgeType : ''
+    if (edgeType !== '' && edgeType !== 'IMPORT' && edgeType !== 'FUNCTION_CALL') {
+      return { error: 'edgeType은 IMPORT 또는 FUNCTION_CALL만 가능합니다.' }
+    }
+    rules.push({ from: ro.from, to: ro.to, edgeType })
   }
   return { modules, rules }
 }
@@ -242,7 +247,7 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
   // 자동 게이트가 커버 못 하는 케이스(신규 코드가 폐기 예정 모듈을 참조하는 것 금지)를 예시로 보여준다
   const applyDddPreset = () => {
     setModules(prev => [...prev, { name: 'app', glob: '**/app/**' }, { name: 'legacy', glob: '**/legacy/**' }])
-    setRules(prev => [...prev, { from: 'app', to: 'legacy' }])
+    setRules(prev => [...prev, { from: 'app', to: 'legacy', edgeType: '' }])
   }
 
   // 감지된 그룹(도메인/레이어)으로 모듈 목록 채우기 — 이미 있는 이름은 건너뜀
@@ -258,7 +263,7 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
   const updateModule = (i: number, field: keyof IntentModule, value: string) =>
     setModules(prev => prev.map((m, idx) => idx === i ? { ...m, [field]: value } : m))
 
-  const addRule = () => setRules(prev => [...prev, { from: '', to: '' }])
+  const addRule = () => setRules(prev => [...prev, { from: '', to: '', edgeType: '' }])
   const removeRule = (i: number) => setRules(prev => prev.filter((_, idx) => idx !== i))
   const updateRule = (i: number, field: keyof IntentRule, value: string) =>
     setRules(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r))
@@ -414,6 +419,12 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
                 placeholder="to 모듈"
                 className="flex-1 text-[11px] bg-gray-800/80 border border-gray-700 rounded px-1.5 py-0.5 text-gray-300 placeholder-gray-600 focus:outline-none focus:border-red-700" />
             )}
+            <select value={r.edgeType} onChange={e => updateRule(i, 'edgeType', e.target.value)}
+              title="금지할 의존 종류 — import 또는 직접 호출"
+              className="shrink-0 text-[10px] bg-gray-800/80 border border-gray-700 rounded px-1 py-0.5 text-gray-400 focus:outline-none focus:border-red-700">
+              <option value="">import</option>
+              <option value="FUNCTION_CALL">직접 호출</option>
+            </select>
             <button onClick={() => removeRule(i)}
               className="text-gray-600 hover:text-red-400 text-xs leading-none shrink-0">✕</button>
           </div>
@@ -439,7 +450,7 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
       )}
 
       <p className="text-[11px] text-gray-600 leading-relaxed">
-        모듈별 경로 글로브와 금지 의존 규칙을 선언하면 실제 IMPORT가 규칙에 위반할 때 <span className="text-amber-400">INTENT_DRIFT</span> 경고가 발생합니다. 특정 위반을 예외로 두려면(정말 의도된 경우) 우측 하단 경고 패널에서 관리합니다.
+        모듈별 경로 글로브와 금지 의존 규칙을 선언하면 실제 import(또는 규칙에서 "직접 호출" 선택 시 함수 호출)가 위반할 때 <span className="text-amber-400">INTENT_DRIFT</span> 경고가 발생합니다. 특정 위반을 예외로 두려면(정말 의도된 경우) 우측 하단 경고 패널에서 관리합니다.
       </p>
     </div>
   )

@@ -1773,6 +1773,43 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("INTENT_DRIFT — edgeType=FUNCTION_CALL로 선언한 규칙은 직접 호출 엣지에서 경고")
+    void intentDrift_explicitFunctionCall_warns() {
+        Node caller = nodeAt("Caller", "/com/example/app/Caller.java");
+        Node legacy = nodeAt("Legacy", "/com/example/legacy/Legacy.java");
+        ArchitectureIntent intent = new ArchitectureIntent(
+                List.of(new ArchitectureIntent.Module("app", List.of("**/app/**")),
+                        new ArchitectureIntent.Module("legacy", List.of("**/legacy/**"))),
+                List.of(new ArchitectureIntent.DependencyRule("app", "legacy", "FUNCTION_CALL")));
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(caller, legacy),
+                List.of(callEdge(caller.getId(), legacy.getId(), false)), intent);
+
+        assertThat(warnings).anySatisfy(w -> {
+            assertThat(w.get("type")).isEqualTo("INTENT_DRIFT");
+            assertThat((String) w.get("message")).contains("직접 호출");
+        });
+    }
+
+    @Test
+    @DisplayName("INTENT_DRIFT — edgeType=FUNCTION_CALL 규칙은 IMPORT 엣지에서 발화하지 않음(타입 특정)")
+    void intentDrift_explicitFunctionCall_doesNotMatchImport() {
+        Node caller = nodeAt("Caller", "/com/example/app/Caller.java");
+        Node legacy = nodeAt("Legacy", "/com/example/legacy/Legacy.java");
+        ArchitectureIntent intent = new ArchitectureIntent(
+                List.of(new ArchitectureIntent.Module("app", List.of("**/app/**")),
+                        new ArchitectureIntent.Module("legacy", List.of("**/legacy/**"))),
+                List.of(new ArchitectureIntent.DependencyRule("app", "legacy", "FUNCTION_CALL")));
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(caller, legacy),
+                List.of(importEdgeForPath(caller.getId(), legacy.getId())), intent);
+
+        assertThat(warnings).noneMatch(w -> "INTENT_DRIFT".equals(w.get("type")));
+    }
+
+    @Test
     @DisplayName("INTENT_DRIFT — intent가 null이면 검사하지 않음(하위호환)")
     void intentDrift_nullIntent_silent() {
         Node domain = nodeAt("User", "/com/example/domain/user/User.java");
