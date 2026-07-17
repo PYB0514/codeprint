@@ -421,6 +421,8 @@ public class GraphWarningService {
             Object isInterface = meta.get("isInterface");
             if (!Boolean.TRUE.equals(isInterface)) continue;
             if (SPRING_DATA_BASE_METHODS.contains(n.getName())) continue;
+            // @FeignClient 인터페이스도 Spring Data와 동일한 이유로 제외(GraphBuilder가 표시) — 런타임 프록시 구현.
+            if (Boolean.TRUE.equals(meta.get("isFrameworkInterface"))) continue;
 
             if (!interfacesWithImpl.contains(n.getId())) {
                 Map<String, Object> w = new LinkedHashMap<>();

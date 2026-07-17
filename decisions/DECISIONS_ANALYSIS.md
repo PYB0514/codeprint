@@ -1976,3 +1976,19 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 - **반복-G(ERROR_TRACKER.md) — `ParsedFile.serviceCalls` 필드(PR #603) 추가 후 `CachedParsedFileLoader.ANALYZER_VERSION` 미인상, B-16(2026-07-10)과 동일 버그 클래스 2회차.** `exploreLocal` 실행 자체가 `GraphBuilder.build()`에서 NPE로 크래시(로컬 캐시 500개 전부 hit, 구스키마 JSON이 신필드를 null로 역직렬화). `ANALYZER_VERSION` 3→4 증가로 즉시 해소. **2회 반복이라 CLAUDE.md 규칙(같은 클래스 버그 2회 이상 → 테스트 의무)에 따라 `CachedParsedFileLoaderTest`에 트립와이어 테스트(`ParsedFile.class.getRecordComponents().length` 기대값 고정) 추가** — 다음에 필드를 추가하는 사람이 이 테스트를 열어보고 버전 증가를 상기하도록 강제.
 
 **검증.** 벤치 87케이스(신규 6 포함) green, `GraphWarningServiceTest` 155건(신규 1건 포함) green, `CachedParsedFileLoaderTest` 5건(신규 1건 포함) green, 백엔드 전체 1008개 테스트 중 Postgres 미기동으로 인한 기존 3개 통합테스트 클래스(DB 연결 필요)만 실패 — 이번 변경과 무관한 환경 문제(Docker 미기동), 코드 회귀 아님.
+
+## SERVICE_CALL_CHAIN — FeignClient 지원 확장 (2026-07-17, codeprint_136, PR #604 후속)
+
+**배경.** 사용자가 "MSA 규칙군을 순차적으로 DDD/레이어드 게이트 수준까지 올려야 한다"고 지시한 세션에서, 앞서 정리한 남은 후속 후보(FeignClient·타 언어 HTTP 클라이언트·변수조합 URL) 중 실사용 빈도가 가장 높은 **FeignClient**(Spring Cloud 표준 서비스 간 호출 방식)부터 착수. `docs/PROJECT.md` §7 non-trivial 기준(3개 이상 파일 수정)에 해당해 코딩 전 Plan+Checklist를 대화로 제시 후 진행.
+
+**설계 — WebClient/RestTemplate과 다른 접근이 필요했던 이유.** WebClient/RestTemplate은 호출부 코드에 `.uri("http://서비스명/...")`가 직접 나타나 정규식으로 바로 추출 가능했다. FeignClient는 DI로 주입된 인터페이스를 쓰는 방식이라(`@Autowired CustomersServiceClient client; ... client.getOwner(1)`) 호출부 코드만 봐서는 대상 서비스를 알 수 없다 — 인터페이스 선언(`@FeignClient(name="customers-service")`)과 실제 호출부가 다른 파일에 있다.
+1. **크로스파일 추적을 새로 만들지 않고 기존 IMPORT 엣지 재사용**: `ParsedFile.feignClientTarget`(interface 파일 자신의 논리 서비스명, nullable) 신설 후, `GraphBuilder`가 "이 인터페이스를 import하는 파일 = 그 서비스를 호출하는 파일"로 단순화(정확한 필드/메서드 타입 해소 없이 IMPORT 매칭만으로 충분 — WebClient 스코프의 "정확한 엔드포인트 불필요, 서비스 A→B 존재만 필요" 원칙과 동일 철학).
+2. **`ANALYZER_VERSION` 4→5 동반 증가** — 오늘 이미 겪은 반복-G(2회) 재발 방지를 위해 신설한 CI 게이트(`analyzer-version-guard`, PR #605)가 이번엔 실제로 처음 작동 검증됨(별도 실패 없이 통과 — 필드 추가와 버전 증가가 같은 커밋에 있어 가드가 조용히 넘어감).
+
+**부수 발견 — BROKEN_INTERFACE_CHAIN 오탐(코드화 중 발견, 즉시 수정).** FeignClient 벤치 P케이스를 작성해 풀 파이프라인으로 돌리자 `@FeignClient` 인터페이스의 추상 메서드가 매번 BROKEN_INTERFACE_CHAIN으로 오탐됐다 — Spring이 런타임에 프록시로 구현체를 생성해 소스에 구현 클래스가 없는 게 정상인데, 기존 감지기는 이걸 "구현 안 됨"으로 오인. 기존에 Spring Data 기본 메서드명(`SPRING_DATA_BASE_METHODS`)을 이름으로 예외 처리하던 것과 같은 근본 원인(런타임 프록시 구현)이지만, FeignClient 메서드명은 임의(대상 서비스의 REST 엔드포인트를 미러링)라 이름 목록으로는 일반화가 안 됨 — 대신 `GraphBuilder`가 FUNCTION 노드에 `isFrameworkInterface`(그 인터페이스 파일이 `feignClientTarget != null`인지) 플래그를 추가로 표시하고, `detectBrokenInterfaceChains`가 이 플래그를 SPRING_DATA_BASE_METHODS와 동등하게 예외 처리 — "이름 기반" 예외를 "출처 기반" 예외로 일반화한 형태라 앞으로 다른 프레임워크(예: gRPC 스텁 등)도 같은 플래그로 확장 가능.
+
+**검토한 대안.** ①필드 타입 해소(injected 필드의 실제 타입까지 추적해 메서드 호출까지 정밀 매칭) — 기각, WebClient 스코프에서 이미 확립한 "정확한 목적지보다 서비스 존재 여부" 원칙에 과함(§2 단순성). ②FeignClient 메서드 호출부를 인식(예: 필드명 패턴 매칭) — 기각, DI 컨테이너의 실제 바인딩은 정적 분석으로 확정 불가(타입 기반 주입이라 필드명이 신뢰할 근거가 아님), IMPORT 재사용이 훨씬 안정적.
+
+**검증.** `StaticCodeAnalyzerTest` 3건(name/value 추출·바레 인자·미선언 null) + `GraphBuilderTest` 2건(FeignClient IMPORT → SERVICE_CALL 엣지·동일서비스 자기호출 제외) + `GraphWarningServiceTest` 1건(FeignClient 인터페이스 BROKEN_INTERFACE_CHAIN 미발화) + 벤치 2건(`p-feign-client-chain`·`n-feign-client-unused`, 풀 파이프라인) 신규. 백엔드 전체 1016개 테스트(Docker Postgres 기동 상태) green, `analyzeLocal` 자기분석 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변 확인(자기 레포는 FeignClient 미사용이라 회귀 없음).
+
+**한계.** FeignClient의 `url` 속성만 쓰고 `name`/`value`가 없는 경우(직접 URL 지정)는 논리 서비스명을 못 뽑아 미탐지 — 실무에서 드문 패턴(`url`은 보통 테스트/로컬 오버라이드용). 남은 후속 후보(Python requests·JS axios, 변수 조합 URL)는 여전히 미착수.

@@ -34,8 +34,29 @@ public record ParsedFile(
         Map<String, Integer> functionLines,      // 함수명 → 정의 시작 줄(1-indexed, Java/TypeScript/JavaScript만 — 그 외 언어는 빈 맵). VS Code 인라인 경고용
         Map<String, Integer> functionColumns,    // 함수명 → 식별자 시작 컬럼(0-indexed, Java/TypeScript/JavaScript만 — 그 외 언어는 빈 맵). VS Code 인라인 경고 밑줄 정밀도용
         List<String> interfaceMethods,           // 인터페이스 파일(파일명=인터페이스명 관례)의 추상 메서드명 목록 (Java/Kotlin만 — BROKEN_INTERFACE_CHAIN 판정용)
-        List<String> serviceCalls                // 모노레포 서비스 간 동기 호출("서비스논리명|METHOD:/path" 형식, Java WebClient/RestTemplate만 — SERVICE_CALL 엣지용)
+        List<String> serviceCalls,               // 모노레포 서비스 간 동기 호출("서비스논리명|METHOD:/path" 형식, Java WebClient/RestTemplate만 — SERVICE_CALL 엣지용)
+        String feignClientTarget                 // @FeignClient(name=...) 선언 파일의 논리 서비스명 (null이면 FeignClient 아님 — SERVICE_CALL 엣지용, IMPORT 재사용)
 ) {
+    // 기존 호출부 호환용 — feignClientTarget 미지정 시 null
+    public ParsedFile(
+            String filePath, String language, List<String> functions, List<String> imports,
+            String fileComment, Map<String, String> functionComments, Map<String, List<String>> functionCalls,
+            List<String> instantiatedClasses, List<DbTableInfo> dbTables, String repositoryEntityClass,
+            List<ColumnInfo> entityColumns, List<String> apiCalls, List<String> controllerMappings,
+            List<String> implementedInterfaces, List<String> asyncMethods, List<String> jsxComponents,
+            List<RawSqlAccess> rawSqlAccesses, List<String> frameworkAnnotatedMethods,
+            List<String> valueReferencedFunctions, Map<String, Integer> functionDefCounts,
+            List<String> declaredTypes, List<String> testMethods, List<DbAccess> dbAccesses, String extendedClass,
+            Map<String, String> controllerMappingFunctions, List<String> transactionalMethods,
+            Map<String, Integer> functionLines, Map<String, Integer> functionColumns,
+            List<String> interfaceMethods, List<String> serviceCalls) {
+        this(filePath, language, functions, imports, fileComment, functionComments, functionCalls,
+                instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings,
+                implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods,
+                valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass,
+                controllerMappingFunctions, transactionalMethods, functionLines, functionColumns, interfaceMethods,
+                serviceCalls, null);
+    }
     // 기존 호출부 호환용 — serviceCalls 미지정 시 빈 목록
     public ParsedFile(
             String filePath, String language, List<String> functions, List<String> imports,

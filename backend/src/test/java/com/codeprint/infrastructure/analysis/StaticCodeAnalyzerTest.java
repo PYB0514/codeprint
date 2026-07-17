@@ -1026,6 +1026,54 @@ class StaticCodeAnalyzerTest {
         assertThat(result.serviceCalls()).isEmpty();
     }
 
+    // ── FeignClient 서비스 대상(feignClientTarget, SERVICE_CALL_CHAIN 확장) ──────────
+
+    @Test
+    @DisplayName("@FeignClient(name=...)에서 논리 서비스명을 추출한다")
+    void feignClientTarget_name속성_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example.api;
+                @FeignClient(name = "customers-service")
+                public interface CustomersServiceClient {
+                    @GetMapping("/owners/{id}")
+                    OwnerDetails getOwner(@PathVariable int id);
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.feignClientTarget()).isEqualTo("customers-service");
+    }
+
+    @Test
+    @DisplayName("@FeignClient(\"...\")처럼 위치 인자만 있어도 논리 서비스명을 추출한다")
+    void feignClientTarget_바레인자_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example.api;
+                @FeignClient("visits-service")
+                public interface VisitsServiceClient {
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.feignClientTarget()).isEqualTo("visits-service");
+    }
+
+    @Test
+    @DisplayName("@FeignClient가 없으면 feignClientTarget은 null이다")
+    void feignClientTarget_미선언_null() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example.api;
+                public interface PlainInterface {
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.feignClientTarget()).isNull();
+    }
+
     // ── DB 테이블 추출 ─────────────────────────────────────────────────────
 
     @Test

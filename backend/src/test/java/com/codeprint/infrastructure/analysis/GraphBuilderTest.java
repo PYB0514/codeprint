@@ -1282,6 +1282,46 @@ class GraphBuilderTest {
         assertThat(edgeCaptor.getAllValues()).noneMatch(e -> e.getType() == EdgeType.SERVICE_CALL);
     }
 
+    @Test
+    @DisplayName("FeignClient 인터페이스를 import하면 SERVICE_CALL 엣지가 생성된다(DI 대신 IMPORT 재사용)")
+    void 서비스_호출_FeignClient_엣지_생성() {
+        ParsedFile feignInterface = parsedFileWithFeignTarget(
+                "api-gateway/src/com/example/api/CustomersServiceClient.java", "Java", "customers-service");
+        ParsedFile caller = parsedFileWithImports(
+                "api-gateway/src/com/example/GatewayService.java", "Java",
+                List.of("com.example.api.CustomersServiceClient"));
+        ParsedFile target = parsedFileWithImports(
+                "spring-petclinic-customers-service/src/OwnerController.java", "Java", List.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(feignInterface, caller, target));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        assertThat(edgeCaptor.getAllValues()).anyMatch(e -> e.getType() == EdgeType.SERVICE_CALL);
+    }
+
+    @Test
+    @DisplayName("FeignClient 대상이 자기 서비스면 SERVICE_CALL 엣지를 만들지 않는다")
+    void 서비스_호출_FeignClient_동일서비스_자기호출_제외() {
+        ParsedFile feignInterface = parsedFileWithFeignTarget(
+                "spring-petclinic-customers-service/src/com/example/api/InternalClient.java", "Java", "customers-service");
+        ParsedFile caller = parsedFileWithImports(
+                "spring-petclinic-customers-service/src/com/example/GatewayService.java", "Java",
+                List.of("com.example.api.InternalClient"));
+        // saveEdge 스텁이 실제로 쓰이도록 무관한 IMPORT 관계를 하나 동반(strict stubbing 대응)
+        ParsedFile importer = parsedFileWithImports("src/com/example/UserController.java", "Java",
+                List.of("com.example.UserService"));
+        ParsedFile importee = parsedFile("src/com/example/UserService.java", "Java", List.of("createUser"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(feignInterface, caller, importer, importee));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        assertThat(edgeCaptor.getAllValues()).noneMatch(e -> e.getType() == EdgeType.SERVICE_CALL);
+    }
+
     // ── 프로덕션 경로 교차검증 (Phase 1 #2: Go 리시버 + 동일 패키지 CYCLIC) ──
 
     @Test
@@ -1520,6 +1560,13 @@ class GraphBuilderTest {
         return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
                 List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), serviceCalls);
+    }
+
+    // FeignClient 인터페이스 파일 생성 헬퍼 — feignClientTarget 포함(canonical 생성자, 나머지 필드는 전부 기본값)
+    private ParsedFile parsedFileWithFeignTarget(String path, String lang, String feignClientTarget) {
+        return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), feignClientTarget);
     }
 
     // DB 테이블/ORM 접근 지정 헬퍼 — 비JPA ORM 코드→테이블 엣지 테스트용 (canonical 생성자: declaredTypes/testMethods/dbAccesses 포함)

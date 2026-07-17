@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.144.0',
+    date: '2026-07-17',
+    title: '서비스 간 동기 호출 체인 감지 — FeignClient 지원',
+    type: 'feature',
+    items: [
+      { category: '게이트 테마', desc: 'SERVICE_CALL_CHAIN이 이제 Spring Cloud FeignClient(@FeignClient 인터페이스)를 통한 서비스 간 호출도 감지합니다. 기존 WebClient·RestTemplate과 함께 인식됩니다.' },
+    ],
+  },
+  {
     version: 'v0.143.0',
     date: '2026-07-17',
     title: '모노레포 MSA 서비스 간 동기 호출 체인 감지',

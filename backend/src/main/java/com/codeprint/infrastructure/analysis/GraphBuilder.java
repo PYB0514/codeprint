@@ -115,6 +115,9 @@ public class GraphBuilder {
                 // 인터페이스 추상 메서드 — BROKEN_INTERFACE_CHAIN이 구현체 존재 여부를 판정하는 데 사용
                 if (pf.interfaceMethods() != null && pf.interfaceMethods().contains(funcName)) {
                     meta.put("isInterface", true);
+                    // @FeignClient 인터페이스는 Spring이 런타임에 프록시로 구현을 생성 — 소스에 구현체가
+                    // 없는 게 정상이라(SPRING_DATA_BASE_METHODS와 같은 이유), BROKEN_INTERFACE_CHAIN 오탐 방지.
+                    if (pf.feignClientTarget() != null) meta.put("isFrameworkInterface", true);
                 }
                 // 값(콜백)으로 참조되는 함수 — 호출 엣지가 없어도 DEAD_CODE 오탐에서 제외하기 위한 플래그
                 if (pf.valueReferencedFunctions() != null && pf.valueReferencedFunctions().contains(funcName)) {
@@ -638,14 +641,32 @@ public class GraphBuilder {
             serviceRepresentativeFile.putIfAbsent(service, fileId);
         }
 
+        // FeignClient 인터페이스 파일(@FeignClient(name=...)) → 논리 서비스명. WebClient/RestTemplate과 달리
+        // FeignClient는 DI로 주입돼 쓰이므로 직접 호출문 대신, 이미 만들어지는 IMPORT 매칭(isImportMatch)을
+        // 재사용해 "이 인터페이스를 import하는 파일 = 그 서비스를 호출하는 파일"로 단순화한다.
+        Map<String, String> feignTargetByFilePath = new HashMap<>();
+        for (ParsedFile pf : parsedFiles) {
+            if (pf.feignClientTarget() != null) feignTargetByFilePath.put(pf.filePath(), pf.feignClientTarget());
+        }
+
         Set<String> usedServiceCallEdgeIds = new HashSet<>();
         for (ParsedFile pf : parsedFiles) {
-            if (pf.serviceCalls().isEmpty()) continue;
+            List<String> logicalServices = new ArrayList<>(pf.serviceCalls());
+            if (!feignTargetByFilePath.isEmpty()) {
+                for (String importPath : pf.imports()) {
+                    for (Map.Entry<String, String> feignEntry : feignTargetByFilePath.entrySet()) {
+                        if (isImportMatch(pf.filePath(), importPath, feignEntry.getKey())) {
+                            logicalServices.add(feignEntry.getValue());
+                        }
+                    }
+                }
+            }
+            if (logicalServices.isEmpty()) continue;
             UUID callerFileId = fileNodeIds.get(pf.filePath());
             if (callerFileId == null) continue;
             String callerService = ServiceBoundary.serviceOf(pf.filePath());
 
-            for (String logicalService : pf.serviceCalls()) {
+            for (String logicalService : logicalServices) {
                 UUID targetFileId = null;
                 String targetServiceName = null;
                 for (Map.Entry<String, UUID> entry : serviceRepresentativeFile.entrySet()) {
