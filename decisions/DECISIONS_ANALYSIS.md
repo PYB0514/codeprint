@@ -1991,6 +1991,8 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 
 **검증.** `StaticCodeAnalyzerTest` 3건(name/value 추출·바레 인자·미선언 null) + `GraphBuilderTest` 2건(FeignClient IMPORT → SERVICE_CALL 엣지·동일서비스 자기호출 제외) + `GraphWarningServiceTest` 1건(FeignClient 인터페이스 BROKEN_INTERFACE_CHAIN 미발화) + 벤치 2건(`p-feign-client-chain`·`n-feign-client-unused`, 풀 파이프라인) 신규. 백엔드 전체 1016개 테스트(Docker Postgres 기동 상태) green, `analyzeLocal` 자기분석 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변 확인(자기 레포는 FeignClient 미사용이라 회귀 없음).
 
+**한계.** FeignClient의 `url` 속성만 쓰고 `name`/`value`가 없는 경우(직접 URL 지정)는 논리 서비스명을 못 뽑아 미탐지 — 실무에서 드문 패턴(`url`은 보통 테스트/로컬 오버라이드용). 남은 후속 후보(Python requests·JS axios, 변수 조합 URL)는 여전히 미착수.
+
 ## SERVICE_CALL_CHAIN — Python requests·JS/TS axios 지원 확장 (2026-07-18, codeprint_137)
 
 **배경.** Context136 "다음 컨텍스트에서 할 것 ②MSA 규칙 후속 확장" — FeignClient(Java 생태계) 다음으로 남은 후보 중 "①Python requests·JS axios" 착수. `docs/PROJECT.md` §7 non-trivial 기준(3개 이상 파일 수정)에 해당해 코딩 전 Plan을 대화로 제시 후 진행.
@@ -2003,4 +2005,18 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 
 **한계.** 여전히 미착수: host 자체가 변수 조합인 서비스 디스커버리 패턴, Go(gin 등)의 HTTP 클라이언트.
 
-**한계.** FeignClient의 `url` 속성만 쓰고 `name`/`value`가 없는 경우(직접 URL 지정)는 논리 서비스명을 못 뽑아 미탐지 — 실무에서 드문 패턴(`url`은 보통 테스트/로컬 오버라이드용). 남은 후속 후보(Python requests·JS axios, 변수 조합 URL)는 여전히 미착수.
+## SERVICE_CALL_CHAIN — "변수 조합 URL" 실사례 조사, 스코프 재평가(구현 안 함) (2026-07-18, codeprint_137)
+
+**배경.** 위 항목에서 명시적으로 미착수로 남긴 "host 자체가 변수 조합인 서비스 디스커버리 패턴"을 이어서 논의하다, 사용자가 "착수 전에 실제 사례부터 조사"를 지시. 기존 스코프 조사(2026-07-17, "모노레포 MSA 신규 규칙군 스코프 조사")는 `spring-petclinic-microservices` 하나만 보고 "완전 신규 분석기 필요"로 결론 낸 것이었어서, 다른 언어(Python/JS) 생태계에서 실제로 어떤 패턴이 쓰이는지는 미확인 상태였다.
+
+**방법.** WebSearch + `gh api`로 오픈소스 Python(Flask)·Node.js 마이크로서비스 예제 3개(`reritom/Flask-Microservice-Tutorial`, 웹서치로 확인한 Node 예제 1건, `kasvith/simple-microservice-example`)의 실제 서비스 간 HTTP 호출부 코드를 직접 읽음.
+
+**발견 — "변수 조합 URL"이 사실 두 갈래로 갈린다.**
+1. **Docker Compose 서비스명 하드코딩** (`requests.post(f'http://invsys:5000/api/{resource_type}', ...)`, `axios.get('http://user-service:4000/users')`) — host 자체는 리터럴이고 포트·path만 붙는 흔한 컨벤션. **오늘 머지한 `extractServiceCalls()` 정규식이 이미 커버한다** — `http://` 뒤 `[a-zA-Z0-9_-]+`가 `:`에서 멈추므로 "invsys"/"user-service"를 정확히 뽑는다. 조사한 3개 중 2개가 이 패턴.
+2. **환경변수로 전체 base URL 주입** (`axios.get(process.env.QUOTES_API + '/api/quote')`, 실제 값은 `docker-compose.yml`의 `environment: - "QUOTES_API=http://quotes:5000"`) — 소스 코드만으로는 탐지 불가하지만, **`docker-compose.yml`도 함께 파싱하면 탐지 가능**하다는 게 새로 확인된 사실. 기존에 "Spring `@Value`+`application.yml` 조인처럼 신규 분석기가 필요하다"고 뭉뚱그려 판단했던 것과 달리, `docker-compose.yml`의 `environment:` 블록은 YAML 구조가 훨씬 단순(서비스별 키=값 나열)하고 MSA 로컬 개발환경에서 사실상 표준 위치라 조인 대상이 명확 — Spring 케이스보다 스코프가 작다.
+
+**재평가.** "host 자체가 변수 조합"이라는 원래 프레이밍이 부정확했다 — 실제로는 (a) 이미 해결된 리터럴 호스트 케이스, (b) `docker-compose.yml` 조인으로 상대적으로 저비용에 해결 가능한 환경변수 케이스, (c) Spring `@Value`+`application.yml`처럼 진짜 신규 분석기가 필요한 케이스로 세분화된다. (b)는 다음에 이 영역을 다시 집을 때 (c)보다 우선순위가 높은 후보로 재분류할 만하다.
+
+**결론 — 이번 세션엔 구현 안 함.** 사용자 지시대로 조사·기록까지만 진행, 착수는 다음 세션 이후로 보류. 착수 시 권장 순서: `docker-compose.yml`(`environment:` 블록) 파싱 → `ENV_VAR_NAME → 리터럴 URL` 맵 구성 → `process.env.X`/`os.environ['X']` 참조를 그 맵으로 역해소. Spring `application.yml`+`@Value` 조인은 여전히 별도 후속(스코프 더 큼).
+
+**검증.** 코드 읽기·웹 조사만 수행, 프로덕션 코드 변경 없음.
