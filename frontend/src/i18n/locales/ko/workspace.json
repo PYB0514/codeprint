@@ -120,6 +120,10 @@
       "INTENT_DRIFT": {
         "example": "그래프 사이드바 \"아키텍처 의도\"에서 선언한 금지 규칙(예: domain → infrastructure 금지)을 실제 import가 어긴 경우.",
         "limitation": "규칙을 선언한 프로젝트에서만 동작 — 선언이 없으면 이 검사는 실행되지 않습니다."
+      },
+      "SHARED_DATABASE_ACCESS": {
+        "example": "모노레포 안의 서로 다른 서비스(최상위 디렉터리) 2개가 같은 DB 테이블을 함께 읽고 씁니다 — 서비스 자율성이 깨진 MSA 안티패턴(shared database).",
+        "limitation": "최상위 디렉터리를 서비스 단위로 간주(services/apps/packages 래퍼는 그 다음 세그먼트) — 단일 서비스 모놀리스에서는 발화하지 않고, 서비스 2개 이상이 실제 DB 테이블에 접근하는 모노레포에서만 활성화."
       }
     }
   },
@@ -515,6 +519,7 @@
       "selfDeclaredSuffix": "(직접 선언)",
       "themeRulesLabel": "{{theme}} 규칙",
       "featureSliceRulesLabel": "피처슬라이스 규칙",
+      "msaRulesLabel": "모노레포 서비스 규칙",
       "universalRulesLabel": "항상 적용되는 규칙",
       "policySelectorLabel": "게이트 정책",
       "policyLabel": { "AUTO": "자동", "DDD": "DDD", "LAYERED": "레이어드" },
@@ -633,7 +638,8 @@
       "HIGH_FAN_OUT": { "label": "한 함수에 몰린 책임", "desc": "함수 하나가 7개 넘는 함수를 호출합니다 — 하는 일이 많아 수정 영향 범위가 큽니다. 역할별 분리를 검토하세요." },
       "LAYERED_REVERSE_DEPENDENCY": { "label": "레이어 역전 의존", "desc": "아래 계층(Repository 등)이 위 계층(Controller 등)을 import합니다 — 계층 구조가 뒤집혀 재사용과 테스트가 어려워집니다." },
       "LAYERED_BYPASS": { "label": "Service 계층 건너뛰기", "desc": "Controller가 Service를 건너뛰고 Repository를 직접 호출합니다 — 비즈니스 로직이 Controller에 흩어질 위험이 있습니다." },
-      "INTENT_DRIFT": { "label": "선언한 구조 규칙 위반", "desc": "\"아키텍처 의도\"에서 직접 선언한 금지 규칙을 어긴 import입니다 — 내가 정한 구조 규칙에서 벗어난 코드입니다." }
+      "INTENT_DRIFT": { "label": "선언한 구조 규칙 위반", "desc": "\"아키텍처 의도\"에서 직접 선언한 금지 규칙을 어긴 import입니다 — 내가 정한 구조 규칙에서 벗어난 코드입니다." },
+      "SHARED_DATABASE_ACCESS": { "label": "공유 데이터베이스 안티패턴", "desc": "모노레포의 서로 다른 서비스가 같은 DB 테이블을 함께 접근합니다 — 테이블 소유권을 한 서비스로 모으고 다른 서비스는 API로 조회하세요." }
     },
     "ignoreRulesTitle": "예외 규칙",
     "noTypeLabel": "모든 타입",

@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.142.0',
+    date: '2026-07-17',
+    title: '모노레포 MSA 공유 데이터베이스 안티패턴 감지',
+    type: 'feature',
+    items: [
+      { category: '게이트 테마', desc: '모노레포 안의 서로 다른 서비스(최상위 디렉터리)가 같은 DB 테이블을 함께 읽고 쓰면 새로 감지됩니다(SHARED_DATABASE_ACCESS). 서비스 경계와 무관하게 항상 적용되며, 단일 서비스 프로젝트에서는 발화하지 않습니다.' },
+    ],
+  },
+  {
     version: 'v0.141.1',
     date: '2026-07-17',
     title: '공통 게이트 규칙 정확도 개선',

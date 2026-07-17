@@ -2140,4 +2140,147 @@ class GraphWarningServiceTest {
         assertThat(withAuto).noneSatisfy(w -> assertThat(w.get("type")).isEqualTo("LAYERED_REVERSE_DEPENDENCY"));
         assertThat(withLayered).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("LAYERED_REVERSE_DEPENDENCY"));
     }
+
+    // ===== SHARED_DATABASE_ACCESS (모노레포 MSA shared database 안티패턴, 2026-07-17) =====
+
+    private Edge dbAccessEdge(UUID src, UUID tgt, EdgeType type) {
+        return Edge.create(graphId, src + "->db->" + tgt, type, src, tgt);
+    }
+
+    @Test
+    @DisplayName("SHARED_DATABASE_ACCESS — 서로 다른 서비스 2개가 같은 테이블에 쓰기")
+    void sharedDatabaseAccess_detected() {
+        Node customersFile = fileNodeWithPath("OwnerRepository",
+                "spring-petclinic-customers-service/src/main/java/OwnerRepository.java");
+        Node visitsFile = fileNodeWithPath("OwnerCache",
+                "spring-petclinic-visits-service/src/main/java/OwnerCache.java");
+        Node ownersTable = Node.create(graphId, NodeType.DB_TABLE, "owners", "OwnerRepository.java", "java");
+        Edge writeEdge = dbAccessEdge(customersFile.getId(), ownersTable.getId(), EdgeType.DB_WRITE);
+        Edge readEdge = dbAccessEdge(visitsFile.getId(), ownersTable.getId(), EdgeType.DB_READ);
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(customersFile, visitsFile, ownersTable), List.of(writeEdge, readEdge));
+
+        List<Map<String, Object>> found = warnings.stream()
+                .filter(w -> "SHARED_DATABASE_ACCESS".equals(w.get("type"))).toList();
+        assertThat(found).hasSize(1);
+        assertThat(found.get(0).get("severity")).isEqualTo("MEDIUM");
+    }
+
+    @Test
+    @DisplayName("precision: 단일 서비스만 DB 접근 — SHARED_DATABASE_ACCESS 미발화 (모노레포 MSA 아님)")
+    void sharedDatabaseAccess_singleService_notFlagged() {
+        Node fileA = fileNodeWithPath("OwnerRepository",
+                "spring-petclinic-customers-service/src/main/java/OwnerRepository.java");
+        Node fileB = fileNodeWithPath("OwnerService",
+                "spring-petclinic-customers-service/src/main/java/OwnerService.java");
+        Node ownersTable = Node.create(graphId, NodeType.DB_TABLE, "owners", "OwnerRepository.java", "java");
+        Edge writeEdge = dbAccessEdge(fileA.getId(), ownersTable.getId(), EdgeType.DB_WRITE);
+        Edge readEdge = dbAccessEdge(fileB.getId(), ownersTable.getId(), EdgeType.DB_READ);
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(fileA, fileB, ownersTable), List.of(writeEdge, readEdge));
+
+        assertThat(warnings.stream().filter(w -> "SHARED_DATABASE_ACCESS".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("precision: 서비스 2개지만 서로 다른 테이블 — SHARED_DATABASE_ACCESS 미발화 (database-per-service 정상)")
+    void sharedDatabaseAccess_differentTables_notFlagged() {
+        Node customersFile = fileNodeWithPath("OwnerRepository",
+                "spring-petclinic-customers-service/src/main/java/OwnerRepository.java");
+        Node vetsFile = fileNodeWithPath("VetRepository",
+                "spring-petclinic-vets-service/src/main/java/VetRepository.java");
+        Node ownersTable = Node.create(graphId, NodeType.DB_TABLE, "owners", "OwnerRepository.java", "java");
+        Node vetsTable = Node.create(graphId, NodeType.DB_TABLE, "vets", "VetRepository.java", "java");
+        Edge writeOwners = dbAccessEdge(customersFile.getId(), ownersTable.getId(), EdgeType.DB_WRITE);
+        Edge writeVets = dbAccessEdge(vetsFile.getId(), vetsTable.getId(), EdgeType.DB_WRITE);
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(customersFile, vetsFile, ownersTable, vetsTable), List.of(writeOwners, writeVets));
+
+        assertThat(warnings.stream().filter(w -> "SHARED_DATABASE_ACCESS".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("precision: 테스트 코드의 DB 접근은 서비스 판정에서 제외 — SHARED_DATABASE_ACCESS 미발화")
+    void sharedDatabaseAccess_testSource_excluded() {
+        Node customersFile = fileNodeWithPath("OwnerRepository",
+                "spring-petclinic-customers-service/src/main/java/OwnerRepository.java");
+        Node visitsTestFile = fileNodeWithPath("OwnerRepositoryTest",
+                "spring-petclinic-visits-service/src/test/java/OwnerRepositoryTest.java");
+        Node ownersTable = Node.create(graphId, NodeType.DB_TABLE, "owners", "OwnerRepository.java", "java");
+        Edge writeEdge = dbAccessEdge(customersFile.getId(), ownersTable.getId(), EdgeType.DB_WRITE);
+        Edge testReadEdge = dbAccessEdge(visitsTestFile.getId(), ownersTable.getId(), EdgeType.DB_READ);
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(customersFile, visitsTestFile, ownersTable), List.of(writeEdge, testReadEdge));
+
+        assertThat(warnings.stream().filter(w -> "SHARED_DATABASE_ACCESS".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("SHARED_DATABASE_ACCESS — services/ 래퍼 디렉터리 다음 세그먼트를 서비스명으로 인식")
+    void sharedDatabaseAccess_servicesWrapper_detected() {
+        Node orderFile = fileNodeWithPath("OrderRepository",
+                "services/order-service/src/main/java/OrderRepository.java");
+        Node paymentFile = fileNodeWithPath("OrderLookup",
+                "services/payment-service/src/main/java/OrderLookup.java");
+        Node ordersTable = Node.create(graphId, NodeType.DB_TABLE, "orders", "OrderRepository.java", "java");
+        Edge writeEdge = dbAccessEdge(orderFile.getId(), ordersTable.getId(), EdgeType.DB_WRITE);
+        Edge readEdge = dbAccessEdge(paymentFile.getId(), ordersTable.getId(), EdgeType.DB_READ);
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(orderFile, paymentFile, ordersTable), List.of(writeEdge, readEdge));
+
+        assertThat(warnings.stream().filter(w -> "SHARED_DATABASE_ACCESS".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("SHARED_DATABASE_ACCESS — GatePolicy 선택과 무관하게 항상 적용(독립 축)")
+    void sharedDatabaseAccess_appliesRegardlessOfGatePolicy() {
+        Node customersFile = fileNodeWithPath("OwnerRepository",
+                "spring-petclinic-customers-service/src/main/java/OwnerRepository.java");
+        Node visitsFile = fileNodeWithPath("OwnerCache",
+                "spring-petclinic-visits-service/src/main/java/OwnerCache.java");
+        Node ownersTable = Node.create(graphId, NodeType.DB_TABLE, "owners", "OwnerRepository.java", "java");
+        Edge writeEdge = dbAccessEdge(customersFile.getId(), ownersTable.getId(), EdgeType.DB_WRITE);
+        Edge readEdge = dbAccessEdge(visitsFile.getId(), ownersTable.getId(), EdgeType.DB_READ);
+        List<Node> nodes = List.of(customersFile, visitsFile, ownersTable);
+        List<Edge> edges = List.of(writeEdge, readEdge);
+
+        List<Map<String, Object>> withDdd = service.detect(nodes, edges, null, GatePolicy.DDD);
+        List<Map<String, Object>> withLayered = service.detect(nodes, edges, null, GatePolicy.LAYERED);
+
+        assertThat(withDdd).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("SHARED_DATABASE_ACCESS"));
+        assertThat(withLayered).anySatisfy(w -> assertThat(w.get("type")).isEqualTo("SHARED_DATABASE_ACCESS"));
+    }
+
+    @Test
+    @DisplayName("detectActiveTheme — 서비스 2개가 DB 접근하면 msaActive=true, msaRuleTypes에 SHARED_DATABASE_ACCESS 포함")
+    void detectActiveTheme_multiServiceDbAccess_msaActive() {
+        Node customersFile = fileNodeWithPath("OwnerRepository",
+                "spring-petclinic-customers-service/src/main/java/OwnerRepository.java");
+        Node visitsFile = fileNodeWithPath("OwnerCache",
+                "spring-petclinic-visits-service/src/main/java/OwnerCache.java");
+        Node ownersTable = Node.create(graphId, NodeType.DB_TABLE, "owners", "OwnerRepository.java", "java");
+        Edge writeEdge = dbAccessEdge(customersFile.getId(), ownersTable.getId(), EdgeType.DB_WRITE);
+        Edge readEdge = dbAccessEdge(visitsFile.getId(), ownersTable.getId(), EdgeType.DB_READ);
+
+        var theme = service.detectActiveTheme(
+                List.of(customersFile, visitsFile, ownersTable), List.of(writeEdge, readEdge), GatePolicy.AUTO);
+
+        assertThat(theme.msaActive()).isTrue();
+        assertThat(theme.msaRuleTypes()).contains("SHARED_DATABASE_ACCESS");
+    }
+
+    @Test
+    @DisplayName("detectActiveTheme — 단일 서비스 프로젝트는 msaActive=false")
+    void detectActiveTheme_singleService_msaInactive() {
+        List<Node> nodes = List.of(fileNodeWithPath("A", "src/domain/user/User.java"));
+
+        var theme = service.detectActiveTheme(nodes, List.of(), GatePolicy.AUTO);
+
+        assertThat(theme.msaActive()).isFalse();
+    }
 }
