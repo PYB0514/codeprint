@@ -1021,3 +1021,19 @@ const fetchGraph = useCallback(async () => {
 **결과.** `migrateButton`/`undoMigrationButton`(단방향 토글 2개 버튼) → `POLICIES` 배열(`AUTO`/`DDD`/`LAYERED`) 순회로 렌더링하는 3버튼 세그먼트 컨트롤 1개로 교체, 현재 선택값은 `aria-pressed` + 배경색으로 표시. 배지 접미사 `migrationSuffix`("(마이그레이션)")도 `selfDeclaredSuffix`("(직접 선언)")로 이름·의미 변경 — 백엔드의 `selfDeclared`(policy != AUTO) 필드를 그대로 반영. PATCH 요청 바디도 `{enabled: boolean}` → `{policy: string}`으로 변경.
 
 **한계·다음.** 야간 자율 진행(사용자 취침) 중이라 GitHub OAuth 대화형 로그인을 요구할 수 없어 브라우저 클릭 상호작용(세그먼트 전환 시 배지 색상·문구 변화)은 실측하지 못함 — `npx tsc -b` 타입체크 통과, i18n JSON 유효성 확인, 백엔드 API 왕복(`decisions/DECISIONS_BACKEND.md` 참조)으로 컴포넌트가 호출하는 엔드포인트 자체는 검증됐으나, 실제 렌더링·클릭 스모크 테스트는 다음 로그인 세션 권장.
+
+## 커스텀 게이트 규칙 — "새 엔진" 대신 기존 ArchitectureIntent/INTENT_DRIFT 재발견, LLM 프롬프트+JSON import UI 추가 (2026-07-18, codeprint_137)
+
+**배경.** 사용자가 "사용자가 LLM으로 게이트 규칙을 만들어 등록하면 실제 게이트로 작동하게 할 수 없냐"고 제안. 처음엔 새 DB 테이블(`custom_gate_rules`)+DSL 파서+평가 엔진+dry-run 미리보기를 설계했으나, 코드를 확인하는 과정에서 **이미 거의 동일한 기능이 구현돼 있음을 발견** — `ArchitectureIntent`(도메인) + `ArchitectureIntentController`(API, GET/PUT/DELETE) + `ArchitectureIntentPanel.tsx`(UI 폼) + `INTENT_DRIFT`(HIGH 심각도 게이트 경고)가 이미 "모듈(경로 글로브) 선언 + A→B import 금지 규칙"을 실제 프로덕션 게이트로 지원 중이었다. 원래 설계를 전부 폐기 — 처음부터 다시 만드는 대신 기존 스키마를 그대로 노출하는 쪽으로 스코프를 축소.
+
+**재정의된 실제 갭 — 딱 두 가지.**
+1. **LLM 프롬프트 템플릿** — 기존 `modules`/`rules` JSON 스키마를 설명해 사용자가 자기 LLM에 붙여넣을 수 있는 프롬프트. 별도 문서 파일 대신 `ArchitectureIntentPanel.tsx` 안에 `LLM_PROMPT_TEMPLATE` 상수로 인라인 배치(발견성이 더 높고, 새 파일 생성 없이 기존 파일만 수정).
+2. **JSON 붙여넣기 import** — 기존 UI는 모듈·규칙을 한 줄씩 폼으로만 입력 가능해, LLM이 만들어준 JSON을 붙여넣을 방법이 없었다. `parseImportedJson()`(스키마 검증) + 텍스트영역 + "가져오기" 버튼을 추가해, 붙여넣은 JSON을 기존 `modules`/`rules` 상태로 변환 — 저장은 여전히 기존 "저장" 버튼(기존 PUT 엔드포인트) 그대로 사용, 새 API 없음.
+
+**검토했으나 기각한 것.** 원래 설계(새 DB 테이블·DSL 엔진·dry-run 미리보기)는 기존 엔진과 100% 중복이라 전부 기각 — §2 단순성 원칙 위반이었을 것. dry-run(등록 전 위반 건수 미리보기)도 이미 `saveIntent` 응답이 `violationCount`를 즉시 반환해(저장 즉시 확인 가능) 별도 미리보기 엔드포인트가 불필요했다.
+
+**남은 한계(이번 세션 범위 밖, 백로그로 기록).**
+- `INTENT_DRIFT`는 `EdgeType.IMPORT`만 검사(`detectIntentDrift` 하드코딩) — "A가 B를 직접 호출하면 안 된다"(FUNCTION_CALL) 규칙은 아직 선언 불가.
+- "사용자가 제안 → 벤치 통과 시 공용 게이트로 승격 → 보상(구독 개월/쿠폰)" 채널은 완전히 별개 이니셔티브(제출 UI+심사+보상 지급 로직 필요), 아이디어만 기록.
+
+**검증.** `npx tsc -b` 통과. GitHub OAuth 로그인 상태(실제 Chrome 세션)로 `codeprint` 자기 프로젝트 그래프에서 실측 — LLM으로 만들기 패널 펼치기 → 예시 JSON(`{"modules":[...],"rules":[...]}`) 붙여넣기 → 가져오기 클릭 → 모듈 2개·규칙 1개(from/to 드롭다운 포함)가 정확히 폼에 채워짐, 상태 메시지("가져옴 — 모듈 2개, 규칙 1개...") 확인. 실제 저장(PUT)은 자기 프로젝트 데이터를 바꾸므로 실행하지 않음(기존 저장 흐름은 이미 프로덕션에서 검증된 엔드포인트라 재검증 불필요). 클립보드 복사 버튼은 Chrome 확장 자동화 컨텍스트에서 `navigator.clipboard.writeText()` promise가 응답 없이 멈추는 것을 확인(권한 정책 관련 자동화 환경 제약으로 판단) — 코드 자체는 표준 Clipboard API 사용법이라 실제 사용자 클릭(신뢰된 제스처)에서는 정상 동작할 것으로 판단, 완전한 확인은 다음 실사용자 클릭 세션 권장.

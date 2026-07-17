@@ -12,6 +12,71 @@ interface Props {
   onSaved?: () => void  // 저장 후 경고 캐시 갱신용 콜백
 }
 
+// LLM에 그대로 붙여넣을 수 있는 규칙 생성 프롬프트 — 아래 JSON 붙여넣기가 기대하는 스키마와 1:1로 맞춰둔다
+const LLM_PROMPT_TEMPLATE = `아래는 Codeprint의 "의도 아키텍처" 규칙 형식입니다. 우리 프로젝트의 아키텍처 원칙을 설명할 테니, 이 JSON 형식으로 변환해줘.
+
+형식:
+{
+  "modules": [
+    { "name": "모듈 이름", "globs": ["경로 글로브 패턴", "..."] }
+  ],
+  "rules": [
+    { "from": "출발 모듈 이름", "to": "도착 모듈 이름" }
+  ]
+}
+
+규칙 의미: "from 모듈이 to 모듈을 import하면 안 된다"(금지 방향 의존)를 뜻합니다.
+글로브 문법: ** = 임의 경로(하위 폴더 포함), * = 폴더/파일명 세그먼트 하나, 파일 경로 전체 기준 매칭.
+
+예시:
+{
+  "modules": [
+    { "name": "app", "globs": ["**/app/**"] },
+    { "name": "legacy", "globs": ["**/legacy/**"] }
+  ],
+  "rules": [
+    { "from": "app", "to": "legacy" }
+  ]
+}
+
+우리 프로젝트의 아키텍처 원칙: [여기에 원하는 원칙을 자유롭게 설명하세요]
+
+위 형식에 맞는 JSON만 출력해줘(다른 설명 없이).`
+
+// JSON 스키마 파싱검증
+function parseImportedJson(text: string): { modules: IntentModule[]; rules: IntentRule[] } | { error: string } {
+  let data: unknown
+  try {
+    data = JSON.parse(text)
+  } catch {
+    return { error: '유효한 JSON이 아닙니다.' }
+  }
+  if (typeof data !== 'object' || data === null) return { error: 'JSON 객체가 아닙니다.' }
+  const obj = data as Record<string, unknown>
+  if (!Array.isArray(obj.modules) || !Array.isArray(obj.rules)) {
+    return { error: '"modules"·"rules" 배열이 필요합니다.' }
+  }
+  const modules: IntentModule[] = []
+  for (const m of obj.modules) {
+    if (typeof m !== 'object' || m === null) return { error: 'modules 항목 형식이 올바르지 않습니다.' }
+    const mo = m as Record<string, unknown>
+    if (typeof mo.name !== 'string' || !Array.isArray(mo.globs)) {
+      return { error: 'modules 항목에 name(문자열)·globs(배열)가 필요합니다.' }
+    }
+    modules.push({ name: mo.name, glob: mo.globs.filter((g): g is string => typeof g === 'string').join(', ') })
+  }
+  const rules: IntentRule[] = []
+  for (const r of obj.rules) {
+    if (typeof r !== 'object' || r === null) return { error: 'rules 항목 형식이 올바르지 않습니다.' }
+    const ro = r as Record<string, unknown>
+    if (typeof ro.from !== 'string' || typeof ro.to !== 'string') {
+      return { error: 'rules 항목에 from·to(문자열)가 필요합니다.' }
+    }
+    rules.push({ from: ro.from, to: ro.to })
+  }
+  return { modules, rules }
+}
+
 // 빈 줄·공백 제거 후 모듈 이름 목록 반환
 function moduleNames(modules: IntentModule[]) {
   return modules.map(m => m.name.trim()).filter(Boolean)
@@ -48,6 +113,10 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
   const [saving, setSaving] = useState(false)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [showLlmHelper, setShowLlmHelper] = useState(false)
+  const [promptCopied, setPromptCopied] = useState(false)
+  const [jsonInput, setJsonInput] = useState('')
+  const [importError, setImportError] = useState<string | null>(null)
 
   // 저장된 의도 아키텍처 로드
   const load = useCallback(async () => {
@@ -139,6 +208,36 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
     }
   }, [projectId, ignore, onSaved])
 
+  // 프롬프트 클립보드 복사
+  const copyPrompt = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(LLM_PROMPT_TEMPLATE)
+      setPromptCopied(true)
+      setTimeout(() => setPromptCopied(false), 2000)
+    } catch {
+      setImportError('클립보드 복사 실패 — 직접 선택해 복사하세요.')
+    }
+  }, [])
+
+  // LLM JSON 가져오기
+  const importJson = useCallback(() => {
+    setImportError(null)
+    const result = parseImportedJson(jsonInput)
+    if ('error' in result) {
+      setImportError(result.error)
+      return
+    }
+    if ((modules.length > 0 || rules.length > 0)
+        && !window.confirm('현재 편집 중인 모듈·규칙을 가져온 내용으로 덮어쓸까요?')) {
+      return
+    }
+    setModules(result.modules)
+    setRules(result.rules)
+    setJsonInput('')
+    setShowLlmHelper(false)
+    setStatusMsg(`가져옴 — 모듈 ${result.modules.length}개, 규칙 ${result.rules.length}개. 저장을 눌러 반영하세요.`)
+  }, [jsonInput, modules, rules])
+
   // 마이그레이션 경계 프리셋 — domain↛infrastructure는 DDD 컨벤션 프로젝트에서 이미 자동 게이트가 잡아주므로
   // 자동 게이트가 커버 못 하는 케이스(신규 코드가 폐기 예정 모듈을 참조하는 것 금지)를 예시로 보여준다
   const applyDddPreset = () => {
@@ -191,6 +290,41 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
           )}
         </div>
       )}
+
+      {/* LLM으로 규칙 생성 — 프롬프트 복사 + 결과 JSON 붙여넣기 */}
+      <div className="px-1">
+        <button onClick={() => setShowLlmHelper(v => !v)}
+          className="text-[10px] px-2 py-1 rounded bg-indigo-900/40 hover:bg-indigo-800/50 border border-indigo-800/60 text-indigo-300">
+          {showLlmHelper ? '△ LLM으로 만들기 닫기' : '▽ LLM으로 만들기'}
+        </button>
+        {showLlmHelper && (
+          <div className="mt-1.5 flex flex-col gap-1.5 border border-gray-800 rounded p-2 bg-gray-900/50">
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              아래 프롬프트를 복사해 원하는 LLM(ChatGPT·Claude 등)에 붙여넣고, 우리 프로젝트의 아키텍처 원칙을 설명하면 JSON을 만들어줍니다. 받은 JSON을 아래에 붙여넣으면 모듈·규칙 폼이 채워집니다.
+            </p>
+            <div className="flex gap-1.5 items-center">
+              <button onClick={copyPrompt}
+                className="text-[10px] px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300">
+                {promptCopied ? '복사됨 ✓' : '프롬프트 복사'}
+              </button>
+            </div>
+            <textarea
+              value={jsonInput}
+              onChange={e => { setJsonInput(e.target.value); setImportError(null) }}
+              placeholder='LLM이 만든 JSON을 여기 붙여넣으세요 — { "modules": [...], "rules": [...] }'
+              rows={4}
+              className="w-full text-[11px] bg-gray-800/80 border border-gray-700 rounded px-1.5 py-1 text-gray-300 placeholder-gray-600 focus:outline-none focus:border-indigo-600 font-mono"
+            />
+            {importError && (
+              <p className="text-[11px] text-red-500/80">{importError}</p>
+            )}
+            <button onClick={importJson} disabled={!jsonInput.trim()}
+              className="self-start text-[10px] px-2 py-1 rounded bg-indigo-700 hover:bg-indigo-600 text-white disabled:opacity-40">
+              가져오기
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* 모듈 목록 */}
       <div>

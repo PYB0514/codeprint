@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.146.0',
+    date: '2026-07-18',
+    title: '아키텍처 의도 규칙 — LLM으로 만들기 지원',
+    type: 'feature',
+    items: [
+      { category: '아키텍처 의도', desc: '"LLM으로 만들기" 버튼으로 규칙 생성 프롬프트를 복사해 원하는 LLM에 붙여넣고, 받은 JSON을 그대로 가져와 모듈·금지 의존 규칙 폼을 채울 수 있습니다.' },
+    ],
+  },
+  {
     version: 'v0.145.0',
     date: '2026-07-18',
     title: '서비스 간 동기 호출 체인 감지 — Python·JavaScript/TypeScript 지원',
