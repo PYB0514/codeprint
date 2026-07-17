@@ -554,3 +554,17 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 **한계 — 확정적 보장 아님.** max-lifetime=120000은 **관측 2회**(PR #600 약 3분, PR #604 3분 30초)에서 역산한 값이라, Railway/Postgres 쪽의 실제 idle timeout 임계값이 정확히 고정된 상수라는 보장은 없다(인프라 벤더의 내부 동작이라 문서화돼 있지 않음). 검증은 배포 후 다음 콜드스타트 몇 차례를 `railway logs`로 관찰해 "Failed to validate connection" 경고가 재발하는지로 확인해야 한다 — 재발하면 max-lifetime을 더 줄이는 후속 조정이 필요할 수 있음.
 
 **검증.** 로컬 Docker Postgres로 `ParsedFileCacheIntegrationTest` 등 통합테스트 재실행 — Spring 컨텍스트가 새 Hikari 설정으로 정상 부팅됨을 확인(프로퍼티 바인딩 오류 없음), 백엔드 전체 1008개 테스트 green. 프로덕션 실제 효과는 배포 후 관찰 필요(위 한계 참조).
+
+## HikariCP 튜닝이 프로덕션에 실제로는 한 번도 적용된 적 없었던 근본 원인 발견·수정 (2026-07-17, codeprint_136)
+
+**문제.** SECURITY_REVIEW.md의 "DB 유저 최소권한 미확인" 항목을 점검하려다, 그 계획을 세우는 과정에서 훨씬 근본적인 결함을 발견했다 — `DataSourceConfig.java`가 Railway의 `DATABASE_URL` 환경변수를 파싱해 `new HikariDataSource()`로 **수동으로 DataSource 빈을 생성**하는데, `jdbcUrl`/`username`/`password`/`driverClassName`만 세팅하고 `application.yml`의 `spring.datasource.hikari.*`(maximum-pool-size·minimum-idle·idle-timeout·max-lifetime)는 전혀 읽지 않고 있었다. 이 빈은 `@ConditionalOnExpression("!'${DATABASE_URL:}'.isEmpty()")`로 프로덕션(Railway가 `DATABASE_URL` 주입)에서만 활성화되고, 로컬 개발(`DATABASE_URL` 미설정)에서는 표준 Spring Boot 자동설정(YAML을 정확히 읽음)이 대신 쓰여 지금까지 로컬에서는 문제가 전혀 드러나지 않았다.
+
+**파급 범위.** `git log --follow`로 확인한 결과 이 빈은 아주 오래전(`8a13b7e`)에 도입됐다 — 즉 **오늘(2026-07-17) 세션에서 두 번 시도한 HikariCP 튜닝(첫 번째: minimum-idle 1→2·max-lifetime 120000 명시, PR #606) 뿐 아니라, 2026-07-15에 이미 결정·기록했던 "유휴 커넥션 10→1 축소"(Serverless 배선 당시)조차 프로덕션에 한 번도 실제로 반영된 적이 없었다.** 즉 GATE_GAPS.md [G-6] 전체 조사 기간 동안 프로덕션은 계속 HikariCP **완전 기본값**(maximum-pool-size 10, minimum-idle 10, idle-timeout 10분, max-lifetime 30분)으로 동작해왔다. 오늘 "PR #606 배포 직후 7분은 조용했는데 바로 다음 콜드스타트(PR #607)에선 재발"했던 관측이 설명 안 되던 것도 이 때문이었을 가능성이 높다 — 애초에 "같은 설정"이 아니라 "설정이 반영된 적 없는 상태"를 매번 관찰하고 있었다.
+
+**수정.** `DataSourceConfig.dataSource()` Bean 메서드에 `@ConfigurationProperties("spring.datasource.hikari")` 애노테이션 한 줄 추가 — Spring Boot 공식 패턴(Bean 메서드에 이 애노테이션을 붙이면 생성된 인스턴스에 해당 prefix 설정을 세터로 바인딩, 서드파티 컴포넌트 설정 시 공식 권장 방식)으로 기존 `application.yml`의 Hikari 블록을 그대로 재사용 — 값 중복 정의 없이 최소 수정.
+
+**검증 방법의 교훈.** `ApplicationContextRunner` 테스트를 처음 작성했을 때 `.withUserConfiguration(DataSourceConfig.class)`만으로는 바인딩이 적용되지 않아(기대 5, 실제 10) 실패했다 — `@ConfigurationProperties` 바인딩은 `ConfigurationPropertiesBindingPostProcessor`가 있어야 동작하는데, 이건 `@SpringBootApplication`이 암묵적으로 켜주는 자동설정(`ConfigurationPropertiesAutoConfiguration`, `org.springframework.boot.autoconfigure.context` 패키지)이라 순수 `ApplicationContextRunner`엔 기본으로 없다. `.withConfiguration(AutoConfigurations.of(ConfigurationPropertiesAutoConfiguration.class))`를 추가해서야 실제 운영 환경과 동일한 바인딩 경로를 재현해 검증할 수 있었다 — **1차 테스트가 통과했다면 오히려 이 수정이 실제로 동작한다는 걸 증명 못 했을 뻔했다**(테스트가 "바인딩 안 됨"을 우연히 가려버렸을 케이스).
+
+**회귀 가드.** `DataSourceConfigTest` 신규 2건 — ①`spring.datasource.hikari.*` 값이 실제로 바인딩되는지(maximumPoolSize·minimumIdle·maxLifetime) + 기존 URL 파싱 로직(username·jdbcUrl)이 회귀 없는지 함께 확인 ②`DATABASE_URL` 미설정 시 이 빈이 여전히 생성 안 되는지(로컬 개발 경로 무회귀).
+
+**다음 단계.** 이 수정이 배포된 뒤에야 비로소 "짧은 max-lifetime이 G-6을 실제로 줄이는가"를 처음으로 제대로 검증할 수 있다 — 오늘까지의 관측은 전부 기본값 상태에서 나온 데이터였다. 배포 후 `railway logs`로 재관찰 예정.
