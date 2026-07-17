@@ -24,6 +24,10 @@ public class GraphWarningService {
             "DB_LAYER_BYPASS", "CROSS_CONTEXT_IMPORT", "CROSS_DOMAIN_CALL");
     private static final List<String> LAYERED_RULE_TYPES = List.of("LAYERED_REVERSE_DEPENDENCY", "LAYERED_BYPASS");
     private static final List<String> FEATURE_SLICE_RULE_TYPES = List.of("CROSS_FEATURE_IMPORT", "FEATURE_LAYER_VIOLATION");
+    // 모노레포 MSA 서비스 경계 축 — DDD(바운디드 컨텍스트)·의존방향과 독립된 세 번째 축(2026-07-17,
+    // decisions/DECISIONS_ANALYSIS.md "모노레포 MSA 신규 규칙군" 참조). featureSlice와 동일하게 자체 게이트로
+    // 해당 구조(서비스 2개 이상이 DB 접근)일 때만 발화.
+    private static final List<String> MSA_RULE_TYPES = List.of("SHARED_DATABASE_ACCESS");
     private static final List<String> UNIVERSAL_RULE_TYPES = List.of(
             "CYCLIC_IMPORT", "BROKEN_INTERFACE_CHAIN", "ASYNC_SELF_CALL", "MISSING_CONVERTER_MIGRATION",
             "MISSING_TRANSACTIONAL_DELETE", "DEAD_CODE", "HIGH_FAN_OUT",
@@ -68,6 +72,8 @@ public class GraphWarningService {
         warnings.addAll(detectCrossFeatureImport(nodes, edges));
         // React/JS 레이어 단방향 위반(app→features→shared) — 하위 레이어가 상위를 import. CROSS_FEATURE와 동일 게이트.
         warnings.addAll(detectFeatureLayerViolation(nodes, edges));
+        // 모노레포 MSA shared database 안티패턴 — 자체 게이트(서비스 2개 이상이 DB 접근)로 해당 구조만 발화
+        warnings.addAll(detectSharedDatabaseAccess(nodes, edges));
         // 사용자가 선언한 의도 아키텍처와 실제 의존을 대조 (컨벤션 무관 — 비-DDD 프로젝트도 적용)
         warnings.addAll(detectIntentDrift(nodes, edges, intent));
         // 노드 위치 조회용 인덱스 — 경고에 발생 파일 경로를 부여하기 위함
@@ -208,28 +214,31 @@ public class GraphWarningService {
 
     // 게이트 테마 표면화용 값 객체 — 현재 적용 중인 규칙 그룹과 각 그룹의 규칙 타입 목록(1~2단계, PROGRESS.md "게이트 테마" 참조)
     // selfDeclared — gatePolicy가 AUTO가 아니라 사용자가 직접 방향을 선언했는지(프론트 "직접 선언" 표시용)
+    // msaActive/msaRuleTypes — featureSlice와 동일한 독립 축(2026-07-17, 서비스 경계 vs DDD 바운디드 컨텍스트는 별개 개념)
     public record ActiveTheme(String theme, List<String> themeRuleTypes, boolean featureSliceActive,
                                List<String> featureSliceRuleTypes, List<String> universalRuleTypes,
-                               boolean dddDetected, GatePolicy gatePolicy, boolean selfDeclared) {}
+                               boolean dddDetected, GatePolicy gatePolicy, boolean selfDeclared,
+                               boolean msaActive, List<String> msaRuleTypes) {}
 
     // 현재 프로젝트에 적용 중인 게이트 테마(DDD/LAYERED/GENERIC) + 규칙 목록을 계산 — detect()의 분기와 동일 조건 재사용
     public ActiveTheme detectActiveTheme(List<Node> nodes, List<Edge> edges, GatePolicy gatePolicy) {
         boolean dddDetected = isDddProject(nodes);
         boolean featureSliceActive = isFeatureSliceProject(nodes);
+        boolean msaActive = hasMultiServiceDbAccess(nodes, edges);
         boolean selfDeclared = gatePolicy != GatePolicy.AUTO;
         boolean useDdd = gatePolicy == GatePolicy.DDD || (gatePolicy == GatePolicy.AUTO && dddDetected);
         if (useDdd) {
             return new ActiveTheme("DDD", DDD_RULE_TYPES, featureSliceActive, FEATURE_SLICE_RULE_TYPES,
-                    UNIVERSAL_RULE_TYPES, dddDetected, gatePolicy, selfDeclared);
+                    UNIVERSAL_RULE_TYPES, dddDetected, gatePolicy, selfDeclared, msaActive, MSA_RULE_TYPES);
         }
         // LAYERED 강제 시엔 실제 레이어 구조 무관하게 표시(강제 자체가 목적) — AUTO면 자체 게이트(레이어 2종 이상) 충족해야 표시
         boolean useLayered = gatePolicy == GatePolicy.LAYERED || (gatePolicy == GatePolicy.AUTO && hasLayeredStructure(nodes));
         if (useLayered) {
             return new ActiveTheme("LAYERED", LAYERED_RULE_TYPES, featureSliceActive, FEATURE_SLICE_RULE_TYPES,
-                    UNIVERSAL_RULE_TYPES, dddDetected, gatePolicy, selfDeclared);
+                    UNIVERSAL_RULE_TYPES, dddDetected, gatePolicy, selfDeclared, msaActive, MSA_RULE_TYPES);
         }
         return new ActiveTheme("GENERIC", List.of(), featureSliceActive, FEATURE_SLICE_RULE_TYPES,
-                UNIVERSAL_RULE_TYPES, dddDetected, gatePolicy, selfDeclared);
+                UNIVERSAL_RULE_TYPES, dddDetected, gatePolicy, selfDeclared, msaActive, MSA_RULE_TYPES);
     }
 
     // detectLayeredViolations의 "분류된 레이어 2종 이상" 게이트만 떼어내 재사용 — 실제 위반 목록 계산 없이 적용 여부만 판정
@@ -244,6 +253,26 @@ public class GraphWarningService {
             if (layer != null) present.add(layer);
         }
         return present.size() >= 2;
+    }
+
+    // detectSharedDatabaseAccess의 "서비스 2개 이상이 DB 접근" 게이트만 떼어내 재사용 — 실제 위반 목록 계산 없이 적용 여부만 판정
+    private boolean hasMultiServiceDbAccess(List<Node> nodes, List<Edge> edges) {
+        Map<UUID, String> nodeFilePaths = new HashMap<>();
+        Set<UUID> dbTableNodeIds = new HashSet<>();
+        for (Node n : nodes) {
+            nodeFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+            if (n.getType() == NodeType.DB_TABLE) dbTableNodeIds.add(n.getId());
+        }
+        if (dbTableNodeIds.isEmpty()) return false;
+        Set<String> services = new HashSet<>();
+        for (Edge e : edges) {
+            if (!DB_ACCESS_EDGE_TYPES.contains(e.getType())) continue;
+            if (!dbTableNodeIds.contains(e.getTargetNodeId())) continue;
+            String service = serviceOf(nodeFilePaths.getOrDefault(e.getSourceNodeId(), ""));
+            if (service != null) services.add(service);
+            if (services.size() >= 2) return true;
+        }
+        return false;
     }
 
     // IMPORT 엣지에서 순환 의존 탐지 (DFS 사이클 검출)
@@ -1519,6 +1548,82 @@ public class GraphWarningService {
             w.put("message", "@Convert 컨버터 감지: " + n.getName()
                     + " — 기존 평문 데이터에 대한 Flyway 마이그레이션이 필요합니다."
                     + " 수정: 기존 행을 새 형식으로 변환하는 V{N}__migrate_{table}.sql 을 작성하세요.");
+            warnings.add(w);
+        }
+        return warnings;
+    }
+
+    // DB 테이블 접근 엣지 타입 — 서비스가 테이블을 "쓰고 있다"는 사실 판정에는 CRUD 세부 구분이 무의미해 하나로 묶는다.
+    private static final Set<EdgeType> DB_ACCESS_EDGE_TYPES = EnumSet.of(
+            EdgeType.DB_READ, EdgeType.DB_WRITE, EdgeType.DB_CREATE, EdgeType.DB_UPDATE, EdgeType.DB_DELETE);
+    // 모노레포 서비스 경계 판별용 래퍼 디렉터리 별칭 — services/apps/packages/modules 뒤 세그먼트를 서비스명으로,
+    // 없으면(예: spring-petclinic-microservices처럼 서비스가 바로 최상위인 레포) 첫 세그먼트를 그대로 서비스명으로 쓴다.
+    private static final Set<String> SERVICE_WRAPPER_DIRS = Set.of("services", "apps", "packages", "modules");
+
+    // 파일 경로에서 모노레포 서비스(최상위 디렉터리) 식별자를 추출 — 판별 불가(세그먼트 부족)면 null
+    private static String serviceOf(String filePath) {
+        if (filePath == null) return null;
+        String p = filePath.replace("\\", "/");
+        while (p.startsWith("/")) p = p.substring(1);
+        String[] segments = p.split("/");
+        if (segments.length < 2) return null;
+        int idx = SERVICE_WRAPPER_DIRS.contains(segments[0].toLowerCase()) ? 1 : 0;
+        if (idx >= segments.length - 1) return null;
+        return segments[idx];
+    }
+
+    // 서로 다른 서비스(최상위 디렉터리) 2개 이상이 같은 DB_TABLE에 접근 — MSA shared database 안티패턴.
+    // 서비스 경계·의존방향(DDD/헥사고날)과 독립된 축이라 GatePolicy 선택과 무관하게 항상 평가한다(2026-07-17).
+    private List<Map<String, Object>> detectSharedDatabaseAccess(List<Node> nodes, List<Edge> edges) {
+        Map<UUID, String> nodeFilePaths = new HashMap<>();
+        Map<UUID, String> nameMap = new HashMap<>();
+        Set<UUID> dbTableNodeIds = new HashSet<>();
+        Map<UUID, String> tableNameByNodeId = new HashMap<>();
+        for (Node n : nodes) {
+            nodeFilePaths.put(n.getId(), n.getFilePath() != null ? n.getFilePath() : "");
+            nameMap.put(n.getId(), n.getName());
+            if (n.getType() == NodeType.DB_TABLE) {
+                dbTableNodeIds.add(n.getId());
+                tableNameByNodeId.put(n.getId(), n.getName());
+            }
+        }
+        if (dbTableNodeIds.isEmpty()) return List.of();
+
+        // 테이블별 접근 서비스 → 대표 엣지 1개(같은 서비스 내 FILE·FUNCTION 중복 엣지는 첫 것만 보존)
+        Map<UUID, Map<String, Edge>> serviceEdgesByTable = new LinkedHashMap<>();
+        Set<String> allServices = new HashSet<>();
+        for (Edge e : edges) {
+            if (!DB_ACCESS_EDGE_TYPES.contains(e.getType())) continue;
+            if (!dbTableNodeIds.contains(e.getTargetNodeId())) continue;
+            String srcPath = nodeFilePaths.getOrDefault(e.getSourceNodeId(), "");
+            if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))) continue;
+            String service = serviceOf(srcPath);
+            if (service == null) continue;
+            allServices.add(service);
+            serviceEdgesByTable.computeIfAbsent(e.getTargetNodeId(), k -> new LinkedHashMap<>())
+                    .putIfAbsent(service, e);
+        }
+        // 서비스가 2개 미만이면 모노레포 MSA 구조로 보지 않음 — 게이트(단일 서비스 레포는 발화 불가)
+        if (allServices.size() < 2) return List.of();
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Map.Entry<UUID, Map<String, Edge>> entry : serviceEdgesByTable.entrySet()) {
+            Map<String, Edge> byService = entry.getValue();
+            if (byService.size() < 2) continue;
+
+            String tableName = tableNameByNodeId.get(entry.getKey());
+            List<String> nodeIds = new ArrayList<>();
+            for (Edge e : byService.values()) nodeIds.add(e.getSourceNodeId().toString());
+            nodeIds.add(entry.getKey().toString());
+
+            Map<String, Object> w = new LinkedHashMap<>();
+            w.put("type", "SHARED_DATABASE_ACCESS");
+            w.put("severity", "MEDIUM");
+            w.put("nodeIds", nodeIds);
+            w.put("edgeIds", byService.values().stream().map(e -> e.getId().toString()).toList());
+            w.put("message", "공유 데이터베이스 안티패턴: 테이블 '" + tableName + "'을(를) 서로 다른 서비스 "
+                    + String.join(", ", byService.keySet()) + "가 함께 접근합니다."
+                    + " 수정: 테이블 소유권을 한 서비스로 모으고 다른 서비스는 API로 데이터를 조회하세요.");
             warnings.add(w);
         }
         return warnings;

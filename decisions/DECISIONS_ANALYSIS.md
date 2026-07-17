@@ -1925,3 +1925,22 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **결과.** 31개 소스 파일, 노드 84·엣지 147 — **17종 규칙 전부 위반 0건**(`DOMAIN_IMPORTS_INFRA`·`INTERFACES_IMPORTS_INFRA` 포함). buckpal 자체가 "도메인이 어댑터를 모른다"를 시범 보이는 교과서 레포라 실제로 이 위반이 없어야 정상 — 승격된 공통 게이트가 정상 레퍼런스 코드에 오탐을 만들지 않는다는 걸 확인.
 
 **한계.** `LocalAnalyzer`(analyzeLocal 진입점)는 `detect(nodes, edges)`(GatePolicy 인자 없음, 항상 AUTO)만 노출해 "LAYERED 강제 선언 시에도 공통 게이트가 계속 잡는다"는 #597의 핵심 개선(사각지대 해소)은 이 경로로 재현 못 함 — 그건 이미 `GraphWarningServiceTest`(`detect_layeredPolicyForced_stillAppliesUniversalDependencyRule`)가 코드 레벨 assertion으로 커버 중. 이번 실측은 "정책 무관 승격이 정상 코드에 새 오탐을 안 만드는가"만 확인하는 보완적 검증.
+
+## 모노레포 MSA 신규 규칙군 ① SHARED_DATABASE_ACCESS 구현 (2026-07-17, codeprint_135)
+
+**배경.** 앞선 스코프 조사("모노레포 MSA 신규 규칙군 스코프 조사")에서 ①shared database 안티패턴은 기존 `DB_READ`/`DB_WRITE` 엣지 + `DB_TABLE` 노드 전역 dedup만으로 탐지 가능(신규 엣지 불필요), ②동기 호출 체인 규칙은 완전 신규 분석기가 필요하다고 결론지었다. 사용자가 "②도 구현해도 좋지만 일단 벤치마킹 먼저"라고 지시 — `spring-petclinic-microservices`(공식 Spring 마이크로서비스 레퍼런스, 이미 이 프로젝트가 `spring-petclinic`으로 도그푸딩하던 레포의 마이크로서비스 버전)로 실제 서비스 경계 명명 관례와 서비스 간 호출 패턴을 확인한 뒤, 스코프가 명확한 ①만 이번 세션에서 구현했다.
+
+**벤치마킹 발견.**
+- 서비스 경계 명명: `spring-petclinic-{customers,vets,visits}-service` — `features/`처럼 강한 단일 별칭이 없고, 최상위 디렉터리 자체가 서비스 단위. 반면 실무에서는 `services/{x}/`·`apps/{x}/`처럼 한 단계 감싸는 변형도 흔함(Nx/Turborepo 컨벤션).
+- 서비스별 테이블 소유권 확인(정상 사례): `customers-service`→`owners`/`pets`/`types`, `vets-service`→`specialties`/`vets`, `visits-service`→`visits` — 서로 겹치지 않음(database-per-service 정석).
+- 호출 체인(②)은 `WebClient.builder().build().get().uri("http://customers-service/owners/{id}")`처럼 **런타임 서비스 디스커버리 논리명**을 타깃으로 써서, URL 문자열 매칭만으론 부족하고 논리명→실제 디렉터리 퍼지 매칭까지 필요함을 확인 — 스코프 조사 결론(완전 신규 분석기 필요)을 재확인, 착수 안 함.
+
+**설계.** `GraphWarningService`에 `detectSharedDatabaseAccess()` 신설.
+- **서비스 판별**: `serviceOf(filePath)` — `services`/`apps`/`packages`/`modules` 래퍼 디렉터리가 있으면 그 다음 세그먼트, 없으면 첫 세그먼트를 서비스명으로. 벤치마킹에서 확인한 두 명명 관례(래퍼 있음/없음) 모두 커버.
+- **탐지 로직**: `DB_TABLE`별로 접근하는 서비스 집합을 모아 2개 이상이면 발화. 전역 게이트로 "서비스 2개 이상이 실제 DB 접근"이 안 되면(단일 서비스 모놀리스) 즉시 빈 목록 — `isDddProject`·`isFeatureSliceProject`와 동일한 자체 게이트 패턴.
+- **축 분류**: DDD(바운디드 컨텍스트)·의존방향과 독립된 **세 번째 축**이라 `MSA_RULE_TYPES`로 분리, `GatePolicy` 선택과 무관하게 항상 평가(featureSlice와 동일 취급) — `ActiveTheme`에 `msaActive`/`msaRuleTypes` 필드 추가.
+- **severity=MEDIUM**(도입 초기): 새 휴리스틱이라 즉시 HIGH로 머지를 막지 않음 — `PrReviewService.isGating()`이 HIGH만 게이팅하므로 MEDIUM은 정보성 경고로만 노출(INTERFACES_IMPORTS_INFRA가 tier-gating으로 달성한 "관찰 기간"과 같은 효과를 severity로 달성).
+
+**검증.** `GraphWarningServiceTest` 8건 신규(발화·단일서비스 미발화·테이블 불일치 미발화·테스트코드 제외·래퍼 디렉터리 인식·정책 무관 적용·ActiveTheme 반영 2건), 백엔드 전체 987개 테스트 green. **실측**: `spring-petclinic-microservices` 저장소 루트 전체(84개 파일, 3개 서비스)를 `analyzeLocal`로 분석 — `SHARED_DATABASE_ACCESS` 0건(각 서비스가 서로 다른 테이블만 소유하는 정상 사례라 0건이 맞는 결과, 위 벤치마킹에서 확인한 테이블 소유권과 일치). `analyzeLocal` 자기분석 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변 — 자기 레포엔 서비스 2개 이상 DB 접근 패턴이 없어 회귀 없음.
+
+**남은 것 — ②동기 호출 체인 규칙, 착수 안 함.** 신규 `EdgeType`(예: `SERVICE_CALL`) + 언어·프레임워크별 HTTP 클라이언트 호출 추출기(Java WebClient/RestTemplate/FeignClient, Python requests, JS axios 등) + 논리 서비스명→디렉터리 퍼지 매칭이 전부 필요한 별도 착수 건. 스코프가 이번 ①보다 훨씬 크고 언어별 정밀도 튜닝이 반복될 가능성이 높아(이 프로젝트의 다른 룰들이 겪은 "동일 함정 반복 재발" 패턴), 착수 여부·순서는 별도 세션에서 사용자와 재확인 필요.

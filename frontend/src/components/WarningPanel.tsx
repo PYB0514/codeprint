@@ -65,6 +65,7 @@ export const WARNING_META: Record<string, { color: string; severity: string }> =
   LAYERED_REVERSE_DEPENDENCY:   { color: '#dc2626', severity: 'HIGH'   },
   LAYERED_BYPASS:               { color: '#14b8a6', severity: 'MEDIUM' },
   INTENT_DRIFT:                 { color: '#a855f7', severity: 'HIGH'   },
+  SHARED_DATABASE_ACCESS:       { color: '#0891b2', severity: 'MEDIUM' },
 }
 
 // 경고 타입 라벨 — React 컴포넌트 밖(graphLayout.ts의 MD 내보내기)에서도 호출되므로 훅 대신 i18n 인스턴스 직접 사용

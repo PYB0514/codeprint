@@ -120,6 +120,10 @@
       "INTENT_DRIFT": {
         "example": "An actual import violates a forbidden rule declared under the graph sidebar's \"Architecture Intent\" (e.g. domain → infrastructure forbidden).",
         "limitation": "Only works in projects that have declared a rule — this check doesn't run if none has been declared."
+      },
+      "SHARED_DATABASE_ACCESS": {
+        "example": "Two different services (top-level directories) in a monorepo both read and write the same DB table — the shared-database MSA antipattern that breaks service autonomy.",
+        "limitation": "Treats the top-level directory as the service unit (services/apps/packages wrappers use the next segment instead) — never fires for a single-service monolith, only active in monorepos where 2+ services actually access a DB table."
       }
     }
   },
@@ -515,6 +519,7 @@
       "selfDeclaredSuffix": "(self-declared)",
       "themeRulesLabel": "{{theme}} rules",
       "featureSliceRulesLabel": "Feature-slice rules",
+      "msaRulesLabel": "Monorepo service rules",
       "universalRulesLabel": "Always-applied rules",
       "policySelectorLabel": "Gate policy",
       "policyLabel": { "AUTO": "Auto", "DDD": "DDD", "LAYERED": "Layered" },
@@ -633,7 +638,8 @@
       "HIGH_FAN_OUT": { "label": "Responsibility Concentrated in One Function", "desc": "A single function calls more than 7 other functions — it does too much, so the impact of changes is large. Consider splitting it by responsibility." },
       "LAYERED_REVERSE_DEPENDENCY": { "label": "Reversed Layer Dependency", "desc": "A lower layer (e.g. Repository) imports an upper layer (e.g. Controller) — the layer structure is inverted, making reuse and testing harder." },
       "LAYERED_BYPASS": { "label": "Service Layer Bypass", "desc": "Controller skips Service and calls Repository directly — business logic risks scattering into the Controller." },
-      "INTENT_DRIFT": { "label": "Declared Structure Rule Violation", "desc": "An import that violates a prohibition rule you declared yourself in \"Architecture Intent\" — code that has drifted from the structure rules you set." }
+      "INTENT_DRIFT": { "label": "Declared Structure Rule Violation", "desc": "An import that violates a prohibition rule you declared yourself in \"Architecture Intent\" — code that has drifted from the structure rules you set." },
+      "SHARED_DATABASE_ACCESS": { "label": "Shared Database Antipattern", "desc": "Different services in a monorepo access the same DB table — consolidate table ownership into one service and have others query it through an API." }
     },
     "ignoreRulesTitle": "Ignore Rules",
     "noTypeLabel": "All Types",

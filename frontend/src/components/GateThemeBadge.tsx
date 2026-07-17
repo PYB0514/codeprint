@@ -14,6 +14,8 @@ interface ActiveTheme {
   dddDetected: boolean
   gatePolicy: GatePolicy
   selfDeclared: boolean
+  msaActive: boolean
+  msaRuleTypes: string[]
 }
 
 interface Props {
@@ -84,6 +86,12 @@ export default function GateThemeBadge({ projectId }: Props) {
             <div>
               <p className="text-gray-500 mb-1">{t('graphPage.gateTheme.featureSliceRulesLabel')}</p>
               <p className="text-gray-300 leading-relaxed">{theme.featureSliceRuleTypes.join(', ')}</p>
+            </div>
+          )}
+          {theme.msaActive && (
+            <div>
+              <p className="text-gray-500 mb-1">{t('graphPage.gateTheme.msaRulesLabel')}</p>
+              <p className="text-gray-300 leading-relaxed">{theme.msaRuleTypes.join(', ')}</p>
             </div>
           )}
           <div>
