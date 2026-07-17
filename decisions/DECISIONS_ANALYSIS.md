@@ -1897,3 +1897,19 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **검증.** `GraphWarningServiceTest` 기존 케이스 중 이 분기에 의존하던 2개를 수정(`detectActiveTheme_dddStructure_returnsDdd` 규칙 수 5→3, `detect_dddPolicy_appliesDddRules`를 여전히 DDD 전용인 `DB_LAYER_BYPASS` 기준으로 교체) + 신규 케이스 2개 추가(LAYERED 강제 시에도 공통 게이트가 계속 적용됨 / 중복 방지 가드 동작). 백엔드 전체 테스트 980개 중 7개 실패는 전부 Docker Postgres 연결 오류(`ParsedFileCacheIntegrationTest`·`PaymentApplicationServiceConcurrencyIntegrationTest`·`PostGraphSnapshotIntegrationTest`, 이번 변경과 무관한 환경 이슈 — Docker 기동 후 재검증). `GraphWarningServiceTest`(이번 변경의 직접 대상) 전체 green.
 
 **프론트엔드 변경 불필요.** `GateThemeBadge.tsx`는 `universalRuleTypes`/`themeRuleTypes`를 백엔드가 준 그대로 범용 렌더링하고 있어, 새로 옮긴 2종은 코드 변경 없이 자동으로 "공통 규칙" 섹션에 나타난다.
+
+## 모노레포 MSA 신규 규칙군 스코프 조사 — "기존 엣지 재활용" 전제 절반만 성립 (2026-07-17, codeprint_135)
+
+**배경.** PROGRESS.md "게이트 테마" 3단계 후보 — 사용자가 "결정 필요 없는 것부터 진행"을 지시해 자리 비운 사이, 이전부터 "API_CALL·DB_READ/WRITE 엣지 기존재 활용"으로 명시돼 있던 이 항목의 실제 착수 스코프를 조사(구현은 하지 않음, 헥사고날 조사와 동일 패턴). 두 후보 규칙: ①"서비스 A·B가 같은 테이블에 쓰기"(shared database 안티패턴) ②"서비스 간 동기 호출 체인 N단계"(distributed monolith 신호).
+
+**조사 방법.** `exploreLocal find`로 `EdgeType`은 찾았으나 `API_CALL`/`DB_READ` 같은 열거형 상수 리터럴은 식별자 검색이라 매치되지 않아(빈 결과) Grep으로 전환해 `GraphBuilder.java`의 실제 엣지 생성 코드를 직접 확인.
+
+**①은 전제대로 재활용 가능.** `DB_TABLE` 노드는 테이블명 기준으로 전역 dedup되고(같은 이름이면 서비스 경계와 무관하게 노드 1개), `FILE`→`DB_TABLE` 방향 `DB_READ`/`DB_WRITE` 엣지가 이미 존재한다. 서로 다른 최상위 디렉터리(="서비스" 후보)에 속한 파일 2개 이상이 같은 `DB_TABLE` 노드로 수렴하는 패턴만 잡으면 되므로, **신규 엣지 추출 없이 기존 데이터만으로 탐지 가능** — PROGRESS.md 전제가 맞다.
+
+**②는 전제가 틀렸다 — API_CALL은 서비스 간 호출을 담지 않는다.** `GraphBuilder.java` 569~622행을 보면 `API_CALL` 엣지는 **오직 "프론트엔드 axios/fetch 호출 → 같은 저장소 내 백엔드 컨트롤러"** 패턴만 생성한다(`pf.apiCalls()`는 프론트 API 호출 추출, `pf.controllerMappings()`는 백엔드 라우트 매핑 — 둘을 경로 매칭). **백엔드 서비스가 다른 백엔드 서비스를 호출하는 패턴(RestTemplate·WebClient·Feign·서비스 간 axios)을 추출하는 로직 자체가 없다.** 즉 "동기 호출 체인 N단계" 규칙은 기존 엣지 재활용이 아니라 **완전히 새로운 분석기(HTTP 클라이언트 호출 추출 + 대상 서비스 라우트 해소)가 필요한 신규 착수 항목** — 스코프가 원래 백로그 서술보다 훨씬 크다.
+
+**부가 리스크 — "서비스" 경계 자체가 약한 컨벤션.** 두 규칙 모두 "어느 최상위 디렉터리가 하나의 서비스인가"를 먼저 판별해야 하는데, 기존 피처-슬라이스 감지(`featureOf()`)가 기댄 `features/`처럼 사실상 표준인 단일 별칭이 MSA 모노레포엔 없다(Gradle/Maven 멀티모듈 임의 명명, Nx `apps/`, Turborepo `apps/`+`packages/`, `services/{x}/` 등 제각각). 이 프로젝트의 정밀도 우선 철학(오탐 낮추기 위해 값싼 게이트를 겹겹이 두는 방식)에 비춰보면, 서비스 경계 오판별이 두 규칙 모두의 정밀도를 좌우하는 단일 실패점이 된다 — DDD 마이그레이션 가이드 아이디어(PROGRESS.md, 추론 난이도 이유로 보류)와 유사한 종류의 리스크.
+
+**판단 — 조사만 완료, 착수는 보류.** ①(shared DB)은 값싸고 스코프가 명확하지만, ②(호출 체인)는 신규 분석기가 필요해 원래 백로그가 암시한 규모보다 훨씬 크다 — 이 프로젝트 전례(헥사고날 스코프 조사 등)와 마찬가지로 스코프가 예상과 달라지는 발견 자체는 사용자 판단이 필요한 지점이라 임의로 착수하지 않는다. PROGRESS.md에 이 조사 결과를 반영.
+
+**검증.** 코드 읽기·분석만 수행, 프로덕션 코드 변경 없음.
