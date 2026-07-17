@@ -568,3 +568,22 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 **회귀 가드.** `DataSourceConfigTest` 신규 2건 — ①`spring.datasource.hikari.*` 값이 실제로 바인딩되는지(maximumPoolSize·minimumIdle·maxLifetime) + 기존 URL 파싱 로직(username·jdbcUrl)이 회귀 없는지 함께 확인 ②`DATABASE_URL` 미설정 시 이 빈이 여전히 생성 안 되는지(로컬 개발 경로 무회귀).
 
 **다음 단계.** 이 수정이 배포된 뒤에야 비로소 "짧은 max-lifetime이 G-6을 실제로 줄이는가"를 처음으로 제대로 검증할 수 있다 — 오늘까지의 관측은 전부 기본값 상태에서 나온 데이터였다. 배포 후 `railway logs`로 재관찰 예정.
+
+## 프로덕션 DB 최소권한 — postgres 슈퍼유저 단일 계정 → 앱 전용 스코프 역할 교체 (2026-07-17, codeprint_136)
+
+**문제.** SECURITY_REVIEW.md의 "DB 유저 권한이 최소권한으로 운영되는지 미확인" 항목을 점검하다 실제 리스크로 확정 — 프로덕션 Postgres에 역할이 `postgres`(슈퍼유저) 단 하나뿐이었고, 백엔드 앱(`DataSourceConfig`가 파싱하는 `DATABASE_URL`)도 이 계정으로 직접 접속하고 있었다. 앱이 실제로 필요한 것(자기 스키마 테이블 CRUD + Flyway 마이그레이션)보다 훨씬 큰 권한(DB 생성/삭제, 역할 생성, RLS 우회, 복제 스트림 접근)을 상시 보유한 상태.
+
+**사전 조사(변경 전 확인).** ①Flyway 마이그레이션 63개 전수 확인 — `CREATE/ALTER/DROP TABLE`·`CREATE INDEX`뿐, `CREATE EXTENSION`/`CREATE ROLE`/`CREATE DATABASE` 없음(`gen_random_uuid()`는 Postgres 13+ 내장이라 pgcrypto 등 extension 불필요). ②DB `railway`·스키마 `public`·테이블 48개 전부 `postgres` 소유, 시퀀스 0개(UUID 기본키라 SERIAL 미사용) — 소유권 이전 없이 GRANT만으로 충분함을 확인. ③DB 백업(`db-backup.yml`)은 별도 GitHub Secret(`BACKUP_DATABASE_URL`)을 써서 이번 변경과 무관함을 확인 — 스코프 밖으로 명시적 제외(값 확인 불가라 별도 후속 판단 필요, 이번엔 안 건드림).
+
+**실행.**
+1. `CREATE ROLE codeprint_app WITH LOGIN PASSWORD '...' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;`
+2. `GRANT USAGE, CREATE ON SCHEMA public TO codeprint_app;` — Flyway가 이 앱과 같은 계정으로 부팅 시 마이그레이션을 실행하므로(별도 마이그레이션 전용 계정 분리는 현재 규모엔 과설계로 판단, §2 단순성) CREATE 권한이 필요. `codeprint_app`이 앞으로 만드는 테이블은 자동으로 자기 소유가 됨.
+3. `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO codeprint_app;` + `ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ... ON TABLES TO codeprint_app;`(방어용 — postgres가 실수로 뭔가 또 만드는 경우 대비) — 기존 48개 테이블(전부 postgres 소유)에 대한 접근권.
+4. Railway `codeprint` 서비스의 `DATABASE_URL`을 `codeprint_app` 계정으로 교체(`railway variables --set`).
+5. `postgres` 계정 자체는 값·속성 변경 없이 그대로 유지 — 문제 생기면 `DATABASE_URL`만 원복하면 즉시 롤백되는 안전판.
+
+**검증(실측).** 교체 전: `codeprint_app`으로 SELECT(users 4건 조회)·UPDATE(트랜잭션 내 실행 후 ROLLBACK)·CREATE TABLE+DROP TABLE(임시 테이블) 전부 정상, `CREATE DATABASE`는 `permission denied`로 정상 차단(스코프가 실제로 작동함을 확인). 배포 후: `railway logs`에서 Flyway "Successfully validated 63 migrations"·"Schema up to date"·Hibernate 정상 초기화·앱 부팅(7초)·크론 작업(`스테일 분석 리컨실리에이션`) 실제 DB 쓰기까지 정상 확인, `/actuator/health` 200 확인.
+
+**검토한 대안.** ①마이그레이션 전용 별도 계정(더 높은 권한) + 런타임 전용 별도 계정(CRUD만, DDL 없음) 이원화 — 기각. "이론적으로 더 정확한 최소권한"이지만 Spring 설정에 데이터소스 2개 배선이 필요해지는 구조 변경이라 이 프로젝트 규모(1인 개발, 트래픽 적음)엔 과설계(SECURITY_REVIEW.md가 이미 ABAC·Queue 등 여러 항목에서 채택한 "지금 규모엔 과설계" 판단 기준과 동일). ②`postgres` 계정 자체를 삭제하거나 비밀번호 변경 — 기각, 롤백 안전판을 잃는 데다 이번 조사에서 다른 자동화(백업 등)가 `postgres`를 참조하는지 완전히 확인 못 했으므로 더 보수적으로 접근.
+
+**남은 것(후속 후보, 이번 범위 밖).** DB 백업(`BACKUP_DATABASE_URL`)도 같은 슈퍼유저를 쓰는지 확인 후 읽기 전용 역할로 축소 — 스케줄 잡이라 급하지 않음, 다음 세션 후보.
