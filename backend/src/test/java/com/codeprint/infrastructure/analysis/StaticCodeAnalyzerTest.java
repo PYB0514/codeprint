@@ -1015,13 +1015,56 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
-    @DisplayName("TypeScript는 serviceCalls를 추출하지 않는다(1차 스코프 Java/Kotlin만)")
-    void serviceCalls_TypeScript_스코프밖() throws IOException {
+    @DisplayName("TS/JS의 fetch() 호출(axios 아님)은 serviceCalls로 추출하지 않는다")
+    void serviceCalls_fetch_스코프밖() throws IOException {
         Path file = writeTsFile("""
                 export const call = () => fetch('http://customers-service/owners/1');
                 """);
 
         ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.serviceCalls()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("axios.get()의 http:// 호스트에서 대상 서비스 논리명을 추출한다(TypeScript)")
+    void serviceCalls_axios_추출() throws IOException {
+        Path file = writeTsFile("""
+                export const getOwner = (id: number) =>
+                    axios.get(`http://customers-service/owners/${id}`);
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.serviceCalls()).contains("customers-service");
+    }
+
+    @Test
+    @DisplayName("requests.get()의 http:// 호스트에서 대상 서비스 논리명을 추출한다(Python)")
+    void serviceCalls_python_requests_추출() throws IOException {
+        Path file = writePyFile("""
+                import requests
+
+                def get_owner(owner_id):
+                    return requests.get(f"http://customers-service/owners/{owner_id}")
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.serviceCalls()).contains("customers-service");
+    }
+
+    @Test
+    @DisplayName("로컬 경로(http:// 없음) requests 호출은 serviceCalls로 추출하지 않는다(Python)")
+    void serviceCalls_python_로컬_경로_제외() throws IOException {
+        Path file = writePyFile("""
+                import requests
+
+                def call():
+                    requests.get("/local/path")
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
 
         assertThat(result.serviceCalls()).isEmpty();
     }

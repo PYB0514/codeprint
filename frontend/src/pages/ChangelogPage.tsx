@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.145.0',
+    date: '2026-07-18',
+    title: '서비스 간 동기 호출 체인 감지 — Python·JavaScript/TypeScript 지원',
+    type: 'feature',
+    items: [
+      { category: '게이트 테마', desc: 'SERVICE_CALL_CHAIN이 이제 Python requests·JS/TS axios를 통한 서비스 간 호출도 감지합니다. 기존 Java WebClient·RestTemplate·FeignClient와 함께 언어 혼합 체인도 인식됩니다.' },
+    ],
+  },
+  {
     version: 'v0.144.0',
     date: '2026-07-17',
     title: '서비스 간 동기 호출 체인 감지 — FeignClient 지원',
