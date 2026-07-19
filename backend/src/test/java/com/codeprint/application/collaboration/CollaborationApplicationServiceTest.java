@@ -3,6 +3,7 @@ package com.codeprint.application.collaboration;
 
 import com.codeprint.domain.collaboration.CollaborationSession;
 import com.codeprint.domain.collaboration.CollaborationSessionRepository;
+import com.codeprint.domain.collaboration.port.GraphAccessPort;
 import com.codeprint.domain.collaboration.port.UserInfoPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,12 +26,13 @@ class CollaborationApplicationServiceTest {
 
     @Mock private CollaborationSessionRepository sessionRepository;
     @Mock private UserInfoPort userInfoPort;
+    @Mock private GraphAccessPort graphAccessPort;
 
     private CollaborationApplicationService service;
 
     @BeforeEach
     void setUp() {
-        service = new CollaborationApplicationService(sessionRepository, userInfoPort);
+        service = new CollaborationApplicationService(sessionRepository, userInfoPort, graphAccessPort);
     }
 
     private CollaborationSession sessionWithParticipants(int count) {
@@ -70,6 +72,51 @@ class CollaborationApplicationServiceTest {
         assertThat(result.getOwnerId()).isEqualTo(owner);
         assertThat(result.hasParticipant(owner)).isTrue();
         verify(sessionRepository).save(any(CollaborationSession.class));
+    }
+
+    @Test
+    @DisplayName("createOrGetSession — 그래프 접근 권한이 없으면 세션 생성 없이 예외 전파(IDOR 방지)")
+    void createOrGetSession_noGraphAccess_throwsAndSkipsCreation() {
+        UUID graphId = UUID.randomUUID();
+        UUID requester = UUID.randomUUID();
+        doThrow(new IllegalStateException("Not authorized to access this project"))
+                .when(graphAccessPort).verifyAccess(graphId, requester);
+
+        assertThatThrownBy(() -> service.createOrGetSession(graphId, requester))
+                .isInstanceOf(IllegalStateException.class);
+        verifyNoInteractions(sessionRepository);
+    }
+
+    // --- verifyParticipant: WebSocket 구독 인가용 ---
+
+    @Test
+    @DisplayName("verifyParticipant — 참가자면 예외 없이 통과")
+    void verifyParticipant_participant_passes() {
+        CollaborationSession session = sessionWithParticipants(1);
+        UUID participant = session.getParticipants().get(0).getUserId();
+        when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+
+        service.verifyParticipant(session.getId(), participant);
+    }
+
+    @Test
+    @DisplayName("verifyParticipant — 참가자가 아니면 IllegalStateException")
+    void verifyParticipant_notParticipant_throws() {
+        CollaborationSession session = sessionWithParticipants(1);
+        when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> service.verifyParticipant(session.getId(), UUID.randomUUID()))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("verifyParticipant — 세션이 없으면 IllegalArgumentException")
+    void verifyParticipant_sessionNotFound_throws() {
+        UUID sessionId = UUID.randomUUID();
+        when(sessionRepository.findById(sessionId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.verifyParticipant(sessionId, UUID.randomUUID()))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     // --- joinSession: 초대코드 + Free 6인 제한 경계 ---
