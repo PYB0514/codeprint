@@ -29,6 +29,9 @@ public class WebSocketAuthorizationInterceptor implements ChannelInterceptor {
             Pattern.compile("^/topic/team/([0-9a-fA-F-]{36})/chat$");
     private static final Pattern COLLAB_TOPIC =
             Pattern.compile("^/topic/collab/([0-9a-fA-F-]{36})(?:/.*)?$");
+    // 기본 SimpleBroker는 Ant 패턴 구독(*, **, {var})도 매칭시켜주므로, 아래 정규식이
+    // 리터럴 UUID만 인식하는 것과 무관하게 와일드카드 구독 자체를 원천 차단해야 우회가 없다.
+    private static final Pattern WILDCARD_CHARS = Pattern.compile("[*?{}]");
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -40,6 +43,10 @@ public class WebSocketAuthorizationInterceptor implements ChannelInterceptor {
         String destination = accessor.getDestination();
         if (destination == null) {
             return message;
+        }
+
+        if (WILDCARD_CHARS.matcher(destination).find()) {
+            throw new IllegalArgumentException("와일드카드 구독은 허용되지 않습니다: " + destination);
         }
 
         Matcher teamMatcher = TEAM_CHAT_TOPIC.matcher(destination);

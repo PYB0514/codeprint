@@ -119,6 +119,26 @@ class WebSocketAuthorizationInterceptorTest {
     }
 
     @Test
+    @DisplayName("팀채팅 와일드카드 구독(/topic/team/*/chat)은 인증 여부와 무관하게 거부 — 브로커 패턴매칭 우회 차단")
+    void teamChatSubscribe_wildcardPattern_rejectedEvenWithoutMatchingRegex() {
+        Message<byte[]> message = subscribeMessage("/topic/team/*/chat", null);
+
+        assertThatThrownBy(() -> interceptor.preSend(message, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(graphFacade, collaborationApplicationService);
+    }
+
+    @Test
+    @DisplayName("전체 토픽 와일드카드 구독(/topic/**)은 거부 — 팀채팅·협업세션 전체 도청 우회 차단")
+    void broadTopicWildcard_rejected() {
+        Message<byte[]> message = subscribeMessage("/topic/**", null);
+
+        assertThatThrownBy(() -> interceptor.preSend(message, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(graphFacade, collaborationApplicationService);
+    }
+
+    @Test
     @DisplayName("관련 없는 목적지 구독은 인가 검사 없이 통과")
     void unrelatedDestination_passesThrough() {
         Message<byte[]> message = subscribeMessage("/topic/analysis/" + UUID.randomUUID(), null);
