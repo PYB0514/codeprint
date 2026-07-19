@@ -3,6 +3,7 @@ package com.codeprint.application.collaboration;
 
 import com.codeprint.domain.collaboration.CollaborationSession;
 import com.codeprint.domain.collaboration.CollaborationSessionRepository;
+import com.codeprint.domain.collaboration.port.GraphAccessPort;
 import com.codeprint.domain.collaboration.port.UserInfoPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,15 +20,17 @@ public class CollaborationApplicationService {
 
     private final CollaborationSessionRepository sessionRepository;
     private final UserInfoPort userInfoPort;
+    private final GraphAccessPort graphAccessPort;
 
     private static final String CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final SecureRandom RANDOM = new SecureRandom();
     // Free 플랜 최대 참가자 수 (오너 포함)
     private static final int FREE_PARTICIPANT_LIMIT = 6;
 
-    // 그래프에 대한 협업 세션을 생성하거나 기존 세션을 반환
+    // 그래프에 대한 협업 세션을 생성하거나 기존 세션을 반환 — 그래프 접근 권한 없으면 예외
     @Transactional
     public CollaborationSession createOrGetSession(UUID graphId, UUID ownerId) {
+        graphAccessPort.verifyAccess(graphId, ownerId);
         return sessionRepository.findByGraphIdAndOwnerId(graphId, ownerId)
                 .orElseGet(() -> {
                     String code = generateUniqueCode();
@@ -35,6 +38,16 @@ public class CollaborationApplicationService {
                     session.addParticipant(ownerId);
                     return sessionRepository.save(session);
                 });
+    }
+
+    // 세션 참가자인지 확인 — WebSocket 구독 인가용, 참가자가 아니면 예외
+    @Transactional(readOnly = true)
+    public void verifyParticipant(UUID sessionId, UUID userId) {
+        CollaborationSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
+        if (!session.hasParticipant(userId)) {
+            throw new IllegalStateException("협업 세션 참가자가 아닙니다.");
+        }
     }
 
     // 초대 코드로 세션에 참가 — Free 플랜 오너면 6명 초과 불가

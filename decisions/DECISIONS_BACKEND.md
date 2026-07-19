@@ -2086,3 +2086,19 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `SecretHygieneGuardTest` 신규 4건(비-local+기본 JWT 거부/비-local+기본 암호화키 거부/비-local+실제값 통과/local+기본값이어도 통과) — 경계조건 있는 로직이라 TDD 대상. 프로젝트 전체에 `@SpringBootTest`(풀 컨텍스트 로딩)가 단 하나도 없음을 grep으로 확인(전부 단위 테스트 또는 `@DataJpaTest` 슬라이스)해 신규 `@Component`가 기존 테스트에 영향 없음을 사전 확인 — Docker DB 기동 후 전체 백엔드 테스트(1030+) green. `analyzeLocal` 자가검사 베이스라인 불변(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1, 신규 위반 0).
 
 **한계.** `CRON_SECRET`·`TOSS_SECRET_KEY`·`AWS_SECRET_KEY` 등 다른 시크릿은 `application.yml`에서 기본값이 빈 문자열(`:`)이라 애초에 "공개된 기본값으로 조용히 뜨는" 이 클래스의 위험에 해당하지 않음(빈 값이면 해당 기능이 그냥 동작 안 함, 조용히 취약해지지 않음) — 이번 가드 대상에서 의도적으로 제외.
+
+## P1 보안 — WebSocket 구독 인가 부재 + 협업세션 생성 시 그래프 소유권 미검증 (2026-07-19, codeprint_139)
+
+**배경.** codeprint_138 Fable 감사 P1-2(R18 #56·R24 #71)·P1-5(R40 #105). `WebSocketConfig`(`/ws/**`가 `SecurityConfig`에서 permitAll)에 STOMP SUBSCRIBE를 검사하는 `ChannelInterceptor`가 전혀 없어, 인증 여부와 무관하게 `graphId`·`sessionId`만 알면 누구나 `/topic/team/{graphId}/chat`(팀채팅)·`/topic/collab/{sessionId}`(커서·선택·프레즌스)를 구독해 도청할 수 있었다. SEND 쪽(`CollaborationWebSocketController`)은 `Principal null` 체크가 있어 메시지 발신은 인증이 필요했지만, 구독(읽기)은 무방비였다 — "쓰기는 막고 읽기는 열어둔" 비대칭 결함. 같은 감사에서 `CollaborationController.createSession`이 `graphId` 소유권 검증 없이 아무 그래프에 대해서나 세션을 만들 수 있던 것도 확인(다른 graphId 쓰기 엔드포인트 6종은 전부 검증하는데 이 경로만 누락).
+
+**문제.** 프론트(`useTeamChat.ts`)의 "roomId"는 실제로 `graphId`(`GraphPage.tsx`가 `<TeamChatPanel roomId={graphId}>`로 전달) — 팀채팅은 팀 단위가 아니라 그래프 단위로 스코프된다. 기존 그래프 접근 검증(`GraphFacade.verifyGraphOwnership` — 소유자 또는 `TeamAccessPort`로 배분된 팀 멤버, `NodeCommentController` 등 다수 컨트롤러가 이미 쓰는 패턴)이 있었는데도 WebSocket 계층에는 전혀 연결돼 있지 않았다.
+
+**결정.**
+- `WebSocketAuthorizationInterceptor`(`interfaces/websocket`) 신설 — STOMP `SUBSCRIBE` 커맨드만 가로채 목적지가 `/topic/team/{graphId}/chat`이면 `GraphFacade.verifyGraphOwnership`, `/topic/collab/{sessionId}`면 신규 `CollaborationApplicationService.verifyParticipant`로 검증. 미인증(Principal 없음)이거나 검증 실패면 예외를 던져 구독 자체를 거부(Spring이 STOMP ERROR 프레임 전송 후 연결 종료) — SEND 시점에 이미 있던 `Principal null` 체크와 대칭을 맞춤. `WebSocketConfig.configureClientInboundChannel`에 등록.
+- `CollaborationApplicationService.verifyParticipant` 신설을 위해 `CollaborationSessionRepository`에 `findById` 추가(기존엔 초대코드로만 조회 가능해 세션 UUID로 직접 조회할 방법이 없었음).
+- P1-5: `createOrGetSession` 진입 시 신규 `domain/collaboration/port/GraphAccessPort.verifyAccess(graphId, userId)`를 먼저 호출 — `TeamAccessPort`(project→team)와 동일한 크로스컨텍스트 포트 패턴(collaboration→graph). 구현체 `infrastructure/adapter/CollaborationGraphAccessAdapter`는 `ProjectAccessAdapter`가 `ProjectQueryService`를 주입하는 것과 같은 방식으로 `GraphFacade`를 주입해 `verifyGraphOwnership`에 위임 — collaboration 컨텍스트가 graph 컨텍스트를 직접 참조하지 않도록(CLAUDE.md §10).
+- **탈락한 대안**: 팀채팅을 teamId 기준으로 재설계(그래프가 아니라 팀 단위로 스코프 변경) — 프론트가 이미 graphId 기준으로 완결된 기능이라 스코프 밖의 재설계, 이번엔 "있는 그래프 접근 검증을 WS까지 연결"로 범위를 좁힘.
+
+**검증.** `WebSocketAuthorizationInterceptorTest` 신규 8건 — 실제 `StompHeaderAccessor.create(StompCommand.SUBSCRIBE)`+`MessageBuilder`로 만든 진짜 STOMP 메시지를 `preSend()`에 직접 통과시켜 검증(Mock은 `GraphFacade`·`CollaborationApplicationService` 협력자 둘뿐 — 인터셉터 본체 로직은 목이 아닌 실제 코드 경로). `CollaborationApplicationServiceTest`에 `createOrGetSession` 권한 없음 거부 1건 + `verifyParticipant` 3건(참가자 통과/비참가자 거부/세션없음 거부) 추가 — 전부 경계조건 있는 로직이라 TDD 대상. 전체 백엔드 테스트(1030+) green, `analyzeLocal` 자가검사 베이스라인 불변(신규 CROSS_DOMAIN_CALL·DOMAIN_IMPORTS_INFRA 없음, HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1 유지).
+
+**한계·다음.** **실 WebSocket 연결을 통한 브라우저/curl 레벨 E2E 검증은 이번 세션에서 완료하지 못함** — Preview 도구로 로컬 백엔드를 여러 차례 기동 시도했으나 Gradle 데몬이 `bootRun` 태스크 진행 중 IDLE로 돌아가며 포트 8080이 끝내 열리지 않는 환경 문제가 발생(재현되는 원인 미상, 이번 세션 한정 이슈로 추정 — 코드 자체는 컴파일·정적 분석 모두 정상). 유닛 테스트가 인터셉터의 실제 판정 로직(정규식 매칭·인가 위임)은 충분히 커버하지만, "SockJS 핸드셰이크 → STOMP CONNECT → 실제 쿠키 기반 Principal 주입"으로 이어지는 전체 배선이 런타임에 실제로 동작하는지는 다음 세션에서 로컬 서버가 정상 기동되면 우선적으로 브라우저 스모크 테스트 권장(팀채팅 패널 열기 → 정상 구독 확인, 다른 브라우저 시크릿창에서 로그인 없이 같은 endpoint 구독 시도 → 거부 확인).

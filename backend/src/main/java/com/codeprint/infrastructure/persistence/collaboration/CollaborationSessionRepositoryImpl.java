@@ -21,6 +21,11 @@ public class CollaborationSessionRepositoryImpl implements CollaborationSessionR
     }
 
     @Override
+    public Optional<CollaborationSession> findById(UUID id) {
+        return jpa.findById(id);
+    }
+
+    @Override
     public Optional<CollaborationSession> findByInviteCode(String inviteCode) {
         return jpa.findByInviteCode(inviteCode);
     }
