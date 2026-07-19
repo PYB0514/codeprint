@@ -613,3 +613,17 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 **검증.** 재배포 후 인스턴스 `RUNNING` 확인 → `GET /api/push/vapid-public-key`가 새로 등록한 공개키를 정상 반환 → `GET /actuator/health` `{"status":"UP"}` 확인(회귀 없음). 브라우저 알림 구독(프론트엔드 사용자 플로우)까지는 이번 조치 범위 밖 — 백엔드가 유효한 키를 서빙하는 것까지 확인.
 
 **한계.** 실제 알림 발송(구독 → 이벤트 트리거 → 수신)까지의 end-to-end 플로우는 별도 검증 필요, 이번엔 키 활성화만 확인.
+
+## 로컬 백엔드(preview_start backend) 기동 불가 — 원인 미상, 다음 세션 최우선 (2026-07-19, codeprint_139)
+
+**증상.** `preview_start({name:"backend"})`로 `gradlew.bat -p backend bootRun`을 띄우면 로그상 JPA repository 스캔·HikariCP·Flyway·Tomcat 초기화까지는 매번 정상 진행되나(`restartedMain` 스레드), "Started CodeprintApplication"(포트 바인딩 완료) 로그에 한 번도 도달 못 함. `preview_logs`용 `serverId`가 몇 초~2회 호출 만에 "not found"로 stale — 도구가 프로세스를 못 따라가는 것으로 추정.
+
+**시도했으나 실패한 것(13회+, ~30분 소요).** ①단순 재시도 반복 ②Gradle 데몬 전체 정리(`--stop`) 후 클린 재시도 ③`spring.devtools.restart.enabled: false`로 DevTools 자동재시작 비활성화 후 재시도(원인 아니었음, 이미 원복 완료) ④90초까지 인내심 있게 대기(45회 헬스체크 전부 실패) ⑤검증 경로 3종 교차 확인 — Bash curl / PowerShell `Invoke-WebRequest` / **실제 Claude in Chrome(사용자 실브라우저)까지 전부 동일하게 연결 실패** → "도구가 sandboxed라 실제 호스트 네트워크를 못 본다"는 가설은 기각(실브라우저도 실패).
+
+**대조군.** 같은 세션에서 `preview_start({name:"frontend"})`(`npm run dev`, Vite)는 즉시 정상 기동·응답 — Preview 인프라 자체·네트워크 경로는 정상. **백엔드(Gradle bootRun) launch config에 국한된 증상.**
+
+**단서.** `./gradlew --status`로 보이는 Gradle 데몬은 매번 preview_start 호출 직후 곧바로 IDLE로 복귀 — 그런데 실제 앱 로그(JPA/Hikari 등)는 분명 그 이후에도 생성됨. `Get-CimInstance Win32_Process`로 자바 프로세스 트리를 확인한 시점엔 Spring Boot 앱을 실행하는 별도 자바 프로세스 자체가 안 보였음(Gradle 데몬과 무관한 Xilinx 툴 프로세스 1개만 존재) — **제 Bash 도구가 보는 Gradle 데몬이 실제로 preview_start가 실행하는 데몬과 다른 프로세스일 가능성**(별도 GRADLE_USER_HOME/사용자 컨텍스트 추정, 미확인).
+
+**같은 코드가 다른 환경에서는 정상 동작 확인** — Railway 프로덕션 재배포 시 동일 코드가 7.6초 만에 정상 기동, GitHub Actions CI의 `Backend Build & Test`도 실제 Postgres로 전체 테스트 통과. **코드 문제 아님, 이 세션의 로컬 Windows 환경 특유의 이슈로 잠정 결론.**
+
+**다음 세션 최우선 조치**: PR #623(WebSocket 인가 수정)이 유닛테스트+독립 적대적 검증 2라운드는 통과했으나 브라우저 실증 없이 머지 보류 중 — 로컬 백엔드 기동부터 해결해야 진행 가능. 시도해볼 것: ①VS Code Spring Boot Dashboard로 직접 기동(제 도구를 거치지 않는 경로) ②시스템 재부팅 후 재시도(이번 세션 내내 누적된 프로세스·리소스 상태가 원인일 가능성) ③`preview_start` 대신 사용자가 직접 기동한 서버에 Claude in Chrome으로만 접속해 검증.
