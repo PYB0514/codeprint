@@ -2061,3 +2061,17 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `PrGateReconciliationServiceTest`에 신규 케이스(`reconcile_errorStatus_triggersReview`) + 기존 `reconcile_hasStatus_skipped`를 `reconcile_terminalStatus_skipped`(success/failure 둘 다 검증)로 확장, `GitHubApiClientTest`의 `hasContext_*` 3건을 `contextState_*` 3건으로 교체. 전체 백엔드 테스트 995개 green, `analyzeLocal` 자가검사 베이스라인 불변(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1).
 
 **한계.** HikariCP 커넥션 불안정 자체(근본 원인)는 여전히 미해결 — 이건 매 웹훅마다 최초 1회는 계속 실패한다는 뜻이고, 이번 변경은 "실패를 최대 1시간 내 자동 복구"로 완화할 뿐이다. 즉시 머지가 급한 경우엔 여전히 close→reopen 수동 우회가 더 빠르다.
+
+## P0 보안 — 첨부파일 s3Key 미검증으로 DB 백업 다운로드 가능 (2026-07-18/19, codeprint_139)
+
+**배경.** codeprint_138 Fable 감사(R43 #112)에서 발견한 최우선 결함. 앱 업로드(`attachments/`)와 DB 백업(`db-backups/`)이 같은 S3 버킷 `codeprint-uploads`를 공유하는데, 게시글 생성 시 클라이언트가 보낸 `s3Key`가 검증 없이 `PostAttachment`로 저장되고 이후 `generatePresignedDownloadUrl`이 그 키로 presigned GET을 그대로 발급했다.
+
+**문제.** `PostCommandService.saveAttachments()`(`interfaces/api/CommunityController.createPost` 경유)가 `AttachmentInfo.s3Key()`를 그대로 `PostAttachment.create()`에 전달 — 진입점은 게시글 생성 1곳뿐이라 인증된 사용자가 `s3Key`에 `db-backups/codeprint-{cron 시각}.sql.gz`(파일명이 cron 스케줄로 예측 가능)를 넣으면 자기 게시글의 첨부파일 조회 API로 프로덕션 DB 백업 전체를 다운로드할 수 있었다.
+
+**결정.** `PostAttachment.create()`(domain factory)에 `s3Key`가 `S3Service.generatePresignedUploadUrl`이 실제로 발급하는 형식(`attachments/<UUID>/<파일명>`)과 정확히 일치하는지 정규식으로 검증하는 가드를 추가, 불일치 시 `IllegalArgumentException`(→400)으로 거부. Application Service가 아닌 domain 엔티티에 둔 이유: "첨부파일의 s3Key는 반드시 attachments/ 프리픽스여야 한다"는 것은 PostAttachment 자체의 불변식이지 서비스 로직이 아님(CLAUDE.md §10 위임 원칙).
+- **탈락한 대안**: "발급 이력 대조"(서버가 실제로 presigned PUT을 내준 키만 화이트리스트로 허용) — 더 엄격하지만 업로드 세션 추적 테이블 신설이 필요해 스코프가 커짐. 이번 P0의 핵심 악용 경로(버킷 내 임의 프리픽스 참조)는 프리픽스+UUID 형식 검증만으로 완전히 차단되므로(S3 키는 평평한 네임스페이스라 `..` 등 경로 조작도 통하지 않음), CLAUDE.md §2(단순성)에 따라 이번 스코프에서는 보류.
+- **버킷 분리(더 근본적인 방어)는 이번에 미착수** — AWS 콘솔/IAM을 직접 변경해야 하는 실 인프라 작업이라 사용자 확인 후 별도로 진행하기로 함(아래 "한계" 참조).
+
+**검증.** `PostAttachmentTest` 신규 4건(TDD: 정상 키 통과·`db-backups/` 등 타 프리픽스 거부·UUID 형식 아닌 세그먼트 거부·null 거부) — 경계 조건 있는 도메인 로직이라 CLAUDE.md §4 TDD 기준 충족. `compileJava`/전체 백엔드 테스트 green. `analyzeLocal` 자가검사: 기존 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1)과 동일, 신규 위반 0. Railway 프로덕션 환경변수 직접 확인 결과 `JWT_SECRET`·`ENCRYPTION_KEY` 둘 다 이미 설정돼 있어(공개 저장소 기본값 아님) P0-2·P1-1은 **현재 안전 확인, 조치 불필요** — 단 코드상 기본값 fallback 자체는 fail-fast 가드 후속 과제로 남음.
+
+**한계·다음.** 버킷 분리(백업을 별도 버킷/IAM으로 완전히 격리)는 여전히 권장 — 이번 코드 수정으로 "앱을 통한" 접근 경로는 막혔지만, S3 자격증명이 별도로 유출되는 시나리오까지 방어하려면 버킷 분리가 근본 해법이다. AWS CLI가 로컬에 없어 이번 세션에서는 미착수, 사용자가 AWS 콘솔에서 직접 하거나 CLI 자격증명을 제공하면 후속 진행. CloudTrail로 `db-backups/` 프리픽스 과거 GetObject 이력 점검(실제 악용 발생 여부 확인)도 미착수 — 사용자 판단 필요.
