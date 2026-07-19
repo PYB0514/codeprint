@@ -2061,3 +2061,14 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `PrGateReconciliationServiceTest`에 신규 케이스(`reconcile_errorStatus_triggersReview`) + 기존 `reconcile_hasStatus_skipped`를 `reconcile_terminalStatus_skipped`(success/failure 둘 다 검증)로 확장, `GitHubApiClientTest`의 `hasContext_*` 3건을 `contextState_*` 3건으로 교체. 전체 백엔드 테스트 995개 green, `analyzeLocal` 자가검사 베이스라인 불변(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1).
 
 **한계.** HikariCP 커넥션 불안정 자체(근본 원인)는 여전히 미해결 — 이건 매 웹훅마다 최초 1회는 계속 실패한다는 뜻이고, 이번 변경은 "실패를 최대 1시간 내 자동 복구"로 완화할 뿐이다. 즉시 머지가 급한 경우엔 여전히 close→reopen 수동 우회가 더 빠르다.
+
+## P1 보안 — JWT_SECRET·ENCRYPTION_KEY 공개 기본값 fail-fast 가드 (2026-07-19, codeprint_139)
+
+**배경.** codeprint_138 Fable 감사(P0-2 #75, P1-1 #58)에서 지적된 결함. `application.yml`의 `jwt.secret`·`encryption.key`가 환경변수 미설정 시 공개 저장소에 그대로 노출된 리터럴 문자열로 폴백돼, 운영 배포에서 실수로 환경변수를 빼먹으면 JWT 서명 위조·GitHub 토큰 평문 노출이 가능했다. Railway 프로덕션 환경변수를 직접 확인한 결과 두 값 모두 이미 정상 설정돼 있어 **현재 프로덕션은 안전**하지만, "설정을 깜빡하면 아무 경고 없이 취약한 기본값으로 조용히 뜬다"는 구조적 위험 자체는 남아있어 fail-fast 가드로 방지.
+
+**결정.** `infrastructure/config/SecretHygieneGuard`를 신설 — `local` 프로파일이 아닌데 `jwt.secret`/`encryption.key`가 `application.yml`에 하드코딩된 기본값 리터럴과 일치하면 생성자에서 즉시 `IllegalStateException`을 던져 애플리케이션 기동 자체를 막는다. `local` 프로파일 판단은 기존 `DevController`의 `@Profile("local")` 패턴과 동일 기준 — 로컬 개발(VS Code 실행 설정 `.vscode/launch.json`이 `SPRING_PROFILES_ACTIVE=local` 명시)과 Docker Compose `backend` 서비스는 모두 이 프로파일로 뜨므로 영향 없고, Railway 프로덕션은 `SPRING_PROFILES_ACTIVE`를 아예 설정하지 않아(직접 확인) 가드가 활성 상태로 걸린다.
+- **왜 `JwtTokenProvider` 생성자에 바로 안 넣었나**: JWT뿐 아니라 `encryption.key`도 같은 클래스의 결함이라(둘 다 "로컬 기본값이 운영에 새는" 동일 패턴), 각 컴포넌트에 개별로 흩뿌리는 대신 시크릿 위생 전용 가드 하나로 통합 — 향후 같은 유형의 시크릿이 추가돼도 이 클래스 하나만 확장하면 됨.
+
+**검증.** `SecretHygieneGuardTest` 신규 4건(비-local+기본 JWT 거부/비-local+기본 암호화키 거부/비-local+실제값 통과/local+기본값이어도 통과) — 경계조건 있는 로직이라 TDD 대상. 프로젝트 전체에 `@SpringBootTest`(풀 컨텍스트 로딩)가 단 하나도 없음을 grep으로 확인(전부 단위 테스트 또는 `@DataJpaTest` 슬라이스)해 신규 `@Component`가 기존 테스트에 영향 없음을 사전 확인 — Docker DB 기동 후 전체 백엔드 테스트(1030+) green. `analyzeLocal` 자가검사 베이스라인 불변(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1, 신규 위반 0).
+
+**한계.** `CRON_SECRET`·`TOSS_SECRET_KEY`·`AWS_SECRET_KEY` 등 다른 시크릿은 `application.yml`에서 기본값이 빈 문자열(`:`)이라 애초에 "공개된 기본값으로 조용히 뜨는" 이 클래스의 위험에 해당하지 않음(빈 값이면 해당 기능이 그냥 동작 안 함, 조용히 취약해지지 않음) — 이번 가드 대상에서 의도적으로 제외.
