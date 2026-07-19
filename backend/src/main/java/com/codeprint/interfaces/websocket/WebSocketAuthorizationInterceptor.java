@@ -4,7 +4,7 @@ package com.codeprint.interfaces.websocket;
 import com.codeprint.application.collaboration.CollaborationApplicationService;
 import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.domain.user.User;
-import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -19,11 +19,20 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Component
-@RequiredArgsConstructor
 public class WebSocketAuthorizationInterceptor implements ChannelInterceptor {
 
     private final GraphFacade graphFacade;
     private final CollaborationApplicationService collaborationApplicationService;
+
+    // GraphFacade·CollaborationApplicationService 둘 다 (직접 또는
+    // CollaborationGraphAccessAdapter 경유로) AnalysisReadAdapter→AnalysisApplicationService→
+    // AnalysisRunner→AnalysisProgressHandler→SimpMessagingTemplate→WebSocketConfig로
+    // 되돌아오는 순환을 만들어 둘 다 지연 주입으로 끊는다(실제 호출 시점에만 해소).
+    public WebSocketAuthorizationInterceptor(@Lazy GraphFacade graphFacade,
+                                              @Lazy CollaborationApplicationService collaborationApplicationService) {
+        this.graphFacade = graphFacade;
+        this.collaborationApplicationService = collaborationApplicationService;
+    }
 
     private static final Pattern TEAM_CHAT_TOPIC =
             Pattern.compile("^/topic/team/([0-9a-fA-F-]{36})/chat$");
