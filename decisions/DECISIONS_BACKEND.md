@@ -2075,3 +2075,14 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `PostAttachmentTest` 신규 4건(TDD: 정상 키 통과·`db-backups/` 등 타 프리픽스 거부·UUID 형식 아닌 세그먼트 거부·null 거부) — 경계 조건 있는 도메인 로직이라 CLAUDE.md §4 TDD 기준 충족. `compileJava`/전체 백엔드 테스트 green. `analyzeLocal` 자가검사: 기존 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1)과 동일, 신규 위반 0. Railway 프로덕션 환경변수 직접 확인 결과 `JWT_SECRET`·`ENCRYPTION_KEY` 둘 다 이미 설정돼 있어(공개 저장소 기본값 아님) P0-2·P1-1은 **현재 안전 확인, 조치 불필요** — 단 코드상 기본값 fallback 자체는 fail-fast 가드 후속 과제로 남음.
 
 **한계·다음.** 버킷 분리(백업을 별도 버킷/IAM으로 완전히 격리)는 여전히 권장 — 이번 코드 수정으로 "앱을 통한" 접근 경로는 막혔지만, S3 자격증명이 별도로 유출되는 시나리오까지 방어하려면 버킷 분리가 근본 해법이다. AWS CLI가 로컬에 없어 이번 세션에서는 미착수, 사용자가 AWS 콘솔에서 직접 하거나 CLI 자격증명을 제공하면 후속 진행. CloudTrail로 `db-backups/` 프리픽스 과거 GetObject 이력 점검(실제 악용 발생 여부 확인)도 미착수 — 사용자 판단 필요.
+
+## P1 보안 — JWT_SECRET·ENCRYPTION_KEY 공개 기본값 fail-fast 가드 (2026-07-19, codeprint_139)
+
+**배경.** codeprint_138 Fable 감사(P0-2 #75, P1-1 #58)에서 지적된 결함. `application.yml`의 `jwt.secret`·`encryption.key`가 환경변수 미설정 시 공개 저장소에 그대로 노출된 리터럴 문자열로 폴백돼, 운영 배포에서 실수로 환경변수를 빼먹으면 JWT 서명 위조·GitHub 토큰 평문 노출이 가능했다. Railway 프로덕션 환경변수를 직접 확인한 결과 두 값 모두 이미 정상 설정돼 있어 **현재 프로덕션은 안전**하지만, "설정을 깜빡하면 아무 경고 없이 취약한 기본값으로 조용히 뜬다"는 구조적 위험 자체는 남아있어 fail-fast 가드로 방지.
+
+**결정.** `infrastructure/config/SecretHygieneGuard`를 신설 — `local` 프로파일이 아닌데 `jwt.secret`/`encryption.key`가 `application.yml`에 하드코딩된 기본값 리터럴과 일치하면 생성자에서 즉시 `IllegalStateException`을 던져 애플리케이션 기동 자체를 막는다. `local` 프로파일 판단은 기존 `DevController`의 `@Profile("local")` 패턴과 동일 기준 — 로컬 개발(VS Code 실행 설정 `.vscode/launch.json`이 `SPRING_PROFILES_ACTIVE=local` 명시)과 Docker Compose `backend` 서비스는 모두 이 프로파일로 뜨므로 영향 없고, Railway 프로덕션은 `SPRING_PROFILES_ACTIVE`를 아예 설정하지 않아(직접 확인) 가드가 활성 상태로 걸린다.
+- **왜 `JwtTokenProvider` 생성자에 바로 안 넣었나**: JWT뿐 아니라 `encryption.key`도 같은 클래스의 결함이라(둘 다 "로컬 기본값이 운영에 새는" 동일 패턴), 각 컴포넌트에 개별로 흩뿌리는 대신 시크릿 위생 전용 가드 하나로 통합 — 향후 같은 유형의 시크릿이 추가돼도 이 클래스 하나만 확장하면 됨.
+
+**검증.** `SecretHygieneGuardTest` 신규 4건(비-local+기본 JWT 거부/비-local+기본 암호화키 거부/비-local+실제값 통과/local+기본값이어도 통과) — 경계조건 있는 로직이라 TDD 대상. 프로젝트 전체에 `@SpringBootTest`(풀 컨텍스트 로딩)가 단 하나도 없음을 grep으로 확인(전부 단위 테스트 또는 `@DataJpaTest` 슬라이스)해 신규 `@Component`가 기존 테스트에 영향 없음을 사전 확인 — Docker DB 기동 후 전체 백엔드 테스트(1030+) green. `analyzeLocal` 자가검사 베이스라인 불변(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1, 신규 위반 0).
+
+**한계.** `CRON_SECRET`·`TOSS_SECRET_KEY`·`AWS_SECRET_KEY` 등 다른 시크릿은 `application.yml`에서 기본값이 빈 문자열(`:`)이라 애초에 "공개된 기본값으로 조용히 뜨는" 이 클래스의 위험에 해당하지 않음(빈 값이면 해당 기능이 그냥 동작 안 함, 조용히 취약해지지 않음) — 이번 가드 대상에서 의도적으로 제외.
