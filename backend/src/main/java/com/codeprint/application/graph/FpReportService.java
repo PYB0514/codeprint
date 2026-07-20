@@ -43,12 +43,16 @@ public class FpReportService {
     }
 
     // GitHub 공개 레포 + 신고 시점 그래프가 분석한 정확한 커밋 SHA를 알 때만 코드 스니펫 확보 — 어느 단계든 실패하면 null(신고 자체는 항상 성공)
+    // filePath는 클라이언트가 그대로 보내는 값이라, 실제로 이 그래프가 분석한 노드 경로와 일치할 때만 조회한다(임의 경로 조회 차단).
     private String captureSnippet(UUID projectId, UUID graphId, String filePath, Integer line) {
         if (graphId == null || filePath == null || filePath.isBlank() || line == null) return null;
         try {
-            UUID analysisId = graphRepository.findById(graphId).map(Graph::getAnalysisId).orElse(null);
-            if (analysisId == null) return null;
-            String sha = analysisReadPort.findCommitSha(analysisId).orElse(null);
+            Graph graph = graphRepository.findById(graphId).orElse(null);
+            if (graph == null || !graph.getProjectId().equals(projectId)) return null;
+            boolean filePathExists = graphRepository.findNodesByGraphId(graphId).stream()
+                    .anyMatch(node -> filePath.equals(node.getFilePath()));
+            if (!filePathExists) return null;
+            String sha = analysisReadPort.findCommitSha(graph.getAnalysisId()).orElse(null);
             if (sha == null) return null;
             String repoUrl = projectAccessPort.findGithubRepoUrl(projectId).orElse(null);
             if (repoUrl == null) return null;

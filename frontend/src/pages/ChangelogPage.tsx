@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.147.1',
+    date: '2026-07-20',
+    title: '오탐 신고 코드 스니펫 확보 경로 강화 (보안)',
+    type: 'fix',
+    items: [
+      { category: '보안', desc: '오탐 신고 시 재현용 코드 스니펫을 가져오는 경로에서, 신고 대상 파일이 실제로 그 그래프가 분석한 파일인지 검증하지 않던 문제를 수정했습니다. 이제 그래프가 분석한 파일 목록에 있는 경로만 조회합니다.' },
+    ],
+  },
+  {
     version: 'v0.147.0',
     date: '2026-07-18',
     title: '아키텍처 의도 규칙 — 직접 호출 금지 지원',
