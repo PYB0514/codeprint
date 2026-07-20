@@ -3,6 +3,7 @@ package com.codeprint.application.project;
 
 import com.codeprint.domain.project.Project;
 import com.codeprint.domain.project.ProjectRepository;
+import com.codeprint.domain.project.port.GraphWarningsCachePort;
 import com.codeprint.shared.gate.GatePolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ public class ProjectCommandService {
             Pattern.compile("^https://github\\.com/[\\w.-]+/[\\w.-]+/?$");
 
     private final ProjectRepository projectRepository;
+    private final GraphWarningsCachePort graphWarningsCachePort;
 
     // URL 유효성 검사 후 프로젝트 생성
     public Project createProject(UUID userId, String githubRepoUrl, String name, String description) {
@@ -106,7 +108,9 @@ public class ProjectCommandService {
         return projectRepository.save(project);
     }
 
-    // 소유자 확인 후 게이트 정책(AUTO/DDD/LAYERED) 전환 — 자동감지와 무관하게 지정 방향의 게이트 규칙 강제 적용
+    // 소유자 확인 후 게이트 정책(AUTO/DDD/LAYERED) 전환 — 자동감지와 무관하게 지정 방향의 게이트 규칙 강제 적용.
+    // gatePolicy는 GraphQueryService.getWarnings()의 detect() 계산에 직접 반영되는데 캐시 키(graphId)엔 없어,
+    // 무효화하지 않으면 최대 10분간 이전 정책 기준 경고로 PR 게이트가 오판정한다.
     public Project setGatePolicy(UUID projectId, UUID requestingUserId, GatePolicy policy) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
@@ -114,7 +118,9 @@ public class ProjectCommandService {
             throw new IllegalStateException("Not authorized to modify this project");
         }
         project.setGatePolicy(policy);
-        return projectRepository.save(project);
+        Project saved = projectRepository.save(project);
+        graphWarningsCachePort.evictAll();
+        return saved;
     }
 
     // 소유자 확인 후 프로젝트 삭제

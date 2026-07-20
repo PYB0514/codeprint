@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.147.4',
+    date: '2026-07-20',
+    title: '게이트 정책 변경 직후 PR 판정이 이전 설정 기준으로 나오던 문제 수정',
+    type: 'fix',
+    items: [
+      { category: '게이트', desc: '프로젝트의 게이트 정책(자동/DDD/레이어드)을 바꾼 직후에는, 최대 10분간 캐시된 이전 정책 기준으로 PR 경고가 계산돼 판정이 어긋날 수 있었습니다. 이제 정책을 바꾸면 즉시 다시 계산됩니다.' },
+    ],
+  },
+  {
     version: 'v0.147.3',
     date: '2026-07-20',
     title: '쿠키 동의 배너 "거부" 시 추적 완전 차단 (보안)',

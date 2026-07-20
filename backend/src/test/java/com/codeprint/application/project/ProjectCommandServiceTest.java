@@ -3,6 +3,8 @@ package com.codeprint.application.project;
 
 import com.codeprint.domain.project.Project;
 import com.codeprint.domain.project.ProjectRepository;
+import com.codeprint.domain.project.port.GraphWarningsCachePort;
+import com.codeprint.shared.gate.GatePolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,7 @@ import static org.mockito.Mockito.*;
 class ProjectCommandServiceTest {
 
     @Mock private ProjectRepository projectRepository;
+    @Mock private GraphWarningsCachePort graphWarningsCachePort;
 
     private ProjectCommandService service;
 
@@ -29,7 +32,7 @@ class ProjectCommandServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ProjectCommandService(projectRepository);
+        service = new ProjectCommandService(projectRepository, graphWarningsCachePort);
     }
 
     // --- createProject: URL 검증 + 생성 ---
@@ -158,6 +161,38 @@ class ProjectCommandServiceTest {
         assertThatThrownBy(() -> service.setPrimaryBranch(projectId, otherId, "develop"))
                 .isInstanceOf(IllegalStateException.class);
         verify(projectRepository, never()).save(any());
+    }
+
+    // --- setGatePolicy: 소유권 + 경고 캐시 무효화(P2-C 회귀 방지) ---
+
+    @Test
+    @DisplayName("setGatePolicy — 소유자면 정책 저장 후 graphWarnings 캐시 전체 무효화")
+    void setGatePolicy_owner_evictsWarningsCache() {
+        UUID ownerId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        Project project = Project.create(ownerId, VALID_URL, "n", "d");
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRepository.save(project)).thenReturn(project);
+
+        Project result = service.setGatePolicy(projectId, ownerId, GatePolicy.DDD);
+
+        assertThat(result.getGatePolicy()).isEqualTo(GatePolicy.DDD);
+        verify(graphWarningsCachePort).evictAll();
+    }
+
+    @Test
+    @DisplayName("setGatePolicy — 소유자가 아니면 IllegalStateException, 캐시 무효화 안 함")
+    void setGatePolicy_notOwner_rejected() {
+        UUID ownerId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        Project project = Project.create(ownerId, VALID_URL, "n", "d");
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+
+        assertThatThrownBy(() -> service.setGatePolicy(projectId, otherId, GatePolicy.LAYERED))
+                .isInstanceOf(IllegalStateException.class);
+        verify(projectRepository, never()).save(any());
+        verifyNoInteractions(graphWarningsCachePort);
     }
 
     // --- deleteProject: 소유권 ---
