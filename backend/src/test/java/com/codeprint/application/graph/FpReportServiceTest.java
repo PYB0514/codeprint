@@ -5,6 +5,8 @@ import com.codeprint.domain.graph.FpReport;
 import com.codeprint.domain.graph.FpReportRepository;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.GraphRepository;
+import com.codeprint.domain.graph.Node;
+import com.codeprint.domain.graph.NodeType;
 import com.codeprint.domain.graph.port.AnalysisReadPort;
 import com.codeprint.domain.graph.port.ProjectAccessPort;
 import com.codeprint.infrastructure.github.GitHubApiClient;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -89,6 +92,8 @@ class FpReportServiceTest {
         Graph graph = Graph.create(projectId, analysisId);
         when(repository.existsByProjectIdAndFingerprintAndReporterId(any(), any(), any())).thenReturn(false);
         when(graphRepository.findById(graphId)).thenReturn(Optional.of(graph));
+        when(graphRepository.findNodesByGraphId(graphId))
+                .thenReturn(List.of(Node.create(graphId, NodeType.FILE, "Foo.java", "src/Foo.java", "java")));
         when(analysisReadPort.findCommitSha(analysisId)).thenReturn(Optional.of("abc123"));
         when(projectAccessPort.findGithubRepoUrl(projectId)).thenReturn(Optional.of("https://github.com/o/r"));
         when(gitHubApiClient.fetchFileContent("https://github.com/o/r", "src/Foo.java", "abc123"))
@@ -101,6 +106,45 @@ class FpReportServiceTest {
     }
 
     @Test
+    @DisplayName("reportFalsePositive — filePath가 그래프가 실제로 분석한 노드 경로와 다르면 스니펫 확보 안 함(임의 경로 조회 차단)")
+    void report_filePathNotInGraph_skipsSnippetCapture() {
+        UUID projectId = UUID.randomUUID();
+        UUID reporterId = UUID.randomUUID();
+        UUID graphId = UUID.randomUUID();
+        UUID analysisId = UUID.randomUUID();
+        Graph graph = Graph.create(projectId, analysisId);
+        when(repository.existsByProjectIdAndFingerprintAndReporterId(any(), any(), any())).thenReturn(false);
+        when(graphRepository.findById(graphId)).thenReturn(Optional.of(graph));
+        when(graphRepository.findNodesByGraphId(graphId))
+                .thenReturn(List.of(Node.create(graphId, NodeType.FILE, "Foo.java", "src/Foo.java", "java")));
+
+        service.reportFalsePositive(projectId, graphId, "fp1", "DEAD_CODE", reporterId, null,
+                "message", "../../../../etc/passwd", 6, null, null);
+
+        verifyNoInteractions(analysisReadPort, projectAccessPort, gitHubApiClient);
+        verify(repository).save(argThat(r -> r.getCodeSnippet() == null));
+    }
+
+    @Test
+    @DisplayName("reportFalsePositive — graphId가 요청한 projectId 소유가 아니면 스니펫 확보 안 함(교차 프로젝트 차단)")
+    void report_graphBelongsToOtherProject_skipsSnippetCapture() {
+        UUID projectId = UUID.randomUUID();
+        UUID otherProjectId = UUID.randomUUID();
+        UUID reporterId = UUID.randomUUID();
+        UUID graphId = UUID.randomUUID();
+        UUID analysisId = UUID.randomUUID();
+        Graph graph = Graph.create(otherProjectId, analysisId);
+        when(repository.existsByProjectIdAndFingerprintAndReporterId(any(), any(), any())).thenReturn(false);
+        when(graphRepository.findById(graphId)).thenReturn(Optional.of(graph));
+
+        service.reportFalsePositive(projectId, graphId, "fp1", "DEAD_CODE", reporterId, null,
+                "message", "src/Foo.java", 6, null, null);
+
+        verifyNoInteractions(analysisReadPort, projectAccessPort, gitHubApiClient);
+        verify(repository).save(argThat(r -> r.getCodeSnippet() == null));
+    }
+
+    @Test
     @DisplayName("reportFalsePositive — 커밋 SHA를 못 구하면(레포 미연동 등) 스니펫 없이도 신고는 성공")
     void report_noCommitSha_stillSavesWithoutSnippet() {
         UUID projectId = UUID.randomUUID();
@@ -110,6 +154,8 @@ class FpReportServiceTest {
         Graph graph = Graph.create(projectId, analysisId);
         when(repository.existsByProjectIdAndFingerprintAndReporterId(any(), any(), any())).thenReturn(false);
         when(graphRepository.findById(graphId)).thenReturn(Optional.of(graph));
+        when(graphRepository.findNodesByGraphId(graphId))
+                .thenReturn(List.of(Node.create(graphId, NodeType.FILE, "Foo.java", "src/Foo.java", "java")));
         when(analysisReadPort.findCommitSha(analysisId)).thenReturn(Optional.empty());
 
         service.reportFalsePositive(projectId, graphId, "fp1", "DEAD_CODE", reporterId, null,

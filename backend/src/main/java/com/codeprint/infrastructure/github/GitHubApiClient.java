@@ -391,7 +391,10 @@ public class GitHubApiClient {
     // 공개 레포의 특정 커밋 시점 파일 원문을 비인증 조회(raw.githubusercontent.com) — 실패 시 null(최선노력, 비공개 레포는 항상 실패)
     public String fetchFileContent(String githubRepoUrl, String path, String ref) {
         String ownerRepo = extractOwnerRepo(githubRepoUrl);
-        String rawUrl = "https://raw.githubusercontent.com/" + ownerRepo + "/" + ref + "/" + path;
+        String encodedPath = java.util.Arrays.stream(path.split("/", -1))
+                .map(segment -> java.net.URLEncoder.encode(segment, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20"))
+                .collect(java.util.stream.Collectors.joining("/"));
+        String rawUrl = "https://raw.githubusercontent.com/" + ownerRepo + "/" + ref + "/" + encodedPath;
         try {
             HttpRequest request = HttpRequest.newBuilder().uri(URI.create(rawUrl)).GET().build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());

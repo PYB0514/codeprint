@@ -60,7 +60,12 @@ public class WarningController {
             return ResponseEntity.badRequest().build();
         }
         graphFacade.verifyProjectReadAccess(projectId, user.getId());
-        UUID graphId = (req.graphId() != null && !req.graphId().isBlank()) ? UUID.fromString(req.graphId()) : null;
+        UUID graphId;
+        try {
+            graphId = (req.graphId() != null && !req.graphId().isBlank()) ? UUID.fromString(req.graphId()) : null;
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
         fpReportService.reportFalsePositive(projectId, graphId, req.fingerprint(), req.type(), user.getId(), req.reason(),
                 req.message(), req.file(), req.line(), req.col(), req.endCol());
         return ResponseEntity.noContent().build();
