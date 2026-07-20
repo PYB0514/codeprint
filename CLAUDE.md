@@ -105,6 +105,7 @@
 - 새 API 응답 필드 → fetch로 실제 JSON 확인
 - 조건부 UI → true/false 상태 둘 다 확인
 - 백엔드 변경 → 해당 엔드포인트 응답 직접 확인
+- **신규 Spring 빈(`@Component`/`@Service`/`@Repository` 등) 추가·생성자 의존관계 변경** → `preview_start`로 로컬 백엔드 실제 재기동해 정상 부팅(`/actuator/health` UP) 확인 필수, 단위 테스트·`analyzeLocal` 통과만으론 불충분(순환 빈 참조는 이 둘 다 원천적으로 못 잡음 — BE-18·BE-19, `GATE_GAPS.md` [G-8] 참조. `./gradlew test`에 포함된 `CodeprintApplicationContextTest` 스모크 테스트가 이중 안전망이지만 로컬 재기동 확인을 대체하지 않음)
 
 *회귀 확인*: 기존 기능 영향 범위 함께 확인. Flyway 마이그레이션은 실제 DB 적용 확인.
 
