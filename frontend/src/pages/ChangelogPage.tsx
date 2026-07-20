@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.147.2',
+    date: '2026-07-20',
+    title: '커뮤니티 공유 그래프 숨김 필터 서버 적용 (보안)',
+    type: 'fix',
+    items: [
+      { category: '보안', desc: '커뮤니티 게시글에 첨부한 그래프에서 특정 레이어·그룹·노드를 숨기고 공유해도, API를 직접 호출하면 숨긴 내용이 그대로 노출되던 문제를 수정했습니다. 이제 서버에서 실제로 제외한 뒤 응답합니다.' },
+    ],
+  },
+  {
     version: 'v0.147.1',
     date: '2026-07-20',
     title: '오탐 신고 코드 스니펫 확보 경로 강화 (보안)',

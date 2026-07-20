@@ -141,6 +141,8 @@ public class CommunityController {
     }
 
     // 게시글에 첨부된 그래프를 숨김 필터 적용하여 반환 (레거시 단일 첨부 전용 — 다중 스냅샷은 /snapshots)
+    // permitAll 엔드포인트라 숨김 필터는 반드시 서버에서 적용한다 — 프론트(CommunityPostGraphPage.tsx)도 동일 필터를
+    // 한 번 더 적용하지만, 그건 표시 레이어 방어일 뿐이고 실제 노출 차단은 여기서 이뤄져야 한다.
     @GetMapping("/posts/{postId}/graph")
     public ResponseEntity<?> getPostGraph(@PathVariable UUID postId) {
         Post post = postCommandService.findById(postId)
@@ -148,15 +150,96 @@ public class CommunityController {
         if (post.getGraphId() == null) return ResponseEntity.notFound().build();
 
         return communityFacade.getGraphSnapshot(post.getGraphId())
-                .map(snapshot -> ResponseEntity.ok(Map.of(
-                        "graphId", snapshot.graphId().toString(),
-                        "nodes", toNodeMaps(snapshot.nodes()),
-                        "edges", toEdgeMaps(snapshot.edges()),
-                        "hiddenLayers", post.getHiddenLayers(),
-                        "hiddenGroups", post.getHiddenGroups(),
-                        "hiddenNodeNames", post.getHiddenNodeNames()
-                )))
+                .map(snapshot -> {
+                    List<GraphReadPort.NodeView> allowedNodes = applyPostHiddenFilter(
+                            snapshot.nodes(), post.getHiddenLayers(), post.getHiddenGroups(), post.getHiddenNodeNames());
+                    Set<UUID> allowedIds = allowedNodes.stream().map(GraphReadPort.NodeView::id).collect(Collectors.toSet());
+                    List<GraphReadPort.EdgeView> allowedEdges = snapshot.edges().stream()
+                            .filter(e -> allowedIds.contains(e.source()) && allowedIds.contains(e.target()))
+                            .toList();
+                    return ResponseEntity.ok(Map.of(
+                            "graphId", snapshot.graphId().toString(),
+                            "nodes", toNodeMaps(allowedNodes),
+                            "edges", toEdgeMaps(allowedEdges),
+                            "hiddenLayers", post.getHiddenLayers(),
+                            "hiddenGroups", post.getHiddenGroups(),
+                            "hiddenNodeNames", post.getHiddenNodeNames()
+                    ));
+                })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    // DDD 레이어 폴더명 — 프론트 CommunityPostGraphPage.tsx의 DDD_LAYERS와 반드시 동일하게 유지
+    private static final List<String> DDD_LAYERS = List.of(
+            "domain", "application", "infrastructure", "interfaces", "pages", "components", "hooks", "utils");
+
+    // 그룹 키 계산 시 건너뛰는 의미 없는 래퍼 디렉터리 — 프론트 graphLayout.ts의 NON_SEMANTIC_WRAPPER_DIRS와 동일
+    private static final Set<String> NON_SEMANTIC_WRAPPER_DIRS = Set.of("src", "lib", "crates", "packages", "pkg");
+
+    // 게시글 작성 시 선택한 hiddenLayers/hiddenGroups/hiddenNodeNames를 실제로 적용해 노드를 제외 —
+    // 프론트 CommunityPostGraphPage.tsx의 applyHiddenFilter와 동일 알고리즘(서버가 응답 자체에서 제외해야 의미가 있음)
+    static List<GraphReadPort.NodeView> applyPostHiddenFilter(List<GraphReadPort.NodeView> nodes,
+                                                                       List<String> hiddenLayers,
+                                                                       List<String> hiddenGroups,
+                                                                       List<String> hiddenNodeNames) {
+        List<String> filePaths = nodes.stream()
+                .filter(n -> !n.hidden() && "FILE".equals(n.type()) && n.filePath() != null)
+                .map(GraphReadPort.NodeView::filePath)
+                .toList();
+        String commonPrefix = findCommonPrefix(filePaths);
+        return nodes.stream()
+                .filter(n -> !n.hidden())
+                .filter(n -> {
+                    if (hiddenNodeNames.contains(n.name())) return false;
+                    if (n.filePath() != null && !n.filePath().isBlank()) {
+                        if (hiddenLayers.contains(getLayer(n.filePath()))) return false;
+                        if (hiddenGroups.contains(getGroupKey(n.filePath(), commonPrefix))) return false;
+                    }
+                    return true;
+                })
+                .toList();
+    }
+
+    // filePath에서 DDD 레이어 이름 추출 — 프론트 CommunityPostGraphPage.tsx getLayer와 동일 알고리즘
+    private static String getLayer(String filePath) {
+        for (String part : filePath.replace("\\", "/").split("/")) {
+            if (DDD_LAYERS.contains(part)) return part;
+        }
+        return "root";
+    }
+
+    // filePath 목록의 공통 prefix 계산 — 프론트 graphLayout.ts findCommonPrefix와 동일 알고리즘
+    private static String findCommonPrefix(List<String> paths) {
+        if (paths.isEmpty()) return "";
+        String[] parts = paths.get(0).replace("\\", "/").split("/");
+        String prefix = "";
+        for (int depth = 1; depth <= parts.length; depth++) {
+            String candidate = String.join("/", java.util.Arrays.asList(parts).subList(0, depth)) + "/";
+            String finalCandidate = candidate;
+            if (paths.stream().allMatch(p -> p.replace("\\", "/").startsWith(finalCandidate))) {
+                prefix = candidate;
+            } else {
+                break;
+            }
+        }
+        return prefix;
+    }
+
+    // filePath에서 그룹 키 추출 — 프론트 graphLayout.ts getGroupKey와 동일 알고리즘
+    private static String getGroupKey(String filePath, String commonPrefix) {
+        String rel = filePath.startsWith(commonPrefix) ? filePath.substring(commonPrefix.length()) : filePath;
+        List<String> parts = java.util.Arrays.stream(rel.replace("\\", "/").split("/"))
+                .filter(s -> !s.isEmpty())
+                .toList();
+        for (int i = 0; i < parts.size(); i++) {
+            if (DDD_LAYERS.contains(parts.get(i))) {
+                return (i + 1 < parts.size()) ? parts.get(i) + "/" + parts.get(i + 1) : parts.get(i);
+            }
+        }
+        List<String> dirParts = parts.isEmpty() ? List.of() : parts.subList(0, parts.size() - 1);
+        int start = 0;
+        while (start < dirParts.size() && NON_SEMANTIC_WRAPPER_DIRS.contains(dirParts.get(start))) start++;
+        return start < dirParts.size() ? dirParts.get(start) : "root";
     }
 
     // 게시글에 첨부된 그래프 스냅샷 목록 조회 (신규 다중 스냅샷 — 각각 캡처 시점 config 포함)

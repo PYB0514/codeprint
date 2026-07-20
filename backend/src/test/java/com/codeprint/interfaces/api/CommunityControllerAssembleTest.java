@@ -162,4 +162,46 @@ class CommunityControllerAssembleTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0)).containsEntry("edgeIdentifier", "a->b");
     }
+
+    @Test
+    @DisplayName("applyPostHiddenFilter — hiddenNodeNames에 있는 노드는 제외(permitAll 응답에서 실제로 빠져야 함)")
+    void applyPostHiddenFilter_excludesHiddenNodeNames() {
+        GraphReadPort.NodeView secret = new GraphReadPort.NodeView(
+                UUID.randomUUID(), "FUNCTION", "collectUserSsn", "domain/user/User.java", "java", 0, 0, null, false);
+        GraphReadPort.NodeView normal = new GraphReadPort.NodeView(
+                UUID.randomUUID(), "FUNCTION", "getUsername", "domain/user/User.java", "java", 0, 0, null, false);
+
+        List<GraphReadPort.NodeView> result = CommunityController.applyPostHiddenFilter(
+                List.of(secret, normal), List.of(), List.of(), List.of("collectUserSsn"));
+
+        assertThat(result).extracting(GraphReadPort.NodeView::name).containsExactly("getUsername");
+    }
+
+    @Test
+    @DisplayName("applyPostHiddenFilter — hiddenLayers에 있는 레이어의 노드는 filePath로 판별해 제외")
+    void applyPostHiddenFilter_excludesHiddenLayers() {
+        GraphReadPort.NodeView domainNode = new GraphReadPort.NodeView(
+                UUID.randomUUID(), "FILE", "User.java", "src/domain/user/User.java", "java", 0, 0, null, false);
+        GraphReadPort.NodeView infraNode = new GraphReadPort.NodeView(
+                UUID.randomUUID(), "FILE", "UserJpaRepository.java", "src/infrastructure/persistence/UserJpaRepository.java", "java", 0, 0, null, false);
+
+        List<GraphReadPort.NodeView> result = CommunityController.applyPostHiddenFilter(
+                List.of(domainNode, infraNode), List.of("domain"), List.of(), List.of());
+
+        assertThat(result).extracting(GraphReadPort.NodeView::name).containsExactly("UserJpaRepository.java");
+    }
+
+    @Test
+    @DisplayName("applyPostHiddenFilter — 그래프 자체 is_hidden 노드도 함께 제외")
+    void applyPostHiddenFilter_excludesGraphHiddenNodes() {
+        GraphReadPort.NodeView visible = new GraphReadPort.NodeView(
+                UUID.randomUUID(), "FILE", "Foo.java", "Foo.java", "java", 0, 0, null, false);
+        GraphReadPort.NodeView graphHidden = new GraphReadPort.NodeView(
+                UUID.randomUUID(), "FILE", "Bar.java", "Bar.java", "java", 0, 0, null, true);
+
+        List<GraphReadPort.NodeView> result = CommunityController.applyPostHiddenFilter(
+                List.of(visible, graphHidden), List.of(), List.of(), List.of());
+
+        assertThat(result).extracting(GraphReadPort.NodeView::name).containsExactly("Foo.java");
+    }
 }
