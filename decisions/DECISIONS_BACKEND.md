@@ -2149,3 +2149,15 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `ProjectCommandServiceTest`에 신규 2건(소유자면 정책 저장 후 `graphWarningsCachePort.evictAll()` 호출 확인/비소유자면 예외+캐시 미호출) — 조건 분기 있는 로직이라 TDD 대상, 14건 전체 green. `compileJava`/`compileTestJava` 통과, 전체 백엔드 테스트 1057건(실패 3건은 Docker DB 미기동 기존 이슈, 무관 확인) green. `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1, 신규 CROSS_DOMAIN_CALL·DOMAIN_IMPORTS_INFRA 0건) — 포트 경유 설계가 실제로 구조 위반 없이 적용됐음을 확인.
 
 **한계·다음.** 캐시 TTL(10분) 자체를 줄이거나 이벤트 기반으로 완전히 없애는 방향은 검토하지 않음 — 이번 수정으로 "설정 변경 시점"의 오판정은 닫혔고, 남은 10분 TTL은 애초에 `detect()`가 CPU 집약적이라 의도된 트레이드오프(그래프 데이터 자체가 안 바뀌는 동안은 재계산 안 함)이므로 손대지 않음. `GraphWarningsCachePort`는 현재 `evictAll()` 하나뿐이라 그래프별 정밀 무효화(특정 프로젝트의 그래프만) 대신 전체 무효화 — `ArchitectureIntentService`도 동일하게 전체 무효화를 쓰고 있어 기존 관례와 일관되고, 게이트 정책 변경 자체가 드문 조작이라 전체 무효화의 비용이 낮다고 판단.
+
+## 사고 — 위 P2-C PR이 머지 직후 프로덕션 배포를 순환 빈 참조로 깨뜨림 (2026-07-20, codeprint_141, PR #629)
+
+**문제.** 위 항목에서 신설한 `GraphWarningsCacheAdapter`가 `GraphQueryService`를 주입받는데, `GraphQueryService`→`ProjectAccessAdapter`(`ProjectAccessPort` 구현체, `getWarnings()`가 `gatePolicy` 조회에 사용)→`ProjectCommandService`(`setGatePolicy` 위임)로 이미 존재하던 역방향 엣지와 만나 `analysisFacade → projectCommandService → graphWarningsCacheAdapter → graphQueryService → projectAccessAdapter → projectCommandService`로 되돌아오는 순환이 완성됐다. 단위 테스트(Mockito, 실제 `ApplicationContext` 미구성)와 `analyzeLocal`(import/함수호출 그래프만 봄, GATE_GAPS [G-8]에서 이미 "인터페이스 경유 DI 순환은 구조적으로 재구성 불가"로 확인된 한계) 둘 다 이 결함을 원천적으로 못 잡아 그대로 머지됐고, **PR #629 머지 직후 실제 Railway 프로덕션 배포가 헬스체크 실패로 죽었다** — 다행히 Railway가 실패한 배포를 반영하지 않고 이전 정상 버전을 계속 서빙해 실제 사용자 다운타임은 없었음(`/actuator/health` 직접 확인으로 검증).
+
+**1차 수정 시도 실패.** `@RequiredArgsConstructor`를 유지한 채 `graphQueryService` 필드에만 `@Lazy`를 붙였으나 **로컬 재부팅 검증에서 동일한 순환참조 예외가 그대로 재현**됐다 — Lombok의 `@RequiredArgsConstructor`가 필드에 붙은 `@Lazy`를 생성자 파라미터로 전파하지 않기 때문(Lombok의 `copyableAnnotations` 기본 설정에 `@Lazy`가 없음). `WebSocketAuthorizationInterceptor`(G-8 사건 수정)가 애초에 `@RequiredArgsConstructor` 대신 명시적 생성자로 파라미터에 직접 `@Lazy`를 단 이유가 바로 이것이었는데, 그 이유를 문서로만 알고 있었지 이번에 직접 겪고서야 체감함.
+
+**최종 수정.** `GraphWarningsCacheAdapter`를 `@RequiredArgsConstructor` 제거 후 명시적 생성자로 교체, `graphQueryService` 파라미터에 직접 `@Lazy` — `WebSocketAuthorizationInterceptor`와 완전히 동일한 코드 형태. 로컬에서 `preview_start`로 백엔드를 실제로 재기동해 `Started CodeprintApplication`+`/actuator/health` → `UP`으로 순환참조 해소를 직접 확인(단위 테스트만으론 이 클래스의 버그를 재현도 검증도 못 하므로, 이번엔 반드시 실제 컨텍스트 부팅으로 확인).
+
+**GATE_GAPS [G-8] 갱신.** 이 사건은 G-8이 이미 기록해둔 "다음에 순환 참조 관련 사건이 재발하면 `@SpringBootTest(webEnvironment=NONE)` 스모크 테스트부터 추가할 것"이라는 재발 트리거를 실제로 충족시켰다. 다만 직전 세션(codeprint_140)에서 사용자가 이 테스트 도입 채택 여부에 의문을 표하고 결정을 보류한 기록이 있어, 트리거 충족을 GATE_GAPS.md에 정정 기록만 하고 테스트 추가는 임의로 하지 않음 — 사용자에게 재발 사실을 알리고 채택 여부를 다시 확인하기로 함.
+
+**교훈.** cross-context 포트/어댑터를 신설할 때 `@Lazy`가 필요한 상황이면(이미 있는 역방향 의존과 만나는지는 미리 다 추적하기 어려움) **Lombok 생성자 어노테이션이 아니라 반드시 명시적 생성자 + 파라미터 `@Lazy`로 작성할 것** — 이번 사건 자체가 "G-8에서 배운 교훈을 안다고 생각했지만 실제 적용 시점엔 Lombok 어노테이션 전파라는 별개 함정에 다시 걸렸다"는 사례. 또한 새 Spring 빈을 추가하는 백엔드 PR은, 단위 테스트·`analyzeLocal`이 전부 green이어도 **push 전 로컬에서 실제로 `preview_start`로 재기동해 정상 부팅을 눈으로 확인하는 단계를 생략하면 안 된다** — 이번엔 그 단계를 건너뛰고 unit test만 믿은 채 push해 프로덕션까지 실패가 흘러갔다.
