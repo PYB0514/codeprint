@@ -29,7 +29,9 @@ public class TeamPaymentApplicationService {
         return new PrepareResult(orderId, amount);
     }
 
-    // 좌석 증가 결제 주문 생성 — 금액 = (새 좌석 수 - 현재 좌석 수) × 좌석당 요금, 팀장만 가능
+    // 좌석 증가 결제 주문 생성 — 금액 = (새 좌석 수 - 현재 좌석 수) × 좌석당 요금, 팀장만 가능.
+    // 주문엔 증분만 저장(TeamPaymentOrder.forSeatIncrease 참조) — 이 시점의 "현재 좌석 수"는 검증·안내용 스냅샷일 뿐,
+    // 실제 반영은 confirm 시점에 증분만큼 원자적으로 더해지므로 다른 주문과 동시에 확정돼도 어긋나지 않는다.
     public PrepareResult prepareSeatIncrease(UUID ownerUserId, UUID teamId, int newSeats) {
         TeamProvisioningPort.TeamSummary summary = teamProvisioningPort.getTeamSummary(teamId);
         if (!summary.ownerUserId().equals(ownerUserId)) {
@@ -38,9 +40,10 @@ public class TeamPaymentApplicationService {
         if (newSeats <= summary.seats()) {
             throw new IllegalArgumentException("새 좌석 수는 현재(" + summary.seats() + "석)보다 많아야 합니다.");
         }
-        long amount = (long) (newSeats - summary.seats()) * UserPlan.DESKTOP.monthlyPricePerSeat();
+        int deltaSeats = newSeats - summary.seats();
+        long amount = (long) deltaSeats * UserPlan.DESKTOP.monthlyPricePerSeat();
         String orderId = "team-seats-" + UUID.randomUUID();
-        TeamPaymentOrder order = TeamPaymentOrder.forSeatIncrease(orderId, ownerUserId, teamId, newSeats, amount);
+        TeamPaymentOrder order = TeamPaymentOrder.forSeatIncrease(orderId, ownerUserId, teamId, deltaSeats, amount);
         orderRepository.save(order);
         return new PrepareResult(orderId, amount);
     }
@@ -67,12 +70,13 @@ public class TeamPaymentApplicationService {
         return new ConfirmOutcome(Result.OK, provision(order));
     }
 
-    // 신규 팀 생성 또는 기존 팀 좌석 변경 실행 — 결과 teamId 반환
+    // 신규 팀 생성 또는 기존 팀 좌석 증가 실행 — 결과 teamId 반환.
+    // 좌석 증가 주문의 getSeats()는 증분(delta)이라 increaseSeatsBy로 원자적으로 더한다(절대치 지정 아님).
     private UUID provision(TeamPaymentOrder order) {
         if (order.isNewTeam()) {
             return teamProvisioningPort.createTeam(order.getOwnerUserId(), order.getTeamName(), order.getSeats());
         }
-        teamProvisioningPort.changeSeats(order.getTeamId(), order.getSeats());
+        teamProvisioningPort.increaseSeatsBy(order.getTeamId(), order.getSeats());
         return order.getTeamId();
     }
 

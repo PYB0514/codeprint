@@ -2175,3 +2175,20 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** 이번엔 순수 Bean Validation 배선(프레임워크 표준 메커니즘, 이미 `FeedbackController`/`MessageController`/`NoticeController` 등에서 검증된 패턴 재사용)이라 커스텀 로직 유닛 테스트 대신 **실제 HTTP 라운드트립으로 런타임 검증**(CLAUDE.md §4 "Add validation → 잘못된 입력으로 400 확인" 기준) — Docker DB 기동 + `preview_start`로 로컬 백엔드 실제 기동 + `/api/dev/test-token`(로컬 전용)으로 발급받은 토큰으로 curl 직접 호출: title 300자(정상) → 201 확인, title 301자 → `{"status":400,"message":"크기가 0에서 300 사이여야 합니다"}` 확인. `bgColor` 정규식은 `grep -E`로 별도 케이스 전수 확인(빈 문자열/6자리 헥스 통과, `red`·5자리·`javascript:` 등 거부). `compileJava`/`compileTestJava`·전체 백엔드 테스트(Docker DB 기동 상태, 1057건 전부 green, 실패 0건)·`analyzeLocal` 베이스라인 불변 확인.
 
 **한계·다음.** `NodeStyleController`·`GraphController` 쪽은 record 전환만으로 끝나 신규 컨트롤러 테스트를 추가하지 않음(Bean Validation 자체는 프레임워크가 보장하는 동작이라 이 저장소의 기존 관례상 별도 유닛 테스트 대상 아님, `FeedbackController` 등도 마찬가지). 레이트리밋 미등록(R22 #65)·`hiddenLayers` 등 배열 크기 무제한은 여전히 미해결로 남음 — 별도 항목으로 다룰 것.
+
+## P2 유료 결제 정합성 — 팀 좌석증가 결제가 절대치 프로비저닝이라 확정 순서에 따라 지불액↔좌석 수 어긋남(TOCTOU) (2026-07-20, codeprint_141)
+
+**배경.** codeprint_138 Fable 감사 P2-2(R13 #42). `TeamPaymentApplicationService.prepareSeatIncrease()`가 좌석 증가 결제 금액은 **증분**(`(newSeats - 현재좌석) × 단가`)으로 정확히 계산해 저장하면서, 정작 `TeamPaymentOrder.seats`엔 **절대 목표치**(`newSeats`)를 저장하고 있었다. 확정(`confirm()` → `provision()`)에서는 이 절대치를 그대로 `teamProvisioningPort.changeSeats(teamId, order.getSeats())`(`Team.upgradePlan`이 `totalSeats = seats`로 절대 SET)에 넘겼다.
+
+**문제 시나리오.** 팀장이 좌석 5→10 증가 주문 A(5석분 결제)를 준비한 뒤 확정하기 전에, 같은 팀에 대해 5→8 증가 주문 B(3석분 결제)를 준비해 먼저 확정하면 팀 좌석은 8이 된다. 이후 A가 확정되면 절대치 10으로 덮어써 최종 13이 아니라 10이 된다 — **A+B 합쳐 8석분(5+3)을 결제했는데 실제로는 5석만 늘어난 것과 동일한 효과**(순서가 반대면 반대로 "이미 늘어난 좌석이 이전 주문의 절대치로 강등"도 가능). 두 주문 모두 자기 주문 행에는 `findByIdForUpdate`로 잠그지만, **서로 다른 주문이 같은 팀 행을 다투는 경합은 전혀 막지 않는** 구조였다.
+
+**결정.** 프로비저닝을 절대치 SET에서 **원자적 증분(increment)**으로 전환 — 과금이 이미 증분 기준이니 프로비저닝도 증분 기준으로 맞추면 순서 문제 자체가 사라진다(무엇을 먼저 확정하든 각자 결제한 증분만큼만 더해져 최종 합계가 항상 실제 지불액과 일치).
+- `TeamPaymentOrder.forSeatIncrease()`가 저장하는 `seats`의 의미를 절대치→증분으로 변경(신규 팀 생성 주문 쪽은 원래도 절대치라 그대로 유지 — 같은 필드가 주문 종류에 따라 의미가 달라지는 게 이번 버그의 근본 원인 중 하나라, `forSeatIncrease`·필드에 그 사실을 명시하는 주석 추가).
+- `TeamProvisioningPort.changeSeats(teamId, newSeats)` → `increaseSeatsBy(teamId, deltaSeats)`로 개명.
+- `TeamProvisioningAdapter`가 `Team` 애그리거트를 로드해 `upgradePlan`으로 SET하던 방식 대신, **조회 없는 `UPDATE teams SET total_seats = total_seats + :delta WHERE id = :teamId`**(`TeamJpaRepository.incrementSeats`, `@Modifying @Query`, 이 저장소에 이미 있는 `NotificationJpaRepository.markAllReadByUserId` 등과 동일 패턴)를 직접 호출 — 이러면 두 확정이 어떤 순서·타이밍으로 겹쳐도 SQL 자체가 원자적이라 lost update가 구조적으로 불가능해진다(비관적 락 추가보다 단순하고, 애초에 "돈 낸 만큼 더한다"는 요구사항과 정확히 대응).
+- **탈락한 대안**: 절대치 방식을 유지하고 confirm 시점에 "현재 좌석 수가 prepare 시점과 같은지" 재검증해 어긋나면 거부 — 이미 Toss 결제가 성공한 뒤에 서버 쪽 사정으로 거부하면 환불 플로우가 별도로 필요해져 훨씬 복잡해진다(§2 단순성 위반). 증분 방식은 결제 성공을 절대 거부하지 않으면서 정합성을 보장해 더 단순하고 사용자 경험도 낫다.
+- **함께 손대지 않은 것**: `TeamApplicationService.decreaseSeats()`(무료 좌석 감소)는 결제·TOCTOU와 무관한 별개 경로라 `Team.upgradePlan`(절대 SET)을 그대로 사용 — 이번 수정 범위 밖.
+
+**검증.** `TeamPaymentApplicationServiceTest`에 신규 2건(증분만큼 `increaseSeatsBy` 호출 확인/서로 다른 두 주문이 순서를 바꿔 확정돼도 각자 자기 증분만 요청되는지, 즉 원래 버그 시나리오의 회귀 방지) 추가, 기존 테스트는 메서드명 변경만 반영 — 11건 전체 green. **신규 `TeamSeatIncrementIntegrationTest`(`@DataJpaTest`, 실 Postgres)** 2건 — `incrementSeats` JPQL이 실제로 좌석을 증분만큼 늘리는지, 두 번 연속 호출(다른 증분)이 순서와 무관하게 누적되는지(버그 시나리오를 DB 레벨에서 직접 재현) 검증. 결제 게이트웨이 확정(`paymentGateway.confirmPayment`)까지 포함한 전체 E2E는 실제 Toss 결제 세션이 필요해 이번에도 하지 않음(기존 결제 관련 PR들과 동일 판단) — 대신 이번 수정의 핵심(원자적 증분 SQL)을 실 DB 라운드트립으로 직접 증명하는 쪽을 택함. `compileJava`/`compileTestJava`·전체 백엔드 테스트(Docker DB 기동, 1060건 전부 green, 실패 0건)·`analyzeLocal` 베이스라인 불변. **신규 리포지토리 메서드(`@Modifying @Query`)가 포함된 변경이라 `preview_start`로 로컬 백엔드 실제 재기동 → `/actuator/health` UP 확인까지 완료**(오늘 사고 이후의 새 원칙 적용).
+
+**한계·다음.** 진짜 동시 스레드로 두 확정을 경합시키는 테스트(`PaymentApplicationServiceConcurrencyIntegrationTest`처럼)는 추가하지 않음 — 이번 수정의 원자성은 애플리케이션 레벨 락이 아니라 SQL `UPDATE x = x + n` 자체의 DB 원자성 보장에서 나오는 것이라(RDBMS의 기본 성질), 순서를 바꿔 순차 호출하는 테스트만으로도 로직 정합성 증명에 충분하다고 판단.
