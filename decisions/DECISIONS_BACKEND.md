@@ -2205,3 +2205,13 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** 신규 1건 green(현재 main, 순환 없는 정상 상태에서 컨텍스트 정상 로딩 확인). 전체 백엔드 테스트 스위트 실행 시간 약 30초(스모크 테스트가 약 16초 기여, WebSocket 브로커·JPA·Flyway까지 전부 뜨는 풀 컨텍스트라 단위 테스트보다는 느리지만 여전히 가벼움). 전체 백엔드 테스트 전부 green(신규 실패 0건).
 
 **한계.** 이 테스트가 실제로 BE-18·BE-19급 순환 참조를 잡아내는지는 "정상 상태에서 green"으로만 확인했다 — 실제 회귀 억제력은 다음에 유사한 버그가 또 만들어졌을 때(있어선 안 되지만) 이 테스트가 로컬/CI 어느 단계에서든 먼저 잡아내는지로 실증될 것. `GraphWarningsCacheAdapter` 사건처럼 코드는 만들어졌지만 테스트/CI를 거치기 전에 이미 잡혔어야 할 케이스에도 이 테스트가 유효하다(개발자가 커밋 전 로컬에서 `./gradlew test`만 돌려도 걸림 — `preview_start` 수동 재기동을 잊어도 이중 안전망 역할).
+
+### 후속 — 스모크 테스트가 첫 실행부터 기존 갭을 하나 발견함 (같은 세션)
+
+**증상.** PR을 올리자 CI의 `Backend Build & Test`가 이 스모크 테스트에서 실패(로컬은 처음에 통과 — `application-local.yml`이 로컬에만 존재해서 숨겨져 있었음). 원인 재현을 위해 로컬에서 `application-local.yml`을 잠시 옮겨두고 재실행해 CI와 동일한 조건으로 맞춘 뒤에야 재현·진단 완료.
+
+**원인.** `S3Config.s3Client()`가 `@Value("${aws.s3.access-key}")`(기본값 `""`, `application.yml`)로 주입된 빈 문자열을 그대로 `AwsBasicCredentials.create()`에 넘겨, AWS SDK가 "Access key ID cannot be blank"로 즉시 `NullPointerException`을 던졌다 — 이 프로젝트에 `@SpringBootTest`가 지금까지 0개였던 탓에, "AWS 자격증명이 없는 환경(CI 등)에서 컨텍스트 자체가 못 뜬다"는 사실이 이번에 처음으로 드러남(스모크 테스트 도입 취지 그대로의 첫 실효 사례).
+
+**결정.** 프로덕션 코드(`S3Config`)는 건드리지 않음 — 실제 배포 환경(Railway)엔 항상 진짜 AWS 자격증명이 있어 이건 "테스트 환경 전용" 문제다. `CodeprintApplicationContextTest`의 `@TestPropertySource`에 더미 값(`aws.s3.access-key=test`, `aws.s3.secret-key=test`) 추가 — 기존 datasource 오버라이드와 동일한 패턴, S3에 실제로 접속하지 않는 테스트라 더미 값으로 충분.
+
+**검증.** `application-local.yml`을 임시로 치운 상태(=CI와 동일 조건)에서 스모크 테스트 green 확인 후 원복, 원복 후에도 전체 백엔드 테스트 스위트 green(41초, 신규 실패 0건) 재확인.

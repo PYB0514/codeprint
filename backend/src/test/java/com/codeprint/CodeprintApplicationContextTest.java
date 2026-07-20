@@ -17,7 +17,12 @@ import org.springframework.test.context.TestPropertySource;
         "spring.datasource.url=jdbc:postgresql://localhost:5432/codeprint",
         "spring.datasource.username=postgres",
         "spring.datasource.password=1234",
-        "spring.flyway.validate-on-migrate=false"
+        "spring.flyway.validate-on-migrate=false",
+        // S3Config가 컨텍스트 로딩 시점에 S3Client/S3Presigner 빈을 즉시 생성하며 AWS SDK가 빈 문자열 키를 거부한다
+        // (application.yml 기본값은 ""라서 실 자격증명이 없는 CI/이 테스트 환경에선 컨텍스트 자체가 안 뜬다 — S3에
+        // 실제로 접속하지 않으므로 더미 값으로 충분, 스모크 테스트가 처음 발견한 기존 갭)
+        "aws.s3.access-key=test",
+        "aws.s3.secret-key=test"
 })
 class CodeprintApplicationContextTest {
 
