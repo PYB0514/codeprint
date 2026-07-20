@@ -2192,3 +2192,16 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `TeamPaymentApplicationServiceTest`에 신규 2건(증분만큼 `increaseSeatsBy` 호출 확인/서로 다른 두 주문이 순서를 바꿔 확정돼도 각자 자기 증분만 요청되는지, 즉 원래 버그 시나리오의 회귀 방지) 추가, 기존 테스트는 메서드명 변경만 반영 — 11건 전체 green. **신규 `TeamSeatIncrementIntegrationTest`(`@DataJpaTest`, 실 Postgres)** 2건 — `incrementSeats` JPQL이 실제로 좌석을 증분만큼 늘리는지, 두 번 연속 호출(다른 증분)이 순서와 무관하게 누적되는지(버그 시나리오를 DB 레벨에서 직접 재현) 검증. 결제 게이트웨이 확정(`paymentGateway.confirmPayment`)까지 포함한 전체 E2E는 실제 Toss 결제 세션이 필요해 이번에도 하지 않음(기존 결제 관련 PR들과 동일 판단) — 대신 이번 수정의 핵심(원자적 증분 SQL)을 실 DB 라운드트립으로 직접 증명하는 쪽을 택함. `compileJava`/`compileTestJava`·전체 백엔드 테스트(Docker DB 기동, 1060건 전부 green, 실패 0건)·`analyzeLocal` 베이스라인 불변. **신규 리포지토리 메서드(`@Modifying @Query`)가 포함된 변경이라 `preview_start`로 로컬 백엔드 실제 재기동 → `/actuator/health` UP 확인까지 완료**(오늘 사고 이후의 새 원칙 적용).
 
 **한계·다음.** 진짜 동시 스레드로 두 확정을 경합시키는 테스트(`PaymentApplicationServiceConcurrencyIntegrationTest`처럼)는 추가하지 않음 — 이번 수정의 원자성은 애플리케이션 레벨 락이 아니라 SQL `UPDATE x = x + n` 자체의 DB 원자성 보장에서 나오는 것이라(RDBMS의 기본 성질), 순서를 바꿔 순차 호출하는 테스트만으로도 로직 정합성 증명에 충분하다고 판단.
+
+## GATE_GAPS [G-8] 재발방지책 — @SpringBootTest 컨텍스트 로딩 스모크 테스트 도입 (2026-07-20, codeprint_141)
+
+**배경.** BE-18(PR #623, WebSocket 인가)에 이어 BE-19(PR #629, 게이트 캐시 무효화)까지 24시간 안에 같은 클래스(Spring 생성자 주입 순환 참조)의 버그가 재발했다 — 두 번째는 실제 프로덕션 배포 실패로까지 이어졌다(다행히 Railway가 실패 배포를 반영 안 해 다운타임은 없었음). `GATE_GAPS.md` [G-8]이 이미 "다음에 재발하면 스모크 테스트부터 추가할 것"이라 명시해뒀고, 이번이 정확히 그 재발이라 트리거가 충족됐다. 직전 세션(codeprint_140)에서 사용자가 채택 여부에 의문을 표하고 보류했던 항목이라, 재발 사실을 알리고 사용자 확인을 받은 뒤 진행.
+
+**결정.** `CodeprintApplicationContextTest`(`@SpringBootTest(webEnvironment = WebEnvironment.NONE)`) 신규 — 로직은 전혀 검증하지 않고 전체 `ApplicationContext`가 실제로 조립되는지만 확인. 이 프로젝트에 `@SpringBootTest`가 지금까지 0개였던 게 두 사건 모두에서 CI가 못 잡은 근본 조건이었다(`decisions/DECISIONS_BACKEND.md` P1 시크릿 가드 항목·GATE_GAPS [G-8]에서 이미 확인된 사실).
+- **`@ActiveProfiles("local")` 필요한 이유**: `SecretHygieneGuard`가 non-local 프로파일에서 `jwt.secret`/`encryption.key`가 기본값이면 기동 자체를 막는데, 테스트 환경(로컬·CI 모두)엔 실제 프로덕션 시크릿이 없어 `local`을 명시하지 않으면 순환참조와 무관한 이유로 이 테스트가 실패해 신호가 오염된다.
+- **`@TestPropertySource`로 datasource 오버라이드**: 기존 `@DataJpaTest` 통합테스트 3개와 동일한 패턴(로컬 Docker DB/CI Postgres 서비스 컨테이너 재사용, `docker-compose.yml`·`.github/workflows/ci.yml`과 접속정보 일치) — 새 CI 인프라 불필요.
+- **CI 배선**: 기존 `./gradlew test`(이미 `Backend Build & Test`로 필수 체크)에 자연스럽게 포함 — 새 GitHub Actions job 신설 안 함.
+
+**검증.** 신규 1건 green(현재 main, 순환 없는 정상 상태에서 컨텍스트 정상 로딩 확인). 전체 백엔드 테스트 스위트 실행 시간 약 30초(스모크 테스트가 약 16초 기여, WebSocket 브로커·JPA·Flyway까지 전부 뜨는 풀 컨텍스트라 단위 테스트보다는 느리지만 여전히 가벼움). 전체 백엔드 테스트 전부 green(신규 실패 0건).
+
+**한계.** 이 테스트가 실제로 BE-18·BE-19급 순환 참조를 잡아내는지는 "정상 상태에서 green"으로만 확인했다 — 실제 회귀 억제력은 다음에 유사한 버그가 또 만들어졌을 때(있어선 안 되지만) 이 테스트가 로컬/CI 어느 단계에서든 먼저 잡아내는지로 실증될 것. `GraphWarningsCacheAdapter` 사건처럼 코드는 만들어졌지만 테스트/CI를 거치기 전에 이미 잡혔어야 할 케이스에도 이 테스트가 유효하다(개발자가 커밋 전 로컬에서 `./gradlew test`만 돌려도 걸림 — `preview_start` 수동 재기동을 잊어도 이중 안전망 역할).
