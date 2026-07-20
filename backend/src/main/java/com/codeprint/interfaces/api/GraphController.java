@@ -18,6 +18,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -292,14 +293,17 @@ public class GraphController {
     public ResponseEntity<Void> updateNodeAnnotation(
             @PathVariable UUID graphId,
             @PathVariable UUID nodeId,
-            @RequestBody Map<String, String> body,
+            @Valid @RequestBody UpdateAnnotationRequest request,
             @AuthenticationPrincipal User user) {
 
         graphFacade.verifyGraphOwnership(graphId, user.getId());
 
-        graphCommandService.updateNodeAnnotation(graphId, nodeId, body.get("userLabel"), body.get("userNote"));
+        graphCommandService.updateNodeAnnotation(graphId, nodeId, request.userLabel(), request.userNote());
         return ResponseEntity.ok().build();
     }
+
+    // 노드 주석 요청 DTO — userLabel은 DB user_label 컬럼(length=200)과 정합, userNote는 무제한 저장(TEXT) 남용 방지 상한
+    record UpdateAnnotationRequest(@Size(max = 200) String userLabel, @Size(max = 2000) String userNote) {}
 
     // 노드 드래그 후 위치를 저장 — 그래프 소유자만 가능
     @PutMapping("/api/graphs/{graphId}/nodes/{nodeId}/position")

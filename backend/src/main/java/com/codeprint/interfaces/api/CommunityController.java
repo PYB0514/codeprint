@@ -20,6 +20,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
@@ -529,11 +530,11 @@ public class CommunityController {
     }
 
     // 게시글 수정 요청 DTO
-    public record UpdatePostRequest(@NotBlank String title, String content) {}
+    public record UpdatePostRequest(@NotBlank @Size(max = 300) String title, @Size(max = 20000) String content) {}
 
-    // 게시글 생성 요청 DTO
+    // 게시글 생성 요청 DTO — title/content 길이는 각각 DB posts.title(length=300)·저장소 남용 방지 상한과 정합
     public record CreatePostRequest(
-            @NotBlank String title, String content, String feedbackType, UUID graphId,
+            @NotBlank @Size(max = 300) String title, @Size(max = 20000) String content, String feedbackType, UUID graphId,
             List<String> hiddenLayers, List<String> hiddenGroups, List<String> hiddenNodeNames,
             List<AttachmentRequest> attachments,
             @Valid List<GraphSnapshotRequest> graphSnapshots, String visibility) {}
@@ -548,7 +549,7 @@ public class CommunityController {
     public record AttachmentResponse(UUID id, String originalFilename, String contentType, String url) {}
 
     // 댓글 생성 요청 DTO
-    public record CreateCommentRequest(@NotBlank String content) {}
+    public record CreateCommentRequest(@NotBlank @Size(max = 2000) String content) {}
 
     // 게시글 응답 DTO
     public record PostResponse(

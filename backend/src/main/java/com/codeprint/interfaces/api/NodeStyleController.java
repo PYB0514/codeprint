@@ -4,6 +4,8 @@ package com.codeprint.interfaces.api;
 import com.codeprint.application.graph.GraphFacade;
 import com.codeprint.application.graph.NodeStyleService;
 import com.codeprint.domain.user.User;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,17 +21,17 @@ public class NodeStyleController {
     private final NodeStyleService nodeStyleService;
     private final GraphFacade graphFacade;
 
-    // 노드 배경색 설정 — bgColor null 이면 초기화
+    // 노드 배경색 설정 — bgColor null/빈 문자열이면 초기화. 프론트가 실제로 보내는 값은 항상 고정 팔레트의 #RRGGBB 헥스뿐이라 그 형식만 허용
     @PutMapping("/api/graphs/{graphId}/nodes/{nodeId}/style")
     public ResponseEntity<Map<String, Object>> upsertStyle(
             @PathVariable UUID graphId,
             @PathVariable UUID nodeId,
-            @RequestBody Map<String, String> body,
+            @Valid @RequestBody UpsertStyleRequest request,
             @AuthenticationPrincipal User user) {
 
         verifyOwnership(graphId, user);
 
-        String bgColor = body.get("bgColor");
+        String bgColor = request.bgColor();
         if (bgColor == null || bgColor.isBlank()) {
             nodeStyleService.clearStyle(graphId, nodeId);
             return ResponseEntity.ok(Map.of("bgColor", ""));
@@ -43,4 +45,7 @@ public class NodeStyleController {
     private void verifyOwnership(UUID graphId, User user) {
         graphFacade.verifyGraphOwnership(graphId, user.getId());
     }
+
+    // 노드 배경색 설정 요청 DTO — bgColor는 없거나 빈 문자열(초기화) 또는 #RRGGBB 헥스 형식만 허용(DB bg_color 컬럼 length=20과 정합)
+    record UpsertStyleRequest(@Pattern(regexp = "^(#[0-9a-fA-F]{6})?$") String bgColor) {}
 }

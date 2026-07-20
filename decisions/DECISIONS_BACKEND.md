@@ -2161,3 +2161,17 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **GATE_GAPS [G-8] 갱신.** 이 사건은 G-8이 이미 기록해둔 "다음에 순환 참조 관련 사건이 재발하면 `@SpringBootTest(webEnvironment=NONE)` 스모크 테스트부터 추가할 것"이라는 재발 트리거를 실제로 충족시켰다. 다만 직전 세션(codeprint_140)에서 사용자가 이 테스트 도입 채택 여부에 의문을 표하고 결정을 보류한 기록이 있어, 트리거 충족을 GATE_GAPS.md에 정정 기록만 하고 테스트 추가는 임의로 하지 않음 — 사용자에게 재발 사실을 알리고 채택 여부를 다시 확인하기로 함.
 
 **교훈.** cross-context 포트/어댑터를 신설할 때 `@Lazy`가 필요한 상황이면(이미 있는 역방향 의존과 만나는지는 미리 다 추적하기 어려움) **Lombok 생성자 어노테이션이 아니라 반드시 명시적 생성자 + 파라미터 `@Lazy`로 작성할 것** — 이번 사건 자체가 "G-8에서 배운 교훈을 안다고 생각했지만 실제 적용 시점엔 Lombok 어노테이션 전파라는 별개 함정에 다시 걸렸다"는 사례. 또한 새 Spring 빈을 추가하는 백엔드 PR은, 단위 테스트·`analyzeLocal`이 전부 green이어도 **push 전 로컬에서 실제로 `preview_start`로 재기동해 정상 부팅을 눈으로 확인하는 단계를 생략하면 안 된다** — 이번엔 그 단계를 건너뛰고 unit test만 믿은 채 push해 프로덕션까지 실패가 흘러갔다.
+
+## P2 게이트 신뢰도 — 입력 검증-DB 제약 불일치로 400이어야 할 게 500 (2026-07-20, codeprint_141)
+
+**배경.** codeprint_138 Fable 감사 P2-3(R42 #109·#110 + R45 #116). 근본 원인은 감사가 지적한 그대로 — 세 엔드포인트가 `@RequestBody Map<String, String>`(raw Map)으로 받아 Bean Validation(`@Valid`)을 우회하는 구조였다: `NodeStyleController.upsertStyle`(bgColor, DB `bg_color` length=20)·`GraphController.updateNodeAnnotation`(userLabel, DB `user_label` length=200)·`CommunityController`의 `CreatePostRequest`/`UpdatePostRequest`(title은 이미 record+`@Valid`였지만 `@Size` 누락, DB `title` length=300). 검증 없이 DB 컬럼 길이를 넘는 값이 들어오면 Hibernate/Postgres 예외가 그대로 `GlobalExceptionHandler`의 제네릭 500 핸들러로 떨어져, 명백한 클라이언트 입력 오류가 500으로 응답되고 있었다.
+
+**결정.**
+- `NodeStyleController`: raw Map → `record UpsertStyleRequest(@Pattern(regexp = "^(#[0-9a-fA-F]{6})?$") String bgColor)`. 프론트(`GraphPage.tsx`)의 노드 색상 팔레트가 항상 `#RRGGBB` 6자리 헥스 또는 빈 문자열(초기화)만 보낸다는 걸 확인하고, DB length=20과도 정합하는 화이트리스트로 확정(Context138이 지적한 "CSS 값 화이트리스트 부재"까지 함께 해소).
+- `GraphController.updateNodeAnnotation`: raw Map → `record UpdateAnnotationRequest(@Size(max = 200) String userLabel, @Size(max = 2000) String userNote)`. `userLabel`은 DB 컬럼 length와 정합, `userNote`는 DB가 TEXT(무제한)라 애플리케이션 레벨 상한(2000자, "메모" 용도에 비례한 값)을 새로 둠 — Context138이 지적한 "무제한 저장=저장소 남용" 방지.
+- `CommunityController`: `CreatePostRequest`/`UpdatePostRequest`에 `@Size(max = 300)` title(기존 DB 정합), `@Size(max = 20000)` content(신규 상한, TEXT 무제한이던 것) 추가. `CreateCommentRequest.content`에도 `@Size(max = 2000)` 추가(Comment.content도 TEXT 무제한).
+- **스코프에서 의도적으로 제외한 것**: `feedbackType`(DB length=50) — 프론트가 고정 `<select>` 3종 값만 보내 실사용 경로에서 초과 위험이 없고 Context138 원문에도 명시 안 됨. `hiddenLayers`/`hiddenGroups`/`hiddenNodeNames`(jsonb, 배열 크기 무제한)·레이트리밋 미등록(R22 #65)은 Context138이 별도 항목으로 언급한 더 큰 스코프(신규 레이트리밋 규칙 설계 필요)라 이번엔 손대지 않음.
+
+**검증.** 이번엔 순수 Bean Validation 배선(프레임워크 표준 메커니즘, 이미 `FeedbackController`/`MessageController`/`NoticeController` 등에서 검증된 패턴 재사용)이라 커스텀 로직 유닛 테스트 대신 **실제 HTTP 라운드트립으로 런타임 검증**(CLAUDE.md §4 "Add validation → 잘못된 입력으로 400 확인" 기준) — Docker DB 기동 + `preview_start`로 로컬 백엔드 실제 기동 + `/api/dev/test-token`(로컬 전용)으로 발급받은 토큰으로 curl 직접 호출: title 300자(정상) → 201 확인, title 301자 → `{"status":400,"message":"크기가 0에서 300 사이여야 합니다"}` 확인. `bgColor` 정규식은 `grep -E`로 별도 케이스 전수 확인(빈 문자열/6자리 헥스 통과, `red`·5자리·`javascript:` 등 거부). `compileJava`/`compileTestJava`·전체 백엔드 테스트(Docker DB 기동 상태, 1057건 전부 green, 실패 0건)·`analyzeLocal` 베이스라인 불변 확인.
+
+**한계·다음.** `NodeStyleController`·`GraphController` 쪽은 record 전환만으로 끝나 신규 컨트롤러 테스트를 추가하지 않음(Bean Validation 자체는 프레임워크가 보장하는 동작이라 이 저장소의 기존 관례상 별도 유닛 테스트 대상 아님, `FeedbackController` 등도 마찬가지). 레이트리밋 미등록(R22 #65)·`hiddenLayers` 등 배열 크기 무제한은 여전히 미해결로 남음 — 별도 항목으로 다룰 것.

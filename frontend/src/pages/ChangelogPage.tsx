@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.147.5',
+    date: '2026-07-20',
+    title: '입력값이 너무 길 때 오류 메시지 없이 실패하던 문제 수정',
+    type: 'fix',
+    items: [
+      { category: '버그', desc: '게시글 제목·노드 배경색·노드 메모 등에 너무 긴 값을 입력하면 원인 없이 서버 오류가 뜨던 문제를 수정했습니다. 이제 허용 길이를 넘으면 명확한 안내와 함께 거부됩니다.' },
+    ],
+  },
+  {
     version: 'v0.147.4',
     date: '2026-07-20',
     title: '게이트 정책 변경 직후 PR 판정이 이전 설정 기준으로 나오던 문제 수정',
