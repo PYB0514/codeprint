@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.147.3',
+    date: '2026-07-20',
+    title: '쿠키 동의 배너 "거부" 시 추적 완전 차단 (보안)',
+    type: 'fix',
+    items: [
+      { category: '보안', desc: '쿠키 동의 배너에서 "거부"를 눌러도 오류 추적(Sentry)이 계속 동작하던 문제를 수정했습니다. 이제 "동의"를 눌렀을 때만 추적이 시작되고, 거부하거나 아직 선택하지 않은 상태에서는 전혀 초기화되지 않습니다.' },
+    ],
+  },
+  {
     version: 'v0.147.2',
     date: '2026-07-20',
     title: '커뮤니티 공유 그래프 숨김 필터 서버 적용 (보안)',

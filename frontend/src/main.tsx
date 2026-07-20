@@ -1,20 +1,14 @@
 // 앱 진입점 — React 루트 마운트 및 Axios 전역 설정
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import * as Sentry from '@sentry/react'
 import axios from 'axios'
 import './index.css'
 import './i18n'
 import App from './App.tsx'
+import { startSentryIfConsented } from './components/CookieBanner'
 
-// 운영 환경에서만 Sentry 활성화 — DSN 없으면 비활성
-if (import.meta.env.VITE_SENTRY_DSN) {
-  Sentry.init({
-    dsn: import.meta.env.VITE_SENTRY_DSN,
-    environment: import.meta.env.MODE,
-    tracesSampleRate: 0.1,
-  })
-}
+// 이전 방문에서 이미 쿠키 동의(accept)한 경우에만 Sentry 활성화 — 미결정/거부 상태로는 초기화하지 않는다
+startSentryIfConsented()
 
 axios.defaults.baseURL = import.meta.env.VITE_API_URL ?? ''
 axios.defaults.withCredentials = true
