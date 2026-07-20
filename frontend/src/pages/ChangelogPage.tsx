@@ -11,6 +11,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.147.6',
+    date: '2026-07-20',
+    title: '팀 좌석 증가 결제가 겹치는 상황에서 최종 좌석 수가 어긋나던 문제 수정',
+    type: 'fix',
+    items: [
+      { category: '결제', desc: '팀 좌석 증가 결제를 연달아 진행하면, 확정 순서에 따라 결제한 만큼 좌석이 반영되지 않던 문제를 수정했습니다. 이제 결제 확정 순서와 무관하게 결제한 좌석 수만큼 정확히 반영됩니다.' },
+    ],
+  },
+  {
     version: 'v0.147.5',
     date: '2026-07-20',
     title: '입력값이 너무 길 때 오류 메시지 없이 실패하던 문제 수정',

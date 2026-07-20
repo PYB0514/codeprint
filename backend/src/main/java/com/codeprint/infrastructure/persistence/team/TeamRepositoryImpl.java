@@ -20,4 +20,5 @@ public class TeamRepositoryImpl implements TeamRepository {
     @Override public Optional<Team> findById(UUID id) { return jpa.findById(id); }
     @Override public List<Team> findByOwnerUserId(UUID ownerUserId) { return jpa.findByOwnerUserId(ownerUserId); }
     @Override public void deleteById(UUID id) { jpa.deleteById(id); }
+    @Override public void incrementSeats(UUID teamId, int delta) { jpa.incrementSeats(teamId, delta); }
 }

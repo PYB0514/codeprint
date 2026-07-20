@@ -31,14 +31,14 @@ public class TeamProvisioningAdapter implements TeamProvisioningPort {
         return team.getId();
     }
 
-    // 결제 완료 후 기존 팀의 좌석 수 변경
+    // 결제 완료 후 좌석 수를 증분만큼 원자적으로 증가 — 조회 없는 UPDATE라 동시 확정 요청이 서로 덮어쓰지 않음
     @Override
     @Transactional
-    public void changeSeats(UUID teamId, int newSeats) {
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new IllegalArgumentException("팀을 찾을 수 없습니다: " + teamId));
-        team.upgradePlan(UserPlan.DESKTOP, newSeats);
-        teamRepository.save(team);
+    public void increaseSeatsBy(UUID teamId, int deltaSeats) {
+        if (!teamRepository.findById(teamId).isPresent()) {
+            throw new IllegalArgumentException("팀을 찾을 수 없습니다: " + teamId);
+        }
+        teamRepository.incrementSeats(teamId, deltaSeats);
     }
 
     // 좌석 증가 결제 준비 시 필요한 팀 소유자·현재 좌석 수 조회

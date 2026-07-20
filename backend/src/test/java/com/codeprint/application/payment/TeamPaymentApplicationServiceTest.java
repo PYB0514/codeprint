@@ -156,17 +156,18 @@ class TeamPaymentApplicationServiceTest {
         verify(paymentGateway).confirmPayment("pk-4", "order-4", 24500L);
         verify(orderRepository).save(order);
         verify(teamProvisioningPort).createTeam(owner, "myteam", 5);
-        verify(teamProvisioningPort, never()).changeSeats(any(), anyInt());
+        verify(teamProvisioningPort, never()).increaseSeatsBy(any(), anyInt());
     }
 
     // --- confirm: 좌석 증가 분기 ---
 
     @Test
-    @DisplayName("confirm — 좌석 증가 주문이면 게이트웨이 승인 후 좌석 변경, 기존 teamId 반환")
+    @DisplayName("confirm — 좌석 증가 주문이면 게이트웨이 승인 후 증분만큼 좌석 증가(절대치 아님), 기존 teamId 반환")
     void confirm_seatIncrease_success() {
         UUID owner = UUID.randomUUID();
         UUID teamId = UUID.randomUUID();
-        TeamPaymentOrder order = TeamPaymentOrder.forSeatIncrease("order-5", owner, teamId, 8, 14700L);
+        // forSeatIncrease의 세 번째 좌석 인자는 증분(delta) — 여기선 3석 증가분을 결제한 주문
+        TeamPaymentOrder order = TeamPaymentOrder.forSeatIncrease("order-5", owner, teamId, 3, 14700L);
         when(orderRepository.findByIdForUpdate("order-5")).thenReturn(Optional.of(order));
 
         var outcome = service.confirm(owner, "pk-5", "order-5", 14700L);
@@ -174,7 +175,25 @@ class TeamPaymentApplicationServiceTest {
         assertThat(outcome.result()).isEqualTo(TeamPaymentApplicationService.Result.OK);
         assertThat(outcome.teamId()).isEqualTo(teamId);
         verify(paymentGateway).confirmPayment("pk-5", "order-5", 14700L);
-        verify(teamProvisioningPort).changeSeats(teamId, 8);
+        verify(teamProvisioningPort).increaseSeatsBy(teamId, 3);
         verify(teamProvisioningPort, never()).createTeam(any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("confirm — 좌석 증가 주문 두 건이 다른 순서로 확정돼도 각자의 증분만 반영(TOCTOU 회귀 방지)")
+    void confirm_seatIncrease_concurrentOrders_bothApplyOwnDelta() {
+        UUID owner = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        TeamPaymentOrder orderA = TeamPaymentOrder.forSeatIncrease("order-a", owner, teamId, 5, 24500L);
+        TeamPaymentOrder orderB = TeamPaymentOrder.forSeatIncrease("order-b", owner, teamId, 3, 14700L);
+        when(orderRepository.findByIdForUpdate("order-a")).thenReturn(Optional.of(orderA));
+        when(orderRepository.findByIdForUpdate("order-b")).thenReturn(Optional.of(orderB));
+
+        // B가 먼저 확정되고 A가 나중에 확정돼도(순서 역전) 각자 자기 증분만 요청 — 절대치 지정이면 나중 확정이 앞선 확정을 덮어썼을 상황
+        service.confirm(owner, "pk-b", "order-b", 14700L);
+        service.confirm(owner, "pk-a", "order-a", 24500L);
+
+        verify(teamProvisioningPort).increaseSeatsBy(teamId, 3);
+        verify(teamProvisioningPort).increaseSeatsBy(teamId, 5);
     }
 }
