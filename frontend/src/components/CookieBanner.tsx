@@ -1,14 +1,29 @@
-// 쿠키 동의 배너 — GDPR/개보법 대응, localStorage 기반 상태 유지
+// 쿠키 동의 배너 — GDPR/개보법 대응, localStorage 기반 상태 유지. accept 시에만 Sentry를 활성화한다.
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import * as Sentry from '@sentry/react'
 
 const STORAGE_KEY = 'cookie-consent'
 const BODY_PB = '80px'
+let sentryStarted = false
 
 // 쿠키 동의 여부 로컬스토리지 조회
 export function hasCookieConsent(): boolean {
   return localStorage.getItem(STORAGE_KEY) !== null
+}
+
+// accept로 동의된 경우에만 Sentry를 시작 — 앱 최초 로드 시(main.tsx)와 accept 클릭 시 둘 다 호출,
+// decline/미결정 상태에서는 절대 초기화하지 않는다(거부해도 추적되던 문제 수정)
+export function startSentryIfConsented(): void {
+  if (sentryStarted || !import.meta.env.VITE_SENTRY_DSN) return
+  if (localStorage.getItem(STORAGE_KEY) !== 'accepted') return
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    environment: import.meta.env.MODE,
+    tracesSampleRate: 0.1,
+  })
+  sentryStarted = true
 }
 
 // 쿠키 배너 렌더링
@@ -27,9 +42,10 @@ export default function CookieBanner() {
 
   if (!visible) return null
 
-  // 동의 저장 후 배너 숨김
+  // 동의 저장 후 배너 숨김 — 이 시점부터 Sentry 활성화
   const accept = () => {
     localStorage.setItem(STORAGE_KEY, 'accepted')
+    startSentryIfConsented()
     document.body.style.paddingBottom = ''
     setVisible(false)
   }

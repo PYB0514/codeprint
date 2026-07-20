@@ -1037,3 +1037,15 @@ const fetchGraph = useCallback(async () => {
 - "사용자가 제안 → 벤치 통과 시 공용 게이트로 승격 → 보상(구독 개월/쿠폰)" 채널은 완전히 별개 이니셔티브(제출 UI+심사+보상 지급 로직 필요), 아이디어만 기록.
 
 **검증.** `npx tsc -b` 통과. GitHub OAuth 로그인 상태(실제 Chrome 세션)로 `codeprint` 자기 프로젝트 그래프에서 실측 — LLM으로 만들기 패널 펼치기 → 예시 JSON(`{"modules":[...],"rules":[...]}`) 붙여넣기 → 가져오기 클릭 → 모듈 2개·규칙 1개(from/to 드롭다운 포함)가 정확히 폼에 채워짐, 상태 메시지("가져옴 — 모듈 2개, 규칙 1개...") 확인. 실제 저장(PUT)은 자기 프로젝트 데이터를 바꾸므로 실행하지 않음(기존 저장 흐름은 이미 프로덕션에서 검증된 엔드포인트라 재검증 불필요). 클립보드 복사 버튼은 Chrome 확장 자동화 컨텍스트에서 `navigator.clipboard.writeText()` promise가 응답 없이 멈추는 것을 확인(권한 정책 관련 자동화 환경 제약으로 판단) — 코드 자체는 표준 Clipboard API 사용법이라 실제 사용자 클릭(신뢰된 제스처)에서는 정상 동작할 것으로 판단, 완전한 확인은 다음 실사용자 클릭 세션 권장.
+
+## P1 보안 — 쿠키 동의 배너 "거부"를 눌러도 Sentry 추적이 계속되던 문제 수정 (2026-07-20, codeprint_141)
+
+**배경.** codeprint_138 Fable 감사 P1-6(R56 #138). `main.tsx`가 `VITE_SENTRY_DSN`이 설정돼 있기만 하면 `CookieBanner`의 accept/decline 여부와 무관하게 `Sentry.init()`을 앱 로드 시점에 무조건 실행하고 있었다. `CookieBanner.tsx`는 accept/decline을 `localStorage`(`cookie-consent`)에 저장할 뿐 그 값을 읽어 사용하는 소비처가 어디에도 없어 — 사용자가 "거부"를 눌러도 Sentry가 IP·UA·URL을 계속 수집하는 상태였다. 공개 런칭 전 법적 리스크로 우선순위가 높은 항목.
+
+**결정.** `CookieBanner.tsx`에 `startSentryIfConsented()`를 신설 — `localStorage.getItem('cookie-consent') === 'accepted'`일 때만 `Sentry.init()`을 실행하고, 이미 시작됐으면 재실행하지 않는 모듈 스코프 플래그(`sentryStarted`)로 중복 초기화를 막는다. 이 함수를 두 지점에서 호출: ①`main.tsx`(이전 방문에서 이미 accept한 재방문자는 로드 시점에 바로 시작) ②`CookieBanner.accept()`(이번 방문에서 막 동의한 사용자는 클릭 즉시 시작, 새로고침 불필요). "거부"·미결정 상태에서는 두 지점 모두 아무 것도 하지 않는다.
+- **함수 위치를 `CookieBanner.tsx`에 둔 이유**: 이 파일이 이미 동의 상태(`STORAGE_KEY`)의 유일한 소유자였다(기존 `hasCookieConsent()` export 관례) — `main.tsx`와 `CookieBanner.tsx`가 서로를 import하는 순환 구조를 피하려면 "동의 상태를 아는 쪽"이 "그 상태에 따른 부수효과(Sentry 시작)"까지 소유하는 게 자연스러웠다. `main.tsx`는 단방향으로 이 함수를 import해 호출만 한다.
+- **동의 철회(런타임에 Sentry를 다시 끄는) 기능은 포함하지 않음**: 배너 자체가 한 번 결정하면 다시 안 뜨는 기존 설계라(설정 페이지에 재변경 UI가 없음) 이번 스코프 밖 — Context138이 지적한 실제 문제("거부해도 추적됨")는 최초 결정 시점에 막는 것만으로 해소된다.
+
+**검증.** `npx tsc -b` 통과(정적 검증, 프론트 전용 변경이라 백엔드 `analyzeLocal`은 대상 아님). Preview 브라우저로 실측: `.env.local`(gitignore 대상 `*.local`, 커밋 안 됨)에 임시 fake DSN을 넣고 세 가지 상태를 직접 확인 — ①`localStorage` 클리어(미결정) 상태로 로드 → `window.__SENTRY__`가 `undefined`(초기화 안 됨) ②"거부" 클릭 후 새로고침 → 여전히 `undefined` ③"동의" 클릭 → 그 즉시 `window.__SENTRY__`가 object로 나타남(Sentry SDK 핸들 생성 확인). 세 상태 전부 의도대로 동작. 검증 후 `.env.local` 파일은 삭제.
+
+**한계·다음.** P1-3·P1-4와 함께 이번 세션에서 식별된 P1 3건 전부 처리 완료 — Context138 남은 항목은 P2(과금 경계·비공개 레포 clone 인증 등) 이하로 넘어간다.
