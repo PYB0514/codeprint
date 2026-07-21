@@ -55,6 +55,14 @@ public class ArchitectureIntentController {
                         "edgeType은 IMPORT 또는 FUNCTION_CALL만 가능합니다: " + r.edgeType()));
             }
         }
+        // globs에 null/빈 원소가 있으면 ArchitectureIntent.globToPattern()이 NPE를 던져 500이 된다 —
+        // 저장 시점에 걸러서 400으로 정리(LLM JSON import처럼 globs 배열 원소가 비정상일 수 있는 경로 대비)
+        for (ModuleDto m : request.modules()) {
+            if (m.globs().stream().anyMatch(g -> g == null || g.isBlank())) {
+                return ResponseEntity.badRequest().body(Map.of("error",
+                        "globs에 빈 값이 있습니다: " + m.name()));
+            }
+        }
         ArchitectureIntent intent = new ArchitectureIntent(
                 request.modules().stream()
                         .map(m -> new ArchitectureIntent.Module(m.name(), m.globs()))

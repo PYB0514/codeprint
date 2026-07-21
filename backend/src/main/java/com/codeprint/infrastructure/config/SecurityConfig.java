@@ -8,6 +8,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -28,6 +30,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
+    private final Environment environment;
 
     // JWT 필터, OAuth2, CORS, 세션리스 정책을 적용한 Security 필터 체인 구성
     @Bean
@@ -36,21 +39,30 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/users/me", "/api/users/me/**").authenticated()
-                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/users/*/follow").authenticated()
-                .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/users/*/follow").authenticated()
-                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/community/posts/*/like").authenticated()
-                .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/community/posts/*/like").authenticated()
-                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/community/posts").permitAll()
-                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/community/posts/*").permitAll()
-                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/graphs/*/nodes/*/comments").permitAll()
-                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/cron/**").permitAll()
-                .requestMatchers("/api/auth/**", "/api/share/**", "/api/community/posts/*/graph", "/api/community/posts/*/snapshots", "/api/payments/webhook", "/api/webhooks/github", "/api/notices", "/api/donations", "/api/users/**", "/ws/**", "/login/**", "/oauth2/**", "/actuator/health", "/api/dev/**", "/api/push/vapid-public-key", "/mcp/**", "/api/featured-repos").permitAll()
-                .requestMatchers("/actuator/metrics/**", "/actuator/info").hasRole("ADMIN")
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .anyRequest().authenticated()
-            )
+            .authorizeHttpRequests(auth -> {
+                auth
+                    .requestMatchers("/api/users/me", "/api/users/me/**").authenticated()
+                    .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/users/*/follow").authenticated()
+                    .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/users/*/follow").authenticated()
+                    .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/community/posts/*/like").authenticated()
+                    .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/community/posts/*/like").authenticated()
+                    .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/community/posts").permitAll()
+                    .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/community/posts/*").permitAll()
+                    .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/graphs/*/nodes/*/comments").permitAll()
+                    .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/cron/**").permitAll()
+                    .requestMatchers("/api/auth/**", "/api/share/**", "/api/community/posts/*/graph", "/api/community/posts/*/snapshots", "/api/payments/webhook", "/api/webhooks/github", "/api/notices", "/api/donations", "/api/users/**", "/ws/**", "/login/**", "/oauth2/**", "/actuator/health", "/api/push/vapid-public-key", "/mcp/**", "/api/featured-repos").permitAll();
+                // /api/dev/**는 DevController가 @Profile("local")이라 운영 환경에선 이미 빈 자체가 없어 404지만,
+                // permitAll 매처는 프로파일과 무관하게 상시 등록돼 있었다 — 훗날 @Profile 가드 없는 새 컨트롤러가
+                // 이 경로에 매핑되면 조용히 무인증 노출될 위험(2026-07-18 Fable 감사 R2 #8 위생 지적)이라 매처
+                // 자체도 local 프로파일에서만 등록한다.
+                if (environment.acceptsProfiles(Profiles.of("local"))) {
+                    auth.requestMatchers("/api/dev/**").permitAll();
+                }
+                auth
+                    .requestMatchers("/actuator/metrics/**", "/actuator/info").hasRole("ADMIN")
+                    .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                    .anyRequest().authenticated();
+            })
             // 이 백엔드는 뷰를 렌더링하지 않는 순수 API 서버라 인증 실패 응답을 받는 쪽은 항상 프론트 axios
             // 호출뿐이다(로그인 시작은 permitAll된 /oauth2/**로 직접 이동하므로 이 지점에 안 걸림). 그런데
             // oauth2Login()의 기본 AuthenticationEntryPoint는 302로 OAuth 인가 페이지(HTML)를 반환해,
