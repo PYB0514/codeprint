@@ -1,6 +1,7 @@
 // 활성 공지사항을 상단 배너로 표시하는 컴포넌트
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import { useTranslation } from 'react-i18next'
 
 interface Notice {
   id: string
@@ -27,6 +28,7 @@ function dismiss(id: string) {
 
 // 활성 공지사항 배너 컴포넌트
 export default function NoticeBanner() {
+  const { t } = useTranslation('workspace')
   const [notices, setNotices] = useState<Notice[]>([])
 
   useEffect(() => {
@@ -45,7 +47,7 @@ export default function NoticeBanner() {
   return (
     <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-gray-900 px-4 py-2 flex items-center justify-between text-sm shadow-md">
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        <span className="font-bold shrink-0">📢 공지</span>
+        <span className="font-bold shrink-0">{t('noticeBanner.badge')}</span>
         <span className="font-semibold shrink-0">{notice.title}</span>
         <span className="text-gray-800 truncate hidden sm:block">{notice.content}</span>
       </div>
@@ -55,7 +57,7 @@ export default function NoticeBanner() {
           setNotices((prev) => prev.filter((n) => n.id !== notice.id))
         }}
         className="ml-3 shrink-0 hover:opacity-70 transition-opacity"
-        aria-label="공지 닫기"
+        aria-label={t('noticeBanner.closeLabel')}
       >
         ✕
       </button>

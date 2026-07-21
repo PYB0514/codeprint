@@ -1,5 +1,6 @@
 // 흐름 재생 패널 UI — GraphPage/GraphViewerPage/CommunityPostGraphPage 공유
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { type RawNode, getGroupKey, findCommonPrefix } from '../utils/graphLayout'
 import { type CallTreeNode, type PlaybackItem, findTreeNode, findPathInTree, extendToDefaultLeaf } from '../utils/flowPlayback'
 
@@ -28,6 +29,7 @@ export function FlowPlaybackPanel({
   callTree, playbackItems, playbackCursor, playbackPlaying, activePath, pendingBranchNodeId, playbackRootNodeId,
   rawNodes, setPlaybackCursor, setPlaybackPlaying, setPendingBranchNodeId, resetPlayback, selectBranchImmediate, confirmBranch, startPlayback,
 }: FlowPlaybackPanelProps) {
+  const { t } = useTranslation('workspace')
   // 도메인 뱃지: 파일 경로 구조에서 그룹 키 추출 (그래프 범례·섹션과 동일한 getGroupKey 사용 — 특정 프로젝트 도메인명에 고정되지 않음)
   // callTree와 무관해 조기 return보다 먼저 계산 — Hooks 규칙(모든 렌더에서 동일한 순서로 호출)을 지키기 위함
   const commonPrefix = useMemo(
@@ -42,7 +44,7 @@ export function FlowPlaybackPanel({
 
   // 흐름 목적: 루트 노드의 주석 또는 이름
   const rootRaw = rawNodes.find((n) => n.id === callTree.nodeId)
-  const flowTitle = rootRaw?.comment || rootRaw?.name || '흐름 재생'
+  const flowTitle = rootRaw?.comment || rootRaw?.name || t('flowPlaybackPanel.defaultTitle')
 
   const rootPath = rootRaw?.filePath ?? ''
   const rootGroupKey = rootPath ? getGroupKey(rootPath, commonPrefix) : null
@@ -65,7 +67,7 @@ export function FlowPlaybackPanel({
             </span>
           )}
         </div>
-        <button onClick={resetPlayback} className="flex-shrink-0 text-gray-600 hover:text-gray-400 text-xs ml-2" title="닫기">✕</button>
+        <button onClick={resetPlayback} className="flex-shrink-0 text-gray-600 hover:text-gray-400 text-xs ml-2" title={t('flowPlaybackPanel.closeTooltip')}>✕</button>
       </div>
 
       {/* 전체 단계 도트 — 클릭하면 해당 스텝으로 이동 */}
@@ -98,7 +100,9 @@ export function FlowPlaybackPanel({
               )
             })}
             <span className="ml-1.5 text-[9px] text-gray-500 tabular-nums whitespace-nowrap">
-              {playbackCursor < 0 ? `0 / ${total}` : `${playbackCursor + 1} / ${total} 단계`}
+              {playbackCursor < 0
+                ? t('flowPlaybackPanel.stepCounterInitial', { total })
+                : t('flowPlaybackPanel.stepCounter', { cur: playbackCursor + 1, total })}
             </span>
           </div>
         </div>
@@ -125,13 +129,13 @@ export function FlowPlaybackPanel({
         let clr = '#4ade80'
         if (cur.nodeType === 'FUNCTION' && /^[A-Z]/.test(name) && !PASCAL_CASE_IS_NOT_CONSTRUCTOR.has(rawNode?.language ?? '')) {
           // PascalCase 함수 = 생성자로 판단 (Go·C#은 공개 함수 전부가 PascalCase라 제외)
-          msg = `${comment || name} 객체가 반환됩니다`
+          msg = t('flowPlaybackPanel.constructorReturned', { name: comment || name })
         } else if (cur.nodeType === 'DB_TABLE') {
           const et = cur.incomingEdgeType
-          if (et === 'DB_READ') { msg = `${comment || name} 데이터를 읽습니다`; clr = '#22d3ee' }
-          else if (et === 'DB_CREATE' || et === 'DB_WRITE') { msg = `${comment || name}에 저장됩니다`; clr = '#4ade80' }
-          else if (et === 'DB_UPDATE') { msg = `${comment || name} 데이터가 수정됩니다`; clr = '#facc15' }
-          else if (et === 'DB_DELETE') { msg = `${comment || name} 데이터가 삭제됩니다`; clr = '#f87171' }
+          if (et === 'DB_READ') { msg = t('flowPlaybackPanel.dbRead', { name: comment || name }); clr = '#22d3ee' }
+          else if (et === 'DB_CREATE' || et === 'DB_WRITE') { msg = t('flowPlaybackPanel.dbSaved', { name: comment || name }); clr = '#4ade80' }
+          else if (et === 'DB_UPDATE') { msg = t('flowPlaybackPanel.dbUpdated', { name: comment || name }); clr = '#facc15' }
+          else if (et === 'DB_DELETE') { msg = t('flowPlaybackPanel.dbDeleted', { name: comment || name }); clr = '#f87171' }
         }
         if (!msg) return null
         return (
@@ -146,7 +150,7 @@ export function FlowPlaybackPanel({
       {/* 분기 선택 — 현재 스텝에서 경로가 갈릴 때 */}
       {branchChildren.length > 0 && (
         <div className="mx-3 mb-2 flex flex-col gap-1">
-          <p className="text-[9px] text-gray-500">흐름이 분기됩니다 — 경로를 선택하세요</p>
+          <p className="text-[9px] text-gray-500">{t('flowPlaybackPanel.branchPrompt')}</p>
           {branchChildren.map((child) => {
             const childRaw = rawNodes.find((n) => n.id === child.nodeId)
             const isPending = pendingBranchNodeId === child.nodeId
@@ -175,7 +179,9 @@ export function FlowPlaybackPanel({
                 <span className="flex items-center justify-between gap-2">
                   <span className="truncate">{childRaw?.comment || childRaw?.name || child.nodeId}</span>
                   {branchStepCount != null && (
-                    <span className={`flex-shrink-0 tabular-nums ${isPending ? 'text-blue-400' : 'text-gray-600'}`}>{branchStepCount}단계</span>
+                    <span className={`flex-shrink-0 tabular-nums ${isPending ? 'text-blue-400' : 'text-gray-600'}`}>
+                      {t('flowPlaybackPanel.branchStepCount', { count: branchStepCount })}
+                    </span>
                   )}
                 </span>
               </button>
@@ -199,7 +205,13 @@ export function FlowPlaybackPanel({
           }}
           className="flex-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-700/40 rounded-lg py-1.5"
         >
-          {pendingBranchNodeId ? '▶ 이 경로로 재생' : playbackPlaying ? '⏸ 일시정지' : playbackCursor >= total - 1 ? '↺ 처음부터' : '▶ 재생'}
+          {pendingBranchNodeId
+            ? t('flowPlaybackPanel.confirmBranchButton')
+            : playbackPlaying
+            ? t('flowPlaybackPanel.pauseButton')
+            : playbackCursor >= total - 1
+            ? t('flowPlaybackPanel.restartButton')
+            : t('flowPlaybackPanel.playButton')}
         </button>
         <button
           onClick={() => setPlaybackCursor((c) => Math.min(total - 1, c + 1))}

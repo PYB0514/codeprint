@@ -1,6 +1,7 @@
 // 협업 세션 관리 패널 — 초대 코드 생성·공유, 참가자 아바타 표시
 import { useState } from 'react'
 import axios from 'axios'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   graphId: string
@@ -23,6 +24,7 @@ function avatarColor(username: string) {
 
 // 협업 패널 렌더링
 export default function CollaborationPanel({ graphId, myUserId, participants, connected, sessionId, inviteCode, onSessionReady }: Props) {
+  const { t } = useTranslation('workspace')
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -66,7 +68,7 @@ export default function CollaborationPanel({ graphId, myUserId, participants, co
         <button
           onClick={() => setOpen(o => !o)}
           className="w-8 h-8 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs flex items-center justify-center transition-colors"
-          title="협업 세션"
+          title={t('collaborationPanel.buttonTooltip')}
         >
           👥
         </button>
@@ -75,7 +77,7 @@ export default function CollaborationPanel({ graphId, myUserId, participants, co
       {/* 드롭다운 패널 */}
       {open && (
         <div className="absolute right-0 top-full mt-2 w-72 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-4 flex flex-col gap-3">
-          <p className="text-white font-semibold text-sm">실시간 협업</p>
+          <p className="text-white font-semibold text-sm">{t('collaborationPanel.heading')}</p>
 
           {!sessionId ? (
             <button
@@ -83,13 +85,13 @@ export default function CollaborationPanel({ graphId, myUserId, participants, co
               disabled={loading}
               className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
             >
-              {loading ? '세션 생성 중...' : '협업 세션 시작'}
+              {loading ? t('collaborationPanel.starting') : t('collaborationPanel.startButton')}
             </button>
           ) : (
             <>
               <div className="flex items-center gap-2">
-                <span className="text-gray-400 text-xs">초대 코드</span>
-                {connected && <span className="w-2 h-2 rounded-full bg-green-500" title="연결됨" />}
+                <span className="text-gray-400 text-xs">{t('collaborationPanel.inviteCodeLabel')}</span>
+                {connected && <span className="w-2 h-2 rounded-full bg-green-500" title={t('collaborationPanel.connectedTooltip')} />}
               </div>
               <div className="flex items-center gap-2">
                 <span className="flex-1 bg-gray-800 text-white text-sm font-mono px-3 py-2 rounded-lg tracking-widest">
@@ -99,14 +101,14 @@ export default function CollaborationPanel({ graphId, myUserId, participants, co
                   onClick={handleCopy}
                   className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition-colors"
                 >
-                  {copied ? '복사됨!' : '복사'}
+                  {copied ? t('collaborationPanel.copiedLabel') : t('collaborationPanel.copyButton')}
                 </button>
               </div>
-              <p className="text-gray-500 text-xs">링크를 공유하면 팀원이 바로 참가합니다.</p>
+              <p className="text-gray-500 text-xs">{t('collaborationPanel.shareHint')}</p>
 
               {participants.length > 0 && (
                 <div className="flex flex-col gap-1">
-                  <p className="text-gray-400 text-xs">참가자 ({participants.length}명)</p>
+                  <p className="text-gray-400 text-xs">{t('collaborationPanel.participantsLabel', { count: participants.length })}</p>
                   {participants.map(p => (
                     <div key={p.userId} className="flex items-center gap-2 text-sm text-gray-300">
                       <div
@@ -116,7 +118,7 @@ export default function CollaborationPanel({ graphId, myUserId, participants, co
                         {p.username.charAt(0)}
                       </div>
                       {p.username}
-                      {p.userId === myUserId && <span className="text-gray-500 text-xs">(나)</span>}
+                      {p.userId === myUserId && <span className="text-gray-500 text-xs">{t('collaborationPanel.meTag')}</span>}
                     </div>
                   ))}
                 </div>

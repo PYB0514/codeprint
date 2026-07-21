@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
 import axios from 'axios'
+import { useTranslation } from 'react-i18next'
 
 interface Project {
   id: string
@@ -31,6 +32,7 @@ interface Props {
 
 // 새 프로젝트 생성 모달 컴포넌트
 export default function CreateProjectModal({ onClose, onCreated, initialUrl }: Props) {
+  const { t } = useTranslation('workspace')
   const [repos, setRepos] = useState<GitHubRepo[]>([])
   const [reposLoading, setReposLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -87,9 +89,9 @@ export default function CreateProjectModal({ onClose, onCreated, initialUrl }: P
       onCreated(res.data)
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.message ?? '프로젝트 생성에 실패했습니다.')
+        setError(err.response?.data?.message ?? t('createProjectModal.createFailed'))
       } else {
-        setError('프로젝트 생성에 실패했습니다.')
+        setError(t('createProjectModal.createFailed'))
       }
     } finally {
       setLoading(false)
@@ -102,19 +104,19 @@ export default function CreateProjectModal({ onClose, onCreated, initialUrl }: P
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="bg-gray-900 rounded-2xl p-8 w-full max-w-md shadow-xl">
-        <h2 className="text-xl font-semibold mb-6">새 프로젝트</h2>
+        <h2 className="text-xl font-semibold mb-6">{t('createProjectModal.title')}</h2>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* 레포 선택 드롭다운 */}
           <div ref={dropdownRef}>
-            <label className="block text-sm text-gray-400 mb-1">GitHub 레포 선택</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('createProjectModal.repoSelectLabel')}</label>
             <div className="relative">
               <input
                 type="text"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setDropdownOpen(true) }}
                 onFocus={() => setDropdownOpen(true)}
-                placeholder={reposLoading ? '레포 불러오는 중...' : '레포 검색...'}
+                placeholder={reposLoading ? t('createProjectModal.repoLoadingPlaceholder') : t('createProjectModal.repoSearchPlaceholder')}
                 disabled={reposLoading}
                 className="w-full bg-gray-800 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-white/20 disabled:opacity-50"
               />
@@ -128,7 +130,7 @@ export default function CreateProjectModal({ onClose, onCreated, initialUrl }: P
                     >
                       <span className="truncate">{repo.fullName}</span>
                       {repo.isPrivate && (
-                        <span className="text-xs text-gray-500 shrink-0">비공개</span>
+                        <span className="text-xs text-gray-500 shrink-0">{t('createProjectModal.privateTag')}</span>
                       )}
                     </li>
                   ))}
@@ -138,7 +140,7 @@ export default function CreateProjectModal({ onClose, onCreated, initialUrl }: P
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">GitHub 레포 URL</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('createProjectModal.repoUrlLabel')}</label>
             <input
               type="url"
               value={githubRepoUrl}
@@ -150,12 +152,12 @@ export default function CreateProjectModal({ onClose, onCreated, initialUrl }: P
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">프로젝트 이름</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('createProjectModal.nameLabel')}</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="My Awesome Project"
+              placeholder={t('createProjectModal.namePlaceholder')}
               required
               maxLength={200}
               className="w-full bg-gray-800 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-white/20"
@@ -163,11 +165,11 @@ export default function CreateProjectModal({ onClose, onCreated, initialUrl }: P
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">설명 (선택)</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('createProjectModal.descriptionLabel')}</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="프로젝트 한 줄 설명"
+              placeholder={t('createProjectModal.descriptionPlaceholder')}
               rows={3}
               className="w-full bg-gray-800 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-white/20 resize-none"
             />
@@ -181,14 +183,14 @@ export default function CreateProjectModal({ onClose, onCreated, initialUrl }: P
               onClick={onClose}
               className="flex-1 bg-gray-800 hover:bg-gray-700 rounded-lg py-2.5 text-sm"
             >
-              취소
+              {t('createProjectModal.cancelButton')}
             </button>
             <button
               type="submit"
               disabled={loading}
               className="flex-1 bg-white text-black font-medium rounded-lg py-2.5 text-sm hover:bg-gray-200 disabled:opacity-50"
             >
-              {loading ? '생성 중...' : '생성'}
+              {loading ? t('createProjectModal.creating') : t('createProjectModal.createButton')}
             </button>
           </div>
         </form>

@@ -771,5 +771,87 @@
       "modeComment": "주석",
       "modeName": "이름"
     }
+  },
+  "createProjectModal": {
+    "title": "새 프로젝트",
+    "repoSelectLabel": "GitHub 레포 선택",
+    "repoLoadingPlaceholder": "레포 불러오는 중...",
+    "repoSearchPlaceholder": "레포 검색...",
+    "privateTag": "비공개",
+    "repoUrlLabel": "GitHub 레포 URL",
+    "nameLabel": "프로젝트 이름",
+    "namePlaceholder": "My Awesome Project",
+    "descriptionLabel": "설명 (선택)",
+    "descriptionPlaceholder": "프로젝트 한 줄 설명",
+    "cancelButton": "취소",
+    "creating": "생성 중...",
+    "createButton": "생성",
+    "createFailed": "프로젝트 생성에 실패했습니다."
+  },
+  "flowPlaybackPanel": {
+    "defaultTitle": "흐름 재생",
+    "closeTooltip": "닫기",
+    "stepCounterInitial": "0 / {{total}}",
+    "stepCounter": "{{cur}} / {{total}} 단계",
+    "branchPrompt": "흐름이 분기됩니다 — 경로를 선택하세요",
+    "branchStepCount": "{{count}}단계",
+    "confirmBranchButton": "▶ 이 경로로 재생",
+    "pauseButton": "⏸ 일시정지",
+    "restartButton": "↺ 처음부터",
+    "playButton": "▶ 재생",
+    "constructorReturned": "{{name}} 객체가 반환됩니다",
+    "dbRead": "{{name}} 데이터를 읽습니다",
+    "dbSaved": "{{name}}에 저장됩니다",
+    "dbUpdated": "{{name}} 데이터가 수정됩니다",
+    "dbDeleted": "{{name}} 데이터가 삭제됩니다"
+  },
+  "errorToast": {
+    "traceIdLabel": "추적 ID:",
+    "traceIdNote": "— 문의 시 알려주세요",
+    "closeLabel": "닫기"
+  },
+  "noticeBanner": {
+    "badge": "📢 공지",
+    "closeLabel": "공지 닫기"
+  },
+  "collaborationPanel": {
+    "buttonTooltip": "협업 세션",
+    "heading": "실시간 협업",
+    "starting": "세션 생성 중...",
+    "startButton": "협업 세션 시작",
+    "inviteCodeLabel": "초대 코드",
+    "connectedTooltip": "연결됨",
+    "copiedLabel": "복사됨!",
+    "copyButton": "복사",
+    "shareHint": "링크를 공유하면 팀원이 바로 참가합니다.",
+    "participantsLabel": "참가자 ({{count}}명)",
+    "meTag": "(나)"
+  },
+  "teamChatPanel": {
+    "title": "팀채팅",
+    "emptyLine1": "아직 메시지가 없습니다.",
+    "emptyLine2": "첫 메시지를 보내보세요.",
+    "inputPlaceholder": "메시지 입력...",
+    "connectingPlaceholder": "연결 중...",
+    "sendButton": "전송"
+  },
+  "graphNodes": {
+    "fileNode": {
+      "openSidebarTooltip": "연결 보기"
+    },
+    "groupNode": {
+      "showContentTooltip": "내용 표시",
+      "hideContentTooltip": "내용 가리기",
+      "expandTooltip": "펼치기",
+      "collapseTooltip": "최소화"
+    },
+    "sketchNode": {
+      "badge": "설계",
+      "deleteTooltip": "삭제",
+      "namePlaceholder": "이름 입력"
+    },
+    "cornerPanel": {
+      "collapseTooltip": "접기"
+    }
   }
 }

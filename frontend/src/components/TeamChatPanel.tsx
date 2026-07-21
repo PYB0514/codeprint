@@ -1,5 +1,6 @@
 // 팀채팅 패널 — 인증 유저 전용, 재사용 가능한 컴포넌트
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useTeamChat } from '../hooks/useTeamChat'
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
 
 // 팀채팅 메시지 목록과 입력폼을 렌더링하는 패널
 export default function TeamChatPanel({ roomId, onClose, notificationsEnabled = true }: Props) {
+  const { t } = useTranslation('workspace')
   const { messages, connected, sendMessage } = useTeamChat(roomId, notificationsEnabled)
   const [input, setInput] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -30,7 +32,7 @@ export default function TeamChatPanel({ roomId, onClose, notificationsEnabled = 
     <div className="flex flex-col h-full bg-gray-900 border-l border-gray-800">
       <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-white">팀채팅</span>
+          <span className="text-xs font-semibold text-white">{t('teamChatPanel.title')}</span>
           <span className={`text-xs ${connected ? 'text-green-400' : 'text-gray-500'}`}>
             {connected ? '●' : '○'}
           </span>
@@ -48,8 +50,8 @@ export default function TeamChatPanel({ roomId, onClose, notificationsEnabled = 
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
         {messages.length === 0 && (
           <p className="text-xs text-gray-600 text-center mt-6">
-            아직 메시지가 없습니다.
-            <br />첫 메시지를 보내보세요.
+            {t('teamChatPanel.emptyLine1')}
+            <br />{t('teamChatPanel.emptyLine2')}
           </p>
         )}
         {messages.map((msg, i) => (
@@ -76,7 +78,7 @@ export default function TeamChatPanel({ roomId, onClose, notificationsEnabled = 
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder={connected ? '메시지 입력...' : '연결 중...'}
+          placeholder={connected ? t('teamChatPanel.inputPlaceholder') : t('teamChatPanel.connectingPlaceholder')}
           disabled={!connected}
           className="flex-1 bg-gray-800 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-gray-500 placeholder-gray-600 disabled:opacity-50"
           maxLength={500}
@@ -86,7 +88,7 @@ export default function TeamChatPanel({ roomId, onClose, notificationsEnabled = 
           disabled={!connected || !input.trim()}
           className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          전송
+          {t('teamChatPanel.sendButton')}
         </button>
       </form>
     </div>

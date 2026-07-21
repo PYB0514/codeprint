@@ -2,6 +2,7 @@
 import { memo, useState } from 'react'
 import { Handle, Position, useReactFlow } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
+import { useTranslation } from 'react-i18next'
 
 interface GroupData {
   layer: string
@@ -31,6 +32,7 @@ const LAYER_KO: Record<string, string> = {
 const HEADER_H = 36
 
 const GroupNode = memo(function GroupNode({ id, data }: NodeProps) {
+  const { t } = useTranslation('workspace')
   const { layer, sub, fileCount, originalHeight } = data as unknown as GroupData
   const p = LAYER_PALETTE[layer] ?? DEFAULT_PALETTE
   const layerLabel = LAYER_KO[layer] ?? layer
@@ -142,14 +144,14 @@ const GroupNode = memo(function GroupNode({ id, data }: NodeProps) {
         {/* 버튼은 헤더 DOM 안에 위치 — CSS transform과 함께 자연스럽게 스케일됨 */}
         <button
           onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); toggleOpaque() }}
-          title={opaque ? '내용 표시' : '내용 가리기'}
+          title={opaque ? t('graphNodes.groupNode.showContentTooltip') : t('graphNodes.groupNode.hideContentTooltip')}
           style={btnStyle(opaque)}
         >
           {opaque ? '◑' : '○'}
         </button>
         <button
           onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); toggleCollapse() }}
-          title={collapsed ? '펼치기' : '최소화'}
+          title={collapsed ? t('graphNodes.groupNode.expandTooltip') : t('graphNodes.groupNode.collapseTooltip')}
           style={btnStyle(collapsed)}
         >
           {collapsed ? '+' : '−'}

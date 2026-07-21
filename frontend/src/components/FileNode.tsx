@@ -2,9 +2,11 @@
 import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
+import { useTranslation } from 'react-i18next'
 
 // 파일 노드 렌더링
 const FileNode = memo(function FileNode({ data }: NodeProps) {
+  const { t } = useTranslation('workspace')
   const hasConn = (data.incoming as unknown[])?.length > 0 || (data.outgoing as unknown[])?.length > 0
   const handleStyle = { opacity: 0, width: 6, height: 6 }
 
@@ -52,7 +54,7 @@ const FileNode = memo(function FileNode({ data }: NodeProps) {
                 color: '#fff', fontSize: 8, fontWeight: 700,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
-              title="연결 보기"
+              title={t('graphNodes.fileNode.openSidebarTooltip')}
             >
               ↔
             </button>
