@@ -2249,3 +2249,19 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `compileJava`·`npx tsc -b` 둘 다 clean(필드명 전체 교체를 컴파일러가 강제 검증 — 양 언어 모두 미변경 잔존 참조 0건 확인). 계산 로직(SQL·반올림) 자체는 무변경이라 별도 단위 테스트 추가 없음. `preview_start`로 로컬 백엔드 재기동 확인, `/api/admin/gate-metrics`가 401(Unauthorized)로 정상 매핑됨을 확인(ROLE_ADMIN 필요라 전체 로그인 플로우까지는 하지 않음 — 순수 식별자 rename이라 리스크 낮다고 판단). `analyzeLocal` 베이스라인 불변.
 
 **한계·다음.** 벤치 기반 실제 precision 측정(대안 ①)은 여전히 미착수 — `BenchSuiteTest` 결과를 저장·집계하는 파이프라인이 선행돼야 한다. 다음에 착수할 때는 CI가 벤치 실행 결과(P/N 케이스별 pass/fail)를 어딘가에 영속화하는 방식부터 설계할 것.
+
+## PR 게이트 신뢰도 갭 2건 — reconcile 100-PR 상한 + 500파일 상한 미고지 (2026-07-21, codeprint_142)
+
+**배경.** `contexts/Context138.md` R16(#51)·R17(#53)이 확정한 결함 2건 — 둘 다 별도 스핀오프 칩(`task_75866d79`·`task_3254f055`)이 등록돼 있었으나, 사용자가 이번 세션에서 계속 진행을 요청해 메인 트랙에서 처리. 서로 독립적이지만 "PR 게이트 신뢰도"라는 같은 주제라 하나의 PR로 묶었다([[feedback_batch_small_prs]] — PR당 CI+웹훅 대기가 느려 소형 PR을 순차로 여러 개 만들지 않기로 함).
+
+**결정 1 — reconcile 100-PR 상한(R17 #53).** `GitHubApiClient.fetchOpenPullRequests`가 `per_page=100` 단일 요청이라 열린 PR이 100개를 넘는 활성 레포에서 101번째 이후 PR은 웹훅이 유실돼도 reconcile cron(GATE_GAPS.md [G-5]/[G-6] 안전망)이 영원히 재트리거하지 못하는 사각이었다. 같은 파일의 `fetchPullRequestChangedFiles`가 이미 쓰던 page 루프 패턴(최대 20페이지)을 그대로 적용 — `fetchOpenPullRequests`도 최대 10페이지(1000개, PR 목록은 파일 목록보다 페이지 상한을 낮게 잡아도 충분)까지 순회하도록 변경.
+- **탈락한 대안**: 상한을 아예 없애기(무제한 루프) — GitHub API 자체에 최종 안전장치가 없어 API 응답이 예상과 다르게 동작할 경우 무한루프 위험, 유한 상한 유지가 안전.
+
+**결정 2 — 500파일 상한 미고지(R16 #51).** `SourceFileWalker`가 eligible 파일을 경로순 정렬 후 앞 500개만 분석하는데, 이 절단 사실이 게이트 판정에 전혀 반영되지 않았다 — PR이 정렬순 500번째 이후 파일(대형 레포의 `zzz/…`·`web/…` 하위 등)을 변경하면 그 파일은 그래프에 없어 경고 0건 → green. "게이트 green ⟹ 안전"이라는 신뢰를 조용히 깎는 커버리지 갭.
+- R16이 제시한 두 옵션(①게이트를 neutral/경고로 표시 ②코멘트에 명시) 중 **②를 채택** — ①(게이트 판정 자체를 바꾸는 것)은 "분석 못 한 파일이 있다"는 사실과 "그 파일에 실제 위반이 있다"는 사실을 혼동시켜 오히려 신뢰를 깎을 수 있다(위반이 없을 수도 있는데 무조건 경고/차단하면 과잉 대응). 정직하게 알리는 쪽이 §2 단순성에도 더 부합.
+- **구현**: `PrReviewService.analyzeBranch()`가 `graphId`만 반환하던 것을 `BranchAnalysis(graphId, truncated, analyzedRelPaths)` 레코드로 확장. `truncated = totalEligible > files.size()`, `analyzedRelPaths`는 `walk.files()`를 PR API와 동일한 형식(forward-slash 상대경로)으로 변환한 집합. `countUnanalyzedChangedFiles()`가 절단된 경우에만 PR 변경 파일 중 `analyzedRelPaths`에 없는 **언어 지원 대상 소스 파일**만 세어(README 등 언어 미지원 파일은 애초에 eligible이 아니었을 대상이라 제외해 오탐 방지) `formatComment()`의 코멘트에 "⚠️ 변경 파일 중 N개는 레포 크기 상한(500개 파일)으로 이번 분석에서 제외됐습니다" 안내를 추가.
+- **함께 손대지 않은 것**: 게이트 판정(`gateState`) 자체는 무변경 — 이 안내는 순수 정보성이라 머지를 막지 않는다.
+
+**검증.** `compileJava`·`compileTestJava` clean. `PrReviewServiceTest`에 신규 5건 추가(`countUnanalyzedChangedFiles` 3케이스 — 미절단 시 0/절단+언어필터 정확히 셈/changedFiles null 시 0, `formatComment` 2케이스 — 안내 문구 표시/미표시) — `BranchAnalysis` 레코드와 `countUnanalyzedChangedFiles`를 `private`에서 package-private로 낮춰 테스트 가능하게 함(기존 `gateState`·`scopeToChangedFiles`와 동일한 "순수 함수는 package-private 테스트 대상" 관례를 따름). 백엔드 전체 테스트 스위트(Docker DB 기동, 1066+건) 전부 green, 신규 실패 0건. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변.
+
+**한계·다음.** `countUnanalyzedChangedFiles`의 "언어 지원 파일" 판정은 `LanguageDetector.detect`가 확장자 기준으로만 판단해 완벽하지 않을 수 있다(예: 확장자 없는 스크립트) — 과소 카운트 가능성은 있어도 과대 카운트(오탐으로 불필요한 불안 유발)보다는 안전한 방향이라 수용.
