@@ -1049,3 +1049,13 @@ const fetchGraph = useCallback(async () => {
 **검증.** `npx tsc -b` 통과(정적 검증, 프론트 전용 변경이라 백엔드 `analyzeLocal`은 대상 아님). Preview 브라우저로 실측: `.env.local`(gitignore 대상 `*.local`, 커밋 안 됨)에 임시 fake DSN을 넣고 세 가지 상태를 직접 확인 — ①`localStorage` 클리어(미결정) 상태로 로드 → `window.__SENTRY__`가 `undefined`(초기화 안 됨) ②"거부" 클릭 후 새로고침 → 여전히 `undefined` ③"동의" 클릭 → 그 즉시 `window.__SENTRY__`가 object로 나타남(Sentry SDK 핸들 생성 확인). 세 상태 전부 의도대로 동작. 검증 후 `.env.local` 파일은 삭제.
 
 **한계·다음.** P1-3·P1-4와 함께 이번 세션에서 식별된 P1 3건 전부 처리 완료 — Context138 남은 항목은 P2(과금 경계·비공개 레포 clone 인증 등) 이하로 넘어간다.
+
+## INTERFACES_IMPORTS_INFRA severity drift 정정 — 프론트를 백엔드(MEDIUM)에 맞춤 (2026-07-21, codeprint_142)
+
+**배경.** `contexts/Context138.md` R31(#86·#87)이 이미 "정답 방향"을 확정해둔 항목 — `WarningPanel.tsx`의 `WARNING_META.INTERFACES_IMPORTS_INFRA.severity`가 `'HIGH'`였지만, 백엔드(`GraphWarningService.java:1305`)는 항상 `'MEDIUM'`으로 발화한다. `decisions/DECISIONS_ANALYSIS.md`·`GATE_GAPS.md [G-3]`을 대조한 결과 "MEDIUM이 의도된 현재 상태(관찰 기간 확보), HIGH 승격은 별도 재검토 대기"임이 이미 결론 나 있었고, drift는 프론트 쪽의 근거 없는 값이었다. 이 drift는 단순 표시 오류를 넘어 위험한 함정이었다 — `PrReviewService.EXPERIMENTAL_GATE_TYPES`의 유일한 멤버가 이 타입인데 `isGating()`이 `severity=="HIGH"`부터 검사하므로, 누군가 "프론트에 맞춰 백엔드도 HIGH로" 고치면 그 순간 2단계(experimental) 게이트가 조용히 활성화돼 머지를 막기 시작한다.
+
+**결정.** `WARNING_META.INTERFACES_IMPORTS_INFRA.severity`를 `'HIGH'` → `'MEDIUM'`으로 정정(R31 권고 ①). 이 값이 실제로 쓰이는 곳은 두 군데: `WarningPanel.tsx`의 정렬 폴백(`itemsA[0]?.severity ?? WARNING_META[...]`, 실제 경고엔 백엔드 값이 이미 있어 영향 없음)과 `HowItWorksPage.tsx`(공개 페이지, 오직 이 정적 메타데이터로만 정렬·배지 표시) — 후자에서 로컬 확인 결과 이 규칙이 실제로 HIGH 그룹에서 MEDIUM 그룹으로 이동했다.
+- **함께 처리한 것(R31 권고 ②)**: 게이트 설정 모달의 "2단계(experimental)" 토글 설명(`workspace.json` ko/en `experimentalDesc`)이 "최신 규칙까지 적용받고 싶은 팀만 켜세요"라고만 해 마치 토글이 실제로 뭔가를 막는 것처럼 읽혔다 — 실제로는 대상 규칙(INTERFACES_IMPORTS_INFRA)이 MEDIUM이라 켜도 아무것도 안 막는 상태다. "현재 대상 규칙이 없어 켜도 머지를 막지 않습니다 — 검증 후 확대 예정" 문구를 덧붙여 정직화.
+- **손대지 않은 것**: 백엔드 severity(MEDIUM 유지가 정답, R31 결론) / `PrReviewServiceTest`의 `gateState_experimental*` 두 테스트(HIGH 입력으로 `isGating()` on/off 분기 자체를 검증하는 테스트라, 미래에 다른 룰이 HIGH로 experimental에 편입될 때를 대비한 메커니즘 테스트로 유효 — MEDIUM으로 바꾸면 두 테스트 모두 항상 success가 되어 on/off 분기를 구분 못 하게 됨, 오히려 테스트 가치가 떨어짐).
+
+**검증.** `npx tsc -b` clean. JSON 문법 검증(`JSON.parse`) 통과. Preview 브라우저로 `/how-it-works` 실측 — "Controller → 인프라 직접 의존" 항목이 MEDIUM 그룹에 위치하고, 기존 desc("아직 교차 프로젝트 실사용 검증이 부족해 2단계(실험적) 게이트로 분류")가 이미 정확해 추가 수정 불필요함을 확인. 콘솔 에러 없음.

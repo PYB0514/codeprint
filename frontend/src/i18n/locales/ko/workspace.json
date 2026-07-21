@@ -234,7 +234,7 @@
       "architectureLabel": "1단계(architecture, 기본 켜짐)",
       "architectureDesc": "순환 참조·계층 위반 등 검증된 구조 위반 — 끄면 레거시 코드에 즉시 마이그레이션을 강제하지 않습니다.",
       "experimentalLabel": "2단계(experimental, 기본 꺼짐)",
-      "experimentalDesc": "아직 교차 프로젝트 실사용 검증이 부족한 신규 룰 — 최신 규칙까지 적용받고 싶은 팀만 켜세요.",
+      "experimentalDesc": "아직 교차 프로젝트 실사용 검증이 부족한 신규 룰 — 최신 규칙까지 적용받고 싶은 팀만 켜세요. (현재 대상 규칙이 없어 켜도 머지를 막지 않습니다 — 검증 후 확대 예정)",
       "close": "닫기",
       "title": "PR 게이트 등급 설정",
       "button": "게이트 설정"
