@@ -60,7 +60,7 @@ A solo-developed project that doubles as a job-search portfolio, aiming beyond s
 - **Relationship extraction** — `IMPORT`, `FUNCTION_CALL`, `INSTANTIATION`, `CONTAINS`, `DB_READ/WRITE`, `API_CALL` edges.
 
 ### Structural warning detection (the differentiator)
-Proactively detects structural/architectural issues via static analysis and classifies them by severity (HIGH/MEDIUM/LOW). 15 detectors.
+Proactively detects structural/architectural issues via static analysis and classifies them by severity (HIGH/MEDIUM/LOW). 19 detectors.
 - Circular dependencies (`CYCLIC_IMPORT`) · broken interface chains (`BROKEN_INTERFACE_CHAIN`) · `@Async` self-calls · DB layer bypass
 - DDD boundary violations (`CROSS_DOMAIN_CALL`, `CROSS_CONTEXT_IMPORT`, `DOMAIN_IMPORTS_INFRA`) · feature-slice boundary violations (`CROSS_FEATURE_IMPORT`, `FEATURE_LAYER_VIOLATION`) · architecture-intent drift (`INTENT_DRIFT`) · dead code · high fan-out
 - **False-positive calibration** — precision is continuously tuned via A/B measurement against real open-source repos (Spring PetClinic, gin, ripgrep, bulletproof-react, requests, and other per-language benchmarks). Zero-config: it automatically detects the project's structure (DDD, feature-slice) and fires only the matching rules.
@@ -132,7 +132,7 @@ cd frontend && npm install && npm run dev
 
 ## 🗺 Roadmap
 
-- [x] Multi-language analysis engine (tree-sitter AST) · 15 structural warning detectors + severity · false-positive calibration
+- [x] Multi-language analysis engine (tree-sitter AST) · 19 structural warning detectors + severity · false-positive calibration
 - [x] React Flow visualization · flow playback · dual domain/layer view · architecture-intent declarations · version retention policy
 - [x] Real-time collaboration · community · AI integration (BYOK) · MCP context endpoint
 - [x] GitHub PR webhook auto-review + `codeprint/structure` merge gate · payments · admin dashboard

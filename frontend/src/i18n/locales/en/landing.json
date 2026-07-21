@@ -22,7 +22,7 @@
   "features": [
     { "title": "File & Function Structure View", "desc": "Renders import relationships and function call flow as a clear diagram." },
     { "title": "End-to-End Flow Tracing", "desc": "One click on an API endpoint auto-traces the call flow. See where it starts and where it ends in the sidebar, and replay the flow." },
-    { "title": "Structural Warning Detection", "desc": "Statically detects 15 risky patterns ahead of time — circular dependencies, DDD boundary violations, DB layer bypasses, and more." },
+    { "title": "Structural Warning Detection", "desc": "Statically detects 19 risky patterns ahead of time — circular dependencies, DDD boundary violations, DB layer bypasses, and more." },
     { "title": "Live Collaboration & Community", "desc": "Invite teammates with an invite code and co-edit with cursor overlays. Publish graphs to the community for architecture review." },
     { "title": "Image & AI Context Export", "desc": "Save the full graph as a full-resolution PNG, or export function-name-and-comment style Markdown to use directly as AI prompt context." }
   ],
@@ -36,7 +36,7 @@
     "features": [
       "Unlimited private projects",
       "Full graph visualization",
-      "15 warning types (incl. 8 HIGH severity)",
+      "19 warning types (incl. 10 HIGH severity)",
       "Graph version history · export warnings as Markdown",
       "Collaboration sessions up to 6 people (incl. owner)",
       "Community gallery"

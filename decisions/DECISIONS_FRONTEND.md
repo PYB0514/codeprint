@@ -1070,3 +1070,14 @@ const fetchGraph = useCallback(async () => {
 **검증.** `npx tsc -b` clean. `npx eslint`로 변경 파일 확인 — 신규 경고/에러 없음(기존에 있던 `useEffect` set-state 에러 1건·`save` useCallback의 `ignore` 누락 exhaustive-deps 경고 1건은 이번 변경 이전부터 있던 것으로 원본 코드도 동일하게 `ignore`를 참조하고 있었음 확인, §3 surgical changes에 따라 손대지 않음). `preview_start` 로컬 재기동 → `/actuator/health` UP 확인(백엔드 API 계약은 무변경이라 별도 백엔드 테스트 없음).
 
 **한계·다음.** 브라우저에서 실제로 두 패널을 동시에 열어 "다른 패널에서 규칙 추가 → 이 패널에서 저장 → 규칙 유지 확인"까지는 GitHub 로그인이 필요해 이번 세션에서 실측하지 않음 — 로직이 이미 검증된 `saveIgnoreRules`와 대칭 구조라는 점으로 갈음. 다음에 이 프로젝트에 로그인해 있을 기회가 있으면 실제로 재현·확인할 것.
+
+## 공개 카피 "감지기 15종"/"HIGH 8종" 스테일 6곳 정정 — 실제 19종/10종 (2026-07-21, codeprint_142)
+
+**배경.** `contexts/Context138.md` R3(#17)·R1(#7)이 확정한 결함 — README(ko/en)·랜딩페이지(ko/en)·워크스페이스 온보딩(ko/en)이 공통적으로 "감지기 15종"·"HIGH 8종"을 주장하지만, `WarningPanel.tsx`의 `WARNING_META`를 직접 세면 실제로는 **19종**(HIGH 10종·MEDIUM 7종·LOW 2종)이다. 오래전 룰 수가 늘어난 뒤 공개 카피가 동기화되지 않은 전형적인 스테일 사례.
+- **함께 처리한 것(R1 #7)**: `SERVICE_CALL_CHAIN`의 워크스페이스 카피(ko/en `limitation`)가 "Python requests·JS axios는 아직 인식 못함"이라 주장했지만, 실제로는 v0.145.0(2026-07-18, codeprint_137)부터 이미 인식하고 있었다(PROGRESS.md 기록 확인) — Go 등 그 외 언어만 미인식으로 정정. 같은 규칙의 `desc`(ko/en, WarningPanel 메인 설명)도 "WebClient/RestTemplate"만 나열해 FeignClient·Python·JS를 빠뜨리고 있어 나열이 전체 목록처럼 읽히는 걸 막기 위해 "등"/"etc." 추가.
+
+**수정 대상 9곳**: `README.md`(2곳)·`README.en.md`(2곳)·`ko/landing.json`(2곳)·`en/landing.json`(2곳)·`ko/workspace.json`(1곳)·`en/workspace.json`(1곳) — 감사가 집계한 6곳보다 실측 결과 더 많이 나옴(README.en.md·en/workspace.json도 같은 스테일을 갖고 있었으나 감사 집계에서 누락된 것으로 보임, 전수 grep으로 재확인).
+
+**검증.** JSON 문법 검증(`JSON.parse`) 전체 통과. `npx tsc -b` clean. Preview 브라우저로 랜딩페이지(ko/en 언어 토글)·`/how-it-works` 실측 — "19종"·"HIGH 10종"·SERVICE_CALL_CHAIN limitation 문구 전부 정상 렌더 확인, 콘솔 에러 없음.
+
+**한계·다음.** 이 19/10이라는 숫자 자체가 다시 스테일해질 수 있다 — 새 룰 추가 시 공개 카피 동기화를 잊기 쉬운 구조적 문제는 이번 수정으로 해소되지 않는다(수치를 코드에서 동적으로 끌어오는 방식은 이번 스코프 밖). 다음에 새 경고 타입을 추가하는 사람은 이 6개 파일도 함께 갱신할 것 — 필요하면 `WARNING_META` 개수를 빌드 타임에 카피에 주입하는 방식을 별도로 검토.
