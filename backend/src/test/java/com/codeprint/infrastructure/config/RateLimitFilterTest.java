@@ -135,4 +135,62 @@ class RateLimitFilterTest {
         verify(response).setStatus(429);
         verify(chain, times(2)).doFilter(request, response);
     }
+
+    @Test
+    @DisplayName("report-fp 카테고리는 분당 10회 — 오탐 신고 학습 신호(fp_reports) 스팸 오염 방지(R22)")
+    void reportFpCategory_limitedToTenPerMinute() throws Exception {
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getRequestURI()).thenReturn("/api/projects/abc-123/warnings/report-fp");
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("6.6.6.6");
+
+        for (int i = 0; i < 10; i++) {
+            filter.doFilter(request, response, chain);
+        }
+        verify(chain, times(10)).doFilter(request, response);
+
+        filter.doFilter(request, response, chain); // 11번째 — 초과
+        verify(response).setStatus(429);
+        verify(chain, times(10)).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("커뮤니티 게시글 댓글은 분당 20회 — 노드 댓글과 별도 버킷(R22)")
+    void postCommentCategory_limitedToTwentyPerMinute() throws Exception {
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getRequestURI()).thenReturn("/api/community/posts/abc-123/comments");
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("7.7.7.7");
+
+        for (int i = 0; i < 20; i++) {
+            filter.doFilter(request, response, chain);
+        }
+        verify(chain, times(20)).doFilter(request, response);
+
+        filter.doFilter(request, response, chain); // 21번째 — 초과
+        verify(response).setStatus(429);
+        verify(chain, times(20)).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("결제 prepare 3종은 같은 payment-prepare 버킷 공유 — 엔드포인트를 바꿔가며 우회 불가(R22)")
+    void paymentPrepareEndpoints_shareSameBucket() throws Exception {
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("8.8.8.8");
+        when(request.getMethod()).thenReturn("POST");
+
+        when(request.getRequestURI()).thenReturn("/api/payments/toss/prepare");
+        for (int i = 0; i < 3; i++) {
+            filter.doFilter(request, response, chain);
+        }
+        when(request.getRequestURI()).thenReturn("/api/teams/payment/prepare");
+        filter.doFilter(request, response, chain);
+        when(request.getRequestURI()).thenReturn("/api/teams/xyz-1/seats/payment/prepare");
+        filter.doFilter(request, response, chain);
+        verify(chain, times(5)).doFilter(request, response); // 3종 합쳐 5회까지는 통과
+
+        filter.doFilter(request, response, chain); // 6번째 — 엔드포인트 전환해도 같은 버킷이라 초과
+        verify(response).setStatus(429);
+        verify(chain, times(5)).doFilter(request, response);
+    }
 }
