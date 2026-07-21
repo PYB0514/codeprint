@@ -44,11 +44,16 @@ edgeType은 "IMPORT"(import 금지, 기본값) 또는 "FUNCTION_CALL"(직접 호
 
 위 형식에 맞는 JSON만 출력해줘(다른 설명 없이).`
 
+// LLM 출력은 대개 마크다운 코드펜스(```json ... ```)로 감싸서 나온다 — JSON.parse 전에 벗겨낸다
+function stripCodeFence(text: string): string {
+  return text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
+}
+
 // JSON 스키마 파싱검증
 function parseImportedJson(text: string): { modules: IntentModule[]; rules: IntentRule[] } | { error: string } {
   let data: unknown
   try {
-    data = JSON.parse(text)
+    data = JSON.parse(stripCodeFence(text))
   } catch {
     return { error: '유효한 JSON이 아닙니다.' }
   }
@@ -135,7 +140,9 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
           name: m.name,
           glob: (m.globs ?? []).join(', ')
         })))
-        setRules(data.rules ?? [])
+        // 드롭다운은 "" 를 IMPORT(기본값)로 취급 — 서버가 명시적으로 "IMPORT"를 내려주면(예: LLM JSON import)
+        // <option value="IMPORT">가 없어 선택값이 안 맞아 빈칸으로 보이는 문제 방지
+        setRules((data.rules ?? []).map((r: IntentRule) => r.edgeType === 'IMPORT' ? { ...r, edgeType: '' } : r))
         setIgnore(data.ignore ?? [])
       } else if (res.status === 404) {
         setModules([])

@@ -2278,3 +2278,20 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `compileJava` clean. 백엔드 전체 테스트 스위트(1066+건) green(회귀 없음 — 이 클래스를 참조하는 테스트가 원래 없었음). `analyzeLocal` 베이스라인 불변.
 
 **한계·다음.** 실제 브라우저 푸시 구독으로 410 응답을 재현하는 E2E 검증은 하지 않음(VAPID 키·서비스워커·실제 만료 구독이 필요해 이번 스코프 밖) — 다음에 VAPID/Web Push E2E를 다룰 기회가 있으면 이 경로도 함께 확인할 것.
+
+## 커스텀 게이트 "소품" 3건 — LLM JSON 코드펜스·edgeType 드롭다운 불일치·null globs NPE + /api/dev permitAll 위생 (2026-07-21, codeprint_142)
+
+**배경.** `contexts/Context138.md` R1(#4·#5)·R2(#8)이 확정한 소품(작은) 결함들 — 커스텀 게이트(PR #619·620) 정밀도 갭과 SecurityConfig 위생 지적. 사용자 확인 후 코드로 처리 가능한 것만 진행.
+
+**1) LLM JSON import — 코드펜스 미처리(#5).** `ArchitectureIntentPanel.parseImportedJson()`이 `JSON.parse(text)`를 바로 호출해, LLM이 흔히 응답을 감싸는 마크다운 코드펜스(````json ... ````)가 그대로 있으면 "유효한 JSON이 아닙니다"로 실패했다 — "LLM으로 만들기" 기능(프롬프트 템플릿 복사→LLM 응답 붙여넣기)의 정상 사용 흐름에서 거의 항상 재현되는 버그였다. `stripCodeFence()`를 신설해 `JSON.parse` 전에 선두/후미 코드펜스를 벗겨낸다.
+
+**2) edgeType "IMPORT" 저장 후 드롭다운 표시 공백(#5).** `<select>`가 `<option value="">import</option>`·`<option value="FUNCTION_CALL">직접 호출</option>` 둘뿐인데, LLM JSON import는 예시 스키마상 `"edgeType": "IMPORT"`를 명시적으로 내려줄 수 있어 저장 후 재로드 시 `value="IMPORT"`와 매칭되는 `<option>`이 없어 드롭다운이 빈 값으로 보였다. 새 `<option>`을 추가하는 대신(백엔드 페이로드에 `"IMPORT"`가 남아 향후 다른 화면에서 또 불일치 재발 가능) **로드 시점에 `"IMPORT"` → `""`로 정규화** — 두 값이 이미 완전히 동의어(§2 단순성, 값 하나만 정본으로 유지).
+
+**3) globs 배열에 null 원소 → NPE→500(#5).** `ArchitectureIntent.globToPattern()`이 `glob.length()`를 바로 호출해 null 원소가 있으면 NPE. `ModuleDto.globs`는 `@NotNull List<String>`이라 리스트 자체의 null은 막지만 개별 원소는 검증 안 됨. 컨트롤러에 이미 있던 edgeType 검증(수동 루프+400)과 동일 패턴으로 globs 원소 null/blank 검증 추가.
+
+**4) `/api/dev/**` permitAll이 프로파일 무관 상시 등록(#8, SecurityConfig 위생).** `DevController`가 `@Profile("local")`이라 운영 환경엔 빈 자체가 없어 현재는 무해(404)하지만, permitAll 매처는 프로파일과 무관하게 항상 등록돼 있었다 — 훗날 `@Profile` 가드 없는 새 컨트롤러가 이 경로에 매핑되면 조용히 무인증 노출될 잠재 위험. `Environment.acceptsProfiles(Profiles.of("local"))`로 매처 자체도 local 프로파일에서만 등록하도록 변경.
+- **SecurityConfig 변경이라 CLAUDE.md 독립 적대적 검증 필수 대상** — 신선한 컨텍스트의 Agent로 ①매처 등록 순서·조건 로직 정확성 ②접근 범위 확대 여부 ③시크릿 노출 ④`/api/dev/test-token`의 프로덕션 오작동 시나리오(profile 오설정 대비) ⑤`ArchitectureIntentController` 검증 루프의 인젝션/DoS 여지를 독립 검토— **PASS 판정**(매처 순서 불변, 접근 범위는 오히려 축소, 시크릿 노출 없음, DevController의 `@Profile("local")`과 SecurityConfig 매처가 이중 방어선으로 동일 판정 기준 공유).
+
+**검증.** `compileJava`·`compileTestJava` clean. 백엔드 전체 테스트 스위트(Docker DB, 1066+건) green. `preview_start` 로컬(local 프로파일) 재기동 → `/actuator/health` UP + `/api/dev/test-token` 정상 200(로컬 dev 워크플로 회귀 없음 확인) 확인. `stripCodeFence`는 Node로 4가지 LLM 출력 패턴(코드펜스+json태그/코드펜스만/펜스없음/여분 공백)을 직접 검증 — 전부 파싱 성공. `analyzeLocal` 베이스라인 불변. **독립 적대적 보안 검증 PASS**(SecurityConfig 변경 대상).
+
+**한계·다음.** null-globs 검증에 전용 백엔드 테스트는 추가 안 함(`ArchitectureIntentController`에 기존 테스트 인프라 자체가 없어 이번 스코프 밖) — 컴파일 검증+기존 edgeType 검증과 동일 패턴 재사용으로 갈음. `stripCodeFence`도 프론트에 테스트 프레임워크 자체가 없어(프론트 테스트 0개 부채) 단위 테스트 대신 Node 스크립트로 로직만 별도 검증. LLM import·드롭다운 정규화의 브라우저 실측은 로그인+소유 프로젝트가 필요해 이번 세션에서 못 함 — 다음에 이 화면을 다룰 기회가 있으면 실측할 것.
