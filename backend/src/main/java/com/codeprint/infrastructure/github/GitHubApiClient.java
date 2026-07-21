@@ -415,23 +415,33 @@ public class GitHubApiClient {
         return String.join("\n", java.util.Arrays.asList(allLines).subList(startIdx, endIdx));
     }
 
-    // 열린 PR 목록 조회(최대 100개) — G-5 리컨실리에이션이 유실된 webhook을 찾는 데 사용
+    // 열린 PR 목록 조회 — G-5 리컨실리에이션이 유실된 webhook을 찾는 데 사용. 페이지네이션 없이 첫 100개만 보면
+    // 열린 PR이 100개 넘는 활성 레포에서 101번째 이후 PR의 웹훅 유실이 영원히 재트리거 안 되는 사각(GATE_GAPS.md
+    // [G-5]/[G-6] 안전망의 미문서화 천장)이 생겨, fetchPullRequestChangedFiles와 동일한 page 루프를 적용한다.
     public List<OpenPullRequest> fetchOpenPullRequests(String githubRepoUrl, String githubAccessToken) {
         String ownerRepo = extractOwnerRepo(githubRepoUrl);
-        String apiUrl = "https://api.github.com/repos/" + ownerRepo + "/pulls?state=open&per_page=100";
+        List<OpenPullRequest> result = new ArrayList<>();
         try {
-            HttpRequest.Builder builder = HttpRequest.newBuilder()
-                    .uri(URI.create(apiUrl))
-                    .header("Accept", "application/vnd.github+json")
-                    .header("X-GitHub-Api-Version", "2022-11-28");
-            if (githubAccessToken != null && !githubAccessToken.isBlank()) {
-                builder.header("Authorization", "Bearer " + githubAccessToken);
+            // 최대 10페이지(1000개) 안전 상한 — 열린 PR이 이 규모를 넘는 레포는 사실상 없어 무한루프 방지 목적
+            for (int page = 1; page <= 10; page++) {
+                String apiUrl = "https://api.github.com/repos/" + ownerRepo + "/pulls?state=open&per_page=100&page=" + page;
+                HttpRequest.Builder builder = HttpRequest.newBuilder()
+                        .uri(URI.create(apiUrl))
+                        .header("Accept", "application/vnd.github+json")
+                        .header("X-GitHub-Api-Version", "2022-11-28");
+                if (githubAccessToken != null && !githubAccessToken.isBlank()) {
+                    builder.header("Authorization", "Bearer " + githubAccessToken);
+                }
+                HttpResponse<String> response = httpClient.send(builder.GET().build(), HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() != 200) {
+                    throw new RuntimeException("GitHub API " + response.statusCode() + " — " + response.body());
+                }
+                JsonNode arr = objectMapper.readTree(response.body());
+                if (!arr.isArray() || arr.isEmpty()) break;
+                result.addAll(parseOpenPullRequests(arr));
+                if (arr.size() < 100) break;
             }
-            HttpResponse<String> response = httpClient.send(builder.GET().build(), HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
-                throw new RuntimeException("GitHub API " + response.statusCode() + " — " + response.body());
-            }
-            return parseOpenPullRequests(objectMapper.readTree(response.body()));
+            return result;
         } catch (Exception e) {
             throw new RuntimeException("GitHub 열린 PR 목록 조회 실패: " + ownerRepo, e);
         }

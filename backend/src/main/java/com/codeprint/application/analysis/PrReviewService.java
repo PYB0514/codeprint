@@ -8,6 +8,7 @@ import com.codeprint.domain.analysis.GateCheckLogRepository;
 import com.codeprint.domain.analysis.port.WarningDetectionPort;
 import com.codeprint.infrastructure.analysis.CachedParsedFileLoader;
 import com.codeprint.infrastructure.analysis.GraphBuilder;
+import com.codeprint.infrastructure.analysis.LanguageDetector;
 import com.codeprint.infrastructure.analysis.ParsedFile;
 import com.codeprint.infrastructure.analysis.RepoCloner;
 import com.codeprint.infrastructure.analysis.SourceFileWalker;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -52,7 +54,8 @@ public class PrReviewService {
         String repoUrl = analysisFacade.resolveOwnedRepoUrl(projectId, userId);
         String headBranch = gitHubApiClient.fetchPullRequestHeadBranch(repoUrl, prNumber, githubToken);
 
-        UUID graphId = analyzeBranch(projectId, repoUrl, headBranch, githubToken);
+        BranchAnalysis branchAnalysis = analyzeBranch(projectId, repoUrl, headBranch, githubToken);
+        UUID graphId = branchAnalysis.graphId();
         List<Map<String, Object>> suppressedFiltered = filterSuppressed(projectId, warningDetectionPort.detectWarnings(graphId));
 
         // diff-scope — PR이 변경한 파일에 속한 경고만 게시 (조회 실패 시 null → 전체 폴백)
@@ -66,7 +69,11 @@ public class PrReviewService {
                 .toList();
         int lowFilteredCount = scoped.size() - warnings.size();
 
-        String body = formatComment(headBranch, warnings, lowFilteredCount, outOfScopeCount, diffScoped);
+        // 500파일 상한으로 그래프가 절단된 경우, PR 변경 파일 중 실제로 분석되지 않은 게 있으면 게이트
+        // green이 "안전"을 보장하지 않는다는 신호를 코멘트에 명시(GATE_GAPS.md 참조) — 게이트 판정 자체는 안 바꿈.
+        int unanalyzedChangedCount = countUnanalyzedChangedFiles(branchAnalysis, changedFiles);
+
+        String body = formatComment(headBranch, warnings, lowFilteredCount, outOfScopeCount, diffScoped, unanalyzedChangedCount);
         // 기존 Codeprint 코멘트가 있으면 갱신, 없으면 새로 작성 — 커밋 push마다 봇 코멘트 누적 방지
         String commentUrl = gitHubApiClient.upsertIssueComment(repoUrl, prNumber, body, REVIEW_MARKER, githubToken);
         log.info("PR 리뷰 코멘트 게시: repo={}, pr={}, 게시={}, LOW_생략={}, 변경외_제외={}, diffScope={}",
@@ -162,8 +169,8 @@ public class PrReviewService {
                 .toList();
     }
 
-    // PR head 브랜치를 동기 분석 — 분석 레코드 생성·그래프 빌드 후 graphId 반환
-    private UUID analyzeBranch(UUID projectId, String repoUrl, String branch, String token) {
+    // PR head 브랜치를 동기 분석 — 분석 레코드 생성·그래프 빌드 후 graphId+절단 정보 반환
+    private BranchAnalysis analyzeBranch(UUID projectId, String repoUrl, String branch, String token) {
         AnalysisResult analysis = AnalysisResult.create(projectId, branch);
         analysisRepository.save(analysis);
         Path repoDir = null;
@@ -184,7 +191,13 @@ public class PrReviewService {
             } catch (Exception ignored) {}
             analysis.complete(sha);
             analysisRepository.save(analysis);
-            return graphId;
+
+            boolean truncated = walk.totalEligible() > walk.files().size();
+            Path finalRepoDir = repoDir;
+            Set<String> analyzedRelPaths = walk.files().stream()
+                    .map(f -> finalRepoDir.relativize(f).toString().replace("\\", "/"))
+                    .collect(Collectors.toSet());
+            return new BranchAnalysis(graphId, truncated, analyzedRelPaths);
         } catch (Exception e) {
             analysis.fail(e.getMessage());
             analysisRepository.save(analysis);
@@ -194,9 +207,29 @@ public class PrReviewService {
         }
     }
 
-    // 경고 목록을 GitHub 마크다운 코멘트로 변환 — severity별 그룹, LOW·변경외 생략 시 안내 포함
+    // analyzeBranch 결과 — 500파일 상한으로 그래프가 절단됐는지와 실제 분석된 파일의 상대경로 집합을 함께 전달
+    // (테스트에서 직접 구성할 수 있도록 package-private)
+    record BranchAnalysis(UUID graphId, boolean truncated, Set<String> analyzedRelPaths) {}
+
+    // 절단된 상태에서 PR 변경 파일 중 실제로 분석되지 않은(=상한 밖으로 잘린) 소스 파일 수를 센다.
+    // 언어 미지원 파일(README 등)은 애초에 eligible이 아니었을 대상이라 카운트에서 제외해 오탐을 줄인다.
+    static int countUnanalyzedChangedFiles(BranchAnalysis branchAnalysis, Set<String> changedFiles) {
+        if (!branchAnalysis.truncated() || changedFiles == null) return 0;
+        return (int) changedFiles.stream()
+                .filter(f -> LanguageDetector.detect(fileNameOf(f)).map(LanguageDetector::isSupported).orElse(false))
+                .filter(f -> !branchAnalysis.analyzedRelPaths().contains(f))
+                .count();
+    }
+
+    // 상대경로 문자열에서 파일명만 추출(언어 판별용)
+    private static String fileNameOf(String relPath) {
+        int idx = relPath.lastIndexOf('/');
+        return idx >= 0 ? relPath.substring(idx + 1) : relPath;
+    }
+
+    // 경고 목록을 GitHub 마크다운 코멘트로 변환 — severity별 그룹, LOW·변경외 생략·상한 절단 시 안내 포함
     static String formatComment(String branch, List<Map<String, Object>> warnings, int lowExcludedCount,
-                                int outOfScopeCount, boolean diffScoped) {
+                                int outOfScopeCount, boolean diffScoped, int unanalyzedCount) {
         StringBuilder sb = new StringBuilder();
         // 봇 코멘트 식별 마커 — upsert가 기존 코멘트를 찾는 키(GitHub에서 렌더되지 않음)
         sb.append(REVIEW_MARKER).append("\n");
@@ -215,6 +248,7 @@ public class PrReviewService {
                 sb.append("> _변경 외 파일의 구조 경고 ").append(outOfScopeCount)
                         .append("개는 이 PR과 무관하여 제외했습니다._\n\n");
             }
+            appendUnanalyzedNotice(sb, unanalyzedCount);
             sb.append("---\n_Codeprint 자동 분석 · 구조 경고는 참고용입니다._\n");
             return sb.toString();
         }
@@ -250,8 +284,23 @@ public class PrReviewService {
             sb.append("> _변경 외 파일의 구조 경고 ").append(outOfScopeCount)
                     .append("개는 이 PR과 무관하여 제외했습니다._\n\n");
         }
+        appendUnanalyzedNotice(sb, unanalyzedCount);
         sb.append("---\n_Codeprint 자동 분석 · 구조 경고는 참고용입니다._\n");
         return sb.toString();
+    }
+
+    // 레포 크기 상한(500파일)으로 PR 변경 파일 일부가 분석에서 빠졌으면 경고 없음이 "안전"을 뜻하지 않는다는 걸 명시
+    private static void appendUnanalyzedNotice(StringBuilder sb, int unanalyzedCount) {
+        if (unanalyzedCount > 0) {
+            sb.append("> ⚠️ _변경 파일 중 ").append(unanalyzedCount)
+                    .append("개는 레포 크기 상한(500개 파일)으로 이번 분석에서 제외됐습니다 — 이 파일의 구조 위반은 감지되지 않았을 수 있습니다._\n\n");
+        }
+    }
+
+    // backward-compat — diff-scope·절단 안내 없이 diff-scope 필드만 받는 오버로드
+    static String formatComment(String branch, List<Map<String, Object>> warnings, int lowExcludedCount,
+                                int outOfScopeCount, boolean diffScoped) {
+        return formatComment(branch, warnings, lowExcludedCount, outOfScopeCount, diffScoped, 0);
     }
 
     // backward-compat — LOW 생략 카운트만 받는 오버로드 (diff-scope 미적용)

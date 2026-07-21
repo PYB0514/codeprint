@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -233,5 +234,45 @@ class PrReviewServiceTest {
         assertThat(PrReviewService.gateState(List.of(
                 warning("HIGH_FAN_OUT", "호출 8개", "MEDIUM")), DEFAULT_SETTINGS)).isEqualTo("success");
         assertThat(PrReviewService.gateState(List.of(), DEFAULT_SETTINGS)).isEqualTo("success");
+    }
+
+    @Test
+    @DisplayName("500파일 상한 미절단 — PR 변경 파일이 전부 분석 대상 밖이어도 0을 반환한다")
+    void countUnanalyzedChangedFiles_notTruncated_zero() {
+        var branchAnalysis = new PrReviewService.BranchAnalysis(UUID.randomUUID(), false, Set.of());
+        assertThat(PrReviewService.countUnanalyzedChangedFiles(branchAnalysis, Set.of("src/Foo.java"))).isZero();
+    }
+
+    @Test
+    @DisplayName("절단됨 — PR 변경 파일 중 분석 대상에 없는 소스 파일만 센다(언어 미지원 파일 제외)")
+    void countUnanalyzedChangedFiles_truncated_countsOnlyUnanalyzedSourceFiles() {
+        var branchAnalysis = new PrReviewService.BranchAnalysis(
+                UUID.randomUUID(), true, Set.of("src/Analyzed.java"));
+        Set<String> changedFiles = Set.of(
+                "src/Analyzed.java",   // 분석됨 — 제외
+                "src/Missed.java",     // 절단으로 미분석 소스 파일 — 카운트
+                "README.md");          // 언어 미지원 — 애초에 eligible 아니었을 대상, 카운트 제외
+        assertThat(PrReviewService.countUnanalyzedChangedFiles(branchAnalysis, changedFiles)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("절단됨 — changedFiles가 null(diff-scope 조회 실패)이면 0을 반환한다")
+    void countUnanalyzedChangedFiles_nullChangedFiles_zero() {
+        var branchAnalysis = new PrReviewService.BranchAnalysis(UUID.randomUUID(), true, Set.of());
+        assertThat(PrReviewService.countUnanalyzedChangedFiles(branchAnalysis, null)).isZero();
+    }
+
+    @Test
+    @DisplayName("코멘트 — 상한 절단으로 미분석된 변경 파일이 있으면 안내 문구를 포함한다")
+    void formatComment_unanalyzedCount_showsCappedNotice() {
+        String md = PrReviewService.formatComment("feature/x", List.of(), 0, 0, true, 3);
+        assertThat(md).contains("3").contains("레포 크기 상한").contains("500개 파일");
+    }
+
+    @Test
+    @DisplayName("코멘트 — 미분석 변경 파일이 없으면(0) 절단 안내 문구가 없다")
+    void formatComment_zeroUnanalyzedCount_noCappedNotice() {
+        String md = PrReviewService.formatComment("feature/x", List.of(), 0, 0, true, 0);
+        assertThat(md).doesNotContain("레포 크기 상한");
     }
 }
