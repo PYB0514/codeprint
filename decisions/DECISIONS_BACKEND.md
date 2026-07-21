@@ -2265,3 +2265,16 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `compileJava`·`compileTestJava` clean. `PrReviewServiceTest`에 신규 5건 추가(`countUnanalyzedChangedFiles` 3케이스 — 미절단 시 0/절단+언어필터 정확히 셈/changedFiles null 시 0, `formatComment` 2케이스 — 안내 문구 표시/미표시) — `BranchAnalysis` 레코드와 `countUnanalyzedChangedFiles`를 `private`에서 package-private로 낮춰 테스트 가능하게 함(기존 `gateState`·`scopeToChangedFiles`와 동일한 "순수 함수는 package-private 테스트 대상" 관례를 따름). 백엔드 전체 테스트 스위트(Docker DB 기동, 1066+건) 전부 green, 신규 실패 0건. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변.
 
 **한계·다음.** `countUnanalyzedChangedFiles`의 "언어 지원 파일" 판정은 `LanguageDetector.detect`가 확장자 기준으로만 판단해 완벽하지 않을 수 있다(예: 확장자 없는 스크립트) — 과소 카운트 가능성은 있어도 과대 카운트(오탐으로 불필요한 불안 유발)보다는 안전한 방향이라 수용.
+
+## Web Push 발송 실패 무감지 수정 — send() 응답 상태코드 확인 (2026-07-21, codeprint_142)
+
+**배경.** `contexts/Context138.md` R1(#1)이 확정한 결함 — `WebPushService.sendToUser()`가 `nl.martijndwars:web-push:5.1.1`의 `PushService.send()` 반환값을 버리고 있었다. 이 라이브러리는 non-2xx 응답에서도 예외를 던지지 않고 `HttpResponse`를 그대로 반환하는데(라이브러리 소스 확증), 반환값을 안 보면 **발송 실패가 조용히 성공 처리**된다. 부수 효과로 `catch` 블록의 `e.getMessage().contains("410")` 검사(만료 구독 삭제)는 애초에 `send()`가 예외를 던지지 않아 사실상 실행 불가능한 dead code였다.
+
+**구현.** `pushService.send(...)`의 반환값을 캡처해 `getStatusLine().getStatusCode()`로 상태코드를 직접 확인. 410(Gone, 구독 만료)이면 재시도해도 항상 실패하므로 구독 삭제, 그 외 300 이상이면 경고 로그만. `catch` 블록은 네트워크 예외 등 진짜 예외 처리로 남기고, 메시지 문자열 파싱으로 410을 추정하던 죽은 로직은 제거.
+- **반환 타입 확인 방법**: 라이브러리 jar를 직접 디컴파일하는 대신, `var`로 반환값을 받고 `.getStatusLine().getStatusCode()`(Apache HttpClient의 `HttpResponse` 인터페이스 시그니처)를 호출하는 코드가 컴파일되는지로 실제 반환 타입을 확인 — 컴파일 성공으로 Apache HttpClient 기반 `HttpResponse`임을 확증.
+
+**테스트.** 전용 단위 테스트는 추가하지 않음 — `pushService` 필드가 생성자 내부에서 VAPID 키로 직접 생성돼(DI 아님) Mockito로 교체하려면 테스트 전용 생성자 오버로드가 필요한데, 이 클래스에 기존 테스트 인프라가 전혀 없는 상태에서 그 정도 리팩토링은 이번 스코프(라이브러리 반환값 확인이라는 작은 수정) 대비 과함. Web Push는 핵심 분석/게이트 파이프라인과 무관한 낮은 리스크 기능이라 §4 "Controller·Repository·DTO 변환처럼 런타임 검증으로 대체" 범주에 준하는 것으로 판단 — `compileJava` 통과 + 반환 타입 컴파일 확인으로 갈음.
+
+**검증.** `compileJava` clean. 백엔드 전체 테스트 스위트(1066+건) green(회귀 없음 — 이 클래스를 참조하는 테스트가 원래 없었음). `analyzeLocal` 베이스라인 불변.
+
+**한계·다음.** 실제 브라우저 푸시 구독으로 410 응답을 재현하는 E2E 검증은 하지 않음(VAPID 키·서비스워커·실제 만료 구독이 필요해 이번 스코프 밖) — 다음에 VAPID/Web Push E2E를 다룰 기회가 있으면 이 경로도 함께 확인할 것.
