@@ -14,12 +14,6 @@ export default function JoinCollaborationPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // URL 경로에 초대 코드가 있으면 자동 참가
-  useEffect(() => {
-    if (codeFromPath && codeFromPath.length >= 6) handleJoin()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codeFromPath])
-
   // 초대 코드로 세션 참가 후 그래프 페이지로 이동
   const handleJoin = async () => {
     if (!code.trim()) return
@@ -34,6 +28,12 @@ export default function JoinCollaborationPage() {
       setLoading(false)
     }
   }
+
+  // URL 경로에 초대 코드가 있으면 자동 참가
+  useEffect(() => {
+    if (codeFromPath && codeFromPath.length >= 6) handleJoin()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codeFromPath])
 
   return (
     <div className="app-page min-h-screen bg-gray-950 flex items-center justify-center">

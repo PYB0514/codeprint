@@ -1081,3 +1081,20 @@ const fetchGraph = useCallback(async () => {
 **검증.** JSON 문법 검증(`JSON.parse`) 전체 통과. `npx tsc -b` clean. Preview 브라우저로 랜딩페이지(ko/en 언어 토글)·`/how-it-works` 실측 — "19종"·"HIGH 10종"·SERVICE_CALL_CHAIN limitation 문구 전부 정상 렌더 확인, 콘솔 에러 없음.
 
 **한계·다음.** 이 19/10이라는 숫자 자체가 다시 스테일해질 수 있다 — 새 룰 추가 시 공개 카피 동기화를 잊기 쉬운 구조적 문제는 이번 수정으로 해소되지 않는다(수치를 코드에서 동적으로 끌어오는 방식은 이번 스코프 밖). 다음에 새 경고 타입을 추가하는 사람은 이 6개 파일도 함께 갱신할 것 — 필요하면 `WARNING_META` 개수를 빌드 타임에 카피에 주입하는 방식을 별도로 검토.
+
+## 프론트 ESLint 저위험 항목 5건 정정 (2026-07-21, codeprint_142)
+
+**배경.** `contexts/Context138.md` R5(#22)가 "프론트 ESLint CI 미배선 + 52건(에러 30·경고 22) 잔존, 에러 정리 후 CI 게이트 배선 권장(프론트 테스트 0 부채의 최저비용 첫 안전망)"으로 확정했다. 전체 재검사 결과 실제로는 53건(에러 31)이었다. `GraphPage.tsx`(3338줄, 최고위험 파일)를 포함해 다수가 `setState-in-effect` 같은 실제 리팩토링이 필요한 항목이라, 사용자와 논의 후 **이번엔 기계적으로 안전하게 고칠 수 있는 5건만** 먼저 처리하고 나머지(주로 setState-in-effect 계열)는 손대지 않기로 확정.
+
+**수정한 5건**(전부 "선언 순서 문제" 또는 "실제 런타임 위험이 있는 훅 규칙 위반" — 로직 변경 없이 코드 이동/재배치만으로 해결):
+1. **`FlowPlaybackPanel.tsx:41` — 조건부 `useMemo` 호출(rules-of-hooks 위반, 진짜 버그)**. `if (!callTree) return null`이 `useMemo` 호출보다 먼저 있어 `callTree`가 null↔non-null로 바뀌는 렌더마다 훅 호출 순서가 달라질 수 있었다. `commonPrefix` `useMemo`는 애초에 `callTree`와 무관(`rawNodes`만 사용)해 조기 return보다 앞으로 이동 — 로직 변경 없음.
+2. **`useAnalysisProgress.ts:14` — 렌더 중 ref 쓰기(`onDoneRef.current = onDone`)**. concurrent 렌더링에서 안전하지 않은 패턴(React 공식 문서가 권고하는 "최신 콜백 ref" 패턴의 올바른 구현은 `useLayoutEffect`로 커밋 직전에 쓰는 것). `useLayoutEffect(() => { onDoneRef.current = onDone })`로 교체 — 매 커밋마다 동기적으로 갱신되어 기존 동작(항상 최신 `onDone` 참조)과 타이밍상 동일.
+3. **`JoinCollaborationPage.tsx:19` — `handleJoin`이 자신을 참조하는 `useEffect`보다 뒤에 선언**. JS 런타임 자체는 문제없지만(effect는 마운트 후 실행되므로 이미 할당된 뒤) 가독성·React Compiler 정적 분석 관점에서 위반. `handleJoin` 정의를 `useEffect`보다 앞으로 이동 — 참가 자동 실행 로직은 무변경.
+4. **`GraphPage.tsx:1461` — `domainColorMap`이 이를 참조하는 `handleNodeClick`(1450행)보다 훨씬 뒤(1680행)에 선언**. `domainColorMap`의 의존값(`rawNodes`·`commonPrefix`·`knownDomains`)이 전부 260~273행에서 이미 정의돼 있어, `useMemo` 블록 전체를 `handleNodeClick`보다 앞(274행 근처)으로 이동 — 계산식·의존성 배열 완전히 동일, 전체 사용처(1468·1700·1703·2279행) 전수 확인해 순서 이동만으로 안전함을 검증.
+5. **`GraphPage.tsx:3275` — 삼항 연산자를 문장으로 사용**(`onClick={() => { onNodeClick ? onNodeClick(id) : onNav(id) }}`, `no-unused-expressions`). `if/else`로 교체 — 두 분기 다 함수 호출이라 동작은 완전히 동일.
+
+**손대지 않은 것**: `setState-in-effect` 계열(`AppHeader`·`ArchitectureIntentPanel`·`ProjectCard`·`GraphPage` 3곳·`TeamsPage` 등), `react-refresh/only-export-components`(`CookieBanner`·`OnboardingTour`·`WarningPanel` — 상수/함수를 별도 파일로 분리해야 해 구조 변경 필요), 그 외 `exhaustive-deps` 경고 22건 — 전부 실제 동작 재설계나 파일 분리가 필요해 이번 "저위험만" 스코프 밖.
+
+**검증.** `npx tsc -b` clean. 수정 대상 파일 개별 재검사로 목표한 5개 에러 소멸 확인(`✖ 53 problems` → `✖ 48 problems`, 정확히 5건 감소, 다른 경고 수는 불변). Preview 브라우저로 `JoinCollaborationPage`(`/collab/join`·`/collab/ABCDEF12` 자동 참가 경로) 실측 — 재배치된 `handleJoin`이 정상 호출되고 에러 메시지 정상 표시, 콘솔 에러 없음. `GraphPage.tsx`의 `domainColorMap` 이동은 로그인·실 프로젝트가 필요해 브라우저 실측은 못 했으나, 사용처 전수 grep(4곳 전부 새 선언 위치보다 뒤)으로 순수 코드 이동임을 정적으로 확인.
+
+**한계·다음.** 남은 26건(주로 `setState-in-effect`)은 실제 effect 재설계가 필요해 별도 세션에서 `GraphPage.tsx` 파일 하나씩 신중하게(가능하면 실제 프로젝트로 로그인 후 브라우저 검증 동반) 처리할 것 — 이번처럼 일괄 처리하지 않는다. ESLint를 CI 게이트로 배선하는 것도 여전히 미착수(에러 0건이 될 때까지는 게이트가 매번 깨질 것이므로 후순위).
