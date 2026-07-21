@@ -2234,3 +2234,18 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `compileJava` clean. 변경 대상 4개 클래스 관련 전체 단위 테스트(`PrReviewServiceTest`·`PrReviewRunnerTest`·`AnalysisApplicationServiceTest`·`CachedParsedFileLoaderTest`) green. `ParsedFileCacheIntegrationTest`·`CodeprintApplicationContextTest`(둘 다 실 Postgres) green. `preview_start`로 로컬 백엔드 실제 재기동 → `/actuator/health` UP 확인(트랜잭션 경계 변경은 순환 빈 참조 트리거는 아니지만 핵심 분석 파이프라인 동작 방식 변경이라 규칙4 취지에 맞춰 재기동 확인). `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변 — 전부 함수 호출 그래프 관련 기존 경고라 어노테이션만 이동한 이번 변경과 무관.
 
 **한계·다음.** 실제 프로덕션 트래픽에서 git clone+네트워크 구간 동안 커넥션을 물지 않게 됐는지는 배포 후 `railway logs`로 G-6("Failed to validate connection") 재발 여부를 관찰해야 확정 가능 — 1회 조사·코드 추론 기반 수정이라 GATE_GAPS.md [G-6]은 "완료"가 아니라 "근본원인 후보 조치"로 기록해두고 다음 재발/무재발로 재평가한다.
+
+## 지표 대시보드 가드레일 값이 헌장 정의와 다른 것을 측정하던 문제 — 정직한 라벨링으로 정정 (2026-07-21, codeprint_142)
+
+**배경.** `contexts/Context138.md` R47(#118) 감사에서 확정된 결함 — `/admin` 지표 대시보드의 "가드레일" 카드(`highWarningPrecisionPct`)가 화면엔 "HIGH 경고 정밀도 · 벤치 스위트 HIGH 8종 검증됨(46케이스)"이라고 표시되지만, 실제 계산(`GateMetricsQuery.highWarningPrecisionPct`)은 벤치를 전혀 참조하지 않고 `gate_check_logs.high_count` 합계 대비 `fp_reports`(사용자 오탐 신고) 건수로 근사한다. 실사용자 유입 전이라 신고가 사실상 0건이라 **이 값은 구조적으로 항상 100%에 수렴** — 그 사이 실제 precision은 phantom 엣지 등으로 이미 훼손돼 있어도 가드레일이 절대 발동하지 않는 "형식만 갖춘 안전장치" 상태였다.
+
+**결정.** 감사가 제시한 두 대안(①벤치 결과를 CI에서 수집해 실제로 연결 ②정직하게 재라벨링) 중 **②를 채택**. ①은 `BenchSuiteTest` 결과를 CI→프로덕션 DB로 전달하는 신규 파이프라인이 필요해 스코프가 크고, "거짓 안심 제거가 급선무"라는 감사의 시급성 판단에는 ②가 더 빠르고 안전하게 부합한다. 벤치 기반 precision 연결은 별도 백로그로 남긴다(착수 안 함).
+- 백엔드: `GateMetrics.highWarningPrecisionPct` → `fpReportRatePct`로 필드명 변경, 레코드·쿼리 양쪽 주석에 "벤치 기준이 아니라 사용자 신고 기준"임을 명시.
+- 프론트(`AdminPage.tsx`): 카드 라벨 "HIGH 경고 정밀도" → "오탐 신고율(참고)", sub 텍스트의 "벤치 스위트 HIGH 8종 검증됨(46케이스)"(사실이 아님) 제거 → "사용자 신고 기준 — 벤치 기반 precision은 미측정"으로 교체.
+- "가드레일" 층 라벨·배지 색상 자체는 유지 — 이건 헌장(`PRODUCT_STRATEGY.md` §0.3)이 정의한 4층 체계의 구조적 위치라 이번 스코프(코드 레벨 정직성 정정) 밖. 헌장의 지표 정의를 바꿀지 여부는 별도 논의 대상.
+
+**함께 손대지 않은 것.** 나머지 3층(북극성·경험·실적)은 R47 부수 확인(#119)에서 이미 정의대로 측정됨이 확인돼 손대지 않음.
+
+**검증.** `compileJava`·`npx tsc -b` 둘 다 clean(필드명 전체 교체를 컴파일러가 강제 검증 — 양 언어 모두 미변경 잔존 참조 0건 확인). 계산 로직(SQL·반올림) 자체는 무변경이라 별도 단위 테스트 추가 없음. `preview_start`로 로컬 백엔드 재기동 확인, `/api/admin/gate-metrics`가 401(Unauthorized)로 정상 매핑됨을 확인(ROLE_ADMIN 필요라 전체 로그인 플로우까지는 하지 않음 — 순수 식별자 rename이라 리스크 낮다고 판단). `analyzeLocal` 베이스라인 불변.
+
+**한계·다음.** 벤치 기반 실제 precision 측정(대안 ①)은 여전히 미착수 — `BenchSuiteTest` 결과를 저장·집계하는 파이프라인이 선행돼야 한다. 다음에 착수할 때는 CI가 벤치 실행 결과(P/N 케이스별 pass/fail)를 어딘가에 영속화하는 방식부터 설계할 것.

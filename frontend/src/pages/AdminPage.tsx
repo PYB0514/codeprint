@@ -48,7 +48,7 @@ interface GateMetricsData {
   weeklyNewAnalysisRepos: number
   weeklyShares: number
   blockedPrsTotal: number
-  highWarningPrecisionPct: number
+  fpReportRatePct: number
 }
 
 interface DigestData {
@@ -350,10 +350,10 @@ export default function AdminPage() {
               <GateMetricCard layer="실적" label="게이트가 막은 PR" value={gateMetrics.blockedPrsTotal} sub="누적" />
               <GateMetricCard
                 layer="가드레일"
-                label="HIGH 경고 정밀도"
-                value={gateMetrics.highWarningPrecisionPct}
+                label="오탐 신고율(참고)"
+                value={gateMetrics.fpReportRatePct}
                 suffix="%"
-                sub="최근 30일 · 벤치 스위트 HIGH 8종 검증됨(46케이스)"
+                sub="최근 30일 · 사용자 신고 기준 — 벤치 기반 precision은 미측정"
               />
             </div>
           </div>
