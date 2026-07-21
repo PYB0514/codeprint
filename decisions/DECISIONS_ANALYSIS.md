@@ -2032,3 +2032,18 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **보안.** 컨트롤러 `saveIntent`에 `edgeType`이 `IMPORT`/`FUNCTION_CALL`/빈값 외의 값이면 400 Bad Request를 반환하는 검증을 추가(CLAUDE.md 규칙2 "외부 입력값 검증"). `effectiveEdgeType()`의 방어적 폴백과 별개 계층 — 하나는 사용자에게 즉시 피드백(API 경계), 하나는 어떤 경로로든 잘못된 데이터가 들어와도 전체 경고 탐지가 죽지 않게 하는 안전망(런타임 방어).
 
 **검증.** `ArchitectureIntentTest` 2건 신규(`isForbidden_edgeTypeSpecific`·`effectiveEdgeType_fallsBackToImport`) + `GraphWarningServiceTest` 2건 신규(명시적 FUNCTION_CALL 규칙이 FUNCTION_CALL 엣지에서 발화·IMPORT 엣지에는 발화 안 함, 타입 특정성 확인) — 기존 `intentDrift_functionCallNotImport_silent`(포트/어댑터 해소 FUNCTION_CALL이 IMPORT 전용 규칙엔 안 걸림)도 그대로 green(엣지 타입 매칭이 암묵적으로 이미 이 보장을 포함). 백엔드 전체 1026개 테스트(Docker Postgres 기동) green, `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변. 프론트는 `npx tsc -b` + GitHub 로그인 상태 실측 — LLM으로 만들기에서 `edgeType: "FUNCTION_CALL"` JSON 가져오기 → 규칙 행의 드롭다운이 "직접 호출"로 정확히 선택됨을 확인.
+
+## A-2 dedup 버그 잔존 3곳 — raw SQL·비JPA ORM·SERVICE_CALL 동일 원인 재발 수정 (2026-07-21, codeprint_142)
+
+**배경.** `contexts/Context138.md` R30(#84)이 decisions↔코드 대조로 발견한 결함 — 2026-07-17(codeprint_136)에 "A-2 dedup 버그"(`GraphBuilder`의 `usedDbEdgeIds` 전역 Set 키가 파일명만 써서 서로 다른 서비스의 동일 파일명이 같은 테이블에 접근하면 두 번째 서비스의 엣지가 조용히 드롭)를 고쳤다고 기록했지만, 실제로는 **JPA 리포지토리 경로(line 441) 1곳만 수정되고 raw SQL(line 480)·비JPA ORM/Django(line 507)·SERVICE_CALL(line 688, 별도 Set `usedServiceCallEdgeIds`지만 같은 원인) 3곳이 그대로 남아 있었다.** 벤치 픽스처가 JPA만 커버해 이 잔존을 못 잡았던 게 근본 원인. 영향 편향이 나쁘다 — 고쳐진 JPA 경로는 Java 전용이고, 안 고쳐진 3곳은 raw SQL·Python Django·SERVICE_CALL(모노레포 MSA 대표 시나리오)이라 **다언어 지원(제품 차별점)에서만 recall이 깨지는 조합**이었다.
+
+**CLAUDE.md 규칙 적용.** A-2는 ERROR_TRACKER 등재 클래스이자 이번이 2회차(잔존 3곳)라 "같은 클래스 버그 2회 이상 → 회귀 테스트 의무"에 해당 — 3곳 전부 `pf.filePath()`로 교체 + 각각에 회귀 테스트 신설.
+
+**구현.** 3곳 모두 line 441과 동일한 패턴으로 `extractFileName(pf.filePath())` → `pf.filePath()` 교체(파일명 대신 전체 상대경로로 dedup 키의 유일성 보장). raw SQL(469행대)·비JPA ORM(501행대)은 같은 `usedDbEdgeIds`를 공유해 원 버그와 완전히 동일한 조건이고, SERVICE_CALL(683행대)은 별도 Set(`usedServiceCallEdgeIds`)이라 DB 엣지와 직접 충돌하진 않지만 "동일 파일명이 같은 대상에 접근하면 두 번째가 드롭"이라는 같은 클래스의 버그.
+
+**테스트 — 벤치 P케이스 대신 GraphBuilderTest 단위 테스트로 대체.** 원 감사는 "비JPA 경로(raw SQL·Django) 벤치 P케이스 추가"를 권고했으나, 벤치 P케이스는 실제 소스를 이 저장소의 파서(정규식·AST)가 정확히 추출하도록 작성해야 해서 더 무겁고 실패 지점이 많다 — 대신 `GraphBuilderTest`가 이미 갖고 있던 `ParsedFile` 직접 구성 헬퍼(`parsedFileWithDb`·`parsedFileWithServiceCalls`, canonical 생성자)로 3개 회귀 테스트를 추가해 같은 목적(재발 방지)을 더 가볍고 결정론적으로 달성했다: ①`ormDbAccess_sameFileNameDifferentServices_bothEdgesCreated` ②`rawSqlAccess_sameFileNameDifferentServices_bothEdgesCreated` ③`serviceCall_sameFileNameDifferentServices_bothEdgesCreated` — 셋 다 "서로 다른 서비스 디렉터리의 동일 파일명이 같은 테이블/서비스에 접근·호출하면 엣지가 2개 다 생성돼야 한다"를 검증.
+**테스트가 실제로 버그를 잡는지 직접 확인**: 3개 fix를 각각 일시적으로 되돌려(`extractFileName`으로 원복) 대응 테스트가 전부 FAILED로 떨어지는 걸 확인한 뒤 복원 — "테스트를 작성했다"가 아니라 "이 테스트가 실제로 이 버그를 잡는다"까지 검증.
+
+**검증.** `compileJava`·`compileTestJava` clean. `GraphBuilderTest`(신규 3건 포함) green. 백엔드 전체 테스트 스위트(Docker DB, 1066+건) green, 신규 실패 0건. `preview_start` 로컬 재기동 → `/actuator/health` UP 확인. `analyzeLocal` 베이스라인 불변.
+
+**한계·다음.** 실제 소스 파일을 이 저장소 파서로 파싱해 raw SQL/Django 케이스를 검증하는 진짜 벤치 P케이스는 여전히 없다 — `GraphBuilder` 로직 자체(엣지 생성·dedup)는 이번 단위 테스트로 커버됐지만, "파서가 실제 Python raw SQL 문자열/Django `Entity.objects` 호출을 올바르게 `RawSqlAccess`/`DbAccess`로 추출하는지"는 기존 벤치(`ormDbAccess_createsEdgeToEntityTable` 등, GraphBuilderTest에 이미 있음)가 별도로 커버 중이라 이번 스코프에서 중복 추가하지 않음.

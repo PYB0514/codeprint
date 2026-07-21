@@ -465,6 +465,49 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("비JPA ORM 접근 — 서로 다른 서비스의 동일 파일명(models.py)이 같은 엔티티에 접근해도 둘 다 엣지가 생성된다(A-2 dedup 재발 방지)")
+    void ormDbAccess_sameFileNameDifferentServices_bothEdgesCreated() {
+        // usedDbEdgeIds는 전역 Set — 파일명만 키로 쓰면 두 번째 서비스의 엣지가 조용히 드롭됐던 버그(line 441과 동일 원인)
+        ParsedFile model = parsedFileWithDb("shared/models.py", "Python",
+                List.of(new DbTableInfo("orders", "Order")), List.of());
+        ParsedFile serviceA = parsedFileWithDb("service-a/models.py", "Python",
+                List.of(), List.of(new DbAccess("Order", false)));
+        ParsedFile serviceB = parsedFileWithDb("service-b/models.py", "Python",
+                List.of(), List.of(new DbAccess("Order", false)));
+
+        graphBuilder.build(projectId, analysisId, List.of(model, serviceA, serviceB));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        long readEdges = cap.getAllValues().stream().filter(e -> e.getType() == EdgeType.DB_READ).count();
+        assertThat(readEdges).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("raw SQL 접근 — 서로 다른 서비스의 동일 파일명(db.py)이 같은 테이블에 접근해도 둘 다 엣지가 생성된다(A-2 dedup 재발 방지)")
+    void rawSqlAccess_sameFileNameDifferentServices_bothEdgesCreated() {
+        ParsedFile serviceA = new ParsedFile(
+                "service-a/db.py", "Python", List.of(), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(),
+                List.of(new RawSqlAccess("orders", false)), // rawSqlAccesses
+                List.of(), List.of(), Map.of());
+        ParsedFile serviceB = new ParsedFile(
+                "service-b/db.py", "Python", List.of(), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(),
+                List.of(new RawSqlAccess("orders", false)), // rawSqlAccesses
+                List.of(), List.of(), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(serviceA, serviceB));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        long readEdges = cap.getAllValues().stream().filter(e -> e.getType() == EdgeType.DB_READ).count();
+        assertThat(readEdges).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("TS baseUrl bare import 세그먼트 경계 — 'entities/task' 가 .../other-task/index.ts 로 오매칭되지 않음")
     void tsImport_baseUrlBare_segmentBoundary_noPartialMatch() {
         ParsedFile importer = parsedFileWithImports("features/toggle-task/ui.tsx", "TypeScript",
@@ -1280,6 +1323,24 @@ class GraphBuilderTest {
         verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
 
         assertThat(edgeCaptor.getAllValues()).noneMatch(e -> e.getType() == EdgeType.SERVICE_CALL);
+    }
+
+    @Test
+    @DisplayName("서로 다른 서비스의 동일 파일명(Client.java)이 같은 대상 서비스를 호출해도 둘 다 SERVICE_CALL 엣지가 생성된다(A-2 dedup 재발 방지)")
+    void serviceCall_sameFileNameDifferentServices_bothEdgesCreated() {
+        // usedServiceCallEdgeIds도 usedDbEdgeIds와 같은 원인의 dedup 버그 — 파일명만 키로 쓰면
+        // 두 번째 호출자 서비스의 엣지가 조용히 드롭된다.
+        ParsedFile callerA = parsedFileWithServiceCalls("service-a/src/Client.java", "Java", List.of("customers-service"));
+        ParsedFile callerB = parsedFileWithServiceCalls("service-b/src/Client.java", "Java", List.of("customers-service"));
+        ParsedFile target = parsedFileWithImports(
+                "spring-petclinic-customers-service/src/OwnerController.java", "Java", List.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(callerA, callerB, target));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        long serviceCallEdges = cap.getAllValues().stream().filter(e -> e.getType() == EdgeType.SERVICE_CALL).count();
+        assertThat(serviceCallEdges).isEqualTo(2);
     }
 
     @Test
