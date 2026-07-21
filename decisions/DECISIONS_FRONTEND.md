@@ -1098,3 +1098,18 @@ const fetchGraph = useCallback(async () => {
 **검증.** `npx tsc -b` clean. 수정 대상 파일 개별 재검사로 목표한 5개 에러 소멸 확인(`✖ 53 problems` → `✖ 48 problems`, 정확히 5건 감소, 다른 경고 수는 불변). Preview 브라우저로 `JoinCollaborationPage`(`/collab/join`·`/collab/ABCDEF12` 자동 참가 경로) 실측 — 재배치된 `handleJoin`이 정상 호출되고 에러 메시지 정상 표시, 콘솔 에러 없음. `GraphPage.tsx`의 `domainColorMap` 이동은 로그인·실 프로젝트가 필요해 브라우저 실측은 못 했으나, 사용처 전수 grep(4곳 전부 새 선언 위치보다 뒤)으로 순수 코드 이동임을 정적으로 확인.
 
 **한계·다음.** 남은 26건(주로 `setState-in-effect`)은 실제 effect 재설계가 필요해 별도 세션에서 `GraphPage.tsx` 파일 하나씩 신중하게(가능하면 실제 프로젝트로 로그인 후 브라우저 검증 동반) 처리할 것 — 이번처럼 일괄 처리하지 않는다. ESLint를 CI 게이트로 배선하는 것도 여전히 미착수(에러 0건이 될 때까지는 게이트가 매번 깨질 것이므로 후순위).
+
+## i18n 미번역 컴포넌트 배치 처리 1차 — 10/13 완료, 2건은 대상 아님으로 확인 (2026-07-22, codeprint_143)
+
+**배경.** `contexts/Context138.md` R2(#9)가 지목한 `useTranslation` 없는 13개 컴포넌트 — 사용자 노출 화면인데 i18n 미적용. `contexts/Context142.md`가 "큰 작업이라 배치로 나눠 처리 권장"이라 명시해뒀던 항목.
+
+**작업.** 원 목록 13개를 하나씩 직접 읽어 실제 하드코딩된 한국어 UI 텍스트가 있는지 재확인(원 감사가 `grep -rL useTranslation`이라는 기계적 스캔이라 "useTranslation 없음"과 "번역 필요한 텍스트 있음"이 항상 일치하진 않을 수 있어서).
+- **10개 완료**: `CreateProjectModal`·`FlowPlaybackPanel`·`CollaborationPanel`·`TeamChatPanel`·`ArchitectureIntentPanel` 제외 — `ErrorToast`·`NoticeBanner`·`FileNode`·`GroupNode`·`SketchNode`·`CornerPanel`. 전부 `useTranslation('workspace')` + `workspace.json`(ko/en) 신규 섹션 추가 방식으로 기존 `WarningPanel.tsx` 패턴 그대로 재사용(§1 재사용성 원칙). 노드 컴포넌트(FileNode·GroupNode·SketchNode·CornerPanel) 4개는 `graphNodes.*` 아래 하위 섹션으로 묶음.
+- **2개는 대상 아님으로 확인**: `SectionNode`·`CursorOverlay` — 코드를 직접 읽어보니 하드코딩된 한국어 UI 문자열이 전혀 없었다(둘 다 `data.label`/`cursor.username` 같은 동적 값만 렌더링, 정적 문구 없음). 원 감사의 기계적 스캔(`useTranslation` 부재)이 "번역 안 됨"과 "번역할 게 있음"을 혼동한 false positive — R2 #9 목록 자체가 스테일이었던 부분.
+- **1개는 이번 스코프에서 제외**: `ArchitectureIntentPanel`(476줄) — 다른 12개(수십 줄)보다 훨씬 크고, PR #644에서 GET-후-PUT lost-update 수정이 막 들어간 복잡한 상태 관리 컴포넌트라 신중하게 별도로 처리하는 게 안전하다고 판단.
+
+**구현 패턴.** 인터폴레이션이 필요한 곳(`{{name}}`·`{{count}}`·`{{total}}`)은 i18next 표준 `t('key', { name, count })` 사용. `FlowPlaybackPanel`의 재생 단계 카운터·DB 접근 설명 메시지(생성자 반환/읽기/저장/수정/삭제 5종)가 이 패턴의 대표 사례.
+
+**검증.** `npx tsc -b` clean, `npx eslint`(수정 대상 10개 파일)로 신규 경고 0건. `node -e "JSON.parse(...)"`로 ko/en `workspace.json` 양쪽 문법 검증 통과. Preview로 랜딩 페이지 로드 확인(콘솔 에러 없음) — 단 이번에 번역한 10개 컴포넌트 자체는 전부 인증 후 화면(프로젝트 생성 모달·협업 패널·팀채팅·그래프 노드 등)이라 실제 로그인 없이는 브라우저에서 직접 렌더링 확인이 불가능해 이번 세션에서 시각적 확인은 못 함 — tsc/eslint/JSON 검증으로 갈음(기존 PR #644 "한계·다음"과 동일한 제약).
+
+**한계·다음.** `ArchitectureIntentPanel`은 다음 배치로 남김. i18n 전체 완료 여부는 위 감사 스캔 자체가 스테일이었을 가능성(false positive 2건 발견)을 고려해, 다음 배치 착수 전 `grep -rL useTranslation` 재스캔으로 원 13개 목록 밖에 놓친 컴포넌트가 없는지도 한 번 더 확인할 것.

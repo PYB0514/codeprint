@@ -2,9 +2,11 @@
 import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
+import { useTranslation } from 'react-i18next'
 
 // 스케치 노드 렌더링 — 점선 보라 테두리 + "설계" 배지 + 라벨 입력 + 삭제 버튼
 const SketchNode = memo(function SketchNode({ id, data }: NodeProps) {
+  const { t } = useTranslation('workspace')
   const handleStyle = { opacity: 0, width: 6, height: 6 }
   return (
     <>
@@ -16,12 +18,12 @@ const SketchNode = memo(function SketchNode({ id, data }: NodeProps) {
         display: 'flex', flexDirection: 'column', gap: 4,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-          <span style={{ fontSize: 9, fontWeight: 700, color: '#c084fc', letterSpacing: 0.5 }}>설계</span>
+          <span style={{ fontSize: 9, fontWeight: 700, color: '#c084fc', letterSpacing: 0.5 }}>{t('graphNodes.sketchNode.badge')}</span>
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); (data.onDelete as ((id: string) => void) | undefined)?.(id) }}
             style={{ flexShrink: 0, width: 14, height: 14, borderRadius: '50%', background: 'transparent', border: 'none', cursor: 'pointer', color: '#a78bfa', fontSize: 10, lineHeight: 1 }}
-            title="삭제"
+            title={t('graphNodes.sketchNode.deleteTooltip')}
           >
             ✕
           </button>
@@ -30,7 +32,7 @@ const SketchNode = memo(function SketchNode({ id, data }: NodeProps) {
           value={String(data.label ?? '')}
           onChange={(e) => (data.onRelabel as ((id: string, v: string) => void) | undefined)?.(id, e.target.value)}
           onMouseDown={(e) => e.stopPropagation()}
-          placeholder="이름 입력"
+          placeholder={t('graphNodes.sketchNode.namePlaceholder')}
           style={{
             width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid #6b21a8',
             borderRadius: 4, color: '#fff', fontSize: 11, padding: '2px 5px', outline: 'none',

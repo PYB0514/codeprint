@@ -771,5 +771,87 @@
       "modeComment": "Comment",
       "modeName": "Name"
     }
+  },
+  "createProjectModal": {
+    "title": "New Project",
+    "repoSelectLabel": "Select a GitHub repo",
+    "repoLoadingPlaceholder": "Loading repos...",
+    "repoSearchPlaceholder": "Search repos...",
+    "privateTag": "Private",
+    "repoUrlLabel": "GitHub repo URL",
+    "nameLabel": "Project name",
+    "namePlaceholder": "My Awesome Project",
+    "descriptionLabel": "Description (optional)",
+    "descriptionPlaceholder": "A short description of your project",
+    "cancelButton": "Cancel",
+    "creating": "Creating...",
+    "createButton": "Create",
+    "createFailed": "Failed to create the project."
+  },
+  "flowPlaybackPanel": {
+    "defaultTitle": "Flow Playback",
+    "closeTooltip": "Close",
+    "stepCounterInitial": "0 / {{total}}",
+    "stepCounter": "{{cur}} / {{total}} steps",
+    "branchPrompt": "The flow branches here — choose a path",
+    "branchStepCount": "{{count}} steps",
+    "confirmBranchButton": "▶ Play this path",
+    "pauseButton": "⏸ Pause",
+    "restartButton": "↺ Restart",
+    "playButton": "▶ Play",
+    "constructorReturned": "{{name}} object is returned",
+    "dbRead": "Reads {{name}} data",
+    "dbSaved": "Saved to {{name}}",
+    "dbUpdated": "{{name}} data is updated",
+    "dbDeleted": "{{name}} data is deleted"
+  },
+  "errorToast": {
+    "traceIdLabel": "Trace ID:",
+    "traceIdNote": "— please mention this if you contact us",
+    "closeLabel": "Close"
+  },
+  "noticeBanner": {
+    "badge": "📢 Notice",
+    "closeLabel": "Dismiss notice"
+  },
+  "collaborationPanel": {
+    "buttonTooltip": "Collaboration session",
+    "heading": "Live collaboration",
+    "starting": "Creating session...",
+    "startButton": "Start collaboration session",
+    "inviteCodeLabel": "Invite code",
+    "connectedTooltip": "Connected",
+    "copiedLabel": "Copied!",
+    "copyButton": "Copy",
+    "shareHint": "Share the link and teammates can join instantly.",
+    "participantsLabel": "Participants ({{count}})",
+    "meTag": "(you)"
+  },
+  "teamChatPanel": {
+    "title": "Team chat",
+    "emptyLine1": "No messages yet.",
+    "emptyLine2": "Send the first one.",
+    "inputPlaceholder": "Type a message...",
+    "connectingPlaceholder": "Connecting...",
+    "sendButton": "Send"
+  },
+  "graphNodes": {
+    "fileNode": {
+      "openSidebarTooltip": "View connections"
+    },
+    "groupNode": {
+      "showContentTooltip": "Show content",
+      "hideContentTooltip": "Hide content",
+      "expandTooltip": "Expand",
+      "collapseTooltip": "Minimize"
+    },
+    "sketchNode": {
+      "badge": "Sketch",
+      "deleteTooltip": "Delete",
+      "namePlaceholder": "Enter a name"
+    },
+    "cornerPanel": {
+      "collapseTooltip": "Collapse"
+    }
   }
 }

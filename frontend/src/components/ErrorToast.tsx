@@ -1,5 +1,6 @@
 // 서버 오류(5xx) 발생 시 추적 ID(traceId)를 사용자에게 노출하는 전역 토스트
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface ErrorToastDetail {
   message: string
@@ -8,6 +9,7 @@ interface ErrorToastDetail {
 
 // app-error 커스텀 이벤트를 수신해 우측 하단 토스트로 표시(6초 후 자동 제거)
 export default function ErrorToast() {
+  const { t } = useTranslation('workspace')
   const [toast, setToast] = useState<ErrorToastDetail | null>(null)
 
   // window의 app-error 이벤트 구독 — axios interceptor가 5xx 시 디스패치
@@ -40,15 +42,15 @@ export default function ErrorToast() {
           <div>{toast.message}</div>
           {toast.traceId && (
             <div className="mt-1 text-xs text-red-300">
-              추적 ID: <code className="font-mono text-red-200">{toast.traceId}</code>
-              <span className="text-red-400"> — 문의 시 알려주세요</span>
+              {t('errorToast.traceIdLabel')} <code className="font-mono text-red-200">{toast.traceId}</code>
+              <span className="text-red-400"> {t('errorToast.traceIdNote')}</span>
             </div>
           )}
         </div>
         <button
           onClick={() => setToast(null)}
           className="text-red-400 hover:text-red-200"
-          aria-label="닫기"
+          aria-label={t('errorToast.closeLabel')}
         >
           ✕
         </button>
