@@ -477,7 +477,10 @@ public class GraphBuilder {
             if (pf.rawSqlAccesses().isEmpty()) continue;
             UUID fileId = fileNodeIds.get(pf.filePath());
             if (fileId == null) continue;
-            String fileBase = extractFileName(pf.filePath());
+            // 파일명만 쓰면 usedDbEdgeIds가 전역 Set이라 서로 다른 서비스의 동일 파일명(예: 여러 서비스의
+            // db.py)에서 두 번째 서비스의 엣지가 조용히 드롭된다 — line 441과 동일 원인, 전체 상대경로로 유일성 보장
+            // (2026-07-21, A-2 dedup 버그 잔존 3곳 중 하나로 재발견·수정, decisions/DECISIONS_ANALYSIS.md 참조)
+            String fileBase = pf.filePath();
 
             for (RawSqlAccess access : pf.rawSqlAccesses()) {
                 String tableName = access.tableName();
@@ -504,7 +507,10 @@ public class GraphBuilder {
             if (pf.dbAccesses().isEmpty()) continue;
             UUID fileId = fileNodeIds.get(pf.filePath());
             if (fileId == null) continue;
-            String fileBase = extractFileName(pf.filePath());
+            // 파일명만 쓰면 usedDbEdgeIds가 전역 Set이라 서로 다른 서비스의 동일 파일명(예: 여러 서비스의
+            // models.py)에서 두 번째 서비스의 엣지가 조용히 드롭된다 — line 441과 동일 원인, 전체 상대경로로 유일성 보장
+            // (2026-07-21, A-2 dedup 버그 잔존 3곳 중 하나로 재발견·수정, decisions/DECISIONS_ANALYSIS.md 참조)
+            String fileBase = pf.filePath();
 
             for (DbAccess access : pf.dbAccesses()) {
                 UUID tableNodeId = entityClassToTableNodeId.get(access.entityClass());
@@ -685,7 +691,10 @@ public class GraphBuilder {
                 if (targetFileId == null || targetFileId.equals(callerFileId)) continue;
                 if (targetServiceName.equalsIgnoreCase(callerService)) continue;
 
-                String edgeId = extractFileName(pf.filePath()) + "-servicecall-" + targetServiceName;
+                // 파일명만 쓰면 서로 다른 서비스의 동일 파일명(예: 여러 서비스의 Client.java)이 같은 대상
+                // 서비스를 호출할 때 usedServiceCallEdgeIds에서 두 번째 서비스의 엣지가 조용히 드롭된다 —
+                // line 441의 usedDbEdgeIds와 같은 원인, 전체 상대경로로 유일성 보장(A-2 dedup 버그 잔존 3곳 중 하나)
+                String edgeId = pf.filePath() + "-servicecall-" + targetServiceName;
                 if (!usedServiceCallEdgeIds.contains(edgeId)) {
                     usedServiceCallEdgeIds.add(edgeId);
                     graphRepository.saveEdge(Edge.create(graphId, edgeId, EdgeType.SERVICE_CALL, callerFileId, targetFileId));
