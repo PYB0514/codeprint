@@ -127,7 +127,7 @@
       },
       "SERVICE_CALL_CHAIN": {
         "example": "A synchronous service-to-service call chain (WebClient/RestTemplate/FeignClient) of 2+ hops, e.g. api-gateway → customers-service → visits-service — a distributed-monolith signal (one request synchronously threading through multiple services).",
-        "limitation": "Recognizes Java/Kotlin WebClient and RestTemplate calls (when the URL is an inline string literal) and FeignClient (based on files importing an @FeignClient interface) — other languages' HTTP clients (Python requests, JS axios, etc.) aren't recognized yet, so real chains can be missed (a recall limitation)."
+        "limitation": "Recognizes Java/Kotlin WebClient and RestTemplate calls (when the URL is an inline string literal), FeignClient (based on files importing an @FeignClient interface), Python requests, and JS/TS axios (when the host is a literal) — other languages' HTTP clients (Go, etc.) aren't recognized yet, so real chains can be missed (a recall limitation)."
       }
     }
   },
@@ -422,7 +422,7 @@
       "step2Title": "Try clicking a function node",
       "step2Content": "Clicking a function or DB node plays back the call flow step by step. If there's a branch, you can choose which path to follow.",
       "step3Title": "Structural warnings",
-      "step3Content": "You can check 15 kinds of structural warnings here, like cyclic dependencies and layer violations.",
+      "step3Content": "You can check 19 kinds of structural warnings here, like cyclic dependencies and layer violations.",
       "step4Title": "Analyze your own repo too",
       "step4Content": "Log in with GitHub to analyze your own repo the same way, and share graphs like this one."
     }
@@ -644,7 +644,7 @@
       "LAYERED_BYPASS": { "label": "Service Layer Bypass", "desc": "Controller skips Service and calls Repository directly — business logic risks scattering into the Controller." },
       "INTENT_DRIFT": { "label": "Declared Structure Rule Violation", "desc": "An import that violates a prohibition rule you declared yourself in \"Architecture Intent\" — code that has drifted from the structure rules you set." },
       "SHARED_DATABASE_ACCESS": { "label": "Shared Database Antipattern", "desc": "Different services in a monorepo access the same DB table — consolidate table ownership into one service and have others query it through an API." },
-      "SERVICE_CALL_CHAIN": { "label": "Cross-Service Synchronous Call Chain", "desc": "Synchronous service-to-service calls (WebClient/RestTemplate) chain 2+ hops — a distributed-monolith signal. Break the middle of the chain with an async event, or move data composition to a gateway layer." }
+      "SERVICE_CALL_CHAIN": { "label": "Cross-Service Synchronous Call Chain", "desc": "Synchronous service-to-service calls (WebClient/RestTemplate, etc.) chain 2+ hops — a distributed-monolith signal. Break the middle of the chain with an async event, or move data composition to a gateway layer." }
     },
     "ignoreRulesTitle": "Ignore Rules",
     "noTypeLabel": "All Types",
