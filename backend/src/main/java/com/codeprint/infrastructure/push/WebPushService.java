@@ -64,13 +64,18 @@ public class WebPushService {
                         sub.getEndpoint(),
                         new Subscription.Keys(sub.getP256dh(), sub.getAuth())
                 );
-                pushService.send(new Notification(subscription, payload));
+                // PushService.send()는 non-2xx에서도 예외를 던지지 않고 HttpResponse를 그대로 반환한다
+                // (webpush-java 라이브러리 동작) — 반환값을 버리면 발송 실패가 조용히 성공 처리된다.
+                var response = pushService.send(new Notification(subscription, payload));
+                int statusCode = response.getStatusLine().getStatusCode();
+                if (statusCode == 410) {
+                    // 만료된 구독 — 재시도해도 항상 실패하므로 제거
+                    pushSubscriptionRepository.deleteByUserIdAndEndpoint(userId, sub.getEndpoint());
+                } else if (statusCode >= 300) {
+                    log.warn("Web Push 전송 실패 (userId={}, endpoint={}, status={})", userId, sub.getEndpoint(), statusCode);
+                }
             } catch (Exception e) {
                 log.warn("Web Push 전송 실패 (userId={}, endpoint={}): {}", userId, sub.getEndpoint(), e.getMessage());
-                // 만료된 구독은 제거
-                if (e.getMessage() != null && e.getMessage().contains("410")) {
-                    pushSubscriptionRepository.deleteByUserIdAndEndpoint(userId, sub.getEndpoint());
-                }
             }
         }
     }

@@ -157,13 +157,19 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
     setSaving(true)
     setStatusMsg(null)
     try {
+      // 예외 규칙은 경고 패널이 독립적으로 관리 — 이 패널을 연 이후 경고 패널에서 추가/제거됐을 수 있으므로
+      // 마운트 시점 스냅샷(ignore state)이 아니라 저장 직전 GET으로 최신값을 확보해 라운드트립한다
+      // (loadIgnoreRules/saveIgnoreRules가 이미 쓰는 GET-then-PUT 패턴과 동일, lost-update 방지)
+      const latest = await fetch(`/api/projects/${projectId}/architecture-intent`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null)
+      const latestIgnore = latest?.ignore ?? ignore
       const body = {
         modules: modules
           .filter(m => m.name.trim())
           .map(m => ({ name: m.name.trim(), globs: m.glob.split(',').map(g => g.trim()).filter(Boolean) })),
         rules: rules.filter(r => r.from.trim() && r.to.trim()),
-        // 예외 규칙은 경고 패널에서 관리 — 여기선 그대로 보존해 덮어쓰기 방지
-        ignore
+        ignore: latestIgnore
       }
       const res = await fetch(`/api/projects/${projectId}/architecture-intent`, {
         method: 'PUT',
@@ -194,11 +200,17 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
   const clear = useCallback(async () => {
     if (!window.confirm('선언된 모듈·금지 규칙을 모두 비울까요? (경고 예외 규칙은 유지됩니다)')) return
     try {
-      if (ignore.length > 0) {
+      // save()와 동일하게 저장 직전 GET으로 최신 ignore를 확보 — 마운트 이후 경고 패널에서 추가된 예외 규칙을
+      // 이 패널이 모른 채 있으면 DELETE 분기를 잘못 타 규칙 전체를 날릴 수 있다(lost-update의 더 심한 변형).
+      const latest = await fetch(`/api/projects/${projectId}/architecture-intent`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null)
+      const latestIgnore = latest?.ignore ?? ignore
+      if (latestIgnore.length > 0) {
         await fetch(`/api/projects/${projectId}/architecture-intent`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ modules: [], rules: [], ignore }),
+          body: JSON.stringify({ modules: [], rules: [], ignore: latestIgnore }),
           credentials: 'include'
         })
       } else {

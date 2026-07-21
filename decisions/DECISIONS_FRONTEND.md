@@ -1059,3 +1059,14 @@ const fetchGraph = useCallback(async () => {
 - **손대지 않은 것**: 백엔드 severity(MEDIUM 유지가 정답, R31 결론) / `PrReviewServiceTest`의 `gateState_experimental*` 두 테스트(HIGH 입력으로 `isGating()` on/off 분기 자체를 검증하는 테스트라, 미래에 다른 룰이 HIGH로 experimental에 편입될 때를 대비한 메커니즘 테스트로 유효 — MEDIUM으로 바꾸면 두 테스트 모두 항상 success가 되어 on/off 분기를 구분 못 하게 됨, 오히려 테스트 가치가 떨어짐).
 
 **검증.** `npx tsc -b` clean. JSON 문법 검증(`JSON.parse`) 통과. Preview 브라우저로 `/how-it-works` 실측 — "Controller → 인프라 직접 의존" 항목이 MEDIUM 그룹에 위치하고, 기존 desc("아직 교차 프로젝트 실사용 검증이 부족해 2단계(실험적) 게이트로 분류")가 이미 정확해 추가 수정 불필요함을 확인. 콘솔 에러 없음.
+
+## ArchitectureIntentPanel ignore 규칙 lost-update 수정 (2026-07-21, codeprint_142)
+
+**배경.** `contexts/Context138.md` R1(#2)이 확정한 결함 — `ArchitectureIntentPanel`의 `ignore`(예외 규칙, 경고 패널이 관리)는 마운트 시점에 한 번 GET해서 컴포넌트 state에 스냅샷으로 저장한다. `save()`는 그 스냅샷을 그대로 PUT body에 실어 보내는데, 이 패널을 연 채로 있는 동안 사용자가 (같은 페이지의) 경고 패널에서 예외 규칙을 추가/제거하면 서버 상태가 이미 바뀌어 있다 — 이 상태에서 `save()`를 누르면 **스테일 스냅샷이 방금 추가된 규칙을 덮어써 지운다**(감사 로그에 REMOVE로 기록됨). `saveIgnoreRules`(`utils/ignoreRules.ts`, 경고 패널이 쓰는 반대 방향 저장 함수)는 이미 저장 직전 GET으로 `modules`/`rules`를 최신화해 이 문제가 없었는데, `ArchitectureIntentPanel` 쪽만 비대칭적으로 취약했다.
+
+**결정.** `save()`·`clear()` 둘 다 PUT 직전에 `GET /api/projects/{id}/architecture-intent`로 서버의 최신 `ignore`를 확보해 그 값을 PUT body에 실음(`saveIgnoreRules`가 이미 쓰는 GET-then-PUT 패턴과 대칭). GET 실패 시엔 로컬 `ignore` state로 폴백(완전 실패보다 스테일 데이터로라도 저장을 막지 않는 게 낫다고 판단).
+- **`clear()`도 함께 고친 이유**: `clear()`는 `ignore.length > 0`(스테일 값)으로 "PUT으로 보존" vs "DELETE로 전체 삭제"를 분기한다 — 로컬 `ignore`가 스테일하게 빈 배열이면, 서버에 실제로 존재하는 예외 규칙이 있어도 DELETE 분기를 잘못 타 **전체가 삭제**된다. `save()`의 "값이 스테일해서 덮어쓴다"보다 더 심한 데이터 손실 변형이라 같은 세션에서 함께 수정.
+
+**검증.** `npx tsc -b` clean. `npx eslint`로 변경 파일 확인 — 신규 경고/에러 없음(기존에 있던 `useEffect` set-state 에러 1건·`save` useCallback의 `ignore` 누락 exhaustive-deps 경고 1건은 이번 변경 이전부터 있던 것으로 원본 코드도 동일하게 `ignore`를 참조하고 있었음 확인, §3 surgical changes에 따라 손대지 않음). `preview_start` 로컬 재기동 → `/actuator/health` UP 확인(백엔드 API 계약은 무변경이라 별도 백엔드 테스트 없음).
+
+**한계·다음.** 브라우저에서 실제로 두 패널을 동시에 열어 "다른 패널에서 규칙 추가 → 이 패널에서 저장 → 규칙 유지 확인"까지는 GitHub 로그인이 필요해 이번 세션에서 실측하지 않음 — 로직이 이미 검증된 `saveIgnoreRules`와 대칭 구조라는 점으로 갈음. 다음에 이 프로젝트에 로그인해 있을 기회가 있으면 실제로 재현·확인할 것.
