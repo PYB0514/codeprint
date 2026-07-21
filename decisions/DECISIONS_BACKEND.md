@@ -2295,3 +2295,14 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `compileJava`·`compileTestJava` clean. 백엔드 전체 테스트 스위트(Docker DB, 1066+건) green. `preview_start` 로컬(local 프로파일) 재기동 → `/actuator/health` UP + `/api/dev/test-token` 정상 200(로컬 dev 워크플로 회귀 없음 확인) 확인. `stripCodeFence`는 Node로 4가지 LLM 출력 패턴(코드펜스+json태그/코드펜스만/펜스없음/여분 공백)을 직접 검증 — 전부 파싱 성공. `analyzeLocal` 베이스라인 불변. **독립 적대적 보안 검증 PASS**(SecurityConfig 변경 대상).
 
 **한계·다음.** null-globs 검증에 전용 백엔드 테스트는 추가 안 함(`ArchitectureIntentController`에 기존 테스트 인프라 자체가 없어 이번 스코프 밖) — 컴파일 검증+기존 edgeType 검증과 동일 패턴 재사용으로 갈음. `stripCodeFence`도 프론트에 테스트 프레임워크 자체가 없어(프론트 테스트 0개 부채) 단위 테스트 대신 Node 스크립트로 로직만 별도 검증. LLM import·드롭다운 정규화의 브라우저 실측은 로그인+소유 프로젝트가 필요해 이번 세션에서 못 함 — 다음에 이 화면을 다룰 기회가 있으면 실측할 것.
+
+## 레이트리밋 커버리지 갭 3건 등록 — report-fp·커뮤니티 댓글·결제 prepare 3종 (2026-07-22, codeprint_143)
+
+**배경.** `contexts/Context138.md` R22(#64~67)가 확정한 결함 — `RateLimitFilter`의 "남용 위험 쓰기 엔드포인트 전체 등록"이라는 주석과 달리 실제로는 3개 카테고리가 누락돼 있었다. ①`POST /api/projects/{projectId}/warnings/report-fp` — 자가개선 루프의 유일한 학습 신호(`fp_reports`)를 기록하는 엔드포인트라 무제한 스팸이 오탐 신고 데이터를 오염시켜 향후 벤치 승격의 진실성을 훼손할 수 있음, 게다가 `verifyProjectReadAccess`(공개 프로젝트면 누구나)로 열려 있어 인증 장벽도 낮음(R25 #74가 이 벡터를 재확인). ②`POST /api/community/posts/*/comments` — 형제 기능인 노드 댓글(`comment-create`)은 이미 20/분 제한이 있는데 게시글 댓글만 무제한. ③결제 prepare 3종(`toss/prepare`·`teams/payment/prepare`·`teams/*/seats/payment/prepare`) — 승인 없이도 반복 호출로 order 테이블에 행이 쌓일 수 있음.
+
+**구현.** `RateLimitFilter.rules`에 4개 규칙 추가. report-fp는 10/분(정상 사용자가 경고 패널을 훑으며 여러 건 신고할 수 있어 `/api/reports`의 5/분보다는 여유를 둠), 커뮤니티 댓글은 형제 규칙과 동일하게 20/분(별도 카테고리 `post-comment-create`로 버킷 분리 — 두 댓글 기능은 독립 리소스). 결제 3종은 **의도적으로 같은 카테고리(`payment-prepare`) 공유** — 별도 카테고리로 나누면 사용자가 세 엔드포인트를 번갈아 호출해 개별 한도를 우회할 수 있어(IP+카테고리 키 구조상), 하나의 버킷을 공유시켜 합산 5/분으로 제한.
+- **탈락한 대안**: 결제 3종을 각각 독립 카테고리(5/분씩, 합산 15/분 허용)로 등록 — 우회 벡터를 남기는 구조라 기각. 공유 카테고리 쪽이 코드도 3줄 추가로 더 단순(§2).
+
+**검증.** `compileJava`·`compileTestJava` clean. `RateLimitFilterTest`에 신규 4건 추가 — report-fp 10/분 한도, 커뮤니티 댓글 20/분 한도(별도 버킷 확인), 결제 3종이 엔드포인트를 바꿔가며 호출해도 같은 버킷을 공유해 합산 5회에서 차단되는 케이스. 전부 통과. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변 — 이번 변경으로 신규 위반 없음.
+
+**한계·다음.** R22 #67이 지적한 "근본 원인"(신규 쓰기 엔드포인트 추가 시 이 목록 동기화를 강제하는 장치 부재)은 이번 스코프 밖 — 수동 목록에 항목을 채워 넣었을 뿐, 앞으로 또 빠질 수 있는 구조 자체는 그대로다. 체크리스트/테스트로 강제하는 방안은 별도 판단 필요.
