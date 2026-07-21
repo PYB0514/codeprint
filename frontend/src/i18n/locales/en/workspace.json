@@ -234,7 +234,7 @@
       "architectureLabel": "Stage 1 (architecture, on by default)",
       "architectureDesc": "Verified structural violations like circular references and layer violations — turning this off won't force immediate migration on legacy code.",
       "experimentalLabel": "Stage 2 (experimental, off by default)",
-      "experimentalDesc": "New rules that haven't been cross-project validated yet — enable only if you want the latest rules applied.",
+      "experimentalDesc": "New rules that haven't been cross-project validated yet — enable only if you want the latest rules applied. (No rule currently qualifies, so enabling this won't block merges yet — more rules will graduate here after validation.)",
       "close": "Close",
       "title": "PR gate stage settings",
       "button": "Gate Settings"

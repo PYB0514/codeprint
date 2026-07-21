@@ -56,7 +56,7 @@ export const WARNING_META: Record<string, { color: string; severity: string }> =
   CROSS_FEATURE_IMPORT:         { color: '#0ea5e9', severity: 'HIGH'   },
   FEATURE_LAYER_VIOLATION:      { color: '#6366f1', severity: 'HIGH'   },
   DOMAIN_IMPORTS_INFRA:         { color: '#ef4444', severity: 'HIGH'   },
-  INTERFACES_IMPORTS_INFRA:     { color: '#f97373', severity: 'HIGH' },
+  INTERFACES_IMPORTS_INFRA:     { color: '#f97373', severity: 'MEDIUM' },
   CROSS_DOMAIN_CALL:            { color: '#f43f5e', severity: 'MEDIUM' },
   MISSING_CONVERTER_MIGRATION:  { color: '#ec4899', severity: 'MEDIUM' },
   MISSING_TRANSACTIONAL_DELETE: { color: '#84cc16', severity: 'HIGH' },
