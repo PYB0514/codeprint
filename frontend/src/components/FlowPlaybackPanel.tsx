@@ -28,6 +28,13 @@ export function FlowPlaybackPanel({
   callTree, playbackItems, playbackCursor, playbackPlaying, activePath, pendingBranchNodeId, playbackRootNodeId,
   rawNodes, setPlaybackCursor, setPlaybackPlaying, setPendingBranchNodeId, resetPlayback, selectBranchImmediate, confirmBranch, startPlayback,
 }: FlowPlaybackPanelProps) {
+  // 도메인 뱃지: 파일 경로 구조에서 그룹 키 추출 (그래프 범례·섹션과 동일한 getGroupKey 사용 — 특정 프로젝트 도메인명에 고정되지 않음)
+  // callTree와 무관해 조기 return보다 먼저 계산 — Hooks 규칙(모든 렌더에서 동일한 순서로 호출)을 지키기 위함
+  const commonPrefix = useMemo(
+    () => findCommonPrefix(rawNodes.filter((n) => n.type === 'FILE').map((n) => n.filePath)),
+    [rawNodes]
+  )
+
   if (!callTree) return null
 
   const cur = playbackCursor >= 0 ? playbackItems[playbackCursor] : null
@@ -37,11 +44,6 @@ export function FlowPlaybackPanel({
   const rootRaw = rawNodes.find((n) => n.id === callTree.nodeId)
   const flowTitle = rootRaw?.comment || rootRaw?.name || '흐름 재생'
 
-  // 도메인 뱃지: 파일 경로 구조에서 그룹 키 추출 (그래프 범례·섹션과 동일한 getGroupKey 사용 — 특정 프로젝트 도메인명에 고정되지 않음)
-  const commonPrefix = useMemo(
-    () => findCommonPrefix(rawNodes.filter((n) => n.type === 'FILE').map((n) => n.filePath)),
-    [rawNodes]
-  )
   const rootPath = rootRaw?.filePath ?? ''
   const rootGroupKey = rootPath ? getGroupKey(rootPath, commonPrefix) : null
   const domainLabel = rootGroupKey && rootGroupKey !== 'root' ? rootGroupKey.charAt(0).toUpperCase() + rootGroupKey.slice(1) : null

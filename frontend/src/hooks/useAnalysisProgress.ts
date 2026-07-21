@@ -1,5 +1,5 @@
 // 분석 진행률을 폴링으로 수신하는 훅 (2초 간격, 시각적 애니메이션 포함)
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import axios from 'axios'
 
 // analysisId가 있으면 2초 간격으로 폴링하여 진행률과 상태를 반환
@@ -11,7 +11,10 @@ export function useAnalysisProgress(analysisId: string | null, onDone: () => voi
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const animRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const onDoneRef = useRef(onDone)
-  onDoneRef.current = onDone
+  // 렌더 중 ref 쓰기는 concurrent 렌더링에서 불안전 — 커밋 직전(useLayoutEffect)으로 옮김
+  useLayoutEffect(() => {
+    onDoneRef.current = onDone
+  })
 
   // displayProgress를 target까지 부드럽게 증가
   const animateTo = (target: number) => {

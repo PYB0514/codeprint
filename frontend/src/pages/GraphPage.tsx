@@ -272,6 +272,13 @@ function GraphPageInner() {
     [rawNodes, commonPrefix]
   )
 
+  // 도메인 색상 맵 — 발견된 도메인 이름으로 동적 생성
+  // handleNodeClick(아래쪽 useCallback)보다 먼저 선언 — Hooks 규칙(선언 전 참조 금지) 위반 방지로 여기로 이동
+  const domainColorMap = useMemo(() => {
+    const domains = rawNodes.map(n => extractDomain(n.filePath, commonPrefix, knownDomains))
+    return buildDomainColorMap(domains)
+  }, [rawNodes, commonPrefix, knownDomains])
+
   const [hiddenNodeTypes, setHiddenNodeTypes] = useState<Set<string>>(new Set())
   const [nodeSearchQuery, setNodeSearchQuery] = useState('')
   const [counts, setCounts] = useState({ files: 0, funcs: 0, edges: 0 })
@@ -1675,12 +1682,6 @@ function GraphPageInner() {
         })
     }
   }, [rawNodes, commonPrefix, knownDomains, layoutPreset])
-
-  // 도메인 색상 맵 — 발견된 도메인 이름으로 동적 생성
-  const domainColorMap = useMemo(() => {
-    const domains = rawNodes.map(n => extractDomain(n.filePath, commonPrefix, knownDomains))
-    return buildDomainColorMap(domains)
-  }, [rawNodes, commonPrefix, knownDomains])
 
   // 레이어 섹션 키+라벨+색상 목록 — 고정 DDD 8종 목록 대신 실제 렌더된 섹션에서 동적으로 파생(비DDD 프로젝트도 커버)
   const layerSections = useMemo(() =>
@@ -3272,7 +3273,7 @@ function FuncChainRow({ entry, direction, labelMode, onNav, onNodeClick }: {
       <span className="text-amber-500 flex-shrink-0">{direction === 'caller' ? '←' : '→'}</span>
       <div className="flex flex-col min-w-0 flex-1">
         <span className="text-emerald-400 font-mono cursor-pointer hover:text-emerald-200 truncate"
-          onClick={() => { onNodeClick ? onNodeClick(entry.funcNodeId) : onNav(entry.funcNodeId) }}
+          onClick={() => { if (onNodeClick) onNodeClick(entry.funcNodeId); else onNav(entry.funcNodeId) }}
         >{funcLabel}</span>
         <span className="text-gray-600 font-mono text-[10px] cursor-pointer hover:text-gray-400 truncate"
           onClick={() => onNav(entry.fileNodeId)}
