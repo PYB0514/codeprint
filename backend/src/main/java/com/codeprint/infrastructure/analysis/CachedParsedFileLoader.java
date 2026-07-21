@@ -4,6 +4,7 @@ package com.codeprint.infrastructure.analysis;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,6 +42,9 @@ public class CachedParsedFileLoader {
     private final ParsedFileCachePort cache;
 
     // DB 접근(findAll/saveAll/evict)은 메인 스레드에서만, CPU 작업(해시·파싱)만 병렬 — JPA 세션이 스레드 바운드라 분리 필수.
+    // 캐시 조회+배치 저장을 자체 트랜잭션으로 감쌈 — 호출자(AnalysisRunner/PrReviewService)가 git clone 등
+    // 네트워크 구간까지 같은 트랜잭션에 묶지 않도록 분리(G-6 HikariCP 커넥션 만료 원인, GATE_GAPS.md 참조).
+    @Transactional
     public List<ParsedFile> load(UUID projectId, Path repoDir, List<Path> sourceFiles) {
         // 1) 병렬 digest — 파일 읽기 + 상대경로 + 내용해시 (DB 없음)
         List<Digest> digests = sourceFiles.parallelStream()

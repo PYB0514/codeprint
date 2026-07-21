@@ -8,6 +8,7 @@ import com.codeprint.infrastructure.adapter.FeaturedProjectProvisioningAdapter;
 import com.codeprint.shared.topology.ServiceBoundary;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -60,11 +61,15 @@ public class GraphBuilder {
     );
 
     // 분석된 파일 목록으로 그래프와 노드/엣지를 생성하여 저장
+    @Transactional
     public Graph build(UUID projectId, UUID analysisId, List<ParsedFile> parsedFiles) {
         return build(projectId, analysisId, parsedFiles, parsedFiles.size());
     }
 
     // 전체 대상 파일 수 포함 빌드 — MAX_FILES 절단 시 totalFileCount가 분석 파일 수보다 큼
+    // 노드/엣지 수천 건을 단일 트랜잭션으로 묶어 배치·원자성 보장 — 호출자(AnalysisRunner/PrReviewService)는
+    // git clone 등 네트워크·IO 구간을 트랜잭션 밖에 두기 위해 더 이상 이 메서드를 감싸는 @Transactional을 갖지 않는다.
+    @Transactional
     public Graph build(UUID projectId, UUID analysisId, List<ParsedFile> parsedFiles, int totalFileCount) {
         Graph graph = Graph.create(projectId, analysisId);
         graph.recordFileCounts(parsedFiles.size(), totalFileCount);
