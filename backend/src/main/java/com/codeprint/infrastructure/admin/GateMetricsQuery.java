@@ -32,13 +32,15 @@ public class GateMetricsQuery {
                 countSince("SELECT count(DISTINCT project_id) FROM analyses WHERE created_at >= :since", last7d),
                 countSince("SELECT count(*) FROM posts WHERE created_at >= :since", last7d),
                 count("SELECT count(*) FROM gate_check_logs WHERE state = 'failure'"),
-                highWarningPrecisionPct(last30d)
+                fpReportRatePct(last30d)
         );
     }
 
     // HIGH 경고 발생(gate_check_logs.high_count 합계) 대비 오탐 미신고 비율 — 근사치(발생은 PR 게이트 시점 누적,
     // 신고는 fingerprint 단위 고유 신고라 단위가 완전히 같진 않음). HIGH 발생 0건이면 100(분모 0 방지).
-    private int highWarningPrecisionPct(Timestamp since) {
+    // 주의: 이 값은 "사용자 신고" 기반이라 벤치(oracle) 기준 정밀도가 아니다 — fp_reports가 0건인 지금은
+    // 항상 100에 수렴해 거짓 안심을 준다. 벤치 기반 precision 연결은 별도 백로그(decisions/DECISIONS_BACKEND.md 참조).
+    private int fpReportRatePct(Timestamp since) {
         Number highOccurrences = (Number) em.createNativeQuery(
                 "SELECT coalesce(sum(high_count), 0) FROM gate_check_logs WHERE created_at >= :since")
                 .setParameter("since", since).getSingleResult();
