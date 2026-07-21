@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -30,12 +29,15 @@ public class AnalysisRunner {
     private final AnalysisProgressHandler progressHandler;
 
     // 레포 클론 → 파일 수집 → 정적 분석 → 그래프 빌드를 비동기로 실행
+    // 메서드 전체를 트랜잭션으로 감싸지 않는다 — git clone·GitHub API 왕복(수십초~수 분)까지 DB 커넥션을 물고
+    // 있으면 HikariCP 유휴 커넥션이 그 사이 만료돼 EOFException으로 죽는다(GATE_GAPS.md [G-6]). DB 작업이
+    // 필요한 구간(캐시 조회+배치 저장은 CachedParsedFileLoader.load, 그래프 저장은 GraphBuilder.build)만
+    // 각자 자체 @Transactional로 좁게 감싸고, 나머지 repository.save() 호출은 Spring Data 기본 자체 트랜잭션에 맡긴다.
     @Async
-    @Transactional
     public void run(UUID analysisId, UUID projectId, String githubRepoUrl, String branch, String githubAccessToken) {
         Path repoDir = null;
         try {
-            // 새 트랜잭션에서 조회 — outer 트랜잭션 커밋 후 확실히 존재
+            // 매 재시도가 각자 자체 트랜잭션(REQUIRED 기본) — outer 트랜잭션 커밋 후 확실히 존재
             AnalysisResult analysis = waitForAnalysis(analysisId);
 
             analysis.start();

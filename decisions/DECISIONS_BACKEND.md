@@ -2215,3 +2215,22 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결정.** 프로덕션 코드(`S3Config`)는 건드리지 않음 — 실제 배포 환경(Railway)엔 항상 진짜 AWS 자격증명이 있어 이건 "테스트 환경 전용" 문제다. `CodeprintApplicationContextTest`의 `@TestPropertySource`에 더미 값(`aws.s3.access-key=test`, `aws.s3.secret-key=test`) 추가 — 기존 datasource 오버라이드와 동일한 패턴, S3에 실제로 접속하지 않는 테스트라 더미 값으로 충분.
 
 **검증.** `application-local.yml`을 임시로 치운 상태(=CI와 동일 조건)에서 스모크 테스트 green 확인 후 원복, 원복 후에도 전체 백엔드 테스트 스위트 green(41초, 신규 실패 0건) 재확인.
+
+## G-6(HikariCP EOFException) 근본원인 후보 — 분석 파이프라인 트랜잭션 경계 축소 (2026-07-21, codeprint_142)
+
+**배경.** `contexts/Context141.md`의 P2-Δ("`PrReviewService.review`가 `@Transactional`이라 clone+파싱+API 왕복 전체가 DB 커넥션을 수 분 점유, G-6 실측 시간대와 일치")를 조사하며 코드를 직접 확인 — 실제로는 `PrReviewService.review()`뿐 아니라 **webhook 트리거 메인 분석 경로인 `AnalysisRunner.run()`에도 완전히 동일한 패턴**이 있었다(Context141엔 미기재, 이번에 발견). 둘 다 `@Transactional` 메서드 안에서 `repoCloner.clone()`(git clone, 최대 120초)·GitHub API 왕복(네트워크)·`graphBuilder.build()`(노드+엣지 최대 12,000여 건 INSERT)까지 전부 하나의 DB 커넥션으로 묶고 있었다 — G-6 실측(유휴 커넥션이 3~3.5분 만에 Railway 쪽에서 먼저 끊김)과 이 구간 길이가 정확히 일치.
+
+**결정.** `PrReviewService.review()`·`AnalysisRunner.run()` 양쪽에서 최상위 `@Transactional` 제거. 대신 실제 배치 DB 작업이 있는 두 지점에 `@Transactional`을 새로 옮겨 좁게 감쌌다.
+- `CachedParsedFileLoader.load()` — 캐시 조회(`findAll`)+배치 저장(`saveAll`)만 감쌈. G-6이 실측으로 지목한 "`parsed_file_cache` 배치 INSERT가 EOFException" 지점이 바로 여기.
+- `GraphBuilder.build()`(4-arg, 실제 구현체 — 2/3-arg 오버로드에도 함께 추가해 self-invocation으로 프록시를 우회하는 함정 방지) — 노드/엣지 개별 `save()` 호출이 배치 없이 그대로 JPA에 위임되는 구조(`GraphRepositoryImpl` 확인)라, 감싸는 트랜잭션이 없으면 건별 auto-commit(느려짐)+실패 시 반쪽 그래프 잔존(원자성 회귀) 위험이 있어 필수로 판단.
+- 나머지 `analysisRepository.save()`/`gateCheckLogRepository.save()` 개별 호출은 그대로 두었다 — Spring Data `SimpleJpaRepository`의 메서드별 기본 `@Transactional`에 맡겨도 문제없음(각각 독립된 단건 저장).
+
+**왜 안전한지 확인.** 제거되는 외부 트랜잭션에 의존하던 다운스트림이 더 있는지 코드로 직접 확인 — `GraphQueryService`(class-level `@Transactional(readOnly=true)`)·`WarningSuppressionService`(메서드별 `@Transactional`)·`AnalysisFacade`(Spring Data 위임)가 전부 이미 자체 트랜잭션 경계를 갖고 있어 외부 트랜잭션 유무와 무관하게 정상 동작함을 확인. `waitForAnalysis`의 재시도 루프(`analysisRepository.findById` polling)도 각 시도가 독립 트랜잭션이 되는 것이라 기존 의도("outer 트랜잭션 커밋 대기")와 동일하게 동작.
+
+**탈락한 대안.** ①`REQUIRES_NEW` propagation으로 graphBuilder 호출만 새 트랜잭션 강제 — 굳이 propagation을 쓸 이유가 없음, 애초에 외부 트랜잭션 자체를 없애는 게 목표라 단순 `@Transactional` 신설로 충분. ②git clone을 트랜잭션 밖에서 먼저 수행하고 나머지만 감싸는 부분 리팩토링(메서드 분리 없이 트랜잭션 프록시 경계만 조정) — Spring AOP 프록시는 클래스 단위 self-invocation을 가로채지 못해 같은 클래스 안에서 트랜잭션 경계를 세분화하려면 어차피 별도 빈(`CachedParsedFileLoader`/`GraphBuilder`)으로 위임해야 하는데, 마침 그 두 클래스가 이미 별도 빈으로 분리돼 있어 그쪽에 옮기는 게 가장 단순.
+
+**범위.** 사용자와 논의 후 PrReviewService뿐 아니라 AnalysisRunner까지 함께 수정(같은 패턴이라 한 번에 고치는 게 일관적, AnalysisRunner가 호출 빈도가 더 높아 G-6 실제 원인일 가능성도 더 큼).
+
+**검증.** `compileJava` clean. 변경 대상 4개 클래스 관련 전체 단위 테스트(`PrReviewServiceTest`·`PrReviewRunnerTest`·`AnalysisApplicationServiceTest`·`CachedParsedFileLoaderTest`) green. `ParsedFileCacheIntegrationTest`·`CodeprintApplicationContextTest`(둘 다 실 Postgres) green. `preview_start`로 로컬 백엔드 실제 재기동 → `/actuator/health` UP 확인(트랜잭션 경계 변경은 순환 빈 참조 트리거는 아니지만 핵심 분석 파이프라인 동작 방식 변경이라 규칙4 취지에 맞춰 재기동 확인). `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변 — 전부 함수 호출 그래프 관련 기존 경고라 어노테이션만 이동한 이번 변경과 무관.
+
+**한계·다음.** 실제 프로덕션 트래픽에서 git clone+네트워크 구간 동안 커넥션을 물지 않게 됐는지는 배포 후 `railway logs`로 G-6("Failed to validate connection") 재발 여부를 관찰해야 확정 가능 — 1회 조사·코드 추론 기반 수정이라 GATE_GAPS.md [G-6]은 "완료"가 아니라 "근본원인 후보 조치"로 기록해두고 다음 재발/무재발로 재평가한다.

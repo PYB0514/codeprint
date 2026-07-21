@@ -16,7 +16,6 @@ import com.codeprint.infrastructure.github.GitHubApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -44,7 +43,10 @@ public class PrReviewService {
     static final String REVIEW_MARKER = "<!-- codeprint-pr-review -->";
 
     // PR 리뷰 실행 — 소유권 검증 → PR head 분석 → 경고 감지 → PR 코멘트 게시 (LOW 제외)
-    @Transactional
+    // 메서드 전체를 트랜잭션으로 감싸지 않는다 — git clone·GitHub API 왕복(수십초~수 분)까지 DB 커넥션을 물고
+    // 있으면 HikariCP 유휴 커넥션이 그 사이 만료돼 EOFException으로 죽는다(GATE_GAPS.md [G-6]). DB 작업이
+    // 필요한 구간(캐시 조회+배치 저장은 CachedParsedFileLoader.load, 그래프 저장은 GraphBuilder.build)만
+    // 각자 자체 @Transactional로 좁게 감싸고, 나머지 repository.save() 호출은 Spring Data 기본 자체 트랜잭션에 맡긴다.
     public Map<String, Object> review(UUID projectId, int prNumber, UUID userId, String githubToken) {
         ProjectGateSettings gateSettings = analysisFacade.getGateSettings(projectId);
         String repoUrl = analysisFacade.resolveOwnedRepoUrl(projectId, userId);
