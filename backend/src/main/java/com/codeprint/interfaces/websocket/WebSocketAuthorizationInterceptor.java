@@ -25,9 +25,10 @@ public class WebSocketAuthorizationInterceptor implements ChannelInterceptor {
     private final CollaborationApplicationService collaborationApplicationService;
 
     // GraphFacade·CollaborationApplicationService 둘 다 (직접 또는
-    // CollaborationGraphAccessAdapter 경유로) AnalysisReadAdapter→AnalysisApplicationService→
-    // AnalysisRunner→AnalysisProgressHandler→SimpMessagingTemplate→WebSocketConfig로
-    // 되돌아오는 순환을 만들어 둘 다 지연 주입으로 끊는다(실제 호출 시점에만 해소).
+    // CollaborationGraphAccessAdapter 경유로) 이 클래스 자신을 등록하는 WebSocketConfig까지
+    // 되돌아오는 순환 경로가 있어 둘 다 지연 주입으로 끊는다(실제 호출 시점에만 해소).
+    // (2026-07-22: 순환 경로 일부였던 AnalysisRunner→AnalysisProgressHandler 링크는 dead
+    // WebSocket push 제거로 사라졌으나, @Lazy 자체는 안전하므로 그대로 유지 — GATE_GAPS.md [G-8] 참조)
     public WebSocketAuthorizationInterceptor(@Lazy GraphFacade graphFacade,
                                               @Lazy CollaborationApplicationService collaborationApplicationService) {
         this.graphFacade = graphFacade;
