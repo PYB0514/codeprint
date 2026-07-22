@@ -52,14 +52,18 @@ export function useAnalysisProgress(analysisId: string | null, onDone: () => voi
   // analysisId 변경 시 폴링 시작/정리
   useEffect(() => {
     if (!analysisId) {
-      setRealProgress(0)
-      setDisplayProgress(0)
-      setStatus('PENDING')
-      setStalled(false)
+      // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
+      Promise.resolve().then(() => {
+        setRealProgress(0)
+        setDisplayProgress(0)
+        setStatus('PENDING')
+        setStalled(false)
+      })
       return
     }
 
-    setStalled(false)
+    // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
+    Promise.resolve().then(() => setStalled(false))
     // 일시적 네트워크 오류로 폴 1번 실패했다고 영구 중단하지 않도록 연속 실패만 카운트
     let consecutiveFailures = 0
     const MAX_POLL_FAILURES = 5

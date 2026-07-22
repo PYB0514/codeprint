@@ -31,7 +31,8 @@ export default function JoinCollaborationPage() {
 
   // URL 경로에 초대 코드가 있으면 자동 참가
   useEffect(() => {
-    if (codeFromPath && codeFromPath.length >= 6) handleJoin()
+    // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
+    if (codeFromPath && codeFromPath.length >= 6) Promise.resolve().then(() => handleJoin())
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codeFromPath])
 

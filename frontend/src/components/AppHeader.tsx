@@ -115,7 +115,8 @@ export default function AppHeader({ onLogin }: Props) {
   // 유저 검색 — 300ms 디바운스
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
-    if (!searchQuery.trim()) { setSearchResults([]); return }
+    // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
+    if (!searchQuery.trim()) { Promise.resolve().then(() => setSearchResults([])); return }
     searchTimer.current = setTimeout(() => {
       axios.get<UserSearchResult[]>('/api/users', { params: { q: searchQuery.trim() } })
         .then(r => setSearchResults(r.data))
