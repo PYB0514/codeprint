@@ -1113,3 +1113,16 @@ const fetchGraph = useCallback(async () => {
 **검증.** `npx tsc -b` clean, `npx eslint`(수정 대상 10개 파일)로 신규 경고 0건. `node -e "JSON.parse(...)"`로 ko/en `workspace.json` 양쪽 문법 검증 통과. Preview로 랜딩 페이지 로드 확인(콘솔 에러 없음) — 단 이번에 번역한 10개 컴포넌트 자체는 전부 인증 후 화면(프로젝트 생성 모달·협업 패널·팀채팅·그래프 노드 등)이라 실제 로그인 없이는 브라우저에서 직접 렌더링 확인이 불가능해 이번 세션에서 시각적 확인은 못 함 — tsc/eslint/JSON 검증으로 갈음(기존 PR #644 "한계·다음"과 동일한 제약).
 
 **한계·다음.** `ArchitectureIntentPanel`은 다음 배치로 남김. i18n 전체 완료 여부는 위 감사 스캔 자체가 스테일이었을 가능성(false positive 2건 발견)을 고려해, 다음 배치 착수 전 `grep -rL useTranslation` 재스캔으로 원 13개 목록 밖에 놓친 컴포넌트가 없는지도 한 번 더 확인할 것.
+
+## i18n 미번역 컴포넌트 배치 처리 2차 — ArchitectureIntentPanel 완료, 13/13 전부 처리 (2026-07-22, codeprint_143)
+
+**배경.** 1차 배치에서 크기·복잡도를 이유로 남겨뒀던 `ArchitectureIntentPanel`(476줄) 처리. 이걸로 R2(#9) 목록 13개 전부 소진(10개 번역+2개는 번역 대상 아님 확인+이번 1개).
+
+**작업.** `useTranslation('workspace')` + `workspace.json`(ko/en) `architectureIntentPanel` 섹션 신설, 총 30여 개 키. 몇 가지 이 컴포넌트만의 특이점:
+- **모듈 레벨 상수 → i18n 키로 전환**: `LLM_PROMPT_TEMPLATE`(사용자가 복사해 ChatGPT/Claude 등에 붙여넣는 긴 프롬프트 텍스트)이 컴포넌트 바깥의 모듈 상수였던 것을 `t('architectureIntentPanel.llmPromptTemplate')` 키로 전환 — 렌더 시점에 훅으로 값을 가져오도록 `copyPrompt` 콜백 안에서 호출.
+- **컴포넌트 바깥 순수 함수의 번역**: `parseImportedJson`(LLM JSON 붙여넣기 검증)은 컴포넌트 바깥의 standalone 함수라 `useTranslation` 훅을 못 씀 — 기존 `WarningPanel.tsx`가 이미 쓰던 패턴(`import i18n from '../i18n'` + `i18n.t(key, { ns: 'workspace' })`)을 그대로 재사용해 8개 검증 에러 메시지 전부 번역.
+- **부분 스타일 보존**: 원문 footer 문단이 `INTENT_DRIFT`만 amber 색상(`text-amber-400`)으로 강조하는 `<span>`을 포함하고 있었음 — 이걸 하나의 번역 키로 뭉치면 스타일이 사라지므로, `footerBefore`/`footerAfter` 두 키로 쪼개고 그 사이에 원래 스타일의 `<span>INTENT_DRIFT</span>`를 그대로 유지(INTENT_DRIFT 자체는 규칙 식별자라 번역 대상 아님).
+
+**검증.** `npx tsc -b` clean. `npx eslint` — 사전 존재하던 경고 2건(`react-hooks/set-state-in-effect`·`react-hooks/exhaustive-deps` 누락 `ignore`)만 그대로, `git stash`로 수정 전 상태와 비교해 정확히 동일한 2건임을 확인(내 변경으로 신규 발생한 경고 0건). `node -e "JSON.parse(...)"`로 ko/en 양쪽 JSON 문법 검증 통과. Preview로 랜딩 페이지 로드 확인(콘솔 에러 없음, 새 워크스페이스 키가 번들링을 깨뜨리지 않음 확인) — 컴포넌트 자체는 인증 후 화면이라 로그인 없이 시각 확인은 이번에도 못 함(1차 배치와 동일한 제약).
+
+**한계·다음.** R2(#9) i18n 미번역 감사 항목은 이걸로 완전히 종료. PROGRESS.md 백로그에서 항목 삭제.
