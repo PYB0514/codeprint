@@ -3,7 +3,7 @@ import React from 'react'
 
 import type { Node, Edge, AriaLabelConfig } from '@xyflow/react'
 import { MarkerType } from '@xyflow/react'
-import { WARNING_META, getWarningLabel, getWarningDesc } from '../components/WarningPanel'
+import { WARNING_META, getWarningLabel, getWarningDesc } from './warningMeta'
 import i18n from '../i18n'
 
 // DDD 레이어별 색상 팔레트 — 파일/함수 노드 색상 구분용 (계층형·도메인 공통 적용)

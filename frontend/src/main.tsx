@@ -5,7 +5,7 @@ import axios from 'axios'
 import './index.css'
 import './i18n'
 import App from './App.tsx'
-import { startSentryIfConsented } from './components/CookieBanner'
+import { startSentryIfConsented } from './utils/cookieConsent'
 
 // 이전 방문에서 이미 쿠키 동의(accept)한 경우에만 Sentry 활성화 — 미결정/거부 상태로는 초기화하지 않는다
 startSentryIfConsented()
