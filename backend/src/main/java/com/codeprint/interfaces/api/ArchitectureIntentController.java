@@ -35,7 +35,7 @@ public class ArchitectureIntentController {
     public ResponseEntity<?> getIntent(
             @PathVariable UUID projectId,
             @AuthenticationPrincipal User user) {
-        graphFacade.verifyProjectOwnership(projectId, user.getId());
+        graphFacade.verifyProjectAccess(projectId, user.getId());
         return intentService.findByProjectId(projectId)
                 .<ResponseEntity<?>>map(intent -> ResponseEntity.ok(toResponse(intent)))
                 .orElse(ResponseEntity.notFound().build());
@@ -47,7 +47,7 @@ public class ArchitectureIntentController {
             @PathVariable UUID projectId,
             @Valid @RequestBody IntentRequest request,
             @AuthenticationPrincipal User user) {
-        graphFacade.verifyProjectOwnership(projectId, user.getId());
+        graphFacade.verifyProjectAccess(projectId, user.getId());
         for (RuleDto r : request.rules()) {
             if (r.edgeType() != null && !r.edgeType().isBlank()
                     && !r.edgeType().equals("IMPORT") && !r.edgeType().equals("FUNCTION_CALL")) {
@@ -84,7 +84,7 @@ public class ArchitectureIntentController {
     public ResponseEntity<List<Map<String, Object>>> getAuditLog(
             @PathVariable UUID projectId,
             @AuthenticationPrincipal User user) {
-        graphFacade.verifyProjectOwnership(projectId, user.getId());
+        graphFacade.verifyProjectAccess(projectId, user.getId());
         List<Map<String, Object>> entries = intentService.findAuditLog(projectId).stream()
                 .map(e -> Map.<String, Object>of(
                         "username", e.getUsername(),
@@ -115,7 +115,7 @@ public class ArchitectureIntentController {
     public ResponseEntity<Void> deleteIntent(
             @PathVariable UUID projectId,
             @AuthenticationPrincipal User user) {
-        graphFacade.verifyProjectOwnership(projectId, user.getId());
+        graphFacade.verifyProjectAccess(projectId, user.getId());
         intentService.delete(projectId);
         return ResponseEntity.ok().build();
     }
