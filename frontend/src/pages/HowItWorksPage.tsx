@@ -1,7 +1,7 @@
 // 분석 엔진 동작 원리(그래프 생성 + 경고 감지)와 한계를 사용자에게 설명하는 페이지
 import { useTranslation } from 'react-i18next'
 import AppHeader from '../components/AppHeader'
-import { WARNING_META } from '../components/WarningPanel'
+import { WARNING_META } from '../utils/warningMeta'
 
 const SEVERITY_STYLE: Record<string, { label: string; cls: string }> = {
   HIGH:   { label: 'HIGH',   cls: 'bg-red-900/40 text-red-400' },

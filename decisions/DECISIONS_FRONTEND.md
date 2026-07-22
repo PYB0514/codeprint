@@ -1168,3 +1168,24 @@ const fetchGraph = useCallback(async () => {
 - 나머지(`ArchitectureIntentPanel`·`ProjectCard`·`useAnalysisProgress`·`useFlowPlayback`·`JoinCollaborationPage`·`TeamsPage`)는 인증 후 화면이라 로그인 없이 브라우저 실측 불가 — tsc/eslint 통과 + 코드 리뷰(로직 변경 없는 순수 타이밍 조정임을 diff로 확인)로 갈음.
 
 **한계·다음.** 남은 4건은 두 갈래: ① `GraphPage.tsx` 5건(2건은 "Cannot access refs during render"로 이번 패턴과 다른 룰, 3건은 setState-in-effect) — 최고위험 파일이라 별도 세션에서 실 로그인 검증 동반해 신중하게 ② `react-refresh/only-export-components` 8건(`CookieBanner`·`OnboardingTour`·`WarningPanel`·`ChangelogPage`) — 컴포넌트 파일에서 상수/함수를 분리하려면 새 파일이 필요해 CLAUDE.md 규칙상 사용자 허락 선행 필요, 이번 세션에서 미착수.
+
+## ESLint `react-refresh/only-export-components` 8건 — 신규 유틸 파일 4개로 상수/함수 분리 (사용자 승인 후 진행, 2026-07-23, codeprint_143)
+
+**배경.** 위 항목에서 남겨둔 마지막 갈래. 사용자에게 "새 파일 4개 만들어서 진행해도 될까?"(CLAUDE.md "새 파일 생성 전 반드시 허락받아라") 확인 후 승인받아 진행.
+
+**분리 내역 — 컴포넌트 파일 4개 → 유틸/데이터 파일 4개 신설.**
+- `CookieBanner.tsx` → `utils/cookieConsent.ts`(`hasCookieConsent`·`startSentryIfConsented`·`COOKIE_CONSENT_STORAGE_KEY`) — 소비처 `main.tsx` 1곳 import 경로 수정.
+- `OnboardingTour.tsx` → `utils/onboardingTour.ts`(`GRAPH_TOUR_STORAGE_KEY`·`getGraphTourSteps`·`isTourDone`) — 소비처 `GraphPage.tsx`·`GraphViewerPage.tsx` 2곳 수정.
+- `WarningPanel.tsx` → `utils/warningMeta.ts`(`WARNING_META`·`getWarningLabel`·`getWarningDesc`) — 소비처 `DogfoodingPage.tsx`·`HowItWorksPage.tsx`·`utils/graphLayout.ts` 3곳 수정(마지막 건은 util→component 역방향 import이던 것이 util→util로 오히려 더 자연스러워짐). `WarningPanel.tsx` 자신은 `WARNING_META`만 실제로 쓰고 있어(`getWarningLabel`/`getWarningDesc`는 export만 하고 내부 미사용) import를 `WARNING_META` 하나로 축소, 이제 안 쓰는 `i18n` import도 함께 제거.
+- `ChangelogPage.tsx`(3003줄) → `data/releases.ts`(`Release` 인터페이스 + `RELEASES` 배열, 2920줄 순수 데이터) — 압도적으로 큰 분리 대상이라 Edit 도구 대신 `sed`로 정확한 라인 범위(4~2931행)를 추출해 새 파일로 옮기고 원본은 76줄로 축소. 소비처 `EvolutionPage.tsx` 1곳 import 경로를 `./ChangelogPage`→`../data/releases`로 수정(원래도 페이지 파일을 데이터 소스로 import하던 어색한 구조였음, 분리로 자연스러워짐).
+
+**시행착오.** 문자열 치환(`replace_all`) 중 `STORAGE_KEY`→`COOKIE_CONSENT_STORAGE_KEY` 치환이 이미 올바르게 작성된 import문의 `COOKIE_CONSENT_STORAGE_KEY`에도 부분 매칭돼 `COOKIE_CONSENT_COOKIE_CONSENT_STORAGE_KEY`로 이중 치환되는 실수 발생 — tsc가 즉시 잡아냄(`has no exported member`), import 줄만 수동으로 재수정.
+
+**검증.** `npx tsc -b` clean. 전체 ESLint 35→27(13→5건, `react-refresh` 8건 전부 해소 — 남은 5건은 `GraphPage.tsx`뿐). Preview(프론트만, 대상 페이지 전부 비로그인 공개 페이지)로 4개 분리 전부 실제 브라우저 검증:
+- **CookieBanner** — localStorage 클리어 후 리로드→배너 노출 확인, "동의" 클릭→`localStorage.getItem('cookie-consent')==='accepted'`로 `startSentryIfConsented()` 정상 호출 확인.
+- **ChangelogPage** — `/changelog` 방문, 새 `data/releases.ts`의 2920줄 데이터가 그대로 렌더링됨을 페이지 텍스트로 확인(v0.147.6부터 순서대로).
+- **EvolutionPage** — `/evolution` 방문, `RELEASES` 재사용해 마일스톤 목록 정상 렌더링 확인.
+- **HowItWorksPage** — `/how-it-works` 방문, `WARNING_META` 기반 경고 타입·severity 카드 정상 렌더링 확인.
+- 전부 콘솔 에러 0건. `OnboardingTour`·`WarningPanel`(그래프 화면 본체)은 인증 필요 화면이라 이번엔 로그인 없이 실측 불가 — 코드 리뷰(순수 위치 이동, 로직 변경 없음)로 갈음.
+
+**한계·다음.** ESLint 잔여는 이제 `GraphPage.tsx` 5건뿐 — 최고위험 파일이라 다음 세션에서 실 로그인 브라우저 검증 동반해 신중하게 진행할 것.

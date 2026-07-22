@@ -1,6 +1,6 @@
 // 주요 기능이 버전을 거쳐 어떻게 자랐는지를 서사+마일스톤 타임라인으로 보여주는 페이지
 import AppHeader from '../components/AppHeader'
-import { RELEASES, type Release } from './ChangelogPage'
+import { RELEASES, type Release } from '../data/releases'
 
 interface Arc {
   id: string

@@ -1,6 +1,6 @@
 // Codeprint가 자기 코드의 구조 결함을 스스로 적발한 사례(도그푸딩)를 보여주는 페이지
 import AppHeader from '../components/AppHeader'
-import { WARNING_META, getWarningLabel } from '../components/WarningPanel'
+import { WARNING_META, getWarningLabel } from '../utils/warningMeta'
 
 const SEVERITY_STYLE: Record<string, string> = {
   HIGH: 'bg-red-900/40 text-red-400',
