@@ -631,3 +631,22 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 > ⚠️ **해소(2026-07-19, codeprint_140)** — 새 세션에서 Docker DB 기동 후 `preview_start({name:"backend"})` 첫 시도에 12.295초 만에 정상 기동(`Started CodeprintApplication`, `/actuator/health` → `UP`). 이건 `main` 브랜치 기준이었고, 이후 PR #623(`fix/websocket-subscription-authorization`) 브랜치로 전환하자 동일 증상이 6회 재현됨.
 >
 > ⚠️ **재정정(2026-07-19~20, codeprint_140)** — 위 "환경 미스터리"는 틀렸다. **실제로는 PR #623 자체의 순환 빈 참조 버그**였음이 확인됨(사용자가 터미널에서 `.\gradlew.bat bootrun` 직접 실행 → 완전한 스택트레이스 확보). `WebSocketAuthorizationInterceptor`가 `GraphFacade`·`CollaborationApplicationService`를 직접 주입받은 게 `AnalysisApplicationService`→`AnalysisRunner`→`AnalysisProgressHandler`→`WebSocketConfig`→자기 자신으로 되돌아오는 순환 참조 2건을 만들어 `ApplicationContext` 리프레시가 매번 결정론적으로 실패하고 있었다. `preview_start`의 `preview_logs`가 매번 정확히 이 예외가 찍히는 시점 근처에서 `serverId not found`(stale)로 끊겨 예외 텍스트를 한 번도 못 봐서(이 도구 자체의 결함은 별개로 남아있음, 재발 시 참고) "환경 문제"로 오인했던 것 — 실제로는 100% 재현 가능한 코드 버그였다. `@Lazy` 주입으로 순환을 끊어 PR #623에서 함께 수정·머지 완료(상세 `DECISIONS_BACKEND.md` "P1 보안 — WebSocket 구독 인가..." 정정 항목, `GATE_GAPS.md` [G-8], `ERROR_TRACKER.md` BE-18·P-3). **교훈: 재현되지만 원인 불명인 로컬 실패를 도구/환경 탓으로 성급히 결론짓지 말 것 — 다른 실행 경로(사용자 터미널 등)로 완전한 출력부터 확보.**
+
+## 프로덕션 Postgres 볼륨 풀로 13.5시간+ 다운 — 리사이즈로 복구 (2026-07-22, codeprint_143)
+
+**문제.** PR #647(i18n 배치 2차) 게이트 재트리거 중 프로덕션 자체가 완전히 죽어있는 걸 발견 — `railway status`로 `codeprint`·`Postgres` 둘 다 Crashed 확인. `railway logs --service Postgres` 확인 결과 WAL 재생(redo) 도중 `could not write to file "pg_wal/xlogtemp.50": No space left on device`로 매번 동일 지점에서 크래시 반복, 마지막 로그 시각이 2026-07-21 21:59:22 UTC였고 발견 시점이 2026-07-22 11:25 UTC라 **최소 13.5시간 다운 상태**였던 것으로 추정(Serverless 유휴 상태라 아무도 접속을 안 해 아무도 몰랐던 것으로 보임). `railway volume list --json`으로 확인한 `currentSizeMB: 484.67`/`sizeMB: 500` — PROGRESS.md `🕐 대기 중`에 있던 "Postgres 볼륨 90.6% — 리사이즈 여부 사용자 판단 대기" 항목이 실제로 터진 것.
+
+**원인.** 볼륨 500MB 상한에 실제 사용량이 근접(96.9%)한 채로 방치돼 있다가, 어느 시점(정확한 트리거는 불명 — 다이제스트 스케줄러의 정기 작업이거나 자연 증가분 누적으로 추정)에 완전히 가득 차 WAL 재생 자체가 불가능해짐. Postgres는 `restartPolicyMaxRetries: 10`(`ON_FAILURE`)이라 10회 재시도 후 Railway가 자동 재시도를 포기하고 배포를 `REMOVED` 상태로 내려버려, 디스크 문제가 해결돼도 자동으로 되살아나지 못하는 이중 실패 상태에 빠져 있었다.
+
+**해결 — 사용자와 함께 실시간 대응.**
+1. **볼륨 리사이즈**: 사용자가 "돈 내야 하는 거 아니냐"고 우려했으나, Railway 사용량 내역 확인 결과 Volume 비용이 월 $0.0386(전체 $5.17 중)로 사실상 무시할 수준(무거운 건 Memory)임을 확인시켜드리고, Hobby 플랜에 "최대 100GB Shared Disk 포함"이라는 문구까지 확인해 리사이즈를 권장. 대시보드의 **"Live Resize Volume (beta)"** 기능(확인 문구 타이핑 필요)으로 500MB→**5GB**로 리사이즈 — `currentSizeMB`는 그대로(484MB), `sizeMB`만 5000으로 늘어 여유공간 확보(사용량 기반 과금이라 실제 비용 변화 없음).
+2. **배포 자체 복구**: 리사이즈 후에도 Postgres가 자동으로 안 살아남 — `railway restart`/`railway redeploy` CLI 둘 다 "No deployment found for service"(두 과거 배포 모두 `REMOVED` 상태라 CLI가 재시작 대상을 못 찾음). `railway up`은 이 저장소 코드를 새로 빌드해 배포하는 명령이라 이미지 기반 서비스(Postgres 템플릿, `ghcr.io/railwayapp-templates/postgres-ssl:18`)에 잘못 쓰면 이미지 자체를 망가뜨릴 위험이 있어 시도하지 않음 — **대신 사용자가 대시보드에서 직접 Deployments 탭의 재배포를 트리거**, 볼륨(PGDATA)은 그대로 유지한 채 컨테이너만 새로 뜸.
+3. **검증**: `railway logs --service Postgres`에서 `redo done` → `checkpoint complete` → `database system is ready to accept connections` 확인, `railway status`로 양쪽 서비스 Online 확인, `/actuator/health` → `{"status":"UP"}` 200 확인.
+
+**교훈.**
+- **CLI만으로는 이 클래스의 사고를 완전히 복구할 수 없다** — 볼륨 리사이즈(Live Resize beta)와 REMOVED 배포의 재생성은 현재 Railway CLI에 대응 명령이 없어(또는 최소한 이번에 시도한 명령으로는 안 됨) 대시보드 개입이 필수였다. 다음에 유사 사고가 나면 처음부터 사용자에게 대시보드 화면을 요청할 것.
+- **비용 우려로 인한 리사이즈 회피는 이번 케이스에서 근거가 약했다** — Volume은 사용량 기반 과금이라 상한을 늘려도 실제 사용량이 그대로면 비용 변화가 없다. "최대 용량"과 "과금 기준"을 혼동하기 쉬운 지점이라, 다음에 비슷한 상황이면 먼저 Usage 화면의 비용 breakdown을 보여주고 판단을 도울 것.
+- **`restartPolicyMaxRetries: 10`이 실질적인 "사망 확정" 임계값** — 디스크가 가득 찬 상태에서 재시도해봐야 매번 같은 지점에서 실패하므로, 10회 소진 후엔 근본 원인(디스크 공간)을 해결해도 자동 복구가 안 되고 수동 재배포가 필요하다는 걸 이번에 실측으로 확인.
+- **Serverless(스케일-투-제로)의 사각지대**: 아무도 접속을 안 하면 사고가 나도 아무도 모른다 — 이번에 발견도 우연히 PR 게이트 웹훅이 실패해서였다. 다이제스트(`AdminDigestService`)가 DB 총 크기 임계 알림을 이미 갖고 있었지만(GATE_GAPS.md [G-4] 재발방지), Serverless로 서비스 자체가 잠들어 있으면 그 다이제스트 스케줄러도 같이 안 돌았을 가능성 — 재발방지 다이제스트가 Serverless 슬립 상태에서도 실행되는지는 별도 확인 필요(다음 세션 후보).
+
+**남은 것**: 살아난 DB에서 실제로 무엇이 500MB를 채웠는지(오래된 분석 캐시·다이제스트 누적 등) 원인 조사는 이번 세션에서 안 함 — 5GB로 늘려 급한 불은 껐으나, 같은 증가 추세면 언젠가 다시 찰 수 있어 다음 세션에서 `parsed_file_cache` 등 대형 테이블 점검 권장. 다이제스트 스케줄러의 Serverless 슬립 중 실행 여부 확인도 함께.
