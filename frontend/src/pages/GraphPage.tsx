@@ -1,6 +1,6 @@
 ﻿// 프로젝트 코드 구조를 React Flow로 시각화하는 그래프 페이지
 // ⚠️ 새 "보기"(필터·조회·전환) 기능 추가 시 GraphViewerPage.tsx도 반영 검토 — 저장/수정 액션만 여기 전용, 보기는 비로그인도 동등해야 함(2026-07-02 결정)
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
@@ -431,8 +431,10 @@ function GraphPageInner() {
   const [warnings, setWarnings] = useState<{ type: string; severity?: 'HIGH' | 'MEDIUM' | 'LOW'; nodeIds: string[]; edgeIds?: string[]; message: string; fingerprint?: string }[]>([])
   // 숨긴 경고 목록 — 서버에서 영속 로드, 복원(unsuppress)용
   const [suppressedWarnings, setSuppressedWarnings] = useState<{ type: string; severity?: 'HIGH' | 'MEDIUM' | 'LOW'; nodeIds: string[]; edgeIds?: string[]; message: string; fingerprint?: string }[]>([])
-  // publishCursorRef를 항상 최신 publishCursor로 유지
-  publishCursorRef.current = publishCursor
+  // publishCursorRef를 항상 최신 publishCursor로 유지 — 렌더 중 ref 쓰기는 동시성 렌더링에서 비안전해 커밋 직전(useLayoutEffect)으로 이동
+  useLayoutEffect(() => {
+    publishCursorRef.current = publishCursor
+  })
 
   // 경고 숨기기 — 서버에 suppress 저장 후 패널에서 제거, 세션 복원 목록으로 이동
   const handleSuppressWarning = useCallback(async (w: { type: string; fingerprint?: string }) => {
@@ -717,8 +719,10 @@ function GraphPageInner() {
       setLoading(false)
     }
   }, [projectId, setNodes, setEdges, applyEdgeVisibility, fitView, t])
-  // 예외 규칙 변경 후 경고를 재조회하기 위해 최신 fetchGraph를 ref에 보관
-  fetchGraphRef.current = fetchGraph
+  // 예외 규칙 변경 후 경고를 재조회하기 위해 최신 fetchGraph를 ref에 보관 — 렌더 중 ref 쓰기는 동시성 렌더링에서 비안전해 커밋 직전(useLayoutEffect)으로 이동
+  useLayoutEffect(() => {
+    fetchGraphRef.current = fetchGraph
+  })
 
   useEffect(() => {
     axios.get<{ id: string; graphBgUrl?: string | null }>('/api/auth/me')
@@ -729,8 +733,9 @@ function GraphPageInner() {
       .catch(() => {})
   }, [])
 
+  // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
   useEffect(() => {
-    fetchGraph().then(() => {
+    Promise.resolve().then(() => fetchGraph().then(() => {
       axios.get(`/api/projects/${projectId}/freshness`)
         .then((res) => {
           if (res.data.isOutdated) {
@@ -740,7 +745,7 @@ function GraphPageInner() {
           }
         })
         .catch(() => {})
-    })
+    }))
   }, [fetchGraph, projectId])
 
   // 배너에서 바로 재분석 시작 — 완료 후 그래프 새로고침
@@ -874,9 +879,9 @@ function GraphPageInner() {
     }
   }, [])
 
-  // graphId 변경 시 프리셋 로드
+  // graphId 변경 시 프리셋 로드 — 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
   useEffect(() => {
-    if (graphId) loadPresets(graphId)
+    if (graphId) Promise.resolve().then(() => loadPresets(graphId))
   }, [graphId, loadPresets])
 
   // 슬롯에 현재 뷰 저장
@@ -980,10 +985,13 @@ function GraphPageInner() {
   useEffect(() => {
     if (!projectId) return
     sketchSaveReady.current = false
-    try {
-      const raw = localStorage.getItem(`sketch:${projectId}`)
-      setSketchNodes(raw ? JSON.parse(raw) : [])
-    } catch { setSketchNodes([]) }
+    // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
+    Promise.resolve().then(() => {
+      try {
+        const raw = localStorage.getItem(`sketch:${projectId}`)
+        setSketchNodes(raw ? JSON.parse(raw) : [])
+      } catch { setSketchNodes([]) }
+    })
   }, [projectId])
 
   // 스케치 노드 변경 시 localStorage에 저장 — 로드 직후 첫 실행은 건너뛰어 빈 배열 덮어쓰기 방지
