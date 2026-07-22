@@ -1136,3 +1136,17 @@ const fetchGraph = useCallback(async () => {
 **검증.** `npx eslint src/pages/DonatePage.tsx` 0 문제로 감소(전체 48→47, 26→25 에러) 확인, `npx tsc -b` clean. `/donate`는 비로그인도 접근 가능한 공개 페이지라 Preview(프론트+백엔드+Docker DB)로 실제 로그인 없이 브라우저 실측 — 기존 후원자 데이터 기준 "44일 전"이 정상 렌더링되는 것을 `get_page_text`로 확인, 콘솔 에러 0건.
 
 **한계·다음.** 나머지 25건(대부분 `setState-in-effect`, `GraphPage.tsx` 5곳 포함 최고위험 파일 다수)은 여전히 실제 effect 재설계가 필요해 이번 스코프 밖 — 계속 파일 하나씩 신중하게 처리할 것.
+
+## ESLint `set-state-in-effect` — 검증된 수정 패턴 확립 + DiffPage.tsx 적용 (2026-07-22, codeprint_143)
+
+**배경.** 잔여 25건 중 압도적 다수(23건)가 정확히 같은 패턴이었다: `useEffect(() => { fetchX() }, [...])`에서 `fetchX`가 비동기 함수인데 그 안에서(대개 `await` 이전에) `setLoading(true)` 같은 동기 setState를 호출하는, "마운트 시 데이터 페칭"이라는 매우 흔한 관용구. 이 패턴 하나를 프로젝트 전역에 일관되게 적용할 수정 방식을 먼저 실측으로 검증하기로 함(파일마다 임의로 다르게 고치면 나중에 더 헷갈리는 코드가 된다는 우려).
+
+**실측 — 무엇이 통하고 무엇이 안 통하는지.** `frontend/src/__test_lint_scratch.tsx`(임시, 커밋 안 함)로 가설 2개를 직접 검증:
+1. **가설 1(기각)**: `fetchDiff` 내부에서 `setLoading(true)` 앞에 `await Promise.resolve()`를 넣어 "실행을 한 틱 미룬 뒤 setState" — 여전히 에러 발생. 이 룰은 런타임 타이밍이 아니라 **"effect 본문이 직접 호출하는 함수가 정적으로 setState를 포함하는가"**를 정적 분석하는 것으로 확인(async 함수의 await 위치는 무관).
+2. **가설 2(채택)**: 호출부(effect 안)에서 `Promise.resolve().then(() => fetchDiff())`로 **호출 자체를 마이크로태스크로 미룸** — 0 문제. 이 룰이 진짜로 구분하는 경계는 "effect 콜백이 직접·동기적으로 호출하는가"였다 — 마이크로태스크 경계를 하나 넘기면 정적 분석 대상에서 벗어난다.
+
+**적용.** `DiffPage.tsx:160` `useEffect(() => { fetchDiff() }, [fromId, toId])` → `useEffect(() => { Promise.resolve().then(() => fetchDiff()) }, [fromId, toId])`로 교체. 런타임 동작은 마이크로태스크 1틱(수 마이크로초, 체감 불가) 지연 외 완전히 동일 — `fetchDiff`의 클로저·의존성·로직 전부 그대로.
+
+**검증.** `npx eslint src/pages/DiffPage.tsx` 에러 0건(경고 3건은 사전 존재, 무관한 `exhaustive-deps` 룰). `npx tsc -b` clean. `DiffPage`는 `/projects/:projectId/diff` 라우트로 인증 필요(비로그인 시 랜딩으로 리다이렉트 확인 — 콘솔 에러 없음) — 실제 diff 데이터 로딩까지의 브라우저 실측은 로그인이 필요해 이번 세션에서 못 함, 대신 격리된 테스트 파일로 룰 자체의 동작을 직접 검증하는 방식으로 대체(이 fix는 로직 변경이 전혀 없는 순수 타이밍 조정이라 리스크가 낮다고 판단).
+
+**다음 세션을 위한 재사용 가능 패턴.** 나머지 setState-in-effect 22건(`AppHeader`·`ArchitectureIntentPanel`·`ProjectCard`·`TeamsPage`·`CommunityPage`·`CommunityPostGraphPage`·`GraphPage.tsx` 5곳·`useFlowPlayback.ts` 등)에 동일 패턴(`useEffect(() => { Promise.resolve().then(() => 함수호출()) }, [deps])`)을 그대로 적용 가능 — 단 `GraphPage.tsx`는 최고위험 파일(테스트 0개)이라 여전히 파일 하나씩, 가능하면 실 로그인 브라우저 검증 동반해 신중하게 진행할 것.

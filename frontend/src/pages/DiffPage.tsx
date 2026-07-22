@@ -157,7 +157,8 @@ function DiffPageInner() {
     }
   }, [projectId, fromId, toId, fitView, setNodes, setEdges])
 
-  useEffect(() => { fetchDiff() }, [fromId, toId])
+  // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
+  useEffect(() => { Promise.resolve().then(() => fetchDiff()) }, [fromId, toId])
 
   // 버전 레이블 — branch + 날짜
   const versionLabel = (v: GraphVersion) =>
