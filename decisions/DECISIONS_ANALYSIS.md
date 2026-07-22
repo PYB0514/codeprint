@@ -2047,3 +2047,17 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **검증.** `compileJava`·`compileTestJava` clean. `GraphBuilderTest`(신규 3건 포함) green. 백엔드 전체 테스트 스위트(Docker DB, 1066+건) green, 신규 실패 0건. `preview_start` 로컬 재기동 → `/actuator/health` UP 확인. `analyzeLocal` 베이스라인 불변.
 
 **한계·다음.** 실제 소스 파일을 이 저장소 파서로 파싱해 raw SQL/Django 케이스를 검증하는 진짜 벤치 P케이스는 여전히 없다 — `GraphBuilder` 로직 자체(엣지 생성·dedup)는 이번 단위 테스트로 커버됐지만, "파서가 실제 Python raw SQL 문자열/Django `Entity.objects` 호출을 올바르게 `RawSqlAccess`/`DbAccess`로 추출하는지"는 기존 벤치(`ormDbAccess_createsEdgeToEntityTable` 등, GraphBuilderTest에 이미 있음)가 별도로 커버 중이라 이번 스코프에서 중복 추가하지 않음.
+
+---
+
+## 분석 진행률 WebSocket 푸시 — 실측으로 완전 dead 확인 후 제거 (2026-07-22, codeprint_143)
+
+**배경.** PROGRESS.md R29(#82·82-b)가 "decisions가 '작동한다'고 전제한 경로의 실제 구독자가 0인 상태로 추정"이라며 실측 조사를 선행 조건으로 걸어둔 항목. 위 "프로덕션 안정성 갭 C+F" 항목(2026-07-17)의 기록도 "프런트에 WebSocket 진행률 알림(`AnalysisProgressHandler`)까지 보낸다"고 적어, 마치 프론트가 이 푸시를 받는 것처럼 전제하고 있었다.
+
+**실측.** 프론트엔드 전체(`frontend/src`)에서 `/topic/analysis/`를 참조하는 코드를 검색한 결과 **0건** — `useAnalysisProgress.ts`의 파일 헤더 주석에 "분석 진행률을 폴링으로 수신하는 훅 (2초 간격...)"이라고 명시돼 있듯, 실제 진행률 표시는 처음부터 `GET /api/analyses/{id}` 2초 폴링으로만 동작 중이었다. VS Code 확장(`vscode-extension/`)도 마찬가지로 이 토픽을 구독하지 않음. 즉 `AnalysisProgressHandler.sendProgress()`(`AnalysisRunner.run()` 8곳 + `StaleAnalysisReconciliationService.reconcile()` 1곳, 총 9곳 호출)는 **애초부터 프로덕션에서 단 한 번도 프론트에 도달한 적 없는 dead 코드**였다.
+
+**결정 — 제거.** 여러 후속 방향(①제거 ②프론트를 WebSocket 구독으로 전환해 폴링 대체) 중 사용자가 더 안전한 ①을 선택 — `AnalysisProgressHandler.java` 클래스 자체 삭제, `AnalysisRunner`·`StaleAnalysisReconciliationService`에서 필드·호출부 전부 제거. `WebSocketAuthorizationInterceptor`의 순환참조 설명 주석(BE-18/BE-19, GATE_GAPS.md [G-8])이 `AnalysisRunner→AnalysisProgressHandler→SimpMessagingTemplate→WebSocketConfig` 링크를 언급하고 있어 이 부분도 갱신 — 다만 **`@Lazy` 애노테이션 자체는 건드리지 않음**(이 클래스가 이미 2차례 순환 빈 참조 사고의 진원지라, 이번에 사라진 건 그 순환의 한 경로일 뿐 다른 경로가 없다고 단정할 근거가 부족해 안전한 쪽인 "그대로 유지"를 택함 — §3 서지컬 원칙과 동일하게, 요청받지 않은 범위까지 정리하지 않음).
+
+**검증.** `compileJava`·`compileTestJava` clean. `StaleAnalysisReconciliationServiceTest`(mock 제거 반영) 포함 백엔드 전체 테스트 스위트(Docker DB, 1066+건) green — **`CodeprintApplicationContextTest`(BE-18/19 재발방지 스모크 테스트)도 통과**해 이번 생성자 의존관계 변경이 순환 참조를 재유발하지 않았음을 확인. `preview_start` 로컬 재기동(`Started CodeprintApplication in 9.7초`) + `/actuator/health` UP 확인 — CLAUDE.md 규칙4 "생성자 의존관계 변경 시 로컬 재기동 필수" 충족. `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) — 단 `AnalysisRunner.run()`의 fan-out이 12→11로 줄어 실제로 결합도가 낮아진 것을 확인.
+
+**한계·다음.** 프론트를 실시간 WebSocket 구독으로 전환하는 방향(폴링 부하 감소, 더 매끄러운 진행률 UX)은 이번엔 채택 안 함 — 필요해지면 별도 기능 요청으로 재검토.

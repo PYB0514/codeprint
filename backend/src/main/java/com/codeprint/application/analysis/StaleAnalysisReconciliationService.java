@@ -4,7 +4,6 @@ package com.codeprint.application.analysis;
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
 import com.codeprint.domain.analysis.AnalysisStatus;
-import com.codeprint.interfaces.websocket.AnalysisProgressHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,7 +22,6 @@ public class StaleAnalysisReconciliationService {
     static final Duration STALE_THRESHOLD = Duration.ofMinutes(20);
 
     private final AnalysisRepository analysisRepository;
-    private final AnalysisProgressHandler progressHandler;
 
     // 분석 시작 시각이 상한을 넘었는지 — 순수 함수(단위 테스트 대상)
     static boolean isStale(Instant startedAt, Instant now) {
@@ -41,7 +39,6 @@ public class StaleAnalysisReconciliationService {
                     analysis.getId(), analysis.getStartedAt());
             analysis.fail("분석이 " + STALE_THRESHOLD.toMinutes() + "분 이상 진행 중 상태로 멈춰 자동 실패 처리되었습니다. 다시 시도해주세요.");
             analysisRepository.save(analysis);
-            progressHandler.sendProgress(analysis.getId(), 0, "FAILED");
             reconciled++;
         }
         return reconciled;

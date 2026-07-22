@@ -5,7 +5,6 @@ import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
 import com.codeprint.infrastructure.analysis.*;
 import com.codeprint.infrastructure.github.GitHubApiClient;
-import com.codeprint.interfaces.websocket.AnalysisProgressHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -26,7 +25,6 @@ public class AnalysisRunner {
     private final SourceFileWalker sourceFileWalker;
     private final CachedParsedFileLoader cachedParsedFileLoader;
     private final GraphBuilder graphBuilder;
-    private final AnalysisProgressHandler progressHandler;
 
     // 레포 클론 → 파일 수집 → 정적 분석 → 그래프 빌드를 비동기로 실행
     // 메서드 전체를 트랜잭션으로 감싸지 않는다 — git clone·GitHub API 왕복(수십초~수 분)까지 DB 커넥션을 물고
@@ -42,26 +40,20 @@ public class AnalysisRunner {
 
             analysis.start();
             analysisRepository.save(analysis);
-            progressHandler.sendProgress(analysisId, 5, "RUNNING");
 
             log.info("분석 시작: analysisId={}, repo={}", analysisId, githubRepoUrl);
 
-            progressHandler.sendProgress(analysisId, 10, "RUNNING");
             repoDir = repoCloner.clone(githubRepoUrl, branch);
             log.info("클론 완료: {}", repoDir);
-            progressHandler.sendProgress(analysisId, 30, "RUNNING");
 
             WalkResult walkResult = sourceFileWalker.walk(repoDir);
             List<Path> sourceFiles = walkResult.files();
             log.info("소스 파일 수: {} (전체 대상 {})", sourceFiles.size(), walkResult.totalEligible());
-            progressHandler.sendProgress(analysisId, 40, "RUNNING");
 
             // 변경된 파일만 재파싱하고 안 바뀐 파일은 캐시된 ParsedFile을 재사용(incremental) — 순서 보존(GraphBuilder 결과 불변)
             List<ParsedFile> parsedFiles = cachedParsedFileLoader.load(projectId, repoDir, sourceFiles);
-            progressHandler.sendProgress(analysisId, 70, "RUNNING");
 
             graphBuilder.build(projectId, analysisId, parsedFiles, walkResult.totalEligible());
-            progressHandler.sendProgress(analysisId, 95, "RUNNING");
 
             // 분석 완료 시점의 브랜치 최신 커밋 SHA 저장
             String commitSha = null;
@@ -75,7 +67,6 @@ public class AnalysisRunner {
 
             analysis.complete(commitSha);
             analysisRepository.save(analysis);
-            progressHandler.sendProgress(analysisId, 100, "DONE");
 
             log.info("분석 완료: analysisId={}, files={}", analysisId, parsedFiles.size());
 
@@ -87,7 +78,6 @@ public class AnalysisRunner {
                     analysis.fail(e.getMessage());
                     analysisRepository.save(analysis);
                 }
-                progressHandler.sendProgress(analysisId, 0, "FAILED");
             } catch (Exception ex) {
                 log.error("분석 실패 상태 저장 중 오류", ex);
             }

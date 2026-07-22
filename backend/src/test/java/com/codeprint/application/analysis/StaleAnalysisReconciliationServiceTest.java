@@ -4,7 +4,6 @@ package com.codeprint.application.analysis;
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
 import com.codeprint.domain.analysis.AnalysisStatus;
-import com.codeprint.interfaces.websocket.AnalysisProgressHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -15,8 +14,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -27,13 +24,11 @@ class StaleAnalysisReconciliationServiceTest {
     private static final Instant NOW = Instant.parse("2026-07-17T12:00:00Z");
 
     private AnalysisRepository analysisRepository;
-    private AnalysisProgressHandler progressHandler;
     private StaleAnalysisReconciliationService service;
 
     private void setUp() {
         analysisRepository = mock(AnalysisRepository.class);
-        progressHandler = mock(AnalysisProgressHandler.class);
-        service = new StaleAnalysisReconciliationService(analysisRepository, progressHandler);
+        service = new StaleAnalysisReconciliationService(analysisRepository);
     }
 
     @Test
@@ -51,7 +46,7 @@ class StaleAnalysisReconciliationServiceTest {
     }
 
     @Test
-    @DisplayName("20분 넘게 RUNNING인 분석은 FAILED로 전환하고 진행률 알림을 보낸다")
+    @DisplayName("20분 넘게 RUNNING인 분석은 FAILED로 전환한다")
     void reconcile_staleRunning_marksFailedAndNotifies() {
         setUp();
         UUID id = UUID.randomUUID();
@@ -65,7 +60,6 @@ class StaleAnalysisReconciliationServiceTest {
         assertThat(reconciled).isEqualTo(1);
         assertThat(analysis.getStatus()).isEqualTo(AnalysisStatus.FAILED);
         verify(analysisRepository).save(analysis);
-        verify(progressHandler).sendProgress(analysis.getId(), 0, "FAILED");
     }
 
     @Test
@@ -82,7 +76,6 @@ class StaleAnalysisReconciliationServiceTest {
         assertThat(reconciled).isEqualTo(0);
         assertThat(analysis.getStatus()).isEqualTo(AnalysisStatus.RUNNING);
         verify(analysisRepository, never()).save(any());
-        verify(progressHandler, never()).sendProgress(any(), anyInt(), anyString());
     }
 
     // startedAt을 강제 조작 — AnalysisResult에 테스트 전용 setter를 추가하지 않기 위함
