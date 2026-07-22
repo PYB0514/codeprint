@@ -29,9 +29,23 @@ export default function DonatePage() {
   // 금액을 언어별 형식으로 포맷
   const formatAmount = (amount: number) => amount.toLocaleString('en-US') + t('donate.currencySuffix')
 
+  const [user, setUser] = useState<UserInfo | null>(null)
+  const [selectedAmount, setSelectedAmount] = useState<number>(5000)
+  const [customAmount, setCustomAmount] = useState<string>('')
+  const [useCustom, setUseCustom] = useState(false)
+  const [donors, setDonors] = useState<DonationRecord[]>([])
+  const [loading, setLoading] = useState(false)
+  // 후원 목록을 가져온 시점의 기준 시각 — 렌더 중 Date.now()를 직접 호출하지 않기 위해 이펙트 안에서만 캡처
+  const [now, setNow] = useState(0)
+
+  useEffect(() => {
+    axios.get('/api/auth/me').then(r => setUser(r.data)).catch(() => {})
+    axios.get('/api/donations').then(r => { setDonors(r.data); setNow(Date.now()) }).catch(() => {})
+  }, [])
+
   // 후원 경과 시간을 상대 표시
   const timeAgo = (isoStr: string) => {
-    const diff = Date.now() - new Date(isoStr).getTime()
+    const diff = now - new Date(isoStr).getTime()
     const days = Math.floor(diff / 86400000)
     if (days > 0) return t('donate.timeAgo.daysAgo', { count: days })
     const hours = Math.floor(diff / 3600000)
@@ -39,17 +53,6 @@ export default function DonatePage() {
     const mins = Math.floor(diff / 60000)
     return mins <= 0 ? t('donate.timeAgo.justNow') : t('donate.timeAgo.minsAgo', { count: mins })
   }
-  const [user, setUser] = useState<UserInfo | null>(null)
-  const [selectedAmount, setSelectedAmount] = useState<number>(5000)
-  const [customAmount, setCustomAmount] = useState<string>('')
-  const [useCustom, setUseCustom] = useState(false)
-  const [donors, setDonors] = useState<DonationRecord[]>([])
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    axios.get('/api/auth/me').then(r => setUser(r.data)).catch(() => {})
-    axios.get('/api/donations').then(r => setDonors(r.data)).catch(() => {})
-  }, [])
 
   const finalAmount = useCustom ? parseInt(customAmount || '0', 10) : selectedAmount
 
