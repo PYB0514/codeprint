@@ -1189,3 +1189,22 @@ const fetchGraph = useCallback(async () => {
 - 전부 콘솔 에러 0건. `OnboardingTour`·`WarningPanel`(그래프 화면 본체)은 인증 필요 화면이라 이번엔 로그인 없이 실측 불가 — 코드 리뷰(순수 위치 이동, 로직 변경 없음)로 갈음.
 
 **한계·다음.** ESLint 잔여는 이제 `GraphPage.tsx` 5건뿐 — 최고위험 파일이라 다음 세션에서 실 로그인 브라우저 검증 동반해 신중하게 진행할 것.
+
+## ESLint 마지막 5건 — GraphPage.tsx 전부 해소, R5(#22) 26건 완주 (2026-07-23, codeprint_143)
+
+**배경.** 최고위험 파일이라 별도로 남겨뒀던 `GraphPage.tsx` 5건(2건 "Cannot access refs during render" + 3건 setState-in-effect) 처리. claude-in-chrome으로 실 GitHub 로그인 세션이 이미 있어 실측 검증까지 완료.
+
+**2건 — 렌더 중 ref 쓰기(`react-hooks/refs`).** `publishCursorRef.current = publishCursor`(협업 커서 발행 함수)와 `fetchGraphRef.current = fetchGraph`(예외 규칙 변경 후 재조회용)가 컴포넌트 렌더 본문에서 직접 대입되고 있었음 — 동시성 렌더링에서 비안전(같은 렌더가 커밋 없이 여러 번 실행될 수 있음). PR #642(`useAnalysisProgress.ts`)에서 이미 검증된 패턴 그대로 재사용: 둘 다 `useLayoutEffect(() => { ref.current = value })`로 이동(커밋 직전, 페인트 전 동기 실행이라 사용자 체감 지연 없음).
+
+**3건 — setState-in-effect.** 확립된 `Promise.resolve().then(() => ...)` 패턴 그대로 적용: 메인 그래프 조회 이펙트(`fetchGraph().then(freshness 체크)`), 프리셋 로드(`loadPresets(graphId)`), 스케치 노드 로드(`localStorage`+`JSON.parse`).
+
+**검증 — 이번엔 실 로그인으로 전면 실측.** claude-in-chrome에 기존 GitHub OAuth 세션이 남아있어(PYB0514) 로컬 서버(프론트+백엔드+Docker DB)에 실제 로그인 상태로 접속. `codeprint` 자기분석 프로젝트(454파일·2432함수·8248엣지, 실사용 규모)로 그래프 페이지 진입:
+- 그래프 렌더링 정상, "새 커밋 있음" 배너 정상 표시(수정한 freshness 체크 이펙트가 실제로 `setOutdated` 호출해 배너 노출까지 확인).
+- `GET /api/projects/{id}/freshness` 200 확인(수정한 메인 이펙트 경로).
+- 고정 슬롯 클릭 → `GET /api/graphs/{graphId}/presets` 200 확인(수정한 프리셋 로드 이펙트).
+- 노드 클릭·사이드바 토글 등 일반 상호작용 정상, 전 과정 콘솔 에러 0건.
+- 컬래버레이션 커서 fix는 PR #642와 동일 검증된 패턴이라 별도 2인 세션 구성 없이 코드 동형성으로 갈음.
+
+`npx tsc -b` clean. `analyzeLocal` 베이스라인 불변(프론트 전용 변경).
+
+**마무리.** R5(#22) ESLint 감사 항목(원래 에러 31건) 전체 완주 — `GraphPage.tsx` 포함 프로젝트 전체 에러 0건. 남은 22건은 전부 `warning` 레벨(`exhaustive-deps` 등)로, CLAUDE.md 규칙상 필수 대상이 아니라 이번 R5 항목은 여기서 종료.
