@@ -1126,3 +1126,13 @@ const fetchGraph = useCallback(async () => {
 **검증.** `npx tsc -b` clean. `npx eslint` — 사전 존재하던 경고 2건(`react-hooks/set-state-in-effect`·`react-hooks/exhaustive-deps` 누락 `ignore`)만 그대로, `git stash`로 수정 전 상태와 비교해 정확히 동일한 2건임을 확인(내 변경으로 신규 발생한 경고 0건). `node -e "JSON.parse(...)"`로 ko/en 양쪽 JSON 문법 검증 통과. Preview로 랜딩 페이지 로드 확인(콘솔 에러 없음, 새 워크스페이스 키가 번들링을 깨뜨리지 않음 확인) — 컴포넌트 자체는 인증 후 화면이라 로그인 없이 시각 확인은 이번에도 못 함(1차 배치와 동일한 제약).
 
 **한계·다음.** R2(#9) i18n 미번역 감사 항목은 이걸로 완전히 종료. PROGRESS.md 백로그에서 항목 삭제.
+
+## 프론트 ESLint 잔여 26건 중 1건 처리 — DonatePage.tsx `Date.now()` 렌더 중 호출 (2026-07-22, codeprint_143)
+
+**배경.** R5(#22) 잔여 26건 중 `DonatePage.tsx:34`는 다른 25건(대부분 `setState-in-effect`)과 다른 룰(`react-hooks/purity`, "Cannot call impure function during render") — 렌더 중 직접 `Date.now()`를 호출해 후원 경과 시간을 계산하고 있었다. React 동시성 렌더링에서 같은 컴포넌트가 여러 번 렌더될 경우 결과가 달라질 수 있어(idempotent 렌더 규칙 위반) 새 ESLint 규칙이 잡아냄.
+
+**시행착오.** 1차 시도로 `useMemo(() => Date.now(), [donors])`로 감쌌으나 여전히 같은 에러 발생 — 이 새 룰은 `useMemo` factory도 렌더 단계 실행으로 간주해 예외를 안 둠(React Compiler 지향 룰이라 effect 이후로 완전히 밀어내야 함). 최종적으로 `now`를 `useState(0)` + 기존 `/api/donations` fetch 완료 시점(`useEffect` 콜백, 렌더 바깥)에 `setNow(Date.now())`로 캡처하는 방식으로 교체 — 이제 `timeAgo`는 순수하게 `now`(state)와 인자만으로 계산.
+
+**검증.** `npx eslint src/pages/DonatePage.tsx` 0 문제로 감소(전체 48→47, 26→25 에러) 확인, `npx tsc -b` clean. `/donate`는 비로그인도 접근 가능한 공개 페이지라 Preview(프론트+백엔드+Docker DB)로 실제 로그인 없이 브라우저 실측 — 기존 후원자 데이터 기준 "44일 전"이 정상 렌더링되는 것을 `get_page_text`로 확인, 콘솔 에러 0건.
+
+**한계·다음.** 나머지 25건(대부분 `setState-in-effect`, `GraphPage.tsx` 5곳 포함 최고위험 파일 다수)은 여전히 실제 effect 재설계가 필요해 이번 스코프 밖 — 계속 파일 하나씩 신중하게 처리할 것.
