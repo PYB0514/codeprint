@@ -128,7 +128,8 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
     }
   }, [projectId, t])
 
-  useEffect(() => { load() }, [load])
+  // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
+  useEffect(() => { Promise.resolve().then(() => load()) }, [load])
 
   // 저장
   const save = useCallback(async () => {

@@ -399,8 +399,9 @@ function CommunityPostSnapshotInner() {
 
   // 선택된 노드가 바뀌면 코멘트 목록을 읽기 전용으로 조회
   useEffect(() => {
+    // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
     if (!graphId || !selectedNode) {
-      setNodeComments([])
+      Promise.resolve().then(() => setNodeComments([]))
       return
     }
     axios

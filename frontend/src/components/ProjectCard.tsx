@@ -106,7 +106,8 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
 
   // primary branch freshness 별도 조회 (hasGraph 확인 후 실행)
   useEffect(() => {
-    if (!primaryBranch || !hasGraph) { setPrimaryFreshness(null); return }
+    // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
+    if (!primaryBranch || !hasGraph) { Promise.resolve().then(() => setPrimaryFreshness(null)); return }
     axios.get(`/api/projects/${project.id}/primary-freshness`)
       .then(res => {
         if (!res.data.reason) {

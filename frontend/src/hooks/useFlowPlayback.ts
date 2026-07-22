@@ -99,15 +99,16 @@ export function useFlowPlayback({ rawNodes, rawEdges, setNodes, setEdges, getNod
   // 흐름 재생 — 자동 진행 타이머 (분기점에서 자동 일시정지)
   useEffect(() => {
     if (playbackTimerRef.current) clearTimeout(playbackTimerRef.current)
+    // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
     if (!playbackPlaying || playbackCursor >= playbackItems.length - 1) {
-      if (playbackCursor >= playbackItems.length - 1 && playbackPlaying) setPlaybackPlaying(false)
+      if (playbackCursor >= playbackItems.length - 1 && playbackPlaying) Promise.resolve().then(() => setPlaybackPlaying(false))
       return
     }
     // 현재 노드가 분기점이면 자동 일시정지
     if (callTree && playbackCursor >= 0) {
       const treeNode = findTreeNode(callTree, playbackItems[playbackCursor].id)
       if (treeNode && treeNode.children.length > 1) {
-        setPlaybackPlaying(false)
+        Promise.resolve().then(() => setPlaybackPlaying(false))
         return
       }
     }

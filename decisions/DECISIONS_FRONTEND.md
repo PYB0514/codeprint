@@ -1150,3 +1150,21 @@ const fetchGraph = useCallback(async () => {
 **검증.** `npx eslint src/pages/DiffPage.tsx` 에러 0건(경고 3건은 사전 존재, 무관한 `exhaustive-deps` 룰). `npx tsc -b` clean. `DiffPage`는 `/projects/:projectId/diff` 라우트로 인증 필요(비로그인 시 랜딩으로 리다이렉트 확인 — 콘솔 에러 없음) — 실제 diff 데이터 로딩까지의 브라우저 실측은 로그인이 필요해 이번 세션에서 못 함, 대신 격리된 테스트 파일로 룰 자체의 동작을 직접 검증하는 방식으로 대체(이 fix는 로직 변경이 전혀 없는 순수 타이밍 조정이라 리스크가 낮다고 판단).
 
 **다음 세션을 위한 재사용 가능 패턴.** 나머지 setState-in-effect 22건(`AppHeader`·`ArchitectureIntentPanel`·`ProjectCard`·`TeamsPage`·`CommunityPage`·`CommunityPostGraphPage`·`GraphPage.tsx` 5곳·`useFlowPlayback.ts` 등)에 동일 패턴(`useEffect(() => { Promise.resolve().then(() => 함수호출()) }, [deps])`)을 그대로 적용 가능 — 단 `GraphPage.tsx`는 최고위험 파일(테스트 0개)이라 여전히 파일 하나씩, 가능하면 실 로그인 브라우저 검증 동반해 신중하게 진행할 것.
+
+## ESLint `set-state-in-effect` — 확립된 패턴으로 9개 파일 일괄 처리 + ChangelogPage 이스케이프 정정 (2026-07-22, codeprint_143)
+
+**배경.** 위 항목에서 확립한 `Promise.resolve().then(() => 함수호출())` 패턴을 나머지 파일에 실제 적용.
+
+**적용 대상 9개 — 두 가지 변형.**
+- **함수 호출 자체를 미룸**(가장 흔한 형태): `AppHeader.tsx`(검색어 빈 값일 때 `setSearchResults([])`) · `ArchitectureIntentPanel.tsx`(`load()`) · `ProjectCard.tsx`(freshness 미조회 조건 `setPrimaryFreshness(null)`) · `useFlowPlayback.ts`(재생 정지 분기 2곳) · `CommunityPostGraphPage.tsx`(`setNodeComments([])`) · `JoinCollaborationPage.tsx`(`handleJoin()`) · `TeamsPage.tsx`(`fetchTeams()`).
+- **여러 setState를 하나의 콜백으로 묶음**: `useAnalysisProgress.ts` — `if (!analysisId) {...}` 블록 안 4개 setState를 콜백 하나로, 그 아래 무조건 실행되는 `setStalled(false)` 1개를 별도로 — **에러가 한 번에 다 안 잡히고 고칠 때마다 다음 직접-호출 지점이 순차적으로 드러남**을 실측으로 확인(룰이 파일당 첫 위반만 보고하는 방식).
+- **함수 선언 순서 재배치**(다른 성격의 룰): `CommunityPage.tsx:126` — `handleSelectPost`가 자신보다 뒤에 선언되는데 `useEffect` 안에서 먼저 참조되던 `no-use-before-define`류(`react-hooks/immutability`) 문제. 이전 세션(PR #643, GraphPage.tsx `domainColorMap`)과 동일한 방식으로 함수 선언을 사용처보다 앞으로 이동.
+
+**부수 발견·수정.** `ChangelogPage.tsx:1950`의 `no-useless-escape` 2건 — 작은따옴표 문자열 안에서 큰따옴표를 불필요하게 이스케이프(`\"/path\"` → `"/path"`). 완전히 무관한 별도 룰이지만 같은 파일 훑어보다 발견해 함께 정리(§2 단순성, 진짜 사소한 기계적 수정).
+
+**검증.** `npx tsc -b` clean. 전체 ESLint 46→35(13건 감소: setState-in-effect 9 + immutability 1(CommunityPage 재배치로 해소) + no-useless-escape 2 — CommunityPage 재배치 자체가 별도 카운트되진 않고 대상 파일에 원래 에러가 1개뿐이었음, 세부는 각 파일 개별 재검사로 0 문제 확인). Preview(프론트+백엔드+Docker DB)로 실제 브라우저 검증:
+- **AppHeader** — 검색창에 "PYB0514" 입력 → `GET /api/users?q=PYB0514` 200 확인, 입력값 지우기(가드절 분기) → 콘솔 에러 없음.
+- **CommunityPage·CommunityPostGraphPage** — 비로그인으로 `/community` 접근, 실제 게시글 클릭 → `GET /api/community/posts/{id}` + `/snapshots` 둘 다 200, 재배치한 `handleSelectPost`가 정상 호출됨을 네트워크 로그로 확인.
+- 나머지(`ArchitectureIntentPanel`·`ProjectCard`·`useAnalysisProgress`·`useFlowPlayback`·`JoinCollaborationPage`·`TeamsPage`)는 인증 후 화면이라 로그인 없이 브라우저 실측 불가 — tsc/eslint 통과 + 코드 리뷰(로직 변경 없는 순수 타이밍 조정임을 diff로 확인)로 갈음.
+
+**한계·다음.** 남은 4건은 두 갈래: ① `GraphPage.tsx` 5건(2건은 "Cannot access refs during render"로 이번 패턴과 다른 룰, 3건은 setState-in-effect) — 최고위험 파일이라 별도 세션에서 실 로그인 검증 동반해 신중하게 ② `react-refresh/only-export-components` 8건(`CookieBanner`·`OnboardingTour`·`WarningPanel`·`ChangelogPage`) — 컴포넌트 파일에서 상수/함수를 분리하려면 새 파일이 필요해 CLAUDE.md 규칙상 사용자 허락 선행 필요, 이번 세션에서 미착수.

@@ -107,6 +107,23 @@ export default function CommunityPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [sortOrder, setSortOrder] = useState<'latest' | 'likes' | 'views'>('latest')
 
+  // 게시글 클릭 시 상세, 댓글, 첨부파일 로드
+  const handleSelectPost = async (post: Post) => {
+    setSelectedPost(post)
+    setPostSnapshots([])
+    const res = await axios.get<{ post: Post; comments: Comment[]; attachments: Attachment[] }>(
+      `/api/community/posts/${post.id}`
+    )
+    setComments(res.data.comments)
+    setPostAttachments(res.data.attachments ?? [])
+    try {
+      const snapRes = await axios.get<PostSnapshotMeta[]>(`/api/community/posts/${post.id}/snapshots`)
+      setPostSnapshots(snapRes.data)
+    } catch {
+      setPostSnapshots([])
+    }
+  }
+
   useEffect(() => {
     axios
       .get<UserInfo>('/api/auth/me')
@@ -160,23 +177,6 @@ export default function CommunityPage() {
     setPostPage(nextPage)
     setHasMore(res.data.length === 20)
     setLoadingMore(false)
-  }
-
-  // 게시글 클릭 시 상세, 댓글, 첨부파일 로드
-  const handleSelectPost = async (post: Post) => {
-    setSelectedPost(post)
-    setPostSnapshots([])
-    const res = await axios.get<{ post: Post; comments: Comment[]; attachments: Attachment[] }>(
-      `/api/community/posts/${post.id}`
-    )
-    setComments(res.data.comments)
-    setPostAttachments(res.data.attachments ?? [])
-    try {
-      const snapRes = await axios.get<PostSnapshotMeta[]>(`/api/community/posts/${post.id}/snapshots`)
-      setPostSnapshots(snapRes.data)
-    } catch {
-      setPostSnapshots([])
-    }
   }
 
   // 프로젝트 선택 시 최신 그래프의 프리셋 목록 조회 후 연결(선택한 프리셋 번호가 등록 시점에 스냅샷으로 캡처됨)

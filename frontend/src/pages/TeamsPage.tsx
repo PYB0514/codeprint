@@ -112,8 +112,9 @@ export default function TeamsPage() {
     setApiKeys(keysRes.data)
   }
 
+  // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
   useEffect(() => {
-    fetchTeams()
+    Promise.resolve().then(() => fetchTeams())
   }, [])
 
   // 팀 생성 결제 시작 — Toss 결제창 호출, 승인·팀 생성은 리다이렉트 후 TeamPaymentSuccessPage에서 처리

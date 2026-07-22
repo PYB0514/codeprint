@@ -1947,7 +1947,7 @@ export const RELEASES: Release[] = [
     items: [
       { category: 'UX', desc: '랜딩 페이지에 Free / Pro / Team 요금제 카드 추가 — 서비스 가치 확인 후 가격 확인 흐름 완성' },
       { category: '분석', desc: 'Swift Core Data NSManagedObject 상속 클래스 DB_TABLE 노드 감지 추가' },
-      { category: '분석', desc: 'Kotlin Ktor 라우팅 패턴 get/post/put/delete/patch(\"/path\") API_ENDPOINT 노드 감지 추가' },
+      { category: '분석', desc: 'Kotlin Ktor 라우팅 패턴 get/post/put/delete/patch("/path") API_ENDPOINT 노드 감지 추가' },
     ],
   },
   {
