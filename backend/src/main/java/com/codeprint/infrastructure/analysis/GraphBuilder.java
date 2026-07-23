@@ -47,7 +47,12 @@ public class GraphBuilder {
         "when", "thenReturn", "thenThrow", "doReturn", "doThrow", "doNothing",
         "given", "willReturn", "willThrow", "reset",
         "assertThat", "assertEquals", "assertTrue", "assertFalse",
-        "assertNull", "assertNotNull", "assertThrows"
+        "assertNull", "assertNotNull", "assertThrows",
+        // 빌더 패턴·정적 팩토리·엔트리포인트 공통 메서드명 — 리시버/컨텍스트 타입이 흔히 해소 안 돼
+        // 전역 폴백에 빠지기 쉬운 이름들(WebClient/Bucket4j/JWT 빌더의 build(), Runnable.run(),
+        // List.of()/Optional.of()류 정적 팩토리, Instant.from()류 변환, 타 클래스 main() 엔트리포인트).
+        // 자기 레포 실측: GraphBuilder.build 인바운드 174건 중 ~170건이 이 폴백 오귀속으로 인한 phantom.
+        "build", "run", "of", "from", "main"
     );
 
     // 한정 호출(targetClass::method)의 targetClass가 이 목록에 있으면 해소를 아예 시도하지 않는다(엣지 정확도

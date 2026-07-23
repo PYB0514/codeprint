@@ -884,6 +884,79 @@ class GraphBuilderTest {
         assertThat(hasEdge).isTrue();
     }
 
+    @Test
+    @DisplayName("빌더 패턴 build() bare 호출은 import 매칭 없으면 전역 폴백을 막아 엣지를 만들지 않는다 (WebClient/Bucket4j/JWT 빌더 phantom)")
+    void 빌더패턴_build_폴백_엣지_미생성() {
+        // WebClient.builder().build()·Bucket4j Bandwidth.builder().build()·JWT parser builder 등
+        // 리시버 타입이 해소 안 되는 빌더 체인의 마지막 build() 호출이, 레포 내 무관한 동명 build()로
+        // phantom 연결되던 자기 레포 실측(GraphBuilder.build 인바운드 174건 중 ~170건 phantom).
+        ParsedFile caller = parsedFileWithCallsAndImports("src/client/ApiClient.java", "Java",
+                List.of("send"), Map.of("send", List.of("build")),
+                List.of()); // import 없음(빌더 체인 리시버 타입 미해소)
+        ParsedFile decoy = parsedFile("src/infra/analysis/GraphBuilder.java", "Java", List.of("build"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, decoy));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasPhantomBuildEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("send") && e.getEdgeIdentifier().contains("build"));
+
+        assertThat(hasPhantomBuildEdge).isFalse();
+    }
+
+    @Test
+    @DisplayName("build()도 caller가 실제 import한 파일이면 정상 연결된다 (자기 레포 GraphBuilder.build 실사례 보존)")
+    void build_실제_import된_경우엔_엣지_보존() {
+        // 차단은 "미해소 시 폴백"에만 적용 — PrReviewService가 실제로 import한 GraphBuilder.build()
+        // 호출까지 막으면 안 된다
+        ParsedFile caller = parsedFileWithCallsAndImports("src/app/PrReviewService.java", "Java",
+                List.of("analyzeBranch"), Map.of("analyzeBranch", List.of("build")),
+                List.of("infra.GraphBuilder"));
+        ParsedFile builder = parsedFile("src/infra/GraphBuilder.java", "Java",
+                List.of("build"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(caller, builder));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasImportedBuildEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("analyzeBranch") && e.getEdgeIdentifier().contains("build")
+                        && e.getMetadata().get("calleeFile").toString().contains("GraphBuilder"));
+
+        assertThat(hasImportedBuildEdge).isTrue();
+    }
+
+    @Test
+    @DisplayName("정적 팩토리·엔트리포인트 공통 메서드명(run/of/from/main) bare 호출도 폴백 시 phantom 엣지를 만들지 않는다")
+    void 정적팩토리_엔트리포인트_공통명_폴백_엣지_미생성() {
+        // Runnable.run()·List.of()/Optional.of()류 정적 팩토리·Instant.from()류 변환·다른 클래스의
+        // main() 엔트리포인트 — 전부 리시버/컨텍스트 타입이 흔히 해소 안 되는 전역 충돌 이름
+        for (String name : List.of("run", "of", "from", "main")) {
+            ParsedFile caller = parsedFileWithCallsAndImports("src/app/Service.java", "Java",
+                    List.of("handle"), Map.of("handle", List.of(name)),
+                    List.of());
+            ParsedFile decoy = parsedFile("src/other/TeamMember.java", "Java", List.of(name), Map.of());
+
+            graphBuilder.build(projectId, analysisId, List.of(caller, decoy));
+
+            ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+            verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+            boolean hasPhantomEdge = edgeCaptor.getAllValues().stream()
+                    .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                    .anyMatch(e -> e.getEdgeIdentifier().contains("handle") && e.getEdgeIdentifier().contains(name));
+
+            assertThat(hasPhantomEdge).as("차단 대상 이름: %s", name).isFalse();
+
+            clearInvocations(graphRepository);
+        }
+    }
+
     // ── 외부 심볼(JDK/테스트 프레임워크) 동명 오귀속 차단 (엣지 정확도 패턴 B) ──
 
     @Test
