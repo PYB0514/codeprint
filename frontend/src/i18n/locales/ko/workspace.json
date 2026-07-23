@@ -128,6 +128,10 @@
       "SERVICE_CALL_CHAIN": {
         "example": "api-gateway → customers-service → visits-service 처럼 서비스 간 동기 호출(WebClient/RestTemplate/FeignClient)이 2홉 이상 연쇄됩니다 — distributed monolith 신호(한 요청이 여러 서비스를 동기로 순차 경유).",
         "limitation": "Java/Kotlin의 WebClient·RestTemplate(URL이 인라인 문자열일 때)·FeignClient·Python requests·JS/TS axios(호스트가 리터럴일 때)를 인식 — Go 등 그 외 언어의 HTTP 클라이언트는 아직 인식하지 못해 실제 체인을 놓칠 수 있습니다(recall 한계)."
+      },
+      "CIRCULAR_BEAN_DEPENDENCY": {
+        "example": "@Component/@Service/@Repository/@Configuration/@RestController 빈 파일 2개 이상이 생성자 필드로 서로를 순환 참조 — Spring ApplicationContext 기동 자체가 실패할 수 있는 신호.",
+        "limitation": "Java/Kotlin Spring 프로젝트에서만 활성화(빈 스테레오타입 어노테이션이 하나도 없으면 검사하지 않음). 생성자 파라미터에 @Lazy가 붙은 의존은 Spring이 프록시로 즉시 생성을 미루므로 순환 판정에서 제외됩니다."
       }
     }
   },
@@ -644,7 +648,8 @@
       "LAYERED_BYPASS": { "label": "Service 계층 건너뛰기", "desc": "Controller가 Service를 건너뛰고 Repository를 직접 호출합니다 — 비즈니스 로직이 Controller에 흩어질 위험이 있습니다." },
       "INTENT_DRIFT": { "label": "선언한 구조 규칙 위반", "desc": "\"아키텍처 의도\"에서 직접 선언한 금지 규칙을 어긴 import입니다 — 내가 정한 구조 규칙에서 벗어난 코드입니다." },
       "SHARED_DATABASE_ACCESS": { "label": "공유 데이터베이스 안티패턴", "desc": "모노레포의 서로 다른 서비스가 같은 DB 테이블을 함께 접근합니다 — 테이블 소유권을 한 서비스로 모으고 다른 서비스는 API로 조회하세요." },
-      "SERVICE_CALL_CHAIN": { "label": "서비스 간 동기 호출 체인", "desc": "서비스 간 동기 호출(WebClient/RestTemplate 등)이 2홉 이상 연쇄됩니다 — 분산 모놀리스 신호입니다. 체인 중간을 비동기 이벤트로 끊거나 데이터 조합을 게이트웨이 레이어로 옮기세요." }
+      "SERVICE_CALL_CHAIN": { "label": "서비스 간 동기 호출 체인", "desc": "서비스 간 동기 호출(WebClient/RestTemplate 등)이 2홉 이상 연쇄됩니다 — 분산 모놀리스 신호입니다. 체인 중간을 비동기 이벤트로 끊거나 데이터 조합을 게이트웨이 레이어로 옮기세요." },
+      "CIRCULAR_BEAN_DEPENDENCY": { "label": "순환 빈 의존", "desc": "Spring 빈끼리 생성자 필드로 서로를 순환 참조합니다 — 앱 기동 실패로 이어질 수 있습니다. 한쪽 생성자 파라미터에 @Lazy를 붙이거나 의존을 인터페이스·이벤트로 분리해 순환을 끊으세요." }
     },
     "ignoreRulesTitle": "예외 규칙",
     "noTypeLabel": "모든 타입",

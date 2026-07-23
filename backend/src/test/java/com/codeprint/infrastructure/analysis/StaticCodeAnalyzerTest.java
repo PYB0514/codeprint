@@ -1117,6 +1117,76 @@ class StaticCodeAnalyzerTest {
         assertThat(result.feignClientTarget()).isNull();
     }
 
+    // ── Spring 빈 스테레오타입·필드 의존·@Lazy(CIRCULAR_BEAN_DEPENDENCY) ──────
+
+    @Test
+    @DisplayName("@Service 어노테이션이 붙은 클래스는 beanStereotype이 Service다")
+    void beanStereotype_Service_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                @Service
+                public class OrderService {
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.beanStereotype()).isEqualTo("Service");
+    }
+
+    @Test
+    @DisplayName("Spring 빈 스테레오타입 어노테이션이 없으면 beanStereotype은 null이다")
+    void beanStereotype_미선언_null() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                public class PlainClass {
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.beanStereotype()).isNull();
+    }
+
+    @Test
+    @DisplayName("필드 선언 타입명을 fieldDependencyTypes로 추출한다(distinct)")
+    void fieldDependencyTypes_필드타입_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                @Service
+                public class OrderService {
+                    private final PaymentService paymentService;
+                    private final PaymentService duplicate;
+                    private final InventoryService inventoryService;
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.fieldDependencyTypes()).containsExactlyInAnyOrder("PaymentService", "InventoryService");
+    }
+
+    @Test
+    @DisplayName("생성자 파라미터의 @Lazy 어노테이션이 붙은 타입명을 lazyDependencyTypes로 추출한다")
+    void lazyDependencyTypes_Lazy파라미터_추출() throws IOException {
+        Path file = writeJavaFile("""
+                package com.example;
+                @Service
+                public class OrderService {
+                    private final PaymentService paymentService;
+                    private final InventoryService inventoryService;
+                    public OrderService(@Lazy PaymentService paymentService, InventoryService inventoryService) {
+                        this.paymentService = paymentService;
+                        this.inventoryService = inventoryService;
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.lazyDependencyTypes()).containsExactly("PaymentService");
+    }
+
     // ── DB 테이블 추출 ─────────────────────────────────────────────────────
 
     @Test

@@ -77,6 +77,8 @@ public class GraphWarningService {
         warnings.addAll(detectSharedDatabaseAccess(nodes, edges));
         // 모노레포 MSA 서비스 간 동기 호출 체인 — 자체 게이트(SERVICE_CALL 엣지 존재)로 해당 구조만 발화
         warnings.addAll(detectServiceCallChain(nodes, edges));
+        // Spring 순환 빈 참조 — 자체 게이트(beanStereotype 메타 존재, 즉 @Component류 어노테이션 파일 존재)로 해당 구조만 발화
+        warnings.addAll(detectCircularBeanDependency(nodes, edges));
         // 사용자가 선언한 의도 아키텍처와 실제 의존을 대조 (컨벤션 무관 — 비-DDD 프로젝트도 적용)
         warnings.addAll(detectIntentDrift(nodes, edges, intent));
         // 노드 위치 조회용 인덱스 — 경고에 발생 파일 경로를 부여하기 위함
@@ -351,6 +353,79 @@ public class GraphWarningService {
             w.put("edgeIds", edgeIds);
             w.put("message", "순환 의존: " + String.join(" → ", names)
                     + ". 수정: 공유 로직을 shared/ 모듈로 분리하거나 한쪽 의존을 이벤트/포트-어댑터 패턴으로 역전하세요.");
+            warnings.add(w);
+        }
+        return warnings;
+    }
+
+    // Spring 순환 빈 참조 탐지 — BE-18(WebSocketAuthorizationInterceptor↔AnalysisProgressHandler)·
+    // BE-19(GraphWarningsCacheAdapter) 두 실제 프로덕션 배포 실패 사고의 재현 대상. @Component류 어노테이션이
+    // 붙은 파일(beanStereotype 메타, GraphBuilder가 부여)이 하나도 없으면 Spring 프로젝트가 아니라고 보고 빈 목록.
+    // FIELD_DEPENDENCY 엣지(GraphBuilder가 필드 타입을 다른 빈 파일로 해소해 생성)만으로 인접 그래프를 구성하고
+    // detectCyclicImports와 동일한 DFS(dfsCycle)를 재사용 — @Lazy로 표시된 엣지(isLazy)는 Spring이 프록시로
+    // 즉시 완전 생성을 미뤄 실제로 순환을 허용하는 지점이라 판정에서 제외한다.
+    private List<Map<String, Object>> detectCircularBeanDependency(List<Node> nodes, List<Edge> edges) {
+        boolean hasBeanFile = nodes.stream().anyMatch(n -> n.getType() == NodeType.FILE
+                && n.getMetadata() != null && n.getMetadata().get("beanStereotype") != null);
+        if (!hasBeanFile) return List.of();
+
+        Map<UUID, Set<UUID>> adj = new HashMap<>();
+        Map<UUID, String> nameMap = new HashMap<>();
+        Map<UUID, String> orderKey = new HashMap<>();
+        Map<String, String> depEdgeIds = new HashMap<>();
+
+        for (Node n : nodes) {
+            if (n.getType() == NodeType.FILE && n.getMetadata() != null && n.getMetadata().get("beanStereotype") != null) {
+                adj.put(n.getId(), new HashSet<>());
+                nameMap.put(n.getId(), n.getName());
+                String fp = n.getFilePath();
+                orderKey.put(n.getId(), fp != null && !fp.isEmpty() ? fp
+                        : (n.getName() != null ? n.getName() : n.getId().toString()));
+            }
+        }
+        for (Edge e : edges) {
+            if (e.getType() != EdgeType.FIELD_DEPENDENCY) continue;
+            if (!adj.containsKey(e.getSourceNodeId()) || !adj.containsKey(e.getTargetNodeId())) continue;
+            if (e.getMetadata() != null && Boolean.TRUE.equals(e.getMetadata().get("isLazy"))) continue;
+            adj.get(e.getSourceNodeId()).add(e.getTargetNodeId());
+            depEdgeIds.put(e.getSourceNodeId() + ">" + e.getTargetNodeId(), e.getId().toString());
+        }
+
+        Comparator<UUID> byPath = Comparator
+                .comparing((UUID id) -> orderKey.getOrDefault(id, id.toString()))
+                .thenComparing(UUID::toString);
+
+        Set<UUID> visited = new HashSet<>();
+        Set<UUID> stack = new HashSet<>();
+        List<List<UUID>> cycles = new ArrayList<>();
+
+        List<UUID> starts = new ArrayList<>(adj.keySet());
+        starts.sort(byPath);
+        for (UUID start : starts) {
+            if (!visited.contains(start)) {
+                dfsCycle(start, adj, visited, stack, new ArrayList<>(), cycles, byPath);
+            }
+        }
+
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (List<UUID> cycle : cycles) {
+            List<String> names = cycle.stream()
+                    .map(id -> nameMap.getOrDefault(id, id.toString()))
+                    .toList();
+            List<String> edgeIds = new ArrayList<>();
+            int sz = cycle.size();
+            for (int i = 0; i < sz; i++) {
+                String key = cycle.get(i) + ">" + cycle.get((i + 1) % sz);
+                String eid = depEdgeIds.get(key);
+                if (eid != null) edgeIds.add(eid);
+            }
+            Map<String, Object> w = new LinkedHashMap<>();
+            w.put("type", "CIRCULAR_BEAN_DEPENDENCY");
+            w.put("severity", "HIGH");
+            w.put("nodeIds", cycle.stream().map(UUID::toString).toList());
+            w.put("edgeIds", edgeIds);
+            w.put("message", "순환 빈 의존: " + String.join(" → ", names)
+                    + ". 수정: 한쪽 생성자 파라미터에 @Lazy를 붙이거나 의존을 인터페이스·이벤트로 분리해 순환을 끊으세요.");
             warnings.add(w);
         }
         return warnings;

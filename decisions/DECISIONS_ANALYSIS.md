@@ -4,6 +4,26 @@
 
 ---
 
+## CIRCULAR_BEAN_DEPENDENCY 게이트 규칙 신설 — Spring 순환 빈 참조 감지(2026-07-23, codeprint_144)
+
+**배경.** 2026-07-20(codeprint_141) BE-18(PR #623)·BE-19(PR #629) 두 차례 실제 프로덕션 배포 실패 사고(순환 빈 참조로 `ApplicationContext` 리프레시 실패)를 겪은 뒤 PROGRESS.md에 "우리 게이트가 이걸 직접 잡을 수 있나" 아이디어로 남아있던 항목. 처음엔 "완전히 새 엔진 필요"로 과대평가됐으나, 구성요소 4개 중 3개(필드 타입 추출·인터페이스→구현체 매핑·DFS 사이클 탐지)가 이미 있었음이 드러나 실제 착수 규모는 예상보다 작았다.
+
+**설계 — 기존 메커니즘 재사용, 새 엔진 없음.**
+- **필드 타입**: `TreeSitterJavaAnalyzer.collectFieldTypes()`가 이미 추출하던 필드명→타입명 맵을 메서드 호출 수신자 해소용으로만 쓰고 버리던 것을 `Result` 레코드에 추가해 그대로 노출.
+- **클래스 어노테이션·`@Lazy`**: 새 tree-sitter 쿼리 대신, `@Entity` 판정("파일당 클래스 1개" 관례에 기대 `content.contains("@Entity")`)과 동일한 단순 정규식 방식을 채택 — `StaticCodeAnalyzer.extractBeanStereotype`(파일 내 `@Component`/`@Service`/`@Repository`/`@Configuration`/`@RestController` 존재 여부)·`extractLazyDependencyTypes`(`@Lazy Type name` 패턴 스캔, 생성자/메서드 위치는 구분 안 함 — `@Lazy`는 실질적으로 생성자 주입 전용이라 위치 무관하게 안전).
+- **인터페이스→구현체 매핑·DFS 사이클 탐지**: `GraphBuilder.interfaceToImplFiles`와 `GraphWarningService.dfsCycle`을 그대로 재사용, 새 알고리즘 없음.
+- **자체 게이트**: `beanStereotype` 메타데이터를 가진 FILE 노드가 하나도 없으면(=Java Spring 프로젝트가 아니면) `detectCircularBeanDependency`가 즉시 빈 목록 반환 — 다른 프레임워크 특화 감지기(`@Async` 자기호출, FeignClient 등)와 동일한 패턴.
+
+**데이터 흐름.** `ParsedFile`에 3개 필드 추가(`fieldDependencyTypes`·`beanStereotype`·`lazyDependencyTypes`) — `CachedParsedFileLoader.ANALYZER_VERSION` 5→6 동반 증가(반복-G 재발 방지 트립와이어, `CachedParsedFileLoaderTest` 기대값 31→34 갱신). `GraphBuilder`가 빈 파일 간 필드 타입을 다른 빈 파일로 해소해 새 `EdgeType.FIELD_DEPENDENCY` 엣지 생성(`edges.type`이 VARCHAR라 DB 마이그레이션 불필요, SERVICE_CALL 선례와 동일), `@Lazy` 대상 타입의 엣지는 `isLazy=true` 메타로 표시. `GraphWarningService.detectCircularBeanDependency`가 `isLazy` 엣지를 제외한 인접 그래프로 DFS를 돌려 순환을 HIGH 경고로 보고.
+
+**검증.** TDD로 `GraphBuilderTest` 5건(beanStereotype 메타·FIELD_DEPENDENCY 생성/비생성·인터페이스 해소·isLazy 메타) + `GraphWarningServiceTest` 4건(자체 게이트·BE-18 재현 2-노드 순환·`@Lazy`로 순환 해소·비순환 무경고) 추가, 전부 GREEN. 백엔드 전체 스위트(87개 클래스) green. **실측(자기 레포 374파일)**: `analyzeLocal` 재실행 결과 `CIRCULAR_BEAN_DEPENDENCY` 오탐 0건 — `WebSocketAuthorizationInterceptor`(BE-18 실제 사고 파일, `@Component`+생성자 `@Lazy GraphFacade`·`@Lazy CollaborationApplicationService`)가 정확히 이 패턴을 갖고 있어 `@Lazy` 제외 로직의 실사례 정밀도 검증까지 확보.
+
+**프론트.** `WARNING_META`에 `CIRCULAR_BEAN_DEPENDENCY`(HIGH) 추가, `ko`/`en` `workspace.json` 양쪽에 `howItWorks.warningGuide`(example/limitation)·`warningPanel.types`(label/desc) 항목 신설.
+
+**스코프.** 1차는 Java/Spring 한정(PROGRESS.md 원 아이디어와 동일 — NestJS/Angular 등 무거운 IoC 컨테이너를 쓰는 다른 프레임워크는 향후 확장 여지로 남김).
+
+---
+
 ## Phantom 엣지 수정 — build/run/of/from/main 폴백 차단 목록 확장(2026-07-23, codeprint_144)
 
 **배경.** Context138 Fable 감사(R4 #18~20)에서 자기 레포 `GraphBuilder.build` 인바운드 174건 중 ~170건이 phantom(WebClient/Bucket4j/JWT parser 등 리시버 타입이 해소 안 되는 빌더 체인의 `.build()`가 레포 내 무관한 동명 `build()`로 오귀속)임이 측정됐고, 수정 방향(폴백 이름 매칭에 공통 메서드명 차단 목록 추가)까지 나온 뒤 착수 여부를 사용자 판단으로 미뤄뒀던 항목.

@@ -1635,6 +1635,97 @@ class GraphBuilderTest {
                 .collect(Collectors.toSet());
     }
 
+    // ── Spring 빈 필드 의존 엣지(CIRCULAR_BEAN_DEPENDENCY) ──────────────────
+
+    @Test
+    @DisplayName("빈 스테레오타입 파일은 FILE 노드에 beanStereotype 메타데이터가 붙는다")
+    void 빈파일_beanStereotype_메타데이터_부여() {
+        ParsedFile bean = parsedFileWithBean("src/app/OrderService.java", "Java", "Service", List.of(), List.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(bean));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+        Node fileNode = nodeCaptor.getAllValues().stream()
+                .filter(n -> n.getType() == NodeType.FILE && "OrderService.java".equals(n.getName()))
+                .findFirst().orElseThrow();
+
+        assertThat(fileNode.getMetadata().get("beanStereotype")).isEqualTo("Service");
+    }
+
+    @Test
+    @DisplayName("빈 파일의 필드 타입이 다른 빈 파일이면 FIELD_DEPENDENCY 엣지가 생성된다")
+    void 빈파일_필드타입_다른빈파일_FIELD_DEPENDENCY_엣지_생성() {
+        ParsedFile orderService = parsedFileWithBean("src/app/OrderService.java", "Java",
+                "Service", List.of("PaymentService"), List.of());
+        ParsedFile paymentService = parsedFileWithBean("src/app/PaymentService.java", "Java",
+                "Service", List.of(), List.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(orderService, paymentService));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasFieldDepEdge = edgeCaptor.getAllValues().stream()
+                .anyMatch(e -> e.getType() == EdgeType.FIELD_DEPENDENCY);
+
+        assertThat(hasFieldDepEdge).isTrue();
+    }
+
+    @Test
+    @DisplayName("빈 파일의 필드 타입이 빈이 아닌 일반 파일이면 FIELD_DEPENDENCY 엣지를 만들지 않는다")
+    void 빈파일_필드타입_비빈파일_엣지_미생성() {
+        ParsedFile orderService = parsedFileWithBean("src/app/OrderService.java", "Java",
+                "Service", List.of("PlainDto"), List.of());
+        ParsedFile plainDto = parsedFileWithBean("src/app/PlainDto.java", "Java",
+                null, List.of(), List.of()); // beanStereotype 없음 — 순수 DTO
+
+        graphBuilder.build(projectId, analysisId, List.of(orderService, plainDto));
+
+        verify(graphRepository, never()).saveEdge(argThat(e -> e.getType() == EdgeType.FIELD_DEPENDENCY));
+    }
+
+    @Test
+    @DisplayName("필드 타입이 인터페이스면 구현체 빈 파일로 FIELD_DEPENDENCY 엣지가 해소된다")
+    void 빈파일_필드타입_인터페이스_구현체로_해소() {
+        ParsedFile orderService = parsedFileWithBean("src/app/OrderService.java", "Java",
+                "Service", List.of("NotificationPort"), List.of());
+        ParsedFile impl = parsedFileWithImplAndBean("src/infra/EmailNotificationAdapter.java", "Java",
+                "NotificationPort", "Component");
+
+        graphBuilder.build(projectId, analysisId, List.of(orderService, impl));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        boolean hasEdgeToImpl = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FIELD_DEPENDENCY)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("EmailNotificationAdapter"));
+
+        assertThat(hasEdgeToImpl).isTrue();
+    }
+
+    @Test
+    @DisplayName("@Lazy로 주입된 필드 타입의 FIELD_DEPENDENCY 엣지는 isLazy 메타데이터가 true다")
+    void 빈파일_Lazy필드_isLazy_메타데이터_true() {
+        ParsedFile orderService = parsedFileWithBean("src/app/OrderService.java", "Java",
+                "Service", List.of("PaymentService"), List.of("PaymentService"));
+        ParsedFile paymentService = parsedFileWithBean("src/app/PaymentService.java", "Java",
+                "Service", List.of(), List.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(orderService, paymentService));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        Edge depEdge = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FIELD_DEPENDENCY)
+                .findFirst().orElseThrow();
+
+        assertThat(depEdge.getMetadata()).isNotNull();
+        assertThat(depEdge.getMetadata().get("isLazy")).isEqualTo(true);
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────
 
     private ParsedFile parsedFile(String path, String lang, List<String> functions, Map<String, String> comments) {
@@ -1701,6 +1792,25 @@ class GraphBuilderTest {
         return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
                 List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), feignClientTarget);
+    }
+
+    // Spring 빈 파일 생성 헬퍼 — beanStereotype·fieldDependencyTypes·lazyDependencyTypes 포함(canonical 생성자, 나머지 필드는 기본값)
+    // 함수 하나(placeholder)를 항상 포함시켜 CONTAINS 엣지가 생성되도록 함 — 엣지가 전혀 없는 빌드는
+    // @BeforeEach의 saveEdge 스텁이 미사용으로 잡혀 Mockito strict stubbing 예외가 나기 때문
+    private ParsedFile parsedFileWithBean(String path, String lang, String beanStereotype,
+                                          List<String> fieldDependencyTypes, List<String> lazyDependencyTypes) {
+        return new ParsedFile(path, lang, List.of("placeholder"), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), null,
+                fieldDependencyTypes, beanStereotype, lazyDependencyTypes);
+    }
+
+    // 인터페이스 구현 + 빈 파일 생성 헬퍼 — implementedInterfaces와 beanStereotype을 함께 지정(인터페이스 해소 테스트용)
+    private ParsedFile parsedFileWithImplAndBean(String path, String lang, String implementedInterface, String beanStereotype) {
+        return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(implementedInterface), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), null,
+                List.of(), beanStereotype, List.of());
     }
 
     // DB 테이블/ORM 접근 지정 헬퍼 — 비JPA ORM 코드→테이블 엣지 테스트용 (canonical 생성자: declaredTypes/testMethods/dbAccesses 포함)

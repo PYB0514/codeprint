@@ -179,8 +179,14 @@ public class StaticCodeAnalyzer {
         List<String> interfaceMethods = extractInterfaceMethods(masked, language, functions);
         List<String> serviceCalls = extractServiceCalls(masked, language);
         String feignClientTarget = extractFeignClientTarget(masked, language);
+        // 필드 선언 타입명 — tree-sitter가 이미 수신자 해소용으로 추출한 것을 CIRCULAR_BEAN_DEPENDENCY용으로 재사용(Java만, distinct)
+        List<String> fieldDependencyTypes = javaTs.isPresent()
+                ? new ArrayList<>(new LinkedHashSet<>(javaTs.get().fieldTypes().values()))
+                : List.of();
+        String beanStereotype = extractBeanStereotype(masked, language);
+        List<String> lazyDependencyTypes = extractLazyDependencyTypes(masked, language);
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions, transactionalMethods, functionLines, functionColumns, interfaceMethods, serviceCalls, feignClientTarget);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions, transactionalMethods, functionLines, functionColumns, interfaceMethods, serviceCalls, feignClientTarget, fieldDependencyTypes, beanStereotype, lazyDependencyTypes);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함
@@ -723,6 +729,30 @@ public class StaticCodeAnalyzer {
         if (named.find()) return named.group(1);
         Matcher bare = Pattern.compile("^\\s*[\"']([^\"']+)[\"']").matcher(args);
         return bare.find() ? bare.group(1) : null;
+    }
+
+    // Spring 빈 스테레오타입 어노테이션 — CIRCULAR_BEAN_DEPENDENCY 판정용(Java/Kotlin만). @Entity 판정과 동일하게
+    // 파일당 클래스 1개 관례에 기대 어노테이션-클래스 인접 여부는 보지 않고 파일 내 존재만 확인.
+    private static final List<String> BEAN_STEREOTYPE_ANNOTATIONS = List.of(
+            "Component", "Service", "Repository", "Configuration", "RestController");
+
+    private String extractBeanStereotype(String content, String language) {
+        if (!language.equals("Java") && !language.equals("Kotlin")) return null;
+        for (String ann : BEAN_STEREOTYPE_ANNOTATIONS) {
+            if (Pattern.compile("@" + ann + "\\b").matcher(content).find()) return ann;
+        }
+        return null;
+    }
+
+    // 생성자 파라미터의 @Lazy 어노테이션이 붙은 타입명 목록 — CIRCULAR_BEAN_DEPENDENCY가 순환 판정에서 제외할
+    // 의존 식별용(@Lazy 프록시 주입은 즉시 완전 생성을 요구하지 않아 Spring이 실제로 순환을 허용하는 지점).
+    // 파라미터 형태(@Lazy Type name)만 보고 생성자/세터 위치는 구분하지 않음 — @Lazy는 실질적으로 생성자 주입 전용.
+    private List<String> extractLazyDependencyTypes(String content, String language) {
+        if (!language.equals("Java") && !language.equals("Kotlin")) return List.of();
+        List<String> result = new ArrayList<>();
+        Matcher m = Pattern.compile("@Lazy\\s+(?:final\\s+)?([A-Z]\\w*)\\s+\\w").matcher(content);
+        while (m.find()) result.add(m.group(1));
+        return result;
     }
 
     // JPA Repository 인터페이스 확장에서 엔티티 클래스명 추출

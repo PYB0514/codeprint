@@ -128,6 +128,10 @@
       "SERVICE_CALL_CHAIN": {
         "example": "A synchronous service-to-service call chain (WebClient/RestTemplate/FeignClient) of 2+ hops, e.g. api-gateway → customers-service → visits-service — a distributed-monolith signal (one request synchronously threading through multiple services).",
         "limitation": "Recognizes Java/Kotlin WebClient and RestTemplate calls (when the URL is an inline string literal), FeignClient (based on files importing an @FeignClient interface), Python requests, and JS/TS axios (when the host is a literal) — other languages' HTTP clients (Go, etc.) aren't recognized yet, so real chains can be missed (a recall limitation)."
+      },
+      "CIRCULAR_BEAN_DEPENDENCY": {
+        "example": "Two or more @Component/@Service/@Repository/@Configuration/@RestController bean files reference each other through constructor fields — a signal that Spring's ApplicationContext startup itself can fail.",
+        "limitation": "Only active for Java/Kotlin Spring projects (skipped entirely if no bean stereotype annotation is present). A dependency whose constructor parameter is marked @Lazy is excluded from cycle detection, since Spring defers its full construction via a proxy."
       }
     }
   },
@@ -644,7 +648,8 @@
       "LAYERED_BYPASS": { "label": "Service Layer Bypass", "desc": "Controller skips Service and calls Repository directly — business logic risks scattering into the Controller." },
       "INTENT_DRIFT": { "label": "Declared Structure Rule Violation", "desc": "An import that violates a prohibition rule you declared yourself in \"Architecture Intent\" — code that has drifted from the structure rules you set." },
       "SHARED_DATABASE_ACCESS": { "label": "Shared Database Antipattern", "desc": "Different services in a monorepo access the same DB table — consolidate table ownership into one service and have others query it through an API." },
-      "SERVICE_CALL_CHAIN": { "label": "Cross-Service Synchronous Call Chain", "desc": "Synchronous service-to-service calls (WebClient/RestTemplate, etc.) chain 2+ hops — a distributed-monolith signal. Break the middle of the chain with an async event, or move data composition to a gateway layer." }
+      "SERVICE_CALL_CHAIN": { "label": "Cross-Service Synchronous Call Chain", "desc": "Synchronous service-to-service calls (WebClient/RestTemplate, etc.) chain 2+ hops — a distributed-monolith signal. Break the middle of the chain with an async event, or move data composition to a gateway layer." },
+      "CIRCULAR_BEAN_DEPENDENCY": { "label": "Circular Bean Dependency", "desc": "Spring beans reference each other in a cycle through constructor fields — this can cause the app to fail on startup. Mark one constructor parameter with @Lazy, or break the cycle by extracting the dependency into an interface or event." }
     },
     "ignoreRulesTitle": "Ignore Rules",
     "noTypeLabel": "All Types",
