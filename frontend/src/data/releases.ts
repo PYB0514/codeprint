@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.149.0',
+    date: '2026-07-23',
+    title: '서비스 간 동기 호출 체인 감지 — Go 지원',
+    type: 'feature',
+    items: [
+      { category: '게이트 테마', desc: 'SERVICE_CALL_CHAIN이 이제 Go net/http(http.Get/Post/Head, http.NewRequest)를 통한 서비스 간 호출도 감지합니다. 기존 Java WebClient·RestTemplate·FeignClient·Python requests·JS/TS axios와 함께 언어 혼합 체인도 인식됩니다.' },
+    ],
+  },
+  {
     version: 'v0.148.0',
     date: '2026-07-23',
     title: 'Spring 순환 빈 참조 감지 — CIRCULAR_BEAN_DEPENDENCY',

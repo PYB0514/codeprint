@@ -937,6 +937,19 @@ public class StaticCodeAnalyzer {
             p = Pattern.compile(
                 "\\baxios\\.(?:get|post|put|delete|patch)\\s*\\(\\s*[`\"']http://([a-zA-Z0-9_-]+)"
             );
+        } else if (language.equals("Go")) {
+            // 표준 라이브러리 net/http만 1차 스코프 — http.Get/Post/Head(top-level 함수)와
+            // http.NewRequest(method, url, body)+Client.Do 패턴(PUT/DELETE 등 그 외 메서드는 보통 이 경로)
+            List<String> goResult = new ArrayList<>();
+            Matcher topLevel = Pattern.compile(
+                "\\bhttp\\.(?:Get|Post|Head)\\s*\\(\\s*\"http://([a-zA-Z0-9_-]+)"
+            ).matcher(content);
+            while (topLevel.find()) goResult.add(topLevel.group(1));
+            Matcher newRequest = Pattern.compile(
+                "\\bhttp\\.NewRequest\\s*\\(\\s*\"[A-Z]+\"\\s*,\\s*\"http://([a-zA-Z0-9_-]+)"
+            ).matcher(content);
+            while (newRequest.find()) goResult.add(newRequest.group(1));
+            return goResult.stream().distinct().toList();
         } else {
             return List.of();
         }
