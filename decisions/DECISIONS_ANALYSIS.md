@@ -4,6 +4,18 @@
 
 ---
 
+## Phantom 엣지 수정 — build/run/of/from/main 폴백 차단 목록 확장(2026-07-23, codeprint_144)
+
+**배경.** Context138 Fable 감사(R4 #18~20)에서 자기 레포 `GraphBuilder.build` 인바운드 174건 중 ~170건이 phantom(WebClient/Bucket4j/JWT parser 등 리시버 타입이 해소 안 되는 빌더 체인의 `.build()`가 레포 내 무관한 동명 `build()`로 오귀속)임이 측정됐고, 수정 방향(폴백 이름 매칭에 공통 메서드명 차단 목록 추가)까지 나온 뒤 착수 여부를 사용자 판단으로 미뤄뒀던 항목.
+
+**기존 메커니즘 재사용, 신규 엔진 아님.** `GraphBuilder.JDK_BUILTIN_CALL_NAMES`가 이미 이 정확한 문제(폴백 시에만 오귀속 위험이 큰 공통 메서드명 차단)를 위해 존재했고, 감사가 지목한 10개(build·isEmpty·verify·run·of·from·get·add·main·matches) 중 5개(isEmpty·verify·get·add·matches)는 이미 포함돼 있었다 — 실제 신규 작업은 나머지 5개(build·run·of·from·main) 추가뿐. 새 메커니즘을 설계하지 않고 기존 상수 Set에 항목만 더했다(§2 단순성).
+
+**TDD.** `GraphBuilderTest`에 3건 추가: ①`build` bare 호출(미해소) → phantom 엣지 미생성(RED 확인 후 수정으로 GREEN) ②`build`를 실제로 import한 경우(예: `PrReviewService`→`GraphBuilder`) → 엣지 보존(자기 레포의 진짜 `build()` 호출까지 막지 않는지 회귀 가드) ③`run`/`of`/`from`/`main` 4종 동일 패턴을 반복문 하나로 검증. 차단은 "import 매칭 실패 시 전역 폴백"에만 적용되고 타입이 해소되는 정상 호출은 그대로 통과 — precision 이득 대비 recall 손실이 최소화된 지점에서만 작동.
+
+**검증.** 신규 3건 GREEN + `GraphBuilderTest` 67/67 + 백엔드 전체 스위트(87개 클래스) green. `analyzeLocal` 재실행 결과 이번 diff와 무관한 기존 경고 6건(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1, 전부 이번에 손대지 않은 함수)만 남아 베이스라인 변화 없음 확인.
+
+---
+
 ## 게이트 테마 1단계 — 자동 감지 표면화 + DDD 마이그레이션(2026-07-17)
 
 **배경.** 엔진은 이미 암묵적 테마제로 동작 중이었다(`GraphWarningService.detect()` 내부에서 `isDddProject()` 하나로 DDD 5종/레이어드 2종이 상호배타적으로 갈리고, 피처슬라이스 2종은 별도 자체 게이트로 추가 적용) — 문제는 사용자에게 이게 전혀 안 보인다는 것.
