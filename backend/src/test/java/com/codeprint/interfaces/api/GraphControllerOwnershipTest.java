@@ -132,7 +132,7 @@ class GraphControllerOwnershipTest {
         UUID from = UUID.randomUUID();
         UUID to = UUID.randomUUID();
         doThrow(new IllegalStateException("Not authorized to access this project"))
-                .when(graphFacade).verifyProjectOwnership(projectId, userId);
+                .when(graphFacade).verifyProjectAccess(projectId, userId);
 
         assertThatThrownBy(() -> controller.getGraphDiff(projectId, from, to, user))
                 .isInstanceOf(IllegalStateException.class);

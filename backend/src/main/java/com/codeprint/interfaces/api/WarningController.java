@@ -31,7 +31,7 @@ public class WarningController {
         if (req.fingerprint() == null || req.fingerprint().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        graphFacade.verifyProjectOwnership(projectId, user.getId());
+        graphFacade.verifyProjectAccess(projectId, user.getId());
         warningSuppressionService.suppress(projectId, req.fingerprint(), req.type());
         return ResponseEntity.noContent().build();
     }
@@ -42,7 +42,7 @@ public class WarningController {
             @PathVariable UUID projectId,
             @PathVariable String fingerprint,
             @AuthenticationPrincipal User user) {
-        graphFacade.verifyProjectOwnership(projectId, user.getId());
+        graphFacade.verifyProjectAccess(projectId, user.getId());
         warningSuppressionService.unsuppress(projectId, fingerprint);
         return ResponseEntity.noContent().build();
     }

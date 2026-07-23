@@ -29,8 +29,8 @@ public class GraphFacade {
     private final GraphUserInfoPort graphUserInfoPort;
     private final S3Service s3Service;
 
-    // 프로젝트 소유권 확인 — 소유자 아니면 예외
-    public void verifyProjectOwnership(UUID projectId, UUID userId) {
+    // 프로젝트 접근 권한 확인 — 소유자 또는 팀 멤버 아니면 예외
+    public void verifyProjectAccess(UUID projectId, UUID userId) {
         projectAccessPort.verifyOwnership(projectId, userId);
     }
 
