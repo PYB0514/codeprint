@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.148.0',
+    date: '2026-07-23',
+    title: 'Spring 순환 빈 참조 감지 — CIRCULAR_BEAN_DEPENDENCY',
+    type: 'feature',
+    items: [
+      { category: '게이트', desc: '@Component/@Service/@Repository/@Configuration/@RestController 빈 파일끼리 생성자 필드로 서로를 순환 참조하면 새로 감지됩니다(CIRCULAR_BEAN_DEPENDENCY, HIGH) — 앱 기동 자체가 실패할 수 있는 신호입니다. 생성자 파라미터에 @Lazy가 붙은 의존은 Spring이 즉시 완전 생성을 미루므로 순환 판정에서 제외됩니다. Java/Kotlin Spring 프로젝트에서만 활성화됩니다.' },
+    ],
+  },
+  {
     version: 'v0.147.6',
     date: '2026-07-20',
     title: '팀 좌석 증가 결제가 겹치는 상황에서 최종 좌석 수가 어긋나던 문제 수정',

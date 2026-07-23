@@ -33,7 +33,9 @@ public class CachedParsedFileLoader {
     // 신필드를 null로 역직렬화해 GraphBuilder.build()가 NPE로 죽음(B-16과 동일 원인 2회차, exploreLocal
     // 자가분석 중 발견). CachedParsedFileLoaderTest의 필드 수 트립와이어 테스트로 재발 감지.
     // v5(2026-07-17): ParsedFile에 feignClientTarget 필드 추가(SERVICE_CALL_CHAIN의 FeignClient 지원).
-    static final int ANALYZER_VERSION = 5;
+    // v6(2026-07-23): ParsedFile에 fieldDependencyTypes·beanStereotype·lazyDependencyTypes 3개 필드 추가
+    // (CIRCULAR_BEAN_DEPENDENCY 게이트 규칙).
+    static final int ANALYZER_VERSION = 6;
     private static final Duration CACHE_TTL = Duration.ofDays(30);
     // 미니파이드 번들·생성 파일 등 비정상적으로 큰 파일이 파싱 파이프라인 메모리를 잡아먹는 것 방지 — 이 이상은 분석 제외
     static final long MAX_FILE_SIZE_BYTES = 2L * 1024 * 1024;

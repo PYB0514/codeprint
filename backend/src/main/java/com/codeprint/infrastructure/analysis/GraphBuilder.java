@@ -86,9 +86,11 @@ public class GraphBuilder {
             Node fileNode = Node.create(graphId, NodeType.FILE,
                     extractFileName(pf.filePath()), pf.filePath(), pf.language());
 
-            if (pf.fileComment() != null) {
-                fileNode.updateMetadata(Map.of("comment", pf.fileComment()));
-            }
+            Map<String, Object> fileMeta = new HashMap<>();
+            if (pf.fileComment() != null) fileMeta.put("comment", pf.fileComment());
+            // Spring 빈 스테레오타입 — CIRCULAR_BEAN_DEPENDENCY가 빈 파일만 골라 순환 판정 대상으로 삼는 데 사용
+            if (pf.beanStereotype() != null) fileMeta.put("beanStereotype", pf.beanStereotype());
+            if (!fileMeta.isEmpty()) fileNode.updateMetadata(fileMeta);
             graphRepository.saveNode(fileNode);
             fileNodeIds.put(pf.filePath(), fileNode.getId());
 
@@ -201,6 +203,33 @@ public class GraphBuilder {
         for (ParsedFile pf : parsedFiles) {
             if ("Java".equals(pf.language())) {
                 javaClassNameToFile.put(extractFileNameWithoutExt(pf.filePath()), pf);
+            }
+        }
+
+        // 빈(bean) 파일 간 필드 의존 엣지 생성 — CIRCULAR_BEAN_DEPENDENCY 판정용(BE-18·BE-19 재현 대상).
+        // 필드 타입을 다른 빈 파일로 해소(인터페이스는 구현체 우선, FUNCTION_CALL 매칭과 동일 원칙),
+        // @Lazy 주입 타입은 Spring이 프록시로 즉시 완전 생성을 미뤄 실제로 순환을 허용하므로 isLazy 메타로 표시.
+        for (ParsedFile pf : parsedFiles) {
+            if (pf.beanStereotype() == null) continue;
+            UUID sourceFileId = fileNodeIds.get(pf.filePath());
+            if (sourceFileId == null) continue;
+            Set<String> lazyTypes = new HashSet<>(pf.lazyDependencyTypes());
+            for (String fieldType : pf.fieldDependencyTypes()) {
+                List<ParsedFile> implFiles = interfaceToImplFiles.get(fieldType);
+                List<ParsedFile> targets = (implFiles != null && !implFiles.isEmpty())
+                        ? implFiles
+                        : (javaClassNameToFile.containsKey(fieldType) ? List.of(javaClassNameToFile.get(fieldType)) : List.of());
+                for (ParsedFile target : targets) {
+                    if (target.beanStereotype() == null) continue;
+                    UUID targetFileId = fileNodeIds.get(target.filePath());
+                    if (targetFileId == null || targetFileId.equals(sourceFileId)) continue;
+                    String edgeId = extractFileName(pf.filePath()) + "-fielddep-" + extractFileName(target.filePath()) + "-" + fieldType;
+                    Edge depEdge = Edge.create(graphId, edgeId, EdgeType.FIELD_DEPENDENCY, sourceFileId, targetFileId);
+                    if (lazyTypes.contains(fieldType)) {
+                        depEdge.updateMetadata(Map.of("isLazy", true));
+                    }
+                    graphRepository.saveEdge(depEdge);
+                }
             }
         }
 

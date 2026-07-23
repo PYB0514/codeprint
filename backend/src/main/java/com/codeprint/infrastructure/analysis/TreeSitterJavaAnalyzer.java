@@ -17,9 +17,10 @@ import java.util.Set;
 // 주석·문자열 리터럴 내부의 가짜 식별자를 호출로 오인하지 않는다(AST가 토큰 종류를 구분).
 class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
 
-    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록, 함수명→정의 시작 줄(1-indexed), 함수명→식별자 시작 컬럼(0-indexed)
+    // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록, 함수명→정의 시작 줄(1-indexed), 함수명→식별자 시작 컬럼(0-indexed),
+    // 필드명→선언 타입명(CIRCULAR_BEAN_DEPENDENCY의 빈 의존 그래프 구성용 — 기존엔 메서드 호출 수신자 해소용으로만 쓰고 버려졌음)
     record Result(List<String> functions, Map<String, List<String>> functionCalls, Map<String, Integer> functionLines,
-                  Map<String, Integer> functionColumns) {}
+                  Map<String, Integer> functionColumns, Map<String, String> fieldTypes) {}
 
     @Override
     protected TSLanguage createLanguage() {
@@ -48,7 +49,7 @@ class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
 
             Map<String, List<String>> functionCalls = new LinkedHashMap<>();
             calls.forEach((caller, callees) -> functionCalls.put(caller, new ArrayList<>(callees)));
-            return new Result(functions, functionCalls, functionLines, functionColumns);
+            return new Result(functions, functionCalls, functionLines, functionColumns, fieldTypes);
         });
     }
 

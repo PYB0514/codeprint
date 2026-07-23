@@ -2408,4 +2408,80 @@ class GraphWarningServiceTest {
         assertThat(theme.msaActive()).isTrue();
         assertThat(theme.msaRuleTypes()).contains("SERVICE_CALL_CHAIN");
     }
+
+    // ── CIRCULAR_BEAN_DEPENDENCY — Spring 순환 빈 참조(BE-18·BE-19 재현) ─────
+
+    private Node beanFileNode(String name, String filePath, String stereotype) {
+        Node n = Node.create(graphId, NodeType.FILE, name, filePath, "java");
+        n.updateMetadata(Map.of("beanStereotype", stereotype));
+        return n;
+    }
+
+    private Edge fieldDependencyEdge(UUID src, UUID tgt, boolean isLazy) {
+        Edge e = Edge.create(graphId, src + "->fielddep->" + tgt, EdgeType.FIELD_DEPENDENCY, src, tgt);
+        if (isLazy) e.updateMetadata(Map.of("isLazy", true));
+        return e;
+    }
+
+    @Test
+    @DisplayName("CIRCULAR_BEAN_DEPENDENCY — 빈 파일이 하나도 없으면 FIELD_DEPENDENCY 순환이 있어도 경고 0개(자체 게이트)")
+    void circularBeanDependency_noBeanFile_selfGated() {
+        Node a = fileNode("A");
+        Node b = fileNode("B");
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(a, b),
+                List.of(fieldDependencyEdge(a.getId(), b.getId(), false),
+                        fieldDependencyEdge(b.getId(), a.getId(), false))
+        );
+        assertThat(warnings.stream().filter(w -> "CIRCULAR_BEAN_DEPENDENCY".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("CIRCULAR_BEAN_DEPENDENCY — BE-18 재현(WebSocketAuthorizationInterceptor↔AnalysisProgressHandler 상호 필드 의존)")
+    void circularBeanDependency_be18_mutualFieldDependency() {
+        Node interceptor = beanFileNode("WebSocketAuthorizationInterceptor",
+                "src/main/java/com/codeprint/interfaces/websocket/WebSocketAuthorizationInterceptor.java", "Component");
+        Node progressHandler = beanFileNode("AnalysisProgressHandler",
+                "src/main/java/com/codeprint/application/analysis/AnalysisProgressHandler.java", "Component");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(interceptor, progressHandler),
+                List.of(fieldDependencyEdge(interceptor.getId(), progressHandler.getId(), false),
+                        fieldDependencyEdge(progressHandler.getId(), interceptor.getId(), false))
+        );
+
+        List<Map<String, Object>> beanWarnings = warnings.stream()
+                .filter(w -> "CIRCULAR_BEAN_DEPENDENCY".equals(w.get("type"))).toList();
+        assertThat(beanWarnings).hasSize(1);
+        assertThat(beanWarnings.get(0).get("severity")).isEqualTo("HIGH");
+    }
+
+    @Test
+    @DisplayName("CIRCULAR_BEAN_DEPENDENCY — @Lazy로 표시된 엣지(isLazy)는 순환 판정에서 제외되어 경고가 사라진다")
+    void circularBeanDependency_lazyEdgeExcludesCycle() {
+        Node a = beanFileNode("ServiceA", "src/app/ServiceA.java", "Service");
+        Node b = beanFileNode("ServiceB", "src/app/ServiceB.java", "Service");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(a, b),
+                List.of(fieldDependencyEdge(a.getId(), b.getId(), false),
+                        fieldDependencyEdge(b.getId(), a.getId(), true)) // @Lazy로 순환을 끊음
+        );
+
+        assertThat(warnings.stream().filter(w -> "CIRCULAR_BEAN_DEPENDENCY".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("CIRCULAR_BEAN_DEPENDENCY — 순환 없는 단방향 빈 의존은 경고 0개")
+    void circularBeanDependency_noCycle() {
+        Node a = beanFileNode("ServiceA", "src/app/ServiceA.java", "Service");
+        Node b = beanFileNode("ServiceB", "src/app/ServiceB.java", "Service");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(a, b),
+                List.of(fieldDependencyEdge(a.getId(), b.getId(), false))
+        );
+
+        assertThat(warnings.stream().filter(w -> "CIRCULAR_BEAN_DEPENDENCY".equals(w.get("type"))).toList()).isEmpty();
+    }
 }
