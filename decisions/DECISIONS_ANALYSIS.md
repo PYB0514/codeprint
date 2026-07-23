@@ -4,6 +4,16 @@
 
 ---
 
+## SERVICE_CALL_CHAIN — Go net/http 지원 확장(2026-07-23, codeprint_144)
+
+**배경.** Python requests·JS/TS axios 지원(2026-07-18) 뒤 "남은 후속"으로 남아있던 Go HTTP 클라이언트 지원. 기존 Java WebClient/RestTemplate·Python·JS/TS와 동일한 패턴(host가 `http://서비스명` 리터럴일 때만 매칭, path의 변수는 허용)을 언어 분기만 추가해 재사용 — `GraphBuilder`/`GraphWarningService`는 언어 무관이라 하류 로직 변경 없음(선례와 동일).
+
+**스코프.** 표준 라이브러리 `net/http`만 1차 대상. `http.Get`/`http.Post`/`http.Head`(top-level 함수, 각각 GET/POST/HEAD 고정)와 `http.NewRequest(method, url, body)` + `Client.Do(req)`(PUT/DELETE 등 그 외 메서드는 보통 이 경로) 두 패턴으로 커버. 서드파티 클라이언트(resty 등)는 스코프 밖.
+
+**검증.** `StaticCodeAnalyzerTest`에 TDD 3건(http.Get 추출·http.NewRequest 추출·로컬 경로 제외) 추가, 백엔드 전체 스위트(87개 클래스) green.
+
+---
+
 ## CIRCULAR_BEAN_DEPENDENCY 게이트 규칙 신설 — Spring 순환 빈 참조 감지(2026-07-23, codeprint_144)
 
 **배경.** 2026-07-20(codeprint_141) BE-18(PR #623)·BE-19(PR #629) 두 차례 실제 프로덕션 배포 실패 사고(순환 빈 참조로 `ApplicationContext` 리프레시 실패)를 겪은 뒤 PROGRESS.md에 "우리 게이트가 이걸 직접 잡을 수 있나" 아이디어로 남아있던 항목. 처음엔 "완전히 새 엔진 필요"로 과대평가됐으나, 구성요소 4개 중 3개(필드 타입 추출·인터페이스→구현체 매핑·DFS 사이클 탐지)가 이미 있었음이 드러나 실제 착수 규모는 예상보다 작았다.

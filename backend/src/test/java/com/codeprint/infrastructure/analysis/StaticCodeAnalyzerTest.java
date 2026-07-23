@@ -1069,6 +1069,55 @@ class StaticCodeAnalyzerTest {
         assertThat(result.serviceCalls()).isEmpty();
     }
 
+    @Test
+    @DisplayName("http.Get()의 http:// 호스트에서 대상 서비스 논리명을 추출한다(Go)")
+    void serviceCalls_go_httpGet_추출() throws IOException {
+        Path file = writeGoFile("""
+                package main
+
+                func getOwner(id string) {
+                    http.Get("http://customers-service/owners/" + id)
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.serviceCalls()).contains("customers-service");
+    }
+
+    @Test
+    @DisplayName("http.NewRequest()의 http:// 호스트에서 대상 서비스 논리명을 추출한다(Go)")
+    void serviceCalls_go_newRequest_추출() throws IOException {
+        Path file = writeGoFile("""
+                package main
+
+                func deleteOwner(id string) {
+                    req, _ := http.NewRequest("DELETE", "http://customers-service/owners/"+id, nil)
+                    client.Do(req)
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.serviceCalls()).contains("customers-service");
+    }
+
+    @Test
+    @DisplayName("로컬 경로(http:// 없음) http.Get 호출은 serviceCalls로 추출하지 않는다(Go)")
+    void serviceCalls_go_로컬_경로_제외() throws IOException {
+        Path file = writeGoFile("""
+                package main
+
+                func call() {
+                    http.Get("/local/path")
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Go");
+
+        assertThat(result.serviceCalls()).isEmpty();
+    }
+
     // ── FeignClient 서비스 대상(feignClientTarget, SERVICE_CALL_CHAIN 확장) ──────────
 
     @Test

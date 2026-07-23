@@ -127,7 +127,7 @@
       },
       "SERVICE_CALL_CHAIN": {
         "example": "api-gateway → customers-service → visits-service 처럼 서비스 간 동기 호출(WebClient/RestTemplate/FeignClient)이 2홉 이상 연쇄됩니다 — distributed monolith 신호(한 요청이 여러 서비스를 동기로 순차 경유).",
-        "limitation": "Java/Kotlin의 WebClient·RestTemplate(URL이 인라인 문자열일 때)·FeignClient·Python requests·JS/TS axios(호스트가 리터럴일 때)를 인식 — Go 등 그 외 언어의 HTTP 클라이언트는 아직 인식하지 못해 실제 체인을 놓칠 수 있습니다(recall 한계)."
+        "limitation": "Java/Kotlin의 WebClient·RestTemplate(URL이 인라인 문자열일 때)·FeignClient·Python requests·JS/TS axios·Go net/http(호스트가 리터럴일 때)를 인식 — 그 외 언어·라이브러리의 HTTP 클라이언트는 아직 인식하지 못해 실제 체인을 놓칠 수 있습니다(recall 한계)."
       },
       "CIRCULAR_BEAN_DEPENDENCY": {
         "example": "@Component/@Service/@Repository/@Configuration/@RestController 빈 파일 2개 이상이 생성자 필드로 서로를 순환 참조 — Spring ApplicationContext 기동 자체가 실패할 수 있는 신호.",
