@@ -83,7 +83,7 @@ public class GraphController {
             @PathVariable UUID graphId,
             @Valid @RequestBody PinRequest request,
             @AuthenticationPrincipal User user) {
-        graphFacade.verifyProjectOwnership(projectId, user.getId());
+        graphFacade.verifyProjectAccess(projectId, user.getId());
         graphCommandService.pinGraph(projectId, graphId, request.slot());
         return ResponseEntity.ok().build();
     }
@@ -94,7 +94,7 @@ public class GraphController {
             @PathVariable UUID projectId,
             @PathVariable UUID graphId,
             @AuthenticationPrincipal User user) {
-        graphFacade.verifyProjectOwnership(projectId, user.getId());
+        graphFacade.verifyProjectAccess(projectId, user.getId());
         graphCommandService.unpinGraph(projectId, graphId);
         return ResponseEntity.ok().build();
     }
@@ -237,7 +237,7 @@ public class GraphController {
             @RequestParam UUID to,
             @AuthenticationPrincipal User user) {
 
-        graphFacade.verifyProjectOwnership(projectId, user.getId());
+        graphFacade.verifyProjectAccess(projectId, user.getId());
         // from/to 그래프가 이 프로젝트 소속인지 확인 — 타 프로젝트 그래프 diff 차단
         requireGraphBelongsToProject(from, projectId);
         requireGraphBelongsToProject(to, projectId);
