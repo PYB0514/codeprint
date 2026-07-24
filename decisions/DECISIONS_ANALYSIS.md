@@ -4,6 +4,23 @@
 
 ---
 
+## 엣지 정확도 4차 감사 — DB_READ/WRITE/CREATE/DELETE 62/62 전수 판정, phantom 1.6%(1/62), 신규 패턴 D 발견(2026-07-24)
+
+**방법.** 같은 표본(seed 42)의 DB_* 4종(READ 30·WRITE 7·CREATE 2·DELETE 23) 62건 전수 판정. `detectCrudTypes`(`GraphBuilder.java:758`, 메서드명 접두사 기반 CRUD 분류)의 규칙을 그대로 재현하는 스크립트로 fn-level 41건(메서드명이 edgeIdentifier에 남는 것)을 기계적으로 재분류해 실제 엣지 타입과 대조, file-level·rawsql 21건은 소스(Repository 선언·`@Query` 리터럴)를 직접 확인.
+
+**결과.** fn-level 41건 중 38건은 규칙과 정확히 일치(READ 15·CREATE 1·DELETE 12). 나머지 3건(DB_WRITE)은 모두 "폴백"(메서드명이 어떤 접두사 규칙에도 안 걸려 `types.isEmpty()` → READ+WRITE 이중 추가, `GraphBuilder.java:778`) 경로였다 — 그 중 2건(`incrementSeats`·`markAllReadByUserId`)은 실제로 `@Modifying`+`UPDATE` 문이라 결과적으로 DB_WRITE가 맞았지만, **1건은 확정 오류**.
+
+**신규 발견 — 패턴 D: 접두사 미매칭 폴백이 read-only 집계 쿼리를 write로 오분류.**
+- `TeamProjectAllocationJpaRepository.sumAllocatedSeatsByTeamId`는 `@Query("SELECT COALESCE(SUM(...)) ...")`인 순수 읽기 집계 쿼리(`@Modifying` 없음)인데, "sum" 접두사가 READ 규칙 목록(find/get/count/exists/load/fetch/read/list/search)에 없어 매칭 실패 → 폴백으로 DB_WRITE 엣지가 함께 생성됨.
+- **반대 방향 누출도 존재**(이번 표본엔 안 걸렸지만 같은 메커니즘): `incrementSeats`·`markAllReadByUserId`도 폴백을 탔으므로 실제로는 write-only인데 이 두 메서드에 대한 **DB_READ 엣지도 함께 생겼을 것**(폴백이 항상 두 타입을 같이 추가하므로) — 다음 감사에서 이 엣지들이 표본에 걸리면 phantom으로 잡힐 것.
+- **수정 방향(다음 세션 후보)**: READ 접두사 목록에 `sum`·`total`·`avg`·`max`·`min` 등 JPA `@Query` 집계 함수 관용구를 추가하거나, 폴백을 "READ+WRITE 둘 다 추가"에서 "판정 불가 시 아무 엣지도 안 만듦(precision 우선)"으로 바꾸는 두 방향이 있음 — 후자가 더 안전하지만 회귀(빈 레포의 상속 CRUD 능력 표현이 사라짐) 여부 확인 필요.
+
+**결과물.** `backend/src/test/resources/edge-audit/self/2026-07-24-db-crud.json`.
+
+**의미.** DB_* 엣지는 IMPORT/INSTANTIATION과 마찬가지로 선언 기반 해소(전역 이름 탐색 아님)라 대상 테이블 오귀속 위험은 거의 없음(62건 중 대상 오류 0건) — 유일한 오류원은 엣지 "타입"(READ/WRITE/CREATE/DELETE) 분류 규칙의 커버리지 갭이었다. `resolveBareCall`류(FUNCTION_CALL) 문제와는 성격이 다른, 훨씬 국소적이고 고치기 쉬운 종류의 결함.
+
+---
+
 ## 엣지 정확도 4차 감사 — INSTANTIATION 30/30 전수 판정, phantom 0%(2026-07-24)
 
 **방법.** 같은 표본(seed 42)의 INSTANTIATION 30건 — 소스 파일 전체에서 `new TargetClass(` 리터럴 존재 확인 + 타깃 클래스명이 레포 내 유일 파일인지(동명 충돌 없음) 확인. `classNameToFileId`(GraphBuilder.java:576)가 클래스명→파일 단순 전역 매핑이라 이름 충돌 시 phantom 위험이 있는 구조인데, 실측으로 이번 표본엔 충돌이 없었음을 확인.
