@@ -833,7 +833,7 @@ public class GraphBuilder {
         boolean bestIsInterface = false;
         for (ParsedFile calleeFile : parsedFiles) {
             if (calleeFile.filePath().equals(callerFile.filePath())) continue;
-            if (!calleeFile.functions().contains(calleeFunc)) continue;
+            if (!calleeFile.functions().contains(calleeFunc) && !hasEntityAccessor(calleeFile, calleeFunc)) continue;
             if (onlyImported && !callerImports(callerFile, calleeFile)) continue;
             String calleeClassName = extractFileNameWithoutExt(calleeFile.filePath());
             boolean calleeIsInterface = interfaceToImplFiles.containsKey(calleeClassName);
@@ -847,6 +847,21 @@ public class GraphBuilder {
             }
         }
         return bestMatch;
+    }
+
+    // @Entity 클래스의 필드 목록(entityColumns)에서 Lombok이 생성했을 getter/setter 이름을 합성해 매칭 후보로만
+    // 인정 — FUNCTION 노드는 안 만드므로(functions()에 미포함) funcNodeIds 조회가 항상 실패해 엣지 생성 단계에서
+    // 자연히 no-op된다. 즉 이 메서드는 "틀린 후보를 걸러 phantom을 없애는" 방향으로만 작용하고, 그 자체로 새
+    // 엣지를 만들어내진 않는다(엣지 정확도 4차 감사 패턴 C — Lombok getter가 분석기에 안 보여 self-file/import
+    // 우선순위 해소가 실패하고 무관한 동명 명시적 메서드로 전역 폴백되던 문제).
+    private boolean hasEntityAccessor(ParsedFile pf, String methodName) {
+        for (ColumnInfo col : pf.entityColumns()) {
+            String cap = Character.toUpperCase(col.fieldName().charAt(0)) + col.fieldName().substring(1);
+            if (methodName.equals("get" + cap) || methodName.equals("set" + cap)) return true;
+            boolean isBoolean = "boolean".equals(col.javaType()) || "Boolean".equals(col.javaType());
+            if (isBoolean && methodName.equals("is" + cap)) return true;
+        }
+        return false;
     }
 
     // Java 상속 체인(extends)을 타고 올라가 calleeFunc를 정의한 가장 가까운 조상 파일을 찾는다(엣지 정확도 패턴 A').
