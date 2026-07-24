@@ -4,6 +4,24 @@
 
 ---
 
+## 엣지 정확도 4차 감사 — FUNCTION_CALL 30/30 전수 판정, phantom 6.7%(2/30), 신규 패턴 C 발견(2026-07-24)
+
+**방법.** `LocalEdgeAuditor`(아래 항목)로 자기 레포 FUNCTION_CALL 30건(고정 시드 42) 표본추출 → 각 표본의 호출 지점을 소스 파일에서 직접 확인(호출 텍스트 grep) + receiver 클래스의 실제 필드/메서드 정의 대조. 1차(2026-07-07)와 달리 표본 전수(30/30)를 판정(1차는 플래그된 9건만 수동 판정).
+
+**결과.** **real 28건 · phantom 2건(6.7%)** — 1차 감사(23.3%, 7/30)보다 크게 낮아짐. 이는 2026-07-09 이후 적용된 패턴 A(Java 자기정의 우선)·패턴 B(외부 심볼 동명 오귀속 차단)·6개 언어 타입 인지 호출 해소 수정이 실제로 효과가 있었음을 이번 독립 재측정으로 확인한 것.
+
+**신규 발견 — 패턴 C: Lombok `@Getter` 생성 메서드가 분석기에 안 보임.**
+- `FeedbackController.listAll`의 `f.getStatus()`(f=Feedback)가 `TeamPaymentOrder.getStatus()`로 오귀속. `Feedback`은 `@Getter`+`private String status` 필드로 `getStatus()`가 Lombok 생성이라 소스에 텍스트로 존재하지 않음 — self-file 해소가 실패해 전역 폴백이 동명의 **명시적으로 작성된** 메서드(TeamPaymentOrder.getStatus())로 잘못 연결.
+- `CommunityController.addLike`의 `post.getUserId()`(post=Post)가 `User.getUserId()`(UserId VO 반환)로 오귀속. 동일 원인 — `Post.getUserId()`는 Lombok 생성이라 안 보이고, `User`엔 우연히 같은 이름의 **명시적** 메서드가 있어 그쪽으로 폴백.
+- **패턴 B(외부 심볼 동명 오귀속)와의 차이**: 패턴 B는 대상이 JDK/외부 라이브러리 심볼이었는데, 패턴 C는 대상이 **레포 내부의, 그러나 receiver 타입과 무관한 다른 클래스**다 — "진짜 정의가 레포에 있는데 분석기 눈에 안 보여서" 생기는 새로운 하위 유형.
+- **수정 방향(다음 세션 후보, 이번엔 미착수)**: `@Getter`/`@Setter` 클래스 어노테이션이 있는 클래스의 필드 목록에서 `getXxx`/`setXxx`/`isXxx` 가상 메서드를 합성해 self-file 해소 후보에 포함시키면 근본 해결 가능 — `CIRCULAR_BEAN_DEPENDENCY`가 이미 클래스 어노테이션(`beanStereotype`)을 정규식으로 추출하는 것과 동일한 패턴 재사용 가능.
+
+**결과물.** `backend/src/test/resources/edge-audit/self/2026-07-24-function-call.json`에 30건 전체(verdict·근거 포함) 커밋 — 다음 감사 때 동일 시드로 재실행해 회귀(새 phantom 발생) 여부 비교 가능.
+
+**한계.** 이번 라운드는 FUNCTION_CALL만(다른 7개 타입 — IMPORT/INSTANTIATION/DB_*·CONTAINS·FIELD_DEPENDENCY — 은 `edge-audit-self.json`에 표본은 추출됐으나 미분류). `CONTAINS`·`FIELD_DEPENDENCY`는 구조적 사실(같은 파일 내 정의 관계)이라 이름 해소 리스크가 없어 우선순위 낮음 — IMPORT·INSTANTIATION·DB_* 분류가 다음 착수 후보.
+
+---
+
 ## 엣지 정확도 반복측정 도구 — LocalEdgeAuditor 신설(2026-07-24)
 
 **문제.** "경고 정확도 ≠ 그래프 정확도"(memory `project_warning_vs_graph_accuracy`)를 확인하는 엣지 정확도 감사가 2026-07-07에 1~3차까지 이뤄졌으나(위 "엣지 정확도 1~3차" 항목), 매번 세션 스크래치의 일회성 파이썬 스크립트(고정 시드 랜덤 샘플링)로 측정해 재현 가능한 도구로 저장소에 남지 않았다. PROGRESS.md "품질 부채"가 이 상태를 "전수 측정 체계 부재"로 계속 추적 중이었음.
