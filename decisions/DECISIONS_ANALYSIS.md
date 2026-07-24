@@ -4,6 +4,22 @@
 
 ---
 
+## 엣지 정확도 반복측정 도구 — LocalEdgeAuditor 신설(2026-07-24)
+
+**문제.** "경고 정확도 ≠ 그래프 정확도"(memory `project_warning_vs_graph_accuracy`)를 확인하는 엣지 정확도 감사가 2026-07-07에 1~3차까지 이뤄졌으나(위 "엣지 정확도 1~3차" 항목), 매번 세션 스크래치의 일회성 파이썬 스크립트(고정 시드 랜덤 샘플링)로 측정해 재현 가능한 도구로 저장소에 남지 않았다. PROGRESS.md "품질 부채"가 이 상태를 "전수 측정 체계 부재"로 계속 추적 중이었음.
+
+**스코프 결정(사용자 확인).** ①자기 레포만 우선 대상, 다국어 OSS 벤치 레포 확장은 후속 ②분류(phantom/실제 판정) 자체는 여전히 사람(Claude)이 소스 대조해 수동 판정 — 코드 의미 판단이라 자동화 불가 ③측정 결과는 대시보드 미연동, decisions 기록으로 추이만 추적(이 프로젝트의 채택 레버는 게이트 precision이지 엣지 정확도 자체가 아님 — memory `project_adoption_lever_focus`).
+
+**결정.** `backend/src/main/java/com/codeprint/tools/LocalEdgeAuditor.java` 신설, Gradle task `edgeAudit`로 노출. `LocalAnalyzer.buildGraph`(기존 analyzeLocal/exploreLocal/watchLocal이 공유하는 재사용 코어, `docs/CONVENTIONS.md` 참조)를 그대로 재사용 — 그래프 생성 로직 재구현 없음. 엣지를 `EdgeType`별로 그룹화 → `edgeIdentifier` 정렬 후 고정 시드(`-PsampleSeed=`, 기본 42) 셔플로 표본 추출(`-PsampleSize=`, 타입당 기본 30건) → 각 표본의 source/target 노드를 이름·파일경로·언어·정의 줄(Java/TS/JS만, `Node.metadata.line`)·소스 스니펫(최대 40줄, 과거 수동 감사와 동일 관례)과 함께 JSON으로 `build/codeprint-local/edge-audit-<repoLabel>.json`에 기록. `verdict` 필드는 `null`로 비워둬 분류 전임을 명시 — 사람/Claude가 판정 후 `backend/src/test/resources/edge-audit/<repoLabel>/<날짜>.json`으로 커밋하면 재실행 때마다 추이 비교가 가능해진다(이번 세션은 도구만 신설, 실제 분류·커밋은 후속).
+
+**레포 비종속 설계(장기 확장 대비).** 분석 대상 경로는 코드에 없다 — `-PanalysisDir=`(기본 `src/main/java`, 즉 자기 레포)로만 결정, 소스에 특정 레포 경로 하드코딩 없음. `-PanalysisDir=src/main/java/com/codeprint/tools -PrepoLabel=tools-subset -PsampleSize=5`로 임의 하위 디렉터리를 대상 삼아 코드 변경 없이 동작함을 실측 확인 — 나중에 gin·ripgrep 같은 기존 다국어 벤치 레포로 확장할 때도 파라미터만 바꾸면 된다.
+
+**검증.** `compileJava` green. `./gradlew edgeAudit`(자기 레포, 375파일) 실행 — 노드 2,101·엣지 4,711 중 표본 212건(엣지 타입 8종 × 최대 30건) JSON 정상 기록, `source`/`target` 스니펫에 한글 주석 포함해 정상 직렬화 확인. `analyzeLocal` 자기분석 — 신규 위반 0건(기존 HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1과 동일, `LocalEdgeAuditor.main`은 HIGH_FAN_OUT 룰의 `main` 제외 대상이라 무관).
+
+**한계.** 이 도구는 표본 추출·직렬화까지만 자동화한다 — phantom 여부 분류는 여전히 수동이라 "측정 체계"이지 "정확도 자동 게이트"가 아니다. 언어별(Go/Rust/Ruby/C#) 확장은 스코프 결정에 따라 이번엔 하지 않음, 다음 착수 시 `-PanalysisDir`만 바꿔 재사용 가능.
+
+---
+
 ## SERVICE_CALL_CHAIN — Go net/http 지원 확장(2026-07-23, codeprint_144)
 
 **배경.** Python requests·JS/TS axios 지원(2026-07-18) 뒤 "남은 후속"으로 남아있던 Go HTTP 클라이언트 지원. 기존 Java WebClient/RestTemplate·Python·JS/TS와 동일한 패턴(host가 `http://서비스명` 리터럴일 때만 매칭, path의 변수는 허용)을 언어 분기만 추가해 재사용 — `GraphBuilder`/`GraphWarningService`는 언어 무관이라 하류 로직 변경 없음(선례와 동일).
