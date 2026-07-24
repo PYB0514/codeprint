@@ -20,6 +20,9 @@ public class CacheConfig {
             Caffeine.newBuilder()
                 .maximumSize(200)
                 .expireAfterWrite(10, TimeUnit.MINUTES)
+                // maximumSize는 엔트리 개수 기준이라 노드 수천+엣지 수천짜리 그래프 하나가
+                // 힙을 다 채워도 200개 미만이면 계속 쌓임 — 메모리 압박 시 GC가 회수하도록 보강
+                .softValues()
         );
         return manager;
     }

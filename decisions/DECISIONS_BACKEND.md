@@ -2,6 +2,20 @@
 
 ---
 
+## 그래프 캐시 — maximumSize를 softValues()로 보강(2026-07-24, PROGRESS.md "RAM 절감 여지 2건" ②)
+
+**문제.** `CacheConfig`의 `graphNodes`/`graphEdges`/`graphWarnings` 캐시가 `Caffeine.maximumSize(200)`만으로 크기를 제한하고 있었다 — 이건 **엔트리 개수** 기준이라, 엔트리 하나(그래프 하나)가 노드 수천+엣지 수천 개를 통째로 담을 수 있는 이 캐시 구조에선 실효 상한이 아니다. 200개 미만이면 그래프가 아무리 커도 계속 쌓여 힙 상한(-XX:MaxRAMPercentage=50)을 실질적으로 방어하지 못한다(2026-07-18 Fable 감사 R53 #128 지적).
+
+**결정.** `maximumWeight`+커스텀 `Weigher`(그래프별 정확한 무게 계산, 구현 복잡도↑) 대신 **`softValues()`**를 채택 — Caffeine이 이 값들을 soft reference로 들고 있다가 JVM이 실제 메모리 압박을 느낄 때 GC가 회수하게 한다. "엔트리 몇 개"가 아니라 "실제 힙이 부족한가"를 기준으로 삼아 이 캐시의 실제 실패 모드(엔트리 수는 적은데 개별 크기가 큼)에 더 정확히 대응하고, 무게 추정치 같은 임의 상수를 도입하지 않아 §2(단순성)에도 부합. `maximumSize(200)`·`expireAfterWrite(10분)`는 그대로 유지(추가 방어선, 상충 없음 — Caffeine이 size/time/reference 세 종류 축출 기준을 함께 지원).
+
+**트레이드오프.** soft reference 캐시는 값을 참조 동일성(`==`)으로 다루는 것이 Caffeine의 일반적 동작이나, 이 캐시는 조회 전용 저장소(그래프 노드/엣지/경고 List를 그대로 넣고 그대로 꺼내 쓰기만 함)라 값 동등성 비교에 의존하는 로직이 없어 영향 없음.
+
+**검증.** `compileJava` green. `CacheConfig`는 기존 빈의 설정 변경(신규 빈·생성자 의존관계 변경 아님)이지만 Caffeine 빌더 조합 오류는 빈 생성 시점(`CaffeineCacheManager.afterPropertiesSet`)에 `IllegalStateException`으로 드러나므로 로컬 백엔드 재기동으로 검증 — `preview_start`로 재기동해 정상 부팅(`/actuator/health` UP) 확인. `analyzeLocal` 자기분석 — 이 변경으로 인한 신규 위반 0건(기존 HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1은 무관한 기존 베이스라인).
+
+**남은 것.** PROGRESS.md "RAM 절감 여지 2건" 중 ①(`*/15` cron이 Serverless sleep을 상시 방해)은 스테일 감지 응답성 vs 비용 트레이드오프라 사용자 판단이 먼저 필요 — 이번엔 손대지 않음.
+
+---
+
 ## 프로덕션 안정성 갭 D — @Async 실행기 백프레셔 도입(2026-07-17)
 
 **문제.** `CodeprintApplication`에 `@EnableAsync`만 있고 커스텀 `TaskExecutor`가 없었다. 세션 중 로그(`AnnotationAsyncExecutionInterceptor`)에서 "More than one TaskExecutor bean found within the context, and none is named 'taskExecutor'"가 관찰됐는데 — WebSocket STOMP 설정이 등록한 `clientInboundChannelExecutor`·`clientOutboundChannelExecutor`·`brokerChannelExecutor` 등과 후보가 겹쳐 Spring이 유일한 `TaskExecutor` 빈을 특정하지 못하고 **무제한 스레드-per-태스크 `SimpleAsyncTaskExecutor`로 폴백**하고 있었다. `AnalysisRunner.run`(클론+파싱)·`PrReviewRunner.reviewAsync`(PR 리뷰)처럼 CPU·메모리 부담이 큰 `@Async` 작업이 동시에 여러 건 들어오면 스레드 수 제한이 전혀 없어 Railway의 제한된 메모리에서 OOM 위험이 있었다.
