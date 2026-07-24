@@ -1,0 +1,345 @@
+{
+  "repoLabel": "self",
+  "analysisDir": "src/main/java",
+  "seed": 42,
+  "edgeType": "FIELD_DEPENDENCY",
+  "auditedAt": "2026-07-24",
+  "method": "전수 판정(30/30) - 소스의 생성자 주입 필드 선언과 타겟 클래스명(직접 일치 또는 interfaceToImplFiles 경유 구현체)이 실제로 대응하는지 확인. 2건은 소스 스니펫이 길어 필드 선언부가 감사 도구의 스니펫 길이 제한 밖에 있었으나, import 문 존재+타겟 클래스명 직접 일치로 정탐 확인",
+  "summary": {
+    "real": 30,
+    "phantom": 0,
+    "phantomRate": "0%"
+  },
+  "samples": [
+    {
+      "edgeIdentifier": "UserQueryPortImpl.java-fielddep-UserRepositoryImpl.java-UserRepository",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/UserQueryPortImpl.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/UserRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "PostCommandService.java-fielddep-PostRepositoryImpl.java-PostRepository",
+      "source": {
+        "filePath": "com/codeprint/application/community/PostCommandService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "PrReviewService.java-fielddep-GraphBuilder.java-GraphBuilder",
+      "source": {
+        "filePath": "com/codeprint/application/analysis/PrReviewService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/GraphBuilder.java"
+      },
+      "verdict": "real",
+      "note": "스니펫 길이 제한으로 필드 선언부 미노출 — import문+타겟 클래스명 직접 일치로 정탐 확인"
+    },
+    {
+      "edgeIdentifier": "ProjectController.java-fielddep-ProjectFacade.java-ProjectFacade",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/ProjectController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/project/ProjectFacade.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ArchitectureIntentController.java-fielddep-GraphQueryService.java-GraphQueryService",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/ArchitectureIntentController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/graph/GraphQueryService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "FeaturedRepoService.java-fielddep-FeaturedRepoRepositoryImpl.java-FeaturedRepoRepository",
+      "source": {
+        "filePath": "com/codeprint/application/featured/FeaturedRepoService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/featured/FeaturedRepoRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphController.java-fielddep-NodeStyleService.java-NodeStyleService",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/GraphController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/graph/NodeStyleService.java"
+      },
+      "verdict": "real",
+      "note": "스니펫 길이 제한으로 필드 선언부 미노출 — import문+타겟 클래스명 직접 일치로 정탐 확인"
+    },
+    {
+      "edgeIdentifier": "TeamApiKeyController.java-fielddep-TeamApiKeyApplicationService.java-TeamApiKeyApplicationService",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/TeamApiKeyController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/team/TeamApiKeyApplicationService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "NotificationEventHandler.java-fielddep-NotificationService.java-NotificationService",
+      "source": {
+        "filePath": "com/codeprint/application/notification/NotificationEventHandler.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/notification/NotificationService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "UserUpgradeAdapter.java-fielddep-UserRepositoryImpl.java-UserRepository",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/adapter/UserUpgradeAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/UserRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TeamProvisioningAdapter.java-fielddep-TeamRepositoryImpl.java-TeamRepository",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/adapter/TeamProvisioningAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/team/TeamRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "WarningController.java-fielddep-WarningSuppressionService.java-WarningSuppressionService",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/WarningController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/graph/WarningSuppressionService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "FeaturedRepoService.java-fielddep-FeaturedPostPublishingAdapter.java-PostPublishingPort",
+      "source": {
+        "filePath": "com/codeprint/application/featured/FeaturedRepoService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/adapter/FeaturedPostPublishingAdapter.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "CommunityFacade.java-fielddep-PostRepositoryImpl.java-PostRepository",
+      "source": {
+        "filePath": "com/codeprint/application/community/CommunityFacade.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "NodeCommentController.java-fielddep-NodeCommentService.java-NodeCommentService",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/NodeCommentController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/graph/NodeCommentService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "StuckAnalysisCleaner.java-fielddep-AnalysisRepositoryImpl.java-AnalysisRepository",
+      "source": {
+        "filePath": "com/codeprint/application/analysis/StuckAnalysisCleaner.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/analysis/AnalysisRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ArchitectureIntentService.java-fielddep-ArchitectureIntentAuditLogRepositoryImpl.java-ArchitectureIntentAuditLogRepository",
+      "source": {
+        "filePath": "com/codeprint/application/graph/ArchitectureIntentService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/ArchitectureIntentAuditLogRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "CollaborationApplicationService.java-fielddep-CollaborationGraphAccessAdapter.java-GraphAccessPort",
+      "source": {
+        "filePath": "com/codeprint/application/collaboration/CollaborationApplicationService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/adapter/CollaborationGraphAccessAdapter.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TeamAccessAdapter.java-fielddep-TeamMemberRepositoryImpl.java-TeamMemberRepository",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/adapter/TeamAccessAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/team/TeamMemberRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AuthTokenService.java-fielddep-UserRepositoryImpl.java-UserRepository",
+      "source": {
+        "filePath": "com/codeprint/application/user/AuthTokenService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/UserRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "SecurityConfig.java-fielddep-JwtAuthenticationFilter.java-JwtAuthenticationFilter",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/config/SecurityConfig.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/security/JwtAuthenticationFilter.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "FeaturedRepoMetadataAdapter.java-fielddep-GitHubApiClient.java-GitHubApiClient",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/adapter/FeaturedRepoMetadataAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/github/GitHubApiClient.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "FpReportService.java-fielddep-GraphRepositoryImpl.java-GraphRepository",
+      "source": {
+        "filePath": "com/codeprint/application/graph/FpReportService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/GraphRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "StaleAnalysisReconciliationCronController.java-fielddep-StaleAnalysisReconciliationService.java-StaleAnalysisReconciliationService",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/StaleAnalysisReconciliationCronController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/analysis/StaleAnalysisReconciliationService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "WebSocketAuthorizationInterceptor.java-fielddep-GraphFacade.java-GraphFacade",
+      "source": {
+        "filePath": "com/codeprint/interfaces/websocket/WebSocketAuthorizationInterceptor.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/graph/GraphFacade.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TeamPaymentApplicationService.java-fielddep-TeamProvisioningAdapter.java-TeamProvisioningPort",
+      "source": {
+        "filePath": "com/codeprint/application/payment/TeamPaymentApplicationService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/adapter/TeamProvisioningAdapter.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ProjectFacade.java-fielddep-GitHubApiClient.java-GitHubApiClient",
+      "source": {
+        "filePath": "com/codeprint/application/project/ProjectFacade.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/github/GitHubApiClient.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "DevController.java-fielddep-AuthTokenService.java-AuthTokenService",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/DevController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/user/AuthTokenService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "OAuth2SuccessHandler.java-fielddep-UserCommandService.java-UserCommandService",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/security/OAuth2SuccessHandler.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/user/UserCommandService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "PrReviewService.java-fielddep-GitHubApiClient.java-GitHubApiClient",
+      "source": {
+        "filePath": "com/codeprint/application/analysis/PrReviewService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/github/GitHubApiClient.java"
+      },
+      "verdict": "real",
+      "note": null
+    }
+  ]
+}

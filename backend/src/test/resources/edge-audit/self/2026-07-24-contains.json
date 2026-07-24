@@ -1,0 +1,345 @@
+{
+  "repoLabel": "self",
+  "analysisDir": "src/main/java",
+  "seed": 42,
+  "edgeType": "CONTAINS",
+  "auditedAt": "2026-07-24",
+  "method": "전수 판정(30/30) - source.filePath와 target.filePath가 항상 동일 파일임을 확인(FILE→FUNCTION 구조적 포함 관계는 파서가 함수를 정의 파일에 귀속시키는 시점에 결정되므로 오귀속 가능성 자체가 없음)",
+  "summary": {
+    "real": 30,
+    "phantom": 0,
+    "phantomRate": "0%"
+  },
+  "samples": [
+    {
+      "edgeIdentifier": "GraphRepositoryImpl.java-saveNode",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/GraphRepositoryImpl.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/GraphRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AnalysisResult.java-start",
+      "source": {
+        "filePath": "com/codeprint/domain/analysis/AnalysisResult.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/analysis/AnalysisResult.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphBuilder.java-extractFileNameWithoutExt",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/GraphBuilder.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/GraphBuilder.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphBuilder.java-matchesModulePath",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/GraphBuilder.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/GraphBuilder.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ProjectFacade.java-getGithubRepos",
+      "source": {
+        "filePath": "com/codeprint/application/project/ProjectFacade.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/project/ProjectFacade.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "UserRepositoryImpl.java-findByIdIn",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/UserRepositoryImpl.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/UserRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "WarningSuppressionRepository.java-existsByProjectIdAndFingerprint",
+      "source": {
+        "filePath": "com/codeprint/domain/graph/WarningSuppressionRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/WarningSuppressionRepository.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "StaticCodeAnalyzer.java-extractImports",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "PostAttachmentJpaRepository.java-findByPostIdOrderByCreatedAtAsc",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostAttachmentJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostAttachmentJpaRepository.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "Node.java-getNodeId",
+      "source": {
+        "filePath": "com/codeprint/domain/graph/Node.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/Node.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "FileParsedFileCachePort.java-saveAll",
+      "source": {
+        "filePath": "com/codeprint/tools/FileParsedFileCachePort.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/tools/FileParsedFileCachePort.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LocalAnalyzer.java-findAllWithPrGateConnected",
+      "source": {
+        "filePath": "com/codeprint/tools/LocalAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/tools/LocalAnalyzer.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "FeaturedRepoRepository.java-save",
+      "source": {
+        "filePath": "com/codeprint/domain/featured/FeaturedRepoRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/featured/FeaturedRepoRepository.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "StaticCodeAnalyzer.java-extractControllerMappingFunctions",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "WarningController.java-endpoint-/api/projects/{projectId}/warnings/report-fp",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/WarningController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/interfaces/api/WarningController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "PostRepositoryImpl.java-findSnapshotsByPostId",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostRepositoryImpl.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AnalysisController.java-startAnalysis",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/AnalysisController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/interfaces/api/AnalysisController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TreeSitterCSharpAnalyzer.java-collectFieldTypes",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterCSharpAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterCSharpAnalyzer.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TreeSitterTypescriptAnalyzer.java-addParams",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterTypescriptAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterTypescriptAnalyzer.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "PostCommandService.java-getAttachmentsWithUrls",
+      "source": {
+        "filePath": "com/codeprint/application/community/PostCommandService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/community/PostCommandService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "PostRepositoryImpl.java-deleteSnapshotsByPostId",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostRepositoryImpl.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostRepositoryImpl.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "PlanGrantLogRepository.java-findTop50ByOrderByCreatedAtDesc",
+      "source": {
+        "filePath": "com/codeprint/domain/admin/PlanGrantLogRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/admin/PlanGrantLogRepository.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GateMetricsService.java-current",
+      "source": {
+        "filePath": "com/codeprint/application/admin/GateMetricsService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/admin/GateMetricsService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "PostRepository.java-findPostIdsWithSnapshots",
+      "source": {
+        "filePath": "com/codeprint/domain/community/PostRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/PostRepository.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "Node.java-updateAnnotation",
+      "source": {
+        "filePath": "com/codeprint/domain/graph/Node.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/Node.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "PaymentController.java-endpoint-/api/payments/toss/prepare",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/PaymentController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/interfaces/api/PaymentController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "RepoCloner.java-clone",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/RepoCloner.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/RepoCloner.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphViewPresetJpaRepository.java-findByGraphIdAndUserIdAndSlot",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/GraphViewPresetJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/GraphViewPresetJpaRepository.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AesEncryptionConverter.java-convertToDatabaseColumn",
+      "source": {
+        "filePath": "com/codeprint/shared/jpa/AesEncryptionConverter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/shared/jpa/AesEncryptionConverter.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AdminController.java-getGateMetrics",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/AdminController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/interfaces/api/AdminController.java"
+      },
+      "verdict": "real",
+      "note": null
+    }
+  ]
+}

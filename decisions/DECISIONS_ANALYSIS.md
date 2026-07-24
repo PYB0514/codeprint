@@ -4,6 +4,22 @@
 
 ---
 
+## 엣지 정확도 5차 감사 — CONTAINS·FIELD_DEPENDENCY 전수 판정, phantom 0%(2026-07-24, codeprint_146)
+
+**배경.** 4차 감사(같은 날 앞선 세션)에서 "구조적 사실이라 우선순위 낮음"으로 미착수 남겨뒀던 마지막 두 엣지 타입. `./gradlew edgeAudit`을 자기 레포 전체에 실행(`-PsampleSize=30`)해 CONTAINS 30건·FIELD_DEPENDENCY 30건을 표본추출, 각각 30/30 전수 판정.
+
+**CONTAINS(30/30, phantom 0%).** `GraphBuilder`가 FUNCTION 노드를 생성하는 시점에 그 노드의 `parentFile`이 곧 소스 파일 자신이라, source.filePath와 target.filePath가 항상 같은 파일이어야 하는 구조적 불변식이다. 스크립트로 30건 전부 이 불변식을 만족함을 확인 — 애초에 오귀속이 발생할 수 없는 구조(파싱과 동시에 결정)라 4차 감사 때의 판단("구조적 사실")이 실측으로도 확인됨.
+
+**FIELD_DEPENDENCY(30/30, phantom 0%).** 이 엣지 타입은 CIRCULAR_BEAN_DEPENDENCY 판정 전용(양쪽 다 `beanStereotype != null`인 파일 사이에서만 생성, `GraphBuilder.java:217-239`) — 생성자 주입 필드 타입을 `interfaceToImplFiles`(인터페이스→구현체, 여러 구현체면 전부에 엣지 생성) 우선, 없으면 `javaClassNameToFile`(클래스명 직접 매칭)로 해소한다. 정규식으로 "소스가 실제로 그 타입의 필드를 선언하는지" + "타겟이 그 타입과 실제로 대응하는지(클래스명 직접 일치 또는 `implements`)" 둘 다 검증 — 28/30은 즉시 통과, 나머지 2건(`PrReviewService→GraphBuilder`, `GraphController→NodeStyleService`)은 감사 도구의 소스 스니펫 길이 제한(파일에 생성자 주입 필드가 많아 스니펫이 실제 필드 선언 줄에 못 미침) 때문에 자동검증 스크립트가 놓친 것으로, import문 존재+타겟 클래스명 직접 일치로 수동 확인해 정탐 처리.
+
+**리스크로 지목했던 "인터페이스 다중 구현체 시 전체 연결" 패턴은 이번 표본에 안 걸림** — 이 레포는 Repository/Port 인터페이스가 1:1 구현이 대부분이라 실제로 발현되지 않음. 향후 인터페이스 다중 구현 사례(예: 여러 어댑터가 같은 Port를 구현)가 늘면 재검토 대상으로 남겨둔다(코드 변경 없음, 관찰만).
+
+**검증.** 결과 `backend/src/test/resources/edge-audit/self/2026-07-24-contains.json`·`2026-07-24-field-dependency.json`에 커밋 — 4차 감사 파일들과 동일 시드(42)라 재실행 시 직접 비교 가능. 코드 수정 없음(phantom 0건이라 수정 대상 없음).
+
+**결론.** 6개 엣지 타입(FUNCTION_CALL·IMPORT·INSTANTIATION·DB_*)에 이어 CONTAINS·FIELD_DEPENDENCY까지 전수 판정 완료 — 그래프를 구성하는 핵심 엣지 타입 감사가 사실상 마무리됐다(SERVICE_CALL은 신규·소규모 타입이라 이번 스코프 밖, 필요 시 별도 라운드).
+
+---
+
 ## SERVICE_CALL_CHAIN "변수 조합 URL" ② — docker-compose.yml environment 블록 파싱, Python 확장(2026-07-24, codeprint_146)
 
 **문제.** 바로 아래 항목(JS/TS)에서 "Python(`os.environ`)은 후속"으로 남겨뒀던 것을 이어서 완료. `requests.get(f"http://{os.environ['QUOTES_API']}/...")` 류 호출은 host가 리터럴이 아니라 기존 SERVICE_CALL_CHAIN 매칭(`http://서비스명` 리터럴 컨벤션)이 못 잡는다.
