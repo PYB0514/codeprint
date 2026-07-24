@@ -6,7 +6,9 @@ on:
     - cron: '0 21 * * *'  # 매일 06:00 KST(UTC 21:00) — 오늘의 공개레포 갱신
     - cron: '0 0 * * *'   # 매일 09:00 KST(UTC 00:00) — 일일 다이제스트 발송
     - cron: '0 * * * *'   # 매시 정각 — G-5 웹훅 유실 리컨실리에이션
-    - cron: '*/15 * * * *' # 15분마다 — 안정성 갭 C+F 스테일 RUNNING 분석 리컨실리에이션
+    # reconcile-stale-analyses 스케줄 제거(2026-07-25) — 15분마다 Serverless sleep을 방해해 가동률 ≈67%·콜드스타트 최대
+    # 96회/일 유발(R36 #98, contexts/Context138.md). 실사용자 0명인 지금은 스테일 감지 지연의 실익이 거의 없어
+    # workflow_dispatch 수동 실행으로만 전환 — 실사용자 유입 시 재평가.
   workflow_dispatch:
     inputs:
       job:
@@ -47,7 +49,7 @@ jobs:
             -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}"
 
   reconcile-stale-analyses:
-    if: github.event_name == 'workflow_dispatch' && inputs.job == 'reconcile-stale-analyses' || github.event.schedule == '*/15 * * * *'
+    if: github.event_name == 'workflow_dispatch' && inputs.job == 'reconcile-stale-analyses'
     runs-on: ubuntu-latest
     steps:
       - name: Call /api/cron/reconcile-stale-analyses
