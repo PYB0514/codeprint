@@ -761,7 +761,11 @@ public class GraphBuilder {
             String m = method.toLowerCase();
             if (m.startsWith("find") || m.startsWith("get") || m.startsWith("count")
                     || m.startsWith("exists") || m.startsWith("load") || m.startsWith("fetch")
-                    || m.startsWith("read") || m.startsWith("list") || m.startsWith("search")) {
+                    || m.startsWith("read") || m.startsWith("list") || m.startsWith("search")
+                    // JPQL 집계 함수 관용구 — 이게 없으면 접두사 미매칭 폴백(READ+WRITE 동시 추가)을 타
+                    // read-only 집계 쿼리가 DB_WRITE로도 잘못 표시됨(엣지 정확도 4차 감사 패턴 D)
+                    || m.startsWith("sum") || m.startsWith("avg") || m.startsWith("total")
+                    || m.startsWith("min") || m.startsWith("max")) {
                 types.add(EdgeType.DB_READ);
             } else if (m.startsWith("save") || m.startsWith("create") || m.startsWith("insert")
                     || m.startsWith("add") || m.startsWith("persist")) {
