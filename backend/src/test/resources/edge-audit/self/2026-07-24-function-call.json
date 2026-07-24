@@ -1,0 +1,465 @@
+{
+  "repoLabel": "self",
+  "seed": 42,
+  "edgeType": "FUNCTION_CALL",
+  "auditedAt": "2026-07-24",
+  "method": "전수 판정(30/30) — 호출 지점 텍스트 대조(소스 파일 grep) + receiver 클래스의 실제 필드/메서드 정의 확인",
+  "summary": {
+    "real": 28,
+    "phantom": 2,
+    "phantomRate": "6.7%"
+  },
+  "samples": [
+    {
+      "edgeIdentifier": "NotificationRepository-findTop30ByUserIdOrderByCreatedAtDesc-impl-NotificationJpaRepository",
+      "source": {
+        "name": "findTop30ByUserIdOrderByCreatedAtDesc",
+        "filePath": "com/codeprint/domain/notification/NotificationRepository.java",
+        "line": 17
+      },
+      "target": {
+        "name": "findTop30ByUserIdOrderByCreatedAtDesc",
+        "filePath": "com/codeprint/infrastructure/persistence/notification/NotificationJpaRepository.java",
+        "line": 17
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AnalysisFacade.java-startAnalysis-calls-ProjectQueryService.java-getProject",
+      "source": {
+        "name": "startAnalysis",
+        "filePath": "com/codeprint/application/analysis/AnalysisFacade.java",
+        "line": 39
+      },
+      "target": {
+        "name": "getProject",
+        "filePath": "com/codeprint/application/project/ProjectQueryService.java",
+        "line": 33
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphWarningService.java-extractContextFromApplicationPath-selfcalls-extractContextAfterLayer",
+      "source": {
+        "name": "extractContextFromApplicationPath",
+        "filePath": "com/codeprint/application/graph/GraphWarningService.java",
+        "line": 983
+      },
+      "target": {
+        "name": "extractContextAfterLayer",
+        "filePath": "com/codeprint/application/graph/GraphWarningService.java",
+        "line": 996
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "UserImageService.java-deleteBackground-calls-User.java-updateGraphBgUrl",
+      "source": {
+        "name": "deleteBackground",
+        "filePath": "com/codeprint/application/user/UserImageService.java",
+        "line": 58
+      },
+      "target": {
+        "name": "updateGraphBgUrl",
+        "filePath": "com/codeprint/domain/user/User.java",
+        "line": 119
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphRepository-findNodesByGraphId-impl-GraphRepositoryImpl",
+      "source": {
+        "name": "findNodesByGraphId",
+        "filePath": "com/codeprint/domain/graph/GraphRepository.java",
+        "line": 20
+      },
+      "target": {
+        "name": "findNodesByGraphId",
+        "filePath": "com/codeprint/infrastructure/persistence/graph/GraphRepositoryImpl.java",
+        "line": 40
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "CommunityController.java-toPostResponse-calls-PostRepository.java-findSnapshotsByPostId",
+      "source": {
+        "name": "toPostResponse",
+        "filePath": "com/codeprint/interfaces/api/CommunityController.java",
+        "line": 467
+      },
+      "target": {
+        "name": "findSnapshotsByPostId",
+        "filePath": "com/codeprint/domain/community/PostRepository.java",
+        "line": 75
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GitHubApiClient.java-fetchLatestCommitSha-selfcalls-extractOwnerRepo",
+      "source": {
+        "name": "fetchLatestCommitSha",
+        "filePath": "com/codeprint/infrastructure/github/GitHubApiClient.java",
+        "line": 112
+      },
+      "target": {
+        "name": "extractOwnerRepo",
+        "filePath": "com/codeprint/infrastructure/github/GitHubApiClient.java",
+        "line": 502
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TreeSitterRustAnalyzer.java-walk-selfcalls-simpleTypeName",
+      "source": {
+        "name": "walk",
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterRustAnalyzer.java",
+        "line": 75
+      },
+      "target": {
+        "name": "simpleTypeName",
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterRustAnalyzer.java",
+        "line": 217
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "FeedbackController.java-listAll-calls-TeamPaymentOrder.java-getStatus",
+      "source": {
+        "name": "listAll",
+        "filePath": "com/codeprint/interfaces/api/FeedbackController.java",
+        "line": 56
+      },
+      "target": {
+        "name": "getStatus",
+        "filePath": "com/codeprint/domain/payment/TeamPaymentOrder.java",
+        "line": 75
+      },
+      "verdict": "phantom",
+      "note": "Lombok @Getter가 생성한 Feedback.getStatus()가 분석기에 안 보여(소스에 명시적 정의 없음) self-file 해소 실패 → 동명의 명시적으로 작성된 TeamPaymentOrder.getStatus()로 전역 오귀속. 실제 호출 receiver는 f(Feedback), f.getStatus()가 진짜 대상."
+    },
+    {
+      "edgeIdentifier": "TreeSitterGoAnalyzer.java-parse-calls-AbstractTreeSitterAnalyzer.java-parseTree",
+      "source": {
+        "name": "parse",
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterGoAnalyzer.java",
+        "line": 36
+      },
+      "target": {
+        "name": "parseTree",
+        "filePath": "com/codeprint/infrastructure/analysis/AbstractTreeSitterAnalyzer.java",
+        "line": 50
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "CommunityController.java-addLike-calls-User.java-getUserId",
+      "source": {
+        "name": "addLike",
+        "filePath": "com/codeprint/interfaces/api/CommunityController.java",
+        "line": 374
+      },
+      "target": {
+        "name": "getUserId",
+        "filePath": "com/codeprint/domain/user/User.java",
+        "line": 134
+      },
+      "verdict": "phantom",
+      "note": "Lombok @Getter가 생성한 Post.getUserId()가 분석기에 안 보여 self-file 해소 실패 → 동명의 명시적으로 작성된 User.getUserId()(UserId VO 반환)로 전역 오귀속. 실제 호출 receiver는 post(Post), post.getUserId()가 진짜 대상."
+    },
+    {
+      "edgeIdentifier": "AnalysisRunner.java-run-calls-AnalysisResult.java-complete",
+      "source": {
+        "name": "run",
+        "filePath": "com/codeprint/application/analysis/AnalysisRunner.java",
+        "line": 35
+      },
+      "target": {
+        "name": "complete",
+        "filePath": "com/codeprint/domain/analysis/AnalysisResult.java",
+        "line": 74
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TreeSitterJavaAnalyzer.java-parse-selfcalls-walk",
+      "source": {
+        "name": "parse",
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterJavaAnalyzer.java",
+        "line": 36
+      },
+      "target": {
+        "name": "walk",
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterJavaAnalyzer.java",
+        "line": 58
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphWarningService.java-detectActiveTheme-selfcalls-hasMultiServiceDbAccess",
+      "source": {
+        "name": "detectActiveTheme",
+        "filePath": "com/codeprint/application/graph/GraphWarningService.java",
+        "line": 229
+      },
+      "target": {
+        "name": "hasMultiServiceDbAccess",
+        "filePath": "com/codeprint/application/graph/GraphWarningService.java",
+        "line": 264
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LocalAnalyzer.java-analyze-selfcalls-loadIntent",
+      "source": {
+        "name": "analyze",
+        "filePath": "com/codeprint/tools/LocalAnalyzer.java",
+        "line": 58
+      },
+      "target": {
+        "name": "loadIntent",
+        "filePath": "com/codeprint/tools/LocalAnalyzer.java",
+        "line": 97
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "WarningController.java-unsuppress-calls-WarningSuppressionService.java-unsuppress",
+      "source": {
+        "name": "unsuppress",
+        "filePath": "com/codeprint/interfaces/api/WarningController.java",
+        "line": 41
+      },
+      "target": {
+        "name": "unsuppress",
+        "filePath": "com/codeprint/application/graph/WarningSuppressionService.java",
+        "line": 30
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "StaticCodeAnalyzer.java-analyze-selfcalls-extractEntityColumns",
+      "source": {
+        "name": "analyze",
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java",
+        "line": 41
+      },
+      "target": {
+        "name": "extractEntityColumns",
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java",
+        "line": 820
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LocalGraphQuery.java-main-selfcalls-writeFile",
+      "source": {
+        "name": "main",
+        "filePath": "com/codeprint/tools/LocalGraphQuery.java",
+        "line": 32
+      },
+      "target": {
+        "name": "writeFile",
+        "filePath": "com/codeprint/tools/LocalGraphQuery.java",
+        "line": 123
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphController.java-handles-/api/projects/{projectId}/diff",
+      "source": {
+        "name": "/api/projects/{projectId}/diff",
+        "filePath": "com/codeprint/interfaces/api/GraphController.java",
+        "line": null
+      },
+      "target": {
+        "name": "getGraphDiff",
+        "filePath": "com/codeprint/interfaces/api/GraphController.java",
+        "line": 234
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TreeSitterPythonAnalyzer.java-addParams-selfcalls-typeOfTypeNode",
+      "source": {
+        "name": "addParams",
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterPythonAnalyzer.java",
+        "line": 173
+      },
+      "target": {
+        "name": "typeOfTypeNode",
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterPythonAnalyzer.java",
+        "line": 204
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "DonationApplicationService.java-confirm-calls-DonationRepository.java-existsByOrderId",
+      "source": {
+        "name": "confirm",
+        "filePath": "com/codeprint/application/donation/DonationApplicationService.java",
+        "line": 26
+      },
+      "target": {
+        "name": "existsByOrderId",
+        "filePath": "com/codeprint/domain/donation/DonationRepository.java",
+        "line": 9
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TreeSitterCSharpAnalyzer.java-walk-calls-AbstractTreeSitterAnalyzer.java-isValidIdentifier",
+      "source": {
+        "name": "walk",
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterCSharpAnalyzer.java",
+        "line": 56
+      },
+      "target": {
+        "name": "isValidIdentifier",
+        "filePath": "com/codeprint/infrastructure/analysis/AbstractTreeSitterAnalyzer.java",
+        "line": 97
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphWarningService.java-detectActiveTheme-selfcalls-isDddProject",
+      "source": {
+        "name": "detectActiveTheme",
+        "filePath": "com/codeprint/application/graph/GraphWarningService.java",
+        "line": 229
+      },
+      "target": {
+        "name": "isDddProject",
+        "filePath": "com/codeprint/application/graph/GraphWarningService.java",
+        "line": 194
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "CachedParsedFileLoader.java-parse-calls-StaticCodeAnalyzer.java-analyze",
+      "source": {
+        "name": "parse",
+        "filePath": "com/codeprint/infrastructure/analysis/CachedParsedFileLoader.java",
+        "line": 110
+      },
+      "target": {
+        "name": "analyze",
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java",
+        "line": 41
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphBuilder.java-build-selfcalls-extractFileName",
+      "source": {
+        "name": "build",
+        "filePath": "com/codeprint/infrastructure/analysis/GraphBuilder.java",
+        "line": 70
+      },
+      "target": {
+        "name": "extractFileName",
+        "filePath": "com/codeprint/infrastructure/analysis/GraphBuilder.java",
+        "line": 797
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ProjectRepositoryImpl.java-countPrivateByUserId-calls-ProjectJpaRepository.java-countByUserIdAndIsPublicFalse",
+      "source": {
+        "name": "countPrivateByUserId",
+        "filePath": "com/codeprint/infrastructure/persistence/project/ProjectRepositoryImpl.java",
+        "line": 45
+      },
+      "target": {
+        "name": "countByUserIdAndIsPublicFalse",
+        "filePath": "com/codeprint/infrastructure/persistence/project/ProjectJpaRepository.java",
+        "line": 16
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TreeSitterCAnalyzer.java-walk-calls-AbstractTreeSitterAnalyzer.java-text",
+      "source": {
+        "name": "walk",
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterCAnalyzer.java",
+        "line": 52
+      },
+      "target": {
+        "name": "text",
+        "filePath": "com/codeprint/infrastructure/analysis/AbstractTreeSitterAnalyzer.java",
+        "line": 86
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ProjectController.java-getProject-calls-ProjectQueryService.java-getProject",
+      "source": {
+        "name": "getProject",
+        "filePath": "com/codeprint/interfaces/api/ProjectController.java",
+        "line": 41
+      },
+      "target": {
+        "name": "getProject",
+        "filePath": "com/codeprint/application/project/ProjectQueryService.java",
+        "line": 33
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphRepository-findByProjectId-impl-LocalAnalyzer",
+      "source": {
+        "name": "findByProjectId",
+        "filePath": "com/codeprint/domain/graph/GraphRepository.java",
+        "line": 17
+      },
+      "target": {
+        "name": "findByProjectId",
+        "filePath": "com/codeprint/tools/LocalAnalyzer.java",
+        "line": 146
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TeamPaymentOrderJpaRepository.java-from-calls-TeamPaymentOrder.java-getTeamId",
+      "source": {
+        "name": "from",
+        "filePath": "com/codeprint/infrastructure/persistence/payment/TeamPaymentOrderJpaRepository.java",
+        "line": 57
+      },
+      "target": {
+        "name": "getTeamId",
+        "filePath": "com/codeprint/domain/payment/TeamPaymentOrder.java",
+        "line": 71
+      },
+      "verdict": "real",
+      "note": null
+    }
+  ],
+  "analysisDir": "src/main/java"
+}
