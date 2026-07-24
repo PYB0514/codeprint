@@ -4,6 +4,29 @@
 
 ---
 
+## SERVICE_CALL_CHAIN "변수 조합 URL" ② — docker-compose.yml environment 블록 파싱(JS/TS, 2026-07-24)
+
+**문제.** 2026-07-18(codeprint_137) 조사에서 "변수 조합 URL"(host가 하드코딩 아닌 케이스) 중 ②(환경변수로 전체 URL 주입, `process.env.QUOTES_API` 등)가 ③(Spring `@Value`+`application.yml`)보다 스코프가 작다고 판단해 착수 순서를 ②→③으로 권장해뒀던 항목. `axios.get(process.env.QUOTES_API + ...)` 같은 호출은 host가 코드에 리터럴로 없어 기존 SERVICE_CALL_CHAIN(리터럴 `http://서비스명` 컨벤션 매칭)이 못 잡는다.
+
+**착수 전 재사용성 확인(사용자 요청).** ①`.codeprint/architecture.json`을 사이드채널로 읽는 `LocalAnalyzer.loadIntent()` 재사용을 검토했으나 **로컬 CLI 전용 패턴**임을 확인(프로덕션 PR 게이트의 `INTENT_DRIFT`는 이 파일을 안 읽고 DB 저장값을 씀 — 리포 루트 파일을 사이드채널로 읽어 GraphBuilder에 주입하는 프로덕션 선례가 없음) ②`.sql` 전용 처리도 없음(raw SQL 감지는 소스 문자열 리터럴 대상, 독립 파일 아님). **결론**: 이미 클론된 레포 파일을 안정적으로 읽는 기존 `SourceFileWalker → CachedParsedFileLoader` 파이프라인 자체가 재사용 대상 — 이를 우회해 새 사이드채널을 만드는 게 오히려 중복. docker-compose.yml을 새 "언어"로 이 파이프라인에 태우는 방향으로 확정.
+
+**스코프(사용자 확인)**: JS/TS(`axios`+`process.env.X`)만 우선 — 기존 SERVICE_CALL_CHAIN이 언어별로 하나씩 점진 확장해온 패턴과 동일. Python(`os.environ`)은 후속.
+
+**설계 — 5개 레이어.**
+1. `LanguageDetector`: `.yml`/`.yaml` 확장자는 다른 파일(k8s 매니페스트·`application.yml` 등)과 공유돼 확장자 매핑에 못 넣음 — `docker-compose.yml`/`compose.yaml` 등 **파일명 자체**를 정확 매칭해 `"DockerCompose"` 언어로 인식.
+2. `StaticCodeAnalyzer.analyze()`: `language.equals("DockerCompose")`면 tree-sitter/함수추출 파이프라인 전체를 우회하고 `extractComposeEnvHosts()`(리스트 스타일 `- KEY=http://host`·맵 스타일 `KEY: http://host` 둘 다 지원, 정규식)만 실행한 최소 `ParsedFile` 즉시 반환.
+3. `ParsedFile`: 신규 필드 `composeEnvHosts`(환경변수명→호스트 맵, DockerCompose 파일만 비어있지 않음).
+4. `StaticCodeAnalyzer.extractServiceCalls`(JS/TS 분기): 리터럴 `http://` 매칭 외에 `axios.*(process.env.VARNAME...)` 패턴도 인식해 `"ENV:VARNAME"` 표시로 `serviceCalls`에 추가.
+5. `GraphBuilder`: 전체 `parsedFiles`에서 `composeEnvHosts`를 병합한 맵을 만들어, `"ENV:"` 접두사 엔트리를 실제 호스트로 역해소 후 기존 매칭 로직(대상 서비스 디렉터리와 부분 일치)에 그대로 태움 — 해소 실패(docker-compose.yml 없음/변수 미정의)면 조용히 버림(precision 우선, phantom 방지).
+
+**TDD.** `StaticCodeAnalyzerTest` 5건(JS env-var 추출, compose 리스트/맵 스타일 파싱, 타 필드 비어있음 확인) + `GraphBuilderTest` 2건(정상 역해소 → SERVICE_CALL 엣지 생성, 미정의 변수 → 엣지 미생성).
+
+**검증.** 전체 백엔드 테스트 1100건(Docker DB 포함) green. `ANALYZER_VERSION` 6→7 인상(`ParsedFile` 필드 수 트립와이어 테스트 34→35 동반 갱신). **End-to-end 실측**: 임시 픽스처 레포(`docker-compose.yml`+`api-gateway`+`quotes-service` 2서비스)에 `exploreLocal`/`edgeAudit`을 직접 실행 — `SourceFileWalker`가 `docker-compose.yml`을 정상 인식(소스 파일 수 3), 최종 `api-gateway/src/quotesClient.ts-servicecall-quotes-service` SERVICE_CALL 엣지가 정확히 생성됨을 확인(유닛테스트 목킹이 아닌 실제 전체 파이프라인 관통 확인). `analyzeLocal` 자기분석 — 자기 레포엔 docker-compose.yml이 없어 영향 없음, 신규 위반 0건.
+
+**한계.** Python `os.environ`은 후속(같은 패턴 재사용 가능, 언어 분기만 추가). `docker-compose.yml`이 없는 레포·환경변수가 파일에 없는 경우는 여전히 스코프 밖(recall 한계, 명시).
+
+---
+
 ## 엣지 정확도 패턴 C 수정 — @Entity 필드 목록에서 Lombok getter/setter 이름 합성(2026-07-24)
 
 **문제.** 4차 감사에서 확정한 패턴 C — Lombok `@Getter` 생성 메서드(`Feedback.getStatus()`, `Post.getUserId()`)가 소스에 텍스트로 없어 `resolveBareCall`의 self-file/import-priority 해소가 실패하고, 동명의 무관한 명시적 메서드(`TeamPaymentOrder.getStatus()`, `User.getUserId()`)로 전역 폴백되던 문제. PR #664에서 발견 당시 "설계 없이 고치면 다른 감지기(HIGH_FAN_OUT·DEAD_CODE)를 깨뜨릴 위험"으로 착수를 보류했었음.
