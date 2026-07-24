@@ -484,6 +484,26 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("JPA Repository 집계 쿼리(sumXxx) — read-only인데 DB_WRITE로 오분류되지 않는다(엣지 정확도 감사 패턴 D)")
+    void jpaRepositorySumQuery_classifiedAsReadOnly_notWrite() {
+        // sumAllocatedSeatsByTeamId류 @Query("SELECT SUM(...)")는 어떤 CRUD 접두사(find/get/count/exists/...)에도
+        // 안 걸려 detectCrudTypes가 READ+WRITE 이중 폴백을 태웠던 실제 버그(decisions/DECISIONS_ANALYSIS.md 4차 감사)
+        ParsedFile entity = parsedFileWithDb("domain/order/Order.java", "Java",
+                List.of(new DbTableInfo("orders", "Order")), List.of());
+        ParsedFile repository = parsedFileWithRepository("infra/persistence/OrderJpaRepository.java", "Java",
+                List.of("sumTotalByOrderId"), "Order");
+
+        graphBuilder.build(projectId, analysisId, List.of(entity, repository));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        boolean hasRead = cap.getAllValues().stream().anyMatch(e -> e.getType() == EdgeType.DB_READ);
+        boolean hasWrite = cap.getAllValues().stream().anyMatch(e -> e.getType() == EdgeType.DB_WRITE);
+        assertThat(hasRead).isTrue();
+        assertThat(hasWrite).isFalse();
+    }
+
+    @Test
     @DisplayName("raw SQL 접근 — 서로 다른 서비스의 동일 파일명(db.py)이 같은 테이블에 접근해도 둘 다 엣지가 생성된다(A-2 dedup 재발 방지)")
     void rawSqlAccess_sameFileNameDifferentServices_bothEdgesCreated() {
         ParsedFile serviceA = new ParsedFile(
@@ -1818,6 +1838,14 @@ class GraphBuilderTest {
         return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
                 Map.of(), List.of(), dbTables, null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
                 List.of(), List.of(), dbAccesses);
+    }
+
+    // JPA Repository 파일 생성 헬퍼 — repositoryEntityClass + functions 지정(detectCrudTypes 분류 테스트용)
+    private ParsedFile parsedFileWithRepository(String path, String lang, List<String> functions, String repositoryEntityClass) {
+        return new ParsedFile(path, lang, functions, List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), repositoryEntityClass, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), null,
+                List.of(), null, List.of());
     }
 
     // 백엔드 컨트롤러 매핑 파일 생성 헬퍼 — controllerMappings 포함

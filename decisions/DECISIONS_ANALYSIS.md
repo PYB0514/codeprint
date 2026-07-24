@@ -4,6 +4,18 @@
 
 ---
 
+## 엣지 정확도 패턴 D 수정 — detectCrudTypes READ 접두사에 집계 함수 관용구 추가(2026-07-24)
+
+**문제.** 위 4차 감사에서 확정한 패턴 D — `detectCrudTypes`(`GraphBuilder.java:758`)의 READ 접두사 목록(find/get/count/exists/load/fetch/read/list/search)에 JPQL 집계 함수(`sum`/`avg`/`total`/`min`/`max`) 관용구가 없어, `sumAllocatedSeatsByTeamId`류 read-only 집계 쿼리가 접두사 미매칭 폴백(`types.isEmpty()` → READ+WRITE 이중 추가)을 타 DB_WRITE로도 잘못 표시됨.
+
+**수정.** READ 접두사 목록에 `sum`/`avg`/`total`/`min`/`max` 5개 추가. `resolveBareCall`(패턴 C)과 달리 이 수정은 이름 해소 자체를 건드리지 않고 단순 접두사 목록 확장이라 다른 감지기에 미치는 파급 범위가 없음 — 패턴 C를 보류한 것과 대조적으로 안전하게 바로 적용.
+
+**TDD.** `GraphBuilderTest.jpaRepositorySumQuery_classifiedAsReadOnly_notWrite`(RED 확인: 수정 전 DB_WRITE도 함께 생성됨 → GREEN: DB_READ만 생성) + `parsedFileWithRepository` 헬퍼 신설(이 코드 경로 — `repositoryEntityClass` 기반 JPA 엣지 생성 — 는 기존에 GraphBuilderTest에 단위테스트가 전혀 없었음, 이번에 처음 커버).
+
+**검증.** 신규 테스트 GREEN. 전체 백엔드 테스트 1093건(Docker DB 포함 통합테스트 전부) green. `analyzeLocal` 자기분석 — 신규 위반 0건.
+
+---
+
 ## 엣지 정확도 4차 감사 — DB_READ/WRITE/CREATE/DELETE 62/62 전수 판정, phantom 1.6%(1/62), 신규 패턴 D 발견(2026-07-24)
 
 **방법.** 같은 표본(seed 42)의 DB_* 4종(READ 30·WRITE 7·CREATE 2·DELETE 23) 62건 전수 판정. `detectCrudTypes`(`GraphBuilder.java:758`, 메서드명 접두사 기반 CRUD 분류)의 규칙을 그대로 재현하는 스크립트로 fn-level 41건(메서드명이 edgeIdentifier에 남는 것)을 기계적으로 재분류해 실제 엣지 타입과 대조, file-level·rawsql 21건은 소스(Repository 선언·`@Query` 리터럴)를 직접 확인.
