@@ -149,6 +149,23 @@ task watchLocal(type: JavaExec, dependsOn: classes) {
     args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
 }
 
+// 엣지 정확도 감사 — 타입별 고정 시드 표본을 JSON으로 출력, 분류(phantom/실제)는 사람이 수동 수행 (Spring/DB 불필요)
+task edgeAudit(type: JavaExec, dependsOn: classes) {
+    group = 'codeprint'
+    description = '그래프 엣지를 타입별 고정 시드로 표본추출해 build/codeprint-local/edge-audit-<repoLabel>.json에 기록 (Spring/DB 없이 실행)'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.codeprint.tools.LocalEdgeAuditor'
+    jvmArgs = ['-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8']
+    // -PanalysisDir=경로(기본 자기 레포 src/main/java), -PrepoLabel=출력파일명용 라벨(기본 self),
+    // -PsampleSeed=고정 시드(기본 42), -PsampleSize=엣지 타입당 표본 수(기본 30)
+    args = [
+        project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java',
+        project.hasProperty('repoLabel') ? project.property('repoLabel') : 'self',
+        project.hasProperty('sampleSeed') ? project.property('sampleSeed') : '42',
+        project.hasProperty('sampleSize') ? project.property('sampleSize') : '30'
+    ]
+}
+
 // 로컬 그래프 탐색 — repo map/노드검색/이웃조회 (Spring/DB 불필요, 내부 전용 — LocalGraphQuery.java는 gitignore 처리돼 공개 레포엔 없음)
 task exploreLocal(type: JavaExec, dependsOn: classes) {
     group = 'codeprint'
