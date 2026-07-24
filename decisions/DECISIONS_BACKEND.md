@@ -2,6 +2,20 @@
 
 ---
 
+## 일반 프로젝트 분석에도 커밋 SHA 동일 시 재분석 스킵 확장(2026-07-25, codeprint_146)
+
+**문제.** "codeprint" 자기분석 프로젝트가 도그푸딩 중 짧은 기간 반복 재분석으로 거의 중복인 그래프를 최대 10개까지 쌓는 문제(Postgres 볼륨 사고 후속 조사, 2026-07-23)를 사용자와 재논의 — 처음엔 "그래프 보존 정책"을 손봐야 하는 문제로 보였으나, 실제 근본 원인은 다른 곳에 있었다. `FeaturedRepo`(시스템 갤러리 프로젝트)엔 이미 "커밋 SHA 동일 시 재분석 스킵"(레버①, PR #564)이 있는데, 일반 프로젝트(사용자가 "재분석" 버튼을 누르는 모든 프로젝트, "codeprint" 자기분석 포함)에는 이 로직이 없어 커밋이 안 바뀌어도 매번 새 그래프가 생성되고 있었다.
+
+**결정.** `AnalysisApplicationService.startAnalysis`에 `FeaturedRepoService.featureOne`과 동일한 원칙(커밋 SHA 비교 후 동일하면 스킵)을 확장 적용. 직전 분석이 `DONE` 상태이고 GitHub 조회 결과 최신 커밋 SHA가 그 분석의 `lastCommitSha`와 같으면 새 분석을 만들지 않고 기존 결과를 그대로 반환한다. SHA 조회 실패(네트워크 오류 등)는 안전하게 "스킵 안 함"으로 흡수(`FeaturedCommitShaAdapter`와 동일 원칙, precision보다 가용성 우선). 직전 분석이 `RUNNING`/`FAILED`면 스킵 판정 자체를 안 하고 항상 새로 분석 — 재시도를 막지 않기 위함.
+
+**대안 검토 — 안 한 것.** "그래프 보존 정책 자체를 조정"(사용자 제안)은 근본 원인이 아니라서 기각. "특정 과거 커밋을 재분석하는 히스토리 슬롯 기능"(사용자 제안)도 검토했으나, 이미 있는 핀 기능(`Graph.pin`/`unpin`, 핀 걸린 그래프는 보존 정책 대상에서 제외)으로 "예전 그래프를 남겨두고 싶다"는 니즈가 대부분 커버돼 신규 기능 없이 기각 — PROGRESS.md 백로그에 난이도만 재평가해 기록(GitHub 아카이브 API로 처음 생각보다 쉬울 수 있음, 그래도 API 계약 변경급이라 별도 Plan 필요).
+
+**TDD.** `AnalysisApplicationServiceTest`에 4건 추가 — 커밋 동일 스킵·커밋 변경 시 정상 진행·직전 분석이 RUNNING이면 스킵 안 함·SHA 조회 실패 시 안전하게 진행. 기존 테스트는 `findLatestByProjectIdAndBranch`가 Mockito 기본값(`Optional.empty()`)을 반환해 무변경으로 green.
+
+**검증.** 백엔드 전체 테스트 스위트(Docker DB 포함) green. `GitHubApiClient`가 신규 생성자 의존성으로 추가돼 CLAUDE.md 규칙4에 따라 `preview_start`로 로컬 백엔드 실제 재기동 + `/actuator/health` UP(`{"status":"UP"}`) 확인.
+
+---
+
 ## 그래프 캐시 — maximumSize를 softValues()로 보강(2026-07-24, PROGRESS.md "RAM 절감 여지 2건" ②)
 
 **문제.** `CacheConfig`의 `graphNodes`/`graphEdges`/`graphWarnings` 캐시가 `Caffeine.maximumSize(200)`만으로 크기를 제한하고 있었다 — 이건 **엔트리 개수** 기준이라, 엔트리 하나(그래프 하나)가 노드 수천+엣지 수천 개를 통째로 담을 수 있는 이 캐시 구조에선 실효 상한이 아니다. 200개 미만이면 그래프가 아무리 커도 계속 쌓여 힙 상한(-XX:MaxRAMPercentage=50)을 실질적으로 방어하지 못한다(2026-07-18 Fable 감사 R53 #128 지적).

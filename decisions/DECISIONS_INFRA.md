@@ -2,6 +2,22 @@
 
 ---
 
+## reconcile-stale-analyses cron 스케줄 제거 — 수동 실행만 유지(2026-07-25, codeprint_146)
+
+**문제.** `contexts/Context138.md` R36 #98(2026-07-18 감사)이 지목한 "PROGRESS.md RAM 절감 여지 ①" — `*/15` 스케줄이 Railway Serverless sleep(임계 10분)을 상시 방해해 가동률 ≈67%, 콜드스타트 최대 96회/일로 G-5·G-6을 스스로 유발하는 구조. 사용자 판단 대기로 여러 세션 미결정 상태였음.
+
+**검토 — 처음엔 "시간당(60분)으로 완화"를 제안**, 이미 있는 `reconcile-pr-gate`(시간당)와 같은 빈도로 맞추면 콜드스타트 96→24회/일로 줄고 스테일 감지 지연은 최대 35→80분으로만 늘어난다는 계산이었다. 사용자가 "완화가 실제로 콜드스타트를 줄이는 게 맞냐"·"1인개발·실사용자 0명 기준으로 최선이 뭔지 적대적으로 재검토해달라"고 요청.
+
+**적대적 재검토 — 완화가 아니라 제거가 맞다.** `StaleAnalysisReconciliationService`를 직접 열어 실제 동작을 확인: 하는 일은 "`startedAt`이 20분 넘은 RUNNING 분석을 FAILED로 표시"뿐 — DB 락도 커넥션 누수도 없고, 원래 있던 프론트 WebSocket 알림은 이미 죽은 코드로 판명돼 제거된 상태(위 "AnalysisProgressHandler dead code 제거" 참조). 즉 순수하게 "화면에 RUNNING이 안 지워지는 것" 방지용인데, **실사용자 0명인 지금은 그 화면을 아무도 안 본다** — 실익이 0에 가깝다. 반면 비용은 실측된 진짜 돈(RAM이 Railway 청구액의 96.6%, §18.8-⑤). 시간당으로 완화해도 여전히 하루 24번 깨우는 비용은 남는데 그 실익도 지금은 0이라, "완화"가 아니라 "제거(수동 트리거만 남김)"가 이 국면의 최적해라고 결론.
+
+**결정.** `.github/workflows/scheduled-jobs.yml`에서 `*/15 * * * *` 스케줄 항목 자체를 삭제, `reconcile-stale-analyses` job은 `workflow_dispatch`(수동 실행)로만 남김 — `on.schedule`에서 지워도 `workflow_dispatch.inputs.job` 옵션엔 그대로 남아 있어 필요할 때(디버깅 중 스테일 분석 발견 시 등) `gh workflow run scheduled-jobs.yml -f job=reconcile-stale-analyses`로 즉시 수동 실행 가능.
+
+**되돌릴 조건(명시).** 실사용자가 생기는 순간 이 판단은 뒤집혀야 한다 — 남의 화면에 RUNNING이 안 지워지는 건 그때부터 실제 신뢰 문제가 된다. 재도입 시 §18.8류 실측(콜드스타트·RAM 영향)부터 재확인할 것.
+
+**검증.** 코드/설정 변경만(백엔드 로직 무변경), 로컬 실행 검증 대상 아님. YAML 문법은 GitHub Actions가 다음 스케줄 평가 시점에 자동 검증(현재 문법 오류 없음을 직접 확인).
+
+---
+
 ## docs/CONVENTIONS.md 신설 — "왜"와 "지금 뭐가 있는지"를 분리 (2026-07-24)
 
 **문제.** 세션 중 로컬 CLI 도구(`com.codeprint.tools.LocalAnalyzer.buildGraph`)가 이미 DB/Spring 없이 임의 디렉터리를 분석하는 재사용 코어였음을 확인했는데, 이 사실이 문서 어디에도 없어 `build.gradle`+소스를 직접 읽어 추측성으로 재도출해야 했다. 사용자가 "이런 걸 md로 체계적으로 기록해두면 추측성 답변·전체분석 토큰낭비를 줄일 수 있지 않냐"고 제안.
