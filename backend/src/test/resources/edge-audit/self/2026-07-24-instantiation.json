@@ -1,0 +1,345 @@
+{
+  "repoLabel": "self",
+  "analysisDir": "src/main/java",
+  "seed": 42,
+  "edgeType": "INSTANTIATION",
+  "auditedAt": "2026-07-24",
+  "method": "전수 판정(30/30) - 소스 파일 전체에서 new TargetClass( 리터럴 존재 확인 + 타깃 클래스명이 레포 내 유일 파일인지(동명 충돌 없음) 확인",
+  "summary": {
+    "real": 30,
+    "phantom": 0,
+    "phantomRate": "0%"
+  },
+  "samples": [
+    {
+      "edgeIdentifier": "StaticCodeAnalyzer.java-new-DbAccess",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/DbAccess.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "SourceFileWalker.java-new-WalkResult",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/SourceFileWalker.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/WalkResult.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LocalWatcher.java-new-InMemoryParsedFileCachePort",
+      "source": {
+        "filePath": "com/codeprint/tools/LocalWatcher.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/tools/InMemoryParsedFileCachePort.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "StaticCodeAnalyzer.java-new-ColumnInfo",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/ColumnInfo.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LocalEdgeAuditor.java-new-CachedParsedFileLoader",
+      "source": {
+        "filePath": "com/codeprint/tools/LocalEdgeAuditor.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/CachedParsedFileLoader.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LocalAnalyzer.java-new-CachedParsedFileLoader",
+      "source": {
+        "filePath": "com/codeprint/tools/LocalAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/CachedParsedFileLoader.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TossPaymentOrderJpaRepository.java-new-TossPaymentOrder",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/payment/TossPaymentOrderJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/payment/TossPaymentOrder.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GateMetricsQuery.java-new-GateMetrics",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/admin/GateMetricsQuery.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/admin/GateMetrics.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LocalAnalyzer.java-new-SourceFileWalker",
+      "source": {
+        "filePath": "com/codeprint/tools/LocalAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/SourceFileWalker.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GitHubApiClient.java-new-GitHubRepoDto",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/github/GitHubApiClient.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/github/GitHubRepoDto.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LocalGraphQuery.java-new-CachedParsedFileLoader",
+      "source": {
+        "filePath": "com/codeprint/tools/LocalGraphQuery.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/CachedParsedFileLoader.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "StaticCodeAnalyzer.java-new-TreeSitterRubyAnalyzer",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterRubyAnalyzer.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "PaymentApplicationService.java-new-TossPaymentOrder",
+      "source": {
+        "filePath": "com/codeprint/application/payment/PaymentApplicationService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/payment/TossPaymentOrder.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "StaticCodeAnalyzer.java-new-TreeSitterPhpAnalyzer",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/TreeSitterPhpAnalyzer.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AnalysisFacade.java-new-PrGateStatus",
+      "source": {
+        "filePath": "com/codeprint/application/analysis/AnalysisFacade.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/analysis/PrGateStatus.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "MessageController.java-new-MessageSentEvent",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/MessageController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/shared/event/MessageSentEvent.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "StaticCodeAnalyzer.java-new-DbTableInfo",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/DbTableInfo.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ProjectFacade.java-new-GithubRepoView",
+      "source": {
+        "filePath": "com/codeprint/application/project/ProjectFacade.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/project/GithubRepoView.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ArchitectureIntentController.java-new-ArchitectureIntent",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/ArchitectureIntentController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/ArchitectureIntent.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AnalysisFacade.java-new-PrGateConnectedProject",
+      "source": {
+        "filePath": "com/codeprint/application/analysis/AnalysisFacade.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/analysis/PrGateConnectedProject.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LocalWatcher.java-new-CachedParsedFileLoader",
+      "source": {
+        "filePath": "com/codeprint/tools/LocalWatcher.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/CachedParsedFileLoader.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "CachedParsedFileLoader.java-new-Digest",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/analysis/CachedParsedFileLoader.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/admin/Digest.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LocalAnalyzer.java-new-GraphBuilder",
+      "source": {
+        "filePath": "com/codeprint/tools/LocalAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/GraphBuilder.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LocalAnalyzer.java-new-StaticCodeAnalyzer",
+      "source": {
+        "filePath": "com/codeprint/tools/LocalAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LocalAnalyzer.java-new-ArchitectureIntent",
+      "source": {
+        "filePath": "com/codeprint/tools/LocalAnalyzer.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/ArchitectureIntent.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ApiKeyAuthenticationFilter.java-new-TeamApiKeyPrincipal",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/security/ApiKeyAuthenticationFilter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/team/TeamApiKeyPrincipal.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AdminDigestService.java-new-Digest",
+      "source": {
+        "filePath": "com/codeprint/application/admin/AdminDigestService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/admin/Digest.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LocalGraphQuery.java-new-StaticCodeAnalyzer",
+      "source": {
+        "filePath": "com/codeprint/tools/LocalGraphQuery.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ParsedFileCachePostgresAdapter.java-new-ParsedFileJsonCodec",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCachePostgresAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/ParsedFileJsonCodec.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AnalysisFacade.java-new-ProjectGateSettings",
+      "source": {
+        "filePath": "com/codeprint/application/analysis/AnalysisFacade.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/analysis/ProjectGateSettings.java"
+      },
+      "verdict": "real",
+      "note": null
+    }
+  ]
+}

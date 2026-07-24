@@ -4,6 +4,18 @@
 
 ---
 
+## 엣지 정확도 4차 감사 — INSTANTIATION 30/30 전수 판정, phantom 0%(2026-07-24)
+
+**방법.** 같은 표본(seed 42)의 INSTANTIATION 30건 — 소스 파일 전체에서 `new TargetClass(` 리터럴 존재 확인 + 타깃 클래스명이 레포 내 유일 파일인지(동명 충돌 없음) 확인. `classNameToFileId`(GraphBuilder.java:576)가 클래스명→파일 단순 전역 매핑이라 이름 충돌 시 phantom 위험이 있는 구조인데, 실측으로 이번 표본엔 충돌이 없었음을 확인.
+
+**검증 스크립트 실수(기록해둘 함정).** 1차 시도에서 전부 매칭 실패로 나와 "INSTANTIATION 전멸"로 오판할 뻔했다 — 원인은 INSTANTIATION 엣지가 FILE→FILE(FUNCTION 아님, `GraphBuilder.java:583`)이라 타깃 노드의 `name` 필드가 클래스명이 아니라 파일명(`"GraphBuilder.java"`, 확장자 포함)이었는데, 검색 패턴에 확장자를 안 벗겨 `"new GraphBuilder.java("`를 찾고 있었던 것. `edgeIdentifier`(`"...-new-<클래스명>"`) 또는 `target.name`에서 `.java` 제거 후 재검증해 해결. **엣지 타입마다 source/target이 FILE 단위인지 FUNCTION 단위인지가 다르다는 걸 감사 스크립트 작성 시 항상 먼저 확인할 것** — 이번처럼 안 그러면 가짜 100% phantom 신호가 나올 수 있음.
+
+**결과.** **30/30 전부 real(0%)**.
+
+**결과물.** `backend/src/test/resources/edge-audit/self/2026-07-24-instantiation.json`.
+
+---
+
 ## 엣지 정확도 4차 감사 — IMPORT 30/30 전수 판정, phantom 0%(2026-07-24)
 
 **방법.** FUNCTION_CALL과 같은 표본(seed 42)에서 IMPORT 30건을 소스 파일의 실제 `import` 문과 대상 패키지.클래스명 정확 일치 여부로 전수 검증.
