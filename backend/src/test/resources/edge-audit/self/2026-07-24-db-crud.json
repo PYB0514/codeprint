@@ -1,0 +1,759 @@
+{
+  "repoLabel": "self",
+  "analysisDir": "src/main/java",
+  "seed": 42,
+  "edgeType": "DB_READ,DB_WRITE,DB_CREATE,DB_DELETE",
+  "auditedAt": "2026-07-24",
+  "method": "전수 판정(62/62) - detectCrudTypes 접두사 규칙을 재현해 각 fn-level 메서드명과 대조, file-level/rawsql 엣지는 소스 파일(Repository 선언·@Query 리터럴)을 직접 확인",
+  "summary": {
+    "real": 61,
+    "phantom": 1,
+    "phantomRate": "1.6%"
+  },
+  "samples": [
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/user/UserFollowJpaRepository.java-db_read-UserFollow",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/UserFollowJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/user/UserFollow.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/team/TeamProjectAllocationJpaRepository.java-db_read-TeamProjectAllocation",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/team/TeamProjectAllocationJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/team/TeamProjectAllocation.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/community/PostJpaRepository.java-rawsql-db_read-postgraphsnapshot",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/PostGraphSnapshot.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/notification/NotificationJpaRepository.java-db_read-Notification",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/notification/NotificationJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/notification/Notification.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/community/PostBookmarkJpaRepository.java-fn-existsByUserIdAndPostId-db_read",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostBookmarkJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/PostBookmark.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/collaboration/CollaborationSessionJpaRepository.java-db_read-CollaborationSession",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/collaboration/CollaborationSessionJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/collaboration/CollaborationSession.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/graph/GraphViewPresetJpaRepository.java-db_read-GraphViewPreset",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/GraphViewPresetJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/GraphViewPreset.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/user/UserFollowJpaRepository.java-fn-countByFollowerId-db_read",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/UserFollowJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/user/UserFollow.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/graph/NodeCommentJpaRepository.java-fn-findByGraphIdAndNodeId-db_read",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/NodeCommentJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/NodeComment.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/user/UserJpaRepository.java-fn-findByUsernameContainingIgnoreCase-db_read",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/UserJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/user/User.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/domain/admin/DailyStatsRepository.java-db_read-DailyStats",
+      "source": {
+        "filePath": "com/codeprint/domain/admin/DailyStatsRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/admin/DailyStats.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/user/UserJpaRepository.java-fn-existsByGithubId-db_read",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/UserJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/user/User.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/graph/NodeJpaRepository.java-db_read-Node",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/NodeJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/Node.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/graph/NodeCommentJpaRepository.java-fn-findByGraphIdAndNodeIdOrderByCreatedAtAsc-db_read",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/NodeCommentJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/NodeComment.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/community/PostJpaRepository.java-fn-findWithGraphOrSnapshotsOrderByCreatedAtDesc-db_read",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/Post.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/community/PostAttachmentJpaRepository.java-fn-findByPostIdOrderByCreatedAtAsc-db_read",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostAttachmentJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/PostAttachment.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/team/TeamMemberJpaRepository.java-fn-findByTeamId-db_read",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/team/TeamMemberJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/team/TeamMember.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/project/ProjectJpaRepository.java-fn-countByUserIdAndIsPublicFalse-db_read",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/project/ProjectJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/project/Project.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/admin/AdminMetricsQuery.java-rawsql-db_read-toss_payment_orders",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/admin/AdminMetricsQuery.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/admin/AdminMetricsQuery.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/featured/FeaturedDailyPostJpaRepository.java-db_read-FeaturedDailyPost",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/featured/FeaturedDailyPostJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/featured/FeaturedDailyPost.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/admin/GateMetricsQuery.java-rawsql-db_read-fp_reports",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/admin/GateMetricsQuery.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/admin/GateMetricsQuery.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/graph/ArchitectureIntentJpaRepository.java-db_read-ArchitectureIntentEntity",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/ArchitectureIntentJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/ArchitectureIntentEntity.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/analysis/AnalysisJpaRepository.java-fn-findLatestByProjectIdAndBranch-db_read",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/analysis/AnalysisJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/analysis/AnalysisResult.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/community/PostGraphSnapshotJpaRepository.java-rawsql-db_read-postgraphsnapshot",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostGraphSnapshotJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/PostGraphSnapshot.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/team/TeamProjectAllocationJpaRepository.java-fn-findByTeamIdAndProjectId-db_read",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/team/TeamProjectAllocationJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/team/TeamProjectAllocation.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/message/DirectMessageJpaBaseRepository.java-db_read-DirectMessage",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/message/DirectMessageJpaBaseRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/message/DirectMessage.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/community/PostLikeJpaRepository.java-fn-existsByUserIdAndPostId-db_read",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostLikeJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/PostLike.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/domain/community/FeedbackRepository.java-fn-countByStatus-db_read",
+      "source": {
+        "filePath": "com/codeprint/domain/community/FeedbackRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/Feedback.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/domain/notification/PushSubscriptionRepository.java-fn-findByUserId-db_read",
+      "source": {
+        "filePath": "com/codeprint/domain/notification/PushSubscriptionRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/notification/PushSubscription.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_READ",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/community/PostBookmarkJpaRepository.java-db_read-PostBookmark",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostBookmarkJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/PostBookmark.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_WRITE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/graph/ArchitectureIntentJpaRepository.java-db_write-ArchitectureIntentEntity",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/ArchitectureIntentJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/ArchitectureIntentEntity.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_WRITE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/team/TeamProjectAllocationJpaRepository.java-fn-sumAllocatedSeatsByTeamId-db_write",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/team/TeamProjectAllocationJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/team/TeamProjectAllocation.java"
+      },
+      "verdict": "phantom",
+      "note": "sumAllocatedSeatsByTeamId는 @Query(\"SELECT COALESCE(SUM(...)) ...\")인 순수 읽기 집계 쿼리(@Modifying 없음). \"sum\" 접두사가 detectCrudTypes의 READ 규칙(find/get/count/exists/load/fetch/read/list/search)에 없어 매칭 실패 -> READ+WRITE 이중 폴백 -> 실제로는 read-only인데 DB_WRITE 엣지도 함께 생성됨(패턴 D)."
+    },
+    {
+      "edgeType": "DB_WRITE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/notification/NotificationSettingsJpaRepository.java-db_write-UserNotificationSettings",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/notification/NotificationSettingsJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/notification/UserNotificationSettings.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_WRITE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheJpaRepository.java-rawsql-db_write-parsedfilecacheentity",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheEntity.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_WRITE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/team/TeamJpaRepository.java-fn-incrementSeats-db_write",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/team/TeamJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/team/Team.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_WRITE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/notification/NotificationJpaRepository.java-fn-markAllReadByUserId-db_write",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/notification/NotificationJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/notification/Notification.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_WRITE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/featured/FeaturedDailyPostJpaRepository.java-db_write-FeaturedDailyPost",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/featured/FeaturedDailyPostJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/featured/FeaturedDailyPost.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_CREATE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheJpaRepository.java-db_create-ParsedFileCacheEntity",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheEntity.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_CREATE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheJpaRepository.java-fn-insertIgnore-db_create",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheEntity.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/domain/notification/PushSubscriptionRepository.java-fn-deleteByUserIdAndEndpoint-db_delete",
+      "source": {
+        "filePath": "com/codeprint/domain/notification/PushSubscriptionRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/notification/PushSubscription.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/message/UserBlockJpaBaseRepository.java-fn-deleteByBlockerIdAndBlockedId-db_delete",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/message/UserBlockJpaBaseRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/message/UserBlock.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/community/PostLikeJpaRepository.java-fn-deleteByUserIdAndPostId-db_delete",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostLikeJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/PostLike.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/graph/WarningSuppressionJpaRepository.java-db_delete-WarningSuppression",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/WarningSuppressionJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/WarningSuppression.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/graph/NodeStyleJpaRepository.java-fn-deleteByGraphIdAndNodeId-db_delete",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/NodeStyleJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/NodeStyle.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/user/RefreshTokenJpaRepository.java-db_delete-RefreshToken",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/RefreshTokenJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/user/RefreshToken.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/graph/NodeStyleJpaRepository.java-db_delete-NodeStyle",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/NodeStyleJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/NodeStyle.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/community/PostBookmarkJpaRepository.java-fn-deleteByUserIdAndPostId-db_delete",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostBookmarkJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/PostBookmark.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/community/PostLikeJpaRepository.java-db_delete-PostLike",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostLikeJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/PostLike.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/graph/GraphJpaRepository.java-db_delete-Graph",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/GraphJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/Graph.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/user/UserFollowJpaRepository.java-db_delete-UserFollow",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/UserFollowJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/user/UserFollow.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheJpaRepository.java-db_delete-ParsedFileCacheEntity",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheEntity.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/message/UserBlockJpaBaseRepository.java-db_delete-UserBlock",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/message/UserBlockJpaBaseRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/message/UserBlock.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheJpaRepository.java-fn-deleteByProjectIdAndUpdatedAtBefore-db_delete",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/persistence/analysis/ParsedFileCacheEntity.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/user/RefreshTokenJpaRepository.java-fn-deleteAllByUserId-db_delete",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/RefreshTokenJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/user/RefreshToken.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/graph/GraphJpaRepository.java-fn-clearPinnedSlot-db_delete",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/GraphJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/Graph.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/domain/notification/PushSubscriptionRepository.java-db_delete-PushSubscription",
+      "source": {
+        "filePath": "com/codeprint/domain/notification/PushSubscriptionRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/notification/PushSubscription.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/community/PostGraphSnapshotJpaRepository.java-fn-deleteByPostId-db_delete",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostGraphSnapshotJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/PostGraphSnapshot.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/user/RefreshTokenJpaRepository.java-fn-deleteByTokenHash-db_delete",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/RefreshTokenJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/user/RefreshToken.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/community/PostBookmarkJpaRepository.java-db_delete-PostBookmark",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostBookmarkJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/PostBookmark.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/user/UserFollowJpaRepository.java-fn-deleteByFollowerIdAndFollowingId-db_delete",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/UserFollowJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/user/UserFollow.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/graph/WarningSuppressionJpaRepository.java-fn-deleteByProjectIdAndFingerprint-db_delete",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/graph/WarningSuppressionJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/WarningSuppression.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeType": "DB_DELETE",
+      "edgeIdentifier": "com/codeprint/infrastructure/persistence/community/PostGraphSnapshotJpaRepository.java-db_delete-PostGraphSnapshot",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/community/PostGraphSnapshotJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/PostGraphSnapshot.java"
+      },
+      "verdict": "real",
+      "note": null
+    }
+  ]
+}
