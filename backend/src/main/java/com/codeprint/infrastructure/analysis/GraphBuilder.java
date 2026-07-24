@@ -694,9 +694,24 @@ public class GraphBuilder {
             if (pf.feignClientTarget() != null) feignTargetByFilePath.put(pf.filePath(), pf.feignClientTarget());
         }
 
+        // docker-compose.yml environment 블록에서 추출한 환경변수명→호스트 매핑(보통 파일 1개, 여러 개면 병합) —
+        // JS/TS의 "ENV:VARNAME" 표시 serviceCalls 엔트리를 실제 서비스명으로 역해소하는 데 쓴다
+        // (SERVICE_CALL_CHAIN "변수 조합 URL" ②, decisions/DECISIONS_ANALYSIS.md 참조).
+        Map<String, String> composeEnvHosts = new HashMap<>();
+        for (ParsedFile pf : parsedFiles) composeEnvHosts.putAll(pf.composeEnvHosts());
+
         Set<String> usedServiceCallEdgeIds = new HashSet<>();
         for (ParsedFile pf : parsedFiles) {
-            List<String> logicalServices = new ArrayList<>(pf.serviceCalls());
+            List<String> logicalServices = new ArrayList<>();
+            for (String call : pf.serviceCalls()) {
+                if (call.startsWith("ENV:")) {
+                    String resolved = composeEnvHosts.get(call.substring(4));
+                    if (resolved != null) logicalServices.add(resolved);
+                    // 해소 실패(docker-compose.yml 없음/변수 미정의)면 조용히 버림 — precision 우선, phantom 방지
+                } else {
+                    logicalServices.add(call);
+                }
+            }
             if (!feignTargetByFilePath.isEmpty()) {
                 for (String importPath : pf.imports()) {
                     for (Map.Entry<String, String> feignEntry : feignTargetByFilePath.entrySet()) {

@@ -1404,6 +1404,46 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("\"ENV:VARNAME\" 표시 호출은 docker-compose.yml의 environment 매핑으로 역해소돼 SERVICE_CALL 엣지가 생성된다(변수 조합 URL 지원)")
+    void 서비스_호출_환경변수_docker_compose_역해소() {
+        ParsedFile compose = parsedFileWithComposeEnvHosts(
+                "docker-compose.yml", Map.of("QUOTES_API", "quotes-service"));
+        ParsedFile caller = parsedFileWithServiceCalls(
+                "api-gateway/src/QuotesClient.ts", "TypeScript", List.of("ENV:QUOTES_API"));
+        ParsedFile target = parsedFileWithImports(
+                "quotes-service/src/QuotesController.ts", "TypeScript", List.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(compose, caller, target));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        assertThat(edgeCaptor.getAllValues()).anyMatch(e -> e.getType() == EdgeType.SERVICE_CALL);
+    }
+
+    @Test
+    @DisplayName("docker-compose.yml에 정의 안 된 환경변수 참조는 SERVICE_CALL 엣지를 만들지 않는다(precision 우선, phantom 방지)")
+    void 서비스_호출_환경변수_미정의_엣지_미생성() {
+        ParsedFile compose = parsedFileWithComposeEnvHosts(
+                "docker-compose.yml", Map.of("OTHER_API", "other-service"));
+        ParsedFile caller = parsedFileWithServiceCalls(
+                "api-gateway/src/QuotesClient.ts", "TypeScript", List.of("ENV:QUOTES_API"));
+        ParsedFile target = parsedFileWithImports(
+                "quotes-service/src/QuotesController.ts", "TypeScript", List.of());
+        // saveEdge 스텁이 실제로 쓰이도록 무관한 IMPORT 관계를 하나 동반(strict stubbing 대응)
+        ParsedFile importer = parsedFileWithImports("src/com/example/UserController.java", "Java",
+                List.of("com.example.UserService"));
+        ParsedFile importee = parsedFile("src/com/example/UserService.java", "Java", List.of("createUser"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(compose, caller, target, importer, importee));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        assertThat(edgeCaptor.getAllValues()).noneMatch(e -> e.getType() == EdgeType.SERVICE_CALL);
+    }
+
+    @Test
     @DisplayName("논리 서비스명과 일치하는 서비스 디렉터리가 없으면(외부 API 등) SERVICE_CALL 엣지를 만들지 않는다")
     void 서비스_호출_대상_없으면_엣지_미생성() {
         ParsedFile caller = parsedFileWithServiceCalls(
@@ -1830,6 +1870,14 @@ class GraphBuilderTest {
         return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
                 List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), serviceCalls);
+    }
+
+    // docker-compose.yml 파일 생성 헬퍼 — composeEnvHosts만 포함(full 생성자, 나머지 필드는 전부 기본값)
+    private ParsedFile parsedFileWithComposeEnvHosts(String path, Map<String, String> composeEnvHosts) {
+        return new ParsedFile(path, "DockerCompose", List.of(), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), null,
+                List.of(), null, List.of(), composeEnvHosts);
     }
 
     // FeignClient 인터페이스 파일 생성 헬퍼 — feignClientTarget 포함(canonical 생성자, 나머지 필드는 전부 기본값)

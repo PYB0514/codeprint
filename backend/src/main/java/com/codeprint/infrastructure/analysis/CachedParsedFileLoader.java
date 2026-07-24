@@ -35,7 +35,9 @@ public class CachedParsedFileLoader {
     // v5(2026-07-17): ParsedFile에 feignClientTarget 필드 추가(SERVICE_CALL_CHAIN의 FeignClient 지원).
     // v6(2026-07-23): ParsedFile에 fieldDependencyTypes·beanStereotype·lazyDependencyTypes 3개 필드 추가
     // (CIRCULAR_BEAN_DEPENDENCY 게이트 규칙).
-    static final int ANALYZER_VERSION = 6;
+    // v7(2026-07-24): ParsedFile에 composeEnvHosts 필드 추가(SERVICE_CALL_CHAIN "변수 조합 URL" — docker-compose.yml
+    // environment 블록 파싱).
+    static final int ANALYZER_VERSION = 7;
     private static final Duration CACHE_TTL = Duration.ofDays(30);
     // 미니파이드 번들·생성 파일 등 비정상적으로 큰 파일이 파싱 파이프라인 메모리를 잡아먹는 것 방지 — 이 이상은 분석 제외
     static final long MAX_FILE_SIZE_BYTES = 2L * 1024 * 1024;

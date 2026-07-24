@@ -38,8 +38,32 @@ public record ParsedFile(
         String feignClientTarget,                // @FeignClient(name=...) 선언 파일의 논리 서비스명 (null이면 FeignClient 아님 — SERVICE_CALL 엣지용, IMPORT 재사용)
         List<String> fieldDependencyTypes,        // 필드 선언 타입명 목록(distinct, Java만) — CIRCULAR_BEAN_DEPENDENCY 빈 의존 그래프 구성용
         String beanStereotype,                   // Spring 빈 스테레오타입 어노테이션명(Component/Service/Repository/Configuration/RestController, null이면 빈 아님)
-        List<String> lazyDependencyTypes         // 생성자 파라미터 중 @Lazy가 붙은 타입명 목록 — 순환 판정에서 제외할 엣지 식별용
+        List<String> lazyDependencyTypes,        // 생성자 파라미터 중 @Lazy가 붙은 타입명 목록 — 순환 판정에서 제외할 엣지 식별용
+        Map<String, String> composeEnvHosts      // docker-compose.yml environment 블록에서 추출한 환경변수명→호스트 매핑
+                                                   // (language="DockerCompose" 파일만 비어있지 않음 — SERVICE_CALL_CHAIN의
+                                                   // "ENV:VARNAME" 표시 serviceCalls 엔트리를 GraphBuilder가 역해소할 때 사용)
 ) {
+    // 기존 호출부 호환용 — composeEnvHosts 미지정 시 빈 맵
+    public ParsedFile(
+            String filePath, String language, List<String> functions, List<String> imports,
+            String fileComment, Map<String, String> functionComments, Map<String, List<String>> functionCalls,
+            List<String> instantiatedClasses, List<DbTableInfo> dbTables, String repositoryEntityClass,
+            List<ColumnInfo> entityColumns, List<String> apiCalls, List<String> controllerMappings,
+            List<String> implementedInterfaces, List<String> asyncMethods, List<String> jsxComponents,
+            List<RawSqlAccess> rawSqlAccesses, List<String> frameworkAnnotatedMethods,
+            List<String> valueReferencedFunctions, Map<String, Integer> functionDefCounts,
+            List<String> declaredTypes, List<String> testMethods, List<DbAccess> dbAccesses, String extendedClass,
+            Map<String, String> controllerMappingFunctions, List<String> transactionalMethods,
+            Map<String, Integer> functionLines, Map<String, Integer> functionColumns,
+            List<String> interfaceMethods, List<String> serviceCalls, String feignClientTarget,
+            List<String> fieldDependencyTypes, String beanStereotype, List<String> lazyDependencyTypes) {
+        this(filePath, language, functions, imports, fileComment, functionComments, functionCalls,
+                instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings,
+                implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods,
+                valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass,
+                controllerMappingFunctions, transactionalMethods, functionLines, functionColumns, interfaceMethods,
+                serviceCalls, feignClientTarget, fieldDependencyTypes, beanStereotype, lazyDependencyTypes, Map.of());
+    }
     // 기존 호출부 호환용 — fieldDependencyTypes·beanStereotype·lazyDependencyTypes 미지정 시 빈 값
     public ParsedFile(
             String filePath, String language, List<String> functions, List<String> imports,

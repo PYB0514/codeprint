@@ -1040,6 +1040,19 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("axios.get()의 process.env.VARNAME 호출은 \"ENV:VARNAME\" 표시로 추출한다(TypeScript, docker-compose 역해소용)")
+    void serviceCalls_axios_envVar_추출() throws IOException {
+        Path file = writeTsFile("""
+                export const getQuotes = () =>
+                    axios.get(`${process.env.QUOTES_API}/quotes`);
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "TypeScript");
+
+        assertThat(result.serviceCalls()).contains("ENV:QUOTES_API");
+    }
+
+    @Test
     @DisplayName("requests.get()의 http:// 호스트에서 대상 서비스 논리명을 추출한다(Python)")
     void serviceCalls_python_requests_추출() throws IOException {
         Path file = writePyFile("""
@@ -1115,6 +1128,56 @@ class StaticCodeAnalyzerTest {
 
         ParsedFile result = analyzer.analyze(file, tempDir, "Go");
 
+        assertThat(result.serviceCalls()).isEmpty();
+    }
+
+    // ── docker-compose.yml environment 블록 파싱(composeEnvHosts, SERVICE_CALL_CHAIN "변수 조합 URL" ②) ──
+
+    @Test
+    @DisplayName("docker-compose.yml의 리스트 스타일 environment(- KEY=http://host)에서 환경변수→호스트를 추출한다")
+    void composeEnvHosts_리스트스타일_추출() throws IOException {
+        Path file = writeComposeFile("""
+                services:
+                  order-service:
+                    environment:
+                      - QUOTES_API=http://quotes-service:5000
+                      - PORT=3000
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "DockerCompose");
+
+        assertThat(result.composeEnvHosts()).containsEntry("QUOTES_API", "quotes-service");
+        assertThat(result.composeEnvHosts()).doesNotContainKey("PORT");
+    }
+
+    @Test
+    @DisplayName("docker-compose.yml의 맵 스타일 environment(KEY: http://host)에서 환경변수→호스트를 추출한다")
+    void composeEnvHosts_맵스타일_추출() throws IOException {
+        Path file = writeComposeFile("""
+                services:
+                  order-service:
+                    environment:
+                      QUOTES_API: "http://quotes-service:5000"
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "DockerCompose");
+
+        assertThat(result.composeEnvHosts()).containsEntry("QUOTES_API", "quotes-service");
+    }
+
+    @Test
+    @DisplayName("docker-compose.yml은 일반 소스 파일 필드(functions 등)를 전혀 채우지 않는다 — 언어 소스가 아니므로")
+    void composeEnvHosts_다른_필드는_비어있음() throws IOException {
+        Path file = writeComposeFile("""
+                services:
+                  order-service:
+                    environment:
+                      - QUOTES_API=http://quotes-service:5000
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "DockerCompose");
+
+        assertThat(result.functions()).isEmpty();
         assertThat(result.serviceCalls()).isEmpty();
     }
 
@@ -4416,6 +4479,12 @@ class StaticCodeAnalyzerTest {
 
     private Path writeRustFile(String content) throws IOException {
         Path file = tempDir.resolve("test_file.rs");
+        Files.writeString(file, content);
+        return file;
+    }
+
+    private Path writeComposeFile(String content) throws IOException {
+        Path file = tempDir.resolve("docker-compose.yml");
         Files.writeString(file, content);
         return file;
     }

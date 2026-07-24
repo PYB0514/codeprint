@@ -45,6 +45,17 @@ public class StaticCodeAnalyzer {
         if (!content.isEmpty() && content.charAt(0) == '\uFEFF') content = content.substring(1);
         String relativePath = repoRoot.relativize(file).toString().replace("\\", "/");
 
+        // docker-compose.yml은 프로그래밍 언어 소스가 아니라 environment 블록의 서비스 호스트 매핑만
+        // 필요 — tree-sitter/함수 추출 파이프라인 전체를 우회하고 최소 필드만 채운 ParsedFile을 즉시 반환한다
+        // (SERVICE_CALL_CHAIN "변수 조합 URL" ②, decisions/DECISIONS_ANALYSIS.md 참조).
+        if (language.equals("DockerCompose")) {
+            Map<String, String> composeEnvHosts = extractComposeEnvHosts(content);
+            return new ParsedFile(relativePath, language, List.of(), List.of(), null, Map.of(),
+                    Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                    List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), null,
+                    List.of(), null, List.of(), composeEnvHosts);
+        }
+
         // 식별자 검출기용 — 주석 본문을 공백으로 치환한 길이 보존 사본 (B-10 Stage 1).
         // 주석/문자열 페이로드를 읽는 검출기(주석 라벨·API 경로·raw SQL 등)는 원본 content를 그대로 쓴다.
         String masked = maskComments(content, language);
@@ -934,9 +945,20 @@ public class StaticCodeAnalyzer {
                 "\\brequests\\.(?:get|post|put|delete|patch|head|options)\\s*\\(\\s*f?[\"']http://([a-zA-Z0-9_-]+)"
             );
         } else if (language.equals("JavaScript") || language.equals("TypeScript")) {
-            p = Pattern.compile(
+            // 리터럴 http:// 호스트 외에, docker-compose.yml environment 블록으로 주입되는
+            // process.env.VARNAME 기반 호출도 인식 — "ENV:" 접두사로 표시해 GraphBuilder가
+            // docker-compose 파싱 결과로 실제 서비스명을 역해소하게 한다(엣지 정확도 4차 감사
+            // 후속 "변수 조합 URL" ②, decisions/DECISIONS_ANALYSIS.md 참조).
+            List<String> jsResult = new ArrayList<>();
+            Matcher literal = Pattern.compile(
                 "\\baxios\\.(?:get|post|put|delete|patch)\\s*\\(\\s*[`\"']http://([a-zA-Z0-9_-]+)"
-            );
+            ).matcher(content);
+            while (literal.find()) jsResult.add(literal.group(1));
+            Matcher envVar = Pattern.compile(
+                "\\baxios\\.(?:get|post|put|delete|patch)\\s*\\(\\s*[`\"']?\\$?\\{?\\s*process\\.env\\.([A-Za-z0-9_]+)"
+            ).matcher(content);
+            while (envVar.find()) jsResult.add("ENV:" + envVar.group(1));
+            return jsResult.stream().distinct().toList();
         } else if (language.equals("Go")) {
             // 표준 라이브러리 net/http만 1차 스코프 — http.Get/Post/Head(top-level 함수)와
             // http.NewRequest(method, url, body)+Client.Do 패턴(PUT/DELETE 등 그 외 메서드는 보통 이 경로)
@@ -957,6 +979,22 @@ public class StaticCodeAnalyzer {
         List<String> result = new ArrayList<>();
         while (m.find()) result.add(m.group(1));
         return result.stream().distinct().toList();
+    }
+
+    // docker-compose.yml의 environment 블록에서 ENV_VAR=http://service 또는 ENV_VAR: http://service 패턴을 추출
+    // — 리스트 스타일("- KEY=value")과 맵 스타일("KEY: value") 둘 다 지원. 어느 서비스 소속인지는 구분하지 않고
+    // 파일 전체에서 평면적으로 수집(변수명 충돌은 드물고, 실사용에서 굳이 서비스 스코프를 나눌 필요가 없어 단순화).
+    private Map<String, String> extractComposeEnvHosts(String content) {
+        Map<String, String> result = new LinkedHashMap<>();
+        Matcher listStyle = Pattern.compile(
+            "-\\s*([A-Za-z0-9_]+)=http://([a-zA-Z0-9_-]+)"
+        ).matcher(content);
+        while (listStyle.find()) result.put(listStyle.group(1), listStyle.group(2));
+        Matcher mapStyle = Pattern.compile(
+            "(?m)^\\s*([A-Za-z0-9_]+):\\s*[\"']?http://([a-zA-Z0-9_-]+)"
+        ).matcher(content);
+        while (mapStyle.find()) result.put(mapStyle.group(1), mapStyle.group(2));
+        return result;
     }
 
     // 언어별 API 엔드포인트 경로 목록 추출 (Spring/Express/FastAPI/Flask/Gin 지원)
