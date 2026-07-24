@@ -941,9 +941,21 @@ public class StaticCodeAnalyzer {
                     + "\\(\\s*[\"']http://([a-zA-Z0-9_-]+)"
             );
         } else if (language.equals("Python")) {
-            p = Pattern.compile(
+            // 리터럴 http:// 호스트 외에, docker-compose.yml environment 블록으로 주입되는
+            // os.environ['VAR']/os.environ.get('VAR')/os.getenv('VAR') 기반 호출도 인식 —
+            // JS/TS의 "ENV:" 표시와 동일한 방식으로 GraphBuilder가 역해소한다(SERVICE_CALL_CHAIN
+            // "변수 조합 URL" ② Python 확장, decisions/DECISIONS_ANALYSIS.md 참조).
+            List<String> pyResult = new ArrayList<>();
+            Matcher literal = Pattern.compile(
                 "\\brequests\\.(?:get|post|put|delete|patch|head|options)\\s*\\(\\s*f?[\"']http://([a-zA-Z0-9_-]+)"
-            );
+            ).matcher(content);
+            while (literal.find()) pyResult.add(literal.group(1));
+            Matcher envVar = Pattern.compile(
+                "\\brequests\\.(?:get|post|put|delete|patch|head|options)\\s*\\(\\s*f[\"']http://\\{os\\."
+                    + "(?:environ\\[['\"]|environ\\.get\\(['\"]|getenv\\(['\"])([A-Za-z0-9_]+)"
+            ).matcher(content);
+            while (envVar.find()) pyResult.add("ENV:" + envVar.group(1));
+            return pyResult.stream().distinct().toList();
         } else if (language.equals("JavaScript") || language.equals("TypeScript")) {
             // 리터럴 http:// 호스트 외에, docker-compose.yml environment 블록으로 주입되는
             // process.env.VARNAME 기반 호출도 인식 — "ENV:" 접두사로 표시해 GraphBuilder가

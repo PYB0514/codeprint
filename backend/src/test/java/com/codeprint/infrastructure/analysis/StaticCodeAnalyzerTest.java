@@ -1068,6 +1068,54 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("requests.get()의 os.environ['VARNAME'] 호출은 \"ENV:VARNAME\" 표시로 추출한다(Python, docker-compose 역해소용)")
+    void serviceCalls_python_envVar_environ_bracket_추출() throws IOException {
+        Path file = writePyFile("""
+                import os
+                import requests
+
+                def get_quotes():
+                    return requests.get(f"http://{os.environ['QUOTES_API']}/quotes")
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.serviceCalls()).contains("ENV:QUOTES_API");
+    }
+
+    @Test
+    @DisplayName("requests.get()의 os.environ.get('VARNAME') 호출은 \"ENV:VARNAME\" 표시로 추출한다(Python)")
+    void serviceCalls_python_envVar_environ_get_추출() throws IOException {
+        Path file = writePyFile("""
+                import os
+                import requests
+
+                def get_quotes():
+                    return requests.get(f"http://{os.environ.get('QUOTES_API')}/quotes")
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.serviceCalls()).contains("ENV:QUOTES_API");
+    }
+
+    @Test
+    @DisplayName("requests.get()의 os.getenv('VARNAME') 호출은 \"ENV:VARNAME\" 표시로 추출한다(Python)")
+    void serviceCalls_python_envVar_getenv_추출() throws IOException {
+        Path file = writePyFile("""
+                import os
+                import requests
+
+                def get_quotes():
+                    return requests.get(f"http://{os.getenv('QUOTES_API')}/quotes")
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Python");
+
+        assertThat(result.serviceCalls()).contains("ENV:QUOTES_API");
+    }
+
+    @Test
     @DisplayName("로컬 경로(http:// 없음) requests 호출은 serviceCalls로 추출하지 않는다(Python)")
     void serviceCalls_python_로컬_경로_제외() throws IOException {
         Path file = writePyFile("""
