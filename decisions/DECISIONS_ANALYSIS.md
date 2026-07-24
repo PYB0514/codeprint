@@ -4,6 +4,18 @@
 
 ---
 
+## 엣지 정확도 4차 감사 — IMPORT 30/30 전수 판정, phantom 0%(2026-07-24)
+
+**방법.** FUNCTION_CALL과 같은 표본(seed 42)에서 IMPORT 30건을 소스 파일의 실제 `import` 문과 대상 패키지.클래스명 정확 일치 여부로 전수 검증.
+
+**결과.** **30/30 전부 real(0%)** — 1차 감사(2026-07-07, IMPORT 15/15)와 일치, IMPORT 추출은 여전히 견고함을 재확인. 1차 검증 스크립트가 부분 문자열 매칭(`"Project" in line`)으로 2건을 오탐지했으나(`ProjectProvisioningPort`·`ProjectCommandService` import에 매칭돼 정확한 `import ...Project;` 라인을 못 찾음) 파일을 직접 열어 재확인해 실제로는 정확히 존재함을 확인 — 검증 방법 자체의 함정("부분 문자열 매칭은 다른 동일 접두사 클래스에 오매칭될 수 있다")도 기록해둘 만함.
+
+**결과물.** `backend/src/test/resources/edge-audit/self/2026-07-24-import.json`.
+
+**의미.** FUNCTION_CALL(6.7% phantom)과 대비해 IMPORT가 여전히 0%인 건, 이 프로젝트의 `isImportMatch`(세그먼트 정확 매칭)가 `resolveBareCall`(이름만으로 전역 탐색)보다 구조적으로 훨씬 안전한 설계임을 보여준다 — bare-name 호출 해소가 이 종류의 엔진에서 가장 취약한 지점이라는 기존 결론(1~3차 감사)과 정합.
+
+---
+
 ## 엣지 정확도 4차 감사 — FUNCTION_CALL 30/30 전수 판정, phantom 6.7%(2/30), 신규 패턴 C 발견(2026-07-24)
 
 **방법.** `LocalEdgeAuditor`(아래 항목)로 자기 레포 FUNCTION_CALL 30건(고정 시드 42) 표본추출 → 각 표본의 호출 지점을 소스 파일에서 직접 확인(호출 텍스트 grep) + receiver 클래스의 실제 필드/메서드 정의 대조. 1차(2026-07-07)와 달리 표본 전수(30/30)를 판정(1차는 플래그된 9건만 수동 판정).
@@ -14,7 +26,7 @@
 - `FeedbackController.listAll`의 `f.getStatus()`(f=Feedback)가 `TeamPaymentOrder.getStatus()`로 오귀속. `Feedback`은 `@Getter`+`private String status` 필드로 `getStatus()`가 Lombok 생성이라 소스에 텍스트로 존재하지 않음 — self-file 해소가 실패해 전역 폴백이 동명의 **명시적으로 작성된** 메서드(TeamPaymentOrder.getStatus())로 잘못 연결.
 - `CommunityController.addLike`의 `post.getUserId()`(post=Post)가 `User.getUserId()`(UserId VO 반환)로 오귀속. 동일 원인 — `Post.getUserId()`는 Lombok 생성이라 안 보이고, `User`엔 우연히 같은 이름의 **명시적** 메서드가 있어 그쪽으로 폴백.
 - **패턴 B(외부 심볼 동명 오귀속)와의 차이**: 패턴 B는 대상이 JDK/외부 라이브러리 심볼이었는데, 패턴 C는 대상이 **레포 내부의, 그러나 receiver 타입과 무관한 다른 클래스**다 — "진짜 정의가 레포에 있는데 분석기 눈에 안 보여서" 생기는 새로운 하위 유형.
-- **수정 방향(다음 세션 후보, 이번엔 미착수)**: `@Getter`/`@Setter` 클래스 어노테이션이 있는 클래스의 필드 목록에서 `getXxx`/`setXxx`/`isXxx` 가상 메서드를 합성해 self-file 해소 후보에 포함시키면 근본 해결 가능 — `CIRCULAR_BEAN_DEPENDENCY`가 이미 클래스 어노테이션(`beanStereotype`)을 정규식으로 추출하는 것과 동일한 패턴 재사용 가능.
+- **수정 방향 조사(같은 세션 후속, 착수는 보류)**: `resolveBareCall`(`GraphBuilder.java:824`)를 직접 열어보니 생각보다 복잡함을 확인 — `@Getter`/`@Setter` 필드 목록에서 `getXxx`/`setXxx`/`isXxx`를 합성해 `functions()`에 넣는 방식은, 그 이름으로 실제 FUNCTION 노드까지 만들면 HIGH_FAN_OUT·DEAD_CODE 등 다른 감지기가 이 합성 함수를 정탐 대상으로 오인식할 위험이 크다(`functions()`가 노드 생성에도 그대로 재사용됨). 반대로 "매칭 필터링 전용 별도 필드"로 좁히면 `resolveBareCall`이 후보로 고르더라도 `funcNodeIds.get(...)`이 null이라 엣지 자체가 안 생겨(phantom은 없어지지만 recall도 같이 사라짐) — 나쁘지 않은 결과지만, `resolveBareCall`이 애초에 receiver 타입을 전혀 모른 채 이름만으로 전역 탐색하는 구조라 이 종류의 충돌에 근본적으로 취약하다(패턴 B 때도 "정밀 설계 필요"로 보류했던 것과 같은 성격). 설계 없이 빠르게 고치는 것은 다른 정탐 케이스를 깨뜨릴 위험이 있어 보류 — 다음 착수 시 `resolveBareCall`의 "매칭 전용 필드 + import-priority 우선순위로 정확히 걸러지는지" 벤치 케이스부터 만들 것.
 
 **결과물.** `backend/src/test/resources/edge-audit/self/2026-07-24-function-call.json`에 30건 전체(verdict·근거 포함) 커밋 — 다음 감사 때 동일 시드로 재실행해 회귀(새 phantom 발생) 여부 비교 가능.
 

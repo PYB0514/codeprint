@@ -1,0 +1,345 @@
+{
+  "repoLabel": "self",
+  "analysisDir": "src/main/java",
+  "seed": 42,
+  "edgeType": "IMPORT",
+  "auditedAt": "2026-07-24",
+  "method": "전수 판정(30/30) - 소스 파일의 실제 import 문을 열어 대상 패키지.클래스명과 정확히 일치하는지 확인",
+  "summary": {
+    "real": 30,
+    "phantom": 0,
+    "phantomRate": "0%"
+  },
+  "samples": [
+    {
+      "edgeIdentifier": "CollaborationApplicationService.java-imports-CollaborationSession.java",
+      "source": {
+        "filePath": "com/codeprint/application/collaboration/CollaborationApplicationService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/collaboration/CollaborationSession.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "FeaturedPostPublishingAdapter.java-imports-PostCommandService.java",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/adapter/FeaturedPostPublishingAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/community/PostCommandService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TeamPaymentOrderJpaRepository.java-imports-TeamPaymentOrder.java",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/payment/TeamPaymentOrderJpaRepository.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/payment/TeamPaymentOrder.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "FeaturedProjectProvisioningAdapter.java-imports-Project.java",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/adapter/FeaturedProjectProvisioningAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/project/Project.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ProjectAccessAdapter.java-imports-Project.java",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/adapter/ProjectAccessAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/project/Project.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "DonationRepositoryImpl.java-imports-DonationRepository.java",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/donation/DonationRepositoryImpl.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/donation/DonationRepository.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "CollaborationApplicationService.java-imports-CollaborationSessionRepository.java",
+      "source": {
+        "filePath": "com/codeprint/application/collaboration/CollaborationApplicationService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/collaboration/CollaborationSessionRepository.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "PrGateReconciliationCronController.java-imports-CronSecretVerifier.java",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/PrGateReconciliationCronController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/analysis/CronSecretVerifier.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ReportController.java-imports-Report.java",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/ReportController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/community/Report.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphReadAdapter.java-imports-GraphViewPresetDefaults.java",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/adapter/GraphReadAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/GraphViewPresetDefaults.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ProjectReadAdapter.java-imports-ProjectQueryService.java",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/adapter/ProjectReadAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/project/ProjectQueryService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "WarningDetectionAdapter.java-imports-WarningSuppressionService.java",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/adapter/WarningDetectionAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/graph/WarningSuppressionService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphUserInfoAdapter.java-imports-UserRepository.java",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/adapter/GraphUserInfoAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/user/UserRepository.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "MessageApplicationService.java-imports-UserBlockRepository.java",
+      "source": {
+        "filePath": "com/codeprint/application/message/MessageApplicationService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/message/UserBlockRepository.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "WarningController.java-imports-WarningSuppressionService.java",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/WarningController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/graph/WarningSuppressionService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphController.java-imports-Edge.java",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/GraphController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/Edge.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "McpController.java-imports-NodeType.java",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/McpController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/NodeType.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "JwtAuthenticationFilter.java-imports-User.java",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/security/JwtAuthenticationFilter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/user/User.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ArchitectureIntentService.java-imports-ArchitectureIntentAuditLogRepository.java",
+      "source": {
+        "filePath": "com/codeprint/application/graph/ArchitectureIntentService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/ArchitectureIntentAuditLogRepository.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AnalysisFacade.java-imports-ProjectCommandService.java",
+      "source": {
+        "filePath": "com/codeprint/application/analysis/AnalysisFacade.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/project/ProjectCommandService.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "NotificationSettingsController.java-imports-UserNotificationSettings.java",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/NotificationSettingsController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/notification/UserNotificationSettings.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "RefreshTokenRepositoryImpl.java-imports-RefreshToken.java",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/persistence/user/RefreshTokenRepositoryImpl.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/user/RefreshToken.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "FeaturedAnalysisTriggerAdapter.java-imports-AnalysisTriggerPort.java",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/adapter/FeaturedAnalysisTriggerAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/featured/port/AnalysisTriggerPort.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "PrGateReconciliationService.java-imports-GitHubApiClient.java",
+      "source": {
+        "filePath": "com/codeprint/application/analysis/PrGateReconciliationService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/github/GitHubApiClient.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "CollaborationApplicationService.java-imports-GraphAccessPort.java",
+      "source": {
+        "filePath": "com/codeprint/application/collaboration/CollaborationApplicationService.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/collaboration/port/GraphAccessPort.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphFacade.java-imports-AnalysisReadPort.java",
+      "source": {
+        "filePath": "com/codeprint/application/graph/GraphFacade.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/port/AnalysisReadPort.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "FileParsedFileCachePort.java-imports-ParsedFile.java",
+      "source": {
+        "filePath": "com/codeprint/tools/FileParsedFileCachePort.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/infrastructure/analysis/ParsedFile.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "CollaborationGraphAccessAdapter.java-imports-GraphFacade.java",
+      "source": {
+        "filePath": "com/codeprint/infrastructure/adapter/CollaborationGraphAccessAdapter.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/application/graph/GraphFacade.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphViewPresetController.java-imports-GraphViewPreset.java",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/GraphViewPresetController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/domain/graph/GraphViewPreset.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "CommunityController.java-imports-PostLikedEvent.java",
+      "source": {
+        "filePath": "com/codeprint/interfaces/api/CommunityController.java"
+      },
+      "target": {
+        "filePath": "com/codeprint/shared/event/PostLikedEvent.java"
+      },
+      "verdict": "real",
+      "note": null
+    }
+  ]
+}
