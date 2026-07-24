@@ -4,6 +4,20 @@
 
 ---
 
+## SERVICE_CALL_CHAIN "변수 조합 URL" ② — docker-compose.yml environment 블록 파싱, Python 확장(2026-07-24, codeprint_146)
+
+**문제.** 바로 아래 항목(JS/TS)에서 "Python(`os.environ`)은 후속"으로 남겨뒀던 것을 이어서 완료. `requests.get(f"http://{os.environ['QUOTES_API']}/...")` 류 호출은 host가 리터럴이 아니라 기존 SERVICE_CALL_CHAIN 매칭(`http://서비스명` 리터럴 컨벤션)이 못 잡는다.
+
+**설계 — 언어 분기만 추가.** JS/TS 때 이미 확정한 아키텍처(`ParsedFile.composeEnvHosts` + `"ENV:VARNAME"` 표시 + `GraphBuilder`의 언어 무관 역해소 로직)를 그대로 재사용 — `GraphBuilder`·`ParsedFile`·`LanguageDetector`는 무변경, `StaticCodeAnalyzer.extractServiceCalls`의 Python 분기만 확장했다. Python은 환경변수 접근 관용구가 JS(`process.env.X` 단일 형태)보다 다양해 세 가지를 모두 인식하도록 정규식 알터네이션으로 처리: `os.environ['VAR']`(대괄호)·`os.environ.get('VAR')`·`os.getenv('VAR')`(둘 다 괄호 호출). 셋 다 흔히 쓰이는 관용구라 하나만 지원하면 recall 손실이 컸을 것.
+
+**TDD.** `StaticCodeAnalyzerTest` 3건(환경변수 3가지 관용구 각각) — 기존 리터럴 `http://` 패턴과 겹쳐 오매칭되지 않는지도 확인(리터럴 정규식은 `http://` 직후 `{`를 허용하지 않아 자연히 상호 배타적). `GraphBuilder` 레벨은 이미 JS/TS 테스트가 언어 무관 역해소 로직을 검증하고 있어 별도 추가 불필요.
+
+**검증.** `StaticCodeAnalyzerTest`·`GraphBuilderTest` green. `ParsedFile` 필드 변경 없음(`ANALYZER_VERSION` 인상 불필요) — JS/TS 작업 대비 스코프가 훨씬 작음.
+
+**한계.** Spring `@Value`+`application.yml` 조인(③)은 여전히 미착수(진짜 신규 분석기 필요, 스코프 큼).
+
+---
+
 ## SERVICE_CALL_CHAIN "변수 조합 URL" ② — docker-compose.yml environment 블록 파싱(JS/TS, 2026-07-24)
 
 **문제.** 2026-07-18(codeprint_137) 조사에서 "변수 조합 URL"(host가 하드코딩 아닌 케이스) 중 ②(환경변수로 전체 URL 주입, `process.env.QUOTES_API` 등)가 ③(Spring `@Value`+`application.yml`)보다 스코프가 작다고 판단해 착수 순서를 ②→③으로 권장해뒀던 항목. `axios.get(process.env.QUOTES_API + ...)` 같은 호출은 host가 코드에 리터럴로 없어 기존 SERVICE_CALL_CHAIN(리터럴 `http://서비스명` 컨벤션 매칭)이 못 잡는다.
