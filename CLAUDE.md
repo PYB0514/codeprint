@@ -2,6 +2,7 @@
 
 > 프로젝트 개요/기술 스택/개발 환경 → [`docs/PROJECT.md`](docs/PROJECT.md)
 > DDD 아키텍처/그래프 모델/분석 전략/하위 호환성 규칙 → [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+> 재사용 가능한 코드 구조·컨벤션(진입점·파라미터화 규칙 등, "왜"가 아니라 "지금 뭐가 어디 있는지") → [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md)
 > 기술 결정 기록 → [`decisions/`](decisions/) 폴더 내 주제별 파일
 
 ---

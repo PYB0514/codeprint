@@ -2,6 +2,18 @@
 
 ---
 
+## docs/CONVENTIONS.md 신설 — "왜"와 "지금 뭐가 있는지"를 분리 (2026-07-24)
+
+**문제.** 세션 중 로컬 CLI 도구(`com.codeprint.tools.LocalAnalyzer.buildGraph`)가 이미 DB/Spring 없이 임의 디렉터리를 분석하는 재사용 코어였음을 확인했는데, 이 사실이 문서 어디에도 없어 `build.gradle`+소스를 직접 읽어 추측성으로 재도출해야 했다. 사용자가 "이런 걸 md로 체계적으로 기록해두면 추측성 답변·전체분석 토큰낭비를 줄일 수 있지 않냐"고 제안.
+
+**검토한 대안과 탈락 이유.** ①`docs/ARCHITECTURE.md`의 기존 "구조 채택 이유" 섹션에 항목만 추가 — 이 섹션은 서사형(왜 이렇게 골랐는지, 트레이드오프)이라 "지금 뭐가 어디 있는지"를 빠르게 스캔하려는 목적과 문서 성격이 다름, 계속 추가하면 서사와 레퍼런스가 뒤섞여 둘 다 찾기 어려워짐. ②새 도구(`LocalEdgeAuditor` 등) 구현 PR에 규칙 5 표준 흐름대로 그때그때 묶어 기록 — 이미 존재하는 컨벤션(analyzeLocal 계열의 `-PanalysisDir` 파라미터화 규칙)을 문서화하는 데는 맞지 않음, "새로 채택한 구조"가 아니라 "이미 있었는데 안 적혀있던 사실"이기 때문.
+
+**결정.** `docs/CONVENTIONS.md` 신설 — 서사 없이 사실만(재사용 진입점·파라미터화 규칙 등), `docs/ARCHITECTURE.md`(왜)와 명확히 역할 분리. `CLAUDE.md` 최상단 문서 링크 목록에 추가. 첫 항목으로 "로컬 CLI 도구군(com.codeprint.tools)" 섹션 작성 — `LocalAnalyzer.buildGraph` 재사용 코어, 3개 진입점(analyzeLocal/watchLocal/exploreLocal) 매핑, `-PanalysisDir=` 파라미터화 규칙(레포 경로를 코드에 박지 않는 원칙)을 기록.
+
+**갱신 방식 결정.** "대화 중 발견 시 그 자리에서 제안" vs "슬래시 명령 등 별도 절차" 중 전자로 확정 — 사용자가 명시적으로 후자보다 선호. 상세는 memory `feedback_conventions_doc_proactive` 참조.
+
+---
+
 ## exploreLocal find/neighbors "결함" — 실은 파라미터명 오사용 (2026-07-15)
 
 **문제.** Context126(Fable)이 "`-PqueryMode=find -Pquery=X`가 쿼리를 무시하고 동일한 전체 목록을 반환"하는 도구 결함을 발견했다고 기록. 이번 세션(codeprint_127, Sonnet)에서 재현 시도 중 `neighbors` 모드도 같은 증상(엉뚱한 후보 목록 반환)을 보여 재확인.
