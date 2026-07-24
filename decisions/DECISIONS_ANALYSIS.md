@@ -4,6 +4,18 @@
 
 ---
 
+## 엣지 정확도 패턴 C 수정 — @Entity 필드 목록에서 Lombok getter/setter 이름 합성(2026-07-24)
+
+**문제.** 4차 감사에서 확정한 패턴 C — Lombok `@Getter` 생성 메서드(`Feedback.getStatus()`, `Post.getUserId()`)가 소스에 텍스트로 없어 `resolveBareCall`의 self-file/import-priority 해소가 실패하고, 동명의 무관한 명시적 메서드(`TeamPaymentOrder.getStatus()`, `User.getUserId()`)로 전역 폴백되던 문제. PR #664에서 발견 당시 "설계 없이 고치면 다른 감지기(HIGH_FAN_OUT·DEAD_CODE)를 깨뜨릴 위험"으로 착수를 보류했었음.
+
+**설계 — 왜 안전한가.** 처음 우려했던 위험은 "합성한 getter/setter 이름을 `functions()`에 넣으면 그 이름으로 가짜 FUNCTION 노드까지 생겨 다른 감지기가 오인식한다"는 것이었다. 다시 설계하며 이 우려를 피하는 길을 찾았다 — **`functions()`(노드 생성용 리스트)는 전혀 건드리지 않고, `resolveBareCall`의 후보 필터링에만 쓰는 별도 판정 함수(`hasEntityAccessor`)를 추가**했다. `pf.entityColumns()`(`@Entity` 필드 목록, 이미 `StaticCodeAnalyzer`가 추출 중이라 신규 추출 로직 불필요)에서 `get<Field>`/`set<Field>`/(boolean이면)`is<Field>`를 계산해 이름만 비교한다. 이 판정이 `resolveBareCall`을 "맞는 후보 쪽으로 유도"하더라도, 실제 엣지 생성 단계(`funcNodeIds.get(bestMatch.filePath()+"::"+calleeFunc)`)는 여전히 `functions()` 기반 `funcNodeIds`만 조회하므로 **합성된 이름은 절대 실제 엣지를 만들어내지 못한다** — 최악의 경우도 "엣지 미생성"(recall 손실)이지 "잘못된 엣지"(phantom)가 아니다. 즉 이 수정은 구조적으로 phantom을 새로 만들 수 없고, 오직 기존 phantom을 없애거나 무해한 침묵으로 바꾸는 방향으로만 작동한다 — 그래서 다른 감지기로의 파급 위험이 원천적으로 차단된다.
+
+**TDD.** `bareCallToLombokEntityGetter_notMisattributedToUnrelatedDecoy` — 실제 사고를 그대로 재현하는 픽스처(entityColumns만 있는 Feedback류 엔티티, 동명의 명시적 메서드를 가진 무관한 decoy 클래스, entity를 import하는 caller). RED(수정 전 decoy로 phantom 엣지 생성 확인) → GREEN.
+
+**검증.** 전체 백엔드 테스트 1094건(Docker DB 통합테스트 포함) green. `analyzeLocal` 자기분석 — 워닝 베이스라인 무변화(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1, 이번 수정과 무관 — "경고 정확도 ≠ 그래프 정확도"와 일치, 그래프 품질 개선이 항상 워닝 표면에 드러나는 건 아님). **실측**: `edgeAudit` 재실행 결과 자기 레포 전체 엣지 수 4,711→4,666(**-45**) — 이번에 확인한 2건 외에도 같은 메커니즘의 phantom이 레포 전역에 더 있었고 함께 제거됐음을 시사.
+
+---
+
 ## 엣지 정확도 패턴 D 수정 — detectCrudTypes READ 접두사에 집계 함수 관용구 추가(2026-07-24)
 
 **문제.** 위 4차 감사에서 확정한 패턴 D — `detectCrudTypes`(`GraphBuilder.java:758`)의 READ 접두사 목록(find/get/count/exists/load/fetch/read/list/search)에 JPQL 집계 함수(`sum`/`avg`/`total`/`min`/`max`) 관용구가 없어, `sumAllocatedSeatsByTeamId`류 read-only 집계 쿼리가 접두사 미매칭 폴백(`types.isEmpty()` → READ+WRITE 이중 추가)을 타 DB_WRITE로도 잘못 표시됨.

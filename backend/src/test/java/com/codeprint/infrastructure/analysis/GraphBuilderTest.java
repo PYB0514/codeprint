@@ -792,6 +792,31 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("bare 호출 대상이 @Entity의 Lombok 생성 getter(entityColumns 필드만 존재)면 동명의 무관한 명시적 메서드로 오귀속되지 않는다(엣지 정확도 감사 패턴 C)")
+    void bareCallToLombokEntityGetter_notMisattributedToUnrelatedDecoy() {
+        // Feedback.getStatus()는 Lombok @Getter 생성이라 소스에 없음(functions 비어있음, entityColumns에 status 필드만 존재).
+        // TeamPaymentOrder.getStatus()는 완전 무관한 클래스지만 명시적으로 작성돼 있어, 종전엔 import 후보가 없다는
+        // 이유로 전역 폴백이 이쪽으로 잘못 연결됐다(실제 사고: DECISIONS_ANALYSIS.md 4차 감사 패턴 C).
+        ParsedFile entity = parsedFileWithEntityColumns("domain/community/Feedback.java", "Java",
+                List.of(new ColumnInfo("status", "status", "String", false)));
+        ParsedFile decoy = parsedFile("domain/payment/TeamPaymentOrder.java", "Java",
+                List.of("getStatus"), Map.of());
+        ParsedFile caller = parsedFileWithCallsAndImports("interfaces/api/FeedbackController.java", "Java",
+                List.of("listAll"), Map.of("listAll", List.of("getStatus")),
+                List.of("com.codeprint.domain.community.Feedback"));
+
+        graphBuilder.build(projectId, analysisId, List.of(entity, decoy, caller));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        boolean phantomToDecoy = cap.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("listAll") && e.getEdgeIdentifier().contains("getStatus")
+                        && "domain/payment/TeamPaymentOrder.java".equals(e.getMetadata().get("calleeFile")));
+        assertThat(phantomToDecoy).isFalse();
+    }
+
+    @Test
     @DisplayName("import된 후보 집합 안에서도 인터페이스보다 구현체를 우선 선택한다")
     void import된_집합에서_구현체_우선() {
         // caller가 인터페이스(Repo)와 구현체(RepoImpl)를 모두 import — 구현체로 해소돼야 함
@@ -1844,6 +1869,14 @@ class GraphBuilderTest {
     private ParsedFile parsedFileWithRepository(String path, String lang, List<String> functions, String repositoryEntityClass) {
         return new ParsedFile(path, lang, functions, List.of(), null, Map.of(),
                 Map.of(), List.of(), List.of(), repositoryEntityClass, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), null,
+                List.of(), null, List.of());
+    }
+
+    // @Entity 컬럼(entityColumns)만 지정하는 헬퍼 — Lombok 생성 getter/setter가 self-file 해소 후보로 잡히는지 테스트용
+    private ParsedFile parsedFileWithEntityColumns(String path, String lang, List<ColumnInfo> entityColumns) {
+        return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, entityColumns, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
                 List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), null,
                 List.of(), null, List.of());
     }
