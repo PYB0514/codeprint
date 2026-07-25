@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.150.1',
+    date: '2026-07-25',
+    title: '링크 공유 카드·검색 결과 설명문 정정',
+    type: 'fix',
+    items: [
+      { category: '프론트', desc: '카카오톡·슬랙 등에 링크를 공유할 때 보이는 설명문과 검색 결과 설명문에, 이미 제거된 AI 분석 기능과 폐지된 "무료 프로젝트 3개 제한"이 남아 있던 것을 정정했습니다. "런타임 경고"라는 옛 표현도 실제 동작에 맞게 "구조 경고"로 바꿨습니다.' },
+    ],
+  },
+  {
     version: 'v0.150.0',
     date: '2026-07-25',
     title: '특정 커밋으로 재분석',
