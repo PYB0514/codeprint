@@ -52,7 +52,8 @@ class GraphBuilderTest {
         // Graph.create() → graphRepository.save() 가 Graph 객체를 반환해야 build()가 동작
         when(graphRepository.save(any(Graph.class))).thenAnswer(inv -> inv.getArgument(0));
         when(graphRepository.saveNode(any(Node.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(graphRepository.saveEdge(any(Edge.class))).thenAnswer(inv -> inv.getArgument(0));
+        // CONTAINS 엣지 생성 제거(2026-07-26) 이후 엣지가 전혀 없는 시나리오도 있어 lenient — strict stubbing 예외 방지
+        lenient().when(graphRepository.saveEdge(any(Edge.class))).thenAnswer(inv -> inv.getArgument(0));
         // 개인(비시스템) 계정 프로젝트 기본값 — 보존 정책 회귀 테스트만 이 값을 오버라이드
         when(projectRepository.findById(any())).thenReturn(Optional.empty());
         when(snapshotReferencePort.findReferencedGraphIds(any())).thenReturn(Set.of());
@@ -116,29 +117,6 @@ class GraphBuilderTest {
         verify(graphRepository).deleteById(existing.get(1).getId());
     }
 
-    // ── 회귀: CONTAINS 엣지 중복 방지 ──────────────────────────────────────
-
-    @Test
-    @DisplayName("같은 파일의 같은 함수에 CONTAINS 엣지가 중복 생성되지 않는다")
-    void CONTAINS_엣지_중복_방지() {
-        // DECISIONS_ANALYSIS.md: usedContainsEdgeIds Set 누락으로 CONTAINS 엣지가 중복 생성됐던 버그
-        ParsedFile file = parsedFile("src/UserService.java", "Java",
-                List.of("createUser", "createUser"), // 같은 함수명 중복 입력 (방어 케이스)
-                Map.of("createUser", "유저 생성"));
-
-        graphBuilder.build(projectId, analysisId, List.of(file));
-
-        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
-
-        long containsCount = edgeCaptor.getAllValues().stream()
-                .filter(e -> e.getType() == EdgeType.CONTAINS)
-                .filter(e -> e.getEdgeIdentifier().contains("createUser"))
-                .count();
-
-        assertThat(containsCount).isEqualTo(1);
-    }
-
     // ── 파일 간 FUNCTION_CALL 엣지 생성 ────────────────────────────────────
 
     @Test
@@ -198,7 +176,7 @@ class GraphBuilderTest {
         graphBuilder.build(projectId, analysisId, List.of(file));
 
         ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+        verify(graphRepository, atLeast(0)).saveEdge(edgeCaptor.capture());
 
         long functionCallCount = edgeCaptor.getAllValues().stream()
                 .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
@@ -325,14 +303,14 @@ class GraphBuilderTest {
         // __mocks__/zustand.ts 가 `import * as zustand from 'zustand'`(npm 패키지, 상대/alias 아님) →
         // bare 세그먼트 매칭이 파일 자신의 stripped 경로(".../zustand")와 접미사 일치해 자기참조 IMPORT 생성 →
         // CYCLIC_IMPORT 1노드 자가순환 phantom(2026-07-01 bulletproof-react 측정으로 발견).
-        // 함수 1개를 동반해 CONTAINS 엣지가 발생하도록 함(단일 파일+import뿐이면 saveEdge 미호출로 stub 검증 불가)
         ParsedFile mock = parsedFileWithCallsAndImports("apps/react-vite/__mocks__/zustand.ts", "TypeScript",
                 List.of("create"), Map.of(), List.of("zustand"));
 
         graphBuilder.build(projectId, analysisId, List.of(mock));
 
+        // 자기매칭 차단 시 이 시나리오는 saveEdge가 아예 호출되지 않을 수 있음(CONTAINS 제거 이후) — atLeast(0)로 허용
         ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        verify(graphRepository, atLeast(0)).saveEdge(cap.capture());
         long importEdges = cap.getAllValues().stream()
                 .filter(e -> e.getType() == EdgeType.IMPORT).count();
         assertThat(importEdges).isZero();
@@ -352,7 +330,7 @@ class GraphBuilderTest {
         graphBuilder.build(projectId, analysisId, List.of(mockA, mockB));
 
         ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        verify(graphRepository, atLeast(0)).saveEdge(cap.capture());
         long importEdges = cap.getAllValues().stream()
                 .filter(e -> e.getType() == EdgeType.IMPORT).count();
         assertThat(importEdges).isZero();
@@ -369,7 +347,7 @@ class GraphBuilderTest {
         graphBuilder.build(projectId, analysisId, List.of(importer, decoy));
 
         ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        verify(graphRepository, atLeast(0)).saveEdge(cap.capture());
         long importEdges = cap.getAllValues().stream()
                 .filter(e -> e.getType() == EdgeType.IMPORT).count();
         assertThat(importEdges).isZero();
@@ -537,7 +515,7 @@ class GraphBuilderTest {
         graphBuilder.build(projectId, analysisId, List.of(importer, decoy));
 
         ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        verify(graphRepository, atLeast(0)).saveEdge(cap.capture());
         long importEdges = cap.getAllValues().stream()
                 .filter(e -> e.getType() == EdgeType.IMPORT).count();
         assertThat(importEdges).isZero();
@@ -851,7 +829,7 @@ class GraphBuilderTest {
         graphBuilder.build(projectId, analysisId, List.of(entity, decoy, caller));
 
         ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        verify(graphRepository, atLeast(0)).saveEdge(cap.capture());
         boolean phantomToDecoy = cap.getAllValues().stream()
                 .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
                 .anyMatch(e -> e.getEdgeIdentifier().contains("listAll") && e.getEdgeIdentifier().contains("getStatus")
@@ -899,7 +877,7 @@ class GraphBuilderTest {
         graphBuilder.build(projectId, analysisId, List.of(caller, decoy));
 
         ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+        verify(graphRepository, atLeast(0)).saveEdge(edgeCaptor.capture());
 
         boolean hasPhantomAddEdge = edgeCaptor.getAllValues().stream()
                 .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
@@ -986,7 +964,7 @@ class GraphBuilderTest {
         graphBuilder.build(projectId, analysisId, List.of(caller, decoy));
 
         ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+        verify(graphRepository, atLeast(0)).saveEdge(edgeCaptor.capture());
 
         boolean hasPhantomBuildEdge = edgeCaptor.getAllValues().stream()
                 .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
@@ -1033,7 +1011,7 @@ class GraphBuilderTest {
             graphBuilder.build(projectId, analysisId, List.of(caller, decoy));
 
             ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
-            verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+            verify(graphRepository, atLeast(0)).saveEdge(edgeCaptor.capture());
 
             boolean hasPhantomEdge = edgeCaptor.getAllValues().stream()
                     .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
@@ -1063,7 +1041,7 @@ class GraphBuilderTest {
         graphBuilder.build(projectId, analysisId, List.of(testFile, decoy));
 
         ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+        verify(graphRepository, atLeast(0)).saveEdge(edgeCaptor.capture());
 
         boolean hasPhantomVerifyEdge = edgeCaptor.getAllValues().stream()
                 .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
@@ -1087,7 +1065,7 @@ class GraphBuilderTest {
         graphBuilder.build(projectId, analysisId, List.of(caller, decoy));
 
         ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+        verify(graphRepository, atLeast(0)).saveEdge(edgeCaptor.capture());
 
         boolean hasPhantomCollectEdge = edgeCaptor.getAllValues().stream()
                 .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
@@ -1134,7 +1112,7 @@ class GraphBuilderTest {
         graphBuilder.build(projectId, analysisId, List.of(caller, decoy));
 
         ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+        verify(graphRepository, atLeast(0)).saveEdge(edgeCaptor.capture());
 
         boolean hasPhantomBodyEdge = edgeCaptor.getAllValues().stream()
                 .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
@@ -1221,7 +1199,7 @@ class GraphBuilderTest {
     // ── API_ENDPOINT 노드 실체화 (§16 로드맵, 파일 단위 1차) ────────────────
 
     @Test
-    @DisplayName("controllerMappings가 있는 파일은 경로마다 API_ENDPOINT 노드 + FILE→API_ENDPOINT CONTAINS 엣지를 생성한다")
+    @DisplayName("controllerMappings가 있는 파일은 경로마다 API_ENDPOINT 노드를 생성한다")
     void controllerMappings_있으면_API_ENDPOINT_노드_생성() {
         ParsedFile controller = parsedFileWithMappings("src/UserController.java", "Java",
                 List.of("/api/users", "/api/users/{id}"));
@@ -1236,14 +1214,6 @@ class GraphBuilderTest {
         assertThat(endpointNodes).hasSize(2);
         assertThat(endpointNodes).extracting(Node::getName)
                 .containsExactlyInAnyOrder("/api/users", "/api/users/{id}");
-
-        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
-        long endpointEdges = edgeCaptor.getAllValues().stream()
-                .filter(e -> e.getType() == EdgeType.CONTAINS)
-                .filter(e -> e.getEdgeIdentifier().contains("endpoint"))
-                .count();
-        assertThat(endpointEdges).isEqualTo(2);
     }
 
     @Test
@@ -1319,7 +1289,7 @@ class GraphBuilderTest {
                 .findFirst().orElseThrow();
 
         ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
-        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+        verify(graphRepository, atLeast(0)).saveEdge(edgeCaptor.capture());
         boolean hasOutgoingFunctionCall = edgeCaptor.getAllValues().stream()
                 .anyMatch(e -> e.getType() == EdgeType.FUNCTION_CALL && e.getSourceNodeId().equals(endpoint.getId()));
         assertThat(hasOutgoingFunctionCall).isFalse();
@@ -1657,7 +1627,7 @@ class GraphBuilderTest {
         ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
         ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
         verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
-        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+        verify(graphRepository, atLeast(0)).saveEdge(edgeCaptor.capture());
 
         // 분석기가 값 참조를 잡고, 빌더가 노드 메타에 referencedAsValue 플래그를 심는다
         assertThat(pf.valueReferencedFunctions()).contains("defaultHandleRecovery");
@@ -1931,8 +1901,6 @@ class GraphBuilderTest {
     }
 
     // Spring 빈 파일 생성 헬퍼 — beanStereotype·fieldDependencyTypes·lazyDependencyTypes 포함(canonical 생성자, 나머지 필드는 기본값)
-    // 함수 하나(placeholder)를 항상 포함시켜 CONTAINS 엣지가 생성되도록 함 — 엣지가 전혀 없는 빌드는
-    // @BeforeEach의 saveEdge 스텁이 미사용으로 잡혀 Mockito strict stubbing 예외가 나기 때문
     private ParsedFile parsedFileWithBean(String path, String lang, String beanStereotype,
                                           List<String> fieldDependencyTypes, List<String> lazyDependencyTypes) {
         return new ParsedFile(path, lang, List.of("placeholder"), List.of(), null, Map.of(),

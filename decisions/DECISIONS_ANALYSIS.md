@@ -4,6 +4,22 @@
 
 ---
 
+## CONTAINS 엣지 생성 중단 — 읽는 곳 0곳인 죽은 데이터 제거(2026-07-26, codeprint_149)
+
+**문제.** codeprint_148의 시각화 엣지 분리 설계 검토에서 "백엔드 `main` 전체에서 CONTAINS 출현이 `EdgeType` enum 선언 1 + `GraphBuilder` 생성 2곳(FILE→FUNCTION, FILE→API_ENDPOINT)뿐이고, 읽는 곳(감지기·프론트)이 0곳"임을 확인해뒀다. 프론트는 `graphLayout.ts`가 API_ENDPOINT를 DB_TABLE과 동일하게 독립 컬럼으로 배치하고(CONTAINS/parentId 미사용), 파일↔함수 중첩도 `filePath` 문자열 매칭으로 만들어(CONTAINS 엣지와 무관) 순수 쓰기 전용 데이터였다 — 전체 엣지의 29.6%(자기 레포 기준 110,940행).
+
+**결정 — enum은 유지, 생성만 중단.** `docs/ARCHITECTURE.md` "그래프 하위 호환성 규칙"에 따라 `EdgeType` enum 값 삭제는 Flyway 마이그레이션이 필수이고, 기존 그래프 대다수가 이미 CONTAINS 엣지를 저장하고 있어 enum을 지우면 과거 그래프 로딩(JPA 역직렬화)이 깨진다. 반면 "생성만 중단"은 enum 변경이 아니라 `GraphBuilder`의 생성 로직만 바꾸는 것이라 마이그레이션이 필요 없다("추가는 자유, 변경/삭제는 마이그레이션 세트" 규칙에서 생성 중단은 삭제가 아님). `GraphBuilder.java`에서 FILE→FUNCTION(옛 165~171행, `usedContainsEdgeIds` Set 포함)과 FILE→API_ENDPOINT(옛 613행, `usedApiEndpointEdgeIds` Set 포함) 두 생성 지점을 제거 — 둘 다 제거 후 완전히 미사용이 된 로컬 변수(`controllerFileId`의 API_ENDPOINT 루프 버전 등)도 함께 정리.
+
+**ANALYZER_VERSION 영향 없음.** 이 버전은 `ParsedFile` 스키마(개별 파일 파싱 결과 필드) 변경을 추적하는 캐시 무효화 키인데, 이번 변경은 이미 파싱된 `ParsedFile`을 그대로 쓰되 `GraphBuilder`가 그로부터 엣지를 덜 만드는 것뿐이라 스키마와 무관.
+
+**테스트 리팩토링 — 예상보다 파급이 컸다.** `GraphBuilderTest`는 `@ExtendWith(MockitoExtension.class)`가 기본으로 `Strictness.STRICT_STUBS`를 쓰는데, "phantom 엣지 차단" 계열 회귀 테스트 다수가 의도적으로 실제 엣지를 0개 만드는 시나리오라 그동안 CONTAINS가 "saveEdge 스텁을 최소 1회는 쓰이게 하는" 우연한 안전망 역할을 하고 있었다. CONTAINS 제거 직후 13개 테스트가 `WantedButNotInvoked`로 깨졌다 — 전부 "엣지 0개여야 한다"를 검증하려고 먼저 `verify(atLeastOnce()).saveEdge(...)`를 호출하던 패턴이었다. `@BeforeEach`의 `saveEdge` 스텁을 `lenient()`로 바꾸고(전역 unused-stub 예외 방지), 개별 13개 테스트의 `atLeastOnce()`를 `atLeast(0)`으로 교체(그 자리에서 0개도 유효한 결과라는 뜻으로 변경) — 각 테스트의 실제 단언(특정 phantom 엣지가 없음/특정 타입 개수가 0)은 그대로 유지. `CONTAINS_엣지_중복_방지` 테스트는 제거된 기능 자체를 검증하던 것이라 삭제, `controllerMappings_있으면_API_ENDPOINT_노드_생성`은 CONTAINS 엣지 단언만 제거(노드 생성 단언은 유지).
+
+**검증.** `./gradlew test` — 도메인/유닛 전체 green(Docker DB 미기동으로 인한 통합테스트 10건 실패는 무관한 환경 요인, 스택트레이스로 확인). `./gradlew analyzeLocal` — CROSS_DOMAIN_CALL·DOMAIN_IMPORTS_INFRA 0건, HIGH_FAN_OUT 5건은 이번 변경과 무관한 기존 항목(run·analyzeBranch·analyze·from·onAuthenticationSuccess).
+
+**남은 것.** `GATE_GAPS.md` [G-9]의 시각화 엣지 분리 설계에서 CONTAINS 제거는 1단계일 뿐 — SERVICE_CALL·FIELD_DEPENDENCY(화면에 렌더 경로 없음)·IMPORT류 lazy fetch·FUNCTION_CALL/DB_*/API_CALL 서버 이전(흐름재생)은 별도 후속.
+
+---
+
 ## [G-9] 500파일 절단 편향 완화 1단계 — T2(테스트·픽스처) 후순위화 + 미니파이·docset 제외(2026-07-26, codeprint_149)
 
 **문제.** `GATE_GAPS.md` [G-9](codeprint_148 감사발) — `SourceFileWalker`가 `eligible.sort(경로)` 후 `subList(0,500)`으로 자르기 때문에 절단이 무작위 표본이 아니라 사전순 뒤쪽 서브트리를 통째로 버리는 형태였다. 우리 레포 자체가 실사례: eligible 786개 중 500개가 전부 `backend/` 하위라 `frontend/`(71개)가 자기 게이트에서 영구 비가시. 후속 실측(같은 세션)은 "테스트·픽스처(`src/test` 하위 125개)만 후순위로 돌려도 프로덕션 소스는 451개 < 500이라 우리 레포는 즉시 해소된다"는 것과, "미니파이·docset 오염(`jquery.min.js` 1파일이 노드 378개)이 슬롯·저장·phantom 정확도 3중 손해"라는 것을 확인해뒀다.
