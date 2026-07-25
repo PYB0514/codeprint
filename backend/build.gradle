@@ -133,6 +133,8 @@ task analyzeLocal(type: JavaExec, dependsOn: classes) {
     description = '로컬 소스 디렉터리에서 GraphWarning 감지 (Spring/DB 없이 실행)'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.codeprint.tools.LocalAnalyzer'
+    // Windows 콘솔 기본 인코딩(CP949)이 한국어 경고 메시지를 깨뜨려 UTF-8 강제(다른 로컬 도구들과 동일)
+    jvmArgs = ['-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8']
     // 기본값: backend/src/main/java (직접 경로 지정 가능 — ./gradlew analyzeLocal --args="경로")
     args = [project.hasProperty('analysisDir') ? project.property('analysisDir') : 'src/main/java']
 }
