@@ -456,7 +456,8 @@
       "inst": "Instantiation",
       "broken": "Broken Link",
       "db": "DB Connection",
-      "api": "API Call"
+      "api": "API Call",
+      "localHint": "Other connections appear only when you click a node — showing just that node's direct links."
     },
     "snapshotNotFound": "Snapshot not found.",
     "commentsHeading": "Comments",
@@ -705,8 +706,8 @@
       "welcomeContent": "Explore your project's file structure and function call flow as an interactive circuit diagram. Here's a quick tour of the main features.",
       "layoutTitle": "Switch Layout",
       "layoutContent": "Layer mode sorts by DDD layer (interfaces → application → domain → infrastructure). Domain mode groups nodes that belong to the same domain (e.g. project, payment) together.",
-      "edgesTitle": "Edge Filters",
-      "edgesContent": "Toggle connection types like call chains, DB connections, and API calls on and off. If it looks too busy, keep only the connections you need.",
+      "edgesTitle": "Edge Display",
+      "edgesContent": "Broken connections (violations) are always shown. Other connections like call chains, DB, and API calls appear only when you click a node — showing just that node's direct links.",
       "clickNodeTitle": "Try clicking a node",
       "clickNodeContent": "Clicking a function node shows its details and call flow (call chain) in the right sidebar. Use the flow playback button to animate the execution path.",
       "exportTitle": "Export",

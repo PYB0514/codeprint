@@ -2,6 +2,24 @@
 
 ---
 
+## GraphPage.tsx 엣지 전역 토글 5개 제거 — 국소 표시로 전환(2026-07-26, codeprint_149)
+
+**문제.** codeprint_148의 시각화 엣지 분리 설계 검토("구조 그래프와 시각화 그래프는 다른 것" 질문에서 도출)가 제안한 "국소 표시(3축) + 전역 토글 제거"를 실행하는 항목. 코드 확인 결과 축① (선택 노드 1홉 이웃 강조)는 `clickedNodeId` 기반 useEffect(536행 근처, "토글 상태와 무관하게 강조 표시")로 **이미 구현돼 있었고**, 기본값도 이미 IMPORT·FUNCTION_CALL·INSTANTIATION·DB_*가 꺼져 있어(BROKEN·API_CALL만 켜짐) 국소 표시에 상당히 가까운 상태였다. 진짜 남은 작업은 "사용자가 범례 버튼으로 전역 표시를 켤 수 있는 통로"를 없애는 것.
+
+**범위 결정 — 사용자 확인.** 6개 토글이 `GraphPage.tsx`뿐 아니라 `GraphViewerPage.tsx`·`CommunityPostGraphPage.tsx`(둘 다 미착수) + 저장되는 뷰 프리셋 스키마(`buildCurrentConfig`/`applyPresetConfig`, DB에 영구 저장)까지 얽혀 있음을 확인하고 사용자에게 범위를 질의 — "GraphPage.tsx만 먼저" 확정. 나머지 두 페이지는 별도 PR로 분리.
+
+**결정.** `showEdges`(IMPORT)·`showCallEdges`(FUNCTION_CALL)·`showInstEdges`(INSTANTIATION)·`showDbEdges`(DB_*)·`showApiCallEdges`(API_CALL) 5개 state·토글 콜백·범례 UI를 제거. `showBrokenEdges`(구조 위반 증거)만 유지 — 축③(경고 증거)에 해당하고 위반은 항상 노출돼야 한다는 판단, 희소해서 노이즈가 아니다. 초기 로드 경로(옛 683행)의 하드코딩된 `sapi=true`도 `false`로 맞춰 일관성 확보(그대로 두면 초기 로드에서만 API_CALL이 보였다가 레이아웃 전환 시 사라지는 불일치가 생길 뻔함).
+
+**프리셋 하위 호환.** `buildCurrentConfig`의 `edges` 직렬화를 `{ broken }`만 남기고, `applyPresetConfig`도 `edgeConfig.broken`만 읽는다. 기존에 저장된 프리셋의 `import`/`call`/`inst`/`db`/`api` 필드는 JSONB라 파싱 에러 없이 조용히 무시된다(값이 없어져도 크래시 없음, `docs/ARCHITECTURE.md`의 JSONB 유연 확장 정신과 일치).
+
+**i18n.** `communityPostGraph.edgeTypes.*`(import/call/inst/db/api 라벨)는 `CommunityPostGraphPage.tsx`가 계속 쓰므로 삭제하지 않고 GraphPage 쪽에서만 참조를 끊었다. 새 키 `edgeTypes.localHint`(범례 아래 안내 문구) + 온보딩 투어 `graphShared.tour.edgesTitle`/`edgesContent`(GraphPage 전용 확인 후 갱신 — `GraphViewerPage.tsx`는 이 투어를 쓰지 않음) 추가, ko/en 둘 다 반영.
+
+**검증.** `npx tsc -b` clean(미사용 변수 0). 실 로그인 브라우저(claude-in-chrome, 기존 세션 재사용, "realworld-test" 프로젝트) E2E — ①기본 진입 시 엣지 미노출 확인 ②노드 클릭 시 1홉 이웃 엣지가 옅은 회색 곡선으로 나타남 확인(CommentsApi→CommentMutation) ③흐름 재생(사이드바 "재생" 버튼)이 애니메이션 경로로 정상 동작 ④끊긴 연결 토글 클릭 시 크래시 없음 ⑤계층형/도메인 레이아웃 전환 정상. 콘솔 에러 0건.
+
+**남은 것.** `GraphViewerPage.tsx`·`CommunityPostGraphPage.tsx`는 별도 PR. 축②(흐름 재생 경로)는 서버 이전(`get_call_path`, §16.4 P3) 선행 필요, 축③(경고 증거) 확장은 백엔드가 `warnings[].edgeIds`를 채워야 함(현재 대부분 비어있음, `GraphPage.tsx:670` 근처 `warnEdgeIds` 하이라이트 로직 자체는 이미 있음).
+
+---
+
 ## index.html 메타 설명문에 스테일 주장 3건 잔존 — 카피 정정 스윕이 정적 HTML head를 한 번도 안 훑었음 (2026-07-25)
 
 **문제.** v1.0 런칭 선행조건을 코드로 재검증하던 중 `frontend/index.html`의 `<meta name="description">`·`<meta property="og:description">`에 세 가지 사실과 다른 주장이 남아 있는 것을 발견했다. ①"AI 분석까지" — AI 키 기반 기능은 2026-07-12에 전면 제거됨 ②"런타임 경고 감지" — 정적 분석인데 런타임이라 부르는 오칭으로, 2026-07-05 UX 리뷰(#3)에서 이미 "구조 경고"로 정정하기로 결정하고 랜딩 카드까지 고쳤던 표현 ③"무료로 프로젝트 3개까지" — 그 제한은 성장 레버 보호를 위해 PR #413에서 **폐지**됐고(`docs/PROJECT.md` 82행), 실제로 백엔드에 프로젝트 수 제한 코드가 존재하지 않는다(`UserPlan`의 게이팅은 팀 좌석·협업 인원뿐).
