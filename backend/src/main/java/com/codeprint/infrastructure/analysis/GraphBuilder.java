@@ -84,7 +84,6 @@ public class GraphBuilder {
         Map<String, UUID> fileNodeIds = new HashMap<>();
         // 함수명 → 노드ID (파일 경로 포함: "filePath::funcName" → nodeId)
         Map<String, UUID> funcNodeIds = new HashMap<>();
-        Set<String> usedContainsEdgeIds = new HashSet<>();
 
         // FILE 노드 생성
         for (ParsedFile pf : parsedFiles) {
@@ -161,14 +160,6 @@ public class GraphBuilder {
                 funcNode.updateMetadata(meta);
                 graphRepository.saveNode(funcNode);
                 funcNodeIds.put(pf.filePath() + "::" + funcName, funcNode.getId());
-
-                // FILE → FUNCTION 포함 관계 엣지 (동일 식별자 중복 방지)
-                String edgeId = extractFileName(pf.filePath()) + "-" + funcName;
-                if (usedContainsEdgeIds.contains(edgeId)) continue;
-                usedContainsEdgeIds.add(edgeId);
-                Edge containsEdge = Edge.create(graphId, edgeId, EdgeType.CONTAINS,
-                        fileNodeIds.get(pf.filePath()), funcNode.getId());
-                graphRepository.saveEdge(containsEdge);
             }
         }
 
@@ -592,27 +583,19 @@ public class GraphBuilder {
             }
         }
 
-        // API_ENDPOINT 노드 생성 + FILE → API_ENDPOINT 엣지 (컨트롤러 경로 표면 시각화 — 파일 단위 1차 완료).
+        // API_ENDPOINT 노드 생성(컨트롤러 경로 표면 시각화 — 파일 단위 1차 완료). FILE→API_ENDPOINT 소속 관계는
+        // 엣지로 만들지 않음 — 프론트가 파일 노드처럼 filePath 매칭이 아니라 API_ENDPOINT를 DB_TABLE과 동일하게
+        // 독립 컬럼으로 배치해(graphLayout.ts) 읽는 곳이 없다(GATE_GAPS.md [G-9] 감사에서 CONTAINS 전수 확인, codeprint_149).
         // 처리 함수까지 연결하는 함수 단위 엣지(2차, Java/Kotlin·JS/TS(Express+NestJS)·Python·Go — Ruby는 제외, 사유는
         // StaticCodeAnalyzer.extractControllerMappingFunctions 주석 참조) — controllerMappingFunctions로 해소된
         // 매핑은 API_ENDPOINT → FUNCTION을 FUNCTION_CALL 타입으로 생성(프론트 흐름재생이 API_ENDPOINT를
         // FUNCTION과 동일하게 FUNCTION_CALL 엣지 소스/타깃으로 취급하도록 이미 준비돼 있어 신규 타입 불필요).
-        Set<String> usedApiEndpointEdgeIds = new HashSet<>();
         for (ParsedFile pf : parsedFiles) {
             if (pf.controllerMappings().isEmpty()) continue;
-            UUID controllerFileId = fileNodeIds.get(pf.filePath());
-            if (controllerFileId == null) continue;
 
             for (String mapping : new LinkedHashSet<>(pf.controllerMappings())) {
                 Node endpointNode = Node.create(graphId, NodeType.API_ENDPOINT, mapping, pf.filePath(), pf.language());
                 graphRepository.saveNode(endpointNode);
-
-                String edgeId = extractFileName(pf.filePath()) + "-endpoint-" + mapping;
-                if (!usedApiEndpointEdgeIds.contains(edgeId)) {
-                    usedApiEndpointEdgeIds.add(edgeId);
-                    Edge endpointEdge = Edge.create(graphId, edgeId, EdgeType.CONTAINS, controllerFileId, endpointNode.getId());
-                    graphRepository.saveEdge(endpointEdge);
-                }
 
                 String handlerFunc = pf.controllerMappingFunctions().get(mapping);
                 if (handlerFunc != null) {
