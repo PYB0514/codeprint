@@ -8,8 +8,8 @@ import java.util.UUID;
 
 public final class GraphRetentionPolicy {
 
-    // 프로젝트당 유지할 비고정 그래프 최대 개수
-    public static final int MAX_RECENT = 10;
+    // 프로젝트당 유지할 비고정 그래프 최대 개수 — 볼륨 수용량 레버(10→3, PROGRESS.md §18.8 codeprint_148 분석)
+    public static final int MAX_RECENT = 3;
 
     // 시스템(갤러리) 계정 프로젝트에 적용하는 축소된 보존 개수 — 1이 아닌 이유는 갤러리 재발행이
     // 분석 직후 비동기로 일어나 직전 그래프가 잠시 참조 중일 수 있어서(§18.8-④ 1단계)

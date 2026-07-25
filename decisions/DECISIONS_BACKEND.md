@@ -2,6 +2,18 @@
 
 ---
 
+## 그래프 보존 개수 10→3(`GraphRetentionPolicy.MAX_RECENT`) — 볼륨 수용량 레버 실행(2026-07-26, codeprint_149)
+
+**문제.** codeprint_148(분석 전용 세션)의 저장 비용 실측(`GATE_GAPS.md` [G-9] 후속측정)에서 "상한(500파일)보다 보존 정책이 볼륨 수용량에 미치는 영향이 크다"는 결론이 나왔다 — 밀한 레포 1프로젝트 = 11.7 MB × 보존 10 = 117 MB, 3.5 GB 볼륨에 약 30개 수용. 보존을 10→3으로만 낮춰도 수용량이 약 100개(3.3배)로 늘어난다는 계산이었으나, 그 세션은 "분석만" 지정돼 코드는 건드리지 않고 PROGRESS.md §18.8에 다음 세션 실행 항목으로만 남겨뒀다.
+
+**결정.** `GraphRetentionPolicy.MAX_RECENT`를 10→3으로 변경(`GraphRetentionPolicy.java`). 시스템(갤러리) 계정용 `MAX_RECENT_SYSTEM`(2)은 이미 더 작아 영향 없음 — 이번 변경은 개인 프로젝트 경로에만 적용. 유일한 호출부는 `GraphBuilder.build()`(`selectEvictable(graphs, maxRecent, protectedGraphIds)`)이고, 시스템/개인 분기는 그대로 유지.
+
+**TDD.** `GraphRetentionPolicyTest`의 경계값 테스트(`noEvictionWhenWithinLimit`·`evictsOldestBeyondLimit`·`pinnedAreAlwaysKeptAndNotCounted`)가 하드코딩된 개수(10/11)로 새 상한을 가정하지 않아 그대로는 실패 — 3/4개 기준으로 맞춰 갱신. `GraphBuilderTest`는 시스템 계정 경로(`MAX_RECENT_SYSTEM`)만 다뤄 무변경으로 green.
+
+**검증.** `./gradlew compileJava test` — Docker DB 없이도 도메인 단위 테스트(`GraphRetentionPolicyTest` 포함) 전부 green, 실패 10건은 전부 `ConnectException`(Postgres 미기동)으로 이번 변경과 무관한 환경 실패임을 스택트레이스로 확인. 신규 Spring 빈·엔드포인트 변경 없어 로컬 백엔드 재기동 검증 대상 아님.
+
+---
+
 ## 일반 프로젝트 분석에도 커밋 SHA 동일 시 재분석 스킵 확장(2026-07-25, codeprint_146)
 
 **문제.** "codeprint" 자기분석 프로젝트가 도그푸딩 중 짧은 기간 반복 재분석으로 거의 중복인 그래프를 최대 10개까지 쌓는 문제(Postgres 볼륨 사고 후속 조사, 2026-07-23)를 사용자와 재논의 — 처음엔 "그래프 보존 정책"을 손봐야 하는 문제로 보였으나, 실제 근본 원인은 다른 곳에 있었다. `FeaturedRepo`(시스템 갤러리 프로젝트)엔 이미 "커밋 SHA 동일 시 재분석 스킵"(레버①, PR #564)이 있는데, 일반 프로젝트(사용자가 "재분석" 버튼을 누르는 모든 프로젝트, "codeprint" 자기분석 포함)에는 이 로직이 없어 커밋이 안 바뀌어도 매번 새 그래프가 생성되고 있었다.
