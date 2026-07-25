@@ -147,4 +147,47 @@ class SourceFileWalkerTest {
         assertThat(names.get(0)).isEqualTo("File000.java");
         assertThat(names.get(499)).isEqualTo("File499.java");
     }
+
+    @Test
+    @DisplayName("절단 시 테스트 경로가 알파벳순으로 앞서도 프로덕션 소스가 먼저 채워지고 테스트는 남는 슬롯만 차지한다 — G-9 사전순 편향 완화")
+    void 절단_시_프로덕션_소스_우선_테스트_후순위() throws IOException {
+        // src/test 하위는 알파벳상 "a"로 시작해 정렬상 항상 앞서지만, 프로덕션(z로 시작)을 밀어내면 안 된다
+        Files.createDirectories(tempDir.resolve("src/test"));
+        for (int i = 0; i < 500; i++) {
+            Files.writeString(tempDir.resolve(String.format("src/test/AFile%03d.java", i)), "class T {}");
+        }
+        Files.writeString(tempDir.resolve("ZProd1.java"), "class P1 {}");
+        Files.writeString(tempDir.resolve("ZProd2.java"), "class P2 {}");
+
+        WalkResult result = walker.walk(tempDir);
+
+        List<String> names = result.files().stream().map(p -> p.getFileName().toString()).toList();
+        assertThat(result.totalEligible()).isEqualTo(502);
+        assertThat(names).hasSize(500);
+        assertThat(names).contains("ZProd1.java", "ZProd2.java");
+        assertThat(names).filteredOn(n -> n.startsWith("AFile")).hasSize(498);
+    }
+
+    @Test
+    @DisplayName("미니파이 파일(*.min.*)은 수집되지 않는다")
+    void 미니파이_파일_미수집() throws IOException {
+        Files.writeString(tempDir.resolve("jquery.min.js"), "!function(){}();");
+        Files.writeString(tempDir.resolve("app.js"), "const a = 1;");
+
+        List<Path> files = walker.walk(tempDir).files();
+
+        assertThat(files).extracting(p -> p.getFileName().toString()).containsExactly("app.js");
+    }
+
+    @Test
+    @DisplayName("docsets 디렉터리와 *.docset 디렉터리는 순회하지 않는다")
+    void docset_디렉토리_미수집() throws IOException {
+        Files.createDirectories(tempDir.resolve("docs/docsets/Alamofire.docset/js"));
+        Files.writeString(tempDir.resolve("docs/docsets/Alamofire.docset/js/jquery.js"), "var x=1;");
+        Files.writeString(tempDir.resolve("main.js"), "const a = 1;");
+
+        List<Path> files = walker.walk(tempDir).files();
+
+        assertThat(files).extracting(p -> p.getFileName().toString()).containsExactly("main.js");
+    }
 }
