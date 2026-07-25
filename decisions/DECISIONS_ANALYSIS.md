@@ -4,6 +4,24 @@
 
 ---
 
+## [G-9] 500파일 절단 편향 완화 1단계 — T2(테스트·픽스처) 후순위화 + 미니파이·docset 제외(2026-07-26, codeprint_149)
+
+**문제.** `GATE_GAPS.md` [G-9](codeprint_148 감사발) — `SourceFileWalker`가 `eligible.sort(경로)` 후 `subList(0,500)`으로 자르기 때문에 절단이 무작위 표본이 아니라 사전순 뒤쪽 서브트리를 통째로 버리는 형태였다. 우리 레포 자체가 실사례: eligible 786개 중 500개가 전부 `backend/` 하위라 `frontend/`(71개)가 자기 게이트에서 영구 비가시. 후속 실측(같은 세션)은 "테스트·픽스처(`src/test` 하위 125개)만 후순위로 돌려도 프로덕션 소스는 451개 < 500이라 우리 레포는 즉시 해소된다"는 것과, "미니파이·docset 오염(`jquery.min.js` 1파일이 노드 378개)이 슬롯·저장·phantom 정확도 3중 손해"라는 것을 확인해뒀다.
+
+**결정 — 전체 3티어 설계(T0 diff 우선 + T1 서브트리 비례 쿼터 + T2 테스트 후순위) 중 T2만 먼저 실행.** T0(PR diff 우선)·T1(서브트리 비례 쿼터)은 각각 게이트 경로 전용 배선과 예산 단위 재설계(파일 수→노드·엣지 예산)가 필요해 별도 착수 필요. T2는 "eligible을 프로덕션/테스트 두 그룹으로 나눠 프로덕션을 먼저 채우고 남는 슬롯만 테스트에 배분"으로 기존 결정론(경로 정렬)을 그대로 유지하면서 구현 가능해 먼저 실행. 테스트 판정 기준은 `GraphWarningService.isTestPath`(src/test/·__tests__/·.test.·.spec.)와 동일하게 맞추되, DDD 계층 분리상 infrastructure가 application의 private 메서드를 참조할 수 없어 `SourceFileWalker` 안에 별도로 재구현(레이어 경계 때문에 의도적으로 중복, 로직 자체는 동일 기준).
+
+**함께 처리 — 미니파이·docset 제외.** `SKIP_DIRS`에 `docsets` 추가 + `*.docset` 접미사 디렉터리 프루닝(`Alamofire.docset` 등 벤더명이 매번 달라 정확 매칭 불가), `visitFile`에 `*.min.*` 파일명 제외. 둘 다 순이득(정보 가치 없는 mangled 식별자가 슬롯·저장·phantom 정확도를 갉아먹던 것 제거)이라 별도 검토 없이 같은 커밋에 포함.
+
+**ANALYZER_VERSION 영향 없음.** `ANALYZER_VERSION`은 `ParsedFile` 스키마(개별 파일 파싱 결과의 필드 구성) 변경을 추적하는 캐시 무효화 키다. 이번 변경은 "어떤 파일이 파이프라인에 들어가는지"(walk 단계, 파싱 캐시보다 앞선 단계)만 바꾸고 개별 `ParsedFile`의 필드·의미는 무변경이라 버전 불변.
+
+**TDD.** `SourceFileWalkerTest`에 3건 추가 — ①테스트 경로가 알파벳순 앞이어도 프로덕션이 먼저 채워지고 테스트는 남는 슬롯만 차지(502개 중 500 선택 시 프로덕션 2개 전부 포함) ②`*.min.*` 미수집 ③`docsets`·`*.docset` 디렉터리 미순회. 기존 결정론 테스트(`절단_결정론_정렬순`)는 테스트 경로가 없는 시나리오라 무변경으로 green.
+
+**검증.** `./gradlew test --tests SourceFileWalkerTest` green. 다른 호출부(`AnalysisRunner`·`PrReviewService`·`LocalAnalyzer`·`BenchPipelineRunner`)는 `WalkResult`의 `files()`/`totalEligible()` 계약을 그대로 쓰므로 무변경 확인(`compileJava`/`compileTestJava` 통과).
+
+**남은 것(미착수, GATE_GAPS.md [G-9]에 계속 추적).** T0(diff 우선)·T1(서브트리 비례 쿼터)·절단 시 게이트 판정 표기(부분 분석 구분) 3가지는 이번 범위 밖.
+
+---
+
 ## 엣지 정확도 5차 감사 — CONTAINS·FIELD_DEPENDENCY 전수 판정, phantom 0%(2026-07-24, codeprint_146)
 
 **배경.** 4차 감사(같은 날 앞선 세션)에서 "구조적 사실이라 우선순위 낮음"으로 미착수 남겨뒀던 마지막 두 엣지 타입. `./gradlew edgeAudit`을 자기 레포 전체에 실행(`-PsampleSize=30`)해 CONTAINS 30건·FIELD_DEPENDENCY 30건을 표본추출, 각각 30/30 전수 판정.
