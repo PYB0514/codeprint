@@ -615,6 +615,49 @@ class GraphBuilderTest {
         assertThat(hasInterfaceImplEdge).isTrue();
     }
 
+    @Test
+    @DisplayName("동명 인터페이스가 서로 다른 패키지에 있어도(한 구현체가 둘 다 구현) 각각 isInterfaceImpl 엣지가 생성된다 — confirmPayment phantom 재현")
+    void 동명_인터페이스_서로_다른_패키지_각각_구현체_엣지_생성() {
+        // com.example.domain.payment.port.PaymentGatewayPort — import로 참조
+        ParsedFile paymentIface = parsedFile(
+                "src/main/java/com/example/domain/payment/port/PaymentGatewayPort.java", "Java",
+                List.of("confirmPayment"), Map.of());
+        // com.example.domain.donation.port.PaymentGatewayPort — implements 절에 FQN으로 직접 명시
+        ParsedFile donationIface = parsedFile(
+                "src/main/java/com/example/domain/donation/port/PaymentGatewayPort.java", "Java",
+                List.of("confirmPayment"), Map.of());
+        // TossPaymentsService implements PaymentGatewayPort, com.example.domain.donation.port.PaymentGatewayPort
+        ParsedFile implFile = new ParsedFile(
+                "src/main/java/com/example/infrastructure/payment/TossPaymentsService.java", "Java",
+                List.of("confirmPayment"),
+                List.of("com.example.domain.payment.port.PaymentGatewayPort"), // imports
+                null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(),
+                List.of("PaymentGatewayPort", "com.example.domain.donation.port.PaymentGatewayPort"), // implementedInterfaces
+                List.of(), List.of(), List.of(), List.of(), List.of(), Map.of()
+        );
+
+        graphBuilder.build(projectId, analysisId, List.of(paymentIface, donationIface, implFile));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        List<Edge> implEdges = edgeCaptor.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .filter(e -> e.getMetadata() != null
+                        && Boolean.TRUE.equals(e.getMetadata().get("isInterfaceImpl")))
+                .toList();
+
+        // payment·donation 양쪽 인터페이스 모두에서 구현체로 엣지가 나가야 함(둘 중 하나만 남으면 회귀)
+        assertThat(implEdges).hasSize(2);
+        Set<String> callerFiles = implEdges.stream()
+                .map(e -> (String) e.getMetadata().get("callerFile"))
+                .collect(Collectors.toSet());
+        assertThat(callerFiles).containsExactlyInAnyOrder(
+                "src/main/java/com/example/domain/payment/port/PaymentGatewayPort.java",
+                "src/main/java/com/example/domain/donation/port/PaymentGatewayPort.java");
+    }
+
     // ── FILE/FUNCTION 노드 기본 생성 ────────────────────────────────────────
 
     @Test
