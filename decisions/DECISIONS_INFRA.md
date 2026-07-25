@@ -2,6 +2,18 @@
 
 ---
 
+## `.claude/settings.json` rm -rf 프롬프트 훅 — docker run --rm 오탐 정정 (2026-07-26, codeprint_149)
+
+**문제.** Context148(codeprint_148)에서 `docker run --rm postgres:16 psql <DATABASE_PUBLIC_URL>` 명령이 `rm -rf` 파괴적 명령 감지 훅(`.claude/settings.json:42`)에 걸려 block된 사례 기록. 같은 명령을 세션 중 4회 실행했는데 일부만 block되는 비결정적 동작이었고, 훅 자신(LLM 판정)이 "파괴적 명령이 아니므로 block할 이유가 없다"고 판단하면서도 최종 결과는 block — 판정과 결과가 반대였다.
+
+**원인.** 기존 프롬프트 문구("삭제 대상 경로와 이유를 보고하고, 명시적 확인을 받은 후에만 allow. 확인 없이는 block")가 "이 매처가 걸리면 항상 진짜 rm -rf다"라고 가정하고 작성돼 있었다 — `docker run --rm`처럼 `--rm`이 삭제와 무관한 다른 명령의 옵션 플래그일 뿐인 경우를 분기 없이 다뤘다. 훅은 비대화형으로 한 번에 판정하므로 "확인 없이는 block" 기본값이 사실상 모든 매치에 적용돼, 훅 스스로 비파괴적이라고 판단한 경우에도 뒤이은 "확인 안 됐으니 block" 규칙이 결과를 뒤집었을 개연성이 높다. `if` 매처(`Bash(rm -rf *)`) 자체가 왜 `docker run --rm`에 걸렸는지는 엔진 내부 매칭 로직이라 확정 불가 — 재현이 비결정적이라 매처 자체를 더 좁히는 시도는 보류.
+
+**결정.** 매처(`if`)는 그대로 두고 프롬프트 문구에 사전 분기 추가: "이 Bash 명령이 실제로 파일/디렉터리를 재귀적으로 삭제하는가(`rm -rf`, `rm -r -f`, `rm --recursive --force` 등)? `docker run --rm`처럼 무관한 옵션 플래그일 뿐이면 즉시 allow(확인 절차 생략)" — 실제 파일 삭제인 경우에만 기존 "보고 후 확인" 절차를 적용하도록 순서를 바꿨다. 근본 원인(매처가 왜 걸렸는지)을 못 고쳐도, 걸렸을 때의 기본값을 fail-closed에서 "비파괴적이면 즉시 allow"로 바꿔 오탐의 실제 영향을 제거하는 방향.
+
+**검증.** `.claude/settings.json`은 `.gitignore` 대상(§8)이라 git 비추적 — PowerShell `ConvertFrom-Json`으로 JSON 문법 유효성만 로컬 확인, 실제 재발 여부는 다음에 `docker run --rm` 계열 명령이 다시 실행될 때 관찰.
+
+---
+
 ## reconcile-stale-analyses cron 스케줄 제거 — 수동 실행만 유지(2026-07-25, codeprint_146)
 
 **문제.** `contexts/Context138.md` R36 #98(2026-07-18 감사)이 지목한 "PROGRESS.md RAM 절감 여지 ①" — `*/15` 스케줄이 Railway Serverless sleep(임계 10분)을 상시 방해해 가동률 ≈67%, 콜드스타트 최대 96회/일로 G-5·G-6을 스스로 유발하는 구조. 사용자 판단 대기로 여러 세션 미결정 상태였음.
