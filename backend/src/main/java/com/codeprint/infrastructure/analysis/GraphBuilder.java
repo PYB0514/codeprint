@@ -336,34 +336,40 @@ public class GraphBuilder {
                 }
             }
         }
-        // 인터페이스 심플명 → 인터페이스 ParsedFile 인덱스
-        Map<String, ParsedFile> ifaceNameToFile = new HashMap<>();
-        for (ParsedFile pf : parsedFiles) {
-            String simpleName = extractFileNameWithoutExt(pf.filePath());
-            if (interfaceToImplFiles.containsKey(simpleName)) {
-                ifaceNameToFile.put(simpleName, pf);
-            }
-        }
-        for (Map.Entry<String, ParsedFile> entry : ifaceNameToFile.entrySet()) {
-            String ifaceName = entry.getKey();
-            ParsedFile ifaceFile = entry.getValue();
-            List<ParsedFile> implFiles = interfaceToImplFiles.get(ifaceName);
-            if (implFiles == null) continue;
-            for (ParsedFile implFile : implFiles) {
-                for (String funcName : ifaceFile.functions()) {
-                    UUID ifaceFuncId = funcNodeIds.get(ifaceFile.filePath() + "::" + funcName);
-                    UUID implFuncId = funcNodeIds.get(implFile.filePath() + "::" + funcName);
-                    if (ifaceFuncId == null || implFuncId == null) continue;
-                    String edgeId = ifaceName + "-" + funcName + "-impl-" + extractFileNameWithoutExt(implFile.filePath());
-                    if (usedEdgeIds.contains(edgeId)) continue;
-                    usedEdgeIds.add(edgeId);
-                    Edge implEdge = Edge.create(graphId, edgeId, EdgeType.FUNCTION_CALL, ifaceFuncId, implFuncId);
-                    Map<String, Object> meta = new HashMap<>();
-                    meta.put("callerFile", ifaceFile.filePath());
-                    meta.put("calleeFile", implFile.filePath());
-                    meta.put("isInterfaceImpl", true);
-                    implEdge.updateMetadata(meta);
-                    graphRepository.saveEdge(implEdge);
+        // 인터페이스 선언(단순명 또는 FQN) → 구현체 FUNCTION_CALL 엣지 생성. 한 구현체가 동명 인터페이스를
+        // 서로 다른 패키지에서 각각 구현하는 경우(예: TossPaymentsService가 payment·donation 양쪽
+        // PaymentGatewayPort를 구현) 심플명만으로는 어느 파일을 가리키는지 모호해 하나가 유실되던 문제(confirmPayment
+        // phantom BROKEN_INTERFACE_CHAIN, 2026-07-25) — resolveInterfaceCandidates가 FQN이면 경로로 정밀 매칭,
+        // 심플명 충돌 시엔 구현체의 실제 import로 좁히고 실패하면 안전하게 전체 연결(recall 우선 폴백)한다.
+        for (Map.Entry<String, List<ParsedFile>> entry : interfaceToImplFiles.entrySet()) {
+            List<ParsedFile> ifaceCandidates = resolveInterfaceCandidates(entry.getKey(), parsedFiles);
+            if (ifaceCandidates.isEmpty()) continue;
+            for (ParsedFile implFile : entry.getValue()) {
+                List<ParsedFile> targets = ifaceCandidates;
+                if (ifaceCandidates.size() > 1) {
+                    List<ParsedFile> imported = ifaceCandidates.stream()
+                            .filter(c -> callerImports(implFile, c))
+                            .toList();
+                    if (!imported.isEmpty()) targets = imported;
+                }
+                for (ParsedFile ifaceFile : targets) {
+                    for (String funcName : ifaceFile.functions()) {
+                        UUID ifaceFuncId = funcNodeIds.get(ifaceFile.filePath() + "::" + funcName);
+                        UUID implFuncId = funcNodeIds.get(implFile.filePath() + "::" + funcName);
+                        if (ifaceFuncId == null || implFuncId == null) continue;
+                        // 동명 인터페이스 파일 2개가 파일명이 같을 수 있어(예: 서로 다른 패키지의 PaymentGatewayPort.java)
+                        // 전체 경로로 유일성 보장(A-2 dedup 버그와 같은 원인 — line 471 주석 참조)
+                        String edgeId = ifaceFile.filePath() + "-" + funcName + "-impl-" + implFile.filePath();
+                        if (usedEdgeIds.contains(edgeId)) continue;
+                        usedEdgeIds.add(edgeId);
+                        Edge implEdge = Edge.create(graphId, edgeId, EdgeType.FUNCTION_CALL, ifaceFuncId, implFuncId);
+                        Map<String, Object> meta = new HashMap<>();
+                        meta.put("callerFile", ifaceFile.filePath());
+                        meta.put("calleeFile", implFile.filePath());
+                        meta.put("isInterfaceImpl", true);
+                        implEdge.updateMetadata(meta);
+                        graphRepository.saveEdge(implEdge);
+                    }
                 }
             }
         }
@@ -901,6 +907,24 @@ public class GraphBuilder {
         String na = a.replace("\\", "/");
         String nb = b.replace("\\", "/");
         return na.substring(0, na.lastIndexOf('/') + 1).equals(nb.substring(0, nb.lastIndexOf('/') + 1));
+    }
+
+    // 인터페이스 선언 텍스트(단순명 또는 FQN) → 실제 후보 인터페이스 파일 목록으로 해소. FQN(점 포함)이면
+    // 파일 경로 접미사로 정밀 매칭(항상 충돌 없음), 단순명이면 파일명(확장자 제외)이 일치하는 모든 파일을
+    // 후보로 반환한다 — 서로 다른 패키지에 동명 인터페이스가 있으면 후보가 2개 이상일 수 있다.
+    private List<ParsedFile> resolveInterfaceCandidates(String ifaceKey, List<ParsedFile> parsedFiles) {
+        List<ParsedFile> matched = new ArrayList<>();
+        if (ifaceKey.contains(".")) {
+            String pathSuffix = ifaceKey.replace(".", "/");
+            for (ParsedFile pf : parsedFiles) {
+                if (stripExtension(pf.filePath().replace("\\", "/")).endsWith(pathSuffix)) matched.add(pf);
+            }
+            return matched;
+        }
+        for (ParsedFile pf : parsedFiles) {
+            if (ifaceKey.equals(extractFileNameWithoutExt(pf.filePath()))) matched.add(pf);
+        }
+        return matched;
     }
 
     // caller가 calleeFile을 실제로 import하는지 — 기존 isImportMatch 재사용

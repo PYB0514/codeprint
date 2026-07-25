@@ -2255,3 +2255,21 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **검증.** `compileJava`·`compileTestJava` clean. `StaleAnalysisReconciliationServiceTest`(mock 제거 반영) 포함 백엔드 전체 테스트 스위트(Docker DB, 1066+건) green — **`CodeprintApplicationContextTest`(BE-18/19 재발방지 스모크 테스트)도 통과**해 이번 생성자 의존관계 변경이 순환 참조를 재유발하지 않았음을 확인. `preview_start` 로컬 재기동(`Started CodeprintApplication in 9.7초`) + `/actuator/health` UP 확인 — CLAUDE.md 규칙4 "생성자 의존관계 변경 시 로컬 재기동 필수" 충족. `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) — 단 `AnalysisRunner.run()`의 fan-out이 12→11로 줄어 실제로 결합도가 낮아진 것을 확인.
 
 **한계·다음.** 프론트를 실시간 WebSocket 구독으로 전환하는 방향(폴링 부하 감소, 더 매끄러운 진행률 UX)은 이번엔 채택 안 함 — 필요해지면 별도 기능 요청으로 재검토.
+
+---
+
+## GraphBuilder 인터페이스 매칭 — FQN 우선 해소로 confirmPayment BROKEN_INTERFACE_CHAIN phantom 근본 수정 (2026-07-25, codeprint_147)
+
+**배경.** 여러 세션(4~5차 엣지감사 포함)에서 "수용됨"으로 반복 확인돼온 자기 레포 유일 잔존 `BROKEN_INTERFACE_CHAIN` 1건(`decisions/DECISIONS_ANALYSIS.md` "최종 잔존 1건" 항목) — `TossPaymentsService`가 `implements PaymentGatewayPort, com.codeprint.domain.donation.port.PaymentGatewayPort`로 동명 인터페이스 2개(payment·donation 컨텍스트 각자의 아웃바운드 포트, `decisions/DECISIONS_BACKEND.md` "donation의 결제 게이트웨이 직접 의존 제거" 항목에서 의도적으로 중복 채택)를 구현하는데, `GraphBuilder`가 인터페이스 심플명 하나당 파일을 단 하나만 골라(`ifaceNameToFile`, `HashMap.put`이라 나중에 매칭된 파일이 이전 걸 조용히 덮어씀) 연결하다 보니 donation `confirmPayment` 쪽이 구현체로 가는 FUNCTION_CALL 엣지를 못 받아 계속 오탐으로 남아 있었다.
+
+**원인 정밀화.** `extractImplementedInterfaces`(class-implements 정규식 분기)는 FQN을 심플명으로 안 줄이고 원문 그대로 반환한다(interface-extends 분기와 다름) — 그 결과 `implementedInterfaces()`가 `["PaymentGatewayPort", "com.codeprint.domain.donation.port.PaymentGatewayPort"]`로 이미 FQN 정보를 갖고 있었는데, `GraphBuilder`가 이걸 활용하지 않고 파일명(확장자 제외) 매칭 하나로만 인터페이스 파일을 찾다 보니 이 FQN 정보가 죽어 있었다.
+
+**수정.** `resolveInterfaceCandidates(ifaceKey, parsedFiles)` 신설 — 키가 FQN(점 포함)이면 점을 슬래시로 바꿔 파일 경로 접미사로 정밀 매칭(항상 유일), 심플명이면 파일명이 일치하는 후보 전부 반환. 인터페이스→구현체 연결 루프를 `ifaceNameToFile`(단일 매핑, 원인) 대신 `interfaceToImplFiles`를 직접 순회하도록 재작성 — 후보가 여럿(심플명 충돌)이면 구현체의 실제 `import`로 좁히고(`callerImports` 재사용), 실패 시 안전하게 후보 전부에 연결(recall 우선 폴백, 신규 phantom을 만들 위험보다 누락 방지 우선). 엣지 ID를 파일 전체 경로 기반으로 바꿔(`ifaceFile.filePath() + funcName + "-impl-" + implFile.filePath()`) 동명 인터페이스 파일 2개가 같은 edge ID로 충돌해 하나가 드롭되는 걸 방지(line 441 등 기존 A-2 dedup 패턴과 동일 원칙).
+
+**스코프 밖 — FIELD_DEPENDENCY(CIRCULAR_BEAN_DEPENDENCY 판정용) 미수정.** 같은 `interfaceToImplFiles` 매핑을 공유해 이론상 같은 클래스의 충돌 리스크가 있으나(PROGRESS.md 5차 감사에서 "관찰만", 실제 재현 사례 없음), 재현되지 않은 가설에 방어 코드를 추가하는 건 §2 단순성 위반이라 이번 스코프에서 제외 — 실제 필드 선언에서 동명 인터페이스 충돌이 재현되면 그때 같은 `resolveInterfaceCandidates` 헬퍼로 대응.
+
+**테스트.** `GraphBuilderTest`에 재현 픽스처 신규(`동명_인터페이스_서로_다른_패키지_각각_구현체_엣지_생성`) — payment·donation 두 인터페이스 파일(둘 다 파일명 `PaymentGatewayPort.java`, 서로 다른 디렉터리)과 TossPaymentsService에 대응하는 구현체 1개(import 1개 + implements 절 FQN 1개)로 실제 시나리오를 그대로 재현, 수정 전에는 엣지 1개(마지막에 매칭된 인터페이스만)만 나오던 걸 확인 후 수정해 2개(양쪽 다) 확인. 기존 인터페이스 관련 테스트(`인터페이스_구현체_FUNCTION_CALL_엣지_생성`·`여러_구현체_각각_FUNCTION_CALL_엣지_생성`, 심플명 충돌 없는 단일 후보 케이스)도 그대로 green — 후보가 1개면 기존 동작과 완전히 동일한 경로를 타므로 무회귀.
+
+**검증.** `compileJava`·`compileTestJava` clean. `GraphBuilderTest`(신규 1건 포함) green. Docker DB 기동 후 백엔드 전체 테스트 스위트(1108건) green. `analyzeLocal` 자기분석 재실행 — **`BROKEN_INTERFACE_CHAIN` 0건**으로 실제 레포에서 오탐 소거 확인(기존 베이스라인 "HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1"에서 BROKEN_INTERFACE_CHAIN만 사라짐, HIGH_FAN_OUT 5건은 불변 — 이미 기존에 수용된 조율자 패턴). 이 PR은 `GraphBuilder` 로직만 변경(신규 Spring 빈·생성자 의존관계 변경 없음)이라 로컬 백엔드 재기동은 불필요.
+
+**한계·다음.** `FIELD_DEPENDENCY` 쪽 동일 클래스 리스크는 여전히 미수정 상태로 관찰 중(위 "스코프 밖" 참조) — 실제 재현 시 재검토.
