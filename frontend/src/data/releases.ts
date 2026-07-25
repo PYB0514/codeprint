@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.150.2',
+    date: '2026-07-26',
+    title: '그래프 엣지 표시 — 노드 클릭 시 국소 표시로 전환',
+    type: 'fix',
+    items: [
+      { category: '프론트', desc: '프로젝트 그래프 화면에서 의존성·콜 체인·생성·DB 연결·API 호출 엣지의 전역 켜기/끄기 버튼을 없앴습니다. 이제 원하는 노드를 클릭하면 그 노드와 직접 연결된 엣지만 나타납니다. 구조 위반(끊긴 연결)은 기존처럼 항상 표시됩니다.' },
+    ],
+  },
+  {
     version: 'v0.150.1',
     date: '2026-07-25',
     title: '링크 공유 카드·검색 결과 설명문 정정',

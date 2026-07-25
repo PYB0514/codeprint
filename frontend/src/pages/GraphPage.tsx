@@ -298,12 +298,9 @@ function GraphPageInner() {
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('domain')
   const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
   const [opaqueDomainSet, setOpaqueDomainSet] = useState<Set<string>>(new Set())
-  const [showEdges, setShowEdges] = useState(false)
-  const [showCallEdges, setShowCallEdges] = useState(false)
-  const [showInstEdges, setShowInstEdges] = useState(false)
+  // 국소 표시 원칙(GATE_GAPS.md [G-9] 관련 설계, codeprint_149) — 끊긴 연결(구조 위반 증거)만 전역 토글로
+  // 항상 노출 가능, 나머지 엣지 타입은 전역 토글 없이 clickedNodeId 기반 1홉 강조로만 드러난다(아래 536행 근처 useEffect)
   const [showBrokenEdges, setShowBrokenEdges] = useState(true)
-  const [showDbEdges, setShowDbEdges] = useState(false)
-  const [showApiCallEdges, setShowApiCallEdges] = useState(true)
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [showTeamChat, setShowTeamChat] = useState(false)
@@ -379,7 +376,7 @@ function GraphPageInner() {
     const isDb = isDbEdgeType(d?.type)
     const broken = d?.broken
     return { ...e, animated: false, style: { strokeWidth: (isCall || isInst) ? 1.2 : broken ? 2 : 1.5, stroke: broken ? '#ef4444' : isCall ? '#f59e0b' : isInst ? '#a855f7' : isApiCall ? '#e879f9' : isDb ? (DB_CRUD_COLOR[d?.type ?? ''] ?? '#22d3ee') : '#4b5563' } }
-  }), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges), [showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges])
+  }), false, false, false, showBrokenEdges, false, false), [showBrokenEdges])
 
   // 흐름 재생 시작 시 도메인 요약 사이드바 닫기 — 재생 컨트롤이 가려지지 않도록
   const onFlowPlaybackStart = useCallback(() => setSidebar(prev => prev?.kind === 'domain-summary' ? null : prev), [])
@@ -680,7 +677,7 @@ function GraphPageInner() {
         warnEdgeIds.has(e.id) ? { ...e, style: { ...((e.style as object) ?? {}), stroke: '#eab308', strokeWidth: 2 }, animated: true } : e
       )
       setNodes(styledNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
-      setEdges(applyEdgeVisibility(styledEdges, false, false, false, true, false, true))
+      setEdges(applyEdgeVisibility(styledEdges, false, false, false, true, false, false))
       const fileCount = rn.filter((n) => n.type === 'FILE').length
       const funcCount = rn.filter((n) => n.type === 'FUNCTION').length
       const dbCount = rn.filter((n) => n.type === 'DB_TABLE').length
@@ -789,41 +786,27 @@ function GraphPageInner() {
   }
 
   // 현재 뷰 상태를 프리셋 config로 직렬화
+  // import/call/inst/db/api는 국소 표시 전환(codeprint_149)으로 제거 — 옛 프리셋에 남아있어도 무해하게 무시됨
   const buildCurrentConfig = useCallback(() => ({
     layoutPreset,
     labelMode,
     edges: {
-      import: showEdges,
-      call: showCallEdges,
-      inst: showInstEdges,
       broken: showBrokenEdges,
-      db: showDbEdges,
-      api: showApiCallEdges,
     },
     opaqueLayerSet: Array.from(opaqueLayerSet),
-  }), [layoutPreset, labelMode, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges, opaqueLayerSet])
+  }), [layoutPreset, labelMode, showBrokenEdges, opaqueLayerSet])
 
   // 프리셋 config를 현재 뷰 상태에 적용
   const applyPresetConfig = useCallback((config: Record<string, unknown>) => {
     const lp = (config.layoutPreset as LayoutPreset) ?? 'domain'
     const lm = (config.labelMode as LabelMode) ?? 'name'
     const edgeConfig = (config.edges as Record<string, boolean>) ?? {}
-    const se = edgeConfig.import ?? false
-    const sc = edgeConfig.call ?? false
-    const si = edgeConfig.inst ?? false
     const sb = edgeConfig.broken ?? true
-    const sdb = edgeConfig.db ?? false
-    const sapi = edgeConfig.api ?? true
     const newOpaqueSet = new Set((config.opaqueLayerSet as string[]) ?? [])
 
     setLayoutPreset(lp)
     setLabelMode(lm)
-    setShowEdges(se)
-    setShowCallEdges(sc)
-    setShowInstEdges(si)
     setShowBrokenEdges(sb)
-    setShowDbEdges(sdb)
-    setShowApiCallEdges(sapi)
     setOpaqueLayerSet(newOpaqueSet)
 
     if (rawNodes.length > 0) {
@@ -835,7 +818,7 @@ function GraphPageInner() {
         // layer 모드: opaque 섹션의 자손 노드(group→file→function 3단계) hidden 처리(반복-C 재발방지, graphLayout.ts로 추출)
         return applyLayerModeNodeVisibility(layoutNodes, newOpaqueSet)
       })
-      setEdges(applyEdgeVisibility(layoutEdges, se, sc, si, sb, sdb, sapi))
+      setEdges(applyEdgeVisibility(layoutEdges, false, false, false, sb, false, false))
     }
   }, [rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, applyEdgeVisibility])
 
@@ -899,7 +882,7 @@ function GraphPageInner() {
       setRawNodes(rn)
       setRawEdgesCache(re)
       setNodes(layoutNodes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i))
-      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
+      setEdges(applyEdgeVisibility(layoutEdges.filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i), false, false, false, showBrokenEdges, false, false))
       setCounts({
         files: rn.filter((n) => n.type === 'FILE').length,
         funcs: rn.filter((n) => n.type === 'FUNCTION').length,
@@ -911,7 +894,7 @@ function GraphPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges, t])
+  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showBrokenEdges, t])
 
   // 현재 보는 버전 라벨 표시용 — 버전 목록을 조용히 로드 (graphId 변경 시 갱신)
   useEffect(() => {
@@ -1012,9 +995,9 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rawNodes, rawEdgesCache, next, layoutPreset, openFileSidebar)
       setNodes(layoutNodes)
-      setEdges(applyEdgeVisibility(layoutEdges, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
+      setEdges(applyEdgeVisibility(layoutEdges, false, false, false, showBrokenEdges, false, false))
     }
-  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, applyEdgeVisibility])
+  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showBrokenEdges, applyEdgeVisibility])
 
   // 특정 노드 타입의 표시/숨김 토글 — rawNodes에서 ID로 타입 역조회
   const toggleNodeType = useCallback((nodeType: string) => {
@@ -1028,46 +1011,7 @@ function GraphPageInner() {
     })
   }, [rawNodes, setNodes])
 
-  // IMPORT 엣지 표시/숨김 토글
-  const toggleEdges = useCallback(() => {
-    setShowEdges((prev) => {
-      const next = !prev
-      setEdges((eds) => eds.map((e) =>
-        (e.data as { type?: string })?.type === 'IMPORT'
-          ? { ...e, hidden: !next }
-          : e
-      ))
-      return next
-    })
-  }, [setEdges])
-
-  // FUNCTION_CALL 엣지 표시/숨김 토글
-  const toggleCallEdges = useCallback(() => {
-    setShowCallEdges((prev) => {
-      const next = !prev
-      setEdges((eds) => eds.map((e) =>
-        (e.data as { type?: string })?.type === 'FUNCTION_CALL'
-          ? { ...e, hidden: !next }
-          : e
-      ))
-      return next
-    })
-  }, [setEdges])
-
-  // INSTANTIATION 엣지 표시/숨김 토글
-  const toggleInstEdges = useCallback(() => {
-    setShowInstEdges((prev) => {
-      const next = !prev
-      setEdges((eds) => eds.map((e) =>
-        (e.data as { type?: string })?.type === 'INSTANTIATION'
-          ? { ...e, hidden: !next }
-          : e
-      ))
-      return next
-    })
-  }, [setEdges])
-
-  // 끊긴 연결 엣지 표시/숨김 토글
+  // 끊긴 연결 엣지 표시/숨김 토글 — 국소 표시 전환(codeprint_149) 이후 남은 유일한 전역 엣지 토글(구조 위반 증거)
   const toggleBrokenEdges = useCallback(() => {
     setShowBrokenEdges((prev) => {
       const next = !prev
@@ -1076,30 +1020,6 @@ function GraphPageInner() {
           ? { ...e, hidden: !next }
           : e
       ))
-      return next
-    })
-  }, [setEdges])
-
-  // DB_READ / DB_WRITE 엣지 표시/숨김 토글
-  const toggleDbEdges = useCallback(() => {
-    setShowDbEdges((prev) => {
-      const next = !prev
-      setEdges((eds) => eds.map((e) => {
-        const t = (e.data as { type?: string })?.type
-        return isDbEdgeType(t) ? { ...e, hidden: !next } : e
-      }))
-      return next
-    })
-  }, [setEdges])
-
-  // API_CALL 엣지 표시/숨김 토글
-  const toggleApiCallEdges = useCallback(() => {
-    setShowApiCallEdges((prev) => {
-      const next = !prev
-      setEdges((eds) => eds.map((e) => {
-        const t = (e.data as { type?: string })?.type
-        return t === 'API_CALL' ? { ...e, hidden: !next } : e
-      }))
       return next
     })
   }, [setEdges])
@@ -1114,10 +1034,10 @@ function GraphPageInner() {
     if (rawNodes.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodes, rawEdgesCache, labelMode, next, openFileSidebar)
       setNodes(ln)
-      setEdges(applyEdgeVisibility(le, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges))
+      setEdges(applyEdgeVisibility(le, false, false, false, showBrokenEdges, false, false))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
-  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges, applyEdgeVisibility])
+  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showBrokenEdges, applyEdgeVisibility])
 
   // 키보드 단축키 — / 검색 포커스, Esc 사이드바 닫기, f fitView, l 라벨 전환
   useEffect(() => {
@@ -1718,27 +1638,21 @@ function GraphPageInner() {
     return bg ?? '#374151'
   }, [])
 
-  // 엣지 토글 섹션 — drag 중 nodes 변경과 무관하게 memoize하여 불필요한 reconcile 방지
+  // 엣지 토글 섹션 — 국소 표시 전환(codeprint_149) 이후 전역 토글은 구조 위반 증거(broken)만 남고,
+  // 나머지 엣지 타입은 노드를 클릭하면 그 노드의 1홉 이웃만 드러난다(536행 근처 useEffect) — drag 중
+  // nodes 변경과 무관하게 memoize하여 불필요한 reconcile 방지
   const edgeToggleSectionJsx = useMemo(() => (
     <LeftSection title={t('communityPostGraph.edgeTypes.heading')} id="tour-edges">
-      <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
-      {[
-        { key: 'import',  icon: <span className="block w-4 h-0.5" style={{ background: showEdges ? '#4b5563' : '#374151' }} />,                                                                                              label: t('communityPostGraph.edgeTypes.import'),    textCls: showEdges ? 'text-gray-300' : 'text-gray-600',        active: showEdges,        onToggle: toggleEdges },
-        { key: 'call',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showCallEdges ? '#f59e0b' : '#78350f'} strokeWidth="1.5" strokeDasharray="5 4" /></svg>,                                label: t('communityPostGraph.edgeTypes.call'),   textCls: showCallEdges ? 'text-amber-400' : 'text-gray-600',    active: showCallEdges,    onToggle: toggleCallEdges },
-        { key: 'inst',    icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showInstEdges ? '#a855f7' : '#4c1d95'} strokeWidth="1.5" strokeDasharray="3 4" /></svg>,                                label: t('communityPostGraph.edgeTypes.inst'),      textCls: showInstEdges ? 'text-purple-400' : 'text-gray-600',   active: showInstEdges,    onToggle: toggleInstEdges },
-        { key: 'broken',  icon: <span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} />,                                                                                        label: t('communityPostGraph.edgeTypes.broken'), textCls: showBrokenEdges ? 'text-red-400' : 'text-gray-600',   active: showBrokenEdges,  onToggle: toggleBrokenEdges },
-        { key: 'db',      icon: <svg width="16" height="4"><line x1="0" y1="2" x2="3.5" y2="2" stroke={showDbEdges ? '#22d3ee' : '#374151'} strokeWidth="1.5"/><line x1="4.5" y1="2" x2="8" y2="2" stroke={showDbEdges ? '#4ade80' : '#374151'} strokeWidth="1.5"/><line x1="9" y1="2" x2="12.5" y2="2" stroke={showDbEdges ? '#facc15' : '#374151'} strokeWidth="1.5"/><line x1="13.5" y1="2" x2="16" y2="2" stroke={showDbEdges ? '#f87171' : '#374151'} strokeWidth="1.5"/></svg>, label: t('communityPostGraph.edgeTypes.db'),   textCls: showDbEdges ? 'text-cyan-400' : 'text-gray-600',       active: showDbEdges,      onToggle: toggleDbEdges },
-        { key: 'api',     icon: <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={showApiCallEdges ? '#e879f9' : '#701a75'} strokeWidth="1.5" strokeDasharray="6 3" /></svg>,                              label: t('communityPostGraph.edgeTypes.api'),  textCls: showApiCallEdges ? 'text-fuchsia-400' : 'text-gray-600', active: showApiCallEdges, onToggle: toggleApiCallEdges },
-      ].map(({ key, icon, label, textCls, active, onToggle }) => (
-        <div key={key} onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onToggle()}
-          className={`flex items-center gap-1.5 px-1.5 py-1 rounded cursor-pointer hover:bg-gray-800/60 ${active ? '' : 'opacity-40'}`}>
-          <span className="w-4 flex-shrink-0">{icon}</span>
-          <span className={`text-xs truncate ${textCls}`}>{label}</span>
+      <div className="flex flex-col gap-0.5">
+        <div onClick={toggleBrokenEdges} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && toggleBrokenEdges()}
+          className={`flex items-center gap-1.5 px-1.5 py-1 rounded cursor-pointer hover:bg-gray-800/60 ${showBrokenEdges ? '' : 'opacity-40'}`}>
+          <span className="w-4 flex-shrink-0"><span className="block w-4 h-0.5" style={{ background: showBrokenEdges ? '#ef4444' : '#450a0a' }} /></span>
+          <span className={`text-xs truncate ${showBrokenEdges ? 'text-red-400' : 'text-gray-600'}`}>{t('communityPostGraph.edgeTypes.broken')}</span>
         </div>
-      ))}
+        <p className="text-[11px] text-gray-500 px-1.5 leading-snug">{t('communityPostGraph.edgeTypes.localHint')}</p>
       </div>
     </LeftSection>
-  ), [showEdges, showCallEdges, showInstEdges, showBrokenEdges, showDbEdges, showApiCallEdges, toggleEdges, toggleCallEdges, toggleInstEdges, toggleBrokenEdges, toggleDbEdges, toggleApiCallEdges, t])
+  ), [showBrokenEdges, toggleBrokenEdges, t])
 
   // 노드 타입 필터 섹션 — drag 중 변경 없음
   const nodeFilterSectionJsx = useMemo(() => (
