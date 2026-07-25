@@ -35,11 +35,11 @@ public class AnalysisFacade {
         return new ProjectGateSettings(project.isGateArchitectureEnabled(), project.isGateExperimentalEnabled());
     }
 
-    // 프로젝트 소유권 확인 후 분석 시작 — analysisId/status/progress 반환
-    public Map<String, Object> startAnalysis(UUID projectId, String branch, UUID userId, String githubToken) {
+    // 프로젝트 소유권 확인 후 분석 시작 — analysisId/status/progress 반환. ref(특정 커밋 SHA)가 있으면 HEAD가 아닌 그 커밋 상태로 재분석
+    public Map<String, Object> startAnalysis(UUID projectId, String branch, UUID userId, String githubToken, String ref) {
         var project = projectQueryService.getProject(projectId, userId);
         AnalysisResult result = analysisApplicationService.startAnalysis(
-                projectId, branch, project.getGithubRepoUrl(), githubToken);
+                projectId, branch, project.getGithubRepoUrl(), githubToken, ref);
         return Map.of(
                 "analysisId", result.getId(),
                 "status", result.getStatus(),

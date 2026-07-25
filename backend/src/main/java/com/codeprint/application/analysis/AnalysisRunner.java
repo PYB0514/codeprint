@@ -31,8 +31,9 @@ public class AnalysisRunner {
     // 있으면 HikariCP 유휴 커넥션이 그 사이 만료돼 EOFException으로 죽는다(GATE_GAPS.md [G-6]). DB 작업이
     // 필요한 구간(캐시 조회+배치 저장은 CachedParsedFileLoader.load, 그래프 저장은 GraphBuilder.build)만
     // 각자 자체 @Transactional로 좁게 감싸고, 나머지 repository.save() 호출은 Spring Data 기본 자체 트랜잭션에 맡긴다.
+    // ref(특정 커밋 SHA)가 있으면 git shallow clone 대신 GitHub 아카이브 다운로드로 그 커밋 상태를 그대로 분석한다.
     @Async
-    public void run(UUID analysisId, UUID projectId, String githubRepoUrl, String branch, String githubAccessToken) {
+    public void run(UUID analysisId, UUID projectId, String githubRepoUrl, String branch, String githubAccessToken, String ref) {
         Path repoDir = null;
         try {
             // 매 재시도가 각자 자체 트랜잭션(REQUIRED 기본) — outer 트랜잭션 커밋 후 확실히 존재
@@ -41,9 +42,14 @@ public class AnalysisRunner {
             analysis.start();
             analysisRepository.save(analysis);
 
-            log.info("분석 시작: analysisId={}, repo={}", analysisId, githubRepoUrl);
+            log.info("분석 시작: analysisId={}, repo={}, ref={}", analysisId, githubRepoUrl, ref);
 
-            repoDir = repoCloner.clone(githubRepoUrl, branch);
+            if (ref != null) {
+                byte[] archive = gitHubApiClient.downloadArchive(githubRepoUrl, ref, githubAccessToken);
+                repoDir = repoCloner.extractArchive(archive);
+            } else {
+                repoDir = repoCloner.clone(githubRepoUrl, branch);
+            }
             log.info("클론 완료: {}", repoDir);
 
             WalkResult walkResult = sourceFileWalker.walk(repoDir);
@@ -55,14 +61,17 @@ public class AnalysisRunner {
 
             graphBuilder.build(projectId, analysisId, parsedFiles, walkResult.totalEligible());
 
-            // 분석 완료 시점의 브랜치 최신 커밋 SHA 저장
-            String commitSha = null;
-            try {
-                if (branch != null) {
-                    commitSha = gitHubApiClient.fetchLatestCommitSha(githubRepoUrl, branch, githubAccessToken);
+            // ref로 명시 요청했으면 그 SHA 자체가 곧 분석된 커밋 — 재조회 불필요. 아니면 기존처럼 분석 완료
+            // 시점의 브랜치 최신 커밋 SHA를 조회(약간의 레이스가 있으나 기존 동작 그대로 유지).
+            String commitSha = ref;
+            if (commitSha == null) {
+                try {
+                    if (branch != null) {
+                        commitSha = gitHubApiClient.fetchLatestCommitSha(githubRepoUrl, branch, githubAccessToken);
+                    }
+                } catch (Exception e) {
+                    log.warn("커밋 SHA 조회 실패 (무시): {}", e.getMessage());
                 }
-            } catch (Exception e) {
-                log.warn("커밋 SHA 조회 실패 (무시): {}", e.getMessage());
             }
 
             analysis.complete(commitSha);

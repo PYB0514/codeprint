@@ -71,6 +71,9 @@ dependencies {
     // AWS S3
     implementation 'software.amazon.awssdk:s3:2.25.60'
 
+    // tar.gz 해제 — 특정 커밋 재분석 시 GitHub 아카이브(codeload) 다운로드용(git shallow clone은 임의 SHA를 못 받음)
+    implementation 'org.apache.commons:commons-compress:1.27.1'
+
     // Web Push (VAPID)
     implementation 'nl.martijndwars:web-push:5.1.1'
     implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'

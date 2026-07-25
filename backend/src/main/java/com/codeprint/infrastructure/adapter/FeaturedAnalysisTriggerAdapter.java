@@ -24,6 +24,6 @@ public class FeaturedAnalysisTriggerAdapter implements AnalysisTriggerPort {
     public void triggerAnalysis(UUID projectId, String githubRepoUrl) {
         AnalysisResult analysis = AnalysisResult.create(projectId, null);
         analysisRepository.save(analysis);
-        analysisRunner.run(analysis.getId(), projectId, githubRepoUrl, null, null);
+        analysisRunner.run(analysis.getId(), projectId, githubRepoUrl, null, null, null);
     }
 }

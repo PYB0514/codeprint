@@ -233,6 +233,15 @@
       "invalidNumber": "Please enter a valid PR number.",
       "failed": "PR review failed. Please check the PR number and your GitHub connection."
     },
+    "commitReanalyze": {
+      "desc": "Enter a specific commit SHA to reanalyze that commit's state instead of HEAD.",
+      "placeholder": "Commit SHA (e.g. a1b2c3d)",
+      "reanalyzing": "Analyzing...",
+      "run": "Run",
+      "close": "Close",
+      "invalidSha": "Please enter a commit SHA.",
+      "failed": "Failed to start commit reanalysis. Please check the SHA."
+    },
     "gateSettings": {
       "desc": "Stage 0 (bugs that actually break at runtime) always blocks the PR. Only the two stages below can be toggled per project.",
       "architectureLabel": "Stage 1 (architecture, on by default)",
@@ -271,6 +280,7 @@
     "copied": "Copied!",
     "copyLink": "Copy Link",
     "prReviewButton": "PR Review",
+    "commitReanalyzeButton": "Reanalyze commit",
     "primaryBranchTitle": "Set primary branch",
     "otherBranch": "Other Branch",
     "viewGraph": "View Graph",

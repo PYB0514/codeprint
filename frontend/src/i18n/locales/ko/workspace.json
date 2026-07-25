@@ -233,6 +233,15 @@
       "invalidNumber": "올바른 PR 번호를 입력해주세요.",
       "failed": "PR 리뷰에 실패했습니다. PR 번호와 GitHub 연결을 확인해주세요."
     },
+    "commitReanalyze": {
+      "desc": "특정 커밋 SHA를 입력하면 HEAD가 아닌 그 커밋 상태로 재분석합니다.",
+      "placeholder": "커밋 SHA (예: a1b2c3d)",
+      "reanalyzing": "분석 중...",
+      "run": "실행",
+      "close": "닫기",
+      "invalidSha": "커밋 SHA를 입력해주세요.",
+      "failed": "커밋 재분석 시작에 실패했습니다. SHA를 확인해주세요."
+    },
     "gateSettings": {
       "desc": "0단계(실행 시점에 실제로 깨지는 버그)는 항상 PR을 막습니다. 아래 두 단계만 프로젝트별로 켜고 끌 수 있습니다.",
       "architectureLabel": "1단계(architecture, 기본 켜짐)",
@@ -271,6 +280,7 @@
     "copied": "복사됨!",
     "copyLink": "링크 복사",
     "prReviewButton": "PR 리뷰",
+    "commitReanalyzeButton": "커밋으로 재분석",
     "primaryBranchTitle": "주요 브랜치 설정",
     "otherBranch": "다른 브랜치",
     "viewGraph": "그래프 보기",

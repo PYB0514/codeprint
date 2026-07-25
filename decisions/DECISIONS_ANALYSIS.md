@@ -2273,3 +2273,31 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **검증.** `compileJava`·`compileTestJava` clean. `GraphBuilderTest`(신규 1건 포함) green. Docker DB 기동 후 백엔드 전체 테스트 스위트(1108건) green. `analyzeLocal` 자기분석 재실행 — **`BROKEN_INTERFACE_CHAIN` 0건**으로 실제 레포에서 오탐 소거 확인(기존 베이스라인 "HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1"에서 BROKEN_INTERFACE_CHAIN만 사라짐, HIGH_FAN_OUT 5건은 불변 — 이미 기존에 수용된 조율자 패턴). 이 PR은 `GraphBuilder` 로직만 변경(신규 Spring 빈·생성자 의존관계 변경 없음)이라 로컬 백엔드 재기동은 불필요.
 
 **한계·다음.** `FIELD_DEPENDENCY` 쪽 동일 클래스 리스크는 여전히 미수정 상태로 관찰 중(위 "스코프 밖" 참조) — 실제 재현 시 재검토.
+
+---
+
+## 특정 커밋 재분석 — GitHub 아카이브 다운로드로 구현 (2026-07-25, codeprint_147)
+
+**배경.** PROGRESS.md에 "난이도 재평가 완료, 착수는 미정"으로 남아있던 백로그(2026-07-25, codeprint_146) — `codeload.github.com/{owner}/{repo}/tar.gz/{ref}`가 브랜치·태그뿐 아니라 임의 커밋 SHA도 지원해 애초 예상(git 풀 클론 필요)보다 쉽다는 점까지는 확인돼 있었으나, 실제 착수는 사용자 확인을 거쳐 이번 세션에서 진행했다.
+
+**구현.**
+- `RepoCloner.extractArchive(byte[] archiveBytes)` 신설 — GitHub 아카이브(tar.gz)를 임시 디렉터리에 해제. 최상위 `{repo}-{sha}/` 디렉터리를 제거해 기존 `git clone` 결과와 동일한 트리 구조로 맞춘다. 각 엔트리의 해제 대상 경로가 정규화 후 임시 디렉터리를 벗어나면 거부(path traversal/zip-slip 방지) — 기존 `clone()`은 그대로 두고 완전히 새 메서드로 추가(§3 서지컬 원칙, 기존 경로 무변경).
+- `GitHubApiClient.downloadArchive(githubRepoUrl, ref, githubAccessToken)` 신설 — `codeload.github.com/{owner}/{repo}/tar.gz/{ref}`에서 바이트 다운로드. 공개 레포는 인증 불필요(실측 확인), 비공개는 토큰을 최선노력으로 첨부(기존 `fetchFileContent`의 raw.githubusercontent.com 패턴과 동일 원칙).
+- `AnalysisRunner.run()`에 `ref` 파라미터 추가 — 있으면 archive 경로(다운로드+해제), 없으면 기존 git clone 경로. `ref`가 있으면 그 SHA 자체가 곧 분석된 커밋이라 완료 시점의 HEAD 재조회를 스킵.
+- `AnalysisApplicationService.startAnalysis()`에 `ref` 오버로드 추가 — ref가 명시되면 "직전 분석과 동일 커밋이면 스킵" 최적화(레버①)를 우회하고 항상 실행(사용자가 명시적으로 요청한 것이므로).
+- `AnalysisController`의 `StartAnalysisRequest`에 `ref` optional 필드 추가, `AnalysisFacade`가 그대로 관통.
+- 프론트: `ProjectCard.tsx`에 "커밋으로 재분석" 토글 버튼 + 패널 신설 — 기존 "PR 리뷰" 패널(PR 번호 입력 → 실행)과 완전히 동일한 UI 관용구를 그대로 재사용(재사용성 우선 확인 원칙). 성공 시 기존 `analysisId` state에 반영해 기존 진행률 폴링(`useAnalysisProgress`)이 그대로 재사용되도록 함 — 신규 진행률 UI 불필요.
+
+**스코프 축소.** 원래 구상했던 "GitHub 커밋 목록 브라우징 UI"(목록 조회+페이지네이션+검색)는 공수 대비 가치가 낮다고 판단, "커밋 SHA 직접 입력" 텍스트 필드로 MVP를 잡았다(§2 단순성) — 기능적 가치(임의 커밋으로 재분석)는 동일하게 제공.
+
+**신규 의존성.** `org.apache.commons:commons-compress:1.27.1` — JDK 표준 라이브러리엔 gzip 해제(`GZIPInputStream`)는 있어도 tar 해제가 없어 채택. gzip 레이어는 JDK로, tar 레이어만 이 라이브러리로 처리.
+
+**검증.**
+- TDD — `RepoClonerTest` 신규 2건(정상 해제+최상위 디렉터리 제거 확인, path traversal 엔트리 거부 확인). path traversal 가드를 일시 제거하고 재실행해 테스트가 실제로 FAILED로 떨어지는 것까지 확인한 뒤 복원(가드가 실제로 이 취약점을 잡는지 검증, A-2 dedup 버그 수정 때와 동일한 rigor).
+- `AnalysisApplicationServiceTest`에 ref 관련 신규 케이스(ref 지정 시 스킵 판정 자체를 안 함 확인) + 기존 5개 케이스의 `verify(analysisRunner).run(...)` 호출에 `ref` 인자(null) 추가해 무회귀 확인.
+- `compileJava`/`compileTestJava` clean, Docker DB 기동 후 백엔드 전체 테스트 스위트(1110+건) green.
+- **실제 GitHub 공개 레포(자기 자신, `PYB0514/codeprint`)로 로컬 백엔드 재기동 후 실 브라우저(Claude in Chrome, 기존 로그인 세션 재사용) E2E 확인**: 과거 커밋 SHA(`0faab30`, 7자 축약형)로 "커밋으로 재분석" 실행 → 진행률 폴링이 정상 동작 → 500개 파일 분석 완료(status=DONE, progress=100) → DB 직접 조회로 `analyses.last_commit_sha='0faab30'`(요청한 SHA 그대로, HEAD 재조회 아님) 확인. 연속 재요청 시 429(Bucket4j 레이트리밋)가 정상적으로 발동하는 것도 함께 확인(회귀 아님, 기존 보호 로직 정상 동작).
+- `analyzeLocal` — `AnalysisRunner.run`의 HIGH_FAN_OUT이 11→13으로 소폭 증가했으나 총 HIGH_FAN_OUT 5건(기존 베이스라인)은 불변 — `run`은 이미 오케스트레이터로 수용된 기존 항목이라 ref 분기 추가로 인한 자연스러운 증가, 신규 위반 아님.
+- 신규 Spring 빈·생성자 의존관계 변경 없음(기존 빈에 메서드만 추가)이라 로컬 재기동 필수 조건은 아니었으나, 실제 E2E 검증을 위해 어차피 재기동해 확인함.
+
+**한계·다음.** 비공개 레포에서 `codeload.github.com`이 Bearer 토큰을 실제로 받아들이는지는 미검증(공개 레포로만 실측) — 필요 시 별도 검증. 커밋 목록 브라우징 UI는 여전히 미착수(스코프 밖으로 명시적 축소).

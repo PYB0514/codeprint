@@ -53,7 +53,7 @@ class AnalysisApplicationServiceTest {
         assertThat(result.getBranch()).isEqualTo("main");
         // save가 호출되고, runner.run이 생성된 분석의 ID·전달 파라미터로 호출됨(트랜잭션 커밋 전 URL 선전달)
         verify(analysisRepository).save(result);
-        verify(analysisRunner).run(eq(result.getId()), eq(projectId), eq("https://github.com/a/b"), eq("main"), eq("tok"));
+        verify(analysisRunner).run(eq(result.getId()), eq(projectId), eq("https://github.com/a/b"), eq("main"), eq("tok"), eq((String) null));
     }
 
     @Test
@@ -85,7 +85,21 @@ class AnalysisApplicationServiceTest {
 
         assertThat(result).isNotSameAs(prev);
         verify(analysisRepository).save(result);
-        verify(analysisRunner).run(eq(result.getId()), eq(projectId), eq("https://github.com/a/b"), eq("main"), eq("tok"));
+        verify(analysisRunner).run(eq(result.getId()), eq(projectId), eq("https://github.com/a/b"), eq("main"), eq("tok"), eq((String) null));
+    }
+
+    @Test
+    @DisplayName("startAnalysis는 ref(특정 커밋)를 지정하면 직전 분석 커밋과 무관하게 스킵 판정 자체를 하지 않고 그 ref로 항상 새로 분석한다")
+    void startAnalysis_ref지정시_스킵판정없이_새로분석() {
+        UUID projectId = UUID.randomUUID();
+
+        AnalysisResult result = service().startAnalysis(projectId, "main", "https://github.com/a/b", "tok", "sha-abc");
+
+        verify(analysisRepository).save(result);
+        verify(analysisRunner).run(eq(result.getId()), eq(projectId), eq("https://github.com/a/b"), eq("main"), eq("tok"), eq("sha-abc"));
+        // ref가 있으면 직전 분석 조회·최신 SHA 조회(스킵 판정 자체)를 하지 않음
+        verify(analysisRepository, never()).findLatestByProjectIdAndBranch(any(), any());
+        verifyNoInteractions(gitHubApiClient);
     }
 
     @Test

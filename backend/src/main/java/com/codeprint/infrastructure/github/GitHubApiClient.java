@@ -137,6 +137,27 @@ public class GitHubApiClient {
         }
     }
 
+    // 특정 커밋 SHA(ref)의 소스 아카이브(tar.gz)를 codeload에서 다운로드 — 특정 커밋 재분석용.
+    // git 프로토콜은 shallow clone에서 임의 SHA를 못 받아 GitHub 아카이브 다운로드로 우회(공개 레포는 인증
+    // 불필요, 비공개는 토큰을 최선 노력으로 첨부 — raw.githubusercontent.com과 같은 host 밖 패턴, fetchFileContent 참조).
+    public byte[] downloadArchive(String githubRepoUrl, String ref, String githubAccessToken) {
+        String ownerRepo = extractOwnerRepo(githubRepoUrl);
+        String archiveUrl = "https://codeload.github.com/" + ownerRepo + "/tar.gz/" + ref;
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(archiveUrl));
+            if (githubAccessToken != null && !githubAccessToken.isBlank()) {
+                builder.header("Authorization", "Bearer " + githubAccessToken);
+            }
+            HttpResponse<byte[]> response = httpClient.send(builder.GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() != 200) {
+                throw new RuntimeException("GitHub 아카이브 다운로드 실패 " + response.statusCode() + ": " + archiveUrl);
+            }
+            return response.body();
+        } catch (Exception e) {
+            throw new RuntimeException("GitHub 아카이브 다운로드 중 오류: " + ownerRepo + " @ " + ref, e);
+        }
+    }
+
     // PR 번호로 head 브랜치명(소스 브랜치)을 조회 — PR 리뷰 분석 대상
     public String fetchPullRequestHeadBranch(String githubRepoUrl, int prNumber, String githubAccessToken) {
         String ownerRepo = extractOwnerRepo(githubRepoUrl);
