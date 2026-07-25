@@ -1227,4 +1227,18 @@ const fetchGraph = useCallback(async () => {
 
 **검증.** `npx vitest run` 3건 green, `npx tsc -b` clean, `npx eslint .` — 신규 에러 0건, 경고 22건(기존 베이스라인과 동일, 신규 항목 없음).
 
-**한계·다음.** 여전히 컴포넌트 테스트(RTL로 실제 렌더링 검증)는 0건 — 순수 로직 추출이 가능한 다른 버그부터 같은 패턴으로 점진 확대할 것. `npm audit`에서 프로덕션 의존성(axios·react-router·postcss) 관련 기존 취약점이 있으나 이번 작업(devDependency만 추가)과 무관해 손대지 않음 — 별도 과제.
+**한계·다음.** 여전히 컴포넌트 테스트(RTL로 실제 렌더링 검증)는 0건 — 순수 로직 추출이 가능한 다른 버그부터 같은 패턴으로 점진 확대할 것. `npm audit`에서 프로덕션 의존성(axios·react-router·postcss) 관련 기존 취약점이 있으나 이번 작업(devDependency만 추가)과 무관해 손대지 않음 — 별도 과제(아래 "npm audit 취약점 해소" 참조).
+
+---
+
+## npm audit 취약점 해소 — axios·postcss·brace-expansion 패치, react-router는 위험 무관 판단으로 보류 (2026-07-25, codeprint_147)
+
+**배경.** 위 테스트 인프라 작업 중 devDependency 설치로 발견한 프로덕션 의존성 취약점(axios·react-router·postcss·brace-expansion, 전부 high severity) — 별도 작업으로 분리해뒀던 것을 이어서 처리.
+
+**적용.** `npm audit fix --dry-run`으로 먼저 확인 — axios(1.16.1→1.18.1)·postcss(8.5.15→8.5.23)·brace-expansion(간접)·nanoid(간접) 4건 전부 기존 `package.json`의 caret 범위(`^1.16.1` 등) **안에서의** patch/minor 업그레이드라 breaking change 위험이 낮음을 확인 후 `npm audit fix`(force 아님) 실행. `package.json` 자체는 무변경(caret 범위 그대로), `package-lock.json`만 갱신.
+
+**react-router는 의도적으로 보류.** 남은 GHSA-qwww-vcr4-c8h2("RSC Mode CSRF Bypass")는 `npm audit fix --force`가 react-router-dom을 **7.18.1(최신)에서 7.11.0으로 역행 다운그레이드**해야 해소되는 구조 — 7.12.0~8.2.0(현재 최신 포함) 전 구간이 취약해 상위 방향 패치가 아직 없다. 코드 확인 결과(`grep`으로 `react-router/rsc`·서버 액션 관련 API 사용 여부 검색) 이 프로젝트는 순수 클라이언트 SPA로 RSC/서버 액션 모드를 전혀 쓰지 않아 — 이 취약점의 공격 표면 자체가 우리 배포 형태에 존재하지 않는다. 반면 7.11.0으로의 역행은 `package.json`이 원래 `^7.16.0`을 요구하던 이유(7.11~7.15 사이에 도입된 API 의존 가능성)를 깨뜨릴 실제 회귀 위험이 있다 — 위험 없는 걸 막으려고 위험을 만드는 셈이라 다운그레이드하지 않기로 결정.
+
+**검증.** `npx tsc -b` clean, `npx vitest run` 4건 green, `npx eslint .` 신규 에러 0건. 실 브라우저(로컬 백엔드+DB 기동, 기존 로그인 세션) — 마이페이지 목록 조회(axios)·그래프 페이지 라우팅(react-router 파라미터 라우트)·전체 Tailwind 스타일링(postcss) 정상 동작, 콘솔 에러 0건 확인. axios·postcss·react-router 셋 다 앱 전역에서 쓰이는 핵심 의존성이라 이 정도 스모크 확인으로 충분하다고 판단(개별 기능별 회귀 테스트는 과함).
+
+**한계·다음.** react-router의 진짜 픽스가 나오면(현재 npm 레지스트리에 7.18.1 이후 버전 없음) 그때 재평가. 현재 판단(RSC 미사용이라 위험 없음)이 유지되는 한 급하지 않음.
