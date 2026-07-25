@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.150.0',
+    date: '2026-07-25',
+    title: '특정 커밋으로 재분석',
+    type: 'feature',
+    items: [
+      { category: '분석', desc: '프로젝트 카드의 "커밋으로 재분석" 버튼으로 최신 커밋이 아닌 과거 특정 커밋 SHA 상태로 재분석할 수 있습니다. 예전 버그가 도입된 시점을 찾거나, 특정 릴리스 시점의 구조를 확인할 때 유용합니다.' },
+    ],
+  },
+  {
     version: 'v0.149.0',
     date: '2026-07-23',
     title: '서비스 간 동기 호출 체인 감지 — Go 지원',

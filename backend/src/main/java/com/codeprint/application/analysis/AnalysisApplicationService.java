@@ -28,12 +28,20 @@ public class AnalysisApplicationService {
 
     // 분석 레코드를 생성하고 비동기 분석을 시작 (URL·토큰은 컨트롤러에서 전달) — 직전 분석이 같은 커밋이면 스킵(FeaturedRepo 레버①과 동일 원칙)
     public AnalysisResult startAnalysis(UUID projectId, String branch, String githubRepoUrl, String githubAccessToken) {
-        Optional<AnalysisResult> lastAnalysis = analysisRepository.findLatestByProjectIdAndBranch(projectId, branch);
-        if (lastAnalysis.isPresent() && lastAnalysis.get().getStatus() == AnalysisStatus.DONE) {
-            String latestSha = fetchLatestShaSafely(githubRepoUrl, branch, githubAccessToken);
-            if (latestSha != null && latestSha.equals(lastAnalysis.get().getLastCommitSha())) {
-                log.info("커밋 변경 없음, 재분석 스킵: projectId={}, branch={}, sha={}", projectId, branch, latestSha);
-                return lastAnalysis.get();
+        return startAnalysis(projectId, branch, githubRepoUrl, githubAccessToken, null);
+    }
+
+    // ref(특정 커밋 SHA)를 지정해 그 커밋 상태로 재분석 — 사용자가 명시적으로 요청한 것이므로 "동일 커밋 스킵"
+    // 최적화를 적용하지 않고 항상 실행한다.
+    public AnalysisResult startAnalysis(UUID projectId, String branch, String githubRepoUrl, String githubAccessToken, String ref) {
+        if (ref == null) {
+            Optional<AnalysisResult> lastAnalysis = analysisRepository.findLatestByProjectIdAndBranch(projectId, branch);
+            if (lastAnalysis.isPresent() && lastAnalysis.get().getStatus() == AnalysisStatus.DONE) {
+                String latestSha = fetchLatestShaSafely(githubRepoUrl, branch, githubAccessToken);
+                if (latestSha != null && latestSha.equals(lastAnalysis.get().getLastCommitSha())) {
+                    log.info("커밋 변경 없음, 재분석 스킵: projectId={}, branch={}, sha={}", projectId, branch, latestSha);
+                    return lastAnalysis.get();
+                }
             }
         }
 
@@ -41,7 +49,7 @@ public class AnalysisApplicationService {
         analysisRepository.save(analysis);
 
         // URL을 미리 추출해서 넘김 — 트랜잭션 커밋 전 비동기 스레드가 DB 조회 시 못 찾는 문제 방지
-        analysisRunner.run(analysis.getId(), projectId, githubRepoUrl, branch, githubAccessToken);
+        analysisRunner.run(analysis.getId(), projectId, githubRepoUrl, branch, githubAccessToken, ref);
         return analysis;
     }
 

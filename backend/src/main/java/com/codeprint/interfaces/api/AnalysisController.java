@@ -25,7 +25,7 @@ public class AnalysisController {
             @AuthenticationPrincipal User user) {
         return ResponseEntity.status(202).body(
                 analysisFacade.startAnalysis(request.projectId(), request.branch(),
-                        user.getId(), user.getGithubAccessToken()));
+                        user.getId(), user.getGithubAccessToken(), request.ref()));
     }
 
     // 분석 소유권 확인 후 상태 및 진행률 조회
@@ -36,6 +36,6 @@ public class AnalysisController {
         return ResponseEntity.ok(analysisFacade.getAnalysis(analysisId, user.getId()));
     }
 
-    // 분석 시작 요청 DTO (프로젝트 ID + 브랜치명)
-    public record StartAnalysisRequest(UUID projectId, String branch) {}
+    // 분석 시작 요청 DTO (프로젝트 ID + 브랜치명 + ref — 특정 커밋 SHA로 재분석 시에만 지정, 없으면 브랜치 HEAD)
+    public record StartAnalysisRequest(UUID projectId, String branch, String ref) {}
 }

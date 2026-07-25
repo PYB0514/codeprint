@@ -275,3 +275,15 @@ WHERE 컬럼 IS NOT NULL
 **깨지면 생기는 일.** 번역 누락 페이지는 i18next의 `fallbackLng: 'ko'`가 한국어로 대체 표시하므로 완전히 깨지진 않지만, 한국어/영어가 한 화면에 섞여 보이는 "반쪽 번역" 상태가 된다 — 그래서 페이지 단위로 통째 이관하고, 부분 이관 상태를 오래 방치하지 않는 게 원칙이다.
 
 **원문 기록.** decisions/DECISIONS_FRONTEND.md "i18n 도입 — react-i18next"(2026-07-15).
+
+### 13. 특정 커밋 재분석 — GitHub 아카이브 다운로드로 git shallow clone 한계 우회
+
+**무엇을.** 프로젝트를 HEAD가 아닌 임의의 과거 커밋 SHA로 재분석하는 기능. 기존 `RepoCloner.clone()`(`git clone --depth=1 --branch`)은 그대로 두고, ref(커밋 SHA)가 지정된 경우에만 `GitHubApiClient.downloadArchive()`로 `codeload.github.com/{owner}/{repo}/tar.gz/{ref}`를 받아 `RepoCloner.extractArchive()`로 임시 디렉터리에 해제한다. 신규 의존성 `org.apache.commons:commons-compress`(tar 해제, gzip 해제는 JDK 표준 `GZIPInputStream`으로 충분).
+
+**쉽게 말하면.** git은 "얕은 클론"(최근 커밋 하나만) 요청 시 브랜치·태그 이름만 받아준다 — 몇 달 전 특정 커밋 하나를 콕 집어 "이거 하나만 줘"라고 하면 거절한다. 대신 GitHub가 어떤 커밋이든 압축파일(zip 대신 tar.gz)로 통째로 내려주는 문 하나를 열어두고 있어서, 그 문으로 우회한다.
+
+**어떻게 도달했나.** 처음엔 "특정 커밋 재분석은 git 풀 클론+checkout이 필요해 어렵다"고 판단해 보류했으나(2026-07-25, codeprint_146), 재평가 과정에서 `codeload.github.com/.../tar.gz/{ref}`가 브랜치·태그뿐 아니라 임의 SHA(축약형 포함)도 받는다는 걸 실측(`curl`)으로 확인해 착수 난이도가 처음 생각보다 낮음을 재확인했다(2026-07-25, codeprint_147). tar.gz 해제는 JDK 표준 라이브러리에 없어 Apache Commons Compress를 신규 채택 — 압축 해제 자체보다 **해제 대상 경로 검증(path traversal/zip-slip 방지)**이 핵심 리스크라, `extractArchive`가 각 엔트리의 정규화된 목적지 경로가 임시 디렉터리를 벗어나면 거부하도록 만들고 이 가드를 일시 제거했을 때 실제로 테스트가 실패하는 것까지 확인해 방어 로직이 살아있음을 검증했다. `AnalysisResult`가 이미 `lastCommitSha`를 저장하고 있어 DB 마이그레이션은 불필요했다.
+
+**깨지면 생기는 일.** path traversal 가드가 없으면 악의적으로 조작된(또는 손상된) 아카이브 엔트리가 임시 디렉터리 밖 임의 경로에 파일을 쓸 수 있다(zip-slip류 취약점) — 이 가드는 정상 GitHub 아카이브에서는 절대 발동하지 않고, 오직 비정상 엔트리에서만 안전하게 차단으로 작동한다.
+
+**원문 기록.** decisions/DECISIONS_ANALYSIS.md "특정 커밋 재분석 — GitHub 아카이브 다운로드로 구현"(2026-07-25).

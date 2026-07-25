@@ -68,6 +68,12 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
   const [prResult, setPrResult] = useState<{ prNumber: number; warningCount: number; lowFilteredCount: number; outOfScopeCount: number; commentUrl: string } | null>(null)
   const [prError, setPrError] = useState<string | null>(null)
 
+  // 커밋 SHA 재분석 상태 (특정 커밋으로 재분석)
+  const [showCommitReanalyze, setShowCommitReanalyze] = useState(false)
+  const [commitSha, setCommitSha] = useState('')
+  const [commitReanalyzing, setCommitReanalyzing] = useState(false)
+  const [commitReanalyzeError, setCommitReanalyzeError] = useState<string | null>(null)
+
   // PR 게이트 등급 설정 상태 (0단계는 항상 게이팅이라 설정 없음, 1단계/2단계만 토글)
   const [showGateSettings, setShowGateSettings] = useState(false)
   const [gateArchitectureEnabled, setGateArchitectureEnabled] = useState(project.gateArchitectureEnabled)
@@ -362,6 +368,30 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
     }
   }
 
+  // 입력한 커밋 SHA로 재분석 시작 — HEAD가 아닌 그 커밋 상태를 분석
+  const handleCommitReanalyze = async () => {
+    const sha = commitSha.trim()
+    if (!sha) {
+      setCommitReanalyzeError(t('projectCard.commitReanalyze.invalidSha'))
+      return
+    }
+    setCommitReanalyzing(true)
+    setCommitReanalyzeError(null)
+    try {
+      const res = await axios.post(
+        '/api/analyses',
+        { projectId: project.id, branch: null, ref: sha }
+      )
+      setAnalysisId(res.data.analysisId)
+      setLastAnalyzedBranch(null) // 브랜치가 아닌 커밋 기준 분석이라 진행률 표시에 브랜치명을 붙이지 않음
+      setShowCommitReanalyze(false)
+    } catch {
+      setCommitReanalyzeError(t('projectCard.commitReanalyze.failed'))
+    } finally {
+      setCommitReanalyzing(false)
+    }
+  }
+
   const isAnalyzing = analysisId !== null && status !== 'FAILED'
 
   return (
@@ -590,6 +620,39 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
         </div>
       )}
 
+      {/* 커밋 SHA 재분석 패널 */}
+      {showCommitReanalyze && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
+          <p className="text-xs text-gray-400">
+            {t('projectCard.commitReanalyze.desc')}
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={commitSha}
+              onChange={(e) => setCommitSha(e.target.value)}
+              placeholder={t('projectCard.commitReanalyze.placeholder')}
+              disabled={commitReanalyzing}
+              className="flex-1 bg-gray-700 text-white text-xs rounded px-2 py-1.5 border border-gray-600 focus:outline-none disabled:opacity-50"
+            />
+            <button
+              onClick={handleCommitReanalyze}
+              disabled={commitReanalyzing}
+              className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200 disabled:opacity-40"
+            >
+              {commitReanalyzing ? t('projectCard.commitReanalyze.reanalyzing') : t('projectCard.commitReanalyze.run')}
+            </button>
+            <button
+              onClick={() => { setShowCommitReanalyze(false); setCommitReanalyzeError(null) }}
+              className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
+            >
+              {t('projectCard.commitReanalyze.close')}
+            </button>
+          </div>
+          {commitReanalyzeError && <p className="text-xs text-red-400">{commitReanalyzeError}</p>}
+        </div>
+      )}
+
       {/* PR 게이트 등급 설정 패널 — 0단계(correctness)는 항상 게이팅이라 설정 없음, 1·2단계만 토글 */}
       {showGateSettings && (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
@@ -756,6 +819,13 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
             className="text-xs text-purple-400 hover:text-purple-300 disabled:opacity-40"
           >
             {t('projectCard.prReviewButton')}
+          </button>
+          <button
+            onClick={() => { setShowCommitReanalyze(true); setCommitReanalyzeError(null) }}
+            disabled={isAnalyzing || commitReanalyzing}
+            className="text-xs text-teal-400 hover:text-teal-300 disabled:opacity-40"
+          >
+            {t('projectCard.commitReanalyzeButton')}
           </button>
           <button
             onClick={() => setShowGateSettings(true)}
