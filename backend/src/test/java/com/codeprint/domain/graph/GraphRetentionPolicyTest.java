@@ -1,4 +1,4 @@
-// 그래프 보존 정책 단위 테스트 — 비고정 최근 10개 유지·초과분 삭제·고정 보호 경계 회귀 방지
+// 그래프 보존 정책 단위 테스트 — 비고정 최근 3개 유지·초과분 삭제·고정 보호 경계 회귀 방지
 package com.codeprint.domain.graph;
 
 import org.junit.jupiter.api.DisplayName;
@@ -32,19 +32,19 @@ class GraphRetentionPolicyTest {
     }
 
     @Test
-    @DisplayName("비고정 10개 이하면 삭제 대상 없음")
+    @DisplayName("비고정 3개 이하면 삭제 대상 없음")
     void noEvictionWhenWithinLimit() {
         List<Graph> graphs = new ArrayList<>();
-        for (int i = 0; i < 10; i++) graphs.add(graph(i, null));
+        for (int i = 0; i < 3; i++) graphs.add(graph(i, null));
 
         assertThat(GraphRetentionPolicy.selectEvictable(graphs)).isEmpty();
     }
 
     @Test
-    @DisplayName("비고정 11개면 가장 오래된 1개가 삭제 대상")
+    @DisplayName("비고정 4개면 가장 오래된 1개가 삭제 대상")
     void evictsOldestBeyondLimit() {
         List<Graph> graphs = new ArrayList<>();
-        for (int i = 0; i < 11; i++) graphs.add(graph(i, null)); // i=0이 가장 오래됨
+        for (int i = 0; i < 4; i++) graphs.add(graph(i, null)); // i=0이 가장 오래됨
 
         List<Graph> evict = GraphRetentionPolicy.selectEvictable(graphs);
 
@@ -59,8 +59,8 @@ class GraphRetentionPolicyTest {
         // 고정 2개 (아주 오래됨)
         graphs.add(graph(0, 1));
         graphs.add(graph(1, 2));
-        // 비고정 11개 → 그중 가장 오래된 1개만 삭제 대상
-        for (int i = 10; i < 21; i++) graphs.add(graph(i, null));
+        // 비고정 4개 → 그중 가장 오래된 1개만 삭제 대상
+        for (int i = 10; i < 14; i++) graphs.add(graph(i, null));
 
         List<Graph> evict = GraphRetentionPolicy.selectEvictable(graphs);
 
