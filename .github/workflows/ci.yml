@@ -89,3 +89,6 @@ jobs:
 
       - name: Type check
         run: npx tsc -b
+
+      - name: Run tests
+        run: npm test

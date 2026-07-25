@@ -1158,6 +1158,43 @@ export function applyEdgeVisibility(
   })
 }
 
+// layer 모드에서 각 레이어 섹션의 opaque 여부에 따라 자손 노드(group→file→function 3단계) 전부의 hidden을
+// 명시(true/false 둘 다) 적용. React Flow v12는 extent:'parent'인 자식 노드에 부모 hidden을 자동 전파하지
+// 않아([반복-C], ERROR_TRACKER.md 2회 재발) 매 단계를 직접 계산해야 한다 — 이 함수 자체가 그 재발 방지책.
+// 라이브 노드 배열(toggleLayerOpaque처럼 이미 hidden이 섞여있는 배열)에 호출해도 "opaque 아닌 자손은 그대로
+// 둔다"가 아니라 매번 true/false를 다시 써야 토글 OFF 시 이전에 숨겼던 노드가 정상 복원된다.
+export function applyLayerModeNodeVisibility(layoutNodes: Node[], opaqueLayerSet: Set<string>): Node[] {
+  const sectionOpaque = new Map(
+    layoutNodes
+      .filter((n) => n.id.startsWith('layer-section-'))
+      .map((n) => [n.id, opaqueLayerSet.has(n.id.replace('layer-section-', ''))] as const)
+  )
+  const groupOpaque = new Map(
+    layoutNodes
+      .filter((n) => n.parentId && sectionOpaque.has(n.parentId))
+      .map((n) => [n.id, sectionOpaque.get(n.parentId!)!] as const)
+  )
+  const fileOpaque = new Map(
+    layoutNodes
+      .filter((n) => n.parentId && groupOpaque.has(n.parentId))
+      .map((n) => [n.id, groupOpaque.get(n.parentId!)!] as const)
+  )
+  const funcOpaque = new Map(
+    layoutNodes
+      .filter((n) => n.parentId && fileOpaque.has(n.parentId))
+      .map((n) => [n.id, fileOpaque.get(n.parentId!)!] as const)
+  )
+
+  return layoutNodes.map((n) => {
+    if (n.id.startsWith('layer-section-')) {
+      return { ...n, hidden: false, data: { ...n.data, opaque: sectionOpaque.get(n.id) ?? false } }
+    }
+    const opaque = groupOpaque.get(n.id) ?? fileOpaque.get(n.id) ?? funcOpaque.get(n.id)
+    if (opaque !== undefined) return { ...n, hidden: opaque }
+    return n
+  })
+}
+
 // 경고 목록을 타입별로 그룹핑하여 마크다운 파일로 다운로드
 // 라벨은 WARNING_META 단일 소스 재사용 — 자체 맵 중복 시절 신규 타입 누락(8/15종)이 있었음
 export function downloadWarningsMd(warningList: { type: string; nodeIds: string[]; message: string }[]): void {
