@@ -20,7 +20,7 @@ import { toPng } from 'html-to-image'
 import { buildLayout, downloadWarningsMd } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry, ColumnInfo } from '../utils/graphLayout'
 import { extractDomain, buildDomainColorMap, buildKnownDomains } from '../utils/graphLayout'
-import { isDbEdgeType, applyEdgeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS, searchNodes } from '../utils/graphLayout'
+import { isDbEdgeType, applyEdgeVisibility, applyLayerModeNodeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS, searchNodes } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
@@ -546,28 +546,14 @@ function GraphPageInner() {
     }))
   }, [clickedNodeId, rawEdgesCache, setEdges])
 
-  // 레이어 섹션 박스 opaque 토글 — 섹션은 원래 크기 유지 + opaqueColor로 덮고, 내부 노드 전부 hidden
+  // 레이어 섹션 박스 opaque 토글 — 섹션은 원래 크기 유지 + opaqueColor로 덮고, 내부 노드(group→file→function
+  // 3단계) 전부 hidden(반복-C 재발방지, applyPresetConfig와 같은 계산을 graphLayout.ts로 단일화)
   const toggleLayerOpaque = useCallback((layer: string) => {
     setOpaqueLayerSet((prev) => {
       const next = new Set(prev)
       if (next.has(layer)) next.delete(layer)
       else next.add(layer)
-      const isOpaque = next.has(layer)
-      const sectionId = `layer-section-${layer}`
-      setNodes((nds) => {
-        const groupIds = new Set(nds.filter((n) => n.parentId === sectionId).map((n) => n.id))
-        const fileIds = new Set(nds.filter((n) => n.parentId && groupIds.has(n.parentId)).map((n) => n.id))
-        const funcIds = new Set(nds.filter((n) => n.parentId && fileIds.has(n.parentId)).map((n) => n.id))
-        return nds.map((n) => {
-          if (n.id === sectionId) {
-            return { ...n, data: { ...n.data, opaque: isOpaque } }
-          }
-          if (groupIds.has(n.id) || fileIds.has(n.id) || funcIds.has(n.id)) {
-            return { ...n, hidden: isOpaque }
-          }
-          return n
-        })
-      })
+      setNodes((nds) => applyLayerModeNodeVisibility(nds, next))
       return next
     })
   }, [setNodes])
@@ -846,24 +832,8 @@ function GraphPageInner() {
         if (lp === 'domain') {
           return layoutNodes
         }
-        // layer 모드: opaque 섹션의 자손 노드(group→file→function 3단계) hidden 처리
-        const opaqueSectionIds = new Set(
-          layoutNodes
-            .filter((n) => n.id.startsWith('layer-section-') && newOpaqueSet.has(n.id.replace('layer-section-', '')))
-            .map((n) => n.id)
-        )
-        const groupIds = new Set(layoutNodes.filter((n) => n.parentId && opaqueSectionIds.has(n.parentId!)).map((n) => n.id))
-        const fileIds  = new Set(layoutNodes.filter((n) => n.parentId && groupIds.has(n.parentId!)).map((n) => n.id))
-        const hiddenIds = new Set([...groupIds, ...fileIds,
-          ...layoutNodes.filter((n) => n.parentId && fileIds.has(n.parentId!)).map((n) => n.id)])
-        return layoutNodes.map((n) => {
-          if (n.id.startsWith('layer-section-')) {
-            const isOpaque = newOpaqueSet.has(n.id.replace('layer-section-', ''))
-            return { ...n, hidden: false, data: { ...n.data, opaque: isOpaque } }
-          }
-          if (hiddenIds.has(n.id)) return { ...n, hidden: true }
-          return n
-        })
+        // layer 모드: opaque 섹션의 자손 노드(group→file→function 3단계) hidden 처리(반복-C 재발방지, graphLayout.ts로 추출)
+        return applyLayerModeNodeVisibility(layoutNodes, newOpaqueSet)
       })
       setEdges(applyEdgeVisibility(layoutEdges, se, sc, si, sb, sdb, sapi))
     }

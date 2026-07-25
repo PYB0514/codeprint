@@ -1208,3 +1208,23 @@ const fetchGraph = useCallback(async () => {
 `npx tsc -b` clean. `analyzeLocal` 베이스라인 불변(프론트 전용 변경).
 
 **마무리.** R5(#22) ESLint 감사 항목(원래 에러 31건) 전체 완주 — `GraphPage.tsx` 포함 프로젝트 전체 에러 0건. 남은 22건은 전부 `warning` 레벨(`exhaustive-deps` 등)로, CLAUDE.md 규칙상 필수 대상이 아니라 이번 R5 항목은 여기서 종료.
+
+---
+
+## 프론트 테스트 인프라 도입 — Vitest + React Testing Library, 첫 회귀 테스트로 반복-C 재발방지 (2026-07-25, codeprint_147)
+
+**배경.** 프론트 테스트가 0건이라 `ERROR_TRACKER.md` [반복-C](React Flow `extent:'parent'` hidden 미전파, 2회 재발 — 1회차는 DDD 범례 토글, 2회차는 `applyPresetConfig`)가 유일하게 회귀 테스트 없는 반복 버그로 남아있던 갭. 여러 세션에 걸쳐 "별도 집중 세션에서 하는 게 낫다"고 미뤄오다 사용자 승인으로 착수.
+
+**프레임워크 선택.** Vite 프로젝트라 Vitest가 자연스러운 선택(별도 번들러 설정 불필요, `vite.config.ts`를 `/// <reference types="vitest/config" />`로 그대로 확장). React Testing Library(`@testing-library/react`)·jest-dom 매처(`@testing-library/jest-dom`)·jsdom 환경도 함께 설치해 향후 컴포넌트 테스트까지 같은 세션에서 준비했다(PROGRESS.md 권장 스택 그대로).
+
+**첫 테스트 — 반복-C 재발방지, pure function으로 추출.** `GraphPage.tsx`의 `applyPresetConfig`(프리셋 로드 시)와 `toggleLayerOpaque`(DDD 범례 클릭 시) 두 곳에 **거의 동일한 3단계(group→file→function) hidden 계산 로직이 중복**돼 있었다 — 이 중복이 정확히 반복-C가 두 번 따로 재발한 이유(같은 버그를 두 곳에서 각자 고쳐야 했음). `applyLayerModeNodeVisibility`(순수 함수)로 `graphLayout.ts`에 추출해 두 호출부 모두 이걸 쓰도록 통일 — 재발 표면을 하나로 줄였다. 컴포넌트 렌더링(React Router·axios·WebSocket·i18n 프로바이더 전부 필요) 없이 순수 로직만 테스트하도록 잡아 첫 테스트의 셋업 비용을 최소화했다.
+
+**테스트가 실제로 버그를 잡는지 검증.** `fileIds`/재귀 3단계 중 file·function 단계를 일시적으로 제거해(group만 hidden 처리하는 옛 1회차 버그 재현) 대응 테스트가 실제로 FAILED로 떨어지는 걸 확인한 뒤 복원 — A-2 dedup 버그 수정 때와 동일한 rigor.
+
+**추출 과정에서 새 회귀를 직접 발견·수정.** 최초 추출 버전은 "opaque 집합에 속한 자손만 `hidden:true`로 쓰고, 나머지는 그대로 둔다"였다 — `applyPresetConfig`(항상 `buildLayout()`의 새 배열, hidden 잔재 없음)에서는 무해하지만, `toggleLayerOpaque`가 넘기는 **라이브 노드 배열**(이전 토글의 `hidden:true`가 이미 섞여있음)에 재사용하면 **토글 OFF 시 이전에 숨긴 노드가 복원되지 않는** 새 버그였다. "opaque 여부와 무관하게 모든 group/file/function 자손에 hidden:true/false를 항상 명시로 쓴다" 방식(Map 기반)으로 재작성해 해결 — 테스트도 "hidden:true가 섞인 배열에 opaque 해제를 적용하면 false로 복원되는지" 케이스를 추가해 회귀 방지. 실 브라우저(DDD 범례에서 레이어 토글 ON→OFF)로 실제 복원까지 재확인.
+
+**CI 배선.** 기존 "Frontend Type Check" 잡(브랜치 보호 필수 체크)에 `npx tsc -b` 다음 단계로 `npm test`(`vitest run`) 추가 — 새 필수 체크 이름을 만들지 않아 브랜치 보호 설정 변경 불필요.
+
+**검증.** `npx vitest run` 3건 green, `npx tsc -b` clean, `npx eslint .` — 신규 에러 0건, 경고 22건(기존 베이스라인과 동일, 신규 항목 없음).
+
+**한계·다음.** 여전히 컴포넌트 테스트(RTL로 실제 렌더링 검증)는 0건 — 순수 로직 추출이 가능한 다른 버그부터 같은 패턴으로 점진 확대할 것. `npm audit`에서 프로덕션 의존성(axios·react-router·postcss) 관련 기존 취약점이 있으나 이번 작업(devDependency만 추가)과 무관해 손대지 않음 — 별도 과제.
