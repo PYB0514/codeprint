@@ -128,9 +128,12 @@
 
 ## Actuator 정책
 
-- `/actuator/health` — 공개 허용 (Railway healthcheck 필수)
-- `/actuator/prometheus` — **공개 금지**, push 방식으로 Grafana Cloud 전송
-- 그 외 모든 actuator 엔드포인트 — 비활성화
+> 실제 노출 목록은 `application.yml`의 `management.endpoints.web.exposure.include`(현재 `health,metrics,info` 3개), 그 외는 Spring Boot가 애초에 활성화하지 않아 문자 그대로 비활성화.
+
+- `/actuator/health` — 공개 허용(`permitAll`, Railway healthcheck 필수)
+- `/actuator/metrics/**`·`/actuator/info` — 노출은 돼 있으나 `SecurityConfig`에서 `hasRole("ADMIN")`으로 인증 게이트(비활성화 아님 — 관리자 로그인 없이는 401/403)
+- `/actuator/prometheus` — **공개 금지**, `exposure.include`에 없어 응답 자체가 없음(2026-07-26 재확인 — "push 방식 Grafana Cloud 전송"은 `decisions/DECISIONS_BACKEND.md`에 **Phase 2 계획**으로만 기록돼 있었고 `build.gradle`에 micrometer-registry-otlp/prometheus 의존성 자체가 없어 실제 구현된 적이 없었다. 보안 리스크는 없음(엔드포인트가 애초에 안 열려 있어 scrape든 push든 노출 경로 자체가 없음) — 다만 "현재 모니터링 중"으로 오독될 수 있어 정정. 실제 모니터링 도입은 여전히 미착수, 필요 시 별도 착수)
+- 그 외 모든 actuator 엔드포인트 — `exposure.include`에 없어 비활성화(존재하지 않는 경로로 404)
 
 ---
 
