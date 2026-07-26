@@ -451,9 +451,6 @@
     "hiddenNodesCount": "노드 {{count}}개",
     "edgeTypes": {
       "heading": "엣지",
-      "import": "의존성",
-      "call": "콜 체인",
-      "inst": "생성",
       "broken": "끊긴 연결",
       "db": "DB 연결",
       "api": "API 호출",
