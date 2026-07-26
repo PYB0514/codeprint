@@ -2,6 +2,16 @@
 
 ---
 
+## GraphViewerPage·CommunityPostGraphPage에도 국소 표시 확장(2026-07-26, codeprint_149)
+
+**문제.** 앞선 `GraphPage.tsx` 국소 표시 전환(PR #687)을 사용자 확인에 따라 나머지 두 페이지로 확장. 두 페이지는 GraphPage와 구조가 달랐다 — `GraphViewerPage.tsx`(공유 링크 `/share/:projectId`, 읽기 전용)는 토글 UI 자체가 없고 소유자가 저장한 프리셋 값을 그대로 반영만 했고, `CommunityPostGraphPage.tsx`(커뮤니티 게시글 스냅샷)는 `edgeVisibility` 객체(`{se,sc,si,sb,sdb,sapi}`)+`toggleEdgeType` 제네릭 토글로 GraphPage보다 이미 간결한 형태였다. **두 페이지 다 노드 클릭 1홉 강조(`clickedNodeId`) 기능 자체가 없었다** — GraphPage에서만 있던 기능이라 이번에 새로 이식.
+
+**결정.** 두 파일 모두 6개 필드 `edgeVisibility`/개별 booleans를 `showBrokenEdges` 단일 상태로 축소(GraphPage와 동일 네이밍으로 통일). `GraphViewerPage`는 프리셋에서 `broken`만 읽고 나머지 5개는 무시하도록 변경(소유자가 과거에 저장한 프리셋에 다른 타입이 켜져 있었어도 뷰어에선 항상 국소 표시). `CommunityPostGraphPage`는 `EDGE_TOGGLE_DEFS` 6항목 배열+제네릭 `toggleEdgeType`을 `toggleBrokenEdges` 전용 함수+단일 버튼으로 교체, `communityPostGraph.edgeTypes.localHint`(GraphPage 작업에서 이미 추가된 키) 힌트 문구 재사용. 두 파일 모두 `handleNodeClick`에 `setClickedNodeId(node.id)` + 1홉 강조 `useEffect`(GraphPage와 동일 패턴, PR7 보류 결정에 따라 공유 훅으로 추출하지 않고 각 파일에 독립 구현) 신규 추가.
+
+**검증.** `npx tsc -b` clean. 실 로그인 브라우저(claude-in-chrome) E2E — ①`GraphViewerPage`: `codeprint` 프로젝트(공개) `/share/{projectId}`에서 노드 클릭 시 1홉 이웃 엣지 노출 확인(회색 선), 콘솔 에러 0건 ②`CommunityPostGraphPage`: 커뮤니티 게시글 스냅샷 뷰에서 페이지 정상 렌더(엣지 섹션 "끊긴 연결"+힌트 문구 확인), 노드 클릭·끊긴 연결 토글 클릭 둘 다 무크래시, 콘솔 에러 0건.
+
+---
+
 ## GraphPage.tsx 엣지 전역 토글 5개 제거 — 국소 표시로 전환(2026-07-26, codeprint_149)
 
 **문제.** codeprint_148의 시각화 엣지 분리 설계 검토("구조 그래프와 시각화 그래프는 다른 것" 질문에서 도출)가 제안한 "국소 표시(3축) + 전역 토글 제거"를 실행하는 항목. 코드 확인 결과 축① (선택 노드 1홉 이웃 강조)는 `clickedNodeId` 기반 useEffect(536행 근처, "토글 상태와 무관하게 강조 표시")로 **이미 구현돼 있었고**, 기본값도 이미 IMPORT·FUNCTION_CALL·INSTANTIATION·DB_*가 꺼져 있어(BROKEN·API_CALL만 켜짐) 국소 표시에 상당히 가까운 상태였다. 진짜 남은 작업은 "사용자가 범례 버튼으로 전역 표시를 켤 수 있는 통로"를 없애는 것.

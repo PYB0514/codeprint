@@ -229,15 +229,6 @@ function CommunityPostSnapshotInner() {
   const { postId, position } = useParams<{ postId: string; position: string }>()
   const navigate = useNavigate()
 
-  // 엣지 타입 토글 항목 정의 (구조 파악 목적 — GraphPage 엣지 섹션과 동일 라벨)
-  const EDGE_TOGGLE_DEFS: { key: 'se' | 'sc' | 'si' | 'sb' | 'sdb' | 'sapi'; label: string }[] = [
-    { key: 'se', label: t('communityPostGraph.edgeTypes.import') },
-    { key: 'sc', label: t('communityPostGraph.edgeTypes.call') },
-    { key: 'si', label: t('communityPostGraph.edgeTypes.inst') },
-    { key: 'sb', label: t('communityPostGraph.edgeTypes.broken') },
-    { key: 'sdb', label: t('communityPostGraph.edgeTypes.db') },
-    { key: 'sapi', label: t('communityPostGraph.edgeTypes.api') },
-  ]
   const { fitView } = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
@@ -255,7 +246,9 @@ function CommunityPostSnapshotInner() {
   const [builtEdgesCache, setBuiltEdgesCache] = useState<Edge[]>([])
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
-  const [edgeVisibility, setEdgeVisibility] = useState({ se: false, sc: false, si: false, sb: true, sdb: false, sapi: true })
+  // 국소 표시 전환(codeprint_149, GraphPage.tsx와 동일 원칙) — 구조 위반 증거(broken)만 프리셋값 존중, 나머지 타입은 노드 클릭 1홉으로만 노출
+  const [showBrokenEdges, setShowBrokenEdges] = useState(true)
+  const [clickedNodeId, setClickedNodeId] = useState<string | null>(null)
   const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
   const [opaqueDomainSet, setOpaqueDomainSet] = useState<Set<string>>(new Set())
   const [warnings, setWarnings] = useState<PostSnapshot['warnings']>([])
@@ -317,9 +310,8 @@ function CommunityPostSnapshotInner() {
 
   // 흐름 재생 — 종료 시 표시 토글 기준 기본 엣지 스타일 복원
   const restorePlaybackEdgeStyles = useCallback(() => {
-    const { se, sc, si, sb, sdb, sapi } = edgeVisibility
-    return applyEdgeVisibility(builtEdgesCache, se, sc, si, sb, sdb, sapi)
-  }, [builtEdgesCache, edgeVisibility])
+    return applyEdgeVisibility(builtEdgesCache, false, false, false, showBrokenEdges, false, false)
+  }, [builtEdgesCache, showBrokenEdges])
 
   const {
     callTree, playbackItems, playbackCursor, playbackPlaying, activePath, pendingBranchNodeId, playbackRootNodeId,
@@ -333,6 +325,7 @@ function CommunityPostSnapshotInner() {
   // 노드 클릭 시 우측 사이드바 표시 + 함수/DB 노드는 흐름 재생 시작
   const handleNodeClick: NodeMouseHandler = (_, node) => {
     if (node.type === 'sectionNode') return
+    setClickedNodeId(node.id)
     if (node.type === 'groupNode') { resetPlayback(); return }
     setSelectedNode(node)
     if (node.type === 'fileNode') { resetPlayback(); return }
@@ -343,6 +336,20 @@ function CommunityPostSnapshotInner() {
       resetPlayback()
     }
   }
+
+  // 클릭된 노드의 직접 연결 엣지(1홉)를 국소 표시로 강조(GraphPage.tsx와 동일 패턴)
+  useEffect(() => {
+    if (!clickedNodeId) return
+    const connectedIds = new Set(
+      rawEdgesCache
+        .filter(e => e.source === clickedNodeId || e.target === clickedNodeId)
+        .map(e => e.id)
+    )
+    setEdges(eds => eds.map(e => {
+      if (!connectedIds.has(e.id)) return e
+      return { ...e, hidden: false, style: { ...((e.style as object) ?? {}), opacity: 1 } }
+    }))
+  }, [clickedNodeId, rawEdgesCache, setEdges])
 
   // 좌측 노드 목록 클릭 시 해당 노드로 이동
   const handleFocusNode = (nodeId: string) => {
@@ -366,13 +373,9 @@ function CommunityPostSnapshotInner() {
         const cfg = snapshot.config ?? {}
         const lp: LayoutPreset = cfg.layoutPreset ?? 'layer'
         const lm: LabelMode = cfg.labelMode ?? 'name'
+        // 국소 표시 전환(codeprint_149) — broken만 저장된 값 존중, 나머지 5개는 옛 스냅샷 값이 남아있어도 무시
         const edgeCfg = cfg.edges ?? {}
-        const se = edgeCfg.import ?? false
-        const sc = edgeCfg.call ?? false
-        const si = edgeCfg.inst ?? false
         const sb = edgeCfg.broken ?? true
-        const sdb = edgeCfg.db ?? false
-        const sapi = edgeCfg.api ?? true
         const initialOpaqueLayerSet = new Set(cfg.opaqueLayerSet ?? [])
 
         const { nodes: builtNodes, edges: builtEdges } = buildLayout(snapshot.nodes, snapshot.edges, lm, lp)
@@ -383,10 +386,10 @@ function CommunityPostSnapshotInner() {
         setBuiltEdgesCache(builtEdges)
         setLayoutPreset(lp)
         setLabelMode(lm)
-        setEdgeVisibility({ se, sc, si, sb, sdb, sapi })
+        setShowBrokenEdges(sb)
         setOpaqueLayerSet(initialOpaqueLayerSet)
         setNodes(finalNodes)
-        setEdges(applyEdgeVisibility(builtEdges, se, sc, si, sb, sdb, sapi))
+        setEdges(applyEdgeVisibility(builtEdges, false, false, false, sb, false, false))
         setGraphId(snapshot.graphId)
         setSnapshotProjectId(snapshot.projectId)
         setWarnings(snapshot.warnings ?? [])
@@ -421,8 +424,7 @@ function CommunityPostSnapshotInner() {
       const { nodes: ln, edges: le } = buildLayout(rawNodesCache, rawEdgesCache, labelMode, next)
       setBuiltEdgesCache(le)
       setNodes(ln)
-      const { se, sc, si, sb, sdb, sapi } = edgeVisibility
-      setEdges(applyEdgeVisibility(le, se, sc, si, sb, sdb, sapi))
+      setEdges(applyEdgeVisibility(le, false, false, false, showBrokenEdges, false, false))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
   }
@@ -435,16 +437,15 @@ function CommunityPostSnapshotInner() {
       const { nodes: ln, edges: le } = buildLayout(rawNodesCache, rawEdgesCache, next, layoutPreset)
       setBuiltEdgesCache(le)
       setNodes(ln)
-      const { se, sc, si, sb, sdb, sapi } = edgeVisibility
-      setEdges(applyEdgeVisibility(le, se, sc, si, sb, sdb, sapi))
+      setEdges(applyEdgeVisibility(le, false, false, false, showBrokenEdges, false, false))
     }
   }
 
-  // 엣지 타입 토글 — 레이아웃 재계산 없이 캐시된 빌드 결과에 가시성만 재적용
-  const toggleEdgeType = (key: keyof typeof edgeVisibility) => {
-    setEdgeVisibility((prev) => {
-      const next = { ...prev, [key]: !prev[key] }
-      setEdges(applyEdgeVisibility(builtEdgesCache, next.se, next.sc, next.si, next.sb, next.sdb, next.sapi))
+  // 끊긴 연결(구조 위반 증거) 표시 토글 — 국소 표시 전환(codeprint_149) 이후 남은 유일한 전역 엣지 토글
+  const toggleBrokenEdges = () => {
+    setShowBrokenEdges((prev) => {
+      const next = !prev
+      setEdges(applyEdgeVisibility(builtEdgesCache, false, false, false, next, false, false))
       return next
     })
   }
@@ -736,23 +737,16 @@ function CommunityPostSnapshotInner() {
             </div>
           )}
 
-          {/* 엣지 타입 토글 — 구조 파악 목적 */}
+          {/* 엣지 표시 — 국소 표시 전환(codeprint_149): broken만 전역 토글, 나머지는 노드 클릭 1홉으로만 노출 */}
           <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('communityPostGraph.edgeTypes.heading')}</p>
-            <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
-              {EDGE_TOGGLE_DEFS.map(({ key, label }) => {
-                const active = edgeVisibility[key]
-                return (
-                  <button
-                    key={key}
-                    onClick={() => toggleEdgeType(key)}
-                    className={`text-left text-xs px-1.5 py-1 rounded hover:bg-gray-800/60 transition-colors ${active ? 'text-gray-300' : 'text-gray-600 opacity-60'}`}
-                  >
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
+            <button
+              onClick={toggleBrokenEdges}
+              className={`text-left text-xs px-1.5 py-1 rounded hover:bg-gray-800/60 transition-colors ${showBrokenEdges ? 'text-gray-300' : 'text-gray-600 opacity-60'}`}
+            >
+              {t('communityPostGraph.edgeTypes.broken')}
+            </button>
+            <p className="text-[11px] text-gray-500 leading-snug">{t('communityPostGraph.edgeTypes.localHint')}</p>
           </div>
         </aside>
         )}

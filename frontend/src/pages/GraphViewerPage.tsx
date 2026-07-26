@@ -131,7 +131,9 @@ function GraphViewerInner() {
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('layer')
   const [labelMode, setLabelMode] = useState<LabelMode>('name')
-  const [edgeVisibility, setEdgeVisibility] = useState({ se: false, sc: false, si: false, sb: true, sdb: false, sapi: true })
+  // 국소 표시 전환(codeprint_149, GraphPage.tsx와 동일 원칙) — 구조 위반 증거(broken)만 프리셋값 존중, 나머지 타입은 노드 클릭 1홉으로만 노출
+  const [showBrokenEdges, setShowBrokenEdges] = useState(true)
+  const [clickedNodeId, setClickedNodeId] = useState<string | null>(null)
   const [opaqueLayerSet, setOpaqueLayerSet] = useState<Set<string>>(new Set())
   const [opaqueDomainSet, setOpaqueDomainSet] = useState<Set<string>>(new Set())
   // 언어·테마 드롭다운 — AppHeader와 동일한 UI(공유 컴포넌트 없는 페이지라 인라인 복제)
@@ -162,9 +164,8 @@ function GraphViewerInner() {
   // 흐름 재생 — 종료 시 레이아웃 재빌드로 기본 엣지 스타일 복원 (dasharray 등 타입별 스타일 보존)
   const restorePlaybackEdgeStyles = useCallback(() => {
     const { edges: rebuilt } = buildLayout(rawNodesCache, rawEdgesCache, labelMode, layoutPreset)
-    const { se, sc, si, sb, sdb, sapi } = edgeVisibility
-    return applyEdgeVisibility(rebuilt, se, sc, si, sb, sdb, sapi)
-  }, [rawNodesCache, rawEdgesCache, labelMode, layoutPreset, edgeVisibility])
+    return applyEdgeVisibility(rebuilt, false, false, false, showBrokenEdges, false, false)
+  }, [rawNodesCache, rawEdgesCache, labelMode, layoutPreset, showBrokenEdges])
 
   const {
     callTree, playbackItems, playbackCursor, playbackPlaying, activePath, pendingBranchNodeId, playbackRootNodeId,
@@ -178,6 +179,7 @@ function GraphViewerInner() {
   // 노드 클릭 시 우측 사이드바 표시 + 함수/DB 노드는 흐름 재생 시작
   const handleNodeClick: NodeMouseHandler = (_, node) => {
     if (node.type === 'sectionNode') return
+    setClickedNodeId(node.id)
     if (node.type === 'groupNode') { resetPlayback(); return }
     setSelectedNode(node)
     if (node.type === 'fileNode') { resetPlayback(); return }
@@ -188,6 +190,20 @@ function GraphViewerInner() {
       resetPlayback()
     }
   }
+
+  // 클릭된 노드의 직접 연결 엣지(1홉)를 국소 표시로 강조(GraphPage.tsx와 동일 패턴)
+  useEffect(() => {
+    if (!clickedNodeId) return
+    const connectedIds = new Set(
+      rawEdgesCache
+        .filter(e => e.source === clickedNodeId || e.target === clickedNodeId)
+        .map(e => e.id)
+    )
+    setEdges(eds => eds.map(e => {
+      if (!connectedIds.has(e.id)) return e
+      return { ...e, hidden: false, style: { ...((e.style as object) ?? {}), opacity: 1 } }
+    }))
+  }, [clickedNodeId, rawEdgesCache, setEdges])
 
   // 좌측 노드 목록 클릭 시 해당 노드로 이동
   const handleFocusNode = (nodeId: string) => {
@@ -222,13 +238,9 @@ function GraphViewerInner() {
         const cfg = (presetRes?.data?.config ?? {}) as Record<string, unknown>
         const lp = (cfg.layoutPreset as LayoutPreset) ?? 'layer'
         const lm = (cfg.labelMode as LabelMode) ?? 'name'
+        // 국소 표시 전환(codeprint_149) — broken만 프리셋값 존중, 나머지 5개는 옛 프리셋 값이 남아있어도 무시
         const edgeCfg = (cfg.edges as Record<string, boolean>) ?? {}
-        const se  = edgeCfg.import ?? false
-        const sc  = edgeCfg.call   ?? false
-        const si  = edgeCfg.inst   ?? false
-        const sb  = edgeCfg.broken ?? true
-        const sdb = edgeCfg.db     ?? false
-        const sapi = edgeCfg.api   ?? true
+        const sb = edgeCfg.broken ?? true
         const initialOpaqueLayerSet = new Set((cfg.opaqueLayerSet as string[]) ?? [])
 
         const { nodes: builtNodes, edges: builtEdges } = buildLayout(raw.nodes, raw.edges, lm, lp)
@@ -241,10 +253,10 @@ function GraphViewerInner() {
         setRawEdgesCache(raw.edges)
         setLayoutPreset(lp)
         setLabelMode(lm)
-        setEdgeVisibility({ se, sc, si, sb, sdb, sapi })
+        setShowBrokenEdges(sb)
         setOpaqueLayerSet(initialOpaqueLayerSet)
         setNodes(finalNodes)
-        setEdges(applyEdgeVisibility(builtEdges, se, sc, si, sb, sdb, sapi))
+        setEdges(applyEdgeVisibility(builtEdges, false, false, false, sb, false, false))
         setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 300)
         if (!isTourDone(SHARE_TOUR_STORAGE_KEY)) setTimeout(() => setTourRunning(true), 800)
       })
@@ -273,8 +285,7 @@ function GraphViewerInner() {
     if (rawNodesCache.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodesCache, rawEdgesCache, labelMode, next)
       setNodes(ln)
-      const { se, sc, si, sb, sdb, sapi } = edgeVisibility
-      setEdges(applyEdgeVisibility(le, se, sc, si, sb, sdb, sapi))
+      setEdges(applyEdgeVisibility(le, false, false, false, showBrokenEdges, false, false))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
   }
@@ -292,8 +303,7 @@ function GraphViewerInner() {
     if (rawNodesCache.length > 0) {
       const { nodes: ln, edges: le } = buildLayout(rawNodesCache, rawEdgesCache, next, layoutPreset)
       setNodes(ln)
-      const { se, sc, si, sb, sdb, sapi } = edgeVisibility
-      setEdges(applyEdgeVisibility(le, se, sc, si, sb, sdb, sapi))
+      setEdges(applyEdgeVisibility(le, false, false, false, showBrokenEdges, false, false))
     }
   }
 

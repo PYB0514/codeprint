@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.150.3',
+    date: '2026-07-26',
+    title: '공유 링크·커뮤니티 그래프에도 국소 엣지 표시 적용',
+    type: 'fix',
+    items: [
+      { category: '프론트', desc: '공유 링크(/share)와 커뮤니티 게시글 그래프 화면에도 노드 클릭 시 1홉 이웃 엣지만 표시되는 방식을 적용했습니다. 구조 위반(끊긴 연결)은 기존처럼 항상 표시됩니다.' },
+    ],
+  },
+  {
     version: 'v0.150.2',
     date: '2026-07-26',
     title: '그래프 엣지 표시 — 노드 클릭 시 국소 표시로 전환',
