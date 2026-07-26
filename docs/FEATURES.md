@@ -86,23 +86,28 @@
 
 Java · Python · TypeScript/JavaScript · Go · Rust · C · C++ · C# · PHP · Ruby · Swift (11개 언어)
 
-## 3. 경고 감지기 15종
+## 3. 경고 감지기 20종 (2026-07-26 실제 코드와 재동기화 — 이전 "15종" 이후 5개 신설이 표에 반영 안 돼 있었음)
 
 | 타입 | Severity | 설명 |
 |---|---|---|
 | CYCLIC_IMPORT | HIGH | 파일 간 순환 의존(DFS 탐지) |
+| CIRCULAR_BEAN_DEPENDENCY | HIGH | Spring 빈(생성자 필드)이 서로 순환 참조(`@Lazy`는 제외) |
+| ASYNC_SELF_CALL | HIGH | `@Async` 메서드를 같은 파일에서 직접 호출(프록시 우회로 비동기 무시됨) — 0단계(correctness) |
+| MISSING_TRANSACTIONAL_DELETE | HIGH | JpaRepository 파생 삭제 쿼리에 `@Transactional` 누락 |
 | DB_LAYER_BYPASS | HIGH | 상위 레이어가 Repository 추상 없이 영속 구현체 직접 import |
 | CROSS_CONTEXT_IMPORT | HIGH | application/{A}가 domain/{B}(다른 바운디드 컨텍스트) 직접 import |
 | CROSS_FEATURE_IMPORT | HIGH | features/{A}가 features/{B} 직접 import (FSD/bulletproof-react) |
 | FEATURE_LAYER_VIOLATION | HIGH | shared/entities가 app/features를 import(FSD 역전) |
-| DOMAIN_IMPORTS_INFRA | HIGH | domain/이 infrastructure/ 직접 import (DDD 의존 역전 위반) |
+| DOMAIN_IMPORTS_INFRA | HIGH | domain/이 infrastructure/ 직접 import (DDD 의존 역전 위반, 테마 무관 공통 게이트) |
 | LAYERED_REVERSE_DEPENDENCY | HIGH | 하위 레이어가 상위 레이어 import(Repository→Service 등) |
 | INTENT_DRIFT | HIGH | 사용자 선언 아키텍처 의도(모듈+금지규칙) 위반 — opt-in |
 | CROSS_DOMAIN_CALL | MEDIUM | FUNCTION_CALL 엣지가 바운디드 컨텍스트 경계를 넘음 |
 | BROKEN_INTERFACE_CHAIN | MEDIUM | 인터페이스인데 구현 체인 엣지 없음 |
-| ASYNC_SELF_CALL | MEDIUM | `@Async` 메서드를 같은 파일에서 직접 호출(프록시 우회로 비동기 무시됨) |
+| INTERFACES_IMPORTS_INFRA | MEDIUM | interfaces/가 infrastructure/ 직접 import(테마 무관 공통 게이트) |
 | MISSING_CONVERTER_MIGRATION | MEDIUM | `@Convert` 컬럼인데 Flyway 마이그레이션 없음 |
 | LAYERED_BYPASS | MEDIUM | Service 있는데 Controller가 Repository 직접 import(비-DDD) |
+| SHARED_DATABASE_ACCESS | MEDIUM | 모노레포 내 서로 다른 서비스 2개 이상이 같은 DB 테이블 접근(MSA 경계 축) |
+| SERVICE_CALL_CHAIN | MEDIUM | 서비스 간 동기 호출이 2홉 이상 연쇄(distributed monolith 신호) |
 | DEAD_CODE | LOW | 호출되지 않는 함수(테스트/프레임워크 진입점 등 다수 필터로 오탐 억제) |
 | HIGH_FAN_OUT | LOW | 함수가 7개 초과 대상 호출(단일 책임 위반 가능성, 폴리모픽 머지 제외 처리됨) |
 
@@ -120,7 +125,7 @@ Java · Python · TypeScript/JavaScript · Go · Rust · C · C++ · C# · PHP �
 
 - JWT 1시간, Refresh Token 7일(httpOnly 쿠키, rotate-on-use)
 - 이미지 업로드: JPEG/PNG/GIF/WebP만, 10MB 제한, path traversal 차단
-- Bucket4j 레이트리밋(분석 엔드포인트 IP당 분당 10회)
+- Bucket4j 레이트리밋(분석 엔드포인트 IP당 1회/3분, 2026-07-12 교정 — 나머지 15개 엔드포인트별 규칙은 `SECURITY_POLICY.md` 참조)
 - 상세 → `SECURITY_POLICY.md`
 
 ## 6. 다음 세션에서 자주 필요한 파일 위치
