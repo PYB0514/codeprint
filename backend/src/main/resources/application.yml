@@ -62,7 +62,7 @@ app:
 
 jwt:
   secret: ${JWT_SECRET:local-dev-secret-key-must-be-at-least-32-characters}
-  expiration-ms: 3600000  # 1h — localStorage 저장이므로 탈취 시 노출 최소화
+  expiration-ms: 3600000  # 1h — HttpOnly 쿠키로 저장되지만(PR #142) 탈취 시 노출 최소화를 위해 짧게 유지
 
 cron:
   # GitHub Actions 스케줄 워크플로가 /api/cron/** 호출 시 보내는 공유 시크릿. 미설정 시 요청은 전부 거부됨.

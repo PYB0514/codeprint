@@ -119,9 +119,10 @@
 
 | 항목 | 현재 | 목표 |
 |---|---|---|
-| 업로드 presigned URL 만료 | 5분 | 유지 |
-| 다운로드 presigned URL 만료 | ~~1시간~~ → **15분** ✅ | |
-| 파일 타입 검증 | ~~없음~~ → **이미지 화이트리스트** ✅ | Phase 1에서 완료 |
+| 업로드 presigned URL 만료 | 5분(`AttachmentController`, 첨부파일) | 유지 |
+| 다운로드 presigned URL 만료 | ~~1시간~~ → **15분** ✅(`S3Service.generatePresignedDownloadUrl`) | |
+| 표시용 이미지 presigned URL 만료 | **7일**(`S3Service.toPresignedUrl` — 아바타·그래프 배경 이미지 등 반복 표시용, 2026-07-26 문서 누락 발견) | 유지(공개성 낮은 표시 자산이라 장기 URL이 목적에 맞음, 사용자 개인 첨부파일과는 다른 카테고리) |
+| 파일 타입 검증 | ~~없음~~ → **이미지 화이트리스트**(jpeg/png/gif/webp) ✅ | Phase 1에서 완료 |
 | 파일 크기 제한 | ~~없음~~ → **10MB** ✅ | |
 
 ---
