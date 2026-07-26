@@ -69,16 +69,19 @@ jobs:
           set -euo pipefail
           aws s3 cp "s3://${S3_BUCKET}/${BACKUP_KEY}" backup.sql.gz --no-progress
           gunzip -q backup.sql.gz
-          # Railway 원본 DB의 소유 role은 이 임시 컨테이너에 없어 OWNER/GRANT/REVOKE 구문만 제거 —
-          # COPY ... FROM stdin; ~ \. 데이터 블록 내부는 절대 건드리지 않도록 awk로 상태 추적
-          # (naive grep은 데이터 행이 우연히 "GRANT "/"REVOKE "로 시작하면 실제 데이터를 삭제해버림).
+          # Railway 원본 DB의 소유 role(codeprint_backup 등)은 이 임시 컨테이너에 없어 OWNER/GRANT/REVOKE/
+          # DEFAULT PRIVILEGES 구문만 제거 — COPY ... FROM stdin; ~ \. 데이터 블록 내부는 절대 건드리지 않도록
+          # awk로 상태 추적(naive grep은 데이터 행이 우연히 "GRANT "로 시작하면 실제 데이터를 삭제해버림).
+          # 실측(2026-07-26): pg_dump가 파일 맨 끝에 붙이는 "ALTER DEFAULT PRIVILEGES ... TO codeprint_backup;"이
+          # OWNER TO/GRANT/REVOKE 어느 패턴에도 안 걸려 실제 백업 파일 복원이 99.4% 지점에서 실패했던 것을 확인·수정.
           awk '
-            /^COPY .* FROM stdin;$/ { in_copy=1; print; next }
-            in_copy && /^\\\.$/      { in_copy=0; print; next }
-            in_copy                  { print; next }
-            /^ALTER .* OWNER TO /    { next }
-            /^GRANT /                { next }
-            /^REVOKE /               { next }
+            /^COPY .* FROM stdin;$/    { in_copy=1; print; next }
+            in_copy && /^\\\.$/         { in_copy=0; print; next }
+            in_copy                     { print; next }
+            /^ALTER .* OWNER TO /       { next }
+            /^ALTER DEFAULT PRIVILEGES/ { next }
+            /^GRANT /                   { next }
+            /^REVOKE /                  { next }
             { print }
           ' backup.sql > backup_filtered.sql
 
