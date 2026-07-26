@@ -66,15 +66,18 @@
 
 ---
 
-## 보안 헤더 (적용 목표)
+## 보안 헤더 — `SecurityHeadersFilter` 적용 중 ✅ (2026-07-26 실제 코드와 재동기화)
+
+> 이전 표는 "적용 목표"(아직 미달성한 이상값)로 기재돼 있었으나, `SecurityHeadersFilter`가 이미 모든 응답에 적용 중인 값을 확인해 실제 값으로 교체. `script-src`의 `'unsafe-inline'`은 React 빌드 산출물이 인라인 스크립트를 쓰기 때문에 의도적으로 허용된 것(완전한 `'self'` 전환은 nonce/hash 기반 CSP로의 빌드 파이프라인 변경이 필요해 별도 과제).
 
 | 헤더 | 값 |
 |---|---|
-| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'` |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.github.com https://*.sentry.io; frame-ancestors 'none'` |
 | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` |
 | `X-Content-Type-Options` | `nosniff` |
 | `X-Frame-Options` | `DENY` |
 | `Referrer-Policy` | `no-referrer` |
+| `Permissions-Policy` | `geolocation=(), microphone=(), camera=()` (문서 표에 누락돼 있었음) |
 
 ---
 
