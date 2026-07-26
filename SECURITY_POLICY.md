@@ -80,7 +80,7 @@
 
 ## 레이트 리미팅 기준 ✅ 적용 완료
 
-`RateLimitFilter`(IP+카테고리별 버킷) 기준. 아래 표는 실제 코드와 동기화된 전체 목록 — 신규 규칙 추가 시 이 표도 함께 갱신한다(2026-07-12 기준 3개만 적혀 있던 걸 실제 10개 규칙으로 동기화).
+`RateLimitFilter`(IP+카테고리별 버킷) 기준. 아래 표는 실제 코드와 동기화된 전체 목록 — 신규 규칙 추가 시 이 표도 함께 갱신한다(2026-07-26 기준 10개만 적혀 있던 걸 실제 16개 규칙으로 재동기화 — cron·오탐신고·커뮤니티 댓글·결제 준비 6건이 누락돼 있었음).
 
 | 엔드포인트 | 제한 | 비고 |
 |---|---|---|
@@ -88,12 +88,17 @@
 | `POST /api/attachments/presign` | IP당 20회/분 | S3 비용 |
 | `POST /api/community/posts` | IP당 5회/분 | |
 | `POST /api/community/posts/*/like` | IP당 60회/분 | |
+| `POST /api/community/posts/*/comments` | IP당 20회/분 | |
 | `POST /api/graphs/*/nodes/*/comments` | IP당 20회/분 | |
 | `POST /api/feedback` | IP당 5회/분 | |
 | `POST /api/reports` | IP당 5회/분 | |
 | `POST /api/messages/*` | IP당 30회/분 | |
 | `POST /api/users/*/follow` | IP당 30회/분 | |
 | `POST /api/push/subscribe` | IP당 10회/분 | |
+| `POST /api/projects/*/warnings/report-fp` | IP당 10회/분 | 오탐 신고 |
+| `POST /api/cron/refresh-featured` | IP당 2회/시간 | 레포 최대 5개 클론+분석, GitHub Actions cron 전용 |
+| `POST /api/cron/daily-digest` | IP당 5회/시간 | |
+| `POST /api/payments/toss/prepare`·`/api/teams/payment/prepare`·`/api/teams/*/seats/payment/prepare` | IP당 5회/분(3개 엔드포인트가 `payment-prepare` 버킷 공유) | 결제 준비 — 남용 시 Toss API 호출 비용·이상거래 신호 |
 
 > ⚠️ 이전에 이 표에 있던 `GET /oauth2/** IP당 20회/분` 항목은 허위 기재였음(2026-07-12 발견) — `RateLimitFilter`의 모든 규칙이 POST만 매칭해 GET 경로는 애초에 아무 제한도 없다. OAuth 인가 요청 반복 남용은 별도 위협모델(GitHub 자체 레이트리밋에 일부 의존)이라 즉시 추가하지 않고 후속 과제로만 기록.
 
