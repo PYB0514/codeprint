@@ -1,0 +1,124 @@
+# 매주 1회 S3에 실제로 쌓인 최신 DB 백업을 임시 컨테이너에 복원해 재해복구 절차 자체가
+# 살아있는지 검증(decisions/DECISIONS_INFRA.md 참조 — "백업은 쌓이는데 복원 성공 확인은 0회"였던 갭 해소).
+# db-backup.yml과 동일 AWS 자격증명을 재사용할 뿐 신규 시크릿 없음, 실 프로덕션 DB에는 연결하지 않는다
+# (S3의 백업 파일만 읽어 GitHub Actions 임시 컨테이너에 복원 — 세션 종료 시 자동 폐기).
+name: DB Restore Rehearsal
+
+on:
+  schedule:
+    - cron: '17 19 * * 6'  # 매주 일요일 04:17 KST(UTC 토요일 19:17, 정각 회피)
+  workflow_dispatch: {}
+
+env:
+  AWS_REGION: ap-northeast-2
+  S3_BUCKET: codeprint-uploads
+  S3_PREFIX: db-backups
+
+jobs:
+  restore-rehearsal:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Install postgresql-client (PGDG, 서버 버전 18과 호환 — db-backup.yml과 동일)
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 파일명이 codeprint-YYYYMMDDTHHMMSSZ.sql.gz 형식이라 사전순 정렬 = 시간순 정렬
+      - name: Find latest backup in S3
+        id: find
+        run: |
+          set -euo pipefail
+          LATEST=$(aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "${S3_PREFIX}/codeprint-" \
+            --query "Contents[].Key" --output text | tr '\t' '\n' | sort | tail -n 1)
+          if [ -z "$LATEST" ]; then
+            echo "::error::S3에 백업 파일이 하나도 없습니다 — db-backup.yml이 정상 동작하는지 먼저 확인하세요."
+            exit 1
+          fi
+          echo "key=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "가장 최신 백업: $LATEST"
+
+      # 실제 백업 파일 내용(사용자 데이터)은 로그에 절대 노출하지 않는다(공개 레포라 Actions 로그도 공개) —
+      # stdout은 버리고, stderr(psql 에러의 CONTEXT: 는 실패한 데이터 행을 그대로 인용하는 경우가 있어 특히 위험)도
+      # 파일로만 받아 화면엔 절대 출력하지 않는다. 실패 시 사람이 로컬에서 최신 백업을 내려받아 직접 진단한다.
+      - name: Download and restore into ephemeral container
+        env:
+          BACKUP_KEY: ${{ steps.find.outputs.key }}
+        run: |
+          set -euo pipefail
+          aws s3 cp "s3://${S3_BUCKET}/${BACKUP_KEY}" backup.sql.gz --no-progress
+          gunzip -q backup.sql.gz
+          # Railway 원본 DB의 소유 role은 이 임시 컨테이너에 없어 OWNER/GRANT/REVOKE 구문만 제거 —
+          # COPY ... FROM stdin; ~ \. 데이터 블록 내부는 절대 건드리지 않도록 awk로 상태 추적
+          # (naive grep은 데이터 행이 우연히 "GRANT "/"REVOKE "로 시작하면 실제 데이터를 삭제해버림).
+          awk '
+            /^COPY .* FROM stdin;$/ { in_copy=1; print; next }
+            in_copy && /^\\\.$/      { in_copy=0; print; next }
+            in_copy                  { print; next }
+            /^ALTER .* OWNER TO /    { next }
+            /^GRANT /                { next }
+            /^REVOKE /               { next }
+            { print }
+          ' backup.sql > backup_filtered.sql
+
+          set +e
+          PGPASSWORD=postgres psql -q -h localhost -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -f backup_filtered.sql > /dev/null 2> psql_stderr.log
+          STATUS=$?
+          set -e
+          rm -f backup.sql backup_filtered.sql
+
+          if [ "$STATUS" -ne 0 ]; then
+            ERR_COUNT=$(grep -c '^psql:.*ERROR:' psql_stderr.log || true)
+            echo "::error::복원 실패(exit $STATUS, ERROR 라인 ${ERR_COUNT}건) — 실제 데이터 노출 방지를 위해 상세 내용은 로그에 출력하지 않습니다. 로컬에서 같은 백업 파일을 내려받아 직접 재현하세요."
+            rm -f psql_stderr.log
+            exit 1
+          fi
+          rm -f psql_stderr.log
+          echo "복원 완료 — 에러 없이 psql 종료"
+
+      # 집계 수치만 확인(행 내용은 조회하지 않음) — flyway 이력에 실패 기록이 없고, 테이블이 실제로 존재하는지만 검증
+      - name: Sanity check — schema actually restored, no failed migrations
+        run: |
+          set -euo pipefail
+          export PGPASSWORD=postgres
+          TABLE_COUNT=$(psql -h localhost -U postgres -d postgres -tAc \
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'")
+          FAILED_MIGRATIONS=$(psql -h localhost -U postgres -d postgres -tAc \
+            "SELECT count(*) FROM flyway_schema_history WHERE success = false")
+          MIGRATION_COUNT=$(psql -h localhost -U postgres -d postgres -tAc \
+            "SELECT count(*) FROM flyway_schema_history")
+
+          echo "복원된 테이블 수: $TABLE_COUNT"
+          echo "flyway 마이그레이션 이력: $MIGRATION_COUNT건 (실패 $FAILED_MIGRATIONS건)"
+
+          if [ "$TABLE_COUNT" -lt 10 ]; then
+            echo "::error::복원된 테이블이 10개 미만입니다 — 백업이 비어있거나 복원이 실질적으로 실패했을 가능성."
+            exit 1
+          fi
+          if [ "$FAILED_MIGRATIONS" -ne 0 ]; then
+            echo "::error::flyway_schema_history에 실패로 기록된 마이그레이션이 있습니다."
+            exit 1
+          fi
+          echo "리허설 통과 — 최신 백업이 정상적으로 복원 가능함을 확인했습니다."
