@@ -2,6 +2,19 @@
 
 ---
 
+## DB 백업 복원 리허설 신설 — "쌓이기만 하고 검증 0회"였던 갭 해소(2026-07-26, codeprint_149)
+
+**문제.** `decisions/DECISIONS_INFRA.md:383`(과거 기록)에 "진짜 재해 시점에 처음 시도하면 위험"으로 남아있던 항목. `db-backup.yml`이 매일 프로덕션 Postgres를 S3에 백업하고 있었지만, 그 백업이 실제로 복원 가능한지 확인한 적이 한 번도 없었다.
+
+**결정.** `.github/workflows/db-restore-rehearsal.yml` 신설 — 매주 1회(+수동 실행) S3의 최신 백업을 GitHub Actions의 임시 Postgres 18 서비스 컨테이너(작업 종료 시 자동 폐기)에 복원해보고, 스키마 테이블 수·flyway 마이그레이션 실패 여부로 통과/실패를 판정한다. `db-backup.yml`과 동일한 `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`만 재사용(신규 시크릿 없음), 프로덕션 DB(`BACKUP_DATABASE_URL`)에는 연결하지 않는다 — S3의 백업 파일만 읽는다.
+
+**독립 적대적 검증(공개 레포 — Actions 로그도 공개라 CLAUDE.md 보안 거버넌스 규칙 트리거) — 2라운드 진행, 5건 발견 후 전부 해소.**
+1라운드에서 HIGH 1건("psql 복원 실패 시 stderr의 `CONTEXT:` 라인이 실패한 데이터 행을 그대로 인용해 공개 로그에 실사용자 데이터가 노출될 수 있음") + MEDIUM 3건(①OWNER 필터 정규식이 `[A-Z ]+`라 실제 pg_dump 출력의 소문자 스키마명과 안 맞아 매 실행 거짓 실패 ②단순 grep이 `COPY ... FROM stdin;` 데이터 블록 내부까지 걸러내 우연히 "GRANT "로 시작하는 데이터 행이 조용히 유실되는 false negative 가능 ③`${{ steps.find.outputs.key }}`를 `run:` 스크립트에 직접 보간하는 script-injection 안티패턴) + LOW 1건(cron 주석 요일 오기) 발견. 전부 수정: stderr는 파일로만 받아 실패 시 에러 **건수만** 로그에 남기고 즉시 삭제, OWNER 필터를 `.*`로 완화, grep을 COPY 블록 상태를 추적하는 awk 상태기계로 교체(블록 내부는 필터 미적용), 보간 대상을 `env:`로 이동, cron을 UTC 토요일 19:17(=KST 일요일 04:17)로 정정. 2라운드 재검증에서 5건 전부 해소 확인, 신규 결함 없음.
+
+**검증.** IAM 권한 관점에서 `db-backup.yml`이 이미 쓰던 권한(PutObject·ListBucket·DeleteObject)의 완전한 부분집합만 요구(GetObject·List만)함을 확인 — 새 권한 확대 없음. 실제 워크플로 실행(workflow_dispatch)은 이 커밋 직후 별도로 트리거해 실측.
+
+---
+
 ## 호스팅 상시배포 전환 — 보류 유지(2026-07-26, codeprint_149)
 
 **문제.** codeprint_148 실측으로 "유휴 후 첫 방문자가 콜드스타트 16초를 본다"(Railway Serverless, 공유 링크 클릭이 정확히 그 첫 방문자)는 게 확인됐고, 저비용 우회(cron이 주기적으로 `/actuator/health` 호출)와 상시배포 전환(Railway `min-instances=1`, 월 ~$10 고정) 중 어느 쪽으로 갈지가 다음 컨텍스트 1순위 항목으로 남아 있었다.
