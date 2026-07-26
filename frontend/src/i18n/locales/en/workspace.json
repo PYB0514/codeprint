@@ -451,9 +451,6 @@
     "hiddenNodesCount": "{{count}} nodes",
     "edgeTypes": {
       "heading": "Edges",
-      "import": "Dependency",
-      "call": "Call Chain",
-      "inst": "Instantiation",
       "broken": "Broken Link",
       "db": "DB Connection",
       "api": "API Call",
