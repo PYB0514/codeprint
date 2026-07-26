@@ -16,12 +16,11 @@
 | Team | 팀·좌석제(Seat Pool) |
 | Payment / Donation | 토스페이먼츠 결제, 후원 |
 | Collaboration | 실시간 협업 세션(STOMP) |
-| AI | BYOK 키 관리, 노드/엣지 설명, 코드 생성 |
 | Message / Notification / Notice | DM, 알림 센터, 공지 |
 | Featured | 오늘의 공개레포(랜딩 쇼케이스) |
 | Admin | 관리자 대시보드, 감사 로그 |
 
-> 위 표는 대표 책임 요약이다. 실제 컨텍스트 목록의 단일 소스는 `backend/src/main/java/com/codeprint/domain/` 하위 디렉터리다(2026-07-06 기준 15개).
+> 위 표는 대표 책임 요약이다. 실제 컨텍스트 목록의 단일 소스는 `backend/src/main/java/com/codeprint/domain/` 하위 디렉터리다(2026-07-26 재확인 14개 — AI 컨텍스트는 "AI 키 기반 기능 전면 제거"(2026-07-12, decisions/DECISIONS_BACKEND.md)로 삭제됨).
 
 ### 컨텍스트 간 참조 규칙
 - 컨텍스트끼리 직접 객체 참조 금지
@@ -44,32 +43,26 @@
 
 ## 그래프 데이터 모델
 
-### 노드 타입
+### 노드 타입 (`NodeType.java`, 2026-07-26 재확인)
 - `FILE` — 소스 파일
 - `FUNCTION` — 파일 내 함수/메서드
 - `DB_TABLE` — 데이터베이스 테이블
-- `API_ENDPOINT` — REST API 엔드포인트 (2026-07-08 시점 기록 — 이후 실체화 진행됐을 수 있음, 최신 상태는 `PROGRESS.md`·decisions/ 확인 권장)
+- `API_ENDPOINT` — REST API 엔드포인트(실체화 완료 — 파일 단위 1차 + 처리 함수 연결 2차, `GraphBuilder` 참조)
 
-### 엣지 타입
+### 엣지 타입 (`EdgeType.java`, 2026-07-26 재확인 — 이전 4종만 기재돼 있던 것을 실제 12종으로 재동기화)
+- `CONTAINS` — FILE→FUNCTION/API_ENDPOINT 포함 관계(2026-07-26부로 신규 생성 중단, 읽는 곳이 없어 죽은 데이터였음 — enum 값 자체는 기존 그래프 하위 호환을 위해 유지, `decisions/DECISIONS_ANALYSIS.md` 참조)
 - `IMPORT` — 파일 간 import 관계
+- `INSTANTIATION` — 객체 생성 관계
 - `FUNCTION_CALL` — 함수 호출 관계
-- `DB_READ` / `DB_WRITE` — DB 읽기/쓰기
+- `DB_READ` / `DB_WRITE` / `DB_CREATE` / `DB_UPDATE` / `DB_DELETE` — DB CRUD
 - `API_CALL` — 프론트 → 백엔드 API 호출
+- `SERVICE_CALL` — 모노레포 내 서비스 간 동기 호출(SERVICE_CALL_CHAIN 게이트 전용)
+- `FIELD_DEPENDENCY` — Spring 빈 필드 의존(CIRCULAR_BEAN_DEPENDENCY 게이트 전용)
 
 ### 엣지 식별자 규칙
 - 직접 호출: `{호출파일명}-{함수명}` (예: `UserController-createUser`)
 - 연쇄 호출: `{상위엣지ID}-{현재함수명}` (예: `UserController-createUser-validateEmail`)
 - **엣지 식별자 변경 시 기존 저장 데이터 마이그레이션 필요 — 신중히 결정**
-
-### AI 직렬화 형식
-```json
-{
-  "nodes": [{"id": "...", "type": "FILE", "name": "...", "language": "..."}],
-  "edges": [{"id": "...", "type": "FUNCTION_CALL", "source": "...", "target": "...", "meta": {...}}],
-  "summary": "프로젝트 요약 텍스트"
-}
-```
-AI 호출 시 전체 그래프 대신 관련 노드 주변만 잘라서 컨텍스트로 넘긴다.
 
 ---
 
@@ -77,7 +70,7 @@ AI 호출 시 전체 그래프 대신 관련 노드 주변만 잘라서 컨텍�
 
 > 파이프라인·StaticCodeAnalyzer/GraphBuilder·경고 감지기별 로직과 제외 규칙은 [`ANALYSIS_ENGINE.md`](ANALYSIS_ENGINE.md)에 상세. 사용자용 요약은 [`/how-it-works`](../frontend/src/pages/HowItWorksPage.tsx).
 
-- **분석 엔진**: tree-sitter AST 기반 정적 분석기 — 13개 언어(Java·Kotlin·TS·JS·Python·Go·Rust·C·C++·C#·Ruby·PHP·Swift) + Prisma 스키마. Kotlin은 정규식 전용(bonede 그래머 부재), 나머지는 AST + native 실패 시 정규식 폴백.
+- **분석 엔진**: tree-sitter AST 기반 정적 분석기 — 13개 언어(Java·Kotlin·TS·JS·Python·Go·Rust·C·C++·C#·Ruby·PHP·Swift) + Prisma 스키마 + docker-compose.yml(2026-07-24 추가, SERVICE_CALL_CHAIN 변수 조합 URL 역해소용). Kotlin은 정규식 전용(해당 그래머 부재), 나머지는 AST + native 실패 시 정규식 폴백.
 - **분석 정확도**: 벤치 오픈소스 레포(언어별) A/B 측정으로 precision·recall을 지속 교정. 타입 인지 호출 해소 6언어(Java·C#·TS·Python·Go·Rust) 적용. 동적 호출·런타임 의존성은 정적 분석 한계로 제외.
 - **DB 스키마 수집**: 자동 감지 → 파일 업로드 → 수동 입력 순 fallback
   - 감지 대상: `schema.prisma`, `schema.sql`, `*.migration.sql`, JPA Entity 클래스, raw SQL 리터럴
