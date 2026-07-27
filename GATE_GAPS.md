@@ -104,7 +104,7 @@ Codeprint 구조 게이트(`codeprint/structure`)가 **통과(HIGH 0)했는데�
 - **재발 방지 — 완료(2026-07-17)**: `.github/workflows/ci.yml`에 `analyzer-version-guard` 잡 신설 — `ParsedFile.java` 변경 시 `CachedParsedFileLoader.java`(ANALYZER_VERSION) 동반 변경을 CI에서 기계적으로 강제(반복-G가 로컬 트립와이어 테스트만으론 2회 다 못 막혔던 것에 대한 상위 안전장치). 상세 `decisions/DECISIONS_INFRA.md` "PR #604 자체 게이트 교착".
 - **교훈**: 같은 세션에서 발견한 코드 버그가 몇 시간 안에 실제 인프라 사건으로 이어질 수 있다 — "로컬 테스트 통과"와 "프로덕션 데이터가 이미 오염된 상태"는 별개 문제. 배포된 지 얼마 안 된 스키마 변경 관련 버그를 고칠 땐 프로덕션 캐시/데이터 상태도 함께 점검할 것.
 
-### [G-9] 500파일 상한 절단이 경로 사전순이라 **서브트리가 통째로** 게이트에서 사라짐 — 우리 자신의 `frontend/`가 자기 게이트에 영구 비가시 · `[부분 완료: T2(codeprint_149)+T0/T1(codeprint_150) 완료, 판정표기만 미착수]` (2026-07-25, codeprint_148 감사발)
+### [G-9] 500파일 상한 절단이 경로 사전순이라 **서브트리가 통째로** 게이트에서 사라짐 — 우리 자신의 `frontend/`가 자기 게이트에 영구 비가시 · `[완료: T2(codeprint_149)+T0/T1+판정표기(codeprint_150)]` (2026-07-25, codeprint_148 감사발)
 - **증상**: `SourceFileWalker`가 `eligible.sort(경로 문자열)` 후 `subList(0, 500)`으로 자르기 때문에, 절단은 무작위 표본이 아니라 **사전순 뒤쪽 서브트리를 통째로 버리는** 형태다. 우리 레포를 루트에서 걸어보면 eligible 786개 중 500개만 분석되고, 남는 500개는 전부 `backend/` 하위(main 375 + test 125) — **`frontend/`(ts/tsx 71개)와 `vscode-extension/`은 단 한 파일도 그래프에 안 들어간다.** 실측: `./gradlew exploreLocal -PanalysisDir=..` 결과 repoMap의 최상위 트리에 `backend/`와 `.claude/`만 존재, `frontend/` 항목 0건.
 - **분류**: 탐지 커버리지 갭(CI red 사건 아님 — G-3와 같은 감사발 발견). 상한 자체는 의식적 설계이고 사용자 고지도 이미 있으나(`Graph.totalFileCount` + PR 코멘트 안내), **고지가 발화하는 조건이 좁다**: `countUnanalyzedChangedFiles`는 "이 PR이 변경한 파일 중 미분석분이 있을 때"만 세므로, 백엔드만 건드린 PR에선 안내가 안 뜨고 프론트는 원래부터 안 보이던 상태가 그대로 유지된다. 그래프를 가로지르는 규칙(`CROSS_CONTEXT_IMPORT`·`SERVICE_CALL_CHAIN` 등)은 엣지의 **반대쪽 끝**이 절단됐을 때도 조용히 발화를 잃는다 — 이건 변경 파일 기준 고지로는 원리적으로 못 덮는다.
 - **왜 지금까지 안 드러났나**: 절단이 알파벳순이라 결정론적이고(같은 커밋 = 같은 500개, 이건 의도된 설계), 우리 관심사가 계속 백엔드(DDD 규칙 대상)였다. 프론트 품질은 ESLint·Vitest가 따로 보고 있어서 "게이트가 프론트를 본 적이 없다"는 사실 자체가 질문된 적이 없었다.
@@ -158,7 +158,8 @@ Codeprint 구조 게이트(`codeprint/structure`)가 **통과(HIGH 0)했는데�
 **남은 판단 지점(구현 착수 전 필요)**: ㉮노드·엣지 예산의 구체 수치 — **DB 행 단가 실측 완료(아래), 힙은 미측정** ㉯T1 비례 쿼터의 단위(최상위 디렉터리 vs 언어 vs 감지 레이어) ㉰절단 시 게이트 판정 표기(④)를 이 작업에 포함할지 분리할지.
 
 > ✅ **T2(테스트·픽스처 후순위화) + 미니파이·docset 제외 완료(2026-07-26, codeprint_149)** — `SourceFileWalker`가 eligible을 프로덕션/테스트 두 그룹으로 나눠 프로덕션을 먼저 채우고 테스트는 남는 슬롯만 사용하도록 변경, `SKIP_DIRS`에 `docsets`+`*.docset` 접미사 프루닝, `visitFile`에 `*.min.*` 제외 추가. T0(diff 우선)·T1(서브트리 비례 쿼터)·판정 표기(④)는 여전히 미착수. 상세 `decisions/DECISIONS_ANALYSIS.md` "[G-9] 500파일 절단 편향 완화 1단계".
-> ✅ **T0(diff 우선)+T1(서브트리 라운드로빈) 완료(2026-07-27, codeprint_150)** — 비례 쿼터 대신 최상위 디렉터리별 라운드로빈으로 단순화 구현(작은 서브트리가 항상 전량 포함되는 효과는 동일). `PrReviewService`가 PR diff 파일을 `analyzeBranch`보다 먼저 조회해 우선 배정. 실측(`exploreLocal -PanalysisDir=..`)으로 우리 레포 `frontend/` 71개 파일 전부가 처음으로 그래프에 포함됨을 확인 — 이 항목의 핵심 증상이 해소됨. 판정 표기(④, 부분 분석임을 success와 구분)만 남음. 상세 `decisions/DECISIONS_ANALYSIS.md` "[G-9] 500파일 절단 편향 완화 2단계".
+> ✅ **T0(diff 우선)+T1(서브트리 라운드로빈) 완료(2026-07-27, codeprint_150)** — 비례 쿼터 대신 최상위 디렉터리별 라운드로빈으로 단순화 구현(작은 서브트리가 항상 전량 포함되는 효과는 동일). `PrReviewService`가 PR diff 파일을 `analyzeBranch`보다 먼저 조회해 우선 배정. 실측(`exploreLocal -PanalysisDir=..`)으로 우리 레포 `frontend/` 71개 파일 전부가 처음으로 그래프에 포함됨을 확인 — 이 항목의 핵심 증상이 해소됨. 상세 `decisions/DECISIONS_ANALYSIS.md` "[G-9] 500파일 절단 편향 완화 2단계".
+> ✅ **판정 표기(④) 완료(2026-07-27, codeprint_150, 같은 세션)** — commit status의 description에만 "부분 분석 — 절단된 변경 파일 N개"를 추가(state 자체는 success/failure 그대로 유지, "판정을 바꾸지 않기로 한 기존 결정" 재검토 결과 최소 침습 버전으로 확정). T0가 이미 diff 파일을 우선 배정하므로 이 표기가 실제로 발화하는 경우는 단일 PR이 프로덕션 파일 500개 이상을 변경하는 극단적 사례로 좁혀짐. [G-9] 전체 완료.
 
 #### [G-9] 후속 측정 ② — 프로덕션 DB 행 단가 실측 (2026-07-25, 같은 세션)
 

@@ -4,6 +4,24 @@
 
 ---
 
+## [G-9] 500파일 절단 편향 완화 3단계 — 판정 표기(④) 완료, [G-9] 전체 종료(2026-07-27, codeprint_150, 같은 세션)
+
+**문제.** T0/T1(위 2단계) 완료 후 남은 마지막 후보는 "절단된 상태의 success를 'success(부분 분석)'로 구분해 게시"(GATE_GAPS.md 원 설계 ④)였다. `PrReviewService:72`(현재는 이동) 주석이 "판정 자체는 안 바꿈"이라 명시해뒀던 기존 결정을 재검토할 시점이었다.
+
+**결정 — description에만 반영, state(성공/실패)는 그대로.** GitHub commit status API 자체가 pending/success/failure/error 4종뿐이라 "부분 성공"이라는 중간 상태가 없다. state를 바꾸면 "HIGH 위반 0건인데 실패로 표시"라는 혼란을 만들 수 있어, 대신 이미 표시 중인 description 문자열에만 "(부분 분석 — 절단된 변경 파일 N개)"를 덧붙이는 최소 침습 버전으로 확정 — PR 코멘트에는 이미 `appendUnanalyzedNotice`로 같은 정보가 있었으니 commit status에도 대칭적으로 노출하는 것뿐, 새 정보를 만드는 게 아니다.
+
+**리팩터링 — 순수 함수로 추출.** `postCommitStatus`(private, `GitHubApiClient` 의존이라 직접 단위테스트 어려움) 안의 description 조립 로직을 `buildGateDescription(long gatingHighCount, int unanalyzedChangedCount)`(static, package-private)으로 분리 — 이 파일의 기존 컨벤션(`gateState`·`scopeToChangedFiles` 등 이미 순수 정적 함수로 뽑아 직접 테스트하는 패턴)과 동일하게 맞췄다.
+
+**T0 덕분에 발화 범위가 좁다.** 2단계에서 PR diff 파일을 프로덕션 티어 맨 앞에 배정하도록 이미 고쳐놔서, 이 표기가 실제로 뜨는 경우는 "diff 파일 자체가 프로덕션 우선순위 슬롯(무제한 배정)에도 불구하고 500 전체 상한에 걸리는" 극단적 사례(단일 PR이 500개 넘는 프로덕션 파일을 변경)로 좁혀졌다 — 대부분의 실사용 PR에선 이 문구가 뜨지 않는 게 정상이다.
+
+**TDD.** `PrReviewServiceTest`에 2건 추가 — ①`unanalyzedChangedCount>0`이면 "부분 분석"+숫자 포함 ②0이면 기존 문구와 완전히 동일(회귀 없음).
+
+**검증.** `./gradlew compileTestJava` 통과, `PrReviewServiceTest` green, Docker DB 기동 후 `./gradlew test` 전체 green, `analyzeLocal` HIGH_FAN_OUT 5건(기존 베이스라인과 동일, `analyzeBranch`는 호출 구성만 바뀌었을 뿐 팬아웃 수 무변화)·구조 위반 0건.
+
+**결과 — [G-9] 전체 완료.** T0·T1·T2·판정 표기 4가지 모두 처리, `GATE_GAPS.md` [G-9]를 `[완료]`로 갱신.
+
+---
+
 ## [G-9] 500파일 절단 편향 완화 2단계 — T0(diff 우선)+T1(서브트리 라운드로빈) 완료(2026-07-27, codeprint_150)
 
 **문제.** codeprint_149에서 T2(테스트·픽스처 후순위화)만 먼저 처리했고, T0(PR diff 우선)·T1(서브트리 비례 쿼터)은 "게이트 경로 전용 배선"·"예산 단위 재설계 필요"라는 이유로 미착수로 남아있었다. 우리 레포 자체가 실사례 — `backend/`(451개 프로덕션)가 알파벳순으로 `frontend/`(71개)보다 앞서, T2만으론 이 레포가 우연히(451<500) 구제됐을 뿐 일반 모노레포(양쪽 다 500 넘는 경우)는 여전히 특정 서브트리가 절단으로 전멸한다.

@@ -81,7 +81,7 @@ public class PrReviewService {
                 repoUrl, prNumber, warnings.size(), lowFilteredCount, outOfScopeCount, diffScoped);
 
         // CI 게이트 — PR head 커밋에 구조 검사 상태 게시. 브랜치 보호의 required check로 등록하면 머지를 막을 수 있음.
-        String gateState = postCommitStatus(projectId, repoUrl, prNumber, warnings, commentUrl, githubToken, gateSettings);
+        String gateState = postCommitStatus(projectId, repoUrl, prNumber, warnings, commentUrl, githubToken, gateSettings, unanalyzedChangedCount);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("prNumber", prNumber);
@@ -101,21 +101,32 @@ public class PrReviewService {
     // (브랜치명 조회는 fork 브랜치가 base repo에 없어 fork PR에서 실패했음). 동일repo PR도 head.sha가 정확.
     // 상태 게시 실패는 리뷰를 깨뜨리지 않도록 graceful 처리(코멘트는 이미 게시됨). 게시한 state를 반환.
     // 게이트 판정은 GitHub 게시 성공 여부와 무관하게 항상 로컬에 기록(지표 대시보드 집계용 데이터 소스).
+    // unanalyzedChangedCount(500파일 절단으로 누락된 변경 파일 수)는 판정(state) 자체는 바꾸지 않고
+    // description에만 반영한다(GATE_GAPS.md [G-9] ④ — "부분 분석" 명시, success/failure 의미는 유지).
     private String postCommitStatus(UUID projectId, String repoUrl, int prNumber, List<Map<String, Object>> warnings,
-                                    String targetUrl, String githubToken, ProjectGateSettings gateSettings) {
+                                    String targetUrl, String githubToken, ProjectGateSettings gateSettings,
+                                    int unanalyzedChangedCount) {
         String state = gateState(warnings, gateSettings);
         long gatingHighCount = warnings.stream().filter(w -> isGating(w, gateSettings)).count();
         try {
             String headSha = gitHubApiClient.fetchPullRequestHeadSha(repoUrl, prNumber, githubToken);
-            String description = gatingHighCount > 0
-                    ? gatingHighCount + "건의 구조 위반(HIGH)이 변경 파일에 있습니다"
-                    : "구조 위반(HIGH) 없음";
+            String description = buildGateDescription(gatingHighCount, unanalyzedChangedCount);
             gitHubApiClient.createCommitStatus(repoUrl, headSha, state, description, targetUrl, githubToken);
         } catch (Exception e) {
             log.warn("CI 게이트 상태 게시 실패(리뷰 코멘트는 유지): repo={}, pr={}", repoUrl, prNumber, e);
         }
         gateCheckLogRepository.save(GateCheckLog.create(projectId, prNumber, state, (int) gatingHighCount, warnings.size()));
         return state;
+    }
+
+    // commit status description 조립 — 절단으로 누락된 변경 파일이 있으면 "부분 분석"을 명시(판정값 자체는 무변경)
+    static String buildGateDescription(long gatingHighCount, int unanalyzedChangedCount) {
+        String base = gatingHighCount > 0
+                ? gatingHighCount + "건의 구조 위반(HIGH)이 변경 파일에 있습니다"
+                : "구조 위반(HIGH) 없음";
+        return unanalyzedChangedCount > 0
+                ? base + " (부분 분석 — 절단된 변경 파일 " + unanalyzedChangedCount + "개)"
+                : base;
     }
 
     // 0단계(correctness) — 아키텍처 의견이 아니라 실행 시점에 실제로 깨지는 버그. 프로젝트 설정과 무관하게 항상 게이팅.
