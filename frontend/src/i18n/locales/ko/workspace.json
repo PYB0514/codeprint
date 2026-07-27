@@ -616,6 +616,7 @@
     "generating": "생성 중...",
     "exportContextFull": "↓ AI 컨텍스트 - 전체 (.md)",
     "exportContextSummary": "↓ AI 컨텍스트 - 요약 (.md)",
+    "exportContextByDomain": "↓ AI 컨텍스트 - 컨텍스트별 (.md)",
     "savingImage": "저장 중...",
     "exportImage": "↓ 이미지 (.png)",
     "shareToCommunityButton": "커뮤니티에 공유",

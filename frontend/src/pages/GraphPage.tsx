@@ -1083,11 +1083,12 @@ function GraphPageInner() {
 
   // 전체 그래프를 원본 크기 PNG로 다운로드
   // "AI 컨텍스트 (.md)" 다운로드 — 생성은 백엔드(RepoMapService)가 담당, 프론트는 결과를 받아 파일로 저장만 한다
-  const handleDownloadContextMd = useCallback(async (level: 'full' | 'summary' = 'full') => {
+  // grouping="context"는 레이어드 폴더에 흩어진 같은 기능 파일을 바운디드 컨텍스트별로 묶어 보여준다(감지 실패 시 폴더 구조로 자동 폴백)
+  const handleDownloadContextMd = useCallback(async (level: 'full' | 'summary' = 'full', grouping: 'folder' | 'context' = 'folder') => {
     if (!projectId) return
     setExportingContextMd(true)
     try {
-      const params = new URLSearchParams({ level })
+      const params = new URLSearchParams({ level, grouping })
       if (graphId) params.set('graphId', graphId)
       const url = `/api/projects/${projectId}/graph/context-md?${params.toString()}`
       const res = await axios.get<{ content: string }>(url)
@@ -1097,7 +1098,7 @@ function GraphPageInner() {
       const dlUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = dlUrl
-      a.download = `${rootName}-structure${level === 'summary' ? '-summary' : ''}.md`
+      a.download = `${rootName}-structure${level === 'summary' ? '-summary' : ''}${grouping === 'context' ? '-by-context' : ''}.md`
       a.click()
       URL.revokeObjectURL(dlUrl)
     } finally {
@@ -1845,6 +1846,13 @@ function GraphPageInner() {
                 className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {exportingContextMd ? t('graphPage.generating') : t('graphPage.exportContextSummary')}
+              </button>
+              <button
+                onClick={() => { handleDownloadContextMd('full', 'context'); setOpenToolbarMenu(null) }}
+                disabled={exportingContextMd || rawNodes.length === 0}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {exportingContextMd ? t('graphPage.generating') : t('graphPage.exportContextByDomain')}
               </button>
               <button
                 onClick={() => { handleExportImage(); setOpenToolbarMenu(null) }}
