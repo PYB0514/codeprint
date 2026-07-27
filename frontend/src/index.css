@@ -8,6 +8,35 @@
   animation: fade-in 0.2s ease-out;
 }
 
+/* 히어로 그래프 미리보기 — 노드 등장 + 엣지가 그려지는 애니메이션(모션 최소화 선호 시 즉시 완료 상태로 표시) */
+@keyframes node-pop {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes draw-line {
+  from { stroke-dashoffset: var(--line-length); }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes node-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(34, 211, 238, 0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-graph-node {
+    animation: node-pop 0.4s ease-out both;
+    animation-delay: var(--pop-delay, 0s);
+  }
+  .hero-graph-line {
+    stroke-dasharray: var(--line-length);
+    animation: draw-line 0.5s ease-out both;
+    animation-delay: var(--line-delay, 0s);
+  }
+  .hero-graph-node--live {
+    animation: node-pop 0.4s ease-out both, node-pulse 2.4s ease-in-out 0.8s infinite;
+    animation-delay: var(--pop-delay, 0s), 0s;
+  }
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

@@ -135,6 +135,99 @@
       }
     }
   },
+  "evolution": {
+    "title": "Evolution",
+    "subtitle": "If the changelog is \"what changed,\" this is \"how one feature grew\" — how three flagship features grew across versions",
+    "milestonesCount": "{{count}} milestones",
+    "arcs": [
+      {
+        "id": "warning",
+        "title": "Runtime Risk Warning Engine",
+        "color": "#f59e0b",
+        "lede": "It started with catching one broken connection. We added static-analysis patterns one by one for things the compiler can't catch but that blow up at runtime — circular dependencies, async proxy bypasses, DB layer bypasses, DDD boundary violations, missing migrations. As the patterns grew, so did the false positives, and the direction shifted from \"catch more\" to \"catch reliably.\" Gating for non-DDD projects, severity levels, false-positive cleanup, user-controlled dismissal, and a How It Works page that discloses every judgment criterion — from a detector to a diagnostic tool you can trust.",
+        "versions": ["v0.10.0", "v0.10.1", "v0.10.2", "v0.10.3", "v0.32.0", "v0.72.0", "v0.72.2", "v0.72.4", "v0.73.0", "v0.74.0"]
+      },
+      {
+        "id": "analysis",
+        "title": "Multi-Language Analysis Engine",
+        "color": "#22d3ee",
+        "lede": "It started by reading only functions and imports in a single language, Java. From there it grew to 11 languages, and the extraction target widened to function calls, DB tables, and API routes. Every language notates calls differently (C# PascalCase, Go capitalization), accesses DBs differently (JPA, TypeORM, Prisma, raw SQL), down to frontend fetch calls — an accumulated expansion to capture each language and framework's actual code in the graph. After growing coverage one step at a time, function/call extraction moved from regex to tree-sitter AST to raise accuracy.",
+        "versions": ["v0.1.0", "v0.3.0", "v0.58.0", "v0.71.1", "v0.71.4", "v0.71.6", "v0.71.7"]
+      },
+      {
+        "id": "graph",
+        "title": "Graph Visualization & Exploration",
+        "color": "#a78bfa",
+        "lede": "From drawing nodes and edges on screen to a tool for reading code. Automatic flow visualization let you follow execution paths, and a dual layered/domain view let you see the same code from two perspectives. The domain view was redesigned around bounded contexts, and flow replay was rebuilt with branch trees and viewport switching. Edges went from always-drawn to on-demand — revealed only when exploring — a continuing push to cut complexity and raise manipulability.",
+        "versions": ["v0.4.0", "v0.8.0", "v0.14.1", "v0.17.0", "v0.51.0", "v0.72.3"]
+      }
+    ],
+    "footerBefore": "What's shown here is just the key milestones of each feature, trimmed down. The full changelog of every version is available on the ",
+    "footerLink": "changelog",
+    "footerAfter": " page."
+  },
+  "dogfooding": {
+    "title": "Dogfooding 🐶",
+    "introBefore": "Every case below happened in code that had already passed ",
+    "introHighlight1": "compilation, tests, and code review",
+    "introMid": " — Codeprint was the only thing that flagged the structural defect. That's because it sees dependency direction and boundary violations on the graph, which you can't spot by reading line by line. The strongest evidence is the case where ",
+    "introHighlight2": "the PR review feature caught a bug in itself",
+    "introAfter": ".",
+    "noteFalsePositive": "※ False positives aren't included here — only real defects that led to an actual fix are recorded.",
+    "featuredBadge": "★ Featured",
+    "caughtLabel": "What it caught. ",
+    "missedLabel": "Why it was missed. ",
+    "fixLabel": "Fix. ",
+    "footer": "Evidence that \"a tool that sees structure\" actually catches defects when applied to itself.",
+    "cases": [
+      {
+        "type": "CROSS_DOMAIN_CALL",
+        "severity": "MEDIUM",
+        "ref": "PR #277",
+        "title": "The PR review feature caught its own DDD violation",
+        "caught": "While building the new automated PR review feature, PrReviewService (in the analysis context) directly called detectWarnings from the graph context — a direct call across a bounded-context boundary.",
+        "missed": "Compilation and tests both passed, and no one noticed the boundary violation during writing or review. The compiler doesn't block cross-package calls.",
+        "fix": "Running the brand-new PR review feature on its own PR (#277) flagged it immediately. Inverted with a standard port pattern (WarningDetectionPort + Adapter) → re-check went from 1 to 0.",
+        "highlight": true
+      },
+      {
+        "type": "CROSS_CONTEXT_IMPORT",
+        "severity": "HIGH",
+        "ref": "2026-06-13",
+        "title": "Notification handler directly importing other-context events — 7 instances",
+        "caught": "NotificationEventHandler in application/notification directly imported 4 domain event types from other contexts (community, message, user). 7 instances total including the shared UserPlan type.",
+        "missed": "The feature worked fine and the imports compiled cleanly. It read as natural code — \"notifications listen to several events\" — so it didn't look like a violation.",
+        "fix": "Introduced a unified event + moved UserPlan to shared → 7 down to 2 (the remaining 2 are below)."
+      },
+      {
+        "type": "CROSS_CONTEXT_IMPORT",
+        "severity": "HIGH",
+        "ref": "2026-06-14",
+        "title": "2 remaining community → graph boundary violations",
+        "caught": "CommunityFacade directly injected the graph/project Application Services and directly imported Edge/Node from domain/graph.",
+        "missed": "Attaching a graph to a post worked correctly — hard to tell the dependency direction was wrong from the code alone.",
+        "fix": "Inverted via a port so community no longer knows graph directly → reached 0 CROSS_CONTEXT_IMPORT."
+      },
+      {
+        "type": "DB_LAYER_BYPASS",
+        "severity": "HIGH",
+        "ref": "PR #135",
+        "title": "45 instances of bypassing the repository layer",
+        "caught": "45 code paths where the Application/Domain layer called the persistence layer directly, skipping the Repository interface.",
+        "missed": "It worked fine functionally, so ordinary development and review couldn't tally up the accumulated bypasses at a glance.",
+        "fix": "Established a Repository interface (domain) + implementation (infrastructure) → 45 down to 0."
+      },
+      {
+        "type": "MISSING_CONVERTER_MIGRATION",
+        "severity": "HIGH",
+        "ref": "PR #143",
+        "title": "44 mixed structural warnings resolved in one batch",
+        "caught": "44 instances accumulated across contexts: CROSS_CONTEXT_IMPORT, DB_LAYER_BYPASS, and missing Flyway migrations for @Convert columns.",
+        "missed": "Each one was a small violation that didn't stand out in its individual PR, so they accumulated. Missing migrations don't show up until runtime.",
+        "fix": "Cleaned up in bulk by type → all 44 resolved."
+      }
+    ]
+  },
   "proof": {
     "title": "Codeprint by the Numbers",
     "subtitle": "The claims we share with the community, verified directly against the code — all checkable in the open-source repo.",
@@ -220,7 +313,8 @@
     },
     "tabs": {
       "projects": "Projects",
-      "posts": "Posts"
+      "posts": "Posts",
+      "bookmarks": "Bookmarks"
     },
     "teamManagement": "Team Management",
     "settings": "Settings",

@@ -368,7 +368,7 @@ export default function CommunityPage() {
               />
               {user && (
                 <button
-                  onClick={() => navigate('/bookmarks')}
+                  onClick={() => navigate('/mypage?tab=bookmarks')}
                   className="text-sm text-gray-400 hover:text-white px-3 py-1.5 rounded-lg"
                 >
                   {t('community.bookmarksButton')}

@@ -3,10 +3,8 @@
     "community": "Community",
     "service": "Service",
     "serviceLinks": {
-      "howItWorks": "How it Works",
-      "changelog": "Changelog",
-      "evolution": "Evolution",
-      "dogfooding": "Dogfooding"
+      "proof": "About Codeprint",
+      "changelog": "Changelog"
     },
     "teams": "Teams",
     "donate": "Donate",

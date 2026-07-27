@@ -1,6 +1,6 @@
 // 마이페이지 — 내 프로젝트·내 글 통합 허브 (헤더 닉네임 클릭 진입점)
 import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import CreateProjectModal from '../components/CreateProjectModal'
@@ -39,16 +39,31 @@ interface PostSummary {
   hasGraph: boolean
 }
 
-type MyPageTab = 'projects' | 'posts'
+interface BookmarkedPost {
+  id: string
+  title: string
+  feedbackType: string | null
+  graphId: string | null
+  userId: string
+  authorUsername: string
+  createdAt: string
+  bookmarkCount: number
+  bookmarkedByMe: boolean
+}
 
-// 마이페이지 — 프로젝트/글 탭 전환 허브
+type MyPageTab = 'projects' | 'posts' | 'bookmarks'
+
+// 마이페이지 — 프로젝트/글/북마크 탭 전환 허브
 export default function MyPage() {
   const { t } = useTranslation('workspace')
   const { t: tMisc } = useTranslation('misc')
   const FEEDBACK_LABELS = tMisc('bookmarks.feedbackLabels', { returnObjects: true }) as Record<string, string>
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [user, setUser] = useState<UserInfo | null>(null)
-  const [tab, setTab] = useState<MyPageTab>('projects')
+  const [tab, setTab] = useState<MyPageTab>(
+    searchParams.get('tab') === 'bookmarks' ? 'bookmarks' : 'projects'
+  )
 
   const [projects, setProjects] = useState<Project[]>([])
   const [showModal, setShowModal] = useState(false)
@@ -57,6 +72,9 @@ export default function MyPage() {
 
   const [posts, setPosts] = useState<PostSummary[]>([])
   const [postsLoaded, setPostsLoaded] = useState(false)
+
+  const [bookmarks, setBookmarks] = useState<BookmarkedPost[]>([])
+  const [bookmarksLoaded, setBookmarksLoaded] = useState(false)
 
   // 사용자의 프로젝트 목록을 서버에서 불러와 상태에 저장
   const fetchProjects = useCallback(async () => {
@@ -90,6 +108,21 @@ export default function MyPage() {
       .then((res) => setPosts(res.data))
       .finally(() => setPostsLoaded(true))
   }, [tab, postsLoaded, user])
+
+  // 북마크 탭 최초 진입 시에만 조회
+  useEffect(() => {
+    if (tab !== 'bookmarks' || bookmarksLoaded || !user) return
+    axios
+      .get<BookmarkedPost[]>('/api/community/bookmarks')
+      .then((res) => setBookmarks(res.data))
+      .finally(() => setBookmarksLoaded(true))
+  }, [tab, bookmarksLoaded, user])
+
+  // 북마크 목록에서 북마크 취소
+  const handleRemoveBookmark = async (postId: string) => {
+    await axios.delete(`/api/community/posts/${postId}/bookmark`)
+    setBookmarks((prev) => prev.filter((p) => p.id !== postId))
+  }
 
   // 확인 후 프로젝트를 삭제하고 목록에서 제거
   const handleDeleteProject = async (projectId: string) => {
@@ -166,6 +199,12 @@ export default function MyPage() {
             >
               {t('myPage.tabs.posts')}
             </button>
+            <button
+              onClick={() => setTab('bookmarks')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === 'bookmarks' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'}`}
+            >
+              {t('myPage.tabs.bookmarks')}
+            </button>
           </div>
           <div className="flex items-center gap-3 text-sm">
             <button onClick={() => navigate('/teams')} className="text-gray-400 hover:text-white transition-colors">{t('myPage.teamManagement')}</button>
@@ -217,6 +256,56 @@ export default function MyPage() {
                   onVisibilityChange={handleVisibilityChange}
                   autoStart={project.id === autoAnalyzeId}
                 />
+              ))}
+            </div>
+          )
+        )}
+
+        {tab === 'bookmarks' && (
+          bookmarksLoaded && bookmarks.length === 0 ? (
+            <p className="text-gray-600 text-sm">{tMisc('bookmarks.empty')}</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {bookmarks.map((post) => (
+                <div
+                  key={post.id}
+                  onClick={() => navigate('/community')}
+                  className="bg-gray-900 rounded-xl p-4 cursor-pointer hover:bg-gray-800 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {post.feedbackType && (
+                          <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">
+                            {FEEDBACK_LABELS[post.feedbackType] ?? post.feedbackType}
+                          </span>
+                        )}
+                        {post.graphId && (
+                          <span className="text-xs text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded">
+                            {tMisc('bookmarks.graphBadge')}
+                          </span>
+                        )}
+                        <span className="font-medium text-sm truncate">{post.title}</span>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/users/${post.userId}`) }}
+                          className="hover:text-gray-300"
+                        >
+                          {post.authorUsername}
+                        </button>
+                        {' · '}{new Date(post.createdAt).toLocaleDateString(currentDateLocale())}
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleRemoveBookmark(post.id) }}
+                      className="text-yellow-400 hover:text-gray-500 text-sm shrink-0"
+                      title={tMisc('bookmarks.removeBookmark')}
+                    >
+                      ★
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           )

@@ -32,10 +32,8 @@ interface UserSearchResult {
 
 // "서비스" 드롭다운에 묶이는 정보성 페이지 링크 — 라벨은 i18n 키로 조회
 const SERVICE_LINKS = [
-  { key: 'howItWorks', path: '/how-it-works' },
+  { key: 'proof', path: '/proof' },
   { key: 'changelog', path: '/changelog' },
-  { key: 'evolution', path: '/evolution' },
-  { key: 'dogfooding', path: '/dogfooding' },
 ]
 
 // 공통 앱 헤더 — 어느 페이지에서든 <AppHeader /> 한 줄로 동작

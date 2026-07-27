@@ -135,6 +135,99 @@
       }
     }
   },
+  "evolution": {
+    "title": "발전사",
+    "subtitle": "패치노트가 \"무엇이 바뀌었나\"라면, 발전사는 \"한 기능이 어떻게 자랐나\" — 주요 기능 셋이 버전을 거쳐 커온 과정",
+    "milestonesCount": "{{count}}개 마일스톤",
+    "arcs": [
+      {
+        "id": "warning",
+        "title": "런타임 위험 경고 엔진",
+        "color": "#f59e0b",
+        "lede": "끊긴 연결 하나를 잡는 것에서 시작했다. 컴파일러는 못 잡지만 런타임에 터지는 패턴 — 순환 의존, 비동기 프록시 우회, DB 레이어 우회, DDD 경계 위반, 마이그레이션 누락 — 을 정적 분석으로 하나씩 추가했다. 패턴이 늘자 오탐도 늘었고, 그때부터는 \"더 많이 잡기\"가 아니라 \"믿을 수 있게 잡기\"로 방향이 바뀌었다. 비DDD 프로젝트 게이팅, 심각도 구분, 오탐 정리, 사용자가 직접 끄는 숨기기, 모든 판정 기준을 공개하는 작동 방식 페이지까지 — 감지기에서 신뢰할 수 있는 진단 도구로.",
+        "versions": ["v0.10.0", "v0.10.1", "v0.10.2", "v0.10.3", "v0.32.0", "v0.72.0", "v0.72.2", "v0.72.4", "v0.73.0", "v0.74.0"]
+      },
+      {
+        "id": "analysis",
+        "title": "다국어 분석 엔진",
+        "color": "#22d3ee",
+        "lede": "처음엔 Java 한 언어의 함수와 import만 읽었다. 거기서 11개 언어로, 그리고 함수 호출·DB 테이블·API 라우트로 추출 대상을 넓혔다. 언어마다 호출 표기가 다르고(C# PascalCase, Go 대문자), DB 접근 방식이 다르고(JPA·TypeORM·Prisma·raw SQL), 프론트의 fetch까지 — 각 언어·프레임워크의 실제 코드를 그래프에 담기 위한 누적된 확장이다. 커버리지를 한 칸씩 늘려온 뒤, 함수·호출 추출은 정규식에서 tree-sitter AST로 옮겨 정확도를 끌어올렸다.",
+        "versions": ["v0.1.0", "v0.3.0", "v0.58.0", "v0.71.1", "v0.71.4", "v0.71.6", "v0.71.7"]
+      },
+      {
+        "id": "graph",
+        "title": "그래프 시각화·탐색",
+        "color": "#a78bfa",
+        "lede": "노드와 엣지를 화면에 그리는 것에서, 코드를 읽는 도구로. 흐름 자동 시각화로 실행 경로를 따라가게 했고, 계층형/도메인 이중 뷰로 같은 코드를 두 관점에서 보게 했다. 도메인 뷰는 바운디드 컨텍스트 단위로 재설계했고, 흐름 재생은 분기 트리와 뷰포트 전환으로 다시 짰다. 엣지는 전부 그리던 방식에서 탐색할 때만 드러나는 온디맨드로 — 복잡도를 줄이고 조작성을 높이는 방향의 연속.",
+        "versions": ["v0.4.0", "v0.8.0", "v0.14.1", "v0.17.0", "v0.51.0", "v0.72.3"]
+      }
+    ],
+    "footerBefore": "여기 실린 건 각 기능의 핵심 마일스톤만 추린 것입니다. 모든 버전의 전체 변경 내역은 ",
+    "footerLink": "패치노트",
+    "footerAfter": "에서 볼 수 있습니다."
+  },
+  "dogfooding": {
+    "title": "도그푸딩 🐶",
+    "introBefore": "아래 사례는 모두 ",
+    "introHighlight1": "컴파일·테스트·코드 리뷰를 통과한",
+    "introMid": " 코드에서 발생했고, Codeprint만 구조 결함을 표시했습니다. 코드를 한 줄씩 읽어서는 보이지 않는 의존 방향과 경계 위반을 그래프로 보기 때문입니다. 가장 강한 증거는 ",
+    "introHighlight2": "PR 리뷰 기능이 자기 자신의 버그를 잡은",
+    "introAfter": " 케이스입니다.",
+    "noteFalsePositive": "※ 오탐(false positive)은 여기 싣지 않습니다. 실제로 수정으로 이어진 진짜 결함만 기록합니다.",
+    "featuredBadge": "★ 대표",
+    "caughtLabel": "무엇을 잡았나. ",
+    "missedLabel": "왜 놓쳤나. ",
+    "fixLabel": "수정. ",
+    "footer": "\"구조를 보는 도구\"가 자기 자신에게 적용됐을 때 실제로 결함을 잡는다는 증거.",
+    "cases": [
+      {
+        "type": "CROSS_DOMAIN_CALL",
+        "severity": "MEDIUM",
+        "ref": "PR #277",
+        "title": "PR 리뷰 기능이 자기 자신의 DDD 위반을 적발",
+        "caught": "PR 자동 리뷰 기능을 새로 만들면서 PrReviewService(analysis 컨텍스트)가 graph 컨텍스트의 detectWarnings를 직접 호출 — 바운디드 컨텍스트 경계를 넘는 직접 호출.",
+        "missed": "컴파일·테스트 전부 통과했고 코드 작성·검토 단계에서 경계 위반을 아무도 인지하지 못함. 컴파일러는 패키지 간 호출을 막지 않는다.",
+        "fix": "갓 만든 PR 리뷰 기능을 자기 PR(#277)에 직접 실행하니 탐지기가 즉시 표시. 정석 포트 패턴(WarningDetectionPort + Adapter)으로 역전 → 재검증 1→0.",
+        "highlight": true
+      },
+      {
+        "type": "CROSS_CONTEXT_IMPORT",
+        "severity": "HIGH",
+        "ref": "2026-06-13",
+        "title": "알림 핸들러의 타 컨텍스트 이벤트 직접 import 7건",
+        "caught": "application/notification 의 NotificationEventHandler가 타 컨텍스트 도메인 이벤트 4종(community·message·user)을 직접 import. UserPlan 공유 타입 포함 총 7건.",
+        "missed": "기능은 정상 동작했고 import는 컴파일 통과. \"알림이 여러 이벤트를 듣는다\"는 자연스러운 코드라 위반으로 보이지 않음.",
+        "fix": "통합 이벤트 도입 + UserPlan을 shared로 이동 → 7→2 (잔존 2건은 아래)."
+      },
+      {
+        "type": "CROSS_CONTEXT_IMPORT",
+        "severity": "HIGH",
+        "ref": "2026-06-14",
+        "title": "community → graph 경계 위반 잔존 2건",
+        "caught": "CommunityFacade가 graph·project의 Application Service를 직접 주입하고 domain/graph 의 Edge·Node를 직접 import.",
+        "missed": "게시글에 그래프를 붙이는 기능이 정상 동작 → 의존 방향이 잘못됐음을 코드만으로 알아채기 어려움.",
+        "fix": "포트 역전으로 community가 graph를 직접 모르게 분리 → CROSS_CONTEXT_IMPORT 0 달성."
+      },
+      {
+        "type": "DB_LAYER_BYPASS",
+        "severity": "HIGH",
+        "ref": "PR #135",
+        "title": "Repository 계층 우회 45건",
+        "caught": "Application/Domain 계층이 Repository 인터페이스를 거치지 않고 영속성 계층을 직접 호출하는 경로 45건.",
+        "missed": "동작에는 문제가 없어 일반 개발·리뷰로는 누적된 우회를 한눈에 셀 수 없음.",
+        "fix": "Repository 인터페이스(domain) + 구현체(infrastructure) 정착 → 45→0."
+      },
+      {
+        "type": "MISSING_CONVERTER_MIGRATION",
+        "severity": "HIGH",
+        "ref": "PR #143",
+        "title": "다중 컨텍스트 구조 경고 44건 일괄 해소",
+        "caught": "CROSS_CONTEXT_IMPORT·DB_LAYER_BYPASS + @Convert 컬럼에 대한 Flyway 마이그레이션 누락이 여러 컨텍스트에 누적된 44건.",
+        "missed": "각각은 작은 위반이라 개별 PR에서는 드러나지 않고 누적됨. 마이그레이션 누락은 런타임 전까지 보이지 않음.",
+        "fix": "타입별로 일괄 정리 → 44건 해소."
+      }
+    ]
+  },
   "proof": {
     "title": "숫자로 보는 Codeprint",
     "subtitle": "커뮤니티에 공유하는 주장을 코드로 직접 검증한 근거 — 전부 오픈소스에서 확인 가능합니다.",
@@ -220,7 +313,8 @@
     },
     "tabs": {
       "projects": "프로젝트",
-      "posts": "글"
+      "posts": "글",
+      "bookmarks": "북마크"
     },
     "teamManagement": "팀 관리",
     "settings": "설정",

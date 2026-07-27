@@ -19,14 +19,10 @@ const AdminPage = lazy(() => import('./pages/AdminPage'))
 const PaymentSuccessPage = lazy(() => import('./pages/PaymentSuccessPage'))
 const PaymentCancelPage = lazy(() => import('./pages/PaymentCancelPage'))
 const ChangelogPage = lazy(() => import('./pages/ChangelogPage'))
-const HowItWorksPage = lazy(() => import('./pages/HowItWorksPage'))
 const ProofPage = lazy(() => import('./pages/ProofPage'))
-const EvolutionPage = lazy(() => import('./pages/EvolutionPage'))
-const DogfoodingPage = lazy(() => import('./pages/DogfoodingPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
 const ContactPage = lazy(() => import('./pages/ContactPage'))
-const BookmarksPage = lazy(() => import('./pages/BookmarksPage'))
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const DonatePage = lazy(() => import('./pages/DonatePage'))
@@ -63,16 +59,16 @@ export default function App() {
           <Route path="/payment/cancel" element={<PaymentCancelPage />} />
           <Route path="/payment/fail" element={<PaymentCancelPage />} />
           <Route path="/changelog" element={<ChangelogPage />} />
-          <Route path="/how-it-works" element={<HowItWorksPage />} />
+          <Route path="/how-it-works" element={<Navigate to="/proof?tab=howItWorks" replace />} />
           <Route path="/proof" element={<ProofPage />} />
-          <Route path="/evolution" element={<EvolutionPage />} />
-          <Route path="/dogfooding" element={<DogfoodingPage />} />
+          <Route path="/evolution" element={<Navigate to="/proof?tab=evolution" replace />} />
+          <Route path="/dogfooding" element={<Navigate to="/proof?tab=proof" replace />} />
           <Route path="/projects/:projectId/diff" element={<DiffPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/admin" element={<AdminPage />} />
-          <Route path="/bookmarks" element={<BookmarksPage />} />
+          <Route path="/bookmarks" element={<Navigate to="/mypage?tab=bookmarks" replace />} />
           <Route path="/users/:userId" element={<UserProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/donate" element={<DonatePage />} />
