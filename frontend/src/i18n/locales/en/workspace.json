@@ -135,6 +135,41 @@
       }
     }
   },
+  "proof": {
+    "title": "Codeprint by the Numbers",
+    "subtitle": "The claims we share with the community, verified directly against the code — all checkable in the open-source repo.",
+    "section1": {
+      "heading": "1. Detection Coverage",
+      "detectorCount": "19 structural violation detectors",
+      "detectorDesc": "Cyclic dependencies, DB layer bypass, DDD boundary violations, domain→infrastructure inversions, and custom architecture rules you can define with an LLM.",
+      "languageCount": "11 languages with tree-sitter AST analysis",
+      "languageDesc": "Java·Kotlin(regex)·Python·TypeScript/JavaScript·Go·Rust·C#·Ruby·PHP·C·C++·Swift — Prisma and docker-compose are additionally recognized via regex, 15 languages in total."
+    },
+    "section2": {
+      "heading": "2. Accuracy",
+      "edgeAccuracy": "93%+ edge (relationship) accuracy",
+      "edgeAccuracyDesc": "Full audit of 152 sampled edges across 6 edge types — phantom (mis-linked) edge rate of 0–6.7%.",
+      "benchSuite": "Bench suite: 17 rules × 81 cases, all passing",
+      "benchSuiteDesc": "Per-rule precision/recall regression suite — re-verified automatically on every commit."
+    },
+    "section3": {
+      "heading": "3. Real-World Proof — Applied to Its Own Codebase",
+      "body": "We ran Codeprint on Codeprint's own codebase and it caught real structural defects — all of them had already passed compilation, tests, and code review before this tool flagged them.",
+      "totalCatches": "97 real structural defects caught",
+      "breakdown": [
+        { "type": "CROSS_DOMAIN_CALL", "count": "1" },
+        { "type": "CROSS_CONTEXT_IMPORT", "count": "7" },
+        { "type": "DB_LAYER_BYPASS", "count": "45" },
+        { "type": "Mixed (multiple types)", "count": "44" }
+      ]
+    },
+    "section4": {
+      "heading": "4. Performance",
+      "perf": "~2 seconds incremental for 500 files (~13,000 edges)",
+      "perfDesc": "Parsing through graph build — measured on a real repository."
+    },
+    "footer": "The methodology and raw data are available directly in the GitHub repository."
+  },
   "donate": {
     "title": "Support Us ☕",
     "desc": "Support Codeprint's development. Donations go toward server costs and feature development.",
