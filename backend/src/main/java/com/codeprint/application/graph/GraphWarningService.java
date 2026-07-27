@@ -197,8 +197,8 @@ public class GraphWarningService {
             String fp = n.getFilePath() != null ? n.getFilePath() : "";
             // 레이어 KIND를 디렉터리 별칭으로 인식 — 리터럴 domain/application/infrastructure 외에 core·persistence·adapter 등
             // 실제 명명을 포착해 게이트가 Codeprint 자기 컨벤션에만 묶이지 않게 한다(recall).
-            if (containsLayerSegment(fp, DOMAIN_LAYER_DIRS)) foundLayers.add("domain");
-            if (containsLayerSegment(fp, APPLICATION_LAYER_DIRS)) foundLayers.add("application");
+            if (containsLayerSegment(fp, BoundedContextResolver.DOMAIN_LAYER_DIRS)) foundLayers.add("domain");
+            if (containsLayerSegment(fp, BoundedContextResolver.APPLICATION_LAYER_DIRS)) foundLayers.add("application");
             if (containsLayerSegment(fp, INFRA_LAYER_DIRS)) foundLayers.add("infrastructure");
             if (foundLayers.size() >= 2) return true;
         }
@@ -687,15 +687,15 @@ public class GraphWarningService {
 
         // context-first 레이아웃({context}/application/·{context}/model/) 컨텍스트 집합을 전역 추론.
         // 비어 있으면 layer-first(application/{context}/) 레포 → 기존 추출만 사용(무회귀).
-        Set<String> cfContexts = detectContextFirstContexts(nodeFilePaths.values());
+        Set<String> cfContexts = BoundedContextResolver.detectContextFirstContexts(nodeFilePaths.values());
 
         // C1: 진짜 복수 바운디드 컨텍스트가 있을 때만 발화 — 단일 컨텍스트(헥사고날 단일 모듈 등)면 cross-context
         // 위반 자체가 성립 불가. 추출 가능한 distinct 컨텍스트가 2개 미만이면 검출하지 않는다(교과서 FP 방지).
         Set<String> distinctContexts = new HashSet<>();
         for (String p : nodeFilePaths.values()) {
-            String ac = applicationContextOf(p, cfContexts);
+            String ac = BoundedContextResolver.applicationContextOf(p, cfContexts);
             if (ac != null) distinctContexts.add(ac);
-            String dc = domainContextOf(p, cfContexts);
+            String dc = BoundedContextResolver.domainContextOf(p, cfContexts);
             if (dc != null) distinctContexts.add(dc);
         }
         if (distinctContexts.size() < 2) return List.of();
@@ -709,8 +709,8 @@ public class GraphWarningService {
             // 테스트 코드의 타 컨텍스트 import는 정상(테스트 픽스처 와이어링)이라 위반 아님 — 제외
             if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))) continue;
 
-            String srcContext = applicationContextOf(srcPath, cfContexts);
-            String tgtContext = domainContextOf(tgtPath, cfContexts);
+            String srcContext = BoundedContextResolver.applicationContextOf(srcPath, cfContexts);
+            String tgtContext = BoundedContextResolver.domainContextOf(tgtPath, cfContexts);
 
             if (srcContext != null && tgtContext != null && !srcContext.equals(tgtContext)) {
                 Map<String, Object> w = new LinkedHashMap<>();
@@ -901,23 +901,9 @@ public class GraphWarningService {
         };
     }
 
-    // 아키텍처 레이어/하위패키지 용어 — 헥사고날·클린아키텍처에서 application/domain/, application/port/ 처럼
-    // 레이어명이 컨텍스트 자리에 오는 것을 바운디드 컨텍스트로 오인하지 않도록 제외(buckpal 류 교과서 FP 방지).
-    // shared·common·seedwork·shared_kernel·kernel 은 Shared Kernel(모든 컨텍스트가 공유하는 베이스)이라
-    // 바운디드 컨텍스트가 아니다 — 이를 import하는 것은 정상이므로 컨텍스트로 인식하면 cross-context 오탐을 낸다.
-    private static final Set<String> LAYER_TERMS = Set.of(
-        "domain", "application", "infrastructure", "interfaces", "presentation",
-        "adapter", "adapters", "port", "ports", "service", "services",
-        "model", "models", "entity", "entities", "repository", "repositories",
-        "controller", "controllers", "usecase", "usecases", "use_case",
-        "in", "out", "web", "persistence", "api", "rest", "config",
-        "common", "shared", "dto", "dtos", "mapper", "mappers", "util", "utils",
-        "seedwork", "shared_kernel", "kernel"
-    );
+    // 컨텍스트 판정(LAYER_TERMS·DOMAIN_LAYER_DIRS·APPLICATION_LAYER_DIRS·컨텍스트 추출 메서드 일체)은
+    // BoundedContextResolver로 추출됨(2026-07-27, RepoMapService와 공유 — decisions/DECISIONS_ANALYSIS.md 참조).
 
-    // 도메인 레이어 디렉터리 별칭 — 실제 Java 레포는 domain 외에 core·domains 로도 도메인 레이어를 명명한다.
-    // (recall 확장: 리터럴 /domain/ 만 보면 core/ 류 레이아웃에서 도메인→인프라 위반을 못 잡음.)
-    private static final Set<String> DOMAIN_LAYER_DIRS = Set.of("domain", "domains", "core");
     // 인프라 레이어 디렉터리 별칭 — infrastructure 외에 infra·persistence·adapter·dao 등. 도메인→인프라는 어떤
     // 아키텍처에서도 위반(보편)이라 별칭 인식은 precision 위험이 낮다(레이어 이름만 넓힐 뿐 규칙은 불변).
     // "db"는 Python 생태계(예: app/db/repositories)의 영속화 레이어 관용 명명이다.
@@ -927,10 +913,6 @@ public class GraphWarningService {
     // 좁게 잡는다 — application→infrastructure는 정상 방향(포트/직접 호출 둘 다 허용)이라 여기 섞으면 오탐.
     private static final Set<String> INTERFACE_LAYER_DIRS = Set.of(
         "interfaces", "presentation", "controllers", "controller");
-    // 애플리케이션 레이어 디렉터리 별칭 — isDddProject 게이트가 레이어드/DDD 프로젝트를 인식할 때 사용.
-    // "app"은 제외 — /app/ 은 앱 루트 패키지로 흔히 쓰여(레이어 아님) 오분류를 일으킨다.
-    // "services"는 Python 생태계(예: app/services)의 애플리케이션 레이어 관용 명명이다.
-    private static final Set<String> APPLICATION_LAYER_DIRS = Set.of("application", "usecase", "usecases", "services");
     // DB 레이어 우회의 상위(소스) 레이어 별칭 — interfaces/application 류. 이들이 영속화 계층을 직접 import하면
     // 도메인 Repository 추상을 건너뛴 위반. presentation은 interfaces의 흔한 별칭.
     // "api"·"routes"는 Python/JS 생태계(예: app/api/routes)의 인터페이스(웹 진입) 레이어 관용 명명이다.
@@ -977,119 +959,6 @@ public class GraphWarningService {
             if (p.contains("/" + d + "/")) return true;
         }
         return false;
-    }
-
-    // application 레이어 별칭(application/usecase 등) 바로 다음 세그먼트를 컨텍스트명으로 추출 — 레이어 용어면 null.
-    private String extractContextFromApplicationPath(String path) {
-        return extractContextAfterLayer(path, APPLICATION_LAYER_DIRS, false);
-    }
-
-    // domain 레이어 별칭(domain/domains/core 등) 바로 다음 세그먼트를 컨텍스트명으로 추출 — 없으면 null.
-    // domain 마커가 application 마커 하위에 중첩(application/domain/model)이면 헥사고날 레이어이지 top-level 도메인
-    // 레이어가 아니므로 컨텍스트로 보지 않는다. 추출 세그먼트가 레이어 용어인 경우도 제외.
-    private String extractContextFromDomainPath(String path) {
-        return extractContextAfterLayer(path, DOMAIN_LAYER_DIRS, true);
-    }
-
-    // 경로에서 주어진 레이어 별칭 디렉터리 바로 다음 세그먼트를 컨텍스트명으로 추출 — 레이어 용어면 다음 별칭 시도.
-    // excludeNestedUnderApplication=true면 해당 마커가 application 별칭 하위에 중첩된 경우 건너뛴다.
-    private String extractContextAfterLayer(String path, Set<String> layerDirs, boolean excludeNestedUnderApplication) {
-        String p = path.replace("\\", "/");
-        for (String layer : layerDirs) {
-            String marker = "/" + layer + "/";
-            int idx = p.indexOf(marker);
-            if (idx < 0) continue;
-            if (excludeNestedUnderApplication) {
-                int appIdx = firstLayerIndex(p, APPLICATION_LAYER_DIRS);
-                if (appIdx >= 0 && appIdx < idx) continue;
-            }
-            String after = p.substring(idx + marker.length());
-            int slash = after.indexOf('/');
-            if (slash <= 0) continue;
-            String seg = after.substring(0, slash);
-            if (LAYER_TERMS.contains(seg)) continue;
-            return seg;
-        }
-        return null;
-    }
-
-    // 경로에서 주어진 레이어 별칭 마커(/{dir}/) 중 가장 앞선 인덱스 — 없으면 -1. 중첩 도메인 가드용.
-    private static int firstLayerIndex(String p, Set<String> dirs) {
-        int best = -1;
-        for (String d : dirs) {
-            int i = p.indexOf("/" + d + "/");
-            if (i >= 0 && (best < 0 || i < best)) best = i;
-        }
-        return best;
-    }
-
-    // 컨텍스트 경계를 이루는 내부 레이어 디렉터리 — 한 세그먼트가 이들 중 2개 이상을 직접 선행하면 그 세그먼트는
-    // 바운디드 컨텍스트(context-first 레이아웃 {context}/{layer}/)일 가능성이 높다.
-    private static final Set<String> CONTEXT_BOUNDARY_LAYERS = Set.of(
-        "application", "usecase", "usecases", "model", "models", "domain", "domains", "core",
-        "infrastructure", "infra", "adapter", "adapters", "persistence", "web", "port", "ports",
-        "interfaces", "presentation", "api", "dao");
-    // context-first 레이아웃에서 도메인 레이어로 인정하는 디렉터리 — 별칭 + model(DDD 애그리거트 모델).
-    // model을 전역 DOMAIN_LAYER_DIRS에 넣지 않고 여기서만 쓰는 이유: model은 흔한 일반 디렉터리라
-    // 확인된 context-first 컨텍스트의 직하위일 때만 도메인으로 보아야 precision이 안전하다.
-    private static final Set<String> CONTEXT_FIRST_DOMAIN_DIRS = Set.of(
-        "domain", "domains", "core", "model", "models");
-
-    // 전역 레이아웃 추론: {context}/{layer}/ 형태의 context-first 컨텍스트 집합을 반환.
-    // 판별 = 한 세그먼트가 서로 다른 CONTEXT_BOUNDARY_LAYERS를 2개 이상 직접 선행하고, 그런 세그먼트가 2개 이상일 때만
-    // (layer-first 레포의 패키지 루트는 단 하나만 레이어를 선행하므로 1개<2로 배제 → 무회귀).
-    private Set<String> detectContextFirstContexts(Collection<String> paths) {
-        Map<String, Set<String>> segToLayers = new HashMap<>();
-        for (String raw : paths) {
-            if (raw == null) continue;
-            String[] segs = raw.replace("\\", "/").split("/");
-            for (int i = 0; i + 1 < segs.length; i++) {
-                String next = segs[i + 1];
-                String seg = segs[i];
-                if (seg.isEmpty() || LAYER_TERMS.contains(seg)) continue;
-                if (CONTEXT_BOUNDARY_LAYERS.contains(next)) {
-                    segToLayers.computeIfAbsent(seg, k -> new HashSet<>()).add(next);
-                }
-            }
-        }
-        Set<String> candidates = new HashSet<>();
-        for (Map.Entry<String, Set<String>> e : segToLayers.entrySet()) {
-            if (e.getValue().size() >= 2) candidates.add(e.getKey());
-        }
-        // 후보가 2개 미만이면 단일 루트(layer-first)이므로 context-first가 아니다.
-        return candidates.size() >= 2 ? candidates : Set.of();
-    }
-
-    // application 컨텍스트 — context-first면 application 마커 앞 세그먼트(확인된 컨텍스트), 아니면 layer-first 추출.
-    private String applicationContextOf(String path, Set<String> cfContexts) {
-        if (!cfContexts.isEmpty()) {
-            String cf = contextBeforeLayer(path, APPLICATION_LAYER_DIRS, cfContexts);
-            if (cf != null) return cf;
-        }
-        return extractContextFromApplicationPath(path);
-    }
-
-    // domain 컨텍스트 — context-first면 도메인 레이어(model 포함) 마커 앞 세그먼트, 아니면 layer-first 추출.
-    private String domainContextOf(String path, Set<String> cfContexts) {
-        if (!cfContexts.isEmpty()) {
-            String cf = contextBeforeLayer(path, CONTEXT_FIRST_DOMAIN_DIRS, cfContexts);
-            if (cf != null) return cf;
-        }
-        return extractContextFromDomainPath(path);
-    }
-
-    // 레이어 별칭 마커(/{layer}/) 바로 앞 세그먼트가 확인된 context-first 컨텍스트면 반환 — 아니면 null.
-    private String contextBeforeLayer(String path, Set<String> layerDirs, Set<String> cfContexts) {
-        String p = path.replace("\\", "/");
-        for (String layer : layerDirs) {
-            int idx = p.indexOf("/" + layer + "/");
-            if (idx < 0) continue;
-            String before = p.substring(0, idx);
-            int ls = before.lastIndexOf('/');
-            String seg = ls >= 0 ? before.substring(ls + 1) : before;
-            if (cfContexts.contains(seg)) return seg;
-        }
-        return null;
     }
 
     // DDD 팩토리·JPA·React·콜백 패턴은 정적 FUNCTION_CALL 엣지로 추적 불가 → 제외
@@ -1331,11 +1200,11 @@ public class GraphWarningService {
             // 테스트 코드가 인프라를 직접 import하는 것은 정상이라 도메인→인프라 위반 아님 — 제외
             if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))) continue;
 
-            boolean srcIsDomain = containsLayerSegment(srcPath, DOMAIN_LAYER_DIRS);
+            boolean srcIsDomain = containsLayerSegment(srcPath, BoundedContextResolver.DOMAIN_LAYER_DIRS);
             boolean tgtIsInfra = containsLayerSegment(tgtPath, INFRA_LAYER_DIRS) && !tgtPath.contains("/shared/");
 
             if (srcIsDomain && tgtIsInfra) {
-                String srcContext = extractContextFromDomainPath(srcPath);
+                String srcContext = BoundedContextResolver.extractContextFromDomainPath(srcPath);
                 Map<String, Object> w = new LinkedHashMap<>();
                 w.put("type", "DOMAIN_IMPORTS_INFRA");
                 w.put("severity", "HIGH");
@@ -1392,7 +1261,7 @@ public class GraphWarningService {
     private boolean coveredByUniversalDependencyRule(String srcPath, String tgtPath) {
         boolean tgtIsInfra = containsLayerSegment(tgtPath, INFRA_LAYER_DIRS) && !tgtPath.contains("/shared/");
         if (!tgtIsInfra) return false;
-        return containsLayerSegment(srcPath, DOMAIN_LAYER_DIRS) || containsLayerSegment(srcPath, INTERFACE_LAYER_DIRS);
+        return containsLayerSegment(srcPath, BoundedContextResolver.DOMAIN_LAYER_DIRS) || containsLayerSegment(srcPath, INTERFACE_LAYER_DIRS);
     }
 
     // FUNCTION_CALL 엣지가 도메인 경계를 넘을 때 — Cross-Domain 직접 호출 위반
@@ -1407,13 +1276,13 @@ public class GraphWarningService {
 
         // 컨텍스트 추출은 CROSS_CONTEXT_IMPORT와 동일한 레이어-인지 추출기(레이어 용어 스킵·application 하위 중첩 가드)를 쓴다 —
         // 헥사고날 단일 컨텍스트(application/domain/{service,model})를 별개 도메인으로 오인식하던 FP를 제거(buckpal 16건).
-        Set<String> cfContexts = detectContextFirstContexts(nodeFilePaths.values());
+        Set<String> cfContexts = BoundedContextResolver.detectContextFirstContexts(nodeFilePaths.values());
 
         // 함수명 → 등장 도메인 집합 — 동일 이름이 2개 이상 도메인에 있으면 bare-name 해석이 모호 → 오탐 제외용
         Map<String, Set<String>> funcNameToDomains = new HashMap<>();
         for (Node n : nodes) {
             if (n.getType() != NodeType.FUNCTION) continue;
-            String domain = functionContextOf(n.getFilePath() != null ? n.getFilePath() : "", cfContexts);
+            String domain = BoundedContextResolver.functionContextOf(n.getFilePath() != null ? n.getFilePath() : "", cfContexts);
             if (domain == null) continue;
             funcNameToDomains.computeIfAbsent(n.getName(), k -> new HashSet<>()).add(domain);
         }
@@ -1431,8 +1300,8 @@ public class GraphWarningService {
             if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))
                     || isTestArtifact(tgtPath, nameMap.getOrDefault(e.getTargetNodeId(), ""))) continue;
 
-            String srcDomain = functionContextOf(srcPath, cfContexts);
-            String tgtDomain = functionContextOf(tgtPath, cfContexts);
+            String srcDomain = BoundedContextResolver.functionContextOf(srcPath, cfContexts);
+            String tgtDomain = BoundedContextResolver.functionContextOf(tgtPath, cfContexts);
 
             if (srcDomain == null || tgtDomain == null) continue;
             if (srcDomain.equals(tgtDomain)) continue;
@@ -1524,14 +1393,6 @@ public class GraphWarningService {
                 || path.contains(".test.") || path.contains(".spec.");
     }
 
-    // 파일 경로에서 Bounded Context 이름 추출 (domain/X, application/X, infrastructure/X → X)
-    // 함수 파일의 바운디드 컨텍스트 — domain/application 레이어-인지 추출기로 해소(레이어 용어·application 하위 중첩 가드 포함).
-    // 헥사고날 단일 컨텍스트(application/domain/service 등)는 null → cross-domain 오탐 방지. layer-first({layer}/{context})는 그대로 컨텍스트 추출.
-    private String functionContextOf(String path, Set<String> cfContexts) {
-        String dc = domainContextOf(path, cfContexts);
-        if (dc != null) return dc;
-        return applicationContextOf(path, cfContexts);
-    }
 
     // 엣지가 같은 파일 내 호출(sameFile 마커)인지 여부
     private boolean isSameFileEdge(Edge e) {

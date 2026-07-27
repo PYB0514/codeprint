@@ -17,8 +17,80 @@ public class RepoMapService {
         return generate(nodes, "full");
     }
 
-    // level: "summary"(파일까지만, 함수 생략 — 대형 레포 토큰 절감용) | "full"(기존 — 함수까지 포함)
+    // grouping 없이 호출 — 기존 폴더 구조 트리(folder)
     public String generate(List<Node> nodes, String level) {
+        return generate(nodes, level, "folder");
+    }
+
+    // grouping: "folder"(기존 — 물리적 폴더 구조) | "context"(바운디드 컨텍스트별 — 레이어드 폴더에 흩어진 같은
+    // 기능 파일을 한데 모아 보여줌). context 감지 실패(DDD/레이어드 컨벤션 자체가 없는 레포)면 folder로 자동 폴백
+    // + 안내 문구를 덧붙인다 — 감지할 구조가 없으면 컨텍스트별로 묶을 수 없다는 원리적 한계를 숨기지 않는다.
+    public String generate(List<Node> nodes, String level, String grouping) {
+        if ("context".equals(grouping)) {
+            String byContext = generateByContext(nodes, level);
+            if (byContext != null) return byContext;
+            return "> ⚠️ 이 프로젝트에서 DDD/레이어드 컨텍스트 구조를 감지하지 못해 폴더 구조로 표시합니다.\n\n"
+                    + generate(nodes, level, "folder");
+        }
+        return generateFolderTree(nodes, level);
+    }
+
+    // 컨텍스트별 그룹핑 — 감지된 바운디드 컨텍스트가 없으면(진짜 스파게티 등 구조 자체가 없는 레포) null 반환(폴백 신호)
+    private String generateByContext(List<Node> nodes, String level) {
+        boolean summary = "summary".equals(level);
+        // 테스트·픽스처 경로는 컨텍스트 판정에서 제외 — 벤치/edge-audit처럼 의도적으로 다른 DDD 레이아웃을 심어둔
+        // 합성 픽스처가 실제 코드와 섞이면 detectContextFirstContexts가 오인식할 수 있음(실측으로 확인, GATE_GAPS.md 참조)
+        List<Node> fileNodes = nodes.stream()
+                .filter(n -> n.getType() == NodeType.FILE)
+                .filter(n -> !isTestOrFixturePath(n.getFilePath()))
+                .toList();
+        List<Node> funcNodes = summary ? List.of() : nodes.stream()
+                .filter(n -> n.getType() == NodeType.FUNCTION)
+                .filter(n -> !isTestOrFixturePath(n.getFilePath()))
+                .toList();
+
+        List<String> allPaths = fileNodes.stream().map(f -> normalize(f.getFilePath())).toList();
+        Set<String> cfContexts = BoundedContextResolver.detectContextFirstContexts(allPaths);
+
+        Map<String, List<Node>> byContext = new TreeMap<>();
+        for (Node f : fileNodes) {
+            String ctx = BoundedContextResolver.functionContextOf(normalize(f.getFilePath()), cfContexts);
+            byContext.computeIfAbsent(ctx != null ? ctx : "(미분류)", k -> new ArrayList<>()).add(f);
+        }
+        // 전부 미분류면 컨텍스트 구조 자체가 없는 레포 — 폴백
+        if (byContext.size() <= 1 && byContext.containsKey("(미분류)")) return null;
+
+        String rootName = findCommonPrefix(allPaths);
+        rootName = rootName.endsWith("/") ? rootName.substring(0, rootName.length() - 1) : rootName;
+        rootName = lastSegment(rootName);
+        if (rootName.isEmpty()) rootName = "project";
+
+        StringBuilder sb = new StringBuilder("# " + rootName + " — 프로젝트 구조 (컨텍스트별)\n\n");
+        for (Map.Entry<String, List<Node>> entry : byContext.entrySet()) {
+            sb.append("## ").append(entry.getKey()).append(" 컨텍스트\n\n```\n");
+            List<Node> files = entry.getValue().stream().sorted(Comparator.comparing(Node::getFilePath)).toList();
+            for (int i = 0; i < files.size(); i++) {
+                Node file = files.get(i);
+                boolean isLast = i == files.size() - 1;
+                sb.append(isLast ? "└── " : "├── ").append(label(file.getFilePath(), comment(file))).append("\n");
+                List<Node> funcsInFile = funcNodes.stream()
+                        .filter(fn -> file.getFilePath().equals(fn.getFilePath()))
+                        .sorted(Comparator.comparing(Node::getName))
+                        .toList();
+                String childIndent = isLast ? "    " : "│   ";
+                for (int fi = 0; fi < funcsInFile.size(); fi++) {
+                    Node fn = funcsInFile.get(fi);
+                    String fnBranch = fi == funcsInFile.size() - 1 ? "└── " : "├── ";
+                    sb.append(childIndent).append(fnBranch).append(label(fn.getName(), comment(fn))).append("\n");
+                }
+            }
+            sb.append("```\n\n");
+        }
+        return sb.toString();
+    }
+
+    // level: "summary"(파일까지만, 함수 생략 — 대형 레포 토큰 절감용) | "full"(기존 — 함수까지 포함)
+    private String generateFolderTree(List<Node> nodes, String level) {
         boolean summary = "summary".equals(level);
         List<Node> fileNodes = nodes.stream().filter(n -> n.getType() == NodeType.FILE).toList();
         List<Node> funcNodes = summary ? List.of() : nodes.stream().filter(n -> n.getType() == NodeType.FUNCTION).toList();
@@ -54,6 +126,14 @@ public class RepoMapService {
         renderDir(prefixNoSlash, "", tree, fileByPath, funcNodes, lines);
 
         return "# " + rootName + " — 프로젝트 구조\n\n```\n" + String.join("\n", lines) + "\n```\n";
+    }
+
+    // 테스트·픽스처 경로 여부 — SourceFileWalker.isTestOrFixturePath와 같은 기준(레이어 분리로 별도 구현,
+    // infrastructure 역참조 방지). 컨텍스트 그룹핑 전용(폴더 트리 모드는 기존대로 전체 표시 — 하위 호환 유지).
+    private boolean isTestOrFixturePath(String path) {
+        if (path == null) return false;
+        String p = normalize(path);
+        return p.contains("src/test/") || p.contains("__tests__/") || p.contains(".test.") || p.contains(".spec.");
     }
 
     // 디렉터리를 재귀적으로 트리 텍스트로 렌더링 — 하위 디렉터리 먼저, 그 다음 파일(+파일별 함수) 순으로 정렬
