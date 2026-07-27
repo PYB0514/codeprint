@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -166,6 +167,52 @@ class SourceFileWalkerTest {
         assertThat(names).hasSize(500);
         assertThat(names).contains("ZProd1.java", "ZProd2.java");
         assertThat(names).filteredOn(n -> n.startsWith("AFile")).hasSize(498);
+    }
+
+    @Test
+    @DisplayName("절단 시 사전순으로 밀리는 작은 서브트리도 라운드로빈으로 전량 포함된다 — G-9 T1")
+    void 서브트리_라운드로빈_전멸_방지() throws IOException {
+        // adir(600개)이 알파벳순으로 bdir보다 앞서 순수 정렬이면 bdir을 통째로 밀어내지만,
+        // 라운드로빈은 파일 수가 적은 bdir을 전량 포함하고 남는 슬롯만 adir에 배정해야 한다
+        Files.createDirectories(tempDir.resolve("adir"));
+        Files.createDirectories(tempDir.resolve("bdir"));
+        for (int i = 0; i < 600; i++) {
+            Files.writeString(tempDir.resolve(String.format("adir/File%03d.java", i)), "class A {}");
+        }
+        for (int i = 0; i < 100; i++) {
+            Files.writeString(tempDir.resolve(String.format("bdir/File%03d.java", i)), "class B {}");
+        }
+
+        WalkResult result = walker.walk(tempDir);
+
+        List<String> rels = result.files().stream()
+                .map(p -> tempDir.relativize(p).toString().replace('\\', '/'))
+                .toList();
+        assertThat(rels).hasSize(500);
+        long bdirCount = rels.stream().filter(r -> r.startsWith("bdir/")).count();
+        long adirCount = rels.stream().filter(r -> r.startsWith("adir/")).count();
+        assertThat(bdirCount).isEqualTo(100);
+        assertThat(adirCount).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("PR diff 우선순위 파일은 라운드로빈에서 밀려도 항상 포함된다 — G-9 T0")
+    void 우선순위_파일_항상_포함() throws IOException {
+        // adir·bdir 각 500개씩 두면 라운드로빈으로 각 250개(File000~249)만 선택되고 File499는 정상적으론 제외된다
+        Files.createDirectories(tempDir.resolve("adir"));
+        Files.createDirectories(tempDir.resolve("bdir"));
+        for (int i = 0; i < 500; i++) {
+            Files.writeString(tempDir.resolve(String.format("adir/File%03d.java", i)), "class A {}");
+            Files.writeString(tempDir.resolve(String.format("bdir/File%03d.java", i)), "class B {}");
+        }
+
+        WalkResult result = walker.walk(tempDir, Set.of("adir/File499.java"));
+
+        List<String> rels = result.files().stream()
+                .map(p -> tempDir.relativize(p).toString().replace('\\', '/'))
+                .toList();
+        assertThat(rels).hasSize(500);
+        assertThat(rels).contains("adir/File499.java");
     }
 
     @Test
