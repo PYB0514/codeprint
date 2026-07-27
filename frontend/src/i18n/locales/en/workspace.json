@@ -33,7 +33,7 @@
       "heading": "1. How the graph is built",
       "bodyBefore": "After cloning the GitHub repo, Codeprint extracts functions, imports, DB entities, API routes, and comments from each source file using ",
       "bodyHighlight": "static analysis that combines the tree-sitter AST (functions/calls) with regex (DB/API/import, etc.)",
-      "bodyAfter": ". It supports 13 languages and only reads source text — no compiling or running. The extracted results are wired together as nodes and edges to form the graph.",
+      "bodyAfter": ". It supports 15 languages and only reads source text — no compiling or running. The extracted results are wired together as nodes and edges to form the graph.",
       "limitationLabel": "Limitation.",
       "limitationBefore": " Being static analysis, it can't track some connections that are only decided at runtime, like dynamic calls or reflection. So some of the warnings below can be false positives, and each one can be ",
       "limitationHighlight": "hidden individually",
@@ -140,7 +140,7 @@
     "subtitle": "The claims we share with the community, verified directly against the code — all checkable in the open-source repo.",
     "section1": {
       "heading": "1. Detection Coverage",
-      "detectorCount": "19 structural violation detectors",
+      "detectorCount": "20 structural violation warning types (19 detector methods)",
       "detectorDesc": "Cyclic dependencies, DB layer bypass, DDD boundary violations, domain→infrastructure inversions, and custom architecture rules you can define with an LLM.",
       "languageCount": "11 languages with tree-sitter AST analysis",
       "languageDesc": "Java·Kotlin(regex)·Python·TypeScript/JavaScript·Go·Rust·C#·Ruby·PHP·C·C++·Swift — Prisma and docker-compose are additionally recognized via regex, 15 languages in total."
@@ -149,7 +149,7 @@
       "heading": "2. Accuracy",
       "edgeAccuracy": "93%+ edge (relationship) accuracy",
       "edgeAccuracyDesc": "Full audit of 152 sampled edges across 6 edge types — phantom (mis-linked) edge rate of 0–6.7%.",
-      "benchSuite": "Bench suite: 17 rules × 81 cases, all passing",
+      "benchSuite": "Bench suite: 19 rules × 90 cases, all passing",
       "benchSuiteDesc": "Per-rule precision/recall regression suite — re-verified automatically on every commit."
     },
     "section3": {
@@ -471,7 +471,7 @@
       "step2Title": "Try clicking a function node",
       "step2Content": "Clicking a function or DB node plays back the call flow step by step. If there's a branch, you can choose which path to follow.",
       "step3Title": "Structural warnings",
-      "step3Content": "You can check 19 kinds of structural warnings here, like cyclic dependencies and layer violations.",
+      "step3Content": "You can check 20 kinds of structural warnings here, like cyclic dependencies and layer violations.",
       "step4Title": "Analyze your own repo too",
       "step4Content": "Log in with GitHub to analyze your own repo the same way, and share graphs like this one."
     }
