@@ -1,5 +1,5 @@
 {
-  "badge": "13 languages supported · tree-sitter AST analysis",
+  "badge": "15 languages supported · tree-sitter AST analysis",
   "heroTitle1": "Turn a GitHub repo into an",
   "heroTitle2": "interactive circuit diagram",
   "heroTitle3": "",
@@ -15,14 +15,14 @@
   "howToUseTitle": "How does it work?",
   "steps": [
     { "step": "01", "title": "Paste a GitHub repo URL", "desc": "Enter a public repo URL, or a connected private one." },
-    { "step": "02", "title": "Automatic analysis — ~10–60s", "desc": "A tree-sitter AST-based static analysis engine extracts file, function, and DB relationships across 13 languages including Java, TypeScript, Python, and Go." },
+    { "step": "02", "title": "Automatic analysis — ~10–60s", "desc": "A tree-sitter AST-based static analysis engine extracts file, function, and DB relationships across 15 languages including Java, TypeScript, Python, and Go." },
     { "step": "03", "title": "Get an interactive diagram", "desc": "Click nodes to trace flow, review warnings, and share with teammates." }
   ],
   "featuresTitle": "Key Features",
   "features": [
     { "title": "File & Function Structure View", "desc": "Renders import relationships and function call flow as a clear diagram." },
     { "title": "End-to-End Flow Tracing", "desc": "One click on an API endpoint auto-traces the call flow. See where it starts and where it ends in the sidebar, and replay the flow." },
-    { "title": "Structural Warning Detection", "desc": "Statically detects 19 risky patterns ahead of time — circular dependencies, DDD boundary violations, DB layer bypasses, and more." },
+    { "title": "Structural Warning Detection", "desc": "Statically detects 20 risky patterns ahead of time — circular dependencies, DDD boundary violations, DB layer bypasses, and more." },
     { "title": "Live Collaboration & Community", "desc": "Invite teammates with an invite code and co-edit with cursor overlays. Publish graphs to the community for architecture review." },
     { "title": "Image & AI Context Export", "desc": "Save the full graph as a full-resolution PNG, or export function-name-and-comment style Markdown to use directly as AI prompt context." }
   ],
@@ -36,7 +36,7 @@
     "features": [
       "Unlimited private projects",
       "Full graph visualization",
-      "19 warning types (incl. 10 HIGH severity)",
+      "20 warning types (incl. 11 HIGH severity)",
       "Graph version history · export warnings as Markdown",
       "Collaboration sessions up to 6 people (incl. owner)",
       "Community gallery"

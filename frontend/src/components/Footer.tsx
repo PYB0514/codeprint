@@ -22,6 +22,9 @@ export default function Footer() {
       <button onClick={() => navigate('/changelog')} className="hover:text-gray-400 transition-colors">
         {t('footer.changelog')}
       </button>
+      <button onClick={() => navigate('/proof')} className="hover:text-gray-400 transition-colors">
+        {t('footer.proof')}
+      </button>
     </footer>
   )
 }
