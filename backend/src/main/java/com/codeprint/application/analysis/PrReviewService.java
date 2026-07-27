@@ -54,13 +54,14 @@ public class PrReviewService {
         String repoUrl = analysisFacade.resolveOwnedRepoUrl(projectId, userId);
         String headBranch = gitHubApiClient.fetchPullRequestHeadBranch(repoUrl, prNumber, githubToken);
 
-        BranchAnalysis branchAnalysis = analyzeBranch(projectId, repoUrl, headBranch, githubToken);
-        UUID graphId = branchAnalysis.graphId();
-        List<Map<String, Object>> suppressedFiltered = filterSuppressed(projectId, warningDetectionPort.detectWarnings(graphId));
-
         // diff-scope — PR이 변경한 파일에 속한 경고만 게시 (조회 실패 시 null → 전체 폴백)
+        // analyzeBranch보다 먼저 조회해 500파일 절단 시 이 파일들을 우선 배정한다(GATE_GAPS.md [G-9] T0)
         Set<String> changedFiles = fetchChangedFilesSafe(repoUrl, prNumber, githubToken);
         boolean diffScoped = changedFiles != null;
+
+        BranchAnalysis branchAnalysis = analyzeBranch(projectId, repoUrl, headBranch, githubToken, changedFiles);
+        UUID graphId = branchAnalysis.graphId();
+        List<Map<String, Object>> suppressedFiltered = filterSuppressed(projectId, warningDetectionPort.detectWarnings(graphId));
         List<Map<String, Object>> scoped = scopeToChangedFiles(suppressedFiltered, changedFiles);
         int outOfScopeCount = suppressedFiltered.size() - scoped.size();
 
@@ -169,8 +170,9 @@ public class PrReviewService {
                 .toList();
     }
 
-    // PR head 브랜치를 동기 분석 — 분석 레코드 생성·그래프 빌드 후 graphId+절단 정보 반환
-    private BranchAnalysis analyzeBranch(UUID projectId, String repoUrl, String branch, String token) {
+    // PR head 브랜치를 동기 분석 — 분석 레코드 생성·그래프 빌드 후 graphId+절단 정보 반환.
+    // changedFiles(PR diff 파일, null 가능)를 500파일 절단 시 우선 배정 대상으로 전달(G-9 T0)
+    private BranchAnalysis analyzeBranch(UUID projectId, String repoUrl, String branch, String token, Set<String> changedFiles) {
         AnalysisResult analysis = AnalysisResult.create(projectId, branch);
         analysisRepository.save(analysis);
         Path repoDir = null;
@@ -179,7 +181,7 @@ public class PrReviewService {
             analysisRepository.save(analysis);
 
             repoDir = repoCloner.clone(repoUrl, branch);
-            WalkResult walk = sourceFileWalker.walk(repoDir);
+            WalkResult walk = sourceFileWalker.walk(repoDir, changedFiles);
             // 변경된 파일만 재파싱(incremental) — PR head는 base와 내용이 거의 같아 캐시 hit률이 높다
             List<ParsedFile> parsed = cachedParsedFileLoader.load(projectId, repoDir, walk.files());
 

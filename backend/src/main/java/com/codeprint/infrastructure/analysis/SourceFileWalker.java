@@ -11,7 +11,9 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Component
@@ -24,10 +26,18 @@ public class SourceFileWalker {
 
     private static final int MAX_FILES = 500;
 
+    // 우선순위 파일 없이 호출 — T0(diff 우선) 미적용, T1(서브트리 라운드로빈)만 적용
+    public WalkResult walk(Path repoRoot) throws IOException {
+        return walk(repoRoot, null);
+    }
+
     // 레포 루트에서 지원 언어 소스 파일을 최대 500개 수집 — 전체 대상 수를 함께 반환 (절단 감지)
     // 절단 시 사전순 뒤쪽 서브트리가 통째로 사라지는 편향을 줄이기 위해 프로덕션 소스를 먼저 채우고
-    // 테스트·픽스처는 남는 슬롯만 사용(GATE_GAPS.md [G-9] T2 후순위화)
-    public WalkResult walk(Path repoRoot) throws IOException {
+    // 테스트·픽스처는 남는 슬롯만 사용(GATE_GAPS.md [G-9] T2 후순위화). priorityRelPaths(PR diff 변경
+    // 파일의 상대경로, 슬래시 정규화)가 주어지면 그 파일들을 프로덕션 우선순위 맨 앞에 배정하고(T0),
+    // 나머지 프로덕션 파일은 최상위 디렉터리별 라운드로빈으로 선택해(T1) 어느 서브트리도 절단으로
+    // 전멸하지 않도록 한다.
+    public WalkResult walk(Path repoRoot, Set<String> priorityRelPaths) throws IOException {
         List<Path> eligible = new ArrayList<>();
         Files.walkFileTree(repoRoot, new SimpleFileVisitor<>() {
             // 스킵 대상 디렉터리(node_modules·.git 등)는 하위 전체를 순회하지 않음 — 대형 디렉터리 순회 비용 제거 +
@@ -67,10 +77,51 @@ public class SourceFileWalker {
         for (Path p : eligible) {
             (isTestOrFixturePath(repoRoot, p) ? testOrFixture : production).add(p);
         }
-        List<Path> tiered = new ArrayList<>(production);
+        List<Path> tiered = new ArrayList<>();
+        if (priorityRelPaths != null && !priorityRelPaths.isEmpty()) {
+            List<Path> priority = new ArrayList<>();
+            List<Path> rest = new ArrayList<>();
+            for (Path p : production) {
+                String rel = repoRoot.relativize(p).toString().replace('\\', '/');
+                (priorityRelPaths.contains(rel) ? priority : rest).add(p);
+            }
+            tiered.addAll(priority);
+            tiered.addAll(distributeBySubtree(repoRoot, rest));
+        } else {
+            tiered.addAll(distributeBySubtree(repoRoot, production));
+        }
         tiered.addAll(testOrFixture);
         List<Path> files = tiered.size() > MAX_FILES ? tiered.subList(0, MAX_FILES) : tiered;
         return new WalkResult(files, eligible.size());
+    }
+
+    // 최상위 디렉터리별 라운드로빈 재배열 — 사전순 편향으로 특정 서브트리가 전멸하는 것 방지(G-9 T1)
+    private static List<Path> distributeBySubtree(Path repoRoot, List<Path> files) {
+        Map<String, List<Path>> byTopDir = new LinkedHashMap<>();
+        for (Path p : files) {
+            byTopDir.computeIfAbsent(topLevelDir(repoRoot, p), k -> new ArrayList<>()).add(p);
+        }
+        List<List<Path>> groups = new ArrayList<>(byTopDir.values());
+        int[] cursors = new int[groups.size()];
+        List<Path> result = new ArrayList<>(files.size());
+        boolean progress = true;
+        while (progress) {
+            progress = false;
+            for (int i = 0; i < groups.size(); i++) {
+                if (cursors[i] < groups.get(i).size()) {
+                    result.add(groups.get(i).get(cursors[i]++));
+                    progress = true;
+                }
+            }
+        }
+        return result;
+    }
+
+    // 레포 루트 기준 최상위 디렉터리 이름(루트 직속 파일은 빈 문자열)
+    private static String topLevelDir(Path repoRoot, Path file) {
+        String rel = repoRoot.relativize(file).toString().replace('\\', '/');
+        int slash = rel.indexOf('/');
+        return slash >= 0 ? rel.substring(0, slash) : "";
     }
 
     // 미니파이 번들 제외 — mangled 식별자라 판정·시각화 모두 무의미하고 슬롯·저장·phantom 정확도만 갉아먹는다(jquery.min.js 등)

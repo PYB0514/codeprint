@@ -4,6 +4,26 @@
 
 ---
 
+## [G-9] 500파일 절단 편향 완화 2단계 — T0(diff 우선)+T1(서브트리 라운드로빈) 완료(2026-07-27, codeprint_150)
+
+**문제.** codeprint_149에서 T2(테스트·픽스처 후순위화)만 먼저 처리했고, T0(PR diff 우선)·T1(서브트리 비례 쿼터)은 "게이트 경로 전용 배선"·"예산 단위 재설계 필요"라는 이유로 미착수로 남아있었다. 우리 레포 자체가 실사례 — `backend/`(451개 프로덕션)가 알파벳순으로 `frontend/`(71개)보다 앞서, T2만으론 이 레포가 우연히(451<500) 구제됐을 뿐 일반 모노레포(양쪽 다 500 넘는 경우)는 여전히 특정 서브트리가 절단으로 전멸한다.
+
+**결정 — T1은 "비례 쿼터"가 아니라 "라운드로빈"으로 단순화.** 원 설계안은 "최상위 디렉터리별 비례 배분"이었으나, 정확한 비율 계산(디렉터리 크기 사전 스캔 2회 필요)은 §2 단순성 원칙에 비해 이득이 작다고 판단 — 최상위 디렉터리마다 1개씩 돌아가며 뽑는 라운드로빈은 별도 사전 계산 없이 한 번의 순회로 "작은 서브트리부터 소진되면 그 서브트리는 전량 포함, 남는 슬롯은 큰 서브트리가 채운다"는 정확히 같은 효과를 낸다(작은 쪽이 항상 전량 살아남는다는 점에서 오히려 더 안전한 방향). `SourceFileWalker.distributeBySubtree`가 `LinkedHashMap<최상위 디렉터리, List<Path>>`로 그룹핑 후 커서 배열로 라운드로빈.
+
+**T0(diff 우선)는 게이트 경로(`PrReviewService`)에만 배선.** `walk(Path)`(기존 시그니처, `AnalysisRunner`·`LocalAnalyzer`·`BenchPipelineRunner`가 그대로 사용)는 `walk(repoRoot, null)`로 위임해 T1만 적용받고, `PrReviewService.review()`가 PR diff 파일 목록(`changedFiles`)을 `analyzeBranch`보다 먼저 조회해(기존엔 이후 조회) `walk(repoDir, changedFiles)`로 전달 — diff 파일은 라운드로빈보다 우선해 프로덕션 티어 맨 앞에 배정한다. import 1홉 이웃까지 우선 배정하는 안(GATE_GAPS.md 원 설계안 ㉮)은 이번 스코프에서 제외 — 이웃을 알려면 먼저 파싱해야 하는데 파싱 대상을 정하는 게 바로 이 단계라 순환 의존이 생기고, "diff 파일 자체가 빠지는" 핵심 문제는 이미 해결되므로 이득 대비 복잡도가 크다고 판단.
+
+**T0 결정론 우려 재확인.** codeprint_148 후속측정에서 이미 "`PrReviewService.analyzeBranch()`가 게이트 그래프를 프로젝트 그래프와 별도로 만들기 때문에 T0는 게이트 그래프에만 적용되고 '같은 커밋=같은 그래프' 결정론을 건드리지 않는다"가 확인돼 있었다 — 이번 구현이 정확히 그 경계를 지킨다(`AnalysisRunner`의 일반 프로젝트 분석 경로는 T1만 적용, priority 없음).
+
+**ANALYZER_VERSION 영향 없음** — walk 단계(파싱 이전)만 바꾸고 `ParsedFile` 스키마 무변경.
+
+**TDD.** `SourceFileWalkerTest`에 2건 추가 — ①`adir`(600)·`bdir`(100)일 때 작은 쪽(`bdir`)이 전량(100개) 포함되고 나머지 400슬롯을 `adir`이 채움(순수 정렬이면 `bdir`은 0개가 됐을 시나리오) ②`adir`·`bdir` 각 500개일 때 우선순위로 지정한 `adir/File499.java`(라운드로빈만으로는 정상 제외될 위치)가 항상 포함됨.
+
+**검증.** `./gradlew test --tests SourceFileWalkerTest --tests PrReviewServiceTest` green, 전체 스위트(`./gradlew test`, Docker DB 기동 후) 1114+ 테스트 green. `./gradlew analyzeLocal` HIGH_FAN_OUT 5건(기존 베이스라인과 동일)·구조 위반 0건. **실측**(`exploreLocal -PanalysisDir=..`, 저장소 루트) — `repoMap.md`에 `frontend/`가 처음으로 최상위에 나타났고 71개 프론트 파일 전부(기존 0개) 포함 확인. `backend/`도 여전히 대부분 포함(500 슬롯 중 대부분).
+
+**남은 것(GATE_GAPS.md [G-9]에 계속 추적).** 절단 시 게이트 판정 표기(부분 분석임을 success와 구분해 표시, 원 설계 ④)는 여전히 미착수 — 판정 자체를 바꾸는 문제라 별도 논의 필요.
+
+---
+
 ## CONTAINS 엣지 생성 중단 — 읽는 곳 0곳인 죽은 데이터 제거(2026-07-26, codeprint_149)
 
 **문제.** codeprint_148의 시각화 엣지 분리 설계 검토에서 "백엔드 `main` 전체에서 CONTAINS 출현이 `EdgeType` enum 선언 1 + `GraphBuilder` 생성 2곳(FILE→FUNCTION, FILE→API_ENDPOINT)뿐이고, 읽는 곳(감지기·프론트)이 0곳"임을 확인해뒀다. 프론트는 `graphLayout.ts`가 API_ENDPOINT를 DB_TABLE과 동일하게 독립 컬럼으로 배치하고(CONTAINS/parentId 미사용), 파일↔함수 중첩도 `filePath` 문자열 매칭으로 만들어(CONTAINS 엣지와 무관) 순수 쓰기 전용 데이터였다 — 전체 엣지의 29.6%(자기 레포 기준 110,940행).
