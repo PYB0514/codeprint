@@ -157,4 +157,50 @@ class RepoMapServiceTest {
         assertThat(service.generate(nodes, "full")).contains("findById");
         assertThat(service.generate(nodes)).contains("findById");
     }
+
+    @Test
+    @DisplayName("grouping=context — 레이어드 폴더에 흩어진 같은 컨텍스트 파일이 한 데 묶여 표시된다")
+    void grouping_context_레이어드_컨텍스트별_묶음() {
+        List<Node> nodes = List.of(
+                fileNode("backend/domain/payment/Payment.java", null),
+                fileNode("backend/application/payment/PaymentService.java", null),
+                fileNode("backend/domain/order/Order.java", null),
+                fileNode("backend/application/order/OrderService.java", null)
+        );
+
+        String md = service.generate(nodes, "full", "context");
+
+        assertThat(md).contains("## payment 컨텍스트");
+        assertThat(md).contains("## order 컨텍스트");
+        // "payment 컨텍스트" 섹션(다음 "## " 헤더 전까지)만 잘라내 그 안에 도메인·애플리케이션 파일이 둘 다 있는지 확인
+        int paymentStart = md.indexOf("## payment 컨텍스트");
+        int nextHeaderAfterPayment = md.indexOf("## ", paymentStart + 1);
+        String paymentSection = nextHeaderAfterPayment >= 0
+                ? md.substring(paymentStart, nextHeaderAfterPayment) : md.substring(paymentStart);
+        assertThat(paymentSection).contains("Payment.java").contains("PaymentService.java");
+        assertThat(paymentSection).doesNotContain("Order.java").doesNotContain("OrderService.java");
+    }
+
+    @Test
+    @DisplayName("grouping=context — DDD/레이어드 컨텍스트를 감지 못하면 폴더 구조로 폴백하고 안내 문구를 표시한다")
+    void grouping_context_감지실패시_폴더구조_폴백() {
+        List<Node> nodes = List.of(
+                fileNode("src/utils/helper.js", null),
+                fileNode("src/main.js", null)
+        );
+
+        String md = service.generate(nodes, "full", "context");
+
+        assertThat(md).contains("컨텍스트 구조를 감지하지 못해");
+        assertThat(md).contains("helper.js");
+        assertThat(md).contains("main.js");
+    }
+
+    @Test
+    @DisplayName("grouping 생략 시 기존 폴더 구조와 동일하다")
+    void grouping_생략시_폴더구조_기본값() {
+        List<Node> nodes = List.of(fileNode("src/UserService.java", null));
+
+        assertThat(service.generate(nodes, "full")).isEqualTo(service.generate(nodes, "full", "folder"));
+    }
 }

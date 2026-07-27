@@ -179,11 +179,13 @@ task exploreLocal(type: JavaExec, dependsOn: classes) {
     mainClass = 'com.codeprint.tools.LocalGraphQuery'
     // Windows 콘솔 기본 인코딩(CP949)이 한국어 주석·경로를 깨뜨려 UTF-8 강제
     jvmArgs = ['-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8']
-    // -PqueryMode=repoMap|find|neighbors, -PqueryTarget=검색어 또는 노드ID, -PanalysisDir=경로(기본 .)
+    // -PqueryMode=repoMap|find|neighbors, -PqueryTarget=검색어 또는 노드ID, -PanalysisDir=경로(기본 .),
+    // -PqueryGrouping=folder|context(repoMap 전용, 기본 folder — 바운디드 컨텍스트별 트리로 전환)
     args = [
         project.hasProperty('queryMode') ? project.property('queryMode') : 'repoMap',
         project.hasProperty('queryTarget') ? project.property('queryTarget') : '',
-        project.hasProperty('analysisDir') ? project.property('analysisDir') : '.'
+        project.hasProperty('analysisDir') ? project.property('analysisDir') : '.',
+        project.hasProperty('queryGrouping') ? project.property('queryGrouping') : 'folder'
     ]
 }
 

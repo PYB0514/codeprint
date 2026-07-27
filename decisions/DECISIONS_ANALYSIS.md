@@ -4,6 +4,23 @@
 
 ---
 
+## RepoMap DDD 컨텍스트별 그룹핑(1단계: 내부 exploreLocal) — `BoundedContextResolver` 추출 (2026-07-27, codeprint_150, 같은 세션)
+
+**문제.** 사용자 대화 중 나온 아이디어 — MD 내보내기(`RepoMapService`, 웹 다운로드·로컬 `exploreLocal`·MCP가 공유)를 폴더 구조 대신 DDD 바운디드 컨텍스트별로 묶어 보여줄 수 있는지 검토. 확인 결과 `GraphWarningService`가 `CROSS_CONTEXT_IMPORT`/`CROSS_DOMAIN_CALL` 판정용으로 이미 컨텍스트 추론 로직(`detectContextFirstContexts`·`functionContextOf` 등)을 갖고 있었음 — 재사용 가능했으나 전부 `private`이라 `RepoMapService`가 직접 못 씀.
+
+**결정 — `RepoMapService`가 `GraphWarningService`에 의존하는 대신 별도 유틸 클래스로 추출.** 처음엔 "package-private으로 열고 `RepoMapService`가 `GraphWarningService`를 주입받는" 방안을 검토했으나(`GraphWarningService`가 필드 없는 완전 무상태 클래스라 의존성 자체는 가볍다는 걸 확인), "왜 트리 export 기능이 경고 감지 서비스에 의존하는가"라는 의미적 어색함이 남아 기각 — 대신 컨텍스트 판정 로직 전체(`LAYER_TERMS`·`DOMAIN_LAYER_DIRS`·`APPLICATION_LAYER_DIRS`·`CONTEXT_BOUNDARY_LAYERS`·`CONTEXT_FIRST_DOMAIN_DIRS`와 `detectContextFirstContexts`·`applicationContextOf`·`domainContextOf`·`functionContextOf` 등 9개 메서드)를 `BoundedContextResolver`(신규, `application.graph`, 순수 static 유틸)로 추출. `GraphWarningService`는 이 클래스에 위임하도록 전환(순수 리팩터— 동작 무변화), `RepoMapService`는 이 클래스만 참조. `DOMAIN_LAYER_DIRS`/`APPLICATION_LAYER_DIRS`는 `GraphWarningService`의 다른 감지기(`isDddProject`·`detectDomainInfraImport` 등)에서도 쓰여 완전 이동 후 `BoundedContextResolver.XXX`로 참조 갱신. 검증: 전체 백엔드 테스트(DB 포함) green, `analyzeLocal` 자기 레포 베이스라인(HIGH_FAN_OUT 5건) 무변화로 회귀 없음 확인.
+
+**`RepoMapService.generate(nodes, level, grouping)` 신설** — `grouping`: `"folder"`(기존, 하위호환 기본값) | `"context"`(컨텍스트별). 컨텍스트 감지 실패(구조 자체가 없는 레포)면 폴더 트리로 자동 폴백 + "⚠️ 컨텍스트 구조를 감지하지 못해 폴더 구조로 표시합니다" 안내 문구 — 감지할 구조가 없으면 묶을 수 없다는 원리적 한계를 숨기지 않음.
+
+**실측 도그푸딩 — 심각한 버그 2건 발견.**
+1. **infrastructure/ 레이어 파일 전량 미분류** — `functionContextOf`가 domain→application 순서로만 컨텍스트를 찾고 infrastructure는 아예 안 봄. 자기 레포 실측 결과 (미분류) 버킷이 전체의 약 51%. **의도적으로 안 고침** — `functionContextOf`는 `BoundedContextResolver`를 통해 이미 배포된 `CROSS_CONTEXT_IMPORT`/`CROSS_DOMAIN_CALL` 판정에도 쓰이는 공유 로직이라, infra 계층을 컨텍스트로 인식하도록 확장하면 그 감지기들의 판정 범위(어떤 파일 쌍이 "cross-context"로 비교되는지)까지 바뀌어 회귀 위험이 큼 — 이번 기능(export 전용) 스코프를 넘어서는 변경이라 별도 검토로 분리.
+2. **"codeprint"(자기 최상위 패키지명)이 가짜 컨텍스트로 오인식** — `backend/src/test/resources/bench/rules/CROSS_CONTEXT_IMPORT/` 같은 벤치 픽스처(의도적으로 다른 DDD 레이아웃을 심어둔 합성 데이터)가 실제 코드와 섞여 스캔되면서 `detectContextFirstContexts`가 "codeprint" 세그먼트를 컨텍스트 경계 후보로 오인식 — 실측 시 전체의 약 48%가 이 가짜 컨텍스트에 쏠림. **수정 완료**: `RepoMapService.generateByContext`에서 테스트·픽스처 경로(`SourceFileWalker.isTestOrFixturePath`와 동일 기준, 레이어 분리로 별도 구현)를 컨텍스트 판정 대상에서 제외. 재실측 결과 가짜 "codeprint" 컨텍스트 소멸, 실제 바운디드 컨텍스트 15개(admin·analysis·attachment·collaboration·community·donation·featured·graph·message·notice·notification·payment·project·team·user)가 정확히 그룹핑됨.
+   - ⚠️ **잠재 재발 방지 필요 — 별도 검토 대상**: 이 픽스처 오염 메커니즘은 `RepoMapService`뿐 아니라 **이미 배포된 `CROSS_CONTEXT_IMPORT`/`CROSS_DOMAIN_CALL` 감지기 자체**에도 이론상 동일하게 적용될 수 있음(둘 다 같은 `BoundedContextResolver.detectContextFirstContexts`를 씀). 우리 자신의 레포(bench 픽스처 포함)를 게이트 대상으로 분석할 때 이 감지기들의 정확도에 실제 영향이 있는지는 이번 스코프에서 검증 안 됨 — GATE_GAPS.md에 후속 조사 항목으로 기록.
+
+**남은 것(이번 세션 미착수)**: 웹 다운로드(`GraphController` API 파라미터 + `GraphPage.tsx` UI 선택지) — `RepoMapService`/`exploreLocal` 쪽 공유 로직은 완료됐으니 이 부분만 남음.
+
+---
+
 ## [G-9] 500파일 절단 편향 완화 3단계 — 판정 표기(④) 완료, [G-9] 전체 종료(2026-07-27, codeprint_150, 같은 세션)
 
 **문제.** T0/T1(위 2단계) 완료 후 남은 마지막 후보는 "절단된 상태의 success를 'success(부분 분석)'로 구분해 게시"(GATE_GAPS.md 원 설계 ④)였다. `PrReviewService:72`(현재는 이동) 주석이 "판정 자체는 안 바꿈"이라 명시해뒀던 기존 결정을 재검토할 시점이었다.
