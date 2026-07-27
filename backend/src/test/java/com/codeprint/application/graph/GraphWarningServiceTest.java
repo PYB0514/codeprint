@@ -899,6 +899,27 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("G-10 회귀: 벤치/픽스처 경로가 섞여도 실코드 컨텍스트 판정이 붕괴하지 않음 — CROSS_CONTEXT_IMPORT 정상 발화")
+    void crossContextImport_fixturePollution_doesNotCollapseRealContexts() {
+        // G-10(GATE_GAPS.md): 픽스처가 "moduleA/application"·"moduleA/domain"처럼 context-first 후보를 만들면
+        // detectContextFirstContexts가 실코드 최상위 세그먼트("codeprint")까지 context-first 컨텍스트로 오인식해,
+        // 서로 다른 실제 서브컨텍스트(project·user)가 전부 "codeprint" 하나로 붕괴돼 진짜 위반이 사라졌다.
+        // 픽스처 경로가 테스트 경로(/test/)라 isTestArtifact로 제외되면 이 붕괴가 재발하지 않아야 한다.
+        Node app = funcNodeWithPath("createProject", "/backend/src/main/java/com/codeprint/application/project/ProjectService.java");
+        Node dom = funcNodeWithPath("User", "/backend/src/main/java/com/codeprint/domain/user/User.java");
+        Edge imp = importEdgeForPath(app.getId(), dom.getId());
+
+        // 픽스처: moduleA가 application·domain 2개 레이어를 선행해 context-first 후보 2번째로 성립(테스트 경로라 제외 대상)
+        Node fixtureApp = funcNodeWithPath("scenario", "/backend/src/test/resources/bench/rules/CROSS_CONTEXT_IMPORT/moduleA/application/Foo.java");
+        Node fixtureDom = funcNodeWithPath("scenario", "/backend/src/test/resources/bench/rules/CROSS_CONTEXT_IMPORT/moduleA/domain/Bar.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(app, dom, fixtureApp, fixtureDom), List.of(imp));
+
+        assertThat(warnings.stream().filter(w -> "CROSS_CONTEXT_IMPORT".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
     @DisplayName("precision: 테스트 코드(domain 패키지 *Test)가 인프라를 직접 import — DOMAIN_IMPORTS_INFRA 미발화")
     void domainImportsInfra_testSource_excluded() {
         Node test = funcNodeWithPath("encrypts", "/src/test/java/io/spring/core/UserServiceTest.java");
@@ -1216,6 +1237,23 @@ class GraphWarningServiceTest {
                 List.of(callEdge(src.getId(), tgt.getId(), false))
         );
         assertThat(crossDomain(warnings)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("G-10 회귀: 벤치/픽스처 경로가 섞여도 실코드 컨텍스트 판정이 붕괴하지 않음 — CROSS_DOMAIN_CALL 정상 발화")
+    void crossDomainCall_fixturePollution_doesNotCollapseRealContexts() {
+        // CROSS_CONTEXT_IMPORT와 동일 오염 메커니즘(cfContexts가 detectCrossDomainFunctionCall에도 쓰임).
+        Node src = funcNodeWithPath("runProjectFlow", "/backend/src/main/java/com/codeprint/application/project/ProjectService.java");
+        Node tgt = funcNodeWithPath("loadUserPlan", "/backend/src/main/java/com/codeprint/domain/user/User.java");
+        Node fixtureApp = funcNodeWithPath("scenario", "/backend/src/test/resources/bench/rules/CROSS_CONTEXT_IMPORT/moduleA/application/Foo.java");
+        Node fixtureDom = funcNodeWithPath("scenario", "/backend/src/test/resources/bench/rules/CROSS_CONTEXT_IMPORT/moduleA/domain/Bar.java");
+
+        List<Map<String, Object>> warnings = service.detect(
+                List.of(src, tgt, fixtureApp, fixtureDom),
+                List.of(callEdge(src.getId(), tgt.getId(), false))
+        );
+
+        assertThat(crossDomain(warnings)).hasSize(1);
     }
 
     // --- DEAD_CODE 오탐 제외 ---
