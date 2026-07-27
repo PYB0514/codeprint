@@ -1132,6 +1132,37 @@ export function searchNodes(rawNodes: RawNode[], query: string, limit = 10): Raw
     .slice(0, limit)
 }
 
+export interface ComplexityHub {
+  node: RawNode
+  inDegree: number
+  outDegree: number
+}
+
+// 이름을 몰라도 "숨은 복잡도 지점"을 찾도록 min(in-degree, out-degree) 기준으로 FUNCTION 노드를 순위화.
+// 진입점(Controller 등, in≈0)·순수 유틸(out≈0)은 min값이 낮아 자연히 걸러짐 — 이름/언어 무관, 언어팩 필요 없음.
+// FUNCTION_CALL 엣지만 집계(HIGH_FAN_OUT과 동일 기준). 같은 파일 내 호출 제외·병합 노드 판별은
+// 이 단계 데이터(RawEdge/RawNode)만으론 불가해 하지 않음 — 낮은 stakes(탐색 제안일 뿐 게이트 아님)라 수용.
+export function computeComplexityHubs(rawNodes: RawNode[], rawEdges: RawEdge[], limit = 15, minDegree = 3): ComplexityHub[] {
+  const funcIds = new Set(rawNodes.filter((n) => n.type === 'FUNCTION').map((n) => n.id))
+  const inDegree = new Map<string, number>()
+  const outDegree = new Map<string, number>()
+  for (const e of rawEdges) {
+    if (e.type !== 'FUNCTION_CALL') continue
+    if (funcIds.has(e.source)) outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1)
+    if (funcIds.has(e.target)) inDegree.set(e.target, (inDegree.get(e.target) ?? 0) + 1)
+  }
+  const nodeById = new Map(rawNodes.map((n) => [n.id, n]))
+  const hubs: ComplexityHub[] = []
+  for (const id of funcIds) {
+    const inD = inDegree.get(id) ?? 0
+    const outD = outDegree.get(id) ?? 0
+    if (inD < minDegree || outD < minDegree) continue
+    const node = nodeById.get(id)
+    if (node) hubs.push({ node, inDegree: inD, outDegree: outD })
+  }
+  return hubs.sort((a, b) => Math.min(b.inDegree, b.outDegree) - Math.min(a.inDegree, a.outDegree)).slice(0, limit)
+}
+
 // DB 엣지 타입 판별
 export function isDbEdgeType(t: string | undefined): boolean {
   return t === 'DB_READ' || t === 'DB_WRITE' || t === 'DB_CREATE' || t === 'DB_UPDATE' || t === 'DB_DELETE'
