@@ -4,6 +4,22 @@
 
 ---
 
+## [G-10] 근본 수정 — `GraphWarningService` 컨텍스트 판정 입력에서 테스트·픽스처 경로 제외 (2026-07-27, codeprint_151)
+
+**문제.** codeprint_150에서 발견된 G-10(위 항목 참조) — `BoundedContextResolver.detectContextFirstContexts`가 벤치/edge-audit 픽스처(의도적으로 다른 DDD 레이아웃을 심어둔 합성 데이터)와 실제 코드가 섞여 스캔되면 "codeprint"(우리 최상위 패키지명)를 가짜 바운디드 컨텍스트로 오인식할 수 있다는 게 확인됐다. `RepoMapService`는 그 세션에 이미 수정됐지만, 같은 `BoundedContextResolver`를 공유하는 배포 감지기 `CROSS_CONTEXT_IMPORT`(`detectCrossContextDomainImport`)·`CROSS_DOMAIN_CALL`(`detectCrossDomainFunctionCall`)은 "미검증"으로 남아 있었다.
+
+**원인 — 위반 발화 필터와 컨텍스트 판정 입력 필터의 비대칭.** 두 감지기 모두 개별 엣지를 위반으로 발화할 때는 `isTestArtifact`로 테스트/픽스처 경로를 걸렀지만(`detectCrossContextDomainImport` 710행, `detectCrossDomainFunctionCall` 1300행), 그보다 먼저 실행되는 `BoundedContextResolver.detectContextFirstContexts` 호출과 그 결과로 만드는 `distinctContexts`(C1 게이트, 진짜 복수 컨텍스트가 있어야만 검사를 여는 조건) 계산은 전체 노드(테스트·픽스처 포함)를 그대로 입력으로 썼다. 즉 "위반이냐 아니냐"는 걸러졌지만 "컨텍스트가 몇 개, 무엇이냐"는 걸러지지 않은 채였다.
+
+**실증 — 단위 테스트로 직접 재현.** `GraphWarningServiceTest`에 회귀 테스트 2건을 추가(`crossContextImport_fixturePollution_doesNotCollapseRealContexts`·`crossDomainCall_fixturePollution_doesNotCollapseRealContexts`). 시나리오: 실코드가 `com/codeprint/application/project/`(project 컨텍스트)에서 `com/codeprint/domain/user/`(user 컨텍스트)를 직접 참조하는 명백한 위반 + 테스트 경로 픽스처 노드 2개("moduleA"가 application·domain 레이어를 선행해 context-first 후보 2번째로 성립, 그래야 `candidates.size()>=2` 문턱을 넘겨 "codeprint"까지 context-first로 승격됨). `git stash`로 수정을 되돌려 실행한 결과 **두 위반 모두 발화 0건**으로 사라짐을 확인 — "codeprint"가 cfContexts에 편입되면서 실코드의 서로 다른 두 서브컨텍스트(project·user)가 전부 "codeprint" 하나로 붕괴해, `srcContext.equals(tgtContext)`가 참이 되어 위반 조건 자체가 성립하지 않게 됐다. 이론상 가능이 아니라 실제로 재현되는 결함이었음을 확인 후 수정을 복원, 테스트가 통과함을 재확인.
+
+**수정.** 두 메서드 모두 `detectContextFirstContexts` 호출 직전에 `nodes.stream().filter(n -> !isTestArtifact(...))`로 걸러낸 `nonTestPaths`를 만들어 컨텍스트 추론(cfContexts)과 C1 게이트(distinctContexts) 계산의 입력으로 쓰도록 변경 — `RepoMapService.isTestOrFixturePath`와 같은 원리이나, 이쪽은 이미 있던 `isTestArtifact`(더 포괄적: pytest `test_` 접두사 함수명까지 인식)를 재사용해 새 유틸을 만들지 않았다. `detectCrossDomainFunctionCall`의 `funcNameToDomains`(동일 함수명이 2개 이상 도메인에 있으면 bare-name 해석을 포기하는 모호성 판정)도 테스트 함수를 넣으면 안 되는 이유가 같아 함께 필터링.
+
+**대안으로 검토했다 기각한 것 — `SourceFileWalker.isTestOrFixturePath`를 새로 공유.** GATE_GAPS.md 원문이 제안했던 방향이었으나, `GraphWarningService`엔 이미 `isTestArtifact`(인스턴스 메서드, pytest 관례까지 인식)가 있고 위반 발화 필터와 컨텍스트 판정 필터를 **같은 기준**으로 맞추는 게 더 중요했다(다른 필터를 쓰면 "위반은 안 걸렸는데 컨텍스트 판정에선 여전히 픽스처로 오염"이라는 새 비대칭이 생길 수 있음). `SourceFileWalker`쪽 유틸을 끌어오면 레이어(infrastructure)를 domain/application이 참조하게 되는 문제도 있어 기각.
+
+**검증.** 회귀 테스트 2건 신규 통과, 백엔드 전체 스위트(Docker DB 포함) 1121+2건 전부 green. `analyzeLocal` 자기 레포 베이스라인(HIGH_FAN_OUT 5건, CROSS_CONTEXT_IMPORT/CROSS_DOMAIN_CALL 0건) 무변화 — 단, `analyzeLocal`은 `backend/src/main/java`만 스캔해 픽스처가 스코프 밖이라 이 경로로는 애초에 오염이 재현되지 않는다(GATE_GAPS.md에 이미 기록된 한계). 실제 PR 게이트(레포 루트 전체 스캔) 경로에서 수정 전 상태가 실제로 얼마나 위반을 놓쳤는지는 이번에도 별도 실측하지 않음 — GATE_GAPS.md [G-10] "범위 한계" 참조.
+
+---
+
 ## RepoMap DDD 컨텍스트별 그룹핑(1단계: 내부 exploreLocal) — `BoundedContextResolver` 추출 (2026-07-27, codeprint_150, 같은 세션)
 
 **문제.** 사용자 대화 중 나온 아이디어 — MD 내보내기(`RepoMapService`, 웹 다운로드·로컬 `exploreLocal`·MCP가 공유)를 폴더 구조 대신 DDD 바운디드 컨텍스트별로 묶어 보여줄 수 있는지 검토. 확인 결과 `GraphWarningService`가 `CROSS_CONTEXT_IMPORT`/`CROSS_DOMAIN_CALL` 판정용으로 이미 컨텍스트 추론 로직(`detectContextFirstContexts`·`functionContextOf` 등)을 갖고 있었음 — 재사용 가능했으나 전부 `private`이라 `RepoMapService`가 직접 못 씀.
