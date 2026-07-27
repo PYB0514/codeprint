@@ -76,9 +76,14 @@
 ### 기타
 - `FeaturedRepoController` — `GET /api/featured-repos`(public, 오늘의 공개레포)
 - `CollaborationController` — 세션 생성/참여(실시간 커서·팀챗)
-- `AdminController` — 통계·유저관리·플랜변경(감사로그)·공지·다이제스트
+- `AdminController` — 통계·유저관리·플랜변경(감사로그)·다이제스트
 - `McpController` — AI 에이전트용 그래프 컨텍스트 REST 엔드포인트(`/mcp/graphs/{graphId}/context`)·관리자 다이제스트(`/mcp/admin/stats`). ~~`McpRpcController`(JSON-RPC 2.0 MCP 서버)~~는 2026-07-10 제거(경위: `decisions/DECISIONS_BACKEND.md`)
 - `GitHubWebhookController`/`PrReviewController` — PR 자동 구조 리뷰(`codeprint/structure` commit status 게이트)
+- `NoticeController`(`/api/notices`, 2026-07-26 문서 누락 발견 — 실제 코드는 이전부터 존재) — 활성 공지 조회(public), 전체 조회·생성·활성화/비활성화·삭제(admin)
+- `FeedbackController`(`/api/feedback`, 상동) — 문의/피드백 제출(auth), 전체 조회·처리상태 변경(admin)
+- `ReportController`(`/api/reports`, 상동) — 게시글/댓글 신고(auth), 전체 조회·처리상태 변경(admin)
+- `PushController`(`/api/push`, 상동) — VAPID 공개키 조회(public), Web Push 구독 등록/해제(auth)
+- `TeamApiKeyController`(`/api/teams/{teamId}/api-keys`, 상동) — 팀 API 키 발급/목록/폐기(own, 평문 키는 발급 응답에서만 노출)
 
 ---
 

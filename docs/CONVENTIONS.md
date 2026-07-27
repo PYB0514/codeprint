@@ -25,10 +25,14 @@ Spring/DB 없이 임의 `Path`를 받아 파싱 → `GraphBuilder` → 인메모
 | `LocalGraphQuery` | `exploreLocal` | repo map / 노드검색(`find`) / 이웃조회(`neighbors`) |
 
 **경로 파라미터화 컨벤션**: 어떤 레포를 분석할지는 코드에 없다 — `build.gradle`의 Gradle task 인자
-`-PanalysisDir=<경로>`로만 결정된다(미지정 시 기본값 `src/main/java`, 즉 자기 레포 — 이건 "편의상 기본값"이지
-하드코딩이 아니다). `exploreLocal`은 추가로 `-PqueryMode=repoMap|find|neighbors -PqueryTarget=검색어`를 받는다
+`-PanalysisDir=<경로>`로만 결정된다("편의상 기본값"이지 하드코딩이 아니다). **기본값은 도구마다 다르다**
+(2026-07-26 재확인 — 이전엔 하나로 뭉뚱그려져 있었음): `analyzeLocal`/`watchLocal`/`edgeAudit`은
+`src/main/java`(백엔드 소스 한정)가 기본값이고, `exploreLocal`만 `.`(레포 루트, backend+frontend 전체)이 기본값이다.
+`exploreLocal`은 추가로 `-PqueryMode=repoMap|find|neighbors -PqueryTarget=검색어`를 받는다
 (⚠️ `find`/`neighbors` 모드는 `-PqueryTarget=` 파라미터명을 정확히 써야 함 — `-Pquery=`로 잘못 넘기면 조용히
-무시되고 repoMap과 동일한 전체 목록이 반환됨, `decisions/DECISIONS_INFRA.md` 참조).
+무시되고 repoMap과 동일한 전체 목록이 반환됨, `decisions/DECISIONS_INFRA.md` 참조). `find`/`neighbors`는 FILE·FUNCTION·
+DB_TABLE·API_ENDPOINT 노드만 대상으로 한다 — 프론트엔드의 최상위 `export const` 같은 비-그래프 식별자는
+결과에 나오지 않는다(찾으려면 repoMap이나 직접 파일 열람).
 
 **이 계열에 새 로컬 도구를 추가할 때 규칙**:
 1. `LocalAnalyzer.buildGraph`(또는 그 결과를 감싸는 기존 메서드)를 재사용 — 그래프 생성 로직 재구현 금지.
