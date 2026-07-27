@@ -275,4 +275,18 @@ class PrReviewServiceTest {
         String md = PrReviewService.formatComment("feature/x", List.of(), 0, 0, true, 0);
         assertThat(md).doesNotContain("레포 크기 상한");
     }
+
+    @Test
+    @DisplayName("게이트 description — 절단으로 누락된 변경 파일이 있으면 '부분 분석'을 명시한다")
+    void buildGateDescription_unanalyzedCount_showsPartialNotice() {
+        String desc = PrReviewService.buildGateDescription(0, 3);
+        assertThat(desc).contains("구조 위반(HIGH) 없음").contains("부분 분석").contains("3");
+    }
+
+    @Test
+    @DisplayName("게이트 description — 절단된 변경 파일이 없으면(0) 기존 문구 그대로다")
+    void buildGateDescription_zeroUnanalyzedCount_unchanged() {
+        String desc = PrReviewService.buildGateDescription(2, 0);
+        assertThat(desc).isEqualTo("2건의 구조 위반(HIGH)이 변경 파일에 있습니다");
+    }
 }
