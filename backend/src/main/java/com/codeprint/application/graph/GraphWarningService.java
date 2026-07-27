@@ -685,14 +685,23 @@ public class GraphWarningService {
             nameMap.put(n.getId(), n.getName());
         }
 
+        // 컨텍스트 추론(cfContexts·distinctContexts) 입력은 테스트·픽스처 경로 제외 — 벤치/edge-audit
+        // 픽스처가 실제 코드와 섞여 스캔되면 detectContextFirstContexts가 오염된다(G-10 실증, GATE_GAPS.md 참조).
+        // 아래 710행의 isTestArtifact는 위반 "발화"만 걸렀고 컨텍스트 "판정" 입력은 무필터였던 비대칭을 제거.
+        List<String> nonTestPaths = nodes.stream()
+                .filter(n -> !isTestArtifact(n.getFilePath() != null ? n.getFilePath() : "",
+                        n.getName() != null ? n.getName() : ""))
+                .map(n -> n.getFilePath() != null ? n.getFilePath() : "")
+                .toList();
+
         // context-first 레이아웃({context}/application/·{context}/model/) 컨텍스트 집합을 전역 추론.
         // 비어 있으면 layer-first(application/{context}/) 레포 → 기존 추출만 사용(무회귀).
-        Set<String> cfContexts = BoundedContextResolver.detectContextFirstContexts(nodeFilePaths.values());
+        Set<String> cfContexts = BoundedContextResolver.detectContextFirstContexts(nonTestPaths);
 
         // C1: 진짜 복수 바운디드 컨텍스트가 있을 때만 발화 — 단일 컨텍스트(헥사고날 단일 모듈 등)면 cross-context
         // 위반 자체가 성립 불가. 추출 가능한 distinct 컨텍스트가 2개 미만이면 검출하지 않는다(교과서 FP 방지).
         Set<String> distinctContexts = new HashSet<>();
-        for (String p : nodeFilePaths.values()) {
+        for (String p : nonTestPaths) {
             String ac = BoundedContextResolver.applicationContextOf(p, cfContexts);
             if (ac != null) distinctContexts.add(ac);
             String dc = BoundedContextResolver.domainContextOf(p, cfContexts);
@@ -1274,17 +1283,29 @@ public class GraphWarningService {
             nameMap.put(n.getId(), n.getName());
         }
 
+        // 컨텍스트 추론 입력은 테스트·픽스처 경로 제외 — 벤치/edge-audit 픽스처가 실제 코드와 섞여 스캔되면
+        // detectContextFirstContexts가 오염된다(G-10 실증, GATE_GAPS.md 참조). 1300행의 isTestArtifact는
+        // 위반 "발화"만 걸렀고 컨텍스트 "판정" 입력은 무필터였던 비대칭을 제거.
         // 컨텍스트 추출은 CROSS_CONTEXT_IMPORT와 동일한 레이어-인지 추출기(레이어 용어 스킵·application 하위 중첩 가드)를 쓴다 —
         // 헥사고날 단일 컨텍스트(application/domain/{service,model})를 별개 도메인으로 오인식하던 FP를 제거(buckpal 16건).
-        Set<String> cfContexts = BoundedContextResolver.detectContextFirstContexts(nodeFilePaths.values());
+        List<String> nonTestPaths = nodes.stream()
+                .filter(n -> !isTestArtifact(n.getFilePath() != null ? n.getFilePath() : "",
+                        n.getName() != null ? n.getName() : ""))
+                .map(n -> n.getFilePath() != null ? n.getFilePath() : "")
+                .toList();
+        Set<String> cfContexts = BoundedContextResolver.detectContextFirstContexts(nonTestPaths);
 
         // 함수명 → 등장 도메인 집합 — 동일 이름이 2개 이상 도메인에 있으면 bare-name 해석이 모호 → 오탐 제외용
+        // (테스트 함수는 실제 도메인 판정과 무관하므로 여기서도 제외)
         Map<String, Set<String>> funcNameToDomains = new HashMap<>();
         for (Node n : nodes) {
             if (n.getType() != NodeType.FUNCTION) continue;
-            String domain = BoundedContextResolver.functionContextOf(n.getFilePath() != null ? n.getFilePath() : "", cfContexts);
+            String fp = n.getFilePath() != null ? n.getFilePath() : "";
+            String name = n.getName() != null ? n.getName() : "";
+            if (isTestArtifact(fp, name)) continue;
+            String domain = BoundedContextResolver.functionContextOf(fp, cfContexts);
             if (domain == null) continue;
-            funcNameToDomains.computeIfAbsent(n.getName(), k -> new HashSet<>()).add(domain);
+            funcNameToDomains.computeIfAbsent(name, k -> new HashSet<>()).add(domain);
         }
 
         List<Map<String, Object>> warnings = new ArrayList<>();
