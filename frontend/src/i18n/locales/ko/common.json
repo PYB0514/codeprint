@@ -3,10 +3,8 @@
     "community": "커뮤니티",
     "service": "서비스",
     "serviceLinks": {
-      "howItWorks": "작동 방식",
-      "changelog": "패치노트",
-      "evolution": "발전사",
-      "dogfooding": "자체 사용 사례"
+      "proof": "제품 살펴보기",
+      "changelog": "패치노트"
     },
     "teams": "팀",
     "donate": "후원",

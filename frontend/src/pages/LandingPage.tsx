@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
 import Footer from '../components/Footer'
+import HeroGraphPreview from '../components/HeroGraphPreview'
 
 // 기능 카드 아이콘 — 텍스트는 i18n(landing.json)에서 조회, 순서로 매칭
 const FEATURE_ICONS = [
@@ -112,7 +113,7 @@ export default function LandingPage() {
             />
             <button
               type="submit"
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg whitespace-nowrap transition-all duration-150 hover:scale-[1.04] active:scale-95 hover:shadow-lg hover:shadow-blue-500/30"
             >
               {t('analyzeButton')}
             </button>
@@ -131,13 +132,13 @@ export default function LandingPage() {
               <>
                 <button
                   onClick={() => navigate('/mypage')}
-                  className="px-6 py-3 bg-white text-black rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                  className="px-6 py-3 bg-white text-black rounded-lg font-semibold transition-all duration-150 hover:bg-gray-100 hover:scale-[1.04] active:scale-95 hover:shadow-lg hover:shadow-white/10"
                 >
                   {t('viewMyProjects')}
                 </button>
                 <button
                   onClick={() => navigate('/community')}
-                  className="px-6 py-3 border border-gray-700 text-gray-300 rounded-lg font-medium hover:border-gray-500 hover:text-white transition-colors"
+                  className="px-6 py-3 border border-gray-700 text-gray-300 rounded-lg font-medium transition-all duration-150 hover:border-gray-500 hover:text-white hover:scale-[1.04] active:scale-95"
                 >
                   {t('browseCommunity')}
                 </button>
@@ -146,20 +147,22 @@ export default function LandingPage() {
               <>
                 <button
                   onClick={handleLogin}
-                  className="flex items-center gap-2 px-6 py-3 bg-white text-black rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                  className="flex items-center gap-2 px-6 py-3 bg-white text-black rounded-lg font-semibold transition-all duration-150 hover:bg-gray-100 hover:scale-[1.04] active:scale-95 hover:shadow-lg hover:shadow-white/10"
                 >
                   <GithubIcon />
                   {t('loginWithGithub')}
                 </button>
                 <button
                   onClick={() => navigate('/community')}
-                  className="px-6 py-3 border border-gray-700 text-gray-300 rounded-lg font-medium hover:border-gray-500 hover:text-white transition-colors"
+                  className="px-6 py-3 border border-gray-700 text-gray-300 rounded-lg font-medium transition-all duration-150 hover:border-gray-500 hover:text-white hover:scale-[1.04] active:scale-95"
                 >
                   {t('browseCommunity')}
                 </button>
               </>
             )}
           </div>
+
+          <HeroGraphPreview />
         </section>
 
         {/* 사용법 + 주요 기능 — 나란히 배치 */}
@@ -216,7 +219,7 @@ export default function LandingPage() {
               </ul>
               <button
                 onClick={handleLogin}
-                className="mt-auto w-full py-2 bg-gray-800 hover:bg-gray-700 text-sm rounded-lg transition-colors"
+                className="mt-auto w-full py-2 bg-gray-800 text-sm rounded-lg transition-all duration-150 hover:bg-gray-700 hover:scale-[1.02] active:scale-95"
               >
                 {t('free.cta')}
               </button>
@@ -290,7 +293,7 @@ function FeaturedReposSection() {
             key={r.repoFullName}
             disabled={r.postId == null || r.position == null}
             onClick={() => navigate(`/community/posts/${r.postId}/graph/${r.position}`)}
-            className="text-left bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-800"
+            className="text-left bg-gray-900 border border-gray-800 rounded-xl overflow-hidden transition-all duration-150 hover:border-gray-600 hover:scale-[1.02] hover:shadow-lg hover:shadow-black/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-800 disabled:hover:scale-100"
           >
             <img src={r.ogImageUrl} alt={r.repoFullName} className="w-full h-32 object-cover bg-gray-800" loading="lazy" />
             <div className="p-3 flex flex-col gap-1">

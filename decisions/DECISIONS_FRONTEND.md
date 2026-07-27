@@ -2,6 +2,26 @@
 
 ---
 
+## 페이지 통폐합(결제 결과·북마크·제품 신뢰성 4종) + 랜딩 인터랙션 추가 (2026-07-28, codeprint_151 이후 세션)
+
+**문제.** 얼리억세스 디자인 시안 작업 중 사용자가 "전체적으로 체계적이지 않고 대충 쌓아둔 느낌"이라는 피드백을 줬고, 실제 라우트 30개를 전수 점검한 결과 두 종류의 구조적 낭비가 확인됐다 — ①거의 동일한 로직이 파일만 복제된 페이지군(결제 성공/실패 5종) ②같은 성격의 콘텐츠가 서로 다른 최상위 라우트로 쪼개진 페이지군(`/proof`·`/how-it-works`·`/evolution`·`/dogfooding` — 특히 `/dogfooding`의 5개 사례와 `/proof` section3의 요약이 동일한 "97건 자체 적발" 사실을 다른 깊이로 중복 서술).
+
+**결정 ① — 결제 결과 페이지 5→2 공용 컴포넌트.** `PaymentSuccessPage`·`TeamPaymentSuccessPage`·`DonateSuccessPage`(loading→confirm API→success/error 3단계, API 엔드포인트·문구·복귀 대상만 다름)를 `components/PaymentResultPage.tsx`로, `PaymentCancelPage`·`DonateFailPage`(정적 취소/실패 안내, API 호출 없음)를 `components/PaymentFailedPage.tsx`로 통합. 기존 5개 파일은 props만 다르게 넘기는 얇은 래퍼로 남겨 **라우트 경로는 전혀 안 바꿈**(하위 호환·리스크 최소화).
+
+**결정 ② — 북마크를 마이페이지 3번째 탭으로.** `BookmarksPage`(독립 페이지+헤더, `/api/community/bookmarks` 조회)가 마이페이지의 기존 글/프로젝트 탭과 같은 성격(내 활동 목록)인데도 별도 라우트로 분리돼 있던 것을 `MyPage.tsx`의 `MyPageTab` 유니언에 `'bookmarks'` 추가로 흡수. `/bookmarks`는 `<Navigate to="/mypage?tab=bookmarks">`로 리다이렉트, `MyPage`는 마운트 시 `?tab=` 쿼리로 초기 탭을 정한다.
+
+**결정 ③ — proof/how-it-works/evolution/dogfooding을 `/proof` 탭 3개로.** 단순 병렬 배치가 아니라 **dogfooding의 5개 상세 사례를 proof의 "실전 검증" 섹션 안에 실제로 병합**(요약 표 유지 + 그 아래 상세 사례 카드 추가) — 두 콘텐츠가 같은 사실(97건 자체 적발)을 다른 깊이로 서술하던 중복을 없앴다. how-it-works·evolution은 콘텐츠가 서로 겹치지 않아 통합하지 않고 별도 탭으로 유지. `/how-it-works`·`/evolution`·`/dogfooding` 세 라우트는 각각 `/proof?tab=howItWorks`·`/proof?tab=evolution`·`/proof?tab=proof`로 리다이렉트. 헤더 "서비스" 드롭다운도 4개 항목→2개(`제품 살펴보기`+패치노트)로 축소.
+
+**i18n 특이사항 — dogfooding·evolution은 원래 100% 한국어 하드코딩이었음.** 두 페이지의 서사 콘텐츠(`DogfoodingPage`의 `CASES` 배열, `EvolutionPage`의 `ARCS` 배열)는 i18n 도입 이전에 작성돼 `t()` 호출 없이 컴포넌트에 리터럴로 박혀 있었다 — 즉 언어 토글과 무관하게 항상 한국어만 보였던 기존 결함. 이번에 `workspace.json`(ko/en)의 `dogfooding`/`evolution` 네임스페이스로 이동시키며 전체 영어 번역을 새로 작성했다(기존에 없던 번역이라 "동기화"가 아니라 "신규 작성"). `howItWorks` 네임스페이스는 이미 완전히 i18n화돼 있어 그대로 재사용.
+
+**대안으로 검토했다 기각한 것.** ㉠결제 결과 페이지의 라우트 자체를 하나로 합치는 안(`/payment/result?type=...`) — 기각 이유: 기존 GitHub OAuth 콜백·토스 리다이렉트 URL에 하드코딩된 경로라 바꾸면 외부 연동이 깨짐, 컴포넌트만 합치고 라우트는 유지하는 게 리스크 대비 이득이 큼. ㉡proof 4종을 완전히 한 화면(탭 없이 스크롤 롱폼)으로 합치는 안 — 기각 이유: 각 콘텐츠가 충분히 길어(특히 how-it-works의 경고 타입별 상세 가이드) 탭 없이 이어붙이면 오히려 "체계적이지 않다"는 원 불만을 재현.
+
+**랜딩 페이지 — 인터랙티브 그래프 미리보기 + 버튼 마이크로인터랙션 추가.** 사용자가 "메인페이지에 동적/인터랙티브 이미지, 버튼에 반응 있는 디자인"을 요청 — `components/HeroGraphPreview.tsx` 신설(노드 3개+연결선 2개가 순차 등장·드로잉되는 SVG+CSS 애니메이션, 첫 노드에 은은한 펄스). `index.css`에 `@media (prefers-reduced-motion: no-preference)`로 감싼 키프레임만 추가해, 모션 최소화 선호 사용자는 애니메이션 없이 완성된 상태를 즉시 본다(별도 분기 코드 없이 CSS만으로 접근성 처리). 랜딩의 주요 CTA 버튼(분석 시작·GitHub 시작·커뮤니티 둘러보기·프로젝트 보기·무료 시작·오늘의 공개레포 카드)에 호버 시 `scale-105`류 확대+그림자, 클릭 시 `active:scale-95` 눌림 효과 추가.
+
+**검증.** `npx tsc -b`·전체 ESLint(0 errors, 기존 경고만 유지)·`npm test`(Vitest 4/4) 통과. 브라우저로 `/proof` 3탭(한국어·영어 둘 다), `/how-it-works`·`/evolution`·`/dogfooding`·`/bookmarks` 리다이렉트, 결제 성공/실패 페이지(쿼리 파라미터 동적 메시지 포함), 헤더 드롭다운(한/영) 전부 클릭 확인. 히어로 애니메이션은 이 세션의 자동화 브라우저 탭이 화면에 표시되지 않아 실제 프레임 컴포지팅이 안 되는 환경 제약으로 재생 자체는 못 봤으나, Web Animations API로 타임라인을 끝까지 돌려 최종 상태(opacity 1·선 완전히 그려짐)가 올바름을 확인.
+
+---
+
 ## GraphViewerPage·CommunityPostGraphPage에도 국소 표시 확장(2026-07-26, codeprint_149)
 
 **문제.** 앞선 `GraphPage.tsx` 국소 표시 전환(PR #687)을 사용자 확인에 따라 나머지 두 페이지로 확장. 두 페이지는 GraphPage와 구조가 달랐다 — `GraphViewerPage.tsx`(공유 링크 `/share/:projectId`, 읽기 전용)는 토글 UI 자체가 없고 소유자가 저장한 프리셋 값을 그대로 반영만 했고, `CommunityPostGraphPage.tsx`(커뮤니티 게시글 스냅샷)는 `edgeVisibility` 객체(`{se,sc,si,sb,sdb,sapi}`)+`toggleEdgeType` 제네릭 토글로 GraphPage보다 이미 간결한 형태였다. **두 페이지 다 노드 클릭 1홉 강조(`clickedNodeId`) 기능 자체가 없었다** — GraphPage에서만 있던 기능이라 이번에 새로 이식.
