@@ -137,6 +137,31 @@ public class GitHubApiClient {
         }
     }
 
+    // 레포 크기(KB) 조회 — 클론/아카이브 다운로드 전 상한 검사용(대형 레포로 동시성 슬롯을 오래 점유하는 DoS 완화)
+    public long fetchRepoSizeKb(String githubRepoUrl, String githubAccessToken) {
+        String ownerRepo = extractOwnerRepo(githubRepoUrl);
+        String apiUrl = "https://api.github.com/repos/" + ownerRepo;
+
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28");
+            if (githubAccessToken != null && !githubAccessToken.isBlank()) {
+                builder.header("Authorization", "Bearer " + githubAccessToken);
+            }
+            HttpRequest request = builder.GET().build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new RuntimeException("GitHub API " + response.statusCode() + " — " + response.body());
+            }
+            JsonNode root = objectMapper.readTree(response.body());
+            return root.hasNonNull("size") ? root.get("size").asLong() : 0L;
+        } catch (Exception e) {
+            throw new RuntimeException("GitHub 레포 크기 조회 실패: " + ownerRepo, e);
+        }
+    }
+
     // 특정 커밋 SHA(ref)의 소스 아카이브(tar.gz)를 codeload에서 다운로드 — 특정 커밋 재분석용.
     // git 프로토콜은 shallow clone에서 임의 SHA를 못 받아 GitHub 아카이브 다운로드로 우회(공개 레포는 인증
     // 불필요, 비공개는 토큰을 최선 노력으로 첨부 — raw.githubusercontent.com과 같은 host 밖 패턴, fetchFileContent 참조).

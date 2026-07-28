@@ -193,4 +193,22 @@ class RateLimitFilterTest {
         verify(response).setStatus(429);
         verify(chain, times(5)).doFilter(request, response);
     }
+
+    @Test
+    @DisplayName("GitHub 웹훅은 분당 60회 — 서명검증이 1차 방어, IP당 무제한 수신 방지가 목적(codeprint_152 DDoS 감사)")
+    void webhookGithubCategory_limitedToSixtyPerMinute() throws Exception {
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getRequestURI()).thenReturn("/api/webhooks/github");
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("10.10.10.10");
+
+        for (int i = 0; i < 60; i++) {
+            filter.doFilter(request, response, chain);
+        }
+        verify(chain, times(60)).doFilter(request, response);
+
+        filter.doFilter(request, response, chain); // 61번째 — 초과
+        verify(response).setStatus(429);
+        verify(chain, times(60)).doFilter(request, response);
+    }
 }
