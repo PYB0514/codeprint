@@ -235,7 +235,7 @@ export default function AppHeader({ onLogin }: Props) {
             className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-xs"
             title={t('language.toggle')}
           >
-            <span>🌐</span>
+            <GlobeIcon />
             <span>{i18n.language.startsWith('ko') ? t('language.ko') : t('language.en')}</span>
           </button>
           {showLangMenu && (
@@ -260,7 +260,7 @@ export default function AppHeader({ onLogin }: Props) {
             onClick={() => setShowThemeMenu(v => !v)}
             className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-xs"
           >
-            <span>{isDark ? '🌙' : '☀️'}</span>
+            {isDark ? <MoonIcon /> : <SunIcon />}
             <span>{isDark ? t('header.darkMode') : t('header.lightMode')}</span>
           </button>
           {showThemeMenu && (
@@ -367,5 +367,34 @@ export default function AppHeader({ onLogin }: Props) {
         )}
       </nav>
     </header>
+  )
+}
+
+// 언어 전환 아이콘 — 이모지(🌐) 대신 선 아이콘으로 통일
+function GlobeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <circle cx="12" cy="12" r="9" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h18M12 3c2.5 2.5 3.75 5.5 3.75 9s-1.25 6.5-3.75 9c-2.5-2.5-3.75-5.5-3.75-9S9.5 5.5 12 3Z" />
+    </svg>
+  )
+}
+
+// 다크 모드 아이콘 — 이모지(🌙) 대신 선 아이콘으로 통일
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
+    </svg>
+  )
+}
+
+// 라이트 모드 아이콘 — 이모지(☀️) 대신 선 아이콘으로 통일
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <circle cx="12" cy="12" r="4.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1.5M12 19.5V21M4.22 4.22l1.06 1.06M18.72 18.72l1.06 1.06M3 12h1.5M19.5 12H21M4.22 19.78l1.06-1.06M18.72 5.28l1.06-1.06" />
+    </svg>
   )
 }
