@@ -168,6 +168,7 @@ public class GraphController {
             @PathVariable UUID projectId,
             @RequestParam(required = false) UUID graphId,
             @RequestParam(defaultValue = "full") String level,
+            @RequestParam(defaultValue = "folder") String grouping,
             @AuthenticationPrincipal User user) {
 
         graphFacade.getOwnedProject(projectId, user.getId());
@@ -179,7 +180,7 @@ public class GraphController {
         return graphOpt.map(graph -> {
                     List<Node> nodes = graphQueryService.getNodes(graph.getId()).stream()
                             .filter(n -> !n.isHidden()).toList();
-                    return ResponseEntity.ok(Map.of("content", repoMapService.generate(nodes, level)));
+                    return ResponseEntity.ok(Map.of("content", repoMapService.generate(nodes, level, grouping)));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

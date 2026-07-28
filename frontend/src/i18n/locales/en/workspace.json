@@ -616,6 +616,7 @@
     "generating": "Generating...",
     "exportContextFull": "↓ AI Context - Full (.md)",
     "exportContextSummary": "↓ AI Context - Summary (.md)",
+    "exportContextByDomain": "↓ AI Context - By Context (.md)",
     "savingImage": "Saving...",
     "exportImage": "↓ Image (.png)",
     "shareToCommunityButton": "Share to Community",

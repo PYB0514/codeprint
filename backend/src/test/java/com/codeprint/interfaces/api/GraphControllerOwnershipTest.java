@@ -103,11 +103,11 @@ class GraphControllerOwnershipTest {
         doThrow(new IllegalStateException("Not authorized to access this project"))
                 .when(graphFacade).getOwnedProject(projectId, userId);
 
-        assertThatThrownBy(() -> controller.getContextMd(projectId, null, "full", user))
+        assertThatThrownBy(() -> controller.getContextMd(projectId, null, "full", "folder", user))
                 .isInstanceOf(IllegalStateException.class);
 
         verify(graphQueryService, never()).findLatestByProject(any());
-        verify(repoMapService, never()).generate(any(), any());
+        verify(repoMapService, never()).generate(any(), any(), any());
     }
 
     // 다른 프로젝트 소속 graphId를 넘기면 404로 차단되고 마크다운을 생성하지 않아야 한다
@@ -119,10 +119,10 @@ class GraphControllerOwnershipTest {
         when(foreignGraph.getProjectId()).thenReturn(UUID.randomUUID()); // 다른 프로젝트
         when(graphQueryService.findById(foreignGraphId)).thenReturn(Optional.of(foreignGraph));
 
-        var response = controller.getContextMd(projectId, foreignGraphId, "full", user);
+        var response = controller.getContextMd(projectId, foreignGraphId, "full", "folder", user);
 
         assertThat(response.getStatusCode().value()).isEqualTo(404);
-        verify(repoMapService, never()).generate(any(), any());
+        verify(repoMapService, never()).generate(any(), any(), any());
     }
 
     // 비소유자가 diff 호출 시 차단되고 diff 연산을 수행하지 않아야 한다
