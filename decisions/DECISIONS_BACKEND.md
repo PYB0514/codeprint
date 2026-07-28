@@ -2346,3 +2346,17 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `compileJava`·`compileTestJava` clean. `RateLimitFilterTest`에 신규 4건 추가 — report-fp 10/분 한도, 커뮤니티 댓글 20/분 한도(별도 버킷 확인), 결제 3종이 엔드포인트를 바꿔가며 호출해도 같은 버킷을 공유해 합산 5회에서 차단되는 케이스. 전부 통과. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5·BROKEN_INTERFACE_CHAIN 1) 불변 — 이번 변경으로 신규 위반 없음.
 
 **한계·다음.** R22 #67이 지적한 "근본 원인"(신규 쓰기 엔드포인트 추가 시 이 목록 동기화를 강제하는 장치 부재)은 이번 스코프 밖 — 수동 목록에 항목을 채워 넣었을 뿐, 앞으로 또 빠질 수 있는 구조 자체는 그대로다. 체크리스트/테스트로 강제하는 방안은 별도 판단 필요.
+
+## DDoS 감사 갭 ②③ 처리 — 레포 크기 상한 + 웹훅 레이트리밋 (2026-07-28, codeprint_153)
+
+**배경.** `contexts/Context152.md`의 DDoS 취약점 코드 감사(codeprint_152)가 발견한 5개 갭 중 우선순위 1번(①동시성 슬롯 소진)에 대한 완화책. IP당 분석 요청은 이미 3분에 1회로 제한돼 있어(`analysisCategory_limitedToOnePerThreeMinutes`) 단일 IP의 슬롯 점유는 사실상 이미 막혀 있었다 — 실제로 뚫려 있는 건 **분산 IP 8개가 동시에 각자 1회씩 대형 레포를 분석 요청하는 경우, 각 요청이 `git clone` 타임아웃(120초)까지 8-슬롯 전체를 점유**하는 시나리오였다. 분산 소스는 IP 레이트리밋으로 막을 수 없으므로(감사에서 이미 확인된 한계), "슬롯을 점유하는 시간 자체를 줄이는" 방향으로 접근 — 갭②(레포 크기 상한 없음)를 해소하면 대형 레포로 인한 최악의 점유 시간(최대 120초)을 사실상 즉시 실패로 단축할 수 있다.
+
+**구현.**
+1. **레포 크기 상한(갭②)** — `GitHubApiClient.fetchRepoSizeKb(githubRepoUrl, githubAccessToken)` 신설(기존 URL 기반 메서드들과 동일 패턴, `GET /repos/{owner}/{repo}`의 `size` 필드 KB 단위 조회). `AnalysisApplicationService.startAnalysis`가 `AnalysisResult` 생성·`@Async` 디스패치 이전(=슬롯 점유 이전)에 이 값을 확인해 1GB(1,048,576KB) 초과 시 `IllegalArgumentException`(→400)으로 즉시 거부. GitHub API 조회 자체가 실패하면(레이트리밋·네트워크 오류 등) 기존 `fetchLatestShaSafely`와 동일한 fail-open 패턴(`fetchRepoSizeKbSafely`, 0 반환)으로 상한 검사를 통과시켜 정상 분석을 막지 않는다.
+2. **웹훅 레이트리밋(갭③)** — `RateLimitFilter.rules`에 `POST /api/webhooks/github` 규칙 추가(분당 60회, IP당). HMAC 서명검증이 이미 1차 방어선이라 위조 요청 자체는 처리 전에 걸러지지만, 서명 검증 로직 자체를 반복 호출해 소모시키는 무제한 수신은 막혀 있지 않았다.
+- **탈락한 대안**: `RepoCloner.clone()`(실제 `git clone` 실행 지점, 즉 `@Async` 스레드 내부)에서 크기를 검사하는 방안 — 그 시점엔 이미 슬롯을 점유한 뒤라 "슬롯 점유 시간 단축"이라는 목적에 안 맞아 기각. 검사는 반드시 슬롯 점유 이전(동기 구간)에서 일어나야 한다.
+- **범위 밖으로 남긴 것**: `PrReviewService`(PR 게이트 웹훅 트리거 재분석)의 `repoCloner.clone()` 호출은 이번에 크기 상한을 적용하지 않음 — 이미 PR 게이트가 연결된(=프로젝트 소유자가 신뢰한) 레포에서만 트리거되는 경로라 임의 공격자가 직접 도달하기 어려워 우선순위가 낮다고 판단.
+
+**검증.** `compileJava`·`compileTestJava` clean. `AnalysisApplicationServiceTest`에 신규 2건(상한 초과 시 저장·실행 없이 즉시 거부, 크기 조회 실패 시 fail-open으로 정상 진행) + 기존 2건(`ref` 지정·직전 RUNNING 케이스의 `verifyNoInteractions(gitHubApiClient)`가 신규 호출과 충돌해 `verify(..., never()).fetchLatestCommitSha(...)`로 좁혀 수정) 추가. `RateLimitFilterTest`에 웹훅 60/분 한도 신규 1건. 백엔드 전체 테스트(Docker DB 기동) 1124건 중 실패 10건은 전부 사전에 확인된 무관한 DB 연결 실패(이 세션 시작 시점부터 존재, 이번 변경과 무관) — 신규/수정 테스트 7건은 격리 실행으로 별도 확인, 전부 green. `preview_start`로 백엔드 재기동 → `/actuator/health` UP, 인증 없는 `POST /api/analyses` 호출이 500이 아닌 401 정상 반환 확인(필터 체인·라우팅 무결성). GitHub API 실응답(`api.github.com/repos/octocat/Hello-World`)을 브라우저로 직접 조회해 `size` 필드 존재·형식 확증(공식 문서 의존이 아닌 실측). `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변.
+
+**한계·다음.** GitHub OAuth 로그인 후 실제 분석 시작→크기 통과→완료까지의 풀 E2E는 이번 세션에서 하지 않음(fail-open 설계상 정상 흐름 회귀 위험이 구조적으로 낮다고 판단해 단위 테스트+엔드포인트 무결성 확인으로 갈음) — 다음에 이 화면을 다룰 기회가 있으면 실측할 것. 갭①(슬롯 소진)은 이 완화로 "최악의 경우 최대 120초 점유"가 "대형 레포는 즉시 거부"로 줄었을 뿐 근본 해결은 아니다 — IP당 동시 진행 중 분석 수 제한, Cloudflare 등 엣지 방어(갭⑤)는 여전히 미착수. 갭④(WebSocket 연결수·메시지 빈도 제한)도 미착수.

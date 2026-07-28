@@ -97,9 +97,9 @@ class AnalysisApplicationServiceTest {
 
         verify(analysisRepository).save(result);
         verify(analysisRunner).run(eq(result.getId()), eq(projectId), eq("https://github.com/a/b"), eq("main"), eq("tok"), eq("sha-abc"));
-        // ref가 있으면 직전 분석 조회·최신 SHA 조회(스킵 판정 자체)를 하지 않음
+        // ref가 있으면 직전 분석 조회·최신 SHA 조회(스킵 판정 자체)를 하지 않음 — 단, 크기 상한 검사는 ref 유무와 무관하게 항상 수행
         verify(analysisRepository, never()).findLatestByProjectIdAndBranch(any(), any());
-        verifyNoInteractions(gitHubApiClient);
+        verify(gitHubApiClient, never()).fetchLatestCommitSha(any(), any(), any());
     }
 
     @Test
@@ -114,7 +114,8 @@ class AnalysisApplicationServiceTest {
 
         assertThat(result).isNotSameAs(prev);
         verify(analysisRepository).save(result);
-        verifyNoInteractions(gitHubApiClient);
+        // 직전 분석이 RUNNING이면 커밋 SHA 스킵 판정은 안 하지만, 크기 상한 검사는 여전히 수행
+        verify(gitHubApiClient, never()).fetchLatestCommitSha(any(), any(), any());
     }
 
     @Test
@@ -131,6 +132,33 @@ class AnalysisApplicationServiceTest {
 
         assertThat(result).isNotSameAs(prev);
         verify(analysisRepository).save(result);
+    }
+
+    @Test
+    @DisplayName("startAnalysis는 레포 크기가 상한(1GB)을 넘으면 거부하고 저장·실행하지 않는다")
+    void startAnalysis_레포크기_상한초과_거부() {
+        UUID projectId = UUID.randomUUID();
+        when(gitHubApiClient.fetchRepoSizeKb("https://github.com/a/b", "tok")).thenReturn(1_048_577L);
+
+        assertThatThrownBy(() -> service().startAnalysis(projectId, "main", "https://github.com/a/b", "tok"))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verifyNoInteractions(analysisRepository);
+        verifyNoInteractions(analysisRunner);
+    }
+
+    @Test
+    @DisplayName("startAnalysis는 레포 크기 조회가 실패하면 상한 검사를 통과시키고 정상 진행한다(fail-open)")
+    void startAnalysis_레포크기조회실패_안전하게_진행() {
+        UUID projectId = UUID.randomUUID();
+        when(gitHubApiClient.fetchRepoSizeKb("https://github.com/a/b", "tok"))
+                .thenThrow(new RuntimeException("GitHub API 500"));
+
+        AnalysisResult result = service().startAnalysis(projectId, "main", "https://github.com/a/b", "tok");
+
+        assertThat(result.getStatus()).isEqualTo(AnalysisStatus.PENDING);
+        verify(analysisRepository).save(result);
+        verify(analysisRunner).run(eq(result.getId()), eq(projectId), eq("https://github.com/a/b"), eq("main"), eq("tok"), eq((String) null));
     }
 
     @Test

@@ -22,6 +22,10 @@ import java.util.stream.Collectors;
 @Transactional
 public class AnalysisApplicationService {
 
+    // 이 크기(KB)를 넘는 레포는 클론/아카이브 다운로드 자체를 거부 — 대형 레포 하나가 8-슬롯 동시성 캡을
+    // 클론 타임아웃(120초)까지 점유하는 DoS를 막는다(GitHub API "size"는 근사치라 완전한 보장은 아님)
+    private static final long MAX_REPO_SIZE_KB = 1_048_576; // 1GB
+
     private final AnalysisRepository analysisRepository;
     private final AnalysisRunner analysisRunner;
     private final GitHubApiClient gitHubApiClient;
@@ -34,6 +38,11 @@ public class AnalysisApplicationService {
     // ref(특정 커밋 SHA)를 지정해 그 커밋 상태로 재분석 — 사용자가 명시적으로 요청한 것이므로 "동일 커밋 스킵"
     // 최적화를 적용하지 않고 항상 실행한다.
     public AnalysisResult startAnalysis(UUID projectId, String branch, String githubRepoUrl, String githubAccessToken, String ref) {
+        long sizeKb = fetchRepoSizeKbSafely(githubRepoUrl, githubAccessToken);
+        if (sizeKb > MAX_REPO_SIZE_KB) {
+            throw new IllegalArgumentException("레포 크기가 너무 큽니다(" + sizeKb + "KB, 상한 " + MAX_REPO_SIZE_KB + "KB) — 분석을 시작할 수 없습니다.");
+        }
+
         if (ref == null) {
             Optional<AnalysisResult> lastAnalysis = analysisRepository.findLatestByProjectIdAndBranch(projectId, branch);
             if (lastAnalysis.isPresent() && lastAnalysis.get().getStatus() == AnalysisStatus.DONE) {
@@ -60,6 +69,16 @@ public class AnalysisApplicationService {
         } catch (Exception e) {
             log.warn("커밋 SHA 조회 실패 (무시, 안전하게 재분석): branch={}", branch, e);
             return null;
+        }
+    }
+
+    // 레포 크기 조회 실패 시 0 반환(상한 검사 통과) — API 장애로 정상 분석까지 막지 않도록 fail-open
+    private long fetchRepoSizeKbSafely(String githubRepoUrl, String githubAccessToken) {
+        try {
+            return gitHubApiClient.fetchRepoSizeKb(githubRepoUrl, githubAccessToken);
+        } catch (Exception e) {
+            log.warn("레포 크기 조회 실패 (무시, 상한 검사 통과 처리): {}", githubRepoUrl, e);
+            return 0L;
         }
     }
 

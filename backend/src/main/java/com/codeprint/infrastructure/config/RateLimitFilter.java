@@ -60,7 +60,9 @@ public class RateLimitFilter implements Filter {
             // 결제 prepare 3종 — 승인 없이도 반복 호출 시 order 테이블 bloat 가능(R22)
             new RateLimitRule("POST", "/api/payments/toss/prepare", "payment-prepare", 5, 1),
             new RateLimitRule("POST", "/api/teams/payment/prepare", "payment-prepare", 5, 1),
-            new RateLimitRule("POST", "/api/teams/*/seats/payment/prepare", "payment-prepare", 5, 1)
+            new RateLimitRule("POST", "/api/teams/*/seats/payment/prepare", "payment-prepare", 5, 1),
+            // GitHub 웹훅 — 서명검증(HMAC)이 1차 방어선이나, IP당 무제한 수신을 막는 2차 방어(codeprint_152 DDoS 감사)
+            new RateLimitRule("POST", "/api/webhooks/github", "webhook-github", 60, 1)
     );
 
     // 요청 IP 추출 — Railway 프록시가 실제 접속 IP를 X-Forwarded-For 맨 끝에 추가하므로 마지막 값을 사용
