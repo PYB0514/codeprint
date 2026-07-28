@@ -1328,3 +1328,17 @@ const fetchGraph = useCallback(async () => {
 **실측 검증(브라우저 실클릭, 로컬 백엔드+DB).** ① 컨텍스트 감지 성공 케이스(`codeprint` 자기분석 레포, DDD 컨벤션 따름) — export 버튼 클릭 → 실제 다운로드 파일명 `codeprint-structure-by-context.md` 정상. ② 폴백 케이스(`bench-petclinic`, Spring PetClinic 표준 레이어드 구조가 이 프로젝트 컨벤션과 달라 컨텍스트 미감지) — 수정 전 로직으로 재현하면 파일명이 무조건 `codeprint-...`가 됐을 것을, 수정 후 실제 다운로드 파일이 `src-structure-by-context.md`(레포의 실제 루트 폴더명 `src`)로 정확히 명명됨을 실제 다운로드된 파일로 확인. ③ 비인증 `GET /api/projects/{id}/graph/context-md` → 401(SecurityConfig permitAll 목록에 없어 기본 인증 요구, curl로 직접 확인).
 
 **결과.** codeprint_150부터 4개 세션에 걸쳐 보류됐던 브랜치의 마지막 잔여 항목(로그인 후 실클릭 E2E·폴백 정규식 수정·비인증 401 확인) 전부 완료 — 머지 가능.
+
+---
+
+## 복잡도 허브 패널 — GraphViewerPage/CommunityPostGraphPage 뷰어 패리티 누락 발견·수정 (2026-07-29, codeprint_154)
+
+**배경.** `GraphPage.tsx` 2행 주석("⚠️ 새 '보기' 기능 추가 시 GraphViewerPage.tsx도 반영 검토 — 저장/수정 액션만 여기 전용, 보기는 비로그인도 동등해야 함", 2026-07-02 결정)이 명시하는 규칙을 이번 세션 PR #714(복잡도 허브 패널)에서 지키지 않고 머지했다 — 사용자가 "정말 더 할 게 없냐"고 재확인을 요청해 다시 점검하는 과정에서 직접 발견.
+
+**분석.** 복잡도 허브는 저장/수정 액션이 없는 순수 탐색 기능(클릭 시 이동만)이라 규칙상 예외 없이 적용 대상 — `GraphViewerPage.tsx`(`/share/:projectId`, 비로그인 공유 링크)뿐 아니라 같은 `graphViewer` i18n 네임스페이스·동일 `handleFocusNode` 패턴을 공유하는 `CommunityPostGraphPage.tsx`(`/community/posts/:postId/graph`, 커뮤니티 첨부 그래프)도 같은 이유로 누락돼 있었음을 확인.
+
+**수정.** 두 페이지 모두 `computeComplexityHubs`를 동일하게 import해 `useMemo`로 계산 후, 기존 "노드 검색" 섹션 바로 아래(GraphPage.tsx와 동일 배치 순서)에 동일 UI 블록 추가. i18n 키(`graphViewer.complexityHubHeading`/`complexityHubHint`)는 `graphPage`와 별개 네임스페이스인 `graphViewer`에 추가(두 네임스페이스에 동일 이름의 키가 각각 존재하는 구조라 처음엔 `graphPage.tsx`용 키를 잘못된 네임스페이스에 추가했다가 `awk`로 상위 블록을 재확인해 발견·정정 — PR #714 작업 때도 같은 실수를 했었음, 이 파일의 이런 이름 중복 구조는 앞으로도 주의 필요).
+
+**검증.** `tsc -b`/`eslint` clean, `vitest run` green. 실 브라우저로 세 화면 전부 실측: ① `GraphPage.tsx`(로그인, 저장/수정 가능) ② `GraphViewerPage.tsx`(`/share/...`, 읽기 전용 배지 확인) ③ `CommunityPostGraphPage.tsx`(커뮤니티 게시글 첨부 그래프, 실제 다른 레포 스냅샷) — 셋 다 패널 렌더+항목 클릭 시 해당 노드로 이동+노드 정보 패널 갱신까지 확인, 콘솔 에러 0건.
+
+**교훈.** "새 보기 기능은 뷰어 페이지도 반영"이라는 규칙이 파일 맨 위 주석에 명시돼 있었음에도, 작업을 서두르며 그 파일(GraphPage.tsx)만 보고 규칙 자체를 놓쳤다 — 다음에 GraphPage.tsx를 건드릴 땐 파일 상단 주석을 매번 재확인할 것.

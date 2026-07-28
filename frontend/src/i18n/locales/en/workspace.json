@@ -539,6 +539,8 @@
     "nodeSearchHeading": "Node Search",
     "searchPlaceholder": "Search file / function name...",
     "noResults": "No results",
+    "complexityHubHeading": "Complexity hubs",
+    "complexityHubHint": "Functions that both receive and make many calls — explore tangled spots even if you don't know their names.",
     "collapseFuncs": "Collapse",
     "expandFuncs": "Expand {{count}} functions",
     "legendDomainHeader": "Legend (click ○ = hide, click name = show only that domain)",

@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.154.0',
+    date: '2026-07-29',
+    title: '복잡도 허브 패널을 공유·커뮤니티 그래프 뷰어에도 확대',
+    type: 'feature',
+    items: [
+      { category: '신규', desc: '어제 추가된 "복잡도 허브" 패널을 로그인 없이 보는 공유 링크(/share)와 커뮤니티 게시글 첨부 그래프에서도 동일하게 사용할 수 있도록 확대했습니다.' },
+    ],
+  },
+  {
     version: 'v0.153.0',
     date: '2026-07-29',
     title: '그래프 사이드바에 복잡도 허브 패널 추가',
