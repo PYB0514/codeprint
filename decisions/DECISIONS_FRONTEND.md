@@ -1316,3 +1316,15 @@ const fetchGraph = useCallback(async () => {
 **검증.** `npx tsc -b` clean, `npx vitest run` 4건 green, `npx eslint .` 신규 에러 0건. 실 브라우저(로컬 백엔드+DB 기동, 기존 로그인 세션) — 마이페이지 목록 조회(axios)·그래프 페이지 라우팅(react-router 파라미터 라우트)·전체 Tailwind 스타일링(postcss) 정상 동작, 콘솔 에러 0건 확인. axios·postcss·react-router 셋 다 앱 전역에서 쓰이는 핵심 의존성이라 이 정도 스모크 확인으로 충분하다고 판단(개별 기능별 회귀 테스트는 과함).
 
 **한계·다음.** react-router의 진짜 픽스가 나오면(현재 npm 레지스트리에 7.18.1 이후 버전 없음) 그때 재평가. 현재 판단(RSC 미사용이라 위험 없음)이 유지되는 한 급하지 않음.
+
+---
+
+## 컨텍스트별 AI 컨텍스트 export — 폴백 파일명 정규식 버그 수정 (2026-07-29, codeprint_154)
+
+**배경.** `feat/repomap-context-grouping-web-ui` 브랜치(웹 다운로드에 DDD 컨텍스트별 grouping 옵션 추가)가 codeprint_150 Fable 감사에서 A-5로 지적된 채 여러 세션째 보류돼 있었다 — `handleDownloadContextMd`의 `md.match(/^# (.+?) — /)`가 `^` 앵커(멀티라인 아님)라 문자열 맨 앞에서만 매치한다. `RepoMapService.generate`는 컨텍스트 감지 실패 시(`generateByContext`가 null 반환) `"> ⚠️ ...폴백 안내\n\n" + generateFolderTree(...)`를 반환하는데, 이 경우 실제 제목(`# rootName — ...`)이 문자열 2번째 줄로 밀려 정규식이 매치 실패 → 항상 `?? 'codeprint'` 폴백으로 떨어져 어떤 레포를 받아도 파일명이 `codeprint-structure-by-context.md`가 된다.
+
+**수정.** 정규식에 `m` 플래그 추가(`/^# (.+?) — /m`) — 문자열 전체가 아니라 각 줄의 시작에서 매치하도록.
+
+**실측 검증(브라우저 실클릭, 로컬 백엔드+DB).** ① 컨텍스트 감지 성공 케이스(`codeprint` 자기분석 레포, DDD 컨벤션 따름) — export 버튼 클릭 → 실제 다운로드 파일명 `codeprint-structure-by-context.md` 정상. ② 폴백 케이스(`bench-petclinic`, Spring PetClinic 표준 레이어드 구조가 이 프로젝트 컨벤션과 달라 컨텍스트 미감지) — 수정 전 로직으로 재현하면 파일명이 무조건 `codeprint-...`가 됐을 것을, 수정 후 실제 다운로드 파일이 `src-structure-by-context.md`(레포의 실제 루트 폴더명 `src`)로 정확히 명명됨을 실제 다운로드된 파일로 확인. ③ 비인증 `GET /api/projects/{id}/graph/context-md` → 401(SecurityConfig permitAll 목록에 없어 기본 인증 요구, curl로 직접 확인).
+
+**결과.** codeprint_150부터 4개 세션에 걸쳐 보류됐던 브랜치의 마지막 잔여 항목(로그인 후 실클릭 E2E·폴백 정규식 수정·비인증 401 확인) 전부 완료 — 머지 가능.

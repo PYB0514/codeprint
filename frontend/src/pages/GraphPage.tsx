@@ -1093,7 +1093,8 @@ function GraphPageInner() {
       const url = `/api/projects/${projectId}/graph/context-md?${params.toString()}`
       const res = await axios.get<{ content: string }>(url)
       const md = res.data.content
-      const rootName = md.match(/^# (.+?) — /)?.[1] ?? 'codeprint'
+      // 컨텍스트 감지 실패 폴백은 "> ⚠️ ..." 안내문이 맨 앞에 붙어 "# 제목"이 첫 줄이 아니므로 m 플래그 필수
+      const rootName = md.match(/^# (.+?) — /m)?.[1] ?? 'codeprint'
       const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
       const dlUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
