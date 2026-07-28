@@ -189,6 +189,21 @@ task exploreLocal(type: JavaExec, dependsOn: classes) {
     ]
 }
 
+// 로컬 구조 diff — 두 로컬 경로(git worktree로 체크아웃한 서로 다른 브랜치/커밋 등)의 노드·엣지 변경 비교
+// (Spring/DB 불필요, 내부 전용 — LocalDiff.java는 gitignore 처리돼 공개 레포엔 없음)
+task diffLocal(type: JavaExec, dependsOn: classes) {
+    group = 'codeprint'
+    description = '두 로컬 디렉터리의 구조 diff(추가/삭제/불변 노드·엣지) 계산 (내부 전용, Spring/DB 불필요)'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.codeprint.tools.LocalDiff'
+    jvmArgs = ['-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8']
+    // -PfromDir=경로 -PtoDir=경로 (둘 다 필수)
+    args = [
+        project.hasProperty('fromDir') ? project.property('fromDir') : '',
+        project.hasProperty('toDir') ? project.property('toDir') : ''
+    ]
+}
+
 // 열화판 공개 Skill용 독립 실행 fat jar (1차 증명, exploreLocal만) — Spring Boot 전체가 아닌 toolsRuntime 최소 의존성만 포함
 // 외부 플러그인(Shadow) 없이 Jar 태스크 기본 기능만으로 구성 — 이 환경의 JDK trust store가 Gradle Plugin Portal 신규 다운로드를 신뢰 못 하는 이슈 회피(decisions/ 기록)
 tasks.register('exploreLocalJar', Jar) {

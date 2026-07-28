@@ -28,9 +28,14 @@ public class GraphDiffService {
         List<Node> toNodes = graphQueryService.getNodes(toGraphId);
         List<Edge> fromEdges = graphQueryService.getEdges(fromGraphId);
         List<Edge> toEdges = graphQueryService.getEdges(toGraphId);
+        return diffNodesAndEdges(fromNodes, toNodes, fromEdges, toEdges);
+    }
 
-        Map<String, Node> fromNodeMap = index(fromNodes, this::nodeKey);
-        Map<String, Node> toNodeMap = index(toNodes, this::nodeKey);
+    // DB(graphId) 의존 없는 순수 diff 계산 — LocalDiff(로컬 CLI 도구)가 그대로 재사용
+    public static DiffResult diffNodesAndEdges(List<Node> fromNodes, List<Node> toNodes,
+                                                List<Edge> fromEdges, List<Edge> toEdges) {
+        Map<String, Node> fromNodeMap = index(fromNodes, GraphDiffService::nodeKey);
+        Map<String, Node> toNodeMap = index(toNodes, GraphDiffService::nodeKey);
 
         List<NodeDiff> nodeDiffs = new ArrayList<>();
         toNodeMap.forEach((key, node) ->
@@ -66,11 +71,11 @@ public class GraphDiffService {
         return new DiffResult(nodeDiffs, edgeDiffs);
     }
 
-    private String nodeKey(Node n) {
+    private static String nodeKey(Node n) {
         return n.getType().name() + "|" + n.getName() + "|" + Objects.toString(n.getFilePath(), "");
     }
 
-    private <T> Map<String, T> index(List<T> list, Function<T, String> keyFn) {
+    private static <T> Map<String, T> index(List<T> list, Function<T, String> keyFn) {
         return list.stream().collect(Collectors.toMap(keyFn, Function.identity(), (a, b) -> a));
     }
 }

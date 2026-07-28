@@ -2375,3 +2375,19 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `compileJava`·`compileTestJava` clean. `ProjectCommandServiceTest`에 경계값 2건(5개=허용, 6개=거부) 신규 추가, 기존 `createProject_valid_created`는 Mockito 미스텁 시 기본값 0을 반환해 수정 없이 그대로 통과. 전부 green. **로컬 백엔드 재기동 후 실제 API로 전 구간 E2E 실측**(`/api/dev/test-token`으로 로컬 전용 더미 유저 JWT 발급 → `POST /api/projects` 7회 연속 호출) — 1~6번째 201 Created, 7번째 409 + 정확한 한국어 메시지 확인. 1번 프로젝트를 `PATCH .../visibility`로 공개 전환한 뒤 재시도하니 7번째가 201로 성공 — "공개 프로젝트는 상한 제외" 설계가 실측으로도 정확히 동작함을 확인. (검증 중 `CsrfHeaderFilter`가 POST/PUT/PATCH/DELETE에 `X-Requested-With: XMLHttpRequest` 헤더를 요구한다는 것도 실측으로 재확인 — 브라우저 fetch 직접 호출 시 처음엔 이 헤더 누락으로 전부 403이었음.) 프론트 `npx tsc -b`·수정 JSON 4개 파일 `JSON.parse` 유효성 clean. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변.
 
 **한계·다음.** 초과 시 "업그레이드" 유도 UI는 만들지 않음(유료 티어 자체가 아직 없음) — `UserPlan`에 유료 플랜이 실제로 생기는 시점(v1.0 크리티컬 패스 #1, 사업자등록→Toss 계약 대기 중)에 이 에러 메시지에 CTA를 추가할지 재검토. 랜딩·약관 외에 `PRODUCT_STRATEGY.md` 등 로컬 전용 전략 문서에 남아있을 수 있는 "무제한" 서술은 이번에 안 훑음(공개 레포 문서만 동기화 대상으로 스코프 한정) — 다음에 그 문서를 다룰 기회가 있으면 함께 확인할 것.
+
+## LLM 친화 로컬 도구 확장 ① — 구조 diff 로컬 도구(LocalDiff) 신설 (2026-07-28, codeprint_153)
+
+**배경.** `contexts/Context152.md`가 정리한 "LLM 친화 로컬 도구 확장" 우선순위 1번. `exploreLocalJar`/`analyzeLocalJar`가 이미 DB/Spring 없이 repoMap·노드검색·이웃조회·구조경고 감지를 전부 커버하는 걸 확인했었고, 남은 후보 중 "구조 diff"가 `GraphDiffService`의 순수 계산 로직(DB 의존은 `graphId → nodes/edges` 조회뿐)을 그대로 재사용할 수 있어 저비용으로 판단됐다.
+
+**공개 범위 결정(사용자 확인)** — 신규 도구를 공개 레포에 포함할지, `exploreLocal`(`LocalGraphQuery.java`)·`watchLocal`(`LocalWatcher.java`)처럼 `.gitignore` 처리된 내부 전용으로 둘지 미리 정해진 원칙이 없어 사용자에게 확인. "정보 vs 자동화" 경계(`decisions/DECISIONS_INFRA.md` 참조, `analyzeLocal`은 경고 나열이라 정보=공개, `exploreLocal`/`watchLocal`은 Desktop 로컬 분석엔진 가치와 겹쳐 비공개)에 비춰보면 diff는 "두 시점 비교 탐색 유틸리티"라 exploreLocal 쪽에 더 가깝다고 판단했고, 사용자도 **내부 전용(gitignore)**을 확정.
+
+**구현.**
+1. **`GraphDiffService` 리팩터** — 기존 `diff(fromGraphId, toGraphId)`에서 DB 조회 이후의 순수 계산부(`nodeKey`·`index`·added/removed/unchanged 판정)를 `public static DiffResult diffNodesAndEdges(List<Node> fromNodes, List<Node> toNodes, List<Edge> fromEdges, List<Edge> toEdges)`로 분리. 기존 `diff()`는 이 static 메서드를 호출하는 얇은 래퍼로 남김 — 프로덕션 API(`/api/projects/{id}/diff` 등)의 동작은 완전히 그대로.
+2. **`LocalDiff.java` 신설(gitignore)** — `LocalGraphQuery.java`와 동일 패턴: `LocalAnalyzer.buildGraph(dir, projectId, loader)`를 두 디렉터리에 각각 호출해 `(nodes, edges)`를 얻고 `GraphDiffService.diffNodesAndEdges`로 계산, 결과를 `build/codeprint-local/diff.json`에 씀(요약 카운트 + 노드/엣지별 added·removed·unchanged 목록). 두 트리를 **같은 고정 `projectId`**로 빌드해 디스크 캐시(`FileParsedFileCachePort`)를 공유 — 캐시 키가 `(projectId, 상대경로, 내용해시)` 조합이라 두 트리에서 내용이 같은 파일은 안전하게 캐시를 공유하고(내용이 다르면 해시가 달라 자동으로 분리), 어느 쪽 트리 소스인지 뒤섞이는 문제가 없다.
+3. **범위 결정 — git ref가 아니라 "두 로컬 경로" 비교로 한정.** git checkout/worktree 전환 로직은 넣지 않음 — 사용자가 `git worktree add`로 두 커밋을 각각 별도 디렉터리에 체크아웃해 두면 이 도구는 그 두 경로만 받으면 된다(기존 `analysisDir` 파라미터 패턴과 동일 철학, 도구가 git을 몰라도 됨).
+4. **Gradle 태스크 `diffLocal`** — `exploreLocal`/`analyzeLocal`과 같은 `JavaExec` 패턴, `-PfromDir=경로 -PtoDir=경로` 필수 인자.
+
+**검증.** `compileJava` clean. 기존 `GraphDiffServiceTest`(7건, `diff(graphId,graphId)` 경유로 리팩터 후에도 동일 동작 검증 — 별도 수정 없이 그대로 통과)로 회귀 없음 확인. **실제 `diffLocal` 태스크를 두 임시 디렉터리(from: `A.java`가 `B`를 호출, `B.java` 존재 / to: `A.java`가 `C`를 호출하도록 수정, `B.java`→`C.java`)로 직접 실행**해 `build/codeprint-local/diff.json` 결과가 기대와 정확히 일치함을 확인 — `A.java`/`foo` 노드는 unchanged(구현 내용이 아니라 타입·이름·경로로만 키를 잡으므로), `C.java`/`baz`는 added, `B.java`/`bar`는 removed, `INSTANTIATION`(A→B)·`FUNCTION_CALL`(foo→bar) 엣지는 removed, 대응하는 A→C·foo→baz 엣지는 added. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변 — 신규 파일 1개(377번째) 추가에도 새 경고 없음.
+
+**한계·다음.** LLM 친화 로컬 도구 확장 후보 2번(`watchLocal` jar화)·3번(흐름재생/호출경로 추적 서버 이전, Desktop 스코프 결정 선행 필요)은 이번 세션 미착수 — `contexts/Context152.md` "D. LLM 친화 로컬 도구 확장" 참조. `LocalDiff.java`는 `LocalGraphQuery.java`와 마찬가지로 fat jar화(`diffLocalJar`)는 하지 않음 — 공개 Skill 배포 대상이 아니라 내부 개발 도구 용도로만 남긴다.
