@@ -629,6 +629,8 @@
       "toggleLabel": "라벨 이름/주석 전환"
     },
     "searchPlaceholder": "파일명 / 함수명 검색... (/)",
+    "complexityHubHeading": "복잡도 허브",
+    "complexityHubHint": "호출을 많이 받고 많이 하는 함수 — 이름을 몰라도 얽힌 지점부터 둘러보세요.",
     "domainBoxOn": "⬡ 도메인 박스 켜짐",
     "domainBoxOff": "⬡ 도메인 박스 꺼짐",
     "sketchSectionTitle": "✏️ 스케치 (베타)",
