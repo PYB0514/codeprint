@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.152.0',
+    date: '2026-07-29',
+    title: 'AI 컨텍스트 내보내기에 DDD 컨텍스트별 그룹핑 옵션 추가',
+    type: 'feature',
+    items: [
+      { category: '신규', desc: '그래프 페이지 "내보내기" 메뉴에 "AI 컨텍스트 - 컨텍스트별 (md)" 옵션을 추가했습니다. 레이어드 폴더(controller/service/repository 등)에 흩어진 같은 기능 파일을 바운디드 컨텍스트 단위로 묶어 보여줍니다. DDD/레이어드 컨벤션을 감지하지 못하는 프로젝트는 기존 폴더 구조 방식으로 자동 전환됩니다.' },
+    ],
+  },
+  {
     version: 'v0.151.2',
     date: '2026-07-28',
     title: '무료 요금제 비공개 프로젝트 6개 상한 도입',
