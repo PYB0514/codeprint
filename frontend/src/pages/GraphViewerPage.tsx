@@ -17,7 +17,7 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { buildLayout, applyEdgeVisibility, searchNodes, downloadWarningsMd, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS } from '../utils/graphLayout'
+import { buildLayout, applyEdgeVisibility, searchNodes, downloadWarningsMd, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS, computeComplexityHubs } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset } from '../utils/graphLayout'
 import type { Node, Edge } from '@xyflow/react'
 import GroupNode from '../components/GroupNode'
@@ -211,6 +211,9 @@ function GraphViewerInner() {
     const target = nodes.find(n => n.id === nodeId)
     if (target) setSelectedNode(target)
   }
+
+  // 복잡도 허브 — GraphPage.tsx와 동일(보기 기능은 비로그인도 동등해야 함, 2026-07-02 결정)
+  const complexityHubs = useMemo(() => computeComplexityHubs(rawNodesCache, rawEdgesCache), [rawNodesCache, rawEdgesCache])
 
   useEffect(() => {
     if (!projectId) return
@@ -649,6 +652,27 @@ function GraphViewerInner() {
               )}
             </div>
           </div>
+
+          {/* 복잡도 허브 — 이름을 몰라도 구조적으로 얽힌 지점을 둘러보는 탐색 제안(GraphPage.tsx와 동일 로직) */}
+          {complexityHubs.length > 0 && (
+            <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('graphViewer.complexityHubHeading')}</p>
+              <p className="text-[10px] text-gray-600 px-1">{t('graphViewer.complexityHubHint')}</p>
+              <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto">
+                {complexityHubs.map(({ node, inDegree, outDegree }) => (
+                  <button
+                    key={node.id}
+                    onClick={() => handleFocusNode(node.id)}
+                    className="w-full flex items-center justify-between gap-2 text-left text-[11px] px-2 py-1 rounded hover:bg-gray-700 text-gray-300"
+                    title={node.comment ? `${node.name} — ${node.comment}` : node.name}
+                  >
+                    <span className="truncate">{node.comment || node.name}</span>
+                    <span className="shrink-0 text-gray-600">in:{inDegree} out:{outDegree}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 범례 — 도메인/레이어 다중 표시 토글 + 라벨 클릭으로 필터(상단 탭바와 동일 동작) */}
           {availableTabs.length > 2 && (

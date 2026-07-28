@@ -539,6 +539,8 @@
     "nodeSearchHeading": "노드 검색",
     "searchPlaceholder": "파일명 / 함수명 검색...",
     "noResults": "결과 없음",
+    "complexityHubHeading": "복잡도 허브",
+    "complexityHubHint": "호출을 많이 받고 많이 하는 함수 — 이름을 몰라도 얽힌 지점부터 둘러보세요.",
     "collapseFuncs": "접기",
     "expandFuncs": "함수 {{count}}개 펼치기",
     "legendDomainHeader": "범례 (○ 클릭 = 가리기, 이름 클릭 = 해당 도메인만 보기)",
