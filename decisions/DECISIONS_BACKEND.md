@@ -2391,3 +2391,28 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `compileJava` clean. 기존 `GraphDiffServiceTest`(7건, `diff(graphId,graphId)` 경유로 리팩터 후에도 동일 동작 검증 — 별도 수정 없이 그대로 통과)로 회귀 없음 확인. **실제 `diffLocal` 태스크를 두 임시 디렉터리(from: `A.java`가 `B`를 호출, `B.java` 존재 / to: `A.java`가 `C`를 호출하도록 수정, `B.java`→`C.java`)로 직접 실행**해 `build/codeprint-local/diff.json` 결과가 기대와 정확히 일치함을 확인 — `A.java`/`foo` 노드는 unchanged(구현 내용이 아니라 타입·이름·경로로만 키를 잡으므로), `C.java`/`baz`는 added, `B.java`/`bar`는 removed, `INSTANTIATION`(A→B)·`FUNCTION_CALL`(foo→bar) 엣지는 removed, 대응하는 A→C·foo→baz 엣지는 added. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변 — 신규 파일 1개(377번째) 추가에도 새 경고 없음.
 
 **한계·다음.** LLM 친화 로컬 도구 확장 후보 2번(`watchLocal` jar화)·3번(흐름재생/호출경로 추적 서버 이전, Desktop 스코프 결정 선행 필요)은 이번 세션 미착수 — `contexts/Context152.md` "D. LLM 친화 로컬 도구 확장" 참조. `LocalDiff.java`는 `LocalGraphQuery.java`와 마찬가지로 fat jar화(`diffLocalJar`)는 하지 않음 — 공개 Skill 배포 대상이 아니라 내부 개발 도구 용도로만 남긴다.
+
+## watchLocal jar화 보류 — Desktop GUI 미확정 상태에서 투기적 작업 판단 (2026-07-28, codeprint_153)
+
+**배경.** Context152 "LLM 친화 로컬 도구 확장" 후보 2번(watchLocal jar화)에 착수하려다, 사용자에게 목적을 확인하는 과정에서 재검토.
+
+**보류 이유.** `exploreLocalJar`/`analyzeLocalJar`는 이미 실사용처(공개 Skill 마켓플레이스, `codeprint-plugins`)가 있어 jar화가 즉시 가치를 냈다. `watchLocal`은 `.gitignore`에 이미 "Desktop 유료 축 기능이라 공개 레포 미노출"로 명시돼 있어(자동 갱신="자동화") jar를 만들어도 담을 그릇(Desktop 앱 GUI 래퍼)이 아직 스코프조차 안 잡혀 있다 — 지금 jar화는 CLAUDE.md §2(Simplicity First, "요청되지 않은 유연성을 미리 만들지 않는다") 위반에 해당하는 투기적 선행 작업으로 판단해 스킵. 자체 프로젝트 사용 목적이라면 이미 `./gradlew watchLocal`로 직접 실행 가능해 jar화의 이득 자체가 없음(jar는 "이 레포 없이 남의 환경에서 실행"이 목적인데, 우리 자신은 이미 레포를 갖고 있음).
+
+**결정.** D-2·D-3(흐름재생 서버이전)은 둘 다 "Desktop 스코프(좁은 MVP vs 풀버전) 결정"이라는 같은 선행 조건에 묶여 있다 — 그 결정이 나기 전까지는 착수하지 않는다. 코드 변경 없음.
+
+## DDoS 감사 갭④ 처리 — WebSocket 연결수·SEND 빈도 제한 (2026-07-28, codeprint_153)
+
+**배경.** codeprint_152 DDoS 코드 감사가 발견한 5개 갭 중 마지막 미착수 항목("④WebSocket 연결수·메시지 빈도 제한 전무, 우선순위 낮음·별도 조사 필요"). 실제 코드 확인 결과 `/ws` 핸드셰이크(`WebSocketConfig.registerStompEndpoints`)가 `SecurityConfig`에서 permitAll이고, `WebSocketAuthorizationInterceptor`는 SUBSCRIBE 시점 토픽 인가만 검증할 뿐 CONNECT 자체나 SEND 빈도엔 어떤 제한도 없었음 — 인증 없이도 연결을 무제한으로 열어 Tomcat 스레드·Spring 세션 자원을 소모시킬 수 있는 구조. 사용자에게 "지금 구현할지"를 물어 진행 확정.
+
+**구현.**
+1. **`ClientIpHandshakeInterceptor`(신규, `HandshakeInterceptor`)** — HTTP 핸드셰이크 시점에 실제 접속 IP(X-Forwarded-For 마지막 값, `RateLimitFilter.extractIp`와 동일 원칙이나 `ServerHttpRequest` 대상이라 별도 구현)를 세션 속성(`clientIp`)에 저장. STOMP 레벨(`ChannelInterceptor`)에선 `HttpServletRequest`에 접근할 수 없어, HTTP 단계에서 한 번 추출해 세션 속성으로 넘겨줘야 CONNECT 프레임에서 IP를 알 수 있다.
+2. **`WebSocketConnectionLimitInterceptor`(신규, `ChannelInterceptor` + `ApplicationListener<SessionDisconnectEvent>`)**:
+   - CONNECT — IP당 동시 연결 30개 상한(Caffeine `Cache<String, AtomicInteger>`, TTL 1시간은 누수 방지 안전망일 뿐 정상 경로는 DISCONNECT로 명시적 회수). 초과 시 예외로 거부.
+   - SEND — **세션당**(IP당이 아님) Bucket4j로 초당 40회 상한. 프론트 커서 발행이 이미 50ms 스로틀(초당 20회, `GraphPage.tsx`)이라 그 2배 여유. 세션 단위로 잡은 이유: IP 단위로 하면 같은 사무실 NAT에서 여러 사용자가 동시에 협업할 때 정당한 사용을 서로 갉아먹는다 — CONNECT 상한(자원 고갈 방지, 소스 단위가 맞음)과 SEND 상한(정상 사용 페이싱, 세션 단위가 맞음)의 목적이 달라 키를 다르게 잡았다.
+   - `SessionDisconnectEvent` — 정상 DISCONNECT 프레임과 비정상 연결 끊김(네트워크 끊김·탭 닫힘) 둘 다 이 이벤트로 수렴돼(SockJS/WebSocket 전송 레벨) STOMP DISCONNECT 프레임 유무와 무관하게 안정적으로 카운트를 회수한다 — `preSend`의 DISCONNECT 명령만 보는 방식보다 신뢰도가 높다고 판단해 채택.
+3. **`WebSocketConfig`** — `registerStompEndpoints`에 `ClientIpHandshakeInterceptor` 추가, `configureClientInboundChannel`에 `WebSocketConnectionLimitInterceptor` 추가(기존 `authorizationInterceptor`와 나란히).
+- **탈락한 대안**: SEND도 IP 단위로 통일 — 위 이유(공유 NAT 정당 사용 훼손)로 기각. `HandshakeInterceptor`에서 곧바로 연결수를 체크하는 방안 — HandshakeInterceptor엔 "연결 종료" 훅이 없어(핸드셰이크 시점 1회만 호출) 카운트 회수를 별도 메커니즘(어차피 필요한 `SessionDisconnectEvent`)에 의존해야 해, 애초에 증가·판정 자체도 STOMP CONNECT 레벨(`ChannelInterceptor`)에서 하는 쪽이 증가/감소 로직이 한곳(`WebSocketConnectionLimitInterceptor`)에 모여 더 단순(§2).
+
+**검증.** `compileJava`·`compileTestJava` clean. `WebSocketConnectionLimitInterceptorTest` 신규 6건(IP당 30개 상한+31번째 거부, DISCONNECT로 슬롯 회수 후 재연결 허용, IP별 카운터 분리, 세션당 40/초 SEND 상한+41번째 거부, 세션별 버킷 분리, CONNECT/SEND 외 명령은 통과) 전부 green. **로컬 백엔드 실제 재기동**(신규 Spring 빈 추가라 CLAUDE.md 규칙4 대상) → `/actuator/health` UP, `/ws/info` SockJS 정보 정상 응답. **프론트 브라우저에서 raw WebSocket으로 실제 SockJS+STOMP CONNECT 프레임을 보내 CONNECTED 응답 수신까지 확인** — 서버 로그에 `simpSessionAttributes={..., clientIp=0:0:0:0:0:0:0:1}`로 핸드셰이크 IP가 STOMP 세션 속성에 정확히 전파됨을 직접 확인, 인터셉터로 인한 예외·연결 거부 없음(정상 흐름 회귀 없음). SEND 프레임 자체의 실측은 브라우저 자동화 탭의 타이밍 문제로 재현이 불안정했으나(server 로그에 STOMP CONNECT조차 안 찍히는 케이스 발생 — 인터셉터 이전 단계 문제로 확인) 로직은 위 단위 테스트로 충분히 커버돼 있다고 판단. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변.
+
+**한계·다음.** 갭①(슬롯 소진, IP당 동시 진행 분석 수 제한)·갭⑤(Cloudflare 등 엣지 방어)는 여전히 미착수 — DDoS 감사 5개 갭 중 ②③④는 이번·이전 세션에서 처리, ①⑤만 남음. IP당 30·세션당 40/초라는 임계값은 실사용 트래픽 근거가 아니라 프론트 코드(50ms 스로틀)·업계 상식 기반 추정치 — 실사용자 유입 후 오탐(정상 사용자 거부) 발생 시 재조정 필요.
