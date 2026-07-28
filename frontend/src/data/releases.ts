@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.153.0',
+    date: '2026-07-29',
+    title: '그래프 사이드바에 복잡도 허브 패널 추가',
+    type: 'feature',
+    items: [
+      { category: '신규', desc: '그래프 페이지 사이드바에 "복잡도 허브" 패널을 추가했습니다. 호출을 많이 받으면서 동시에 많이 하는 함수를 자동으로 찾아 목록으로 보여줘, 함수 이름을 몰라도 구조적으로 얽힌 지점부터 둘러볼 수 있습니다. 클릭하면 해당 함수로 바로 이동합니다.' },
+    ],
+  },
+  {
     version: 'v0.152.0',
     date: '2026-07-29',
     title: 'AI 컨텍스트 내보내기에 DDD 컨텍스트별 그룹핑 옵션 추가',

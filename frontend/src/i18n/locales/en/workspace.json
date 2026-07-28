@@ -629,6 +629,8 @@
       "toggleLabel": "Toggle name/comment label"
     },
     "searchPlaceholder": "Search file / function name... (/)",
+    "complexityHubHeading": "Complexity hubs",
+    "complexityHubHint": "Functions that both receive and make many calls — explore tangled spots even if you don't know their names.",
     "domainBoxOn": "⬡ Domain boxes on",
     "domainBoxOff": "⬡ Domain boxes off",
     "sketchSectionTitle": "✏️ Sketch (Beta)",

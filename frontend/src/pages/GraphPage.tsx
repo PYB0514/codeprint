@@ -20,7 +20,7 @@ import { toPng } from 'html-to-image'
 import { buildLayout, downloadWarningsMd } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry, ColumnInfo } from '../utils/graphLayout'
 import { extractDomain, buildDomainColorMap, buildKnownDomains } from '../utils/graphLayout'
-import { isDbEdgeType, applyEdgeVisibility, applyLayerModeNodeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS, searchNodes } from '../utils/graphLayout'
+import { isDbEdgeType, applyEdgeVisibility, applyLayerModeNodeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS, searchNodes, computeComplexityHubs } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
@@ -346,6 +346,9 @@ function GraphPageInner() {
   const flowRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const { getNodes, fitView, fitBounds, screenToFlowPosition } = useReactFlow()
+
+  // 복잡도 허브 — 이름을 몰라도 "숨은 복잡도 지점"을 min(in-degree, out-degree) 기준으로 제안(순수 프론트엔드 계산)
+  const complexityHubs = useMemo(() => computeComplexityHubs(rawNodes, rawEdgesCache), [rawNodes, rawEdgesCache])
 
   // 검색 결과 노드로 fitView 이동
   const handleSearchNodeClick = useCallback((nodeId: string) => {
@@ -1979,6 +1982,25 @@ function GraphPageInner() {
               })()}
             </LeftSection>
 
+            {/* 복잡도 허브 — 이름을 몰라도 구조적으로 얽힌 지점을 둘러보는 탐색 제안 */}
+            {complexityHubs.length > 0 && (
+              <LeftSection title={t('graphPage.complexityHubHeading')}>
+                <p className="text-[10px] text-gray-600 mb-1 px-1">{t('graphPage.complexityHubHint')}</p>
+                <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto">
+                  {complexityHubs.map(({ node, inDegree, outDegree }) => (
+                    <button
+                      key={node.id}
+                      onClick={() => handleSearchNodeClick(node.id)}
+                      className="w-full flex items-center justify-between gap-2 text-left text-[11px] px-2 py-1 rounded hover:bg-gray-700 text-gray-300"
+                      title={node.comment ? `${node.name} — ${node.comment}` : node.name}
+                    >
+                      <span className="truncate">{node.comment || node.name}</span>
+                      <span className="shrink-0 text-gray-600">in:{inDegree} out:{outDegree}</span>
+                    </button>
+                  ))}
+                </div>
+              </LeftSection>
+            )}
 
             {/* 보기 옵션 */}
             {(layoutPreset === 'domain' || bgUrl) && (
