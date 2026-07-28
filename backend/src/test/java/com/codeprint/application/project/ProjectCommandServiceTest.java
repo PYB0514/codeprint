@@ -74,6 +74,31 @@ class ProjectCommandServiceTest {
         verify(projectRepository, never()).save(any());
     }
 
+    @Test
+    @DisplayName("createProject — 비공개 프로젝트가 상한(6개)에 도달하면 IllegalStateException, 저장 안 함")
+    void createProject_비공개상한도달_거부() {
+        UUID userId = UUID.randomUUID();
+        when(projectRepository.countPrivateByUserId(userId)).thenReturn(6);
+
+        assertThatThrownBy(() -> service.createProject(userId, VALID_URL, "n", "d"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("6개");
+        verify(projectRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createProject — 비공개 프로젝트가 상한 직전(5개)이면 정상 생성")
+    void createProject_비공개상한직전_생성허용() {
+        UUID userId = UUID.randomUUID();
+        when(projectRepository.countPrivateByUserId(userId)).thenReturn(5);
+        when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Project created = service.createProject(userId, VALID_URL, "n", "d");
+
+        assertThat(created.getUserId()).isEqualTo(userId);
+        verify(projectRepository).save(any(Project.class));
+    }
+
     // --- toggleVisibility: 소유권 + 공개/비공개 전환 ---
 
     @Test

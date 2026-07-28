@@ -12,7 +12,7 @@
       ] },
       { "title": "Article 3 (Eligibility)", "body": "The Service is available to anyone with a GitHub account. Users under 14 require consent from a legal guardian. Using the Service constitutes agreement to these Terms." },
       { "title": "Article 4 (Service Content)", "list": [
-        "Free plan: unlimited private projects, team collaboration up to 5 people",
+        "Free plan: 6 private projects (public projects unlimited), team collaboration up to 5 people",
         "Pro · Desktop: no collaboration session member limit, create real teams and manage seats (1 personal seat or N team seats, monthly per-seat fee. Desktop app coming soon)"
       ], "listBold": ["Free plan:", "Pro · Desktop:"], "footer": "The Service may add, change, or discontinue features without prior notice, and may experience temporary interruptions for stability purposes." },
       { "title": "Article 5 (User Obligations)", "body": "Users must not engage in the following:", "list": [

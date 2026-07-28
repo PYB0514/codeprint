@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.151.2',
+    date: '2026-07-28',
+    title: '무료 요금제 비공개 프로젝트 6개 상한 도입',
+    type: 'fix',
+    items: [
+      { category: '정책', desc: '무료 요금제의 비공개 프로젝트 개수를 계정당 최대 6개로 제한했습니다. 공개 프로젝트는 계속 무제한입니다. 상한에 도달하면 기존 프로젝트를 공개로 전환하거나 삭제한 뒤 새로 만들 수 있습니다.' },
+    ],
+  },
+  {
     version: 'v0.151.1',
     date: '2026-07-27',
     title: '/proof 페이지 수치 정정·접근 경로 추가, 컨텍스트 경계 판정 정확도 개선',

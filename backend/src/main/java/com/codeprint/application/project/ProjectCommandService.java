@@ -20,13 +20,21 @@ public class ProjectCommandService {
     private static final Pattern GITHUB_URL_PATTERN =
             Pattern.compile("^https://github\\.com/[\\w.-]+/[\\w.-]+/?$");
 
+    // 계정당 비공개 프로젝트 상한 — 신규 프로젝트는 항상 비공개로 생성되므로(Project.create) 사실상 계정당 상한과 동일.
+    // 공개 프로젝트는 제외(무제한) — 저장비용은 무료 티어 리스크지만 공개 프로젝트는 커뮤니티 노출·성장에 기여하는 자산이라 별도 취급(codeprint_152/153 결정)
+    private static final int MAX_PRIVATE_PROJECTS = 6;
+
     private final ProjectRepository projectRepository;
     private final GraphWarningsCachePort graphWarningsCachePort;
 
-    // URL 유효성 검사 후 프로젝트 생성
+    // URL 유효성 검사·비공개 프로젝트 상한 확인 후 프로젝트 생성
     public Project createProject(UUID userId, String githubRepoUrl, String name, String description) {
         if (!GITHUB_URL_PATTERN.matcher(githubRepoUrl).matches()) {
             throw new IllegalArgumentException("Invalid GitHub repository URL: " + githubRepoUrl);
+        }
+        if (projectRepository.countPrivateByUserId(userId) >= MAX_PRIVATE_PROJECTS) {
+            throw new IllegalStateException(
+                    "비공개 프로젝트는 최대 " + MAX_PRIVATE_PROJECTS + "개까지 만들 수 있습니다. 기존 프로젝트를 공개로 전환하거나 삭제한 뒤 다시 시도해주세요.");
         }
 
         Project project = Project.create(userId, githubRepoUrl, name, description);
