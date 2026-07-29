@@ -261,6 +261,8 @@ For multi-step tasks, state a brief plan:
 
 **원칙**: 일지형(decisions/, contexts/)=append-only, 대체돼도 배너만. 현행형(README, docs/, CLAUDE.md, PROGRESS, 메모리)=항상 현재 진실 하나만, 대체 즉시 교체. 소급 스윕은 안 함(lazy migration) — 배너 없는 대체 항목을 발견하면 그 자리에서 단다.
 
+**규칙 staleness 점검(2026-07-30 신설, 도입 단계)**: 이 CLAUDE.md의 개별 규칙은 ①도메인/제품 제약(계속 유지) ②과거 특정 시점 모델 한계를 메우던 임시방편(재검토 후보) 둘 중 하나다. 트리거(메이저 Claude 모델 교체 시점, 또는 사용자가 명시적으로 요청할 때 — 아직은 자동 주기 아님)가 오면 ②로 의심되는 규칙을 찾아 위 supersede 프로세스(결정 기록 → 배너 → 현행 문서 교체)와 동일하게 처리한다. 즉시 삭제하지 않는다. 이번 신설은 트리거·판단 기준만 명문화한 것이고, 실제 첫 감사는 아직 수행하지 않았다 — 별도 세션에서 사용자와 함께 진행한다.
+
 ### 8. Semantic Commits & Branch Strategy
 취업 포트폴리오 겸용이라 GitHub 히스토리가 평가 대상이다.
 
