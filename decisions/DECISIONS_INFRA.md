@@ -742,3 +742,21 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 **검증.** `dependency-audit` 잡은 기존 `frontend`/`backend` 잡과 완전히 독립된 새 잡이라 기존 CI에 영향 없음(들여쓰기·구조를 기존 `frontend` 잡과 동일하게 맞춤). `SECURITY_POLICY.md`는 문서 편집만(코드 변경 없음).
 
 **한계·다음.** react-router 패치가 나오면 `dependency-audit` 잡이 자연히 green으로 전환될 것 — 그 시점 이후 몇 차례 관찰 후 브랜치 보호 필수 체크 추가를 검토. 시크릿 로테이션은 표만 수립했고 실제 첫 교체는 아직 실행 안 함(주기 시작점은 이 문서 작성일 기준).
+
+---
+
+## PR #716~#718 머지 직후 프로덕션 배포 실패(#717 SKIPPED·#718 FAILED) — 원인 진단 및 복구 (2026-07-30, codeprint_155)
+
+**문제.** 사용자가 Railway 대시보드 스크린샷 공유 — #718(레이트리밋 이상탐지) 배포 FAILED, #717(CI 게이트+로테이션 정책) SKIPPED, #716(DDoS 갭①) CRASHED로 표시. 3개 PR을 연속 머지한 직후라 코드 결함을 의심할 만한 상황이었음.
+
+**진단 과정(Railway CLI로 실측, 추측 없이 확인).**
+1. `curl /actuator/health` 반복 호출 → 매번 200 `{"status":"UP"}` — 서비스 자체는 살아있었음(사용자 체감 다운타임 없었을 가능성 높음), 다만 `railway status`의 "deployment ID"가 가장 최신(#718)이 아닌 이전 성공 배포(#716)를 가리키고 있어 **롤백 서빙 중**임을 확인.
+2. `railway deployment list`로 배포별 최종 상태와 시각을 조회해 커밋 시각과 대조: 32977805(#716, 22:49:27)=SUCCESS, e56c6d58(#717, 22:52:50)=SKIPPED, 22b69692(#718, 00:13:47)=FAILED — git log의 각 머지 커밋 시각과 정확히 매칭.
+3. `railway logs <id> -b`(빌드 로그)로 #717은 **로그 자체가 0줄**(빌드 시도 자체가 없었음)임을 확인 — #717이 변경한 파일이 `.github/workflows/ci.yml`·`SECURITY_POLICY.md`·`decisions/DECISIONS_INFRA.md`뿐, `backend/**` 무변경이라 Railway가 "재빌드 불필요"로 정상 스킵한 것(결함 아님, watch-path 최적화가 의도대로 동작).
+4. #718은 `railway logs <id> -d`(런타임 로그)로 **애플리케이션이 예외 없이 완전히 정상 기동**(Tomcat·Hikari·Flyway·actuator 전부 정상, 7분간 구동)한 걸 확인했으나, `railway logs <id> -b`의 헬스체크 섹션엔 `1/1 replicas never became healthy! Healthcheck failed!` — **앱 자체는 건강한데 Railway 헬스체크 프로버만 실패 판정**. 기존 GATE_GAPS.md [G-5]/[G-6](Railway Serverless 콜드스타트 헬스체크 플레이키니스, "의식적 트레이드오프로 유지")와 정확히 같은 패턴으로 판단.
+
+**조치.** `railway redeploy -y`로 동일 이미지(digest 재확인 결과 #718 실패 이미지와 완전히 동일, 재빌드 없이 캐시 재사용) 재배포 → 이번엔 `[1/1] Healthcheck succeeded!`로 1차 시도에 바로 성공. 같은 이미지가 재시도 시 즉시 성공했다는 것 자체가 **코드 결함이 아니라 타이밍성 플레이키니스였다는 확증**(코드가 원인이면 재시도해도 같은 이유로 또 실패해야 함).
+
+**결과.** 신규 배포 `8ce3288a`가 Online → (트래픽 없어 Serverless 정책대로) Sleeping으로 정상 전환, `curl /actuator/health` 200 확인(콜드스타트 재현으로 10초 소요 후 응답 — 이것도 기존에 문서화된 정상 동작). #716+#717+#718 전체가 프로덕션에 반영 완료.
+
+**교훈.** ①Railway 대시보드의 "FAILED"/"CRASHED"/"SKIPPED" 라벨을 코드 결함 신호로 성급히 해석하지 말 것 — 특히 "SKIPPED"는 watch-path 최적화의 정상 동작일 수 있다(이번처럼 백엔드 무변경 PR). ②실제 다운타임 여부는 라벨이 아니라 `curl /actuator/health` 실측으로 먼저 확인. ③빌드 로그(`-b`)와 배포 로그(`-d`)를 분리해서 봐야 한다 — 배포 로그만 보면 "정상 기동했는데 왜 FAILED?"로 혼란스럽고, 헬스체크 판정 자체는 빌드 로그 끝에 별도로 찍힌다. ④의심스러우면 `railway redeploy`로 같은 이미지를 재시도하는 것이 코드 결함 vs 인프라 플레이키니스를 가르는 가장 빠른 판별법(동일 이미지가 재시도로 성공하면 인프라 문제).
