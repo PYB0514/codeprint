@@ -4,6 +4,7 @@ package com.codeprint.application.admin;
 import com.codeprint.domain.admin.DailyStats;
 import com.codeprint.domain.admin.DailyStatsRepository;
 import com.codeprint.infrastructure.admin.AdminMetricsQuery;
+import com.codeprint.infrastructure.config.RateLimitMetrics;
 import com.codeprint.shared.event.DailyDigestReadyEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -15,6 +16,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -34,21 +36,31 @@ public class AdminDigestService {
     // DB 크기 경고 임계 — Railway Hobby 볼륨 상한(500MB)의 80%. 디스크 풀로 분석이 조용히 실패했던
     // [G-4] 사고 재발방지용(`decisions/DECISIONS_INFRA.md` "프로덕션 Postgres 디스크 풀 사고" 참조)
     static final long DB_SIZE_WARNING_BYTES = 400L * 1024 * 1024;
+    // 레이트리밋 트립 급증 경고 임계 — 카테고리 하나가 하루 이만큼 트립되면 남용·공격 의심 신호.
+    // 실사용 트래픽 근거가 아닌 잠정치(DDoS 갭① 임계값과 같은 종류) — 실사용자 유입 후 재조정 필요
+    static final long RATE_LIMIT_TRIP_THRESHOLD = 20;
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final DailyStatsRepository dailyStatsRepository;
     private final AdminMetricsQuery metricsQuery;
     private final ApplicationEventPublisher eventPublisher;
+    private final RateLimitMetrics rateLimitMetrics;
 
-    // 순수 로직 — 오늘 지표 + 전일 스냅샷(null 가능) + 현재 미처리 문의 게이지로 이상 신호를 판정 (DB 크기 게이지 없는 호출용)
+    // 순수 로직 — 오늘 지표 + 전일 스냅샷(null 가능) + 현재 미처리 문의 게이지로 이상 신호를 판정 (DB 크기·레이트리밋 게이지 없는 호출용)
     public Digest computeDigest(LocalDate date, DailyMetrics today, DailyStats yesterday, int openFeedback) {
-        return computeDigest(date, today, yesterday, openFeedback, 0L, List.of());
+        return computeDigest(date, today, yesterday, openFeedback, 0L, List.of(), Map.of());
     }
 
-    // DB 크기·상위 테이블 게이지까지 포함한 전체 버전 — 임계 초과 시 디스크 풀 사고[G-4] 재발방지 이상 신호 추가
+    // DB 크기·상위 테이블 게이지까지 포함한 버전 — 임계 초과 시 디스크 풀 사고[G-4] 재발방지 이상 신호 추가
     public Digest computeDigest(LocalDate date, DailyMetrics today, DailyStats yesterday, int openFeedback,
                                  long dbSizeBytes, List<Digest.TableSize> topTables) {
+        return computeDigest(date, today, yesterday, openFeedback, dbSizeBytes, topTables, Map.of());
+    }
+
+    // 레이트리밋 트립 집계까지 포함한 전체 버전 — 특정 카테고리 트립 급증 시 남용·DDoS 의심 이상 신호 추가
+    public Digest computeDigest(LocalDate date, DailyMetrics today, DailyStats yesterday, int openFeedback,
+                                 long dbSizeBytes, List<Digest.TableSize> topTables, Map<String, Long> rateLimitTrips) {
         List<String> anomalies = new ArrayList<>();
 
         if (today.analysesTotal() >= MIN_ANALYSES_FOR_RATE) {
@@ -72,7 +84,17 @@ public class AdminDigestService {
             anomalies.add("DB 크기 " + formatMb(dbSizeBytes) + "MB — Hobby 볼륨 상한 근접");
         }
 
-        return new Digest(date, today, openFeedback, dbSizeBytes, topTables, anomalies);
+        addRateLimitTripAnomalies(anomalies, rateLimitTrips);
+
+        return new Digest(date, today, openFeedback, dbSizeBytes, topTables, rateLimitTrips, anomalies);
+    }
+
+    // 카테고리별 트립 수가 임계 이상이면 이상 신호 추가 — 결과 순서 고정을 위해 카테고리명 정렬
+    private void addRateLimitTripAnomalies(List<String> out, Map<String, Long> rateLimitTrips) {
+        rateLimitTrips.entrySet().stream()
+                .filter(e -> e.getValue() >= RATE_LIMIT_TRIP_THRESHOLD)
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(e -> out.add("레이트리밋 트립 급증: " + e.getKey() + " " + e.getValue() + "회"));
     }
 
     // 바이트를 MB 정수로 반올림
@@ -106,9 +128,11 @@ public class AdminDigestService {
         if (recent.isEmpty()) return Optional.empty();
         DailyStats latest = recent.get(0);
         DailyStats prev = recent.size() > 1 ? recent.get(1) : null;
-        // 미처리 문의·DB 크기는 시점 게이지라 스냅샷에 없음 — 항상 현재값으로 조회
+        // 미처리 문의·DB 크기는 시점 게이지라 스냅샷에 없음 — 항상 현재값으로 조회.
+        // 레이트리밋 트립은 runFor에서만 소비(snapshotAndReset)하는 누적 카운터라 읽기 전용 조회에서
+        // 건드리면 안 됨(리셋되면 다음 runFor가 집계를 놓침) — 여기선 항상 빈 맵으로 표시.
         return Optional.of(computeDigest(latest.getStatDate(), metricsOf(latest), prev,
-                metricsQuery.openFeedbackCount(), metricsQuery.dbSizeBytes(), topTables()));
+                metricsQuery.openFeedbackCount(), metricsQuery.dbSizeBytes(), topTables(), Map.of()));
     }
 
     // 스냅샷 엔티티 → 지표 값 객체 변환
@@ -125,11 +149,20 @@ public class AdminDigestService {
         Instant end = date.plusDays(1).atStartOfDay(KST).toInstant();
         DailyMetrics today = metricsQuery.collect(start, end);
         DailyStats yesterday = dailyStatsRepository.findByStatDate(date.minusDays(1)).orElse(null);
+        // snapshotAndReset — 이 호출 시점까지 누적된 트립을 소비하고 카운터를 비운다(직전 runFor 이후 누적)
         Digest digest = computeDigest(date, today, yesterday, metricsQuery.openFeedbackCount(),
-                metricsQuery.dbSizeBytes(), topTables());
+                metricsQuery.dbSizeBytes(), topTables(), rateLimitMetrics.snapshotAndReset());
 
-        // 스냅샷 업서트 — 같은 날짜 행이 있으면 제자리 UPDATE, 없으면 INSERT
-        // (delete+insert는 한 트랜잭션 내 Hibernate flush가 INSERT를 DELETE보다 먼저 실행해 유니크 위반)
+        upsertSnapshot(date, today);
+
+        // 관리자 발송은 사이드이펙트 — 이벤트로 분리(NotificationEventHandler가 인앱 알림 + 웹푸시 수행)
+        eventPublisher.publishEvent(new DailyDigestReadyEvent(metricsQuery.adminUserIds(), formatKorean(digest)));
+        return digest;
+    }
+
+    // 스냅샷 업서트 — 같은 날짜 행이 있으면 제자리 UPDATE, 없으면 INSERT
+    // (delete+insert는 한 트랜잭션 내 Hibernate flush가 INSERT를 DELETE보다 먼저 실행해 유니크 위반)
+    private void upsertSnapshot(LocalDate date, DailyMetrics today) {
         DailyStats snapshot = dailyStatsRepository.findByStatDate(date).orElse(null);
         if (snapshot != null) {
             snapshot.update(today.newUsers(), today.activeUsers(), today.newProjects(),
@@ -141,10 +174,6 @@ public class AdminDigestService {
                     today.newProjects(), today.analysesTotal(), today.analysesFailed(),
                     today.paymentsCount(), today.paymentsAmount(), today.newFeedback()));
         }
-
-        // 관리자 발송은 사이드이펙트 — 이벤트로 분리(NotificationEventHandler가 인앱 알림 + 웹푸시 수행)
-        eventPublisher.publishEvent(new DailyDigestReadyEvent(metricsQuery.adminUserIds(), formatKorean(digest)));
-        return digest;
     }
 
     // 다이제스트 → 한국어 알림 문구 (인앱·웹푸시 공용)

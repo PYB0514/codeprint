@@ -7,13 +7,14 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class AdminDigestServiceTest {
 
     // computeDigest는 주입 의존성을 쓰지 않으므로 모두 null 주입
-    private final AdminDigestService service = new AdminDigestService(null, null, null);
+    private final AdminDigestService service = new AdminDigestService(null, null, null, null);
     private final LocalDate date = LocalDate.of(2026, 6, 14);
 
     private DailyMetrics metrics(int activeUsers, int analysesTotal, int analysesFailed) {
@@ -119,5 +120,30 @@ class AdminDigestServiceTest {
         Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 0);
         assertThat(d.dbSizeBytes()).isZero();
         assertThat(d.topTables()).isEmpty();
+        assertThat(d.rateLimitTrips()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("레이트리밋 트립이 임계(20) 이상인 카테고리는 이상 신호로 감지")
+    void rateLimitTrip_aboveThreshold_flagged() {
+        Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 0, 0L, List.of(),
+                Map.of("analysis", 25L));
+        assertThat(d.anomalies()).anyMatch(a -> a.contains("레이트리밋 트립") && a.contains("analysis") && a.contains("25"));
+    }
+
+    @Test
+    @DisplayName("레이트리밋 트립이 임계 미만이면 이상 없음")
+    void rateLimitTrip_belowThreshold_notFlagged() {
+        Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 0, 0L, List.of(),
+                Map.of("analysis", 19L));
+        assertThat(d.anomalies()).noneMatch(a -> a.contains("레이트리밋 트립"));
+    }
+
+    @Test
+    @DisplayName("레이트리밋 트립 맵이 Digest에 그대로 전달된다")
+    void rateLimitTrips_passedThrough() {
+        Map<String, Long> trips = Map.of("webhook-github", 5L);
+        Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 0, 0L, List.of(), trips);
+        assertThat(d.rateLimitTrips()).isEqualTo(trips);
     }
 }

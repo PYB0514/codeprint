@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.PrintWriter;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -24,10 +25,12 @@ class RateLimitFilterTest {
     @Mock private PrintWriter writer;
 
     private RateLimitFilter filter;
+    private RateLimitMetrics rateLimitMetrics;
 
     @BeforeEach
     void setUp() throws Exception {
-        filter = new RateLimitFilter();
+        rateLimitMetrics = new RateLimitMetrics();
+        filter = new RateLimitFilter(rateLimitMetrics);
         lenient().when(response.getWriter()).thenReturn(writer);
     }
 
@@ -60,6 +63,21 @@ class RateLimitFilterTest {
 
         verify(response).setStatus(429);
         verify(chain, times(5)).doFilter(request, response); // 6번째는 체인 미진행
+    }
+
+    @Test
+    @DisplayName("한도 초과 시 RateLimitMetrics에 카테고리별 트립이 기록된다")
+    void limitExceeded_recordsRateLimitMetricsTrip() throws Exception {
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getRequestURI()).thenReturn("/api/feedback"); // 분당 5회 한도
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("1.1.1.2");
+
+        for (int i = 0; i < 6; i++) {
+            filter.doFilter(request, response, chain); // 6번째에서 트립
+        }
+
+        assertThat(rateLimitMetrics.snapshotAndReset()).containsEntry("feedback", 1L);
     }
 
     @Test

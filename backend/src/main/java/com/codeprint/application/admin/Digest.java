@@ -3,6 +3,7 @@ package com.codeprint.application.admin;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 public record Digest(
         LocalDate date,
@@ -10,6 +11,7 @@ public record Digest(
         int openFeedback,    // 현재 미처리 문의 누적 (시점 게이지 — 일별 스냅샷 아님)
         long dbSizeBytes,    // 현재 DB 총 크기 (시점 게이지 — Railway 디스크 풀 사고[G-4] 재발방지 지표)
         List<TableSize> topTables, // 크기 상위 테이블 목록 (시점 게이지, 원인 테이블 파악용)
+        Map<String, Long> rateLimitTrips, // 직전 다이제스트 이후 레이트리밋 429 카테고리별 누적(DDoS·남용 조기 신호)
         List<String> anomalies
 ) {
     // 이상 신호 존재 여부
