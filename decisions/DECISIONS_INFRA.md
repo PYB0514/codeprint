@@ -727,3 +727,18 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 > **① 무엇이 채웠는가 — `parsed_file_cache` 아니었다.** 프로덕션 DB(현재 288MB)에서 테이블별 크기 직접 조회(`pg_total_relation_size`) 결과 `edges` 201MB·`nodes` 65MB로 그래프 저장소 자체가 지배적(`parsed_file_cache`는 11MB에 불과, 원 가설은 틀림). 프로젝트별 그래프 개수를 더 파고든 결과: **"codeprint" 자기분석 프로젝트가 그래프 10개**를 보유(다른 시스템 갤러리 프로젝트는 2~3개) — 이번 세션(codeprint_143)의 ESLint 도그푸딩 중 `preview_start` 재기동·재분석을 반복(2026-07-21 16:42~2026-07-22 16:32, 약 24시간 내 10회)한 결과, 매번 거의 동일한 스냅샷(3392 노드·9411~9418 엣지)이 새 그래프로 저장된 것. `GraphRetentionPolicy.MAX_RECENT=10`(일반 프로젝트) vs `MAX_RECENT_SYSTEM=2`(시스템 갤러리 계정, `GraphBuilder.isSystemOwned()`가 `FeaturedProjectProvisioningAdapter.SYSTEM_USER_ID` 소유 여부로 판별)이라 "codeprint" 프로젝트는 개발자 개인 계정 소유라 일반 정책(10개)이 적용돼 정확히 상한에 걸려 있었다(10 ≤ 10이라 아직 삭제 안 됨). 이 프로젝트 하나가 전체 노드(122,855)의 약 27%(33,920개)·엣지(357,099)의 약 26%(94,110개)를 사실상 중복 스냅샷으로 점유 — **버그 아니라 설계대로 동작**(일반 프로젝트는 그래프 diff 등 이력 기능 가치를 위해 시스템 계정보다 훨씬 넉넉한 보존치를 의도적으로 가짐, §18.8-④), 다만 "짧은 시간에 반복 재분석하는 도그푸딩 프로젝트"라는 사용 패턴은 이 정책을 설계할 때 고려 대상이 아니었던 조합. **코드 변경은 하지 않음** — MAX_RECENT를 낮추거나 "codeprint" 자체를 시스템 취급하는 것은 그래프 diff 이력 가치와 저장 비용의 트레이드오프라 제품 판단이 먼저 필요해 보류, 사용자 확인 대기 항목으로 아래 PROGRESS.md에 등록.
 >
 > **② 다이제스트 스케줄러의 Serverless 슬립 중 실행 여부 — 슬립을 깨우고 실행된다.** `.github/workflows/scheduled-jobs.yml` 확인 결과 `daily-digest`(매일 09:00 KST)는 Spring `@Scheduled`가 아니라 **GitHub Actions cron이 `/api/cron/daily-digest`를 외부에서 HTTP로 호출**하는 구조(2026-07-15 스케줄러 외부화, 위 참조)라, Railway가 잠들어 있어도 이 요청 자체가 콜드스타트를 유발해 서비스를 깨우고 실행된다 — "슬립 중이라 다이제스트도 같이 안 돌았을 가능성"은 기우였음, 실제로는 매일 반드시 실행됨. 다이제스트가 쓰는 `daily_stats` 테이블도 40KB에 불과해 볼륨 증가의 원인도 아니었음. 참고로 같은 워크플로의 `*/15 * * * *`(스테일 분석 리컨실리에이션)는 이미 별도로 알려진 이슈(PROGRESS.md "RAM 절감 여지 2건" — 이 15분 주기 cron이 Serverless sleep 자체를 상시 방해해 가동률 ≈67%로 떨어뜨림, 별개 트랙에서 계속 추적 중).
+
+---
+
+## 의존성 취약점 CI 가시화 + 시크릿 정기 로테이션 주기 수립 (2026-07-29, codeprint_155)
+
+**배경.** 사용자 요청으로 "보안사고예방대책" 우선순위를 매겨 진행하던 중, GitHub Dependabot 보안 알림(`vulnerability-alerts`)·자동 보안 업데이트(`automated-security-fixes`)가 둘 다 꺼져 있던 것을 확인(사용자 승인 하에 API로 활성화, 켜자마자 기존에 알려져 있던 `react-router` RSC Mode CSRF(GHSA-qwww-vcr4-c8h2, PROGRESS.md에 이미 "패치 나오면 업그레이드"로 추적 중) high 알림 1건이 정상 포착됨 — 신규 발견 아님, Dependabot이 제대로 동작함을 확인). 시크릿 관리 원칙 5번이 "정기 로테이션은 후속 과제"로 공백 상태였던 것도 함께 처리.
+
+**결정 1 — CI에 `npm audit --audit-level=high`를 새 잡으로 추가하되, 당장 브랜치 보호 필수 체크로는 등록하지 않는다.** 실제로 `npm audit --audit-level=high`를 로컬에서 실행해보니 위 react-router 건이 이미 high로 잡혀(패치 버전이 아직 없어 `npm audit fix --force`가 breaking downgrade를 제안하는 상태) 지금 바로 필수 체크로 걸면 이 이슈와 무관한 모든 PR이 막힌다. 별도 잡(`dependency-audit`)으로 분리해 PR 체크 목록엔 뜨지만(가시성 확보) 실패해도 머지를 막지 않도록 했다 — 기존 취약점이 해소되고 몇 차례 정상 통과를 관찰한 뒤 필수화 여부를 재판단.
+- **탈락한 대안**: 백엔드에 OWASP dependency-check Gradle 플러그인 추가 — NVD API 키·빌드 시간 증가(수 분)·오탐 튜닝이 필요해 이 프로젝트 규모 대비 과설계로 판단, Dependabot이 이미 Gradle 매니페스트도 스캔하므로 중복. `npm audit fix --force`로 즉시 다운그레이드 — breaking change라 별도 검증 없이 자동 적용은 위험, 보류 중인 기존 결정(패치 대기)과도 배치.
+
+**결정 2 — 시크릿 정기 로테이션 주기표 수립(`SECURITY_POLICY.md` "시크릿 관리 원칙" 5번).** JWT 서명 키 6개월, GitHub OAuth Client Secret·AWS IAM 키(`codeprint-s3`)·DB 앱 계정 비밀번호(`codeprint_app`·`codeprint_backup`) 1년, Toss API 키는 제공자 권고 주기. 1인 개발 규모라 자동화는 하지 않고 표 + 수동 캘린더 확인으로 설계(자동 로테이션 파이프라인은 JWT의 경우 전체 세션 강제 로그아웃, DB 계정의 경우 앱 재기동을 동반해 실사용자 있는 상태에서 무중단 자동화가 오히려 더 큰 사고 위험 — 사람이 유지보수 창을 잡고 진행하는 편이 지금 규모엔 안전하다고 판단).
+
+**검증.** `dependency-audit` 잡은 기존 `frontend`/`backend` 잡과 완전히 독립된 새 잡이라 기존 CI에 영향 없음(들여쓰기·구조를 기존 `frontend` 잡과 동일하게 맞춤). `SECURITY_POLICY.md`는 문서 편집만(코드 변경 없음).
+
+**한계·다음.** react-router 패치가 나오면 `dependency-audit` 잡이 자연히 green으로 전환될 것 — 그 시점 이후 몇 차례 관찰 후 브랜치 보호 필수 체크 추가를 검토. 시크릿 로테이션은 표만 수립했고 실제 첫 교체는 아직 실행 안 함(주기 시작점은 이 문서 작성일 기준).
