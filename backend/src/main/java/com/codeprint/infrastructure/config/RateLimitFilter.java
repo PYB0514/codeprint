@@ -9,6 +9,7 @@ import io.github.bucket4j.Refill;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
@@ -21,9 +22,11 @@ import java.util.concurrent.TimeUnit;
 
 @Component
 @Order(2)
+@RequiredArgsConstructor
 public class RateLimitFilter implements Filter {
 
     private final PathMatcher pathMatcher = new AntPathMatcher();
+    private final RateLimitMetrics rateLimitMetrics;
 
     // IP+카테고리별 버킷 — 가장 긴 집계 창(현재 3분)보다 넉넉한 TTL로 유휴 항목을 자동 정리해
     // 무제한 증가(스푸핑 IP를 계속 바꿔가며 항목을 무한 생성하는 2차 DoS)를 막는다. maximumSize는
@@ -105,6 +108,7 @@ public class RateLimitFilter implements Filter {
             String key = extractIp(request) + ":" + matched.category();
             Bucket bucket = buckets.get(key, k -> newBucket(matched.limit(), matched.windowMinutes()));
             if (!bucket.tryConsume(1)) {
+                rateLimitMetrics.recordTrip(matched.category());
                 response.setStatus(429);
                 response.setContentType("application/json;charset=UTF-8");
                 response.getWriter().write("{\"error\":\"요청이 너무 많습니다. 잠시 후 다시 시도해주세요.\"}");

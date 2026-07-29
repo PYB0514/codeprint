@@ -2434,3 +2434,19 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** TDD로 `AnalysisConcurrencyGuardTest`(한도 미만/이상/경계값 3건) + `AnalysisApplicationServiceTest`에 포화 시 429 거부·레포 크기 조회 자체를 안 함을 검증하는 케이스 1건 추가, 전부 green(기존 12건 포함 13건). `compileJava`/`compileTestJava` clean. **로컬 백엔드 실제 재기동**(신규 Spring 빈 + 생성자 의존관계 변경이라 CLAUDE.md 규칙4 대상) → `/actuator/health` UP 확인, 순환 빈 참조 없음. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변.
 
 **한계·다음.** 임계값 40은 실사용 트래픽 근거가 아니라 풀 총 용량(58)에서 PR 리뷰 몫을 어림잡아 뺀 추정치 — 실사용자 유입 후 재조정 필요(갭④의 IP당 30·세션당 40/초와 같은 종류의 잠정치). 갭⑤(Cloudflare 등 엣지 방어)는 여전히 미착수, 콜드스타트 관련 사용자 결정과 함께 논의하는 게 자연스럽다는 기존 판단 유지.
+
+---
+
+## 보안 이벤트 이상탐지 — 레이트리밋 트립을 일일 다이제스트에 편입 (2026-07-29, codeprint_155)
+
+**배경.** "보안사고예방대책" 세션에서 함께 진행. 기존엔 `RateLimitFilter`가 429를 반환할 뿐 그 발생 자체를 어디에도 기록하지 않아, 특정 카테고리가 반복적으로 트립되는(=남용·공격 시도 정황) 상황을 아무도 알아챌 방법이 없었다. Sentry 등 외부 모니터링은 미도입 상태(SECURITY_POLICY.md Actuator 정책 참조)라, 기존에 이미 매일 관리자에게 인앱+웹푸시로 발송되는 `AdminDigestService`(분석 실패율·전일 대비 급변·DB 크기 이상탐지)에 같은 패턴으로 편입하는 쪽을 택했다 — 새 알림 채널을 만들지 않고 기존 것을 확장.
+
+**구현.**
+1. **`RateLimitMetrics`(신규, `infrastructure/config`)** — `ConcurrentHashMap<String, LongAdder>`로 카테고리별 429 카운트. `snapshotAndReset()`이 현재까지 집계를 반환하고 0으로 리셋 — 다이제스트 주기(1일)에 맞춰 소비되는 카운터.
+2. **`RateLimitFilter`** — `tryConsume` 실패 시(429 반환 직전) `rateLimitMetrics.recordTrip(category)` 호출 한 줄만 추가.
+3. **`Digest`/`AdminDigestService`** — `computeDigest`에 `Map<String, Long> rateLimitTrips` 파라미터를 받는 7-인자 오버로드 신설(기존 4·6-인자 오버로드는 하위 호환 유지, 내부적으로 빈 맵을 넘기도록 위임). 카테고리별 트립이 20회(잠정치, DDoS 갭① 임계값과 같은 종류) 이상이면 `"레이트리밋 트립 급증: {category} {count}회"` 이상 신호 추가. `runFor(date)`(스케줄·수동 트리거 공용)만 `rateLimitMetrics.snapshotAndReset()`을 호출해 카운터를 소비하고, 읽기 전용 조회인 `latestStoredDigest()`는 항상 빈 맵을 넘긴다 — 읽기 전용 경로가 실수로 카운터를 리셋해버리면 다음 `runFor`가 그 사이 발생한 트립을 놓치게 되므로 명확히 분리.
+- **탈락한 대안**: Sentry 등 전용 모니터링 도구 신규 도입 — DSN 재발급조차 미착수 상태(PROGRESS.md "저위험 후순위")라 이번 범위를 벗어남, 기존 다이제스트 확장이 훨씬 적은 변경으로 같은 목적(관리자에게 신호 도달)을 달성. DB에 트립 이력을 영속화 — 순수 조기경보 신호일 뿐 장기 분석 대상이 아니라 과설계로 판단, 인메모리로 충분.
+
+**검증.** TDD로 `RateLimitMetricsTest`(카테고리별 독립 집계·스냅샷 후 리셋·빈 맵) 3건 + `RateLimitFilterTest`에 트립 기록 검증 1건 추가(기존 10건 포함 11건) + `AdminDigestServiceTest`에 임계 이상/미만/그대로 전달 3건 추가(기존 13건 포함 16건), 전부 green. `analyzeLocal` 자가검사에서 `runFor`가 새 호출 1개 추가로 HIGH_FAN_OUT 임계(7개)를 막 넘겨(8개) 신규 경고 1건 발생 — 규칙3(코드 품질) 대상으로 판단해 스냅샷 업서트 로직을 `upsertSnapshot()`으로 즉시 추출, 베이스라인(5개) 원복 확인. **로컬 백엔드 실제 재기동**(신규 Spring 빈 + 생성자 의존관계 변경 2건이라 CLAUDE.md 규칙4 대상) → `/actuator/health` UP, 순환 참조 없음. 백엔드 전체 테스트 스위트(통합 테스트 포함, Docker Postgres 기동 상태) green.
+
+**한계·다음.** 임계값 20은 잠정치 — 카테고리마다 정상 트래픽 규모가 다른데(예: `webhook-github` 60/분 vs `analysis` 1/3분) 단일 임계를 적용해, 실사용자 유입 후 특정 카테고리에서 오탐이 나올 수 있다. 인메모리 카운터라 배포 재시작 시 그 시점까지의 집계가 유실되는 점도 알려진 트레이드오프(단일 인스턴스 운영 전제, SECURITY_POLICY.md에 명시).
