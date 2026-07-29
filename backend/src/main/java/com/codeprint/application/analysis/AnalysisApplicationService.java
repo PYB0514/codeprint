@@ -4,11 +4,14 @@ package com.codeprint.application.analysis;
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
 import com.codeprint.domain.analysis.AnalysisStatus;
+import com.codeprint.infrastructure.config.AnalysisConcurrencyGuard;
 import com.codeprint.infrastructure.github.GitHubApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -29,6 +32,7 @@ public class AnalysisApplicationService {
     private final AnalysisRepository analysisRepository;
     private final AnalysisRunner analysisRunner;
     private final GitHubApiClient gitHubApiClient;
+    private final AnalysisConcurrencyGuard concurrencyGuard;
 
     // 분석 레코드를 생성하고 비동기 분석을 시작 (URL·토큰은 컨트롤러에서 전달) — 직전 분석이 같은 커밋이면 스킵(FeaturedRepo 레버①과 동일 원칙)
     public AnalysisResult startAnalysis(UUID projectId, String branch, String githubRepoUrl, String githubAccessToken) {
@@ -38,6 +42,12 @@ public class AnalysisApplicationService {
     // ref(특정 커밋 SHA)를 지정해 그 커밋 상태로 재분석 — 사용자가 명시적으로 요청한 것이므로 "동일 커밋 스킵"
     // 최적화를 적용하지 않고 항상 실행한다.
     public AnalysisResult startAnalysis(UUID projectId, String branch, String githubRepoUrl, String githubAccessToken, String ref) {
+        // 레포 크기 조회(외부 API 호출)보다 먼저 확인 — 포화 상태면 불필요한 GitHub API 호출 자체를 생략
+        if (concurrencyGuard.isAtCapacity()) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "현재 분석 요청이 많아 처리할 수 없습니다. 잠시 후 다시 시도해주세요.");
+        }
+
         long sizeKb = fetchRepoSizeKbSafely(githubRepoUrl, githubAccessToken);
         if (sizeKb > MAX_REPO_SIZE_KB) {
             throw new IllegalArgumentException("레포 크기가 너무 큽니다(" + sizeKb + "KB, 상한 " + MAX_REPO_SIZE_KB + "KB) — 분석을 시작할 수 없습니다.");

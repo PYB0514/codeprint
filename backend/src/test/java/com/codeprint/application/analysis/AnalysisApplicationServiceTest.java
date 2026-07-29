@@ -4,6 +4,7 @@ package com.codeprint.application.analysis;
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
 import com.codeprint.domain.analysis.AnalysisStatus;
+import com.codeprint.infrastructure.config.AnalysisConcurrencyGuard;
 import com.codeprint.infrastructure.github.GitHubApiClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,7 +12,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -36,9 +39,11 @@ class AnalysisApplicationServiceTest {
     private AnalysisRunner analysisRunner;
     @Mock
     private GitHubApiClient gitHubApiClient;
+    @Mock
+    private AnalysisConcurrencyGuard concurrencyGuard;
 
     private AnalysisApplicationService service() {
-        return new AnalysisApplicationService(analysisRepository, analysisRunner, gitHubApiClient);
+        return new AnalysisApplicationService(analysisRepository, analysisRunner, gitHubApiClient, concurrencyGuard);
     }
 
     @Test
@@ -159,6 +164,22 @@ class AnalysisApplicationServiceTest {
         assertThat(result.getStatus()).isEqualTo(AnalysisStatus.PENDING);
         verify(analysisRepository).save(result);
         verify(analysisRunner).run(eq(result.getId()), eq(projectId), eq("https://github.com/a/b"), eq("main"), eq("tok"), eq((String) null));
+    }
+
+    @Test
+    @DisplayName("startAnalysis는 공유 실행기가 포화 상태면 429로 거부하고 레포 크기 조회조차 하지 않는다")
+    void startAnalysis_동시분석한도초과_거부() {
+        UUID projectId = UUID.randomUUID();
+        when(concurrencyGuard.isAtCapacity()).thenReturn(true);
+
+        assertThatThrownBy(() -> service().startAnalysis(projectId, "main", "https://github.com/a/b", "tok"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())
+                        .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+
+        verifyNoInteractions(gitHubApiClient);
+        verifyNoInteractions(analysisRepository);
+        verifyNoInteractions(analysisRunner);
     }
 
     @Test
