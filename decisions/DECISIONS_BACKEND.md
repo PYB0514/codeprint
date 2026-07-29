@@ -2419,6 +2419,24 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 
 ---
 
+## DDoS 감사 갭① 근본 해결 — 공유 taskExecutor 부하 기반 전역 동시성 가드 (2026-07-29, codeprint_155)
+
+> ⚠️ **대체: "갭① IP당 동시 분석 수 제한, 우선순위 낮음으로 유보"(codeprint_153, 2026-07-28)** — 실사용자 유입 등 재검토 트리거 없이는 임의 재개하지 않기로 한 결정이었으나, 이번 세션(보안사고예방대책 계획·설계 요청)에서 사용자가 "미리 해두는 게 낫지 않을까"로 명시적으로 재개를 확정해 대체. 원문은 `contexts/Context153.md`·`PROGRESS.md`(둘 다 로컬 전용, gitignore 대상)에 보존.
+
+**배경.** PR #708(레포 크기 1GB 상한)로 "대형 레포 하나가 120초까지 슬롯을 점유"하는 최악의 경우는 줄었으나, 여러 개의 작은/중간 크기 레포를 **서로 다른 IP에서 동시에** 요청하는 분산 공격은 여전히 가능했다 — 개별 IP는 `RateLimitFilter`로 3분당 1회로 제한되지만, 그 제한은 IP별로 독립이라 IP 수가 늘면 서버 전체 동시 처리량엔 상한이 없었다.
+
+**검토한 대안과 탈락 이유.**
+1. **IP당 동시 진행 분석 수 제한(원안)** — 기각. `POST /api/analyses`가 이미 IP당 3분에 1회로 제한돼 있어(분석 소요시간은 보통 3분 미만) 단일 IP 기준 동시 실행 수는 사실상 이미 1로 제한된 상태였다. 즉 원안은 이미 해소된 문제를 다시 막는 셈이라 실효가 없다 — 진짜 위협(분산 IP)엔 대응하지 못한다.
+2. **전역(서버 전체) 동시 처리 수 상한 — 채택.** `AnalysisRunner.run()`은 `@Async`로 `AsyncConfig`의 공유 `taskExecutor`(최대 8스레드+큐 50, `CallerRunsPolicy`)에서 실행되는데, 이 풀은 PR 리뷰(`PrReviewRunner`)와도 공유된다. 분산 IP가 각자의 3분 제한 안에서 동시에 요청을 몰아넣으면 이 공유 풀(활성+대기 58개)이 소진되고, `CallerRunsPolicy`는 그 이후 요청을 **거부하지 않고 호출자(Tomcat 요청 스레드)에서 직접 실행**시킨다 — 이게 진짜 위험 지점이다(분석 IP 수와 무관하게 Tomcat 요청 처리 능력 자체가 잠식될 수 있음). IP 단위가 아니라 이 공유 자원 자체의 소진을 막아야 분산 공격에 실제로 대응된다.
+
+**구현.** `AnalysisConcurrencyGuard`(신규, `infrastructure/config`) — `taskExecutor.getActiveCount() + taskExecutor.getThreadPoolExecutor().getQueue().size()`가 40(풀+큐 총 용량 58의 약 69%, PR 리뷰 몫으로 18 여유를 남긴 값) 이상이면 포화로 판정. `AnalysisApplicationService.startAnalysis`가 레포 크기 조회(외부 GitHub API 호출)보다 먼저 이 가드를 확인해, 포화 상태면 불필요한 API 호출 없이 즉시 `ResponseStatusException(429)`로 거부한다.
+
+**검증.** TDD로 `AnalysisConcurrencyGuardTest`(한도 미만/이상/경계값 3건) + `AnalysisApplicationServiceTest`에 포화 시 429 거부·레포 크기 조회 자체를 안 함을 검증하는 케이스 1건 추가, 전부 green(기존 12건 포함 13건). `compileJava`/`compileTestJava` clean. **로컬 백엔드 실제 재기동**(신규 Spring 빈 + 생성자 의존관계 변경이라 CLAUDE.md 규칙4 대상) → `/actuator/health` UP 확인, 순환 빈 참조 없음. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변.
+
+**한계·다음.** 임계값 40은 실사용 트래픽 근거가 아니라 풀 총 용량(58)에서 PR 리뷰 몫을 어림잡아 뺀 추정치 — 실사용자 유입 후 재조정 필요(갭④의 IP당 30·세션당 40/초와 같은 종류의 잠정치). 갭⑤(Cloudflare 등 엣지 방어)는 여전히 미착수, 콜드스타트 관련 사용자 결정과 함께 논의하는 게 자연스럽다는 기존 판단 유지.
+
+---
+
 ## 보안 이벤트 이상탐지 — 레이트리밋 트립을 일일 다이제스트에 편입 (2026-07-29, codeprint_155)
 
 **배경.** "보안사고예방대책" 세션에서 함께 진행. 기존엔 `RateLimitFilter`가 429를 반환할 뿐 그 발생 자체를 어디에도 기록하지 않아, 특정 카테고리가 반복적으로 트립되는(=남용·공격 시도 정황) 상황을 아무도 알아챌 방법이 없었다. Sentry 등 외부 모니터링은 미도입 상태(SECURITY_POLICY.md Actuator 정책 참조)라, 기존에 이미 매일 관리자에게 인앱+웹푸시로 발송되는 `AdminDigestService`(분석 실패율·전일 대비 급변·DB 크기 이상탐지)에 같은 패턴으로 편입하는 쪽을 택했다 — 새 알림 채널을 만들지 않고 기존 것을 확장.
