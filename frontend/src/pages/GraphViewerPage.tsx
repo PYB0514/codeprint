@@ -205,11 +205,12 @@ function GraphViewerInner() {
     }))
   }, [clickedNodeId, rawEdgesCache, setEdges])
 
-  // 좌측 노드 목록 클릭 시 해당 노드로 이동
+  // 좌측 노드 목록 클릭 시 해당 노드로 이동 — 노드 예산으로 숨겨진 상태일 수 있어 selectedNode 반영 후(50ms 지연) fitView
+  // (먼저 fitView하면 아직 hidden인 노드라 React Flow가 대상 0개로 계산해 원점(0,0)으로 튐)
   const handleFocusNode = (nodeId: string) => {
-    fitView({ nodes: [{ id: nodeId }], duration: 400, padding: 0.3 })
     const target = nodes.find(n => n.id === nodeId)
     if (target) setSelectedNode(target)
+    setTimeout(() => fitView({ nodes: [{ id: nodeId }], duration: 400, padding: 0.3 }), 50)
   }
 
   // 복잡도 허브 — GraphPage.tsx와 동일(보기 기능은 비로그인도 동등해야 함, 2026-07-02 결정)

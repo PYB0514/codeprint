@@ -360,12 +360,15 @@ function GraphPageInner() {
   // 사이드바가 열려 있으면(경고·흐름재생·검색 상세 등) 그 안에서 특정 노드로 바로 이동하는 링크가 많아 항상 전체 표시로 전환
   const nodeBudgetActive = nodeBudgetEligible && !showAllNodes && !sidebar
 
-  // 검색 결과 노드로 fitView 이동
+  // 검색 결과 노드로 fitView 이동 — 노드 예산으로 숨겨진 상태일 수 있어 reveal 반영 후(50ms 지연) fitView
+  // (먼저 fitView하면 아직 hidden인 노드라 React Flow가 대상 0개로 계산해 원점(0,0)으로 튐)
   const handleSearchNodeClick = useCallback((nodeId: string) => {
-    const flowNode = getNodes().find(n => n.id === nodeId)
-    if (flowNode) fitView({ nodes: [flowNode], duration: 400, padding: 0.5 })
     setNodeSearchQuery('')
     setRevealedNodeIds(prev => prev.has(nodeId) ? prev : new Set(prev).add(nodeId))
+    setTimeout(() => {
+      const flowNode = getNodes().find(n => n.id === nodeId)
+      if (flowNode) fitView({ nodes: [flowNode], duration: 400, padding: 0.5 })
+    }, 50)
   }, [getNodes, fitView])
 
   // 마우스 이동 핸들러 (50ms throttle) — 협업 세션 활성 시 커서 발행
