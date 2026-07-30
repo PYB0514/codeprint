@@ -42,34 +42,46 @@ public class AnalysisApplicationService {
     // ref(특정 커밋 SHA)를 지정해 그 커밋 상태로 재분석 — 사용자가 명시적으로 요청한 것이므로 "동일 커밋 스킵"
     // 최적화를 적용하지 않고 항상 실행한다.
     public AnalysisResult startAnalysis(UUID projectId, String branch, String githubRepoUrl, String githubAccessToken, String ref) {
-        // 레포 크기 조회(외부 API 호출)보다 먼저 확인 — 포화 상태면 불필요한 GitHub API 호출 자체를 생략
-        if (concurrencyGuard.isAtCapacity()) {
+        // 슬롯을 먼저 원자적으로 예약(레포 크기 조회 등 외부 API 호출보다 먼저) — 체크와 제출 사이에 네트워크
+        // 왕복이 끼어들어 레이스가 벌어지는 걸 막는다(2026-07-30 적대적 검증 TOCTOU 발견 수정). 이후 실제로
+        // taskExecutor에 제출하지 않고 리턴하는 모든 경로(스킵·크기초과)에서 slotReleased로 반드시 반납한다.
+        if (!concurrencyGuard.tryAcquire()) {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                     "현재 분석 요청이 많아 처리할 수 없습니다. 잠시 후 다시 시도해주세요.");
         }
 
-        long sizeKb = fetchRepoSizeKbSafely(githubRepoUrl, githubAccessToken);
-        if (sizeKb > MAX_REPO_SIZE_KB) {
-            throw new IllegalArgumentException("레포 크기가 너무 큽니다(" + sizeKb + "KB, 상한 " + MAX_REPO_SIZE_KB + "KB) — 분석을 시작할 수 없습니다.");
-        }
+        boolean submitted = false;
+        try {
+            long sizeKb = fetchRepoSizeKbSafely(githubRepoUrl, githubAccessToken);
+            if (sizeKb > MAX_REPO_SIZE_KB) {
+                throw new IllegalArgumentException("레포 크기가 너무 큽니다(" + sizeKb + "KB, 상한 " + MAX_REPO_SIZE_KB + "KB) — 분석을 시작할 수 없습니다.");
+            }
 
-        if (ref == null) {
-            Optional<AnalysisResult> lastAnalysis = analysisRepository.findLatestByProjectIdAndBranch(projectId, branch);
-            if (lastAnalysis.isPresent() && lastAnalysis.get().getStatus() == AnalysisStatus.DONE) {
-                String latestSha = fetchLatestShaSafely(githubRepoUrl, branch, githubAccessToken);
-                if (latestSha != null && latestSha.equals(lastAnalysis.get().getLastCommitSha())) {
-                    log.info("커밋 변경 없음, 재분석 스킵: projectId={}, branch={}, sha={}", projectId, branch, latestSha);
-                    return lastAnalysis.get();
+            if (ref == null) {
+                Optional<AnalysisResult> lastAnalysis = analysisRepository.findLatestByProjectIdAndBranch(projectId, branch);
+                if (lastAnalysis.isPresent() && lastAnalysis.get().getStatus() == AnalysisStatus.DONE) {
+                    String latestSha = fetchLatestShaSafely(githubRepoUrl, branch, githubAccessToken);
+                    if (latestSha != null && latestSha.equals(lastAnalysis.get().getLastCommitSha())) {
+                        log.info("커밋 변경 없음, 재분석 스킵: projectId={}, branch={}, sha={}", projectId, branch, latestSha);
+                        return lastAnalysis.get();
+                    }
                 }
             }
+
+            AnalysisResult analysis = AnalysisResult.create(projectId, branch);
+            analysisRepository.save(analysis);
+
+            // URL을 미리 추출해서 넘김 — 트랜잭션 커밋 전 비동기 스레드가 DB 조회 시 못 찾는 문제 방지.
+            // 슬롯 소유권이 여기서 AnalysisRunner로 넘어가고, 실제 분석이 끝나는 시점(성공/실패 무관)에
+            // AnalysisRunner가 release()한다 — 점유 구간이 "제출"이 아니라 "실제 작업 완료"까지여야 정확하다.
+            analysisRunner.run(analysis.getId(), projectId, githubRepoUrl, branch, githubAccessToken, ref);
+            submitted = true;
+            return analysis;
+        } finally {
+            if (!submitted) {
+                concurrencyGuard.release();
+            }
         }
-
-        AnalysisResult analysis = AnalysisResult.create(projectId, branch);
-        analysisRepository.save(analysis);
-
-        // URL을 미리 추출해서 넘김 — 트랜잭션 커밋 전 비동기 스레드가 DB 조회 시 못 찾는 문제 방지
-        analysisRunner.run(analysis.getId(), projectId, githubRepoUrl, branch, githubAccessToken, ref);
-        return analysis;
     }
 
     // GitHub 커밋 SHA 조회 실패 시 null 반환 — 스킵 판정만 안전하게 포기, 분석 자체는 정상 진행

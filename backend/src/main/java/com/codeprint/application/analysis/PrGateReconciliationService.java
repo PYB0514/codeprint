@@ -3,6 +3,7 @@
 // 분석 결과라 재시도 대상에서 제외(2026-07-17, GATE_GAPS.md [G-6] 재발 확인 2회차 이후 확장).
 package com.codeprint.application.analysis;
 
+import com.codeprint.infrastructure.config.AnalysisConcurrencyGuard;
 import com.codeprint.infrastructure.github.GitHubApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ public class PrGateReconciliationService {
     private final AnalysisFacade analysisFacade;
     private final GitHubApiClient gitHubApiClient;
     private final PrReviewRunner prReviewRunner;
+    private final AnalysisConcurrencyGuard concurrencyGuard;
 
     // PR의 마지막 갱신 시각이 재트리거 대상 시간창(GRACE_PERIOD ~ MAX_AGE 전) 안에 있는지 — 순수 함수(단위 테스트 대상)
     static boolean withinReconcileWindow(Instant updatedAt, Instant now) {
@@ -51,6 +53,13 @@ public class PrGateReconciliationService {
                 // success/failure = 정상 완료된 분석 결과, 재시도 대상 아님. null(상태 없음, G-5)·error(분석 자체가
                 // 인프라 오류로 죽음, G-6) 둘 다 유실이라 재트리거.
                 if ("success".equals(state) || "failure".equals(state)) continue;
+                // 분석과 같은 taskExecutor를 공유하므로 슬롯을 먼저 예약 — 포화 상태면 이 PR은 이번 회차에
+                // 건너뛰고 다음 스케줄 실행에서 다시 시도한다(2026-07-30 적대적 검증 CONFIRMED로 추가).
+                if (!concurrencyGuard.tryAcquire()) {
+                    log.warn("동시 처리 한도 초과, 리컨실리에이션 재트리거 스킵(다음 회차에 재시도): repo={}, pr={}",
+                            project.repoUrl(), pr.number());
+                    continue;
+                }
                 log.info("G-5/G-6 리컨실리에이션 — 유실 감지(state={}), 리뷰 재트리거: repo={}, pr={}",
                         state, project.repoUrl(), pr.number());
                 prReviewRunner.reviewAsync(project.projectId(), pr.number(), project.ownerId(), project.githubToken());

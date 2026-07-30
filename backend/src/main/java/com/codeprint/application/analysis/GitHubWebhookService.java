@@ -2,6 +2,7 @@
 package com.codeprint.application.analysis;
 
 import com.codeprint.domain.analysis.port.PrWebhookTargetPort;
+import com.codeprint.infrastructure.config.AnalysisConcurrencyGuard;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class GitHubWebhookService {
 
     private final PrWebhookTargetPort prWebhookTargetPort;
     private final PrReviewRunner prReviewRunner;
+    private final AnalysisConcurrencyGuard concurrencyGuard;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // webhook 처리 결과 — 컨트롤러가 HTTP 상태로 매핑
@@ -61,6 +63,14 @@ public class GitHubWebhookService {
         }
 
         PrWebhookTargetPort.Target t = target.get();
+
+        // 분석과 같은 taskExecutor를 공유하므로 슬롯을 먼저 예약 — 포화 상태면 리뷰를 스킵하되 webhook
+        // 자체는 정상 수신 처리(ACCEPTED)한다. 유실된 리뷰는 PrGateReconciliationService가 뒤에서 재시도한다
+        // (2026-07-30 적대적 검증에서 이 경로가 가드를 전혀 안 거친다는 것 CONFIRMED로 발견돼 추가).
+        if (!concurrencyGuard.tryAcquire()) {
+            log.warn("동시 처리 한도 초과, PR 리뷰 스킵(리컨실리에이션이 재시도): repo={}, pr={}", ownerRepo, prNumber);
+            return Result.ACCEPTED;
+        }
         log.info("webhook PR 리뷰 트리거: repo={}, pr={}, action={}", ownerRepo, prNumber, action);
         prReviewRunner.reviewAsync(t.projectId(), prNumber, t.ownerId(), t.githubToken());
         return Result.ACCEPTED;

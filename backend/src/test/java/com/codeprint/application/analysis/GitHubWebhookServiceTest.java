@@ -2,6 +2,7 @@
 package com.codeprint.application.analysis;
 
 import com.codeprint.domain.analysis.port.PrWebhookTargetPort;
+import com.codeprint.infrastructure.config.AnalysisConcurrencyGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,13 +28,16 @@ class GitHubWebhookServiceTest {
 
     private PrWebhookTargetPort targetPort;
     private PrReviewRunner reviewRunner;
+    private AnalysisConcurrencyGuard concurrencyGuard;
     private GitHubWebhookService service;
 
     @BeforeEach
     void setUp() {
         targetPort = mock(PrWebhookTargetPort.class);
         reviewRunner = mock(PrReviewRunner.class);
-        service = new GitHubWebhookService(targetPort, reviewRunner);
+        concurrencyGuard = mock(AnalysisConcurrencyGuard.class);
+        when(concurrencyGuard.tryAcquire()).thenReturn(true);
+        service = new GitHubWebhookService(targetPort, reviewRunner, concurrencyGuard);
     }
 
     // pull_request payload JSON 바이트 생성
@@ -139,5 +143,21 @@ class GitHubWebhookServiceTest {
 
         assertThat(result).isEqualTo(GitHubWebhookService.Result.ACCEPTED);
         verify(reviewRunner).reviewAsync(projectId, 9, ownerId, "tok");
+    }
+
+    @Test
+    @DisplayName("동시 처리 한도 초과 시 리뷰는 스킵하지만 webhook 자체는 ACCEPTED(리컨실리에이션이 재시도)")
+    void handle_atCapacity_skipsReviewButStillAccepted() {
+        UUID projectId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        byte[] body = prPayload("opened", "owner/repo", 11);
+        when(targetPort.resolve(eq("owner/repo"), any(), anyString()))
+                .thenReturn(Optional.of(new PrWebhookTargetPort.Target(projectId, ownerId, "tok")));
+        when(concurrencyGuard.tryAcquire()).thenReturn(false);
+
+        GitHubWebhookService.Result result = service.handle("pull_request", SIG, body);
+
+        assertThat(result).isEqualTo(GitHubWebhookService.Result.ACCEPTED);
+        verify(reviewRunner, never()).reviewAsync(any(), anyInt(), any(), anyString());
     }
 }

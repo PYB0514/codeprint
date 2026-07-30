@@ -6,6 +6,7 @@ import com.codeprint.domain.analysis.AnalysisResult;
 import com.codeprint.domain.analysis.AnalysisStatus;
 import com.codeprint.infrastructure.config.AnalysisConcurrencyGuard;
 import com.codeprint.infrastructure.github.GitHubApiClient;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -41,6 +43,12 @@ class AnalysisApplicationServiceTest {
     private GitHubApiClient gitHubApiClient;
     @Mock
     private AnalysisConcurrencyGuard concurrencyGuard;
+
+    // 기본값: 슬롯 예약 성공 — 포화 시나리오를 다루는 테스트에서만 개별적으로 false로 덮어씀
+    @BeforeEach
+    void setUp() {
+        lenient().when(concurrencyGuard.tryAcquire()).thenReturn(true);
+    }
 
     private AnalysisApplicationService service() {
         return new AnalysisApplicationService(analysisRepository, analysisRunner, gitHubApiClient, concurrencyGuard);
@@ -167,10 +175,10 @@ class AnalysisApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("startAnalysis는 공유 실행기가 포화 상태면 429로 거부하고 레포 크기 조회조차 하지 않는다")
+    @DisplayName("startAnalysis는 슬롯 예약에 실패하면(포화) 429로 거부하고 레포 크기 조회조차 하지 않는다")
     void startAnalysis_동시분석한도초과_거부() {
         UUID projectId = UUID.randomUUID();
-        when(concurrencyGuard.isAtCapacity()).thenReturn(true);
+        when(concurrencyGuard.tryAcquire()).thenReturn(false);
 
         assertThatThrownBy(() -> service().startAnalysis(projectId, "main", "https://github.com/a/b", "tok"))
                 .isInstanceOf(ResponseStatusException.class)
@@ -180,6 +188,44 @@ class AnalysisApplicationServiceTest {
         verifyNoInteractions(gitHubApiClient);
         verifyNoInteractions(analysisRepository);
         verifyNoInteractions(analysisRunner);
+        // 애초에 슬롯을 못 얻었으니 반납할 것도 없다
+        verify(concurrencyGuard, never()).release();
+    }
+
+    @Test
+    @DisplayName("startAnalysis는 정상 제출 시 슬롯을 반납하지 않는다(소유권이 AnalysisRunner로 이전)")
+    void startAnalysis_정상제출_슬롯유지() {
+        UUID projectId = UUID.randomUUID();
+
+        service().startAnalysis(projectId, "main", "https://github.com/a/b", "tok");
+
+        verify(concurrencyGuard, never()).release();
+    }
+
+    @Test
+    @DisplayName("startAnalysis는 동일 커밋 스킵 시 예약했던 슬롯을 반납한다")
+    void startAnalysis_동일커밋스킵_슬롯반납() {
+        UUID projectId = UUID.randomUUID();
+        AnalysisResult prev = AnalysisResult.create(projectId, "main");
+        prev.complete("sha-abc");
+        when(analysisRepository.findLatestByProjectIdAndBranch(projectId, "main")).thenReturn(Optional.of(prev));
+        when(gitHubApiClient.fetchLatestCommitSha("https://github.com/a/b", "main", "tok")).thenReturn("sha-abc");
+
+        service().startAnalysis(projectId, "main", "https://github.com/a/b", "tok");
+
+        verify(concurrencyGuard).release();
+    }
+
+    @Test
+    @DisplayName("startAnalysis는 레포 크기 초과로 거부될 때도 예약했던 슬롯을 반납한다")
+    void startAnalysis_크기초과거부_슬롯반납() {
+        UUID projectId = UUID.randomUUID();
+        when(gitHubApiClient.fetchRepoSizeKb("https://github.com/a/b", "tok")).thenReturn(1_048_577L);
+
+        assertThatThrownBy(() -> service().startAnalysis(projectId, "main", "https://github.com/a/b", "tok"))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verify(concurrencyGuard).release();
     }
 
     @Test
