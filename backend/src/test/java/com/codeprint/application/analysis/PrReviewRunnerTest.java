@@ -1,6 +1,7 @@
 // PrReviewRunner 비동기 실패 처리 회귀 테스트 — GATE_GAPS.md [G-4] 재발방지(체크가 조용히 사라지지 않고 error로 명시)
 package com.codeprint.application.analysis;
 
+import com.codeprint.infrastructure.config.AnalysisConcurrencyGuard;
 import com.codeprint.infrastructure.github.GitHubApiClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +23,7 @@ class PrReviewRunnerTest {
     @Mock private PrReviewService prReviewService;
     @Mock private AnalysisFacade analysisFacade;
     @Mock private GitHubApiClient gitHubApiClient;
+    @Mock private AnalysisConcurrencyGuard concurrencyGuard;
 
     private PrReviewRunner runner;
 
@@ -32,7 +34,7 @@ class PrReviewRunnerTest {
 
     @BeforeEach
     void setUp() {
-        runner = new PrReviewRunner(prReviewService, analysisFacade, gitHubApiClient);
+        runner = new PrReviewRunner(prReviewService, analysisFacade, gitHubApiClient, concurrencyGuard);
     }
 
     @Test
@@ -44,6 +46,26 @@ class PrReviewRunnerTest {
 
         verifyNoInteractions(analysisFacade);
         verify(gitHubApiClient, never()).createCommitStatus(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("호출자가 예약한 동시성 슬롯을 작업 완료(성공) 시 반납한다")
+    void releasesConcurrencySlotOnSuccess() {
+        when(prReviewService.review(projectId, prNumber, ownerId, token)).thenReturn(Map.of());
+
+        runner.reviewAsync(projectId, prNumber, ownerId, token);
+
+        verify(concurrencyGuard).release();
+    }
+
+    @Test
+    @DisplayName("리뷰 실행 중 예외가 나도 동시성 슬롯을 반납한다")
+    void releasesConcurrencySlotOnFailure() {
+        when(prReviewService.review(projectId, prNumber, ownerId, token)).thenThrow(new RuntimeException("boom"));
+
+        runner.reviewAsync(projectId, prNumber, ownerId, token);
+
+        verify(concurrencyGuard).release();
     }
 
     @Test

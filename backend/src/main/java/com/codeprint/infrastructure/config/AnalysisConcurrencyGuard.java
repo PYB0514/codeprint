@@ -1,25 +1,30 @@
-// 공유 비동기 실행기 부하 감시 — 분산 IP발 동시 분석 폭주 방어(DDoS 갭① 근본 해결)
+// 공유 비동기 실행기(taskExecutor) 슬롯 admission 제어 — 분산 IP발 동시 분석·PR 리뷰 폭주 방어(DDoS 갭① 근본 해결)
+// (2026-07-30 적대적 검증에서 TOCTOU 레이스 CONFIRMED — 통계 읽기(isAtCapacity) 방식은 tryAcquire 시점과 실제
+// taskExecutor 제출 시점 사이에 GitHub API 왕복이 끼어 있어 레이스 윈도우가 네트워크 RTT 단위로 벌어졌다.
+// 세마포어로 슬롯을 원자적으로 예약하는 방식으로 교체 — decisions/DECISIONS_BACKEND.md 참조)
 package com.codeprint.infrastructure.config;
 
-import lombok.RequiredArgsConstructor;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.Semaphore;
+
 @Component
-@RequiredArgsConstructor
 public class AnalysisConcurrencyGuard {
 
-    // taskExecutor 전체 용량(최대 8스레드+큐 50=58, AsyncConfig 참조)에 여유를 남겨 PR 리뷰 등 다른
-    // @Async 작업과 공유하면서도, 큐가 완전히 가득 차 CallerRunsPolicy가 Tomcat 요청 스레드까지
-    // 잠식하기 전에 신규 분석 요청을 선제 거부한다. 분산된 여러 IP가 동시에 요청해도(개별 IP는
-    // 3분당 1회로 이미 제한돼 있음) 서버 전체 동시 처리량은 이 한도를 넘지 않는다.
+    // taskExecutor 전체 용량(최대 8스레드+큐 50=58, AsyncConfig 참조)에 여유를 남긴 값. 분석과 PR 리뷰
+    // (웹훅·리컨실리에이션) 둘 다 이 세마포어를 통해서만 taskExecutor에 제출되므로, 두 경로를 합쳐서
+    // 정확히 이 개수까지만 동시 진행을 허용한다.
     private static final int MAX_IN_FLIGHT = 40;
 
-    private final ThreadPoolTaskExecutor taskExecutor;
+    private final Semaphore permits = new Semaphore(MAX_IN_FLIGHT);
 
-    // 현재 활성+대기 작업 수가 한도 이상이면 포화 상태로 판정
-    public boolean isAtCapacity() {
-        int inFlight = taskExecutor.getActiveCount() + taskExecutor.getThreadPoolExecutor().getQueue().size();
-        return inFlight >= MAX_IN_FLIGHT;
+    // 슬롯을 원자적으로 예약 시도 — 성공(true) 시 작업이 끝나는 시점에 반드시 release()를 호출해야 한다(try/finally)
+    public boolean tryAcquire() {
+        return permits.tryAcquire();
+    }
+
+    // 예약한 슬롯 반납
+    public void release() {
+        permits.release();
     }
 }
