@@ -2472,3 +2472,19 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** TDD로 `AnalysisConcurrencyGuardTest` 4건(한도 이내/초과/반납후재획득 + **100스레드 동시 요청 시 정확히 40개만 성공하는 실제 동시성 테스트**로 TOCTOU 회귀 방지) — 이전 버전은 전부 모킹된 정수 비교였다는 게 적대적 검증이 지적한 약점이라 이번엔 실제 스레드풀로 검증. `AnalysisApplicationServiceTest`(+3건: 정상 제출 시 미반납, 스킵/크기초과 시 반납), 신규 `AnalysisRunnerTest`(2건: 성공/실패 무관 반납), `PrReviewRunnerTest`(+2건), `GitHubWebhookServiceTest`(+1건: 포화 시 리뷰 스킵하되 ACCEPTED 유지), `PrGateReconciliationServiceTest`(+1건: 포화 시 이번 회차 스킵) — 전부 green. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변. 신규 Spring 빈 의존관계 변경 다수(5개 클래스)라 로컬 백엔드 실제 재기동 → `/actuator/health` UP, 순환 참조 없음.
 
 **한계·다음.** 세마포어 크기 40은 여전히 잠정치(풀 총 용량 58에서 어림잡아 뺀 값) — 실사용자 유입 후 재조정 필요, 이번 수정으로 바뀐 건 없음. 리컨실리에이션이 포화로 스킵한 PR은 다음 스케줄 실행(주기적)까지 대기하므로, 지속적인 고부하 상황에선 리컨실리에이션 자체가 계속 밀릴 수 있음 — 별도 모니터링 지표는 아직 없음.
+
+---
+
+## DDoS 갭① 3차 수정 — FeaturedAnalysisTriggerAdapter의 세마포어 과다 반납(over-release) (2026-07-30, codeprint_155)
+
+> ⚠️ **부분 대체: "DDoS 갭① 재수정"(2026-07-30, codeprint_155, 같은 세션, 바로 위 항목)** — 그 수정 자체를 fresh-context 에이전트로 소급 적대적 검증한 결과 CONFIRMED HIGH 결함 1건 추가 발견. 세마포어 재설계 자체는 유지, 누락된 호출부 하나만 보강.
+
+**발견된 결함(적대적 검증 CONFIRMED, HIGH).** `AnalysisRunner.run()`의 `finally`가 무조건 `concurrencyGuard.release()`를 호출하도록 만들었는데("이 메서드를 부르는 쪽은 이미 tryAcquire()로 슬롯을 예약했을 것"이 전제) — `FeaturedAnalysisTriggerAdapter.triggerAnalysis()`가 `AnalysisApplicationService.startAnalysis`를 거치지 않고 `analysisRunner.run(...)`을 **직접** 호출하면서도 슬롯 예약이 전혀 없었다. `FeaturedRepoCronController`(매일 06:00 KST, 갤러리 최대 5개 로테이션)를 통해 매일 자동 실행되는 경로라, 실행할 때마다 예약 없이 반납만 일어나 `Semaphore`(초기 permit 수를 넘는 반납을 검사하지 않음)의 유효 상한이 40에서 영구히(재시작 전까지) 늘어난다 — 시간이 지날수록 "40개 동시성 캡"이라는 이 PR 전체의 핵심 주장이 무의미해지는 회귀. 이 어댑터에 대한 테스트가 전무했던 것도 이 결함이 처음부터 안 잡힌 원인으로 지적됨.
+
+**수정.** `FeaturedAnalysisTriggerAdapter.triggerAnalysis()`에 `AnalysisApplicationService.startAnalysis`와 동일한 계약 적용 — `analysisRunner.run()` 호출 전 `concurrencyGuard.tryAcquire()`, 실패 시 오늘의 featured 갱신을 스킵(다음 스케줄에 재시도, 새 재시도 로직 안 만듦), 제출 자체가 실패하면 `finally`로 즉시 반납.
+
+**탈락한 대안.** ①`AnalysisRunner.run()` 내부에서 acquire까지 함께 하기 — `@Async`로 이미 taskExecutor에 제출된 뒤에야 실행되는 메서드 본문이라, 여기서 acquire를 걸어도 "제출 자체를 막는다"는 원래 목적(포화 시 요청을 아예 거부)을 달성 못 함, 캐치 못 하고 뒤늦게 거부하는 꼴이라 기각. ②`FeaturedAnalysisTriggerAdapter`도 `AnalysisApplicationService.startAnalysis`를 거치도록 리팩터링 — 이 어댑터는 인증 토큰 없는 공개 레포 전용 경로라 `startAnalysis`의 레포 크기 검사·커밋 스킵 판정 등 API 계층 로직과 성격이 달라 억지로 합치면 오히려 결합도만 높아진다고 판단, 계약(acquire/release 패턴)만 맞추고 별도 구현 유지가 더 단순.
+
+**검증.** TDD로 신규 `FeaturedAnalysisTriggerAdapterTest` 3건(포화 시 스킵·정상 제출 시 미반납·제출 실패 시 반납, 이전엔 이 클래스 테스트가 0건이었던 공백을 메움) — 전부 green. 기존 스위트 전체(통합 테스트 포함) green, `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변, 로컬 백엔드 실제 재기동(신규 생성자 의존관계 변경) → `/actuator/health` UP.
+
+**한계·다음.** `WebPushService`·`NotificationService`·`GraphWarningService` 등 같은 공유 `taskExecutor`를 쓰는 다른 `@Async` 사용처는 여전히 이 세마포어 예산(40)에 전혀 포함돼 있지 않다 — 기존 설계상 한계(코드 주석에 이미 "다른 @Async 작업과 공유"로 명시)이고 이번 세션 범위 밖이라 손대지 않음. `analysisRunner.run()`을 직접 호출하는 새 경로가 앞으로 추가될 때마다 같은 실수(예약 없이 호출)가 반복될 수 있다는 구조적 위험은 남아있음 — 더 근본적인 방지책(예: `AnalysisRunner.run()` 자체를 `package-private`로 좁혀 반드시 가드를 아는 소수 호출자만 접근하게 강제)은 이번엔 적용하지 않음, 필요성이 재확인되면 별도 검토.
