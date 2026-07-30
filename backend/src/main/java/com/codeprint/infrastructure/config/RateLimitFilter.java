@@ -65,7 +65,10 @@ public class RateLimitFilter implements Filter {
             new RateLimitRule("POST", "/api/teams/payment/prepare", "payment-prepare", 5, 1),
             new RateLimitRule("POST", "/api/teams/*/seats/payment/prepare", "payment-prepare", 5, 1),
             // GitHub 웹훅 — 서명검증(HMAC)이 1차 방어선이나, IP당 무제한 수신을 막는 2차 방어(codeprint_152 DDoS 감사)
-            new RateLimitRule("POST", "/api/webhooks/github", "webhook-github", 60, 1)
+            new RateLimitRule("POST", "/api/webhooks/github", "webhook-github", 60, 1),
+            // ADMIN 인증이 1차 방어선이나, 세션 탈취·내부자 남용 시에도 레이트리밋 이상탐지(RateLimitMetrics)
+            // 자체를 무한 리셋해 무력화하는 걸 막는 2차 방어(2026-07-30 적대적 검증 CONFIRMED로 추가)
+            new RateLimitRule("POST", "/api/admin/digest/run", "admin-digest-run", 5, 60)
     );
 
     // 요청 IP 추출 — Railway 프록시가 실제 접속 IP를 X-Forwarded-For 맨 끝에 추가하므로 마지막 값을 사용

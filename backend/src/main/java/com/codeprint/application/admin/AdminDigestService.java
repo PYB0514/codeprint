@@ -8,6 +8,7 @@ import com.codeprint.infrastructure.config.RateLimitMetrics;
 import com.codeprint.shared.event.DailyDigestReadyEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -142,22 +143,35 @@ public class AdminDigestService {
                 s.getPaymentsAmount(), s.getNewFeedback());
     }
 
-    // 지정 날짜의 다이제스트 생성·스냅샷 저장·관리자 발송 (스케줄·수동 트리거 공용)
+    // 지정 날짜의 다이제스트 생성·스냅샷 저장·관리자 발송 (스케줄·수동 트리거 공용).
+    // synchronized — 스케줄 cron과 관리자 수동 트리거가 같은 날짜에 동시 호출되는 레이스 윈도우를
+    // 크게 좁힌다(단일 인스턴스 운영 전제라 분산 락 대신 JVM 레벨 직렬화). 다만 @Transactional
+    // 프록시는 synchronized 락 해제(메서드 리턴) 이후에 커밋하므로 그 사이의 아주 좁은 윈도우는
+    // 이것만으로 완전히 닫히지 않는다(2026-07-30 적대적 검증 CONFIRMED) — 그 잔여 케이스는
+    // upsertSnapshot의 유니크 제약 위반 재시도가 흡수한다. restore는 그 외 다른 실패 원인(DB 일시
+    // 장애 등)에 대한 방어망으로 유지.
     @Transactional
-    public Digest runFor(LocalDate date) {
+    public synchronized Digest runFor(LocalDate date) {
         Instant start = date.atStartOfDay(KST).toInstant();
         Instant end = date.plusDays(1).atStartOfDay(KST).toInstant();
         DailyMetrics today = metricsQuery.collect(start, end);
         DailyStats yesterday = dailyStatsRepository.findByStatDate(date.minusDays(1)).orElse(null);
-        // snapshotAndReset — 이 호출 시점까지 누적된 트립을 소비하고 카운터를 비운다(직전 runFor 이후 누적)
-        Digest digest = computeDigest(date, today, yesterday, metricsQuery.openFeedbackCount(),
-                metricsQuery.dbSizeBytes(), topTables(), rateLimitMetrics.snapshotAndReset());
+        // snapshotAndReset — 이 호출 시점까지 누적된 트립을 소비하고 카운터를 비운다(직전 runFor 이후 누적).
+        // 이후 단계가 실패하면 restore로 되돌려 다음 시도가 이 신호를 놓치지 않게 한다.
+        Map<String, Long> rateLimitTrips = rateLimitMetrics.snapshotAndReset();
+        try {
+            Digest digest = computeDigest(date, today, yesterday, metricsQuery.openFeedbackCount(),
+                    metricsQuery.dbSizeBytes(), topTables(), rateLimitTrips);
 
-        upsertSnapshot(date, today);
+            upsertSnapshot(date, today);
 
-        // 관리자 발송은 사이드이펙트 — 이벤트로 분리(NotificationEventHandler가 인앱 알림 + 웹푸시 수행)
-        eventPublisher.publishEvent(new DailyDigestReadyEvent(metricsQuery.adminUserIds(), formatKorean(digest)));
-        return digest;
+            // 관리자 발송은 사이드이펙트 — 이벤트로 분리(NotificationEventHandler가 인앱 알림 + 웹푸시 수행)
+            eventPublisher.publishEvent(new DailyDigestReadyEvent(metricsQuery.adminUserIds(), formatKorean(digest)));
+            return digest;
+        } catch (RuntimeException e) {
+            rateLimitMetrics.restore(rateLimitTrips);
+            throw e;
+        }
     }
 
     // 스냅샷 업서트 — 같은 날짜 행이 있으면 제자리 UPDATE, 없으면 INSERT
@@ -165,15 +179,31 @@ public class AdminDigestService {
     private void upsertSnapshot(LocalDate date, DailyMetrics today) {
         DailyStats snapshot = dailyStatsRepository.findByStatDate(date).orElse(null);
         if (snapshot != null) {
-            snapshot.update(today.newUsers(), today.activeUsers(), today.newProjects(),
-                    today.analysesTotal(), today.analysesFailed(), today.paymentsCount(),
-                    today.paymentsAmount(), today.newFeedback());
-            dailyStatsRepository.save(snapshot);
-        } else {
-            dailyStatsRepository.save(DailyStats.create(date, today.newUsers(), today.activeUsers(),
+            applyAndSave(snapshot, today);
+            return;
+        }
+        try {
+            // saveAndFlush로 즉시 INSERT SQL을 실행 — DailyStats.id는 애플리케이션에서 UUID를 미리
+            // 할당하므로(@GeneratedValue 아님) 일반 save()만으로는 flush가 트랜잭션 커밋까지 미뤄질 수
+            // 있어, 유니크 제약 위반을 여기서 즉시 잡으려면 flush를 강제해야 한다.
+            dailyStatsRepository.saveAndFlush(DailyStats.create(date, today.newUsers(), today.activeUsers(),
                     today.newProjects(), today.analysesTotal(), today.analysesFailed(),
                     today.paymentsCount(), today.paymentsAmount(), today.newFeedback()));
+        } catch (DataIntegrityViolationException e) {
+            // synchronized로 좁힌 레이스 윈도우(메서드 리턴~트랜잭션 커밋 사이) 안에서도 다른 스레드가
+            // 먼저 같은 날짜 행을 만들었을 수 있다(2026-07-30 적대적 검증 CONFIRMED) — 그 행을 찾아
+            // UPDATE로 전환해 이 잔여 레이스까지 안전하게 흡수한다.
+            DailyStats race = dailyStatsRepository.findByStatDate(date).orElseThrow(() -> e);
+            applyAndSave(race, today);
         }
+    }
+
+    // 스냅샷에 오늘 지표를 반영해 저장
+    private void applyAndSave(DailyStats snapshot, DailyMetrics today) {
+        snapshot.update(today.newUsers(), today.activeUsers(), today.newProjects(),
+                today.analysesTotal(), today.analysesFailed(), today.paymentsCount(),
+                today.paymentsAmount(), today.newFeedback());
+        dailyStatsRepository.save(snapshot);
     }
 
     // 다이제스트 → 한국어 알림 문구 (인앱·웹푸시 공용)

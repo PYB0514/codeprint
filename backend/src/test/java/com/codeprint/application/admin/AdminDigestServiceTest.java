@@ -2,14 +2,27 @@
 package com.codeprint.application.admin;
 
 import com.codeprint.domain.admin.DailyStats;
+import com.codeprint.domain.admin.DailyStatsRepository;
+import com.codeprint.infrastructure.admin.AdminMetricsQuery;
+import com.codeprint.infrastructure.config.RateLimitMetrics;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class AdminDigestServiceTest {
 
@@ -145,5 +158,73 @@ class AdminDigestServiceTest {
         Map<String, Long> trips = Map.of("webhook-github", 5L);
         Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 0, 0L, List.of(), trips);
         assertThat(d.rateLimitTrips()).isEqualTo(trips);
+    }
+
+    // --- runFor: 스냅샷 저장 실패 시 레이트리밋 트립 복구 회귀 방지(2026-07-30 적대적 검증 CONFIRMED) ---
+
+    private DailyStatsRepository dailyStatsRepository;
+    private AdminMetricsQuery metricsQuery;
+    private ApplicationEventPublisher eventPublisher;
+    private RateLimitMetrics rateLimitMetrics;
+    private AdminDigestService runForService;
+
+    private void setUpRunForMocks() {
+        dailyStatsRepository = mock(DailyStatsRepository.class);
+        metricsQuery = mock(AdminMetricsQuery.class);
+        eventPublisher = mock(ApplicationEventPublisher.class);
+        rateLimitMetrics = mock(RateLimitMetrics.class);
+        runForService = new AdminDigestService(dailyStatsRepository, metricsQuery, eventPublisher, rateLimitMetrics);
+
+        when(metricsQuery.collect(any(), any())).thenReturn(metrics(0, 0, 0));
+        when(dailyStatsRepository.findByStatDate(date.minusDays(1))).thenReturn(Optional.empty());
+        when(metricsQuery.openFeedbackCount()).thenReturn(0);
+        when(metricsQuery.dbSizeBytes()).thenReturn(0L);
+        when(metricsQuery.topTableSizes(3)).thenReturn(List.of());
+    }
+
+    @Test
+    @DisplayName("runFor 정상 완료 시 레이트리밋 카운터를 복구하지 않는다")
+    void runFor_정상완료_복구안함() {
+        setUpRunForMocks();
+        Map<String, Long> trips = Map.of("analysis", 3L);
+        when(rateLimitMetrics.snapshotAndReset()).thenReturn(trips);
+        when(dailyStatsRepository.findByStatDate(date)).thenReturn(Optional.empty());
+
+        runForService.runFor(date);
+
+        verify(rateLimitMetrics, never()).restore(any());
+    }
+
+    @Test
+    @DisplayName("runFor는 스냅샷 저장이 실패하면(유니크 제약 위반이 아닌 일반 오류) 소비했던 레이트리밋 트립을 복구하고 예외를 다시 던진다")
+    void runFor_저장실패시_레이트리밋복구() {
+        setUpRunForMocks();
+        Map<String, Long> trips = Map.of("analysis", 3L);
+        when(rateLimitMetrics.snapshotAndReset()).thenReturn(trips);
+        when(dailyStatsRepository.findByStatDate(date)).thenReturn(Optional.empty());
+        when(dailyStatsRepository.saveAndFlush(any())).thenThrow(new RuntimeException("DB 커넥션 오류"));
+
+        assertThatThrownBy(() -> runForService.runFor(date)).isInstanceOf(RuntimeException.class);
+
+        verify(rateLimitMetrics).restore(trips);
+    }
+
+    @Test
+    @DisplayName("동시 실행 레이스로 INSERT가 유니크 제약 위반이면, 재조회해서 UPDATE로 전환하고 레이트리밋은 복구하지 않는다")
+    void runFor_동시실행레이스_UPDATE로전환() {
+        setUpRunForMocks();
+        Map<String, Long> trips = Map.of("analysis", 3L);
+        when(rateLimitMetrics.snapshotAndReset()).thenReturn(trips);
+        DailyStats raceWinnerRow = DailyStats.create(date, 0, 0, 0, 0, 0, 0, 0L, 0);
+        // 1차 조회(신규 여부 판단)는 없음, INSERT 시도 후 유니크 위반 → 재조회에서는 다른 스레드가 먼저
+        // 만든 행이 보임(consecutive stubbing으로 두 번째 호출부터 다른 값 반환)
+        when(dailyStatsRepository.findByStatDate(date)).thenReturn(Optional.empty(), Optional.of(raceWinnerRow));
+        when(dailyStatsRepository.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("unique violation"));
+
+        runForService.runFor(date);
+
+        verify(dailyStatsRepository, times(2)).findByStatDate(date);
+        verify(dailyStatsRepository).save(raceWinnerRow);
+        verify(rateLimitMetrics, never()).restore(any());
     }
 }

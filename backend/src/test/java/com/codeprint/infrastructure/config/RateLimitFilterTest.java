@@ -229,4 +229,22 @@ class RateLimitFilterTest {
         verify(response).setStatus(429);
         verify(chain, times(60)).doFilter(request, response);
     }
+
+    @Test
+    @DisplayName("관리자 다이제스트 수동 실행은 시간당 5회 — ADMIN 인증이 1차 방어, 세션 탈취 시 이상탐지 카운터 무한 리셋 방지가 목적(2026-07-30 적대적 검증)")
+    void adminDigestRunCategory_limitedToFivePerHour() throws Exception {
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getRequestURI()).thenReturn("/api/admin/digest/run");
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("11.11.11.11");
+
+        for (int i = 0; i < 5; i++) {
+            filter.doFilter(request, response, chain);
+        }
+        verify(chain, times(5)).doFilter(request, response);
+
+        filter.doFilter(request, response, chain); // 6번째 — 초과
+        verify(response).setStatus(429);
+        verify(chain, times(5)).doFilter(request, response);
+    }
 }

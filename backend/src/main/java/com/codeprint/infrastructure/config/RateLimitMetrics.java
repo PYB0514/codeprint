@@ -26,4 +26,10 @@ public class RateLimitMetrics {
         });
         return snapshot;
     }
+
+    // snapshotAndReset으로 비운 카운트를 되돌린다 — 스냅샷을 소비한 다이제스트 저장이 실패했을 때
+    // 신호를 영구 유실하지 않도록 복구용으로 제공(2026-07-30 적대적 검증 CONFIRMED로 추가)
+    public void restore(Map<String, Long> counts) {
+        counts.forEach((category, count) -> trips.computeIfAbsent(category, k -> new LongAdder()).add(count));
+    }
 }
