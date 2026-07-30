@@ -2471,3 +2471,19 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** TDD로 `RateLimitMetricsTest`에 `restore()` 검증 2건 추가(복구 + 복구 후 신규 트립과 합산), `RateLimitFilterTest`에 `admin-digest-run` 카테고리 시간당 5회 상한 1건 추가, `AdminDigestServiceTest`에 `runFor` 저장 실패 시 복구·정상 완료 시 미복구 2건 추가(신규 mock 기반 테스트 섹션) — 전부 green. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변. 백엔드 전체 테스트 스위트(통합 테스트 포함) green, 로컬 백엔드 실제 재기동 → `/actuator/health` UP.
 
 **한계·다음.** `synchronized`는 단일 인스턴스에서만 유효 — 향후 다중 인스턴스로 스케일 아웃하면 이 직렬화가 무의미해지고 분산 락으로 교체해야 한다(현재 아키텍처 전반이 같은 가정을 깔고 있어 이번 수정만의 새로운 제약은 아님). `admin-digest-run` 5회/시간 임계값도 다른 cron 규칙과 마찬가지로 실사용 근거 없는 잠정치.
+
+---
+
+## 레이트리밋 이상탐지 3차 수정 — synchronized로도 안 닫히던 잔여 레이스 완전 차단 (2026-07-30, codeprint_155)
+
+> ⚠️ **부분 대체: "레이트리밋 이상탐지 재수정"(2026-07-30, codeprint_155, 같은 세션, 바로 위 항목)** — 그 수정 자체를 fresh-context 에이전트로 소급 적대적 검증한 결과, "synchronized가 동시 실행을 원천 차단한다"는 서술이 부정확했음을 CONFIRMED로 발견. `synchronized`+`restore()` 설계는 유지, `upsertSnapshot`의 INSERT 경로만 보강.
+
+**발견된 결함(적대적 검증 CONFIRMED).** `@Transactional public synchronized Digest runFor(...)`에서 Spring AOP 프록시는 ①트랜잭션 시작 → ②타겟(synchronized) 메서드 호출·락 획득 → ③메서드 리턴과 동시에 락 해제 → ④그 다음에야 커밋, 순서로 동작한다. **락 해제(③)가 커밋(④)보다 먼저 일어나므로**, 스레드 A가 메서드를 빠져나온 직후 대기하던 B가 즉시 락을 잡고 자기 트랜잭션을 시작할 수 있는데 이 시점에 A의 INSERT는 아직 커밋 전이다. Postgres 기본 격리수준(READ_COMMITTED, 코드베이스에 오버라이드 없음 확인)에서 B는 A의 미커밋 행을 못 보므로 같은 날짜로 다시 INSERT를 시도 → `DailyStats.stat_date` 유니크 제약 위반이 **메서드 리턴~커밋 사이의 좁은 창**에서나마 여전히 가능했다. 결정 기록의 "동시 실행 자체를 원천 차단" 서술은 과장이었음.
+
+**수정.** `upsertSnapshot`의 INSERT 경로를 `save()` → `saveAndFlush()`로 변경(DailyStats.id가 애플리케이션에서 미리 할당하는 UUID라 `@GeneratedValue`가 아니고, 그래서 일반 `save()`만으론 실제 INSERT SQL이 트랜잭션 커밋까지 미뤄질 수 있어 유니크 위반을 그 자리에서 못 잡음 — flush를 강제해야 함). `DataIntegrityViolationException`을 잡아 그 날짜 행을 재조회해 UPDATE로 전환하는 재시도 로직 추가 — synchronized로 좁힌 잔여 레이스를 "발생 안 하게 막기"가 아니라 "발생해도 안전하게 흡수하기"로 완전히 닫았다.
+
+**탈락한 대안.** ①`synchronized` 대신/추가로 `ReentrantLock`을 커밋 이후까지 유지하는 커스텀 AOP — 프레임워크가 제공하는 트랜잭션 경계를 우회하는 복잡한 설계라 과설계로 판단, DB 유니크 제약이 이미 있는 상태에서 "위반 시 복구"가 훨씬 단순하고 견고. ②비관적 락(`SELECT ... FOR UPDATE`)으로 날짜 행을 미리 잠그기 — 행이 아직 존재하지 않는(첫 INSERT) 케이스엔 잠글 대상 자체가 없어 이 시나리오엔 적용 불가.
+
+**검증.** TDD로 `AdminDigestServiceTest`에 3건 재정비 — 기존 "저장 실패 시 복구" 테스트를 `saveAndFlush` 스텁으로 갱신(유니크 위반이 아닌 일반 오류로 실패하는 경우와 구분), 신규 "동시 실행 레이스로 유니크 위반 시 재조회해 UPDATE로 전환하고 레이트리밋은 복구하지 않는다"(consecutive stubbing으로 `findByStatDate`가 1차 호출엔 빈 값, 재조회 시엔 경쟁에서 이긴 다른 스레드의 행을 반환하도록 재현) — 전부 green. 백엔드 전체 스위트(통합 테스트 포함) green, `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변, 로컬 백엔드 실제 재기동 → `/actuator/health` UP.
+
+**한계·다음.** 이 패턴(유니크 위반 시 재조회 후 UPDATE)은 "낙관적 재시도"라 아주 드물게 두 스레드가 동시에 재시도 경로에 진입하면 이론적으로 한 단계 더 깊은 레이스가 남을 수 있으나, `synchronized`가 이미 대부분의 동시 진입을 막아둔 상태에서의 잔여 잔여 케이스라 실질적 위험은 무시할 수준으로 판단, 별도 재귀 재시도는 추가하지 않음.
