@@ -43,4 +43,30 @@ class RateLimitMetricsTest {
 
         assertThat(metrics.snapshotAndReset()).isEmpty();
     }
+
+    @Test
+    @DisplayName("restore는 스냅샷으로 비운 카운트를 되돌린다(다이제스트 저장 실패 시 복구용)")
+    void restore_유실된_카운트_복구() {
+        RateLimitMetrics metrics = new RateLimitMetrics();
+        metrics.recordTrip("analysis");
+        metrics.recordTrip("analysis");
+        Map<String, Long> snapshot = metrics.snapshotAndReset();
+
+        metrics.restore(snapshot);
+
+        assertThat(metrics.snapshotAndReset()).containsEntry("analysis", 2L);
+    }
+
+    @Test
+    @DisplayName("restore 이후 새로 발생한 트립과 합산된다(복구가 이후 집계를 지우지 않음)")
+    void restore_이후_신규트립과_합산() {
+        RateLimitMetrics metrics = new RateLimitMetrics();
+        metrics.recordTrip("analysis");
+        Map<String, Long> snapshot = metrics.snapshotAndReset(); // {analysis: 1}
+
+        metrics.restore(snapshot);
+        metrics.recordTrip("analysis"); // 복구 후 발생한 신규 트립
+
+        assertThat(metrics.snapshotAndReset()).containsEntry("analysis", 2L);
+    }
 }

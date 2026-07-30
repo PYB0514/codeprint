@@ -2,14 +2,25 @@
 package com.codeprint.application.admin;
 
 import com.codeprint.domain.admin.DailyStats;
+import com.codeprint.domain.admin.DailyStatsRepository;
+import com.codeprint.infrastructure.admin.AdminMetricsQuery;
+import com.codeprint.infrastructure.config.RateLimitMetrics;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class AdminDigestServiceTest {
 
@@ -145,5 +156,54 @@ class AdminDigestServiceTest {
         Map<String, Long> trips = Map.of("webhook-github", 5L);
         Digest d = service.computeDigest(date, metrics(50, 20, 1), snapshot(48, 22), 0, 0L, List.of(), trips);
         assertThat(d.rateLimitTrips()).isEqualTo(trips);
+    }
+
+    // --- runFor: 스냅샷 저장 실패 시 레이트리밋 트립 복구 회귀 방지(2026-07-30 적대적 검증 CONFIRMED) ---
+
+    private DailyStatsRepository dailyStatsRepository;
+    private AdminMetricsQuery metricsQuery;
+    private ApplicationEventPublisher eventPublisher;
+    private RateLimitMetrics rateLimitMetrics;
+    private AdminDigestService runForService;
+
+    private void setUpRunForMocks() {
+        dailyStatsRepository = mock(DailyStatsRepository.class);
+        metricsQuery = mock(AdminMetricsQuery.class);
+        eventPublisher = mock(ApplicationEventPublisher.class);
+        rateLimitMetrics = mock(RateLimitMetrics.class);
+        runForService = new AdminDigestService(dailyStatsRepository, metricsQuery, eventPublisher, rateLimitMetrics);
+
+        when(metricsQuery.collect(any(), any())).thenReturn(metrics(0, 0, 0));
+        when(dailyStatsRepository.findByStatDate(date.minusDays(1))).thenReturn(Optional.empty());
+        when(metricsQuery.openFeedbackCount()).thenReturn(0);
+        when(metricsQuery.dbSizeBytes()).thenReturn(0L);
+        when(metricsQuery.topTableSizes(3)).thenReturn(List.of());
+    }
+
+    @Test
+    @DisplayName("runFor 정상 완료 시 레이트리밋 카운터를 복구하지 않는다")
+    void runFor_정상완료_복구안함() {
+        setUpRunForMocks();
+        Map<String, Long> trips = Map.of("analysis", 3L);
+        when(rateLimitMetrics.snapshotAndReset()).thenReturn(trips);
+        when(dailyStatsRepository.findByStatDate(date)).thenReturn(Optional.empty());
+
+        runForService.runFor(date);
+
+        verify(rateLimitMetrics, never()).restore(any());
+    }
+
+    @Test
+    @DisplayName("runFor는 스냅샷 저장이 실패하면 소비했던 레이트리밋 트립을 복구하고 예외를 다시 던진다")
+    void runFor_저장실패시_레이트리밋복구() {
+        setUpRunForMocks();
+        Map<String, Long> trips = Map.of("analysis", 3L);
+        when(rateLimitMetrics.snapshotAndReset()).thenReturn(trips);
+        when(dailyStatsRepository.findByStatDate(date)).thenReturn(Optional.empty());
+        when(dailyStatsRepository.save(any())).thenThrow(new RuntimeException("DB 유니크 제약 위반"));
+
+        assertThatThrownBy(() -> runForService.runFor(date)).isInstanceOf(RuntimeException.class);
+
+        verify(rateLimitMetrics).restore(trips);
     }
 }

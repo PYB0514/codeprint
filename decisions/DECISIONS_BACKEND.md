@@ -2450,3 +2450,24 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** TDD로 `RateLimitMetricsTest`(카테고리별 독립 집계·스냅샷 후 리셋·빈 맵) 3건 + `RateLimitFilterTest`에 트립 기록 검증 1건 추가(기존 10건 포함 11건) + `AdminDigestServiceTest`에 임계 이상/미만/그대로 전달 3건 추가(기존 13건 포함 16건), 전부 green. `analyzeLocal` 자가검사에서 `runFor`가 새 호출 1개 추가로 HIGH_FAN_OUT 임계(7개)를 막 넘겨(8개) 신규 경고 1건 발생 — 규칙3(코드 품질) 대상으로 판단해 스냅샷 업서트 로직을 `upsertSnapshot()`으로 즉시 추출, 베이스라인(5개) 원복 확인. **로컬 백엔드 실제 재기동**(신규 Spring 빈 + 생성자 의존관계 변경 2건이라 CLAUDE.md 규칙4 대상) → `/actuator/health` UP, 순환 참조 없음. 백엔드 전체 테스트 스위트(통합 테스트 포함, Docker Postgres 기동 상태) green.
 
 **한계·다음.** 임계값 20은 잠정치 — 카테고리마다 정상 트래픽 규모가 다른데(예: `webhook-github` 60/분 vs `analysis` 1/3분) 단일 임계를 적용해, 실사용자 유입 후 특정 카테고리에서 오탐이 나올 수 있다. 인메모리 카운터라 배포 재시작 시 그 시점까지의 집계가 유실되는 점도 알려진 트레이드오프(단일 인스턴스 운영 전제, SECURITY_POLICY.md에 명시).
+
+---
+
+## 레이트리밋 이상탐지 재수정 — 감시 엔드포인트 자체 무방비 + 저장 실패 시 카운터 영구 유실 (2026-07-30, codeprint_155)
+
+> ⚠️ **부분 대체: "보안 이벤트 이상탐지 — 레이트리밋 트립을 일일 다이제스트에 편입"(2026-07-29, codeprint_155, 같은 세션)** — "코드리뷰를 항상 적대적으로 하라"는 사용자 요청으로 머지 완료된 #718을 fresh-context 에이전트로 소급 검증한 결과 CONFIRMED 결함 2건 발견. `RateLimitMetrics`·`Digest` 설계 자체는 유지, `RateLimitFilter` 규칙과 `AdminDigestService.runFor` 실행 방식만 보강.
+
+**발견된 결함(적대적 검증 CONFIRMED).**
+1. **`POST /api/admin/digest/run`에 레이트리밋 자체가 없음(HIGH)** — `RateLimitFilter.rules`에 `/api/admin/**` 계열이 하나도 없어, ADMIN 세션(탈취·내부자)만 있으면 이 엔드포인트를 연타해 `rateLimitMetrics.snapshotAndReset()`을 계속 호출시켜 다른 카테고리의 남용 카운트를 트립 임계(20)에 도달하기 전에 계속 씻어낼 수 있었다 — "하루 단위 집계"라는 전제가 즉시 무너짐.
+2. **비트랜잭셔널 리셋 + 동시 실행 락 부재(MEDIUM)** — `snapshotAndReset()`(인메모리, 트랜잭션과 무관)이 `upsertSnapshot()`(DB, `@Transactional`)보다 먼저 실행돼, DB 저장이 실패하면(예: 스케줄 cron과 관리자 수동 트리거가 같은 날짜에 동시 호출 → `DailyStats.stat_date` 유니크 제약 위반) 이미 리셋된 카운터를 되돌릴 방법이 없어 그 구간의 트립 신호가 영구 유실됐다.
+
+**수정.**
+1. `RateLimitFilter.rules`에 `POST /api/admin/digest/run` — IP당 5회/시간(`cron-digest`와 동일 수준) 추가.
+2. `AdminDigestService.runFor`를 `synchronized`로 직렬화 — 단일 인스턴스 운영 전제(기존 인메모리 Caffeine 캐시·`RateLimitMetrics` 자체와 같은 가정)라 분산 락(ShedLock 등) 대신 JVM 레벨 직렬화로 충분, 스케줄·수동 트리거 동시 실행 자체를 원천 차단.
+3. `RateLimitMetrics.restore(Map)` 신설 — `snapshotAndReset()`으로 비운 카운트를 되돌리는 보정 메서드. `runFor`가 `snapshotAndReset()` 이후 실패하면 `catch` 블록에서 즉시 `restore()`로 복구 후 예외를 다시 던진다. `synchronized`로 동시 실행 레이스는 없어졌지만, DB 일시 장애 등 다른 실패 원인은 여전히 남아 방어망으로 유지.
+
+**탈락한 대안.** ①`ShedLock` 등 분산 락 도입 — 이 앱은 단일 인스턴스로 운영 중이라(기존 여러 인메모리 상태가 이미 그 가정 위에 있음) 과설계로 판단해 기각, `synchronized`로 충분. ②`snapshotAndReset()`을 트랜잭션 커밋 이후로 미루기 — 인메모리 연산이라 트랜잭션과 무관하게 항상 즉시 반영되므로 순서를 바꿔도 원자성이 안 생김, `restore()`로 실패를 보정하는 쪽이 더 단순하고 정확.
+
+**검증.** TDD로 `RateLimitMetricsTest`에 `restore()` 검증 2건 추가(복구 + 복구 후 신규 트립과 합산), `RateLimitFilterTest`에 `admin-digest-run` 카테고리 시간당 5회 상한 1건 추가, `AdminDigestServiceTest`에 `runFor` 저장 실패 시 복구·정상 완료 시 미복구 2건 추가(신규 mock 기반 테스트 섹션) — 전부 green. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변. 백엔드 전체 테스트 스위트(통합 테스트 포함) green, 로컬 백엔드 실제 재기동 → `/actuator/health` UP.
+
+**한계·다음.** `synchronized`는 단일 인스턴스에서만 유효 — 향후 다중 인스턴스로 스케일 아웃하면 이 직렬화가 무의미해지고 분산 락으로 교체해야 한다(현재 아키텍처 전반이 같은 가정을 깔고 있어 이번 수정만의 새로운 제약은 아님). `admin-digest-run` 5회/시간 임계값도 다른 cron 규칙과 마찬가지로 실사용 근거 없는 잠정치.

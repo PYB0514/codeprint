@@ -142,22 +142,33 @@ public class AdminDigestService {
                 s.getPaymentsAmount(), s.getNewFeedback());
     }
 
-    // 지정 날짜의 다이제스트 생성·스냅샷 저장·관리자 발송 (스케줄·수동 트리거 공용)
+    // 지정 날짜의 다이제스트 생성·스냅샷 저장·관리자 발송 (스케줄·수동 트리거 공용).
+    // synchronized — 스케줄 cron과 관리자 수동 트리거가 같은 날짜에 동시 호출되면 DailyStats 유니크
+    // 제약 위반으로 실패할 수 있었다(단일 인스턴스 운영 전제라 분산 락 대신 JVM 레벨 직렬화로 충분,
+    // 2026-07-30 적대적 검증 CONFIRMED로 추가). restore는 그 레이스가 없어진 뒤에도 남는 다른 실패
+    // 원인(DB 일시 장애 등)에 대한 방어망으로 유지.
     @Transactional
-    public Digest runFor(LocalDate date) {
+    public synchronized Digest runFor(LocalDate date) {
         Instant start = date.atStartOfDay(KST).toInstant();
         Instant end = date.plusDays(1).atStartOfDay(KST).toInstant();
         DailyMetrics today = metricsQuery.collect(start, end);
         DailyStats yesterday = dailyStatsRepository.findByStatDate(date.minusDays(1)).orElse(null);
-        // snapshotAndReset — 이 호출 시점까지 누적된 트립을 소비하고 카운터를 비운다(직전 runFor 이후 누적)
-        Digest digest = computeDigest(date, today, yesterday, metricsQuery.openFeedbackCount(),
-                metricsQuery.dbSizeBytes(), topTables(), rateLimitMetrics.snapshotAndReset());
+        // snapshotAndReset — 이 호출 시점까지 누적된 트립을 소비하고 카운터를 비운다(직전 runFor 이후 누적).
+        // 이후 단계가 실패하면 restore로 되돌려 다음 시도가 이 신호를 놓치지 않게 한다.
+        Map<String, Long> rateLimitTrips = rateLimitMetrics.snapshotAndReset();
+        try {
+            Digest digest = computeDigest(date, today, yesterday, metricsQuery.openFeedbackCount(),
+                    metricsQuery.dbSizeBytes(), topTables(), rateLimitTrips);
 
-        upsertSnapshot(date, today);
+            upsertSnapshot(date, today);
 
-        // 관리자 발송은 사이드이펙트 — 이벤트로 분리(NotificationEventHandler가 인앱 알림 + 웹푸시 수행)
-        eventPublisher.publishEvent(new DailyDigestReadyEvent(metricsQuery.adminUserIds(), formatKorean(digest)));
-        return digest;
+            // 관리자 발송은 사이드이펙트 — 이벤트로 분리(NotificationEventHandler가 인앱 알림 + 웹푸시 수행)
+            eventPublisher.publishEvent(new DailyDigestReadyEvent(metricsQuery.adminUserIds(), formatKorean(digest)));
+            return digest;
+        } catch (RuntimeException e) {
+            rateLimitMetrics.restore(rateLimitTrips);
+            throw e;
+        }
     }
 
     // 스냅샷 업서트 — 같은 날짜 행이 있으면 제자리 UPDATE, 없으면 INSERT
