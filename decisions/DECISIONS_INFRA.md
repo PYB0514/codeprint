@@ -743,6 +743,18 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 
 **한계·다음.** react-router 패치가 나오면 `dependency-audit` 잡이 자연히 green으로 전환될 것 — 그 시점 이후 몇 차례 관찰 후 브랜치 보호 필수 체크 추가를 검토. 시크릿 로테이션은 표만 수립했고 실제 첫 교체는 아직 실행 안 함(주기 시작점은 이 문서 작성일 기준).
 
+## `dependency-audit` 잡에 확인된 예외(GHSA) 화이트리스트 추가 — 위 "관찰 기간" 종료, 실질 필수화 준비 (2026-07-30, codeprint_156)
+
+**배경.** 사용자가 PR #723 머지 후 CI의 `Dependency Audit` 실패("Dependency Audit fail")를 보고 "조치해야지 왜 가만히있어"라고 지적 — react-router GHSA-qwww-vcr4-c8h2를 다시 조사. 결론 자체는 이미 `decisions/DECISIONS_FRONTEND.md` "npm audit 취약점 해소"(2026-07-25, codeprint_147)에서 확정돼 있던 것과 동일(RSC 미사용으로 무해, 진짜 패치는 아직 미배포라 다운그레이드는 회귀 위험) — 오늘 독립적으로 재조사해 같은 결론에 재도달, GitHub 공식 어드바이저리 원문("This only affects your application if you are using the unstable RSC APIs")까지 재확인.
+
+**문제.** 위 2026-07-29 결정 1이 "이슈가 해소되고 몇 차례 관찰 후 필수화 재판단"이라고 했지만, 진짜 패치가 언제 나올지 알 수 없어 이 상태로는 `dependency-audit` 잡이 **영원히 실패로 남는다** — 그러면 매 PR마다 빨간 X가 뜨는 게 "정상"이 돼버려, 정작 새로운(진짜 조치가 필요한) 취약점이 추가돼도 시각적으로 구분이 안 되는 알림 피로(alert fatigue) 문제가 생김.
+
+**결정.** `npm audit --audit-level=high` 그대로 두지 않고, 그 뒤에 Node.js 스크립트(잡에 이미 Node 셋업이 있어 신규 도구 의존성 불필요)로 결과를 후처리 — 확인된 예외 GHSA ID 목록(`ACKNOWLEDGED = ["GHSA-qwww-vcr4-c8h2"]`)에 해당하는 항목만 통과시키고, 그 외 high/critical이 하나라도 있으면 그대로 실패. 판정 로직: 각 취약점 항목의 `via` 배열에서 (a) 직접 이 GHSA를 참조하거나 (b) 참조하는 다른 패키지 키(`react-router-dom` → `react-router`처럼 한 단계 간접 참조)가 이 GHSA를 갖고 있으면 "확인됨"으로 제외. 로컬에서 실제 프로젝트 audit 결과(예외 0건 남음, exit 0)와 가짜 신규 취약점 데이터(예외 아님, exit 1) 양쪽 다 Node로 먼저 검증 후 워크플로에 반영.
+
+**탈락한 대안**: `audit-ci`/`better-npm-audit` 같은 별도 npm 패키지 도입 — 이 정도 화이트리스트 하나 처리하자고 신규 공급망 의존성을 추가하는 건 과함, 이미 잡에 Node가 있어 인라인 스크립트로 충분.
+
+**효과.** 이제 `dependency-audit` 잡은 알려진 예외 없이는 실제로 green — 신규 취약점이 생기면 그때 다시 실패해 정상적으로 신호 역할을 한다. 진짜 알림 피로 문제 해소. **다음**: 이 상태로 몇 차례 정상 통과를 관찰한 뒤, 위 결정 1의 "필수화 재판단" 조건이 사실상 충족된 것으로 보고 `codeprint/structure` 등과 같이 브랜치 보호 필수 체크로 승격할지 검토(사용자 확인 필요 — 브랜치 보호 규칙 변경이라 별도 논의).
+
 ---
 
 ## PR #716~#718 머지 직후 프로덕션 배포 실패(#717 SKIPPED·#718 FAILED) — 원인 진단 및 복구 (2026-07-30, codeprint_155)

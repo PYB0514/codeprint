@@ -67,9 +67,10 @@ jobs:
       - name: Build & Test
         run: ./gradlew test --no-daemon
 
-  # 프론트엔드 의존성 취약점 스캔 — 아직 브랜치 보호 필수 체크로는 등록하지 않음(신규 게이트라
-  # 기존 미해결 취약점으로 전체 PR이 갑자기 막히는 걸 피하기 위해 몇 차례 관찰 기간을 둔다).
+  # 프론트엔드 의존성 취약점 스캔 — 아직 브랜치 보호 필수 체크로는 등록하지 않음.
   # Dependabot 보안 알림(레포 설정)과는 별개로, npm registry advisory DB 기준 즉시 CI에서 가시화.
+  # 확인된 예외(RSC 미사용으로 무해 판정된 GHSA 등)는 아래 스크립트에서 명시적으로 제외 — 그 외
+  # high/critical은 그대로 실패 처리(2026-07-30, codeprint_156, 근거는 decisions/DECISIONS_FRONTEND.md).
   dependency-audit:
     name: Dependency Audit
     runs-on: ubuntu-latest
@@ -90,8 +91,44 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: npm audit (high 이상)
-        run: npm audit --audit-level=high
+      # GHSA-qwww-vcr4-c8h2(react-router RSC 모드 CSRF)는 확인된 예외 — 이 프로젝트는 RSC/데이터 라우터
+      # API(action/loader/createBrowserRouter 등)를 전혀 안 쓰고 고전 BrowserRouter만 사용해 실제 공격
+      # 경로가 없음을 코드 전수 확인(decisions/DECISIONS_FRONTEND.md 참조). 진짜 패치(8.3.0+)는 아직
+      # npm에 안 올라와 있어 지금 유일한 "수정"은 7개 마이너 버전 다운그레이드뿐이라 보류, 이 특정 ID만
+      # 예외 처리하고 그 외 신규 high/critical은 그대로 게이트로 잡는다.
+      - name: npm audit (high 이상, 확인된 예외 제외)
+        run: |
+          set +e
+          npm audit --audit-level=high --json > audit-result.json
+          AUDIT_EXIT=$?
+          set -e
+          if [ "$AUDIT_EXIT" -eq 0 ]; then
+            echo "취약점 없음"
+            exit 0
+          fi
+          node -e '
+            const fs = require("fs");
+            const data = JSON.parse(fs.readFileSync("audit-result.json", "utf8"));
+            const ACKNOWLEDGED = ["GHSA-qwww-vcr4-c8h2"];
+            const vulns = data.vulnerabilities || {};
+            const hasAcked = (entry) => (entry.via || []).some(v =>
+              typeof v === "object" && v.url && ACKNOWLEDGED.some(id => v.url.includes(id)));
+            const unacknowledged = Object.entries(vulns).filter(([, value]) => {
+              if (!["high", "critical"].includes(value.severity)) return false;
+              if (hasAcked(value)) return false;
+              const indirect = (value.via || []).some(v => {
+                if (typeof v !== "string") return false;
+                const ref = vulns[v];
+                return ref && hasAcked(ref);
+              });
+              return !indirect;
+            });
+            if (unacknowledged.length > 0) {
+              console.error("확인 안 된 high/critical 취약점 발견:", unacknowledged.map(([k]) => k).join(", "));
+              process.exit(1);
+            }
+            console.log("확인된 예외(" + ACKNOWLEDGED.join(", ") + ")만 존재 — 통과");
+          '
 
   frontend:
     name: Frontend Type Check
