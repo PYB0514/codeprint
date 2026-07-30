@@ -1163,6 +1163,16 @@ export function computeComplexityHubs(rawNodes: RawNode[], rawEdges: RawEdge[], 
   return hubs.sort((a, b) => Math.min(b.inDegree, b.outDegree) - Math.min(a.inDegree, a.outDegree)).slice(0, limit)
 }
 
+// 대형 그래프 기본 뷰 — 복잡도 허브가 아닌 FUNCTION 노드를 숨겨 초기 렌더 노드 수를 줄인다.
+// 박스 크기는 기존 전체 함수 개수 기준 그대로 두고(재계산 안 함) hidden만 전환 — layer 모드 opaque 토글과 동일한 패턴.
+export function applyNodeBudget(nodes: Node[], funcNodeIds: Set<string>, hubIds: Set<string>, active: boolean): Node[] {
+  if (!active) return nodes
+  return nodes.map((n) => {
+    if (!funcNodeIds.has(n.id)) return n
+    return hubIds.has(n.id) ? n : { ...n, hidden: true }
+  })
+}
+
 // DB 엣지 타입 판별
 export function isDbEdgeType(t: string | undefined): boolean {
   return t === 'DB_READ' || t === 'DB_WRITE' || t === 'DB_CREATE' || t === 'DB_UPDATE' || t === 'DB_DELETE'

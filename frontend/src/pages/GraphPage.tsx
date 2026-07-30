@@ -20,7 +20,7 @@ import { toPng } from 'html-to-image'
 import { buildLayout, downloadWarningsMd } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset, FileSidebarData, ConnEntry, FuncCallEntry, ColumnInfo } from '../utils/graphLayout'
 import { extractDomain, buildDomainColorMap, buildKnownDomains } from '../utils/graphLayout'
-import { isDbEdgeType, applyEdgeVisibility, applyLayerModeNodeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS, searchNodes, computeComplexityHubs } from '../utils/graphLayout'
+import { isDbEdgeType, applyEdgeVisibility, applyLayerModeNodeVisibility, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS, searchNodes, computeComplexityHubs, applyNodeBudget } from '../utils/graphLayout'
 import GroupNode from '../components/GroupNode'
 import SectionNode from '../components/SectionNode'
 import FileNode from '../components/FileNode'
@@ -301,6 +301,10 @@ function GraphPageInner() {
   // 국소 표시 원칙(GATE_GAPS.md [G-9] 관련 설계, codeprint_149) — 끊긴 연결(구조 위반 증거)만 전역 토글로
   // 항상 노출 가능, 나머지 엣지 타입은 전역 토글 없이 clickedNodeId 기반 1홉 강조로만 드러난다(아래 536행 근처 useEffect)
   const [showBrokenEdges, setShowBrokenEdges] = useState(true)
+  // 노드 예산 — 함수 노드 80개 초과 시 복잡도 허브만 기본 표시(나머지는 숨김), "전체 보기"로 해제 가능
+  const [showAllNodes, setShowAllNodes] = useState(false)
+  // 검색/허브 패널 클릭으로 명시적으로 찾아간 노드 — 허브가 아니어도 항상 표시
+  const [revealedNodeIds, setRevealedNodeIds] = useState<Set<string>>(new Set())
   const [rawEdgesCache, setRawEdgesCache] = useState<RawEdge[]>([])
   const [graphId, setGraphId] = useState<string | null>(null)
   const [showTeamChat, setShowTeamChat] = useState(false)
@@ -349,12 +353,19 @@ function GraphPageInner() {
 
   // 복잡도 허브 — 이름을 몰라도 "숨은 복잡도 지점"을 min(in-degree, out-degree) 기준으로 제안(순수 프론트엔드 계산)
   const complexityHubs = useMemo(() => computeComplexityHubs(rawNodes, rawEdgesCache), [rawNodes, rawEdgesCache])
+  // 노드 예산 대상 — 전체 FUNCTION 노드 id (기준값 판단용) / 허브 id (기본 표시 대상)
+  const funcNodeIds = useMemo(() => new Set(rawNodes.filter(n => n.type === 'FUNCTION').map(n => n.id)), [rawNodes])
+  const hubNodeIds = useMemo(() => new Set(complexityHubs.map(h => h.node.id)), [complexityHubs])
+  const nodeBudgetEligible = funcNodeIds.size > 80
+  // 사이드바가 열려 있으면(경고·흐름재생·검색 상세 등) 그 안에서 특정 노드로 바로 이동하는 링크가 많아 항상 전체 표시로 전환
+  const nodeBudgetActive = nodeBudgetEligible && !showAllNodes && !sidebar
 
   // 검색 결과 노드로 fitView 이동
   const handleSearchNodeClick = useCallback((nodeId: string) => {
     const flowNode = getNodes().find(n => n.id === nodeId)
     if (flowNode) fitView({ nodes: [flowNode], duration: 400, padding: 0.5 })
     setNodeSearchQuery('')
+    setRevealedNodeIds(prev => prev.has(nodeId) ? prev : new Set(prev).add(nodeId))
   }, [getNodes, fitView])
 
   // 마우스 이동 핸들러 (50ms throttle) — 협업 세션 활성 시 커서 발행
@@ -1516,6 +1527,11 @@ function GraphPageInner() {
         })
       }
     }
+    // 노드 예산 — 허브·명시적으로 찾아간 노드·흐름재생 경로상 노드는 항상 표시
+    if (nodeBudgetActive) {
+      const alwaysShow = new Set([...hubNodeIds, ...revealedNodeIds, ...activePath.nodeIds])
+      result = applyNodeBudget(result, funcNodeIds, alwaysShow, true)
+    }
     // 스케치 노드를 기존 레이아웃 위에 덧붙임 (buildLayout을 거치지 않는 별도 레이어 — 기존 노드 합성에 영향 없음)
     if (sketchNodes.length > 0) {
       const sketchRF = sketchNodes.map(s => ({
@@ -1529,7 +1545,7 @@ function GraphPageInner() {
       return [...result, ...sketchRF]
     }
     return result
-  }, [showDomainBoxes, nodes, tabFilteredNodeIds, activeDomainTab, layoutPreset, dbTableIdSet, sketchNodes, deleteSketchNode, relabelSketchNode])
+  }, [showDomainBoxes, nodes, tabFilteredNodeIds, activeDomainTab, layoutPreset, dbTableIdSet, sketchNodes, deleteSketchNode, relabelSketchNode, nodeBudgetActive, hubNodeIds, revealedNodeIds, funcNodeIds, activePath.nodeIds])
 
   // 탭 필터링된 엣지 — 양쪽 노드가 모두 표시될 때만 보여줌
   // 현재 사이드바에서 열린 노드 ID (엣지 온디맨드 표시용)
@@ -1658,6 +1674,24 @@ function GraphPageInner() {
       </div>
     </LeftSection>
   ), [showBrokenEdges, toggleBrokenEdges, t])
+
+  // 노드 예산 토글 — 함수 노드가 많은 프로젝트에서만 노출
+  const nodeBudgetSectionJsx = useMemo(() => {
+    if (!nodeBudgetEligible) return null
+    return (
+      <LeftSection title={t('communityPostGraph.nodeBudget.heading')}>
+        <button
+          onClick={() => setShowAllNodes(v => !v)}
+          className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300"
+        >
+          {showAllNodes
+            ? t('communityPostGraph.nodeBudget.hubOnlyLabel', { shown: hubNodeIds.size, total: funcNodeIds.size })
+            : t('communityPostGraph.nodeBudget.showAllLabel')}
+        </button>
+        {!showAllNodes && <p className="text-[11px] text-gray-500 px-1.5 pt-1 leading-snug">{t('communityPostGraph.nodeBudget.hint')}</p>}
+      </LeftSection>
+    )
+  }, [nodeBudgetEligible, showAllNodes, hubNodeIds, funcNodeIds, t])
 
   // 노드 타입 필터 섹션 — drag 중 변경 없음
   const nodeFilterSectionJsx = useMemo(() => (
@@ -2187,6 +2221,9 @@ function GraphPageInner() {
                 {t('graphPage.versionDiffButton')}
               </button>
             </LeftSection>
+
+            {/* 노드 예산 — 함수 많은 프로젝트만 노출, memoized */}
+            {nodeBudgetSectionJsx}
 
             {/* 노드 타입 가시성 필터 — memoized */}
             {nodeFilterSectionJsx}
