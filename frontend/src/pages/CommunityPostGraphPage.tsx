@@ -15,7 +15,7 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { buildLayout, applyEdgeVisibility, searchNodes, getGroupKey, findCommonPrefix, downloadWarningsMd, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS, computeComplexityHubs } from '../utils/graphLayout'
+import { buildLayout, applyEdgeVisibility, searchNodes, getGroupKey, findCommonPrefix, downloadWarningsMd, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_ARIA_LABELS, computeComplexityHubs, applyNodeBudget } from '../utils/graphLayout'
 import type { RawNode, RawEdge, LabelMode, LayoutPreset } from '../utils/graphLayout'
 import type { Node, Edge } from '@xyflow/react'
 import GroupNode from '../components/GroupNode'
@@ -351,15 +351,22 @@ function CommunityPostSnapshotInner() {
     }))
   }, [clickedNodeId, rawEdgesCache, setEdges])
 
-  // 좌측 노드 목록 클릭 시 해당 노드로 이동
+  // 좌측 노드 목록 클릭 시 해당 노드로 이동 — 노드 예산으로 숨겨진 상태일 수 있어 selectedNode 반영 후(50ms 지연) fitView
+  // (먼저 fitView하면 아직 hidden인 노드라 React Flow가 대상 0개로 계산해 원점(0,0)으로 튐)
   const handleFocusNode = (nodeId: string) => {
-    fitView({ nodes: [{ id: nodeId }], duration: 400, padding: 0.3 })
     const target = nodes.find(n => n.id === nodeId)
     if (target) setSelectedNode(target)
+    setTimeout(() => fitView({ nodes: [{ id: nodeId }], duration: 400, padding: 0.3 }), 50)
   }
 
   // 복잡도 허브 — GraphPage.tsx와 동일(보기 기능은 비로그인도 동등해야 함, 2026-07-02 결정)
   const complexityHubs = useMemo(() => computeComplexityHubs(rawNodesCache, rawEdgesCache), [rawNodesCache, rawEdgesCache])
+  // 노드 예산 — GraphPage.tsx와 동일한 임계값·기준(2026-07-30 도입)
+  const funcNodeIds = useMemo(() => new Set(rawNodesCache.filter(n => n.type === 'FUNCTION').map(n => n.id)), [rawNodesCache])
+  const hubNodeIds = useMemo(() => new Set(complexityHubs.map(h => h.node.id)), [complexityHubs])
+  const nodeBudgetEligible = funcNodeIds.size > 80
+  const [showAllNodes, setShowAllNodes] = useState(false)
+  const nodeBudgetActive = nodeBudgetEligible && !showAllNodes
 
   useEffect(() => {
     if (!postId || position === undefined) return
@@ -523,11 +530,16 @@ function CommunityPostSnapshotInner() {
     return childIds
   }, [activeDomainTab, nodes])
 
-  const displayNodes = useMemo(() =>
-    tabFilteredNodeIds ? nodes.filter(n => tabFilteredNodeIds.has(n.id)) : nodes,
-    [nodes, tabFilteredNodeIds]
-  )
   const focusedNodeId = selectedNode?.id ?? null
+
+  const displayNodes = useMemo(() => {
+    let result = tabFilteredNodeIds ? nodes.filter(n => tabFilteredNodeIds.has(n.id)) : nodes
+    if (nodeBudgetActive) {
+      const alwaysShow = new Set([...hubNodeIds, ...activePath.nodeIds, ...(focusedNodeId ? [focusedNodeId] : [])])
+      result = applyNodeBudget(result, funcNodeIds, alwaysShow, true)
+    }
+    return result
+  }, [nodes, tabFilteredNodeIds, nodeBudgetActive, hubNodeIds, funcNodeIds, activePath.nodeIds, focusedNodeId])
 
   const displayEdges = useMemo(() => {
     const baseEdges = tabFilteredNodeIds
@@ -726,6 +738,22 @@ function CommunityPostSnapshotInner() {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* 노드 예산 — 함수 노드 많은 프로젝트만 노출(GraphPage.tsx와 동일 로직) */}
+          {nodeBudgetEligible && (
+            <div className="px-3 py-3 border-b border-gray-800/60 flex flex-col gap-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('communityPostGraph.nodeBudget.heading')}</p>
+              <button
+                onClick={() => setShowAllNodes(v => !v)}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300"
+              >
+                {showAllNodes
+                  ? t('communityPostGraph.nodeBudget.hubOnlyLabel', { shown: hubNodeIds.size, total: funcNodeIds.size })
+                  : t('communityPostGraph.nodeBudget.showAllLabel')}
+              </button>
+              {!showAllNodes && <p className="text-[10px] text-gray-600 px-1">{t('communityPostGraph.nodeBudget.hint')}</p>}
             </div>
           )}
 

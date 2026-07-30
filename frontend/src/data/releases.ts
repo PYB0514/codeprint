@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.155.0',
+    date: '2026-07-30',
+    title: '함수 노드가 많은 그래프 — 복잡도 허브만 먼저 보기',
+    type: 'feature',
+    items: [
+      { category: '신규', desc: '함수가 80개를 넘는 대형 프로젝트는 그래프를 열면 복잡도 허브 함수만 먼저 표시됩니다(나머지는 좌측 "노드" 섹션의 버튼으로 전체 보기 전환 가능). 검색·복잡도 허브 목록·흐름 재생으로 찾아간 노드는 항상 표시됩니다.' },
+    ],
+  },
+  {
     version: 'v0.154.0',
     date: '2026-07-29',
     title: '복잡도 허브 패널을 공유·커뮤니티 그래프 뷰어에도 확대',

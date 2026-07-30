@@ -587,6 +587,12 @@
       "api": "API Call",
       "localHint": "Other connections appear only when you click a node — showing just that node's direct links."
     },
+    "nodeBudget": {
+      "heading": "Nodes",
+      "hubOnlyLabel": "Show hubs only ({{shown}}/{{total}})",
+      "showAllLabel": "Show all",
+      "hint": "Large project — showing complexity hubs first."
+    },
     "snapshotNotFound": "Snapshot not found.",
     "commentsHeading": "Comments",
     "noComments": "No comments.",

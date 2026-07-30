@@ -587,6 +587,12 @@
       "api": "API 호출",
       "localHint": "다른 연결선은 노드를 클릭하면 그 노드와 연결된 것만 표시됩니다."
     },
+    "nodeBudget": {
+      "heading": "노드",
+      "hubOnlyLabel": "핵심 함수만 보기 ({{shown}}/{{total}})",
+      "showAllLabel": "전체 보기",
+      "hint": "함수가 많은 프로젝트라 복잡도 허브만 먼저 표시합니다."
+    },
     "snapshotNotFound": "스냅샷을 찾을 수 없습니다.",
     "commentsHeading": "코멘트",
     "noComments": "코멘트가 없습니다.",

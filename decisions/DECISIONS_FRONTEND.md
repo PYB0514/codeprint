@@ -1342,3 +1342,26 @@ const fetchGraph = useCallback(async () => {
 **검증.** `tsc -b`/`eslint` clean, `vitest run` green. 실 브라우저로 세 화면 전부 실측: ① `GraphPage.tsx`(로그인, 저장/수정 가능) ② `GraphViewerPage.tsx`(`/share/...`, 읽기 전용 배지 확인) ③ `CommunityPostGraphPage.tsx`(커뮤니티 게시글 첨부 그래프, 실제 다른 레포 스냅샷) — 셋 다 패널 렌더+항목 클릭 시 해당 노드로 이동+노드 정보 패널 갱신까지 확인, 콘솔 에러 0건.
 
 **교훈.** "새 보기 기능은 뷰어 페이지도 반영"이라는 규칙이 파일 맨 위 주석에 명시돼 있었음에도, 작업을 서두르며 그 파일(GraphPage.tsx)만 보고 규칙 자체를 놓쳤다 — 다음에 GraphPage.tsx를 건드릴 땐 파일 상단 주석을 매번 재확인할 것.
+
+## 노드 예산 V1 — 복잡도 허브 기반 기본 뷰(함수 80개 초과 시), 박스 리사이즈는 다음 프론트 개편으로 미룸 (2026-07-30, codeprint_156)
+
+**배경.** Context155에서 벤치마킹까지 마친 "노드·엣지 예산 재정의" 백로그(§PROGRESS.md) 구현 착수. 함수 노드 수백 개가 한꺼번에 렌더되는 "헤어볼" 문제를, 이미 있는 `computeComplexityHubs`(복잡도 허브 패널, 2026-07-29 PR #714) 결과를 재사용해 완화.
+
+**설계 결정 2건 — 사용자 확인 하에 진행.**
+1. **박스 크기는 그대로 두고 hidden 플래그만 전환.** `applyLayerModeNodeVisibility`(layer opaque 토글)와 동일 패턴 — 파일 박스는 여전히 "전체 함수 개수" 기준 그리드 크기 그대로라, 함수를 대부분 숨기면 빈 공간이 많이 남는다. 정교하게 하려면(보이는 함수 개수 기준 박스 재계산) `buildLayout`의 그리드 배치 로직 자체를 손봐야 해서 공수가 큼 — 사용자가 "일단 대충 하고, 나중에 프론트 재구현할 때 어떻게 할지 메모만 남겨달라"고 확정. **다음 프론트 개편 시 참고**: 박스를 실제로 작게 그리려면 `funcsByFile`을 "표시할 함수만"으로 필터링한 뒤 그 결과로 `calcFileSize`를 다시 계산해야 하고, 이는 곧 layout 자체가 노드 예산 상태(허브 id·펼침 상태)에 의존하게 되는 구조 변경이라 `buildLayout` 시그니처에 새 파라미터가 필요하다.
+2. **적용 기준은 함수 노드 80개 초과 프로젝트에서만, 캔버스 내 파일별 펼치기는 V1 범위 밖.** 사용자가 "허브 우선 기본뷰"라는 용어 자체를 처음엔 DDD 레이어드 뷰와 혼동해 재설명 후 진행 — 레이어/도메인 그룹핑과는 무관한 별도 축임을 명확히 함. 백로그 원안은 "파일 클릭 → 그 파일 함수만 펼치기"였으나, 캔버스 안에서 파일별 펼침 상태를 관리하려면(1)과 같은 이유로 리사이즈까지 얽혀 공수가 커, V1은 **전역 토글**("핵심 함수만 보기" ⇄ "전체 보기") 하나로 단순화. 파일별 펼치기는 이미 있는 좌측 사이드바 "브라우즈 트리"(`expandedFiles`, GraphViewerPage.tsx 등)와는 별개 개념 — 그건 텍스트 리스트 UI고 이건 캔버스 노드 렌더링이라 혼동 주의.
+
+**구현.** `graphLayout.ts`에 `applyNodeBudget(nodes, funcNodeIds, hubIds, active)` 추가 — `active`일 때 `funcNodeIds`에 속하지만 `hubIds`(허브+예외 항상 표시 대상)에 없는 노드만 `hidden:true`. GraphPage/GraphViewerPage/CommunityPostGraphPage 3곳의 `displayNodes` 파생 메모에서 호출(뷰어 패리티, 2026-07-02 결정). "허브 외 항상 표시" 집합은 페이지마다 다른 방식으로 구성:
+- GraphPage.tsx: 검색·복잡도 허브 패널 클릭이 `handleSearchNodeClick` 하나로 통합돼 있어 거기서 `revealedNodeIds`에 누적 + 사이드바가 열려 있으면(`!sidebar`, 경고·흐름재생·함수호출체인 등 내부에 caller/callee로 바로 이동하는 링크가 30곳 넘게 흩어져 있어 전부 개별 대응하는 대신) 노드 예산 자체를 비활성화.
+- GraphViewerPage.tsx/CommunityPostGraphPage.tsx: `handleFocusNode` 하나가 모든 네비게이션(검색·허브·트리·직접 클릭)의 공통 경로라 `selectedNode?.id`(=`focusedNodeId`) 하나만 always-show에 포함하면 충분 — GraphPage.tsx보다 구조가 단순해 특별 처리 불요.
+- 세 페이지 공통: 흐름 재생 중인 노드(`activePath.nodeIds`, `useFlowPlayback` 훅)도 always-show에 포함 — 안 그러면 재생 중인 노드가 허브가 아닐 때 숨겨져 랜딩 대표 기능이 깨짐.
+
+**검증.** `tsc -b`/`eslint` clean(신규 warning 없음, 기존 9건 그대로). 실제 프로덕션 규모급 로컬 그래프(`gin-gonic/gin`, 함수 1285개)로 `/share/...` 실측 — 토글 끔 268개 DOM 노드(허브 15개 + 파일/그룹 등) → 토글 켬 1538개(전체), 라벨 "핵심 함수만 보기 (15/1285)" 정상 표시. 좌측 브라우즈 트리에서 허브 아닌 함수(`searchCredential`) 클릭 시 269개로 정확히 1개 늘어나며 DOM에 나타남 — reveal 로직 확인. `GraphPage.tsx`(로그인 전용)는 OAuth 없이 브라우저에서 직접 검증하지 못해(로컬 dev 토큰을 쿠키로 주입하는 시도가 자동 승인 분류기에 의해 차단됨 — 인증 관련 동작으로 판단된 것으로 보임, 우회 안 하고 수용) 코드 리뷰로 대체, 동일한 `applyNodeBudget` 재사용이라 로직 신뢰도는 높음.
+
+**미검증(다음 세션 참고).** ①80개 임계값 자체의 적절성(사용자 판단으로 결정, 실사용자 피드백 없음) ②GraphPage.tsx 실제 로그인 브라우저 검증 ③박스 리사이즈(위 설계 결정 1) 실제 구현.
+
+**추가 수정 — 적대적 검증(fresh-context 에이전트)이 CONFIRMED 결함 발견 (같은 세션, 머지 전).** PR #723 push 직후 "코드 변경 PR은 항상 적대적으로 검증"(사용자 표준 규칙) 하에 독립 에이전트 검증을 돌린 결과, `handleSearchNodeClick`(GraphPage.tsx)와 `handleFocusNode`(GraphViewerPage.tsx·CommunityPostGraphPage.tsx) 3곳 모두 **fitView를 reveal 상태 반영보다 먼저 호출하는 순서 버그**를 발견 — 설치된 `@xyflow/system` 소스(`getFitViewNodes`, `node_modules/@xyflow/system/dist/esm/index.js:415-425`)를 직접 읽어 확증: `hidden` 노드는 fitView 대상에서 제외되고, 대상이 0개면 bounds가 `{x:0,y:0,w:0,h:0}`로 폴백돼 카메라가 원점(0,0)으로 튐. 검색·복잡도 허브 클릭 시 "노드가 나타나긴 하지만 화면 밖(원점)으로 이동"하는 실제 UX 버그였음 — 원래 검증("269개로 정확히 1개 증가")은 노드가 DOM에 나타났는지만 확인했고 카메라 위치는 확인하지 않아 놓쳤던 문제.
+
+**수정.** 3곳 모두 상태 갱신(`setRevealedNodeIds`/`setSelectedNode`)을 먼저 실행하고 `fitView` 호출을 `setTimeout(..., 50)`으로 지연 — `GraphPage.tsx` 안에 이미 30곳 넘게 쓰이던 기존 패턴("state 반영 후 50ms 지연 fitView")과 동일하게 맞춤. React의 setState는 그 뒤에 오는 매크로태스크(setTimeout) 실행 전에 항상 커밋되므로, 50ms 시점엔 해당 노드가 이미 hidden=false로 반영돼 있음이 보장된다.
+
+**검증의 한계.** 이 샌드박스 브라우저 환경은 `document.hidden === true`(Browser pane이 실제로 렌더링되지 않는 상태 — 스크린샷도 "compositing 안 됨"으로 실패)라 `fitView`의 `duration` 기반 애니메이션(d3-zoom 트랜지션)이 아예 진행되지 않아 최종 카메라 transform을 시각적으로 확인할 수 없었다(반면 버튼 직접 클릭형 확대/축소는 애니메이션 없이 즉시 반영돼 정상 동작 확인됨 — 즉 이 환경 자체가 애니메이션을 못 그리는 것이지 앱 결함이 아님을 별도로 확인). 대신 DOM 레벨로 순서를 검증: reveal 클릭 후 700ms(50ms 지연보다 충분히 긴 시간) 뒤 대상 노드가 DOM에 나타나 있음을 재확인 — React state가 setTimeout 매크로태스크보다 먼저 커밋된다는 건 React 자체의 스케줄링 보장이라 이걸로 충분하다고 판단. 실사용자 환경(페이지가 실제로 보이는 상태)에서의 최종 육안 확인은 다음 세션 숙제로 남김.
