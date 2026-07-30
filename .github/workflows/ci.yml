@@ -109,19 +109,39 @@ jobs:
           node -e '
             const fs = require("fs");
             const data = JSON.parse(fs.readFileSync("audit-result.json", "utf8"));
+            // npm audit이 취약점 발견이 아닌 다른 이유(레지스트리 장애 등)로 실패해도 exit code는
+            // 똑같이 비0이라 vulnerabilities 필드 자체가 없을 수 있음 — 그 경우 "취약점 없음"으로
+            // 오판하지 않고 감사 자체 실패로 처리한다.
+            if (!data.vulnerabilities) {
+              console.error("npm audit 결과에 vulnerabilities 필드가 없습니다 — 정상적인 감사 결과가 아닐 수 있어 실패 처리합니다.");
+              console.error(JSON.stringify(data));
+              process.exit(1);
+            }
             const ACKNOWLEDGED = ["GHSA-qwww-vcr4-c8h2"];
-            const vulns = data.vulnerabilities || {};
-            const hasAcked = (entry) => (entry.via || []).some(v =>
-              typeof v === "object" && v.url && ACKNOWLEDGED.some(id => v.url.includes(id)));
+            const vulns = data.vulnerabilities;
+            // via 배열의 각 항목이 확인된 예외로 설명되는지 — 하나라도 안 되면 false.
+            // (한 패키지가 acknowledged 원인 "과" 무관한 원인을 동시에 가질 수 있어, 원인 중 하나만
+            // acknowledged라고 전체를 면제하면 안 된다 — 전부 acknowledged일 때만 면제)
+            // seen은 최상위 항목 하나를 검사하는 동안만 유효한 순환 참조 방어용 — 다른 항목 검사에
+            // 영향 주면 안 되므로 매번 새로 만든다(공유 Set을 쓰면 이전 항목에서 방문한 이름이 다음
+            // 항목에서 오탐 순환으로 잘못 처리됨).
+            const isViaItemAcked = (v, seen) => {
+              if (typeof v === "object" && v !== null && v.url) {
+                return ACKNOWLEDGED.some(id => v.url.includes(id));
+              }
+              if (typeof v === "string") {
+                if (seen.has(v)) return false;
+                seen.add(v);
+                const ref = vulns[v];
+                return !!ref && Array.isArray(ref.via) && ref.via.length > 0 && ref.via.every(w => isViaItemAcked(w, seen));
+              }
+              return false;
+            };
             const unacknowledged = Object.entries(vulns).filter(([, value]) => {
               if (!["high", "critical"].includes(value.severity)) return false;
-              if (hasAcked(value)) return false;
-              const indirect = (value.via || []).some(v => {
-                if (typeof v !== "string") return false;
-                const ref = vulns[v];
-                return ref && hasAcked(ref);
-              });
-              return !indirect;
+              const via = value.via || [];
+              if (via.length === 0) return true; // 원인 불명은 안전 쪽(미확인)으로 처리
+              return !via.every(v => isViaItemAcked(v, new Set()));
             });
             if (unacknowledged.length > 0) {
               console.error("확인 안 된 high/critical 취약점 발견:", unacknowledged.map(([k]) => k).join(", "));
