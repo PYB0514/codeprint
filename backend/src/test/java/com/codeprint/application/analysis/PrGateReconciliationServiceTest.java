@@ -1,6 +1,7 @@
 // PrGateReconciliationService 단위 테스트 — 시간창 판정·재트리거 분기·프로젝트별 격리 회귀 방지
 package com.codeprint.application.analysis;
 
+import com.codeprint.infrastructure.config.AnalysisConcurrencyGuard;
 import com.codeprint.infrastructure.github.GitHubApiClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,13 +27,16 @@ class PrGateReconciliationServiceTest {
     private AnalysisFacade analysisFacade;
     private GitHubApiClient gitHubApiClient;
     private PrReviewRunner prReviewRunner;
+    private AnalysisConcurrencyGuard concurrencyGuard;
     private PrGateReconciliationService service;
 
     private void setUp() {
         analysisFacade = mock(AnalysisFacade.class);
         gitHubApiClient = mock(GitHubApiClient.class);
         prReviewRunner = mock(PrReviewRunner.class);
-        service = new PrGateReconciliationService(analysisFacade, gitHubApiClient, prReviewRunner);
+        concurrencyGuard = mock(AnalysisConcurrencyGuard.class);
+        when(concurrencyGuard.tryAcquire()).thenReturn(true);
+        service = new PrGateReconciliationService(analysisFacade, gitHubApiClient, prReviewRunner, concurrencyGuard);
     }
 
     @Test
@@ -146,5 +150,22 @@ class PrGateReconciliationServiceTest {
 
         assertThat(triggered).isEqualTo(1);
         verify(prReviewRunner).reviewAsync(okProjectId, 3, okOwnerId, "tok2");
+    }
+
+    @Test
+    @DisplayName("동시 처리 한도 초과 시 이번 회차엔 재트리거를 건너뛴다(다음 회차에 재시도)")
+    void reconcile_atCapacity_skipsRetrigger() {
+        setUp();
+        var project = new PrGateConnectedProject(UUID.randomUUID(), UUID.randomUUID(), "https://github.com/o/r", "tok");
+        when(analysisFacade.listPrGateConnectedProjects()).thenReturn(List.of(project));
+        when(gitHubApiClient.fetchOpenPullRequests("https://github.com/o/r", "tok")).thenReturn(List.of(
+                new GitHubApiClient.OpenPullRequest(7, "sha7", Instant.now().minusSeconds(3600))));
+        when(gitHubApiClient.structureCommitStatusState("https://github.com/o/r", "sha7", "tok")).thenReturn(null);
+        when(concurrencyGuard.tryAcquire()).thenReturn(false);
+
+        int triggered = service.reconcile();
+
+        assertThat(triggered).isEqualTo(0);
+        verify(prReviewRunner, never()).reviewAsync(any(), anyInt(), any(), anyString());
     }
 }

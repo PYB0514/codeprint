@@ -1,63 +1,79 @@
-// AnalysisConcurrencyGuard 단위 테스트 — 공유 taskExecutor 부하에 따른 한도 판정 검증
+// AnalysisConcurrencyGuard 단위 테스트 — 세마포어 기반 원자적 슬롯 예약/반납 검증
+// (2026-07-30 적대적 검증에서 TOCTOU 레이스 CONFIRMED — 통계 읽기 방식에서 세마포어 방식으로 재설계)
 package com.codeprint.infrastructure.config;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
 class AnalysisConcurrencyGuardTest {
 
-    @Mock
-    private ThreadPoolTaskExecutor taskExecutor;
-    @Mock
-    private ThreadPoolExecutor delegate;
-    @Mock
-    private BlockingQueue<Runnable> queue;
+    @Test
+    @DisplayName("한도(40) 이내면 tryAcquire가 계속 성공한다")
+    void 한도_이내_성공() {
+        AnalysisConcurrencyGuard guard = new AnalysisConcurrencyGuard();
 
-    private AnalysisConcurrencyGuard guard() {
-        return new AnalysisConcurrencyGuard(taskExecutor);
+        for (int i = 0; i < 40; i++) {
+            assertThat(guard.tryAcquire()).isTrue();
+        }
     }
 
     @Test
-    @DisplayName("활성+대기 작업 합이 한도 미만이면 여유 있음")
-    void 한도_미만이면_여유() {
-        when(taskExecutor.getActiveCount()).thenReturn(3);
-        when(taskExecutor.getThreadPoolExecutor()).thenReturn(delegate);
-        when(delegate.getQueue()).thenReturn(queue);
-        when(queue.size()).thenReturn(10);
+    @DisplayName("한도(40)를 넘으면 tryAcquire가 실패한다")
+    void 한도_초과_실패() {
+        AnalysisConcurrencyGuard guard = new AnalysisConcurrencyGuard();
+        for (int i = 0; i < 40; i++) guard.tryAcquire();
 
-        assertThat(guard().isAtCapacity()).isFalse();
+        assertThat(guard.tryAcquire()).isFalse();
     }
 
     @Test
-    @DisplayName("활성+대기 작업 합이 한도 이상이면 포화 상태")
-    void 한도_이상이면_포화() {
-        when(taskExecutor.getActiveCount()).thenReturn(8);
-        when(taskExecutor.getThreadPoolExecutor()).thenReturn(delegate);
-        when(delegate.getQueue()).thenReturn(queue);
-        when(queue.size()).thenReturn(32);
+    @DisplayName("release 후에는 다시 tryAcquire가 성공한다")
+    void release_후_재획득_가능() {
+        AnalysisConcurrencyGuard guard = new AnalysisConcurrencyGuard();
+        for (int i = 0; i < 40; i++) guard.tryAcquire();
+        assertThat(guard.tryAcquire()).isFalse();
 
-        assertThat(guard().isAtCapacity()).isTrue();
+        guard.release();
+
+        assertThat(guard.tryAcquire()).isTrue();
     }
 
     @Test
-    @DisplayName("경계값(정확히 한도)도 포화로 판정한다")
-    void 경계값_포화() {
-        when(taskExecutor.getActiveCount()).thenReturn(0);
-        when(taskExecutor.getThreadPoolExecutor()).thenReturn(delegate);
-        when(delegate.getQueue()).thenReturn(queue);
-        when(queue.size()).thenReturn(40);
+    @DisplayName("동시에 100개 스레드가 몰려도 정확히 40개만 획득에 성공한다(TOCTOU 회귀 방지)")
+    void 동시_요청_정확히_한도만큼만_성공() throws InterruptedException {
+        AnalysisConcurrencyGuard guard = new AnalysisConcurrencyGuard();
+        int threadCount = 100;
+        CountDownLatch ready = new CountDownLatch(threadCount);
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(threadCount);
+        AtomicInteger succeeded = new AtomicInteger(0);
+        ExecutorService pool = Executors.newFixedThreadPool(threadCount);
 
-        assertThat(guard().isAtCapacity()).isTrue();
+        for (int i = 0; i < threadCount; i++) {
+            pool.submit(() -> {
+                ready.countDown();
+                try {
+                    start.await();
+                    if (guard.tryAcquire()) succeeded.incrementAndGet();
+                } catch (InterruptedException ignored) {
+                } finally {
+                    done.countDown();
+                }
+            });
+        }
+
+        ready.await();
+        start.countDown();
+        done.await();
+        pool.shutdown();
+
+        assertThat(succeeded.get()).isEqualTo(40);
     }
 }

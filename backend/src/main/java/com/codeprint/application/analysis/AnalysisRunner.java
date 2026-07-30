@@ -4,6 +4,7 @@ package com.codeprint.application.analysis;
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
 import com.codeprint.infrastructure.analysis.*;
+import com.codeprint.infrastructure.config.AnalysisConcurrencyGuard;
 import com.codeprint.infrastructure.github.GitHubApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ public class AnalysisRunner {
     private final SourceFileWalker sourceFileWalker;
     private final CachedParsedFileLoader cachedParsedFileLoader;
     private final GraphBuilder graphBuilder;
+    private final AnalysisConcurrencyGuard concurrencyGuard;
 
     // 레포 클론 → 파일 수집 → 정적 분석 → 그래프 빌드를 비동기로 실행
     // 메서드 전체를 트랜잭션으로 감싸지 않는다 — git clone·GitHub API 왕복(수십초~수 분)까지 DB 커넥션을 물고
@@ -94,6 +96,9 @@ public class AnalysisRunner {
             if (repoDir != null) {
                 repoCloner.deleteDir(repoDir);
             }
+            // AnalysisApplicationService.startAnalysis에서 예약한 동시성 슬롯을 실제 작업 완료 시점에 반납
+            // (성공/실패 무관 — 점유 구간은 "제출"이 아니라 "이 비동기 작업 전체")
+            concurrencyGuard.release();
         }
     }
 
