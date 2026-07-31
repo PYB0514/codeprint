@@ -48,7 +48,7 @@ class AnalysisRunnerTest {
         when(analysisRepository.findById(analysisId)).thenReturn(Optional.of(analysis));
         Path repoDir = Path.of("/tmp/repo");
         when(repoCloner.clone("https://github.com/a/b", "main")).thenReturn(repoDir);
-        when(sourceFileWalker.walk(repoDir)).thenReturn(new WalkResult(List.of(), 0));
+        when(sourceFileWalker.walk(repoDir, (String) null)).thenReturn(new WalkResult(List.of(), 0));
         when(cachedParsedFileLoader.load(any(), any(), any())).thenReturn(List.of());
         when(gitHubApiClient.fetchLatestCommitSha("https://github.com/a/b", "main", "tok")).thenReturn("sha1");
 

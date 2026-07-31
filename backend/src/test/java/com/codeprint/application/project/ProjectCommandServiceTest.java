@@ -188,6 +188,52 @@ class ProjectCommandServiceTest {
         verify(projectRepository, never()).save(any());
     }
 
+    // --- setPathPrefix: 소유권 + null 해제 ---
+
+    @Test
+    @DisplayName("setPathPrefix — 소유자면 스코프 설정·저장")
+    void setPathPrefix_owner() {
+        UUID ownerId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        Project project = Project.create(ownerId, VALID_URL, "n", "d");
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRepository.save(project)).thenReturn(project);
+
+        Project result = service.setPathPrefix(projectId, ownerId, "backend/src");
+
+        assertThat(result.getPathPrefix()).isEqualTo("backend/src");
+        verify(projectRepository).save(project);
+    }
+
+    @Test
+    @DisplayName("setPathPrefix — null이면 스코프 해제(레포 전체로 되돌림)")
+    void setPathPrefix_null_clears() {
+        UUID ownerId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        Project project = Project.create(ownerId, VALID_URL, "n", "d");
+        project.setPathPrefix("backend/src");
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRepository.save(project)).thenReturn(project);
+
+        Project result = service.setPathPrefix(projectId, ownerId, null);
+
+        assertThat(result.getPathPrefix()).isNull();
+    }
+
+    @Test
+    @DisplayName("setPathPrefix — 소유자가 아니면 IllegalStateException, 저장 안 함")
+    void setPathPrefix_notOwner_rejected() {
+        UUID ownerId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        Project project = Project.create(ownerId, VALID_URL, "n", "d");
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+
+        assertThatThrownBy(() -> service.setPathPrefix(projectId, otherId, "backend/src"))
+                .isInstanceOf(IllegalStateException.class);
+        verify(projectRepository, never()).save(any());
+    }
+
     // --- setGatePolicy: 소유권 + 경고 캐시 무효화(P2-C 회귀 방지) ---
 
     @Test

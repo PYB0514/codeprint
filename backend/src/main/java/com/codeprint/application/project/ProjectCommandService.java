@@ -131,6 +131,17 @@ public class ProjectCommandService {
         return saved;
     }
 
+    // 소유자 확인 후 국소분석 스코프 설정 (null이면 해제 — 레포 전체로 되돌림)
+    public Project setPathPrefix(UUID projectId, UUID requestingUserId, String pathPrefix) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+        if (!project.getUserId().equals(requestingUserId)) {
+            throw new IllegalStateException("Not authorized to modify this project");
+        }
+        project.setPathPrefix(pathPrefix);
+        return projectRepository.save(project);
+    }
+
     // 소유자 확인 후 프로젝트 삭제
     public void deleteProject(UUID projectId, UUID requestingUserId) {
         Project project = projectRepository.findById(projectId)

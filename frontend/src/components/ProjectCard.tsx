@@ -16,6 +16,7 @@ interface Project {
   primaryBranch: string | null
   gateArchitectureEnabled: boolean
   gateExperimentalEnabled: boolean
+  pathPrefix: string | null
 }
 
 interface Props {
@@ -79,6 +80,12 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
   const [gateArchitectureEnabled, setGateArchitectureEnabled] = useState(project.gateArchitectureEnabled)
   const [gateExperimentalEnabled, setGateExperimentalEnabled] = useState(project.gateExperimentalEnabled)
   const [gateSettingsSaving, setGateSettingsSaving] = useState(false)
+
+  // 국소분석 스코프(pathPrefix) 설정 상태 — 레포 전체 대신 특정 하위 경로만 분석
+  const [showPathPrefix, setShowPathPrefix] = useState(false)
+  const [pathPrefix, setPathPrefix] = useState(project.pathPrefix ?? '')
+  const [pathPrefixSaving, setPathPrefixSaving] = useState(false)
+  const [pathPrefixError, setPathPrefixError] = useState<string | null>(null)
 
   // PR 검사 셀프서비스 연결 상태 (webhook 시크릿 발급/조회/재발급/해제)
   const [showPrGate, setShowPrGate] = useState(false)
@@ -178,6 +185,24 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
       setGateExperimentalEnabled(experimentalEnabled)
     } finally {
       setGateSettingsSaving(false)
+    }
+  }
+
+  // 국소분석 스코프(pathPrefix)를 서버에 반영 — 빈 문자열은 null(레포 전체)로 전송
+  const handleSetPathPrefix = async (value: string) => {
+    setPathPrefixSaving(true)
+    setPathPrefixError(null)
+    try {
+      const trimmed = value.trim()
+      await axios.patch(
+        `/api/projects/${project.id}/path-prefix`,
+        { pathPrefix: trimmed || null }
+      )
+      setPathPrefix(trimmed)
+    } catch {
+      setPathPrefixError(t('projectCard.pathPrefix.failed'))
+    } finally {
+      setPathPrefixSaving(false)
     }
   }
 
@@ -696,6 +721,37 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
         </div>
       )}
 
+      {/* 국소분석 스코프(pathPrefix) 설정 패널 — 비워두면 레포 전체 분석 */}
+      {showPathPrefix && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
+          <p className="text-xs text-gray-400">{t('projectCard.pathPrefix.desc')}</p>
+          <input
+            type="text"
+            value={pathPrefix}
+            onChange={(e) => setPathPrefix(e.target.value)}
+            placeholder={t('projectCard.pathPrefix.placeholder')}
+            disabled={pathPrefixSaving}
+            className="w-full bg-gray-700 text-white text-xs rounded px-2 py-1.5 border border-gray-600 focus:outline-none disabled:opacity-50"
+          />
+          {pathPrefixError && <p className="text-xs text-red-400">{pathPrefixError}</p>}
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setShowPathPrefix(false)}
+              className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
+            >
+              {t('projectCard.pathPrefix.close')}
+            </button>
+            <button
+              onClick={() => handleSetPathPrefix(pathPrefix)}
+              disabled={pathPrefixSaving}
+              className="text-xs bg-white text-black font-medium px-3 py-1 rounded-lg hover:bg-gray-200 disabled:opacity-40"
+            >
+              {pathPrefixSaving ? t('projectCard.pathPrefix.saving') : t('projectCard.pathPrefix.save')}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* PR 검사 셀프서비스 연결 패널 */}
       {showPrGate && (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-2">
@@ -833,6 +889,13 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
             title={t('projectCard.gateSettings.title')}
           >
             {t('projectCard.gateSettings.button')}
+          </button>
+          <button
+            onClick={() => setShowPathPrefix(true)}
+            className="text-xs text-cyan-400 hover:text-cyan-300"
+            title={t('projectCard.pathPrefix.title')}
+          >
+            {pathPrefix ? t('projectCard.pathPrefix.buttonSet', { scope: pathPrefix }) : t('projectCard.pathPrefix.button')}
           </button>
           <button
             onClick={handleOpenPrGate}

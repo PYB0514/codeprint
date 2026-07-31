@@ -4,6 +4,22 @@
 
 ---
 
+## 국소분석(디렉토리 스코프, pathPrefix) V1 구현 (2026-07-31, codeprint_157)
+
+**문제.** Context156에서 세워둔 초안 계획은 `pathPrefix`를 `analyses` 테이블에만 저장하도록 돼 있었다 — "프로젝트 최초 분석 시작 시 선택, 이후 설정 화면에서 변경 가능"이라는 UX 요구사항을 만족하려면 그 값을 어딘가에 영속시켜야 하는데, `analyses` 테이블만으로는 "다음 분석을 시작할 때 이전에 선택한 스코프를 어떻게 자동으로 이어받는가"가 빠져 있었다.
+
+**결정 — `projects` 테이블에도 `path_prefix` 컬럼을 추가해 프로젝트 레벨 설정으로 격상.** 기존 `GatePolicy`(`ProjectCommandService.setGatePolicy`)·`primaryBranch`(`setPrimaryBranch`)와 완전히 동일한 패턴 — Project 엔티티에 필드+도메인 메서드(`setPathPrefix`), `ProjectCommandService`에 소유권 검증 후 저장하는 서비스 메서드, `ProjectController`에 `PATCH /api/projects/{id}/path-prefix` 엔드포인트. 분석을 시작하는 모든 경로(`AnalysisFacade.startAnalysis`)가 `project.getPathPrefix()`를 읽어 `AnalysisApplicationService.startAnalysis(...)`에 전달하고, 그 값을 새로 생성되는 `AnalysisResult.pathPrefix`에도 스탬프한다 — `analyses.path_prefix`는 "이 특정 분석이 어떤 스코프였는지"의 감사 기록 겸, "동일 커밋 스킵" 캐싱의 3번째 키(`projectId, branch, pathPrefix`)로 쓰인다. 대안으로 "Project엔 저장 안 하고 매 API 호출마다 프론트가 명시적으로 pathPrefix를 보내게 하자"도 검토했으나, 자동 트리거(webhook·cron)는 애초에 프론트 호출이 아니라 스코프를 넘겨줄 방법이 없어 기각.
+
+**스코프 제한 — PR 리뷰(`PrReviewService.analyzeBranch`)·Featured 레포 cron(`FeaturedAnalysisTriggerAdapter`)은 이번 범위 밖.** 둘 다 `AnalysisApplicationService.startAnalysis`를 거치지 않고 `AnalysisResult.create`+`AnalysisRunner.run`을 직접 호출하는 별도 경로라, pathPrefix를 프로젝트 설정에서 자동으로 읽어오게 하려면 각각 프로젝트 조회 코드를 추가해야 한다. Context156 계획에도 없던 확장이라 이번엔 손대지 않음 — PR 게이트가 스코프 설정된 프로젝트에서 항상 레포 전체를 분석하는 것은 "동일 커밋 스킵" 판정에서 pathPrefix가 다른 분석으로 인식돼(3키 불일치) 매번 새로 분석되는 비효율은 있지만 정확성 버그는 아니다. 필요해지면 후속 세션에서 확장.
+
+**필터링 위치 — `SourceFileWalker.walk`에 3번째 오버로드(`pathPrefix`) 추가, 500파일 절단 로직보다 먼저 적용.** `eligible` 목록을 정렬한 직후, production/test 분리·라운드로빈보다 먼저 `pathPrefix`로 필터링(`normalizePathPrefix`+`matchesPathPrefix`, 앞뒤 슬래시 정규화 + 정확한 디렉터리 경계 매칭 — `"src"`가 `"src2/"`를 부분 문자열로 오매칭하지 않도록 `rel.equals(prefix) || rel.startsWith(prefix + "/")`로 검사). `AnalysisRunner.run`은 재조회한 `AnalysisResult.pathPrefix`를 그대로 넘기므로 `run()`의 공개 시그니처는 안 바뀜(FeaturedAnalysisTriggerAdapter 등 다른 호출자에 영향 없음).
+
+**실측 검증 — `gin-gonic/gin`(실제 공개 레포)으로 브라우저 E2E.** 전체 레포 분석 시 파일 99개(백엔드 로그 `files=99`). `pathPrefix=examples`로 설정 후 재분석하니 파일 0개가 나와 처음엔 버그로 의심했으나, 로컬에 직접 clone해 확인한 결과 `examples/` 디렉터리는 실제로 `README.md`(예제가 별도 저장소로 이전됐다는 안내) 하나만 있고 `.go` 파일이 진짜 0개였다 — 필터링은 정확했다. `pathPrefix=binding`(로컬 clone에서 `.go` 파일 30개 확인)으로 바꿔 재분석하니 정확히 `files=30`으로 일치 — 스코프 필터링이 실제 분석 파이프라인 전 구간에서 의도대로 동작함을 확인.
+
+**검증.** 백엔드 신규 유닛 테스트(`SourceFileWalkerTest` 4건 pathPrefix 시나리오, `ProjectCommandServiceTest` 3건 setPathPrefix 시나리오) + 전체 백엔드 스위트(Docker DB 포함) 1169+건 green. 프론트 `tsc -b`·`npm test` green. Flyway `V65__add_path_prefix_to_analyses.sql`·`V66__add_path_prefix_to_projects.sql` 실제 Postgres 적용 확인. `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5건) 무변화.
+
+---
+
 ## [G-10] 근본 수정 — `GraphWarningService` 컨텍스트 판정 입력에서 테스트·픽스처 경로 제외 (2026-07-27, codeprint_151)
 
 **문제.** codeprint_150에서 발견된 G-10(위 항목 참조) — `BoundedContextResolver.detectContextFirstContexts`가 벤치/edge-audit 픽스처(의도적으로 다른 DDD 레이아웃을 심어둔 합성 데이터)와 실제 코드가 섞여 스캔되면 "codeprint"(우리 최상위 패키지명)를 가짜 바운디드 컨텍스트로 오인식할 수 있다는 게 확인됐다. `RepoMapService`는 그 세션에 이미 수정됐지만, 같은 `BoundedContextResolver`를 공유하는 배포 감지기 `CROSS_CONTEXT_IMPORT`(`detectCrossContextDomainImport`)·`CROSS_DOMAIN_CALL`(`detectCrossDomainFunctionCall`)은 "미검증"으로 남아 있었다.

@@ -19,8 +19,8 @@ public interface AnalysisRepository {
     // 프로젝트의 최신 분석 조회
     Optional<AnalysisResult> findLatestByProjectId(UUID projectId);
 
-    // 특정 브랜치의 가장 최근 완료 분석 조회
-    Optional<AnalysisResult> findLatestByProjectIdAndBranch(UUID projectId, String branch);
+    // 특정 브랜치+스코프(pathPrefix)의 가장 최근 완료 분석 조회 — pathPrefix가 null이면 레포 전체 스코프 분석만 매칭
+    Optional<AnalysisResult> findLatestByProjectIdAndBranch(UUID projectId, String branch, String pathPrefix);
 
     // ID 목록으로 분석 결과 일괄 조회 — N+1 방지용 배치 조회
     List<AnalysisResult> findAllById(List<UUID> ids);

@@ -78,7 +78,7 @@ public class ProjectFacade {
             return Map.of("isOutdated", false, "reason", "not_set");
         }
 
-        var latestAnalysis = analysisApplicationService.getLatestAnalysisByBranch(projectId, primaryBranch);
+        var latestAnalysis = analysisApplicationService.getLatestAnalysisByBranch(projectId, primaryBranch, project.getPathPrefix());
         if (latestAnalysis.isEmpty() || latestAnalysis.get().getLastCommitSha() == null) {
             return Map.of("isOutdated", false, "reason", "no_data", "branch", primaryBranch);
         }

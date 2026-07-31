@@ -227,6 +227,66 @@ class SourceFileWalkerTest {
     }
 
     @Test
+    @DisplayName("pathPrefix 지정 시 그 하위 경로 파일만 수집된다 — 국소분석")
+    void pathPrefix_지정시_해당_경로만_수집() throws IOException {
+        Files.createDirectories(tempDir.resolve("backend/src"));
+        Files.createDirectories(tempDir.resolve("frontend/src"));
+        Files.writeString(tempDir.resolve("backend/src/App.java"), "public class App {}");
+        Files.writeString(tempDir.resolve("frontend/src/app.ts"), "export const x = 1;");
+
+        WalkResult result = walker.walk(tempDir, "backend");
+
+        List<String> rels = result.files().stream()
+                .map(p -> tempDir.relativize(p).toString().replace('\\', '/'))
+                .toList();
+        assertThat(rels).containsExactly("backend/src/App.java");
+        assertThat(result.totalEligible()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("pathPrefix가 다른 디렉터리 이름의 부분 문자열이어도 오매칭하지 않는다 — 'src'가 'src2'를 포함하면 안 됨")
+    void pathPrefix_부분문자열_오매칭_방지() throws IOException {
+        Files.createDirectories(tempDir.resolve("src"));
+        Files.createDirectories(tempDir.resolve("src2"));
+        Files.writeString(tempDir.resolve("src/App.java"), "public class App {}");
+        Files.writeString(tempDir.resolve("src2/Other.java"), "public class Other {}");
+
+        WalkResult result = walker.walk(tempDir, "src");
+
+        List<String> rels = result.files().stream()
+                .map(p -> tempDir.relativize(p).toString().replace('\\', '/'))
+                .toList();
+        assertThat(rels).containsExactly("src/App.java");
+    }
+
+    @Test
+    @DisplayName("pathPrefix 앞뒤 슬래시는 정규화되어 동일하게 매칭된다")
+    void pathPrefix_슬래시_정규화() throws IOException {
+        Files.createDirectories(tempDir.resolve("backend/src"));
+        Files.writeString(tempDir.resolve("backend/src/App.java"), "public class App {}");
+
+        WalkResult result = walker.walk(tempDir, "/backend/src/");
+
+        List<String> rels = result.files().stream()
+                .map(p -> tempDir.relativize(p).toString().replace('\\', '/'))
+                .toList();
+        assertThat(rels).containsExactly("backend/src/App.java");
+    }
+
+    @Test
+    @DisplayName("pathPrefix가 null이면 전체 레포를 대상으로 한다(기존 동작 유지)")
+    void pathPrefix_null이면_전체_대상() throws IOException {
+        Files.createDirectories(tempDir.resolve("backend"));
+        Files.createDirectories(tempDir.resolve("frontend"));
+        Files.writeString(tempDir.resolve("backend/App.java"), "public class App {}");
+        Files.writeString(tempDir.resolve("frontend/app.ts"), "export const x = 1;");
+
+        WalkResult result = walker.walk(tempDir, (String) null);
+
+        assertThat(result.files()).hasSize(2);
+    }
+
+    @Test
     @DisplayName("docsets 디렉터리와 *.docset 디렉터리는 순회하지 않는다")
     void docset_디렉토리_미수집() throws IOException {
         Files.createDirectories(tempDir.resolve("docs/docsets/Alamofire.docset/js"));

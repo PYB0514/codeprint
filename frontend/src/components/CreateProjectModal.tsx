@@ -14,6 +14,7 @@ interface Project {
   primaryBranch: string | null
   gateArchitectureEnabled: boolean
   gateExperimentalEnabled: boolean
+  pathPrefix: string | null
 }
 
 interface GitHubRepo {

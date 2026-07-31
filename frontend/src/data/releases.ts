@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.156.0',
+    date: '2026-07-31',
+    title: '국소분석 — 레포 전체가 아닌 특정 하위 경로만 분석',
+    type: 'feature',
+    items: [
+      { category: '신규', desc: '프로젝트 카드의 "분석 범위" 설정에서 특정 하위 경로(예: backend/src)를 지정하면 그 경로만 분석 대상으로 좁힐 수 있습니다. 모노레포처럼 관심 디렉터리가 500파일 상한에 묻히는 경우에 유용합니다. 비워두면 기존처럼 레포 전체를 분석합니다.' },
+    ],
+  },
+  {
     version: 'v0.155.0',
     date: '2026-07-30',
     title: '함수 노드가 많은 그래프 — 복잡도 허브만 먼저 보기',

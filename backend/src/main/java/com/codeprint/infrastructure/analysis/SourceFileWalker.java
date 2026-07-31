@@ -26,9 +26,19 @@ public class SourceFileWalker {
 
     private static final int MAX_FILES = 500;
 
-    // 우선순위 파일 없이 호출 — T0(diff 우선) 미적용, T1(서브트리 라운드로빈)만 적용
+    // 우선순위 파일·스코프 지정 없이 호출 — T0(diff 우선) 미적용, T1(서브트리 라운드로빈)만 적용
     public WalkResult walk(Path repoRoot) throws IOException {
-        return walk(repoRoot, null);
+        return walk(repoRoot, null, null);
+    }
+
+    // 국소분석 스코프(pathPrefix)만 지정해 호출 — 일반 분석(AnalysisRunner) 경로용
+    public WalkResult walk(Path repoRoot, String pathPrefix) throws IOException {
+        return walk(repoRoot, null, pathPrefix);
+    }
+
+    // 우선순위 파일(PR diff)만 지정해 호출 — PR 리뷰 경로용, 스코프는 적용하지 않음
+    public WalkResult walk(Path repoRoot, Set<String> priorityRelPaths) throws IOException {
+        return walk(repoRoot, priorityRelPaths, null);
     }
 
     // 레포 루트에서 지원 언어 소스 파일을 최대 500개 수집 — 전체 대상 수를 함께 반환 (절단 감지)
@@ -36,8 +46,9 @@ public class SourceFileWalker {
     // 테스트·픽스처는 남는 슬롯만 사용(GATE_GAPS.md [G-9] T2 후순위화). priorityRelPaths(PR diff 변경
     // 파일의 상대경로, 슬래시 정규화)가 주어지면 그 파일들을 프로덕션 우선순위 맨 앞에 배정하고(T0),
     // 나머지 프로덕션 파일은 최상위 디렉터리별 라운드로빈으로 선택해(T1) 어느 서브트리도 절단으로
-    // 전멸하지 않도록 한다.
-    public WalkResult walk(Path repoRoot, Set<String> priorityRelPaths) throws IOException {
+    // 전멸하지 않도록 한다. pathPrefix가 주어지면 그 하위 경로 파일만 대상으로 좁힌 뒤(국소분석) 나머지
+    // 로직(500파일 절단·T0·T1)을 그 좁혀진 집합에 그대로 적용한다.
+    public WalkResult walk(Path repoRoot, Set<String> priorityRelPaths, String pathPrefix) throws IOException {
         List<Path> eligible = new ArrayList<>();
         Files.walkFileTree(repoRoot, new SimpleFileVisitor<>() {
             // 스킵 대상 디렉터리(node_modules·.git 등)는 하위 전체를 순회하지 않음 — 대형 디렉터리 순회 비용 제거 +
@@ -72,6 +83,10 @@ public class SourceFileWalker {
         // 절단 여부와 무관하게 항상 정렬 — 파일시스템 순회 순서(플랫폼·OS마다 다름, 정렬 보장 없음)에
         // 결과가 좌우되지 않도록 경로 문자열 기준 결정론을 보장한다(같은 커밋을 두 번 분석해도 같은 500개가 선택됨)
         eligible.sort(Comparator.comparing(Path::toString));
+        if (pathPrefix != null && !pathPrefix.isBlank()) {
+            String normalizedPrefix = normalizePathPrefix(pathPrefix);
+            eligible.removeIf(p -> !matchesPathPrefix(repoRoot, p, normalizedPrefix));
+        }
         List<Path> production = new ArrayList<>();
         List<Path> testOrFixture = new ArrayList<>();
         for (Path p : eligible) {
@@ -127,6 +142,21 @@ public class SourceFileWalker {
     // 미니파이 번들 제외 — mangled 식별자라 판정·시각화 모두 무의미하고 슬롯·저장·phantom 정확도만 갉아먹는다(jquery.min.js 등)
     private static boolean isMinified(String fileName) {
         return fileName.contains(".min.");
+    }
+
+    // pathPrefix 문자열을 슬래시 통일 + 앞뒤 슬래시 제거로 정규화("/backend/src/" → "backend/src")
+    private static String normalizePathPrefix(String pathPrefix) {
+        String p = pathPrefix.replace('\\', '/').trim();
+        while (p.startsWith("/")) p = p.substring(1);
+        while (p.endsWith("/")) p = p.substring(0, p.length() - 1);
+        return p;
+    }
+
+    // 파일이 국소분석 스코프(정규화된 pathPrefix) 하위에 속하는지 — 접두사 문자열 부분일치가 아니라
+    // 정확히 그 디렉터리(또는 그 하위)인 경우만 매칭("src"가 "src2/Foo.java"를 잘못 포함하지 않도록)
+    private static boolean matchesPathPrefix(Path repoRoot, Path file, String normalizedPrefix) {
+        String rel = repoRoot.relativize(file).toString().replace('\\', '/');
+        return rel.equals(normalizedPrefix) || rel.startsWith(normalizedPrefix + "/");
     }
 
     // 테스트·픽스처 경로 여부 — GraphWarningService.isTestPath와 같은 기준(레이어 분리로 여기선 별도 구현, application 계층 역참조 방지)
