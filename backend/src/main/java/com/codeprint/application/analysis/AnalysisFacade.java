@@ -39,7 +39,7 @@ public class AnalysisFacade {
     public Map<String, Object> startAnalysis(UUID projectId, String branch, UUID userId, String githubToken, String ref) {
         var project = projectQueryService.getProject(projectId, userId);
         AnalysisResult result = analysisApplicationService.startAnalysis(
-                projectId, branch, project.getGithubRepoUrl(), githubToken, ref);
+                projectId, branch, project.getGithubRepoUrl(), githubToken, ref, project.getPathPrefix());
         return Map.of(
                 "analysisId", result.getId(),
                 "status", result.getStatus(),

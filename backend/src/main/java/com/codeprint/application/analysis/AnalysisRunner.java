@@ -54,7 +54,7 @@ public class AnalysisRunner {
             }
             log.info("클론 완료: {}", repoDir);
 
-            WalkResult walkResult = sourceFileWalker.walk(repoDir);
+            WalkResult walkResult = sourceFileWalker.walk(repoDir, analysis.getPathPrefix());
             List<Path> sourceFiles = walkResult.files();
             log.info("소스 파일 수: {} (전체 대상 {})", sourceFiles.size(), walkResult.totalEligible());
 

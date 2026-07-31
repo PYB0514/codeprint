@@ -65,6 +65,10 @@ public class Project {
     @Enumerated(EnumType.STRING)
     private GatePolicy gatePolicy;
 
+    // 국소분석 스코프 — null이면 레포 전체, 지정 시 이 하위 경로만 분석 대상(프로젝트당 스코프 하나 원칙)
+    @Column(name = "path_prefix", length = 500)
+    private String pathPrefix;
+
     // 사용자 ID와 GitHub URL로 새 프로젝트 인스턴스 생성
     public static Project create(UUID userId, String githubRepoUrl, String name, String description) {
         Project project = new Project();
@@ -144,6 +148,12 @@ public class Project {
     // 게이트 정책 전환(AUTO/DDD/LAYERED)
     public void setGatePolicy(GatePolicy policy) {
         this.gatePolicy = policy;
+        this.updatedAt = Instant.now();
+    }
+
+    // 국소분석 스코프 설정 (null이면 해제 — 레포 전체로 되돌림)
+    public void setPathPrefix(String pathPrefix) {
+        this.pathPrefix = (pathPrefix != null && pathPrefix.isBlank()) ? null : pathPrefix;
         this.updatedAt = Instant.now();
     }
 }

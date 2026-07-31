@@ -47,8 +47,16 @@ public class AnalysisResult {
     @Column(name = "last_commit_sha", length = 40)
     private String lastCommitSha;
 
-    // PENDING 상태로 새 분석 결과 인스턴스 생성
+    @Column(name = "path_prefix", length = 500)
+    private String pathPrefix;
+
+    // PENDING 상태로 새 분석 결과 인스턴스 생성(레포 전체 스코프)
     public static AnalysisResult create(UUID projectId, String branch) {
+        return create(projectId, branch, null);
+    }
+
+    // PENDING 상태로 새 분석 결과 인스턴스 생성 — pathPrefix가 null이면 레포 전체 분석
+    public static AnalysisResult create(UUID projectId, String branch, String pathPrefix) {
         AnalysisResult result = new AnalysisResult();
         result.id = UUID.randomUUID();
         result.projectId = projectId;
@@ -56,6 +64,7 @@ public class AnalysisResult {
         result.progress = 0;
         result.createdAt = Instant.now();
         result.branch = branch;
+        result.pathPrefix = pathPrefix;
         return result;
     }
 

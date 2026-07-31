@@ -75,7 +75,7 @@ class AnalysisApplicationServiceTest {
         UUID projectId = UUID.randomUUID();
         AnalysisResult prev = AnalysisResult.create(projectId, "main");
         prev.complete("sha-abc");
-        when(analysisRepository.findLatestByProjectIdAndBranch(projectId, "main")).thenReturn(Optional.of(prev));
+        when(analysisRepository.findLatestByProjectIdAndBranch(projectId, "main", null)).thenReturn(Optional.of(prev));
         when(gitHubApiClient.fetchLatestCommitSha("https://github.com/a/b", "main", "tok")).thenReturn("sha-abc");
 
         AnalysisResult result = service().startAnalysis(projectId, "main", "https://github.com/a/b", "tok");
@@ -91,7 +91,7 @@ class AnalysisApplicationServiceTest {
         UUID projectId = UUID.randomUUID();
         AnalysisResult prev = AnalysisResult.create(projectId, "main");
         prev.complete("sha-old");
-        when(analysisRepository.findLatestByProjectIdAndBranch(projectId, "main")).thenReturn(Optional.of(prev));
+        when(analysisRepository.findLatestByProjectIdAndBranch(projectId, "main", null)).thenReturn(Optional.of(prev));
         when(gitHubApiClient.fetchLatestCommitSha("https://github.com/a/b", "main", "tok")).thenReturn("sha-new");
 
         AnalysisResult result = service().startAnalysis(projectId, "main", "https://github.com/a/b", "tok");
@@ -111,7 +111,7 @@ class AnalysisApplicationServiceTest {
         verify(analysisRepository).save(result);
         verify(analysisRunner).run(eq(result.getId()), eq(projectId), eq("https://github.com/a/b"), eq("main"), eq("tok"), eq("sha-abc"));
         // ref가 있으면 직전 분석 조회·최신 SHA 조회(스킵 판정 자체)를 하지 않음 — 단, 크기 상한 검사는 ref 유무와 무관하게 항상 수행
-        verify(analysisRepository, never()).findLatestByProjectIdAndBranch(any(), any());
+        verify(analysisRepository, never()).findLatestByProjectIdAndBranch(any(), any(), any());
         verify(gitHubApiClient, never()).fetchLatestCommitSha(any(), any(), any());
     }
 
@@ -121,7 +121,7 @@ class AnalysisApplicationServiceTest {
         UUID projectId = UUID.randomUUID();
         AnalysisResult prev = AnalysisResult.create(projectId, "main");
         ReflectionTestUtils.setField(prev, "status", AnalysisStatus.RUNNING);
-        when(analysisRepository.findLatestByProjectIdAndBranch(projectId, "main")).thenReturn(Optional.of(prev));
+        when(analysisRepository.findLatestByProjectIdAndBranch(projectId, "main", null)).thenReturn(Optional.of(prev));
 
         AnalysisResult result = service().startAnalysis(projectId, "main", "https://github.com/a/b", "tok");
 
@@ -137,7 +137,7 @@ class AnalysisApplicationServiceTest {
         UUID projectId = UUID.randomUUID();
         AnalysisResult prev = AnalysisResult.create(projectId, "main");
         prev.complete("sha-abc");
-        when(analysisRepository.findLatestByProjectIdAndBranch(projectId, "main")).thenReturn(Optional.of(prev));
+        when(analysisRepository.findLatestByProjectIdAndBranch(projectId, "main", null)).thenReturn(Optional.of(prev));
         when(gitHubApiClient.fetchLatestCommitSha("https://github.com/a/b", "main", "tok"))
                 .thenThrow(new RuntimeException("GitHub API 500"));
 
@@ -208,7 +208,7 @@ class AnalysisApplicationServiceTest {
         UUID projectId = UUID.randomUUID();
         AnalysisResult prev = AnalysisResult.create(projectId, "main");
         prev.complete("sha-abc");
-        when(analysisRepository.findLatestByProjectIdAndBranch(projectId, "main")).thenReturn(Optional.of(prev));
+        when(analysisRepository.findLatestByProjectIdAndBranch(projectId, "main", null)).thenReturn(Optional.of(prev));
         when(gitHubApiClient.fetchLatestCommitSha("https://github.com/a/b", "main", "tok")).thenReturn("sha-abc");
 
         service().startAnalysis(projectId, "main", "https://github.com/a/b", "tok");
@@ -268,8 +268,8 @@ class AnalysisApplicationServiceTest {
     void getLatestByBranch_위임() {
         UUID projectId = UUID.randomUUID();
         AnalysisResult analysis = AnalysisResult.create(projectId, "dev");
-        when(analysisRepository.findLatestByProjectIdAndBranch(projectId, "dev")).thenReturn(Optional.of(analysis));
+        when(analysisRepository.findLatestByProjectIdAndBranch(projectId, "dev", null)).thenReturn(Optional.of(analysis));
 
-        assertThat(service().getLatestAnalysisByBranch(projectId, "dev")).containsSame(analysis);
+        assertThat(service().getLatestAnalysisByBranch(projectId, "dev", null)).containsSame(analysis);
     }
 }

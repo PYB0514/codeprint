@@ -41,10 +41,10 @@ public class AnalysisRepositoryImpl implements AnalysisRepository {
         return jpa.findLatestByProjectId(projectId);
     }
 
-    // 특정 브랜치의 가장 최근 분석 결과 조회
+    // 특정 브랜치+스코프의 가장 최근 분석 결과 조회
     @Override
-    public Optional<AnalysisResult> findLatestByProjectIdAndBranch(UUID projectId, String branch) {
-        return jpa.findLatestByProjectIdAndBranch(projectId, branch);
+    public Optional<AnalysisResult> findLatestByProjectIdAndBranch(UUID projectId, String branch, String pathPrefix) {
+        return jpa.findLatestByProjectIdAndBranch(projectId, branch, pathPrefix);
     }
 
     // ID 목록으로 분석 결과 일괄 조회 — Spring Data findAllById 활용

@@ -381,6 +381,17 @@
       "title": "PR 게이트 등급 설정",
       "button": "게이트 설정"
     },
+    "pathPrefix": {
+      "desc": "레포 전체가 아닌 특정 하위 경로만 분석 대상으로 좁힙니다. 비워두면 레포 전체를 분석합니다.",
+      "placeholder": "예: backend/src",
+      "close": "닫기",
+      "save": "저장",
+      "saving": "저장 중...",
+      "failed": "스코프 설정에 실패했습니다.",
+      "title": "국소분석 스코프 설정",
+      "button": "분석 범위",
+      "buttonSet": "분석 범위: {{scope}}"
+    },
     "prGate": {
       "button": "PR 검사 연결",
       "title": "PR 검사를 이 레포에 연결",

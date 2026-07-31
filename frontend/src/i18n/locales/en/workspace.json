@@ -381,6 +381,17 @@
       "title": "PR gate stage settings",
       "button": "Gate Settings"
     },
+    "pathPrefix": {
+      "desc": "Scope analysis to a specific subdirectory instead of the whole repo. Leave blank to analyze the whole repo.",
+      "placeholder": "e.g. backend/src",
+      "close": "Close",
+      "save": "Save",
+      "saving": "Saving...",
+      "failed": "Failed to update the scope.",
+      "title": "Analysis scope settings",
+      "button": "Scope",
+      "buttonSet": "Scope: {{scope}}"
+    },
     "prGate": {
       "button": "Connect PR Checks",
       "title": "Connect PR checks to this repo",

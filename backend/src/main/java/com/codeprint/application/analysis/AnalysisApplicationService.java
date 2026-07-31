@@ -36,12 +36,17 @@ public class AnalysisApplicationService {
 
     // 분석 레코드를 생성하고 비동기 분석을 시작 (URL·토큰은 컨트롤러에서 전달) — 직전 분석이 같은 커밋이면 스킵(FeaturedRepo 레버①과 동일 원칙)
     public AnalysisResult startAnalysis(UUID projectId, String branch, String githubRepoUrl, String githubAccessToken) {
-        return startAnalysis(projectId, branch, githubRepoUrl, githubAccessToken, null);
+        return startAnalysis(projectId, branch, githubRepoUrl, githubAccessToken, null, null);
     }
 
     // ref(특정 커밋 SHA)를 지정해 그 커밋 상태로 재분석 — 사용자가 명시적으로 요청한 것이므로 "동일 커밋 스킵"
     // 최적화를 적용하지 않고 항상 실행한다.
     public AnalysisResult startAnalysis(UUID projectId, String branch, String githubRepoUrl, String githubAccessToken, String ref) {
+        return startAnalysis(projectId, branch, githubRepoUrl, githubAccessToken, ref, null);
+    }
+
+    // pathPrefix(국소분석 스코프, 프로젝트 설정값)까지 받는 전체 버전 — 실제 구현은 이 오버로드 하나뿐
+    public AnalysisResult startAnalysis(UUID projectId, String branch, String githubRepoUrl, String githubAccessToken, String ref, String pathPrefix) {
         // 슬롯을 먼저 원자적으로 예약(레포 크기 조회 등 외부 API 호출보다 먼저) — 체크와 제출 사이에 네트워크
         // 왕복이 끼어들어 레이스가 벌어지는 걸 막는다(2026-07-30 적대적 검증 TOCTOU 발견 수정). 이후 실제로
         // taskExecutor에 제출하지 않고 리턴하는 모든 경로(스킵·크기초과)에서 slotReleased로 반드시 반납한다.
@@ -58,17 +63,17 @@ public class AnalysisApplicationService {
             }
 
             if (ref == null) {
-                Optional<AnalysisResult> lastAnalysis = analysisRepository.findLatestByProjectIdAndBranch(projectId, branch);
+                Optional<AnalysisResult> lastAnalysis = analysisRepository.findLatestByProjectIdAndBranch(projectId, branch, pathPrefix);
                 if (lastAnalysis.isPresent() && lastAnalysis.get().getStatus() == AnalysisStatus.DONE) {
                     String latestSha = fetchLatestShaSafely(githubRepoUrl, branch, githubAccessToken);
                     if (latestSha != null && latestSha.equals(lastAnalysis.get().getLastCommitSha())) {
-                        log.info("커밋 변경 없음, 재분석 스킵: projectId={}, branch={}, sha={}", projectId, branch, latestSha);
+                        log.info("커밋 변경 없음, 재분석 스킵: projectId={}, branch={}, pathPrefix={}, sha={}", projectId, branch, pathPrefix, latestSha);
                         return lastAnalysis.get();
                     }
                 }
             }
 
-            AnalysisResult analysis = AnalysisResult.create(projectId, branch);
+            AnalysisResult analysis = AnalysisResult.create(projectId, branch, pathPrefix);
             analysisRepository.save(analysis);
 
             // URL을 미리 추출해서 넘김 — 트랜잭션 커밋 전 비동기 스레드가 DB 조회 시 못 찾는 문제 방지.
@@ -110,10 +115,10 @@ public class AnalysisApplicationService {
         return analysisRepository.findLatestByProjectId(projectId);
     }
 
-    // 특정 브랜치의 최신 분석 결과 조회
+    // 특정 브랜치+스코프의 최신 분석 결과 조회
     @Transactional(readOnly = true)
-    public Optional<AnalysisResult> getLatestAnalysisByBranch(UUID projectId, String branch) {
-        return analysisRepository.findLatestByProjectIdAndBranch(projectId, branch);
+    public Optional<AnalysisResult> getLatestAnalysisByBranch(UUID projectId, String branch, String pathPrefix) {
+        return analysisRepository.findLatestByProjectIdAndBranch(projectId, branch, pathPrefix);
     }
 
     // 분석 ID로 분석 결과를 조회

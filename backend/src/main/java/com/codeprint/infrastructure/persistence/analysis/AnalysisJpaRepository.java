@@ -19,9 +19,12 @@ public interface AnalysisJpaRepository extends JpaRepository<AnalysisResult, UUI
     @Query("SELECT a FROM AnalysisResult a WHERE a.projectId = :projectId ORDER BY a.createdAt DESC LIMIT 1")
     Optional<AnalysisResult> findLatestByProjectId(UUID projectId);
 
-    // 브랜치별 최신 분석 결과 조회
-    @Query("SELECT a FROM AnalysisResult a WHERE a.projectId = :projectId AND a.branch = :branch ORDER BY a.createdAt DESC LIMIT 1")
-    Optional<AnalysisResult> findLatestByProjectIdAndBranch(UUID projectId, String branch);
+    // 브랜치+스코프(pathPrefix)별 최신 분석 결과 조회 — pathPrefix가 둘 다 null이거나 값이 같을 때만 매칭
+    // (스코프가 다른 과거 분석을 "동일 스코프"로 오인해 재분석을 잘못 스킵하지 않도록 함)
+    @Query("SELECT a FROM AnalysisResult a WHERE a.projectId = :projectId AND a.branch = :branch " +
+            "AND ((:pathPrefix IS NULL AND a.pathPrefix IS NULL) OR a.pathPrefix = :pathPrefix) " +
+            "ORDER BY a.createdAt DESC LIMIT 1")
+    Optional<AnalysisResult> findLatestByProjectIdAndBranch(UUID projectId, String branch, String pathPrefix);
 
     // 상태 목록에 해당하는 분석 결과 조회
     List<AnalysisResult> findByStatusIn(List<AnalysisStatus> statuses);

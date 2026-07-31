@@ -118,6 +118,16 @@ public class ProjectController {
                         projectId, user.getId(), request.architectureEnabled(), request.experimentalEnabled())));
     }
 
+    // 국소분석 스코프(pathPrefix) 설정 — null이면 해제(레포 전체로 되돌림)
+    @PatchMapping("/{projectId}/path-prefix")
+    public ResponseEntity<ProjectResponse> setPathPrefix(
+            @PathVariable UUID projectId,
+            @RequestBody PathPrefixRequest request,
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(ProjectResponse.from(
+                projectCommandService.setPathPrefix(projectId, user.getId(), request.pathPrefix())));
+    }
+
     // 프로젝트 삭제
     @DeleteMapping("/{projectId}")
     public ResponseEntity<Void> deleteProject(
@@ -141,4 +151,7 @@ public class ProjectController {
 
     // PR 게이트 등급 설정 요청 DTO
     public record GateSettingsRequest(boolean architectureEnabled, boolean experimentalEnabled) {}
+
+    // 국소분석 스코프 설정 요청 DTO (null이면 해제)
+    public record PathPrefixRequest(String pathPrefix) {}
 }
