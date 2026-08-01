@@ -93,7 +93,7 @@
 
 | 헤더 | 값 |
 |---|---|
-| `Content-Security-Policy` | `default-src 'self'; script-src 'self' https://*.tosspayments.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://codeprint.up.railway.app wss://codeprint.up.railway.app https://*.sentry.io https://*.tosspayments.com; frame-src https://*.tosspayments.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'` |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' https://*.tosspayments.com https://vercel.live; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://codeprint.up.railway.app wss://codeprint.up.railway.app https://*.sentry.io https://*.tosspayments.com https://vercel.live wss://vercel.live; frame-src https://*.tosspayments.com https://vercel.live; frame-ancestors 'none'; object-src 'none'; base-uri 'self'` |
 | `X-Content-Type-Options` | `nosniff` |
 | `X-Frame-Options` | `DENY` |
 | `Referrer-Policy` | `no-referrer` |
