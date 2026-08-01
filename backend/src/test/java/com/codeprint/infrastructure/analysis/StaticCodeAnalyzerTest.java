@@ -998,6 +998,28 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("리터럴 호스트를 담은 필드 변수와의 문자열 연결(hostname + \"path\")도 대상 서비스를 추출한다")
+    void serviceCalls_필드변수_문자열연결_추출() throws IOException {
+        // spring-petclinic-microservices VisitsServiceClient 실측 패턴 — 엣지 정확도 감사에서 발견한 recall 갭
+        Path file = writeJavaFile("""
+                package com.example.api;
+                public class VisitsServiceClient {
+                    private String hostname = "http://visits-service/";
+                    public Flux<Visits> getVisits(java.util.List<Integer> petIds) {
+                        return webClientBuilder.build().get()
+                            .uri(hostname + "pets/visits?petId={petId}", petIds)
+                            .retrieve()
+                            .bodyToFlux(Visits.class);
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.serviceCalls()).contains("visits-service");
+    }
+
+    @Test
     @DisplayName("로컬 경로(http:// 없음) 호출은 serviceCalls로 추출하지 않는다")
     void serviceCalls_로컬_경로_제외() throws IOException {
         Path file = writeJavaFile("""
