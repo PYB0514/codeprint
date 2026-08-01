@@ -31,7 +31,7 @@ public class LanguageDetector {
 
     private static final java.util.Set<String> SUPPORTED = java.util.Set.of(
             "Java", "Kotlin", "TypeScript", "JavaScript", "Python", "Go", "Rust",
-            "C#", "C", "C++", "Ruby", "PHP", "Swift", "Prisma", "DockerCompose"
+            "C#", "C", "C++", "Ruby", "PHP", "Swift", "Prisma", "DockerCompose", "SpringYaml"
     );
 
     // docker-compose.yml은 .yml/.yaml 확장자를 공유하는 다른 파일(k8s 매니페스트, application.yml 등)과
@@ -41,9 +41,17 @@ public class LanguageDetector {
             "docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"
     );
 
+    // Spring 설정 파일(application.yml/.yaml/.properties) — @Value+application.yml 조인을 위해
+    // 파일명으로 정확히 식별(SERVICE_CALL_CHAIN "변수 조합 URL" ③, decisions/DECISIONS_ANALYSIS.md 참조).
+    // 1차 스코프는 기본 프로필만 — application-{profile}.yml 등은 후속.
+    private static final java.util.Set<String> SPRING_YAML_FILE_NAMES = java.util.Set.of(
+            "application.yml", "application.yaml", "application.properties"
+    );
+
     // 파일명(확장자 무관 특수 케이스 우선) 또는 확장자로 언어를 감지하여 반환
     public static Optional<String> detect(String fileName) {
         if (DOCKER_COMPOSE_FILE_NAMES.contains(fileName)) return Optional.of("DockerCompose");
+        if (SPRING_YAML_FILE_NAMES.contains(fileName)) return Optional.of("SpringYaml");
         int dot = fileName.lastIndexOf('.');
         if (dot == -1) return Optional.empty();
         String ext = fileName.substring(dot + 1).toLowerCase();

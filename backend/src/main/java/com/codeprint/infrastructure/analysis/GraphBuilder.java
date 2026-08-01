@@ -689,6 +689,12 @@ public class GraphBuilder {
         Map<String, String> composeEnvHosts = new HashMap<>();
         for (ParsedFile pf : parsedFiles) composeEnvHosts.putAll(pf.composeEnvHosts());
 
+        // application.yml/.properties에서 추출한 프로퍼티키(dot-path)→호스트 매핑(보통 파일 1개) —
+        // Java/Kotlin의 "PROP:키" 표시 serviceCalls 엔트리를 실제 서비스명으로 역해소하는 데 쓴다
+        // (SERVICE_CALL_CHAIN "변수 조합 URL" ③, decisions/DECISIONS_ANALYSIS.md 참조).
+        Map<String, String> springYamlHosts = new HashMap<>();
+        for (ParsedFile pf : parsedFiles) springYamlHosts.putAll(pf.springYamlHosts());
+
         Set<String> usedServiceCallEdgeIds = new HashSet<>();
         for (ParsedFile pf : parsedFiles) {
             List<String> logicalServices = new ArrayList<>();
@@ -697,6 +703,10 @@ public class GraphBuilder {
                     String resolved = composeEnvHosts.get(call.substring(4));
                     if (resolved != null) logicalServices.add(resolved);
                     // 해소 실패(docker-compose.yml 없음/변수 미정의)면 조용히 버림 — precision 우선, phantom 방지
+                } else if (call.startsWith("PROP:")) {
+                    String resolved = springYamlHosts.get(call.substring(5));
+                    if (resolved != null) logicalServices.add(resolved);
+                    // 해소 실패(application.yml 없음/프로퍼티키 미정의)면 조용히 버림 — precision 우선, phantom 방지
                 } else {
                     logicalServices.add(call);
                 }

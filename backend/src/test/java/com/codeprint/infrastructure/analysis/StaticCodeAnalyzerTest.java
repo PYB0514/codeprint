@@ -1251,6 +1251,83 @@ class StaticCodeAnalyzerTest {
         assertThat(result.serviceCalls()).isEmpty();
     }
 
+    // ── application.yml/.properties 파싱(springYamlHosts, SERVICE_CALL_CHAIN "변수 조합 URL" ③) ──
+
+    @Test
+    @DisplayName("application.yml의 중첩 들여쓰기 키에서 dot-path→호스트를 추출한다")
+    void springYamlHosts_중첩_들여쓰기_추출() throws IOException {
+        Path file = writeSpringYamlFile("""
+                services:
+                  visits:
+                    url: http://visits-service
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "SpringYaml");
+
+        assertThat(result.springYamlHosts()).containsEntry("services.visits.url", "visits-service");
+    }
+
+    @Test
+    @DisplayName("application.properties의 flat key=value에서 프로퍼티키→호스트를 추출한다")
+    void springYamlHosts_properties_flat_추출() throws IOException {
+        Path file = writeSpringPropertiesFile("""
+                services.visits.url=http://visits-service
+                server.port=8080
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "SpringYaml");
+
+        assertThat(result.springYamlHosts()).containsEntry("services.visits.url", "visits-service");
+        assertThat(result.springYamlHosts()).doesNotContainKey("server.port");
+    }
+
+    @Test
+    @DisplayName("http://로 시작하지 않는 값은 springYamlHosts에 포함되지 않는다")
+    void springYamlHosts_http아닌값_제외() throws IOException {
+        Path file = writeSpringYamlFile("""
+                server:
+                  port: 8080
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "SpringYaml");
+
+        assertThat(result.springYamlHosts()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("application.yml은 일반 소스 파일 필드(functions 등)를 전혀 채우지 않는다 — 언어 소스가 아니므로")
+    void springYamlHosts_다른_필드는_비어있음() throws IOException {
+        Path file = writeSpringYamlFile("""
+                services:
+                  visits:
+                    url: http://visits-service
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "SpringYaml");
+
+        assertThat(result.functions()).isEmpty();
+        assertThat(result.serviceCalls()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("@Value(\"${key}\") 필드를 문자열 연결로 쓰는 WebClient 호출은 \"PROP:키\" 표시로 추출한다(Java, application.yml 역해소용)")
+    void serviceCalls_java_atValue필드_문자열연결_PROP표시() throws IOException {
+        Path file = writeJavaFile("""
+                class VisitsServiceClient {
+                    @Value("${services.visits.url}")
+                    private String visitsUrl;
+
+                    void call(WebClient webClient) {
+                        webClient.get().uri(visitsUrl + "/owners/1/pets").retrieve();
+                    }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.serviceCalls()).contains("PROP:services.visits.url");
+    }
+
     // ── FeignClient 서비스 대상(feignClientTarget, SERVICE_CALL_CHAIN 확장) ──────────
 
     @Test
@@ -4555,6 +4632,18 @@ class StaticCodeAnalyzerTest {
 
     private Path writeComposeFile(String content) throws IOException {
         Path file = tempDir.resolve("docker-compose.yml");
+        Files.writeString(file, content);
+        return file;
+    }
+
+    private Path writeSpringYamlFile(String content) throws IOException {
+        Path file = tempDir.resolve("application.yml");
+        Files.writeString(file, content);
+        return file;
+    }
+
+    private Path writeSpringPropertiesFile(String content) throws IOException {
+        Path file = tempDir.resolve("application.properties");
         Files.writeString(file, content);
         return file;
     }

@@ -4,6 +4,26 @@
 
 ---
 
+## SERVICE_CALL_CHAIN "변수 조합 URL" ③ — Spring `@Value`+`application.yml` 조인 완료 (2026-08-02, codeprint_158)
+
+**배경.** "변수 조합 URL" 시리즈(①리터럴 직접 ②env var/docker-compose ③필드변수 문자열연결, 전부 완료) 중 마지막으로 남아있던 하위 패턴. Spring에서 흔한 관용구 — `@Value("${services.visits.url}") private String visitsUrl;` 로 `application.yml`의 값을 필드에 주입받아 그 필드를 WebClient 호출에 문자열 연결로 쓰는 경우 — 는 여태 미탐지였다. env var 패턴(② JS/TS·Python)과 동일하게 cross-file join이 필요해(필드 선언은 Java 소스에, 실제 값은 별도 설정 파일에) "진짜 신규 분석기가 필요"해 스코프가 크다고 여러 세션 미뤄져 있었다(Context157 "E" 항목).
+
+**설계 — 기존 `ENV:` 표시 역해소 구조를 그대로 재사용.** 새 아키텍처를 만들지 않고, docker-compose `ENV:VARNAME` 패턴과 완전히 동일한 3단 구조로 확장했다.
+1. `LanguageDetector` — `application.yml`/`.yaml`/`.properties`를 파일명으로 정확히 매칭해 신규 `SpringYaml` 언어로 인식(`docker-compose.yml`과 똑같이 확장자 공유 문제라 파일명 매칭 필수 — 이 클래스의 기존 주석이 "application.yml 등"이라며 이 케이스를 이미 예견하고 있었다). 1차 스코프는 기본 프로필만(`application-{profile}.yml` 등은 후속).
+2. `StaticCodeAnalyzer.extractSpringYamlHosts` — YAML은 들여쓰기 기반 dot-path 스택 파서(`services.visits.url` 같은 중첩 키 조립), `.properties`는 flat `key=value` 정규식. `http://`로 시작하는 값만 추출(리스트·앵커·멀티문서 등은 스코프 밖 — Spring 설정의 단순 매핑 서브셋만 지원).
+3. `extractServiceCalls`(Java/Kotlin) — `@Value("${키}")` 바로 뒤 필드명을 윈도우 탐색으로 잡아 `필드명→프로퍼티키` 맵을 만들고, 기존 필드변수 문자열연결 매칭(`varConcat`, ② 구현에서 이미 있던 코드)을 그대로 재사용해 `PROP:키` 표시를 추가(리터럴 fieldHosts와 같은 매칭 루프를 공유, 두 맵을 순서대로 조회).
+4. `GraphBuilder` — `composeEnvHosts`와 나란히 `springYamlHosts`를 병합해 `PROP:` 접두사를 역해소(해소 실패 시 조용히 버림, precision 우선은 기존 원칙 그대로).
+
+**하위 호환.** `ParsedFile`에 `springYamlHosts` 필드를 추가하면서 기존 `composeEnvHosts` 미지정 호출부가 깨지지 않도록 완전히 동일한 패턴의 하위호환 생성자를 추가(기존 체인 마지막에 한 단 더 얹는 방식) — `StaticCodeAnalyzer`의 기존 2개 호출부(메인 반환문, DockerCompose 특수분기)는 코드 변경 없이 자동으로 새 필드가 `Map.of()`로 채워짐.
+
+**ANALYZER_VERSION 8→9 인상.** 이번엔 스키마 자체가 바뀐 경우(신규 필드 추가)라 캐시 무효화가 자동으로 일어나지만, 반복-G 재발방지 관례에 따라 계속 명시적으로 인상한다.
+
+**검증.** TDD(YAML 중첩/properties flat/http아닌값 제외/`@Value`+문자열연결→`PROP:` 표시 4건 in `StaticCodeAnalyzerTest`, GraphBuilder 역해소·미정의시 미생성 2건 in `GraphBuilderTest`) + 백엔드 전체 스위트(1177건, Docker DB 기동 상태) green + `analyzeLocal` 신규 경고 0건. `CachedParsedFileLoaderTest`의 필드 수 tripwire 테스트(35→36)도 함께 갱신 — 이 테스트가 "필드만 추가하고 버전 미인상" 실수를 기계적으로 잡아주는 걸 이번에 직접 확인.
+
+**한계(1차 스코프 명시).** ①`application-{profile}.yml` 등 프로필별 파일 미지원 ②Kotlin의 `val url: String = ...`/`@Value` 문법은 필드선언 정규식이 Java 스타일(`String x`)만 매칭해 인식 안 됨(기존 ③ 필드변수 문자열연결 패턴도 동일한 한계를 이미 갖고 있었음, 새로 생긴 제약 아님) ③YAML 리스트·앵커·멀티문서는 파서가 무시.
+
+---
+
 ## API_CALL 엣지 — 최초 정확도 감사, phantom 0% 확인 (2026-08-01, codeprint_157)
 
 **배경.** `EdgeType` 8종 중 CONTAINS·IMPORT·INSTANTIATION·FUNCTION_CALL·DB_READ/WRITE/CREATE/DELETE·FIELD_DEPENDENCY·SERVICE_CALL은 감사를 거쳤지만, 2026-06-05부터 존재해온 `API_CALL`(프론트엔드 axios/fetch 호출 → 같은 저장소 백엔드 컨트롤러, "풀스택 시각화"의 핵심 엣지)만 한 번도 감사 안 된 걸 발견 — SERVICE_CALL 감사 직후 이어서 진행.

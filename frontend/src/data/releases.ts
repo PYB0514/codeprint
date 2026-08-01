@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.156.2',
+    date: '2026-08-02',
+    title: '서비스 간 호출(MSA) 탐지 정확도 개선 — Spring 설정값 조합 URL',
+    type: 'fix',
+    items: [
+      { category: '분석 엔진', desc: '모노레포(MSA) 프로젝트에서 서비스 간 호출(SERVICE_CALL) 탐지 시, `@Value`로 application.yml 설정값을 필드에 주입받아 호출 주소를 조합하는 Spring 관용구는 놓치고 있던 것을 고쳤습니다.' },
+    ],
+  },
+  {
     version: 'v0.156.1',
     date: '2026-08-01',
     title: '보안 헤더 프론트엔드 적용 + 서비스 간 호출(MSA) 탐지 정확도 개선',

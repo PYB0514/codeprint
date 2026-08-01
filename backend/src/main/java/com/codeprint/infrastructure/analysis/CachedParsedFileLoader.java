@@ -40,7 +40,9 @@ public class CachedParsedFileLoader {
     // v8(2026-07-31): ParsedFile 스키마는 그대로지만 extractServiceCalls의 Java/Kotlin 계산 로직만 확장(필드 변수+
     // 문자열 연결 호스트 인식) — 스키마 미변경이라 역직렬화는 항상 성공하므로 놓치기 쉬운 케이스(반복-G와 같은 부류,
     // 미인상 시 이미 캐시된 파일은 새 로직이 영영 실행되지 않고 구 serviceCalls를 계속 반환).
-    static final int ANALYZER_VERSION = 8;
+    // v9(2026-08-02): ParsedFile에 springYamlHosts 필드 추가(SERVICE_CALL_CHAIN "변수 조합 URL" ③ — Spring
+    // @Value("${key}") 필드 + application.yml/.properties 조인, 새 SpringYaml 언어 신설).
+    static final int ANALYZER_VERSION = 9;
     private static final Duration CACHE_TTL = Duration.ofDays(30);
     // 미니파이드 번들·생성 파일 등 비정상적으로 큰 파일이 파싱 파이프라인 메모리를 잡아먹는 것 방지 — 이 이상은 분석 제외
     static final long MAX_FILE_SIZE_BYTES = 2L * 1024 * 1024;
