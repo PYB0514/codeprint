@@ -1,0 +1,345 @@
+{
+  "repoLabel": "self",
+  "analysisDir": ". (repo root — backend+frontend 통합, API_CALL은 크로스 디렉터리 엣지라 backend/src/main/java만으로는 재현 불가)",
+  "seed": 42,
+  "edgeType": "API_CALL",
+  "auditedAt": "2026-08-01",
+  "method": "전수 판정(30/30) - 프론트 axios 호출 경로를 대상 컨트롤러의 @XxxMapping/@RequestMapping과 직접 대조",
+  "summary": {
+    "real": 30,
+    "phantom": 0,
+    "phantomRate": "0%"
+  },
+  "samples": [
+    {
+      "edgeIdentifier": "LandingPage.tsx-apicall-AuthController.java",
+      "source": {
+        "filePath": "frontend/src/pages/LandingPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/AuthController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AdminPage.tsx-apicall-FeedbackController.java",
+      "source": {
+        "filePath": "frontend/src/pages/AdminPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/FeedbackController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphPage.tsx-apicall-NodeCommentController.java",
+      "source": {
+        "filePath": "frontend/src/pages/GraphPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/NodeCommentController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "useAnalysisProgress.ts-apicall-AnalysisController.java",
+      "source": {
+        "filePath": "frontend/src/hooks/useAnalysisProgress.ts"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/AnalysisController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "LandingPage.tsx-apicall-FeaturedRepoController.java",
+      "source": {
+        "filePath": "frontend/src/pages/LandingPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/FeaturedRepoController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphPage.tsx-apicall-GraphViewPresetController.java",
+      "source": {
+        "filePath": "frontend/src/pages/GraphPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/GraphViewPresetController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GateThemeBadge.tsx-apicall-GraphController.java",
+      "source": {
+        "filePath": "frontend/src/components/GateThemeBadge.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/GraphController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ArchitectureIntentPanel.tsx-apicall-ArchitectureIntentController.java",
+      "source": {
+        "filePath": "frontend/src/components/ArchitectureIntentPanel.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/ArchitectureIntentController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "CommunityPage.tsx-apicall-ReportController.java",
+      "source": {
+        "filePath": "frontend/src/pages/CommunityPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/ReportController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ProjectCard.tsx-apicall-GraphController.java",
+      "source": {
+        "filePath": "frontend/src/components/ProjectCard.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/GraphController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphPage.tsx-apicall-WarningController.java",
+      "source": {
+        "filePath": "frontend/src/pages/GraphPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/WarningController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphPage.tsx-apicall-ProjectController.java",
+      "source": {
+        "filePath": "frontend/src/pages/GraphPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/ProjectController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "NoticeBanner.tsx-apicall-NoticeController.java",
+      "source": {
+        "filePath": "frontend/src/components/NoticeBanner.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/NoticeController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "DonatePage.tsx-apicall-DonationController.java",
+      "source": {
+        "filePath": "frontend/src/pages/DonatePage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/DonationController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AppHeader.tsx-apicall-NotificationController.java",
+      "source": {
+        "filePath": "frontend/src/components/AppHeader.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/NotificationController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphPage.tsx-apicall-GraphController.java",
+      "source": {
+        "filePath": "frontend/src/pages/GraphPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/GraphController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "MyPage.tsx-apicall-CommunityController.java",
+      "source": {
+        "filePath": "frontend/src/pages/MyPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/CommunityController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "useWebPush.ts-apicall-PushController.java",
+      "source": {
+        "filePath": "frontend/src/hooks/useWebPush.ts"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/PushController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AdminPage.tsx-apicall-ReportController.java",
+      "source": {
+        "filePath": "frontend/src/pages/AdminPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/ReportController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ProjectCard.tsx-apicall-AnalysisController.java",
+      "source": {
+        "filePath": "frontend/src/components/ProjectCard.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/AnalysisController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "MessagesPage.tsx-apicall-NotificationSettingsController.java",
+      "source": {
+        "filePath": "frontend/src/pages/MessagesPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/NotificationSettingsController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "CommunityPostGraphPage.tsx-apicall-CommunityController.java",
+      "source": {
+        "filePath": "frontend/src/pages/CommunityPostGraphPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/CommunityController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphViewerPage.tsx-apicall-GraphViewPresetController.java",
+      "source": {
+        "filePath": "frontend/src/pages/GraphViewerPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/GraphViewPresetController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "main.tsx-apicall-AuthController.java",
+      "source": {
+        "filePath": "frontend/src/main.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/AuthController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TeamsPage.tsx-apicall-TeamController.java",
+      "source": {
+        "filePath": "frontend/src/pages/TeamsPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/TeamController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AdminPage.tsx-apicall-AdminController.java",
+      "source": {
+        "filePath": "frontend/src/pages/AdminPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/AdminController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ProjectCard.tsx-apicall-PrReviewController.java",
+      "source": {
+        "filePath": "frontend/src/components/ProjectCard.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/PrReviewController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ContactPage.tsx-apicall-FeedbackController.java",
+      "source": {
+        "filePath": "frontend/src/pages/ContactPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/FeedbackController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ProjectCard.tsx-apicall-ProjectController.java",
+      "source": {
+        "filePath": "frontend/src/components/ProjectCard.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/ProjectController.java"
+      },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "DiffPage.tsx-apicall-GraphController.java",
+      "source": {
+        "filePath": "frontend/src/pages/DiffPage.tsx"
+      },
+      "target": {
+        "filePath": "backend/src/main/java/com/codeprint/interfaces/api/GraphController.java"
+      },
+      "verdict": "real",
+      "note": null
+    }
+  ]
+}
