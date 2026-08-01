@@ -1435,6 +1435,46 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("\"PROP:키\" 표시 호출은 application.yml의 프로퍼티 매핑으로 역해소돼 SERVICE_CALL 엣지가 생성된다(@Value 변수 조합 URL 지원)")
+    void 서비스_호출_atValue_프로퍼티_역해소() {
+        ParsedFile springYaml = parsedFileWithSpringYamlHosts(
+                "src/main/resources/application.yml", Map.of("services.visits.url", "visits-service"));
+        ParsedFile caller = parsedFileWithServiceCalls(
+                "api-gateway/src/VisitsServiceClient.java", "Java", List.of("PROP:services.visits.url"));
+        ParsedFile target = parsedFileWithImports(
+                "visits-service/src/VisitController.java", "Java", List.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(springYaml, caller, target));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        assertThat(edgeCaptor.getAllValues()).anyMatch(e -> e.getType() == EdgeType.SERVICE_CALL);
+    }
+
+    @Test
+    @DisplayName("application.yml에 정의 안 된 프로퍼티키 참조는 SERVICE_CALL 엣지를 만들지 않는다(precision 우선, phantom 방지)")
+    void 서비스_호출_atValue_프로퍼티_미정의_엣지_미생성() {
+        ParsedFile springYaml = parsedFileWithSpringYamlHosts(
+                "src/main/resources/application.yml", Map.of("services.other.url", "other-service"));
+        ParsedFile caller = parsedFileWithServiceCalls(
+                "api-gateway/src/VisitsServiceClient.java", "Java", List.of("PROP:services.visits.url"));
+        ParsedFile target = parsedFileWithImports(
+                "visits-service/src/VisitController.java", "Java", List.of());
+        // saveEdge 스텁이 실제로 쓰이도록 무관한 IMPORT 관계를 하나 동반(strict stubbing 대응)
+        ParsedFile importer = parsedFileWithImports("src/com/example/UserController.java", "Java",
+                List.of("com.example.UserService"));
+        ParsedFile importee = parsedFile("src/com/example/UserService.java", "Java", List.of("createUser"), Map.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(springYaml, caller, target, importer, importee));
+
+        ArgumentCaptor<Edge> edgeCaptor = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(edgeCaptor.capture());
+
+        assertThat(edgeCaptor.getAllValues()).noneMatch(e -> e.getType() == EdgeType.SERVICE_CALL);
+    }
+
+    @Test
     @DisplayName("docker-compose.yml에 정의 안 된 환경변수 참조는 SERVICE_CALL 엣지를 만들지 않는다(precision 우선, phantom 방지)")
     void 서비스_호출_환경변수_미정의_엣지_미생성() {
         ParsedFile compose = parsedFileWithComposeEnvHosts(
@@ -1891,6 +1931,14 @@ class GraphBuilderTest {
                 Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
                 List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), null,
                 List.of(), null, List.of(), composeEnvHosts);
+    }
+
+    // application.yml 파일 생성 헬퍼 — springYamlHosts만 포함(canonical 생성자, 나머지 필드는 전부 기본값)
+    private ParsedFile parsedFileWithSpringYamlHosts(String path, Map<String, String> springYamlHosts) {
+        return new ParsedFile(path, "SpringYaml", List.of(), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), null,
+                List.of(), null, List.of(), Map.of(), springYamlHosts);
     }
 
     // FeignClient 인터페이스 파일 생성 헬퍼 — feignClientTarget 포함(canonical 생성자, 나머지 필드는 전부 기본값)

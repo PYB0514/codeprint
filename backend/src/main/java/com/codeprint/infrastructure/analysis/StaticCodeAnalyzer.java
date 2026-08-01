@@ -56,6 +56,14 @@ public class StaticCodeAnalyzer {
                     List.of(), null, List.of(), composeEnvHosts);
         }
 
+        if (language.equals("SpringYaml")) {
+            Map<String, String> springYamlHosts = extractSpringYamlHosts(content, relativePath.endsWith(".properties"));
+            return new ParsedFile(relativePath, language, List.of(), List.of(), null, Map.of(),
+                    Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                    List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), null,
+                    List.of(), null, List.of(), Map.of(), springYamlHosts);
+        }
+
         // 식별자 검출기용 — 주석 본문을 공백으로 치환한 길이 보존 사본 (B-10 Stage 1).
         // 주석/문자열 페이로드를 읽는 검출기(주석 라벨·API 경로·raw SQL 등)는 원본 content를 그대로 쓴다.
         String masked = maskComments(content, language);
@@ -951,14 +959,35 @@ public class StaticCodeAnalyzer {
             ).matcher(content);
             Map<String, String> fieldHosts = new HashMap<>();
             while (fieldDecl.find()) fieldHosts.put(fieldDecl.group(1), fieldDecl.group(2));
-            if (!fieldHosts.isEmpty()) {
+
+            // @Value("${services.visits.url}") 필드 → 프로퍼티키(dot-path) 매핑. application.yml의 실제
+            // 값 해소는 cross-file이라 여기선 안 하고 "PROP:키" 표시만 남겨 GraphBuilder가 역해소한다
+            // (ENV_VAR 패턴과 동일한 원리, SERVICE_CALL_CHAIN "변수 조합 URL" ③, decisions/DECISIONS_ANALYSIS.md 참조).
+            Matcher valueAnno = Pattern.compile(
+                "@Value\\s*\\(\\s*\"\\$\\{([a-zA-Z0-9_.-]+)}\"\\s*\\)"
+            ).matcher(content);
+            Map<String, String> fieldProps = new HashMap<>();
+            while (valueAnno.find()) {
+                String prop = valueAnno.group(1);
+                String window = content.substring(valueAnno.end(), Math.min(valueAnno.end() + 80, content.length()));
+                Matcher fieldName = Pattern.compile("String\\s+(\\w+)").matcher(window);
+                if (fieldName.find()) fieldProps.put(fieldName.group(1), prop);
+            }
+
+            if (!fieldHosts.isEmpty() || !fieldProps.isEmpty()) {
                 Matcher varConcat = Pattern.compile(
                     "\\.(?:uri|getForObject|getForEntity|postForObject|postForEntity|put|delete|exchange)\\s*"
                         + "\\(\\s*(\\w+)\\s*\\+"
                 ).matcher(content);
                 while (varConcat.find()) {
-                    String service = fieldHosts.get(varConcat.group(1));
-                    if (service != null) javaResult.add(service);
+                    String varName = varConcat.group(1);
+                    String service = fieldHosts.get(varName);
+                    if (service != null) {
+                        javaResult.add(service);
+                        continue;
+                    }
+                    String prop = fieldProps.get(varName);
+                    if (prop != null) javaResult.add("PROP:" + prop);
                 }
             }
             return javaResult.stream().distinct().toList();
@@ -1024,6 +1053,51 @@ public class StaticCodeAnalyzer {
             "(?m)^\\s*([A-Za-z0-9_]+):\\s*[\"']?http://([a-zA-Z0-9_-]+)"
         ).matcher(content);
         while (mapStyle.find()) result.put(mapStyle.group(1), mapStyle.group(2));
+        return result;
+    }
+
+    // application.yml(중첩 들여쓰기 → dot-path 키)·application.properties(flat key=value) 에서
+    // http:// 로 시작하는 값만 추출해 프로퍼티키→호스트 매핑을 만든다. SERVICE_CALL_CHAIN "변수 조합 URL" ③
+    // (@Value("${key}") 필드 조인, decisions/DECISIONS_ANALYSIS.md 참조) — Spring 설정 서브셋(단순 매핑)만
+    // 지원, 리스트·앵커·멀티문서는 스코프 밖(1차 스코프).
+    private Map<String, String> extractSpringYamlHosts(String content, boolean isProperties) {
+        Map<String, String> result = new LinkedHashMap<>();
+        if (isProperties) {
+            Matcher m = Pattern.compile(
+                "(?m)^([A-Za-z0-9_.-]+)\\s*=\\s*http://([a-zA-Z0-9_-]+)"
+            ).matcher(content);
+            while (m.find()) result.put(m.group(1), m.group(2));
+            return result;
+        }
+        Deque<int[]> indentStack = new ArrayDeque<>(); // [indent], path는 별도 스택으로 병렬 관리
+        Deque<String> pathStack = new ArrayDeque<>();
+        for (String rawLine : content.split("\n", -1)) {
+            String noComment = rawLine.contains("#") ? rawLine.substring(0, rawLine.indexOf('#')) : rawLine;
+            if (noComment.isBlank()) continue;
+            int indent = 0;
+            while (indent < noComment.length() && noComment.charAt(indent) == ' ') indent++;
+            String line = noComment.trim();
+            int colon = line.indexOf(':');
+            if (colon < 0) continue;
+            String key = line.substring(0, colon).trim();
+            String value = line.substring(colon + 1).trim();
+            if (key.isEmpty()) continue;
+            while (!indentStack.isEmpty() && indentStack.peek()[0] >= indent) {
+                indentStack.pop();
+                pathStack.pop();
+            }
+            String path = pathStack.isEmpty() ? key : pathStack.peek() + "." + key;
+            if (value.isEmpty()) {
+                indentStack.push(new int[]{indent});
+                pathStack.push(path);
+                continue;
+            }
+            String unquoted = value.replaceAll("^[\"']|[\"']$", "");
+            if (unquoted.startsWith("http://")) {
+                String host = unquoted.substring("http://".length()).split("[/:]")[0];
+                if (!host.isEmpty()) result.put(path, host);
+            }
+        }
         return result;
     }
 
