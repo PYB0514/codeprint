@@ -4,6 +4,18 @@
 
 ---
 
+## API_CALL 엣지 — 최초 정확도 감사, phantom 0% 확인 (2026-08-01, codeprint_157)
+
+**배경.** `EdgeType` 8종 중 CONTAINS·IMPORT·INSTANTIATION·FUNCTION_CALL·DB_READ/WRITE/CREATE/DELETE·FIELD_DEPENDENCY·SERVICE_CALL은 감사를 거쳤지만, 2026-06-05부터 존재해온 `API_CALL`(프론트엔드 axios/fetch 호출 → 같은 저장소 백엔드 컨트롤러, "풀스택 시각화"의 핵심 엣지)만 한 번도 감사 안 된 걸 발견 — SERVICE_CALL 감사 직후 이어서 진행.
+
+**감사 방법 — 자기 레포를 backend+frontend 통합 스캔.** `LocalEdgeAuditor`의 self 감사는 관례적으로 `backend/src/main/java`만 스캔했는데, API_CALL은 태생적으로 크로스 디렉터리 엣지(프론트 파일 → 백엔드 파일)라 그 스코프로는 애초에 0건이었을 것 — `-PanalysisDir=..`(레포 루트)로 처음 실행해 backend·frontend를 함께 분석했다(SERVICE_CALL이 외부 벤치 레포가 필요했던 것과 반대로, 이번엔 자기 레포 자체가 이미 유효한 벤치 대상이었음). 500파일 상한에 걸려(자기 레포 전체 3200+ 파일) 일부 절단됐지만 30개 표본 추출에는 지장 없음.
+
+**결과 — 30/30 real(phantom 0%).** 처음 훑을 때 3건(`AdminPage.tsx→FeedbackController`·`AdminPage.tsx→ReportController`·`ProjectCard.tsx→AnalysisController`·`CommunityPostGraphPage.tsx→CommunityController`)이 검증 스크립트의 정규식 한계(멀티라인 `axios.post(\n  '/path'...)`, 메서드 체이닝 `axios\n  .get(...)` 패턴을 못 잡음)로 phantom처럼 보였으나, 실제 소스를 열어 직접 대조한 결과 전부 정상 매칭이었음(엔진의 실제 추출 로직은 이런 패턴을 이미 정확히 처리하고 있었다 — 검증 스크립트가 단순 grep이라 더 약했을 뿐). 나머지 27건도 axios 호출 경로와 대상 컨트롤러의 `@XxxMapping`/`@RequestMapping`을 전부 직접 대조해 확인.
+
+**코드 수정 없음.** 결과 `backend/src/test/resources/edge-audit/self/2026-08-01-api-call.json`에 커밋 — 핵심 엣지 타입(8종) 전수 감사가 이제 완료됐다(CONTAINS·FIELD_DEPENDENCY는 5차, SERVICE_CALL·API_CALL은 이번에 최초 완료).
+
+---
+
 ## SERVICE_CALL 엣지 — 최초 정확도 감사 + 필드변수 문자열연결 recall 갭 발견·수정 (2026-07-31, codeprint_157)
 
 **배경.** FUNCTION_CALL·IMPORT·INSTANTIATION·DB_CRUD·CONTAINS·FIELD_DEPENDENCY는 4~5차 감사로 phantom률까지 검증됐지만, `SERVICE_CALL_CHAIN`(신규 게이트 규칙, Java/Feign/Python/JS/Go 확장 완료)만 "신규·소규모라 스코프 밖"으로 한 번도 감사가 안 됐음을 발견 — 첫 라운드 진행.
