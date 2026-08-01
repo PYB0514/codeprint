@@ -4,6 +4,22 @@
 
 ---
 
+## SERVICE_CALL 엣지 — 최초 정확도 감사 + 필드변수 문자열연결 recall 갭 발견·수정 (2026-07-31, codeprint_157)
+
+**배경.** FUNCTION_CALL·IMPORT·INSTANTIATION·DB_CRUD·CONTAINS·FIELD_DEPENDENCY는 4~5차 감사로 phantom률까지 검증됐지만, `SERVICE_CALL_CHAIN`(신규 게이트 규칙, Java/Feign/Python/JS/Go 확장 완료)만 "신규·소규모라 스코프 밖"으로 한 번도 감사가 안 됐음을 발견 — 첫 라운드 진행.
+
+**감사 대상 선정.** 자기 레포(`backend/src/main/java`)는 모놀리스라 SERVICE_CALL 엣지가 애초에 0건(다른 서비스를 `http://서비스명`으로 호출할 일이 없음) — `LocalEdgeAuditor`는 self 레포 스캔이 기본값이라 대상 레포가 필요했음. 2026-07-17 SERVICE_CALL_CHAIN 최초 구현·검증에도 쓰였던 `spring-petclinic-microservices`(공식 Spring MSA 레퍼런스, 8개 서비스로 확장됨)를 재사용 — `-PanalysisDir`/`-PrepoLabel` 파라미터로 외부 경로 지정.
+
+**감사 결과 — SERVICE_CALL 엣지가 3건뿐이었는데 그중 1건만 잡히고 있었다(recall 33%).** `CustomersServiceClient`(`.uri("http://customers-service/...")`, 리터럴 직접)만 정상 추출. `VisitsServiceClient`(`private String hostname = "http://visits-service/"; ... .uri(hostname + "pets/visits...")`)와 `VectorStoreController`(genai-service, 동일하게 `String vetsHostname = "http://vets-service/"; ... .uri(vetsHostname + "vets")`)는 둘 다 놓치고 있었음 — 기존 정규식(`extractServiceCalls`, Java/Kotlin)이 `.uri(` 바로 뒤에 문자열 리터럴이 오는 경우만 매칭해, "리터럴 호스트를 필드 변수에 담아두고 문자열 연결로 쓰는" 관용구는 인식하지 못했음. 기존 "변수 조합 URL" 시리즈(②env var·docker-compose, ③Spring `@Value` 예약)와는 또 다른 세 번째 하위 패턴.
+
+**수정.** `StaticCodeAnalyzer.extractServiceCalls`의 Java/Kotlin 분기에 2단계 매칭 추가: ①`String 변수명 = "http://서비스명..."` 형태의 필드 선언을 파일 내에서 먼저 수집(`Map<필드명, 서비스명>`) ②`.uri(필드명 + ...)` 같은 호출에서 그 맵으로 역해소. 필드 선언과 사용이 같은 파일 안에서 완결돼(cross-file join 불필요) env var/docker-compose 패턴보다 단순 — `ENV:` 접두사 우회 없이 바로 서비스명을 반환. 기존 공유 `Pattern p`+파일 하단 공통 매칭 블록을 Java/Kotlin 전용 자기완결 분기로 전환(Python/JS/Go와 동일한 스타일로 통일), 이제 도달 불가능해진 공통 블록 제거.
+
+**ANALYZER_VERSION 7→8 인상.** `ParsedFile` 스키마(필드 구성)는 안 바뀌었지만 `serviceCalls` 필드의 **계산 로직만** 바뀐 경우라 — 과거 반복-G(스키마 변경은 명백히 깨지지만 로직만 바뀌면 역직렬화가 조용히 성공해 놓치기 쉬움, `PostGraphSnapshotIntegrationTest` 인근 기록 참조)와 같은 함정. 인상 안 하면 이미 캐시된 파일은 새 로직이 영영 안 돌고 구 `serviceCalls`를 계속 반환한다.
+
+**검증.** `StaticCodeAnalyzerTest`에 실제 `VisitsServiceClient` 패턴 재현 테스트 추가(TDD, RED→GREEN) + 백엔드 전체 테스트 green. **End-to-end 실측**: `edgeAudit`을 수정 전/후로 `spring-petclinic-microservices`에 재실행 — SERVICE_CALL 엣지 1건→3건(정확히 예상한 2건 증가), 3건 전부 소스 재확인으로 phantom 아님(실제 서비스 호출) 확인. `analyzeLocal` 자기분석 베이스라인(HIGH_FAN_OUT 5건) 무변화 — 자기 레포는 이 패턴 자체가 없어 회귀 없음.
+
+---
+
 ## 국소분석(디렉토리 스코프, pathPrefix) V1 구현 (2026-07-31, codeprint_157)
 
 **문제.** Context156에서 세워둔 초안 계획은 `pathPrefix`를 `analyses` 테이블에만 저장하도록 돼 있었다 — "프로젝트 최초 분석 시작 시 선택, 이후 설정 화면에서 변경 가능"이라는 UX 요구사항을 만족하려면 그 값을 어딘가에 영속시켜야 하는데, `analyses` 테이블만으로는 "다음 분석을 시작할 때 이전에 선택한 스코프를 어떻게 자동으로 이어받는가"가 빠져 있었다.

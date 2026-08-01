@@ -934,12 +934,34 @@ public class StaticCodeAnalyzer {
     // 리터럴이면 매칭. host 자체가 변수 조합(`http://{service}/...`)인 경우는 후속 스코프
     // (decisions/DECISIONS_ANALYSIS.md 참조), FeignClient는 별도 필드(feignClientTarget)로 처리.
     private List<String> extractServiceCalls(String content, String language) {
-        Pattern p;
         if (language.equals("Java") || language.equals("Kotlin")) {
-            p = Pattern.compile(
+            List<String> javaResult = new ArrayList<>();
+            Matcher literal = Pattern.compile(
                 "\\.(?:uri|getForObject|getForEntity|postForObject|postForEntity|put|delete|exchange)\\s*"
                     + "\\(\\s*[\"']http://([a-zA-Z0-9_-]+)"
-            );
+            ).matcher(content);
+            while (literal.find()) javaResult.add(literal.group(1));
+
+            // 필드에 리터럴 http:// 호스트를 담아두고 문자열 연결로 쓰는 경우(예: private String hostname =
+            // "http://visits-service/"; ... .uri(hostname + "path"))도 인식 — spring-petclinic-microservices
+            // VisitsServiceClient 실측으로 발견된 패턴(엣지 정확도 감사, decisions/DECISIONS_ANALYSIS.md 참조).
+            // 필드 선언과 사용이 같은 파일 안에서 완결돼 cross-file join이 필요 없다(ENV_VAR 패턴과 다른 점).
+            Matcher fieldDecl = Pattern.compile(
+                "\\bString\\s+(\\w+)\\s*=\\s*[\"']http://([a-zA-Z0-9_-]+)"
+            ).matcher(content);
+            Map<String, String> fieldHosts = new HashMap<>();
+            while (fieldDecl.find()) fieldHosts.put(fieldDecl.group(1), fieldDecl.group(2));
+            if (!fieldHosts.isEmpty()) {
+                Matcher varConcat = Pattern.compile(
+                    "\\.(?:uri|getForObject|getForEntity|postForObject|postForEntity|put|delete|exchange)\\s*"
+                        + "\\(\\s*(\\w+)\\s*\\+"
+                ).matcher(content);
+                while (varConcat.find()) {
+                    String service = fieldHosts.get(varConcat.group(1));
+                    if (service != null) javaResult.add(service);
+                }
+            }
+            return javaResult.stream().distinct().toList();
         } else if (language.equals("Python")) {
             // 리터럴 http:// 호스트 외에, docker-compose.yml environment 블록으로 주입되는
             // os.environ['VAR']/os.environ.get('VAR')/os.getenv('VAR') 기반 호출도 인식 —
@@ -987,10 +1009,6 @@ public class StaticCodeAnalyzer {
         } else {
             return List.of();
         }
-        Matcher m = p.matcher(content);
-        List<String> result = new ArrayList<>();
-        while (m.find()) result.add(m.group(1));
-        return result.stream().distinct().toList();
     }
 
     // docker-compose.yml의 environment 블록에서 ENV_VAR=http://service 또는 ENV_VAR: http://service 패턴을 추출
