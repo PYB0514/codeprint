@@ -9,6 +9,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.156.1',
+    date: '2026-08-01',
+    title: '보안 헤더 프론트엔드 적용 + 서비스 간 호출(MSA) 탐지 정확도 개선',
+    type: 'fix',
+    items: [
+      { category: '보안', desc: '실제 사용자가 보는 페이지(프론트엔드)에 보안 헤더(CSP·클릭재킹 방어 등)가 적용되지 않고 있던 것을 발견해 고쳤습니다. 결제·API 연동 도메인은 실제 사용 도메인 기준으로 구성했습니다.' },
+      { category: '분석 엔진', desc: '모노레포(MSA) 프로젝트에서 서비스 간 호출(SERVICE_CALL) 탐지 시, 호출 대상 주소를 변수에 담아두고 문자열로 이어붙이는 방식(예: hostname + "path")은 놓치고 있던 것을 고쳤습니다.' },
+    ],
+  },
+  {
     version: 'v0.156.0',
     date: '2026-07-31',
     title: '국소분석 — 레포 전체가 아닌 특정 하위 경로만 분석',
