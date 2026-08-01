@@ -74,9 +74,11 @@
 
 ---
 
-## 보안 헤더 — `SecurityHeadersFilter` 적용 중 ✅ (2026-07-26 실제 코드와 재동기화)
+## 보안 헤더 — 백엔드(`SecurityHeadersFilter`)·프론트(`vercel.json`) 둘 다 적용 중 ✅ (2026-07-31 발견·수정)
 
-> 이전 표는 "적용 목표"(아직 미달성한 이상값)로 기재돼 있었으나, `SecurityHeadersFilter`가 이미 모든 응답에 적용 중인 값을 확인해 실제 값으로 교체. `script-src`의 `'unsafe-inline'`은 React 빌드 산출물이 인라인 스크립트를 쓰기 때문에 의도적으로 허용된 것(완전한 `'self'` 전환은 nonce/hash 기반 CSP로의 빌드 파이프라인 변경이 필요해 별도 과제).
+> **2026-07-31 발견 — 이전까지 프론트엔드(Vercel, `codeprint-iota.vercel.app`)엔 이 헤더들이 전혀 적용되지 않고 있었다.** `SecurityHeadersFilter`는 백엔드(Railway) 응답에만 적용되는데, 프론트는 별도 오리진의 정적 SPA(Vercel 호스팅, `VITE_API_URL`로 백엔드와 통신)라 백엔드 필터가 실제 사용자가 보는 페이지엔 적용되지 않았다 — 이 문서가 "적용 중"이라 기재해온 것과 달리 실제 프로덕션 응답(`curl -I https://codeprint-iota.vercel.app/`)엔 `Strict-Transport-Security`(Vercel 기본 제공) 외 아무 보안 헤더도 없었다(CSP·X-Frame-Options·X-Content-Type-Options 전무 — 클릭재킹·XSS 방어면 부재). `frontend/vercel.json`에 `headers` 설정을 신설해 해소. 상세 `decisions/DECISIONS_FRONTEND.md`.
+
+**백엔드(`SecurityHeadersFilter`, Railway API 응답 전용)**
 
 | 헤더 | 값 |
 |---|---|
@@ -85,7 +87,19 @@
 | `X-Content-Type-Options` | `nosniff` |
 | `X-Frame-Options` | `DENY` |
 | `Referrer-Policy` | `no-referrer` |
-| `Permissions-Policy` | `geolocation=(), microphone=(), camera=()` (문서 표에 누락돼 있었음) |
+| `Permissions-Policy` | `geolocation=(), microphone=(), camera=()` |
+
+**프론트엔드(`vercel.json`, 실제 사용자가 보는 페이지 — 신설)**
+
+| 헤더 | 값 |
+|---|---|
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' https://*.tosspayments.com https://vercel.live; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://codeprint.up.railway.app wss://codeprint.up.railway.app https://*.sentry.io https://*.tosspayments.com https://vercel.live wss://vercel.live; frame-src https://*.tosspayments.com https://vercel.live; frame-ancestors 'none'; object-src 'none'; base-uri 'self'` |
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Referrer-Policy` | `no-referrer` |
+| `Permissions-Policy` | `geolocation=(), microphone=(), camera=()` |
+
+두 CSP 모두 `script-src`에 `'unsafe-inline'`은 React 빌드 산출물이 인라인 스크립트를 쓰기 때문에 의도적으로 허용된 것(완전한 `'self'` 전환은 nonce/hash 기반 CSP로의 빌드 파이프라인 변경이 필요해 별도 과제) — 단, 프론트 쪽은 실측 결과 인라인 `<script>` 태그가 없어(`index.html`에 `type="module"` 외부 스크립트 하나뿐) `script-src`에서 `'unsafe-inline'`을 제외할 수 있었다. `*.tosspayments.com`은 SDK가 실제 요청하는 도메인(`api`·`payment-gateway`·`payment-widget`·`event`·`log` 등 다수 서브도메인, 실측으로 확인)을 와일드카드로 커버.
 
 ---
 
