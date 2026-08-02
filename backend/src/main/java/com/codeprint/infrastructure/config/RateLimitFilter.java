@@ -74,7 +74,11 @@ public class RateLimitFilter implements Filter {
             new RateLimitRule("GET", "/api/projects/*/graph", "graph-read", 30, 1),
             new RateLimitRule("GET", "/api/share/*/graph", "graph-read-public", 20, 1),
             new RateLimitRule("GET", "/api/projects/*/graph/context-md", "graph-context-md", 20, 1),
-            new RateLimitRule("GET", "/api/projects/*/diff", "graph-diff", 20, 1)
+            new RateLimitRule("GET", "/api/projects/*/diff", "graph-diff", 20, 1),
+            // BYOK 키 등록/삭제 — 인증이 1차 방어선이나, 등록·삭제 둘 다 쓰기 엔드포인트라 무제한 반복 호출 방어 필요
+            // (BYOK 시리즈 PR1에서 신설 시 누락됐던 갭, 2026-08-02 발견)
+            new RateLimitRule("PUT", "/api/users/me/ai-key", "ai-key-write", 10, 1),
+            new RateLimitRule("DELETE", "/api/users/me/ai-key/*", "ai-key-write", 10, 1)
     );
 
     // 요청 IP 추출 — Railway 프록시가 실제 접속 IP를 X-Forwarded-For 맨 끝에 추가하므로 마지막 값을 사용

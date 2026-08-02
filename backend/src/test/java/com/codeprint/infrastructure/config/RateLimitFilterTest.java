@@ -283,4 +283,25 @@ class RateLimitFilterTest {
         verify(response).setStatus(429);
         verify(chain, times(30)).doFilter(request, response);
     }
+
+    @Test
+    @DisplayName("BYOK 키 등록·삭제는 분당 10회, PUT/DELETE가 같은 버킷 공유(2026-08-02 발견)")
+    void aiKeyWriteCategory_sharedAcrossPutAndDelete() throws Exception {
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("14.14.14.14");
+
+        when(request.getMethod()).thenReturn("PUT");
+        when(request.getRequestURI()).thenReturn("/api/users/me/ai-key");
+        for (int i = 0; i < 9; i++) {
+            filter.doFilter(request, response, chain);
+        }
+        when(request.getMethod()).thenReturn("DELETE");
+        when(request.getRequestURI()).thenReturn("/api/users/me/ai-key/ANTHROPIC");
+        filter.doFilter(request, response, chain);
+        verify(chain, times(10)).doFilter(request, response); // 합쳐 10회까지는 통과
+
+        filter.doFilter(request, response, chain); // 11번째 — 엔드포인트 전환해도 같은 버킷이라 초과
+        verify(response).setStatus(429);
+        verify(chain, times(10)).doFilter(request, response);
+    }
 }

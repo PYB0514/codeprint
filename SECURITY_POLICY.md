@@ -129,6 +129,7 @@
 | `GET /api/share/*/graph` | IP당 20회/분 | 비인증 접근 가능(공개 그래프)이라 더 낮은 한도 |
 | `GET /api/projects/*/graph/context-md` | IP당 20회/분 | 향후 BYOK LLM 호출(역할 명세서/기능명세) 연결 시 남용 표면이 될 수 있어 선제 등록 |
 | `GET /api/projects/*/diff` | IP당 20회/분 | |
+| `PUT /api/users/me/ai-key`·`DELETE /api/users/me/ai-key/*` | IP당 10회/분(두 엔드포인트가 `ai-key-write` 버킷 공유) | BYOK 키 등록/삭제 — 인증이 1차 방어선, 세션 탈취·남용 시 무제한 반복 쓰기 방지가 목적(BYOK 시리즈 PR1 신설 당시 누락됐던 갭, 2026-08-02 발견) |
 
 > ⚠️ 이전에 이 표에 있던 `GET /oauth2/** IP당 20회/분` 항목은 허위 기재였음(2026-07-12 발견) — 당시 `RateLimitFilter`의 모든 규칙이 POST만 매칭해 GET 경로는 아무 제한도 없었다. **2026-08-02부로 GET 규칙 4종이 최초로 추가돼 이 서술은 부분적으로 낡음** — `RateLimitRule.method()`가 GET도 정상 매칭함이 코드로 확인됨(위 4개 행). `GET /oauth2/**`(OAuth 인가 요청)는 여전히 미등록 — 별도 위협모델(GitHub 자체 레이트리밋에 일부 의존)이라 후속 과제로 유지.
 
