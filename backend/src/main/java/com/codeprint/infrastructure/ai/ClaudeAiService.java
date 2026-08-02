@@ -17,7 +17,7 @@ public class ClaudeAiService implements AiService {
     private static final String API_URL = "https://api.anthropic.com/v1/messages";
     private static final String MODEL = "claude-haiku-4-5-20251001";
 
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient = AiRestClients.create();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
