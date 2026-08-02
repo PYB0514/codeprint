@@ -2577,3 +2577,13 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `compileJava`/`npx tsc -b` 클린, 신규 단위테스트 11건(`RoleSpecServiceTest` 9·`UserAiKeyServiceTest` 신규 1) green, 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5, CROSS_CONTEXT_IMPORT 0) 복귀 확인, 로컬 백엔드 재기동 `/actuator/health` UP, 신규 엔드포인트 파라미터 정상 바인딩(미인증 401로 확인, 400 아님 — 리플렉션/바인딩 오류 없음). 프론트 UI 클릭 플로우는 로그인 필요해 미검증(`/loop` 모드 스킵 허용, PR732와 동일 근거).
 
 **남은 것(PR4 스코프).** 레이어B(컨텍스트 단위 기능명세) — `BoundedContextResolver`+`featureOf`(PR733에서 이미 공용화 완료) 재사용, A/B 교차배지, 1파일 컨텍스트 제외 등 정보이득 가드.
+
+## 그래프 조회 GET 엔드포인트 4종 레이트리밋 신설 (2026-08-02, codeprint_158)
+
+**문제.** BYOK 레이어A/B 착수 준비 중 `RateLimitFilter.rules` 전수 확인 결과, 등록된 규칙이 전부 POST 전용이라 그래프 조회 GET 엔드포인트(`getGraph`·`getPublicGraph`·`getContextMd`·`getGraphDiff`)엔 레이트리밋이 전혀 없었음이 드러남. `getGraph`/`getContextMd`는 `GraphQueryService`의 `@Cacheable("graphWarnings")` 캐시가 미스일 때 `detect()` 전체 재계산(대형 그래프 기준 초 단위)까지 유발할 수 있고, `getPublicGraph`(`/api/share/{id}/graph`)는 **비인증**이라 로그인 없이 누구나 반복 호출 가능 — `SECURITY_POLICY.md`의 기존 DDoS 감사(분석 파이프라인·WebSocket·웹훅)에서 빠져있던 사각지대.
+
+**결정.** `RateLimitFilter.rules`에 GET 규칙 4종 추가(`AntPathMatcher`+`RateLimitRule.method()`가 GET도 정상 매칭함을 테스트로 확인). 비인증 공개 엔드포인트(`getPublicGraph`)만 20회/분으로 더 낮게, 나머지는 30회/분(인증 그래프 조회) 또는 20회/분(diff·context-md, 상대적으로 무거운 연산). `context-md`는 지금은 LLM 호출이 없어 남용 표면이 없지만, 후속 PR3(레이어A)에서 LLM 호출이 붙을 걸 대비해 선제 등록.
+
+**결과.** 신규 테스트 2건(`RateLimitFilterTest`) green + 전체 스위트 green. `SECURITY_POLICY.md` 레이트리밋 표 동기화, "GET은 전부 미등록" 서술도 함께 정정.
+
+**PR 게이트 웹훅 플레이키니스 재관찰(2026-08-02).** 이 PR을 머지하는 과정에서 `codeprint/structure` 상태가 두 차례 `error`("구조 검사 실행 중 오류 발생")로 응답 — 1차는 콜드스타트(500) 패턴과 일치, 2차는 이미 프로덕션이 웜인 상태에서도 재현돼 순수 콜드스타트로만 설명되지 않음. 3차 재트리거(빈 커밋)에서 자연 해소. 근본 원인 미상 — `GATE_GAPS.md` [G-5]와 동일 계열이나 콜드스타트 단일 원인으로 완전히 설명 안 되는 잔여 플레이키니스로 별도 관찰 필요(재발 시 [G-5] 항목에 추가 기록).

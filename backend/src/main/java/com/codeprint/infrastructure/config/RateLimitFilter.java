@@ -68,7 +68,13 @@ public class RateLimitFilter implements Filter {
             new RateLimitRule("POST", "/api/webhooks/github", "webhook-github", 60, 1),
             // ADMIN 인증이 1차 방어선이나, 세션 탈취·내부자 남용 시에도 레이트리밋 이상탐지(RateLimitMetrics)
             // 자체를 무한 리셋해 무력화하는 걸 막는 2차 방어(2026-07-30 적대적 검증 CONFIRMED로 추가)
-            new RateLimitRule("POST", "/api/admin/digest/run", "admin-digest-run", 5, 60)
+            new RateLimitRule("POST", "/api/admin/digest/run", "admin-digest-run", 5, 60),
+            // 그래프 조회 GET 4종 — detect() 워닝 재계산(캐시 미스 시 수 초)까지 유발 가능한데 레이트리밋이 전무했던 갭
+            // (2026-08-02 발견). 특히 getPublicGraph는 비인증 접근이라 공격 표면이 더 넓어 한도를 더 낮게 설정.
+            new RateLimitRule("GET", "/api/projects/*/graph", "graph-read", 30, 1),
+            new RateLimitRule("GET", "/api/share/*/graph", "graph-read-public", 20, 1),
+            new RateLimitRule("GET", "/api/projects/*/graph/context-md", "graph-context-md", 20, 1),
+            new RateLimitRule("GET", "/api/projects/*/diff", "graph-diff", 20, 1)
     );
 
     // 요청 IP 추출 — Railway 프록시가 실제 접속 IP를 X-Forwarded-For 맨 끝에 추가하므로 마지막 값을 사용

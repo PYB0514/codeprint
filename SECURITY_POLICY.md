@@ -125,8 +125,12 @@
 | `POST /api/cron/daily-digest` | IP당 5회/시간 | |
 | `POST /api/payments/toss/prepare`·`/api/teams/payment/prepare`·`/api/teams/*/seats/payment/prepare` | IP당 5회/분(3개 엔드포인트가 `payment-prepare` 버킷 공유) | 결제 준비 — 남용 시 Toss API 호출 비용·이상거래 신호 |
 | `POST /api/admin/digest/run` | IP당 5회/시간 | ADMIN 인증이 1차 방어선, 세션 탈취·내부자 남용 시에도 레이트리밋 이상탐지 자체를 무한 리셋해 무력화하는 걸 막는 2차 방어(2026-07-30 적대적 검증 CONFIRMED로 추가) |
+| `GET /api/projects/*/graph` | IP당 30회/분 | `detect()` 워닝 캐시 미스 시 재계산 비용 방어(2026-08-02 발견 — 그래프 조회 GET 4종에 레이트리밋이 전무했던 갭) |
+| `GET /api/share/*/graph` | IP당 20회/분 | 비인증 접근 가능(공개 그래프)이라 더 낮은 한도 |
+| `GET /api/projects/*/graph/context-md` | IP당 20회/분 | 향후 BYOK LLM 호출(역할 명세서/기능명세) 연결 시 남용 표면이 될 수 있어 선제 등록 |
+| `GET /api/projects/*/diff` | IP당 20회/분 | |
 
-> ⚠️ 이전에 이 표에 있던 `GET /oauth2/** IP당 20회/분` 항목은 허위 기재였음(2026-07-12 발견) — `RateLimitFilter`의 모든 규칙이 POST만 매칭해 GET 경로는 애초에 아무 제한도 없다. OAuth 인가 요청 반복 남용은 별도 위협모델(GitHub 자체 레이트리밋에 일부 의존)이라 즉시 추가하지 않고 후속 과제로만 기록.
+> ⚠️ 이전에 이 표에 있던 `GET /oauth2/** IP당 20회/분` 항목은 허위 기재였음(2026-07-12 발견) — 당시 `RateLimitFilter`의 모든 규칙이 POST만 매칭해 GET 경로는 아무 제한도 없었다. **2026-08-02부로 GET 규칙 4종이 최초로 추가돼 이 서술은 부분적으로 낡음** — `RateLimitRule.method()`가 GET도 정상 매칭함이 코드로 확인됨(위 4개 행). `GET /oauth2/**`(OAuth 인가 요청)는 여전히 미등록 — 별도 위협모델(GitHub 자체 레이트리밋에 일부 의존)이라 후속 과제로 유지.
 
 **이상탐지(2026-07-29 추가, 2026-07-30 보강)** — `RateLimitMetrics`가 429 발생을 카테고리별로 집계하고, 일일 다이제스트(`AdminDigestService`)가 하루 20회 이상 트립된 카테고리를 이상 신호로 관리자에게 알린다(인앱+웹푸시). 임계값 20은 실사용 트래픽 근거가 아닌 잠정치 — 실사용자 유입 후 오탐(정상 트래픽인데 알림) 발생 시 재조정 필요. 카운터는 인메모리라 다이제스트 실행(매일 1회) 시점에 리셋되고, 배포로 재시작되면 그 사이 집계는 유실된다(단일 인스턴스 운영 전제, 지속적 관측 도구가 아니라 조기경보 신호). `runFor`는 `synchronized`로 직렬화(스케줄 cron·수동 트리거 동시 실행 방지)하고, 저장 실패 시 소비했던 카운트를 복구(`RateLimitMetrics.restore`)한다 — 2026-07-30 적대적 검증에서 `/api/admin/digest/run`에 레이트리밋이 없어 카운터를 무한 리셋시켜 이상탐지를 무력화할 수 있었던 것과 동시 실행 시 저장 실패로 카운트가 영구 유실될 수 있었던 것 둘 다 CONFIRMED로 발견돼 수정.
 
