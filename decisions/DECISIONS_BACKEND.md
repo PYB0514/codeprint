@@ -2552,6 +2552,32 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 
 **남은 것(PR1 스코프 밖, 후속 PR에서 처리).** ①`context-md` 내보내기 엔드포인트(GET)에 레이트리밋 미등록 — 레이어A/B가 실제로 이 엔드포인트에 LLM 호출을 붙이는 PR3에서 `RateLimitFilter.rules`에 신규 규칙 추가 필수(지금은 LLM 호출이 없어 남용 표면 자체가 없음). ②DLP(코드 전송 고지) 백로그 재검토 — "AI 기능 자체가 없어져 대상 소멸"로 취소돼 있었는데 이번에 전제가 무너짐, PR3 착수 시 최소 고지 UI 필요성 재확인.
 
+## 레이어A "역할 명세서" 구현 + AiProvider 공유어휘 이동 (2026-08-02, codeprint_158, PR3)
+
+**문제.** PR1(BYOK 인프라)에 이어 실제 LLM 생성 로직 착수. 설계는 여러 세션 전 사용자와의 대화로 확정(무주석+HIGH_FAN_OUT 노드만, 함수 본문+1홉 이웃 컨텍스트, 요청 범위 생성/DB 미저장, MD 텍스트 레벨 마커, Desktop 격리).
+
+**구현 중 발견한 구조 문제 — CROSS_CONTEXT_IMPORT.** `application/graph`(RoleSpecService)가 `domain/user`(AiProvider)와 `application/user`(UserAiKeyService)를 직접 참조해 `analyzeLocal`이 신규 위반 1건을 잡음. 해결책 두 가지를 조합:
+1. `AiProvider`를 `domain/user`에서 `shared/ai/`로 이동 — `GatePolicy`(`shared/gate/`)가 project·graph 컨텍스트 공유 어휘로 쓰이는 것과 동일 패턴. user·graph 두 컨텍스트가 공통으로 쓰는 순수 값 타입이라 Shared Kernel 자격 충족.
+2. `UserAiKeyService` 의존은 `domain/graph/port/AiKeyPort` 신설 + `infrastructure/adapter/AiKeyAdapter`로 위임 — `AnalysisReadAdapter`(analysis 컨텍스트 위임)와 완전히 동일한 기존 패턴 재사용.
+
+**LLM 서비스 구현 — 2026-07-12 삭제된 코드 복원.** `ClaudeAiService`/`OpenAiService`/`GeminiAiService`(+`AiService` 인터페이스)는 git 히스토리에서 원문을 그대로 확인해 복원(`infrastructure/ai/`) — RestClient 직접 호출, 모델명(`claude-haiku-4-5-20251001`·`gpt-4o-mini`·`gemini-2.0-flash`)까지 동일. 유일한 차이는 `explain(apiKey, prompt)`를 `generate(apiKey, prompt)`로 개명(과거엔 "설명" 전용이었으나 이번엔 "생성" 용도라 이름을 목적에 맞게 조정) + `max_tokens` 1024→300(역할 요약은 한 문장이면 충분, BYOK 비용 절감).
+
+**스코프 판정 재사용.** 새 탐지 로직을 만들지 않고 `GraphQueryService.getWarnings()`(캐시됨)에서 `HIGH_FAN_OUT` 타입 nodeIds를 그대로 필터링 — §16.4/신념6과 일관되게 "구조 판정은 결정론 엔진, LLM은 그 위에 라벨만" 원칙 유지.
+
+**함수 본문 확보 — 신규 로직 없이 기존 `GitHubApiClient.fetchFileContent`+`extractSnippet` 재사용.** `FpReportService`(오탐 신고 코드 스니펫 확보)가 이미 쓰던 것과 완전히 동일한 패턴(`AnalysisReadPort.findCommitSha`+`ProjectAccessPort.findGithubRepoUrl` 체인) — 새로 설계할 필요가 없었음.
+
+**출력 격리 — RepoMapService 미수정.** 애초 설계는 `RepoMapService.label()`에 인라인 마커를 심는 것이었으나, 구현 과정에서 더 안전한 대안 채택: AI 생성 섹션을 `RepoMapService`가 만든 트리 뒤에 완전히 별도의 `## AI 추정 역할 요약 (미검증)` 섹션으로 덧붙인다(`RoleSpecService.generateSection`). 장점 — ①기존 트리 생성 로직(수백 줄, 여러 호출부에서 공유) 무변경으로 회귀 리스크 0 ②텍스트 레벨 분리가 인라인 마커보다 오히려 명확(전용 섹션 헤더+경고 문구).
+
+**남용 방지.** 요청당 `MAX_TARGET_NODES=15`(무제한 반복 호출 방지, BYOK라 사용자 비용이라도 지연·예측불가 과금은 UX 문제). PR734에서 `context-md` GET에 이미 레이트리밋(20/분)을 선제 등록해둔 게 이번에 실제로 의미를 가짐.
+
+**실패 처리.** 전 구간 최선노력 — 키 없음/그래프 불일치/커밋 SHA 없음/스니펫 실패/LLM 예외 어느 단계든 조용히 빈 문자열(해당 노드만 건너뜀), 예외를 옮겨 export 자체를 실패시키지 않음. 단위테스트 9건(`RoleSpecServiceTest`)이 각 분기를 커버.
+
+**프론트 연동 — 후속으로 미루지 않고 같은 PR에 포함(§2 "half-finished implementation" 방지).** `GET /api/users/me/ai-key` 응답을 `{hasKey}` → `{hasKey, providers}`로 확장(어느 제공자가 등록됐는지 알아야 프론트가 자동으로 그 제공자를 export 요청에 실어 보낼 수 있음). `GraphPage.tsx` export 메뉴에 "AI 컨텍스트 + 역할 요약" 항목을 BYOK 등록 시에만 노출.
+
+**검증.** `compileJava`/`npx tsc -b` 클린, 신규 단위테스트 11건(`RoleSpecServiceTest` 9·`UserAiKeyServiceTest` 신규 1) green, 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5, CROSS_CONTEXT_IMPORT 0) 복귀 확인, 로컬 백엔드 재기동 `/actuator/health` UP, 신규 엔드포인트 파라미터 정상 바인딩(미인증 401로 확인, 400 아님 — 리플렉션/바인딩 오류 없음). 프론트 UI 클릭 플로우는 로그인 필요해 미검증(`/loop` 모드 스킵 허용, PR732와 동일 근거).
+
+**남은 것(PR4 스코프).** 레이어B(컨텍스트 단위 기능명세) — `BoundedContextResolver`+`featureOf`(PR733에서 이미 공용화 완료) 재사용, A/B 교차배지, 1파일 컨텍스트 제외 등 정보이득 가드.
+
 ## 그래프 조회 GET 엔드포인트 4종 레이트리밋 신설 (2026-08-02, codeprint_158)
 
 **문제.** BYOK 레이어A/B 착수 준비 중 `RateLimitFilter.rules` 전수 확인 결과, 등록된 규칙이 전부 POST 전용이라 그래프 조회 GET 엔드포인트(`getGraph`·`getPublicGraph`·`getContextMd`·`getGraphDiff`)엔 레이트리밋이 전혀 없었음이 드러남. `getGraph`/`getContextMd`는 `GraphQueryService`의 `@Cacheable("graphWarnings")` 캐시가 미스일 때 `detect()` 전체 재계산(대형 그래프 기준 초 단위)까지 유발할 수 있고, `getPublicGraph`(`/api/share/{id}/graph`)는 **비인증**이라 로그인 없이 누구나 반복 호출 가능 — `SECURITY_POLICY.md`의 기존 DDoS 감사(분석 파이프라인·WebSocket·웹훅)에서 빠져있던 사각지대.
@@ -2559,3 +2585,5 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결정.** `RateLimitFilter.rules`에 GET 규칙 4종 추가(`AntPathMatcher`+`RateLimitRule.method()`가 GET도 정상 매칭함을 테스트로 확인). 비인증 공개 엔드포인트(`getPublicGraph`)만 20회/분으로 더 낮게, 나머지는 30회/분(인증 그래프 조회) 또는 20회/분(diff·context-md, 상대적으로 무거운 연산). `context-md`는 지금은 LLM 호출이 없어 남용 표면이 없지만, 후속 PR3(레이어A)에서 LLM 호출이 붙을 걸 대비해 선제 등록.
 
 **결과.** 신규 테스트 2건(`RateLimitFilterTest`) green + 전체 스위트 green. `SECURITY_POLICY.md` 레이트리밋 표 동기화, "GET은 전부 미등록" 서술도 함께 정정.
+
+**PR 게이트 웹훅 플레이키니스 재관찰(2026-08-02).** 이 PR을 머지하는 과정에서 `codeprint/structure` 상태가 두 차례 `error`("구조 검사 실행 중 오류 발생")로 응답 — 1차는 콜드스타트(500) 패턴과 일치, 2차는 이미 프로덕션이 웜인 상태에서도 재현돼 순수 콜드스타트로만 설명되지 않음. 3차 재트리거(빈 커밋)에서 자연 해소. 근본 원인 미상 — `GATE_GAPS.md` [G-5]와 동일 계열이나 콜드스타트 단일 원인으로 완전히 설명 안 되는 잔여 플레이키니스로 별도 관찰 필요(재발 시 [G-5] 항목에 추가 기록).
