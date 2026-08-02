@@ -2664,3 +2664,11 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결정.** `LocalGraphQuery.java`에 `callPath` 모드 추가(`-PqueryMode=callPath -PqueryTarget=<함수명>`) — `FUNCTION_CALL` 엣지만 따라 호출자(callers)·피호출자(callees) 트리를 재귀로 구성. 사이클 가드(경로별 방문 이력)+깊이 상한(`MAX_CALL_DEPTH=6`)+전체 노드 상한(`MAX_CALL_PATH_NODES=300`)으로 허브 함수에서의 폭발을 방지. `LocalDiff`/`LocalGraphQuery` 자체가 이미 gitignore 처리된 내부 전용 도구라(공개 레포 미노출), 이번 추가도 같은 파일 안에서 이뤄져 별도 공개범위 결정 불필요 — `build.gradle`의 태스크 설명 주석만 갱신(실제 git 추적 대상은 이 한 줄뿐).
 
 **검증.** `RoleSpecService.summarizeOne`을 대상으로 실행 — `generateSection`→`GraphController.getContextMd`(+그 호출부 테스트들)까지 호출자 체인을, `fetchFileContent`/`neighborContext`/3개 `AiService.generate` 구현체까지 피호출자 체인을 정확히 추적함을 확인. `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 5건). 이번엔 `preview_start`로 가동 중인 백엔드 옆에서 `compileJava`·`exploreLocal`·`analyzeLocal`을 차례로 실행하고 매번 `/actuator/health` UP을 재확인해 죽지 않았음을 관찰(`interfaces/api` 밖 `tools/`·`application/graph` 파일만 건드린 이번 변경 한정) — 다만 이 1회 관측만으로 "백엔드 가동 중 gradle 금지" 기존 규칙을 뒤집지 않는다, 계속 원칙대로 서버 내리고 검증할 것.
+
+## BYOK 도그푸딩 중 발견 — 개별 항목 생성 실패 로그에 예외 원인이 빠져 있던 갭 수정 (2026-08-03, codeprint_158)
+
+**문제.** 사용자가 로컬에서 Gemini/OpenAI 키를 등록해 실제 BYOK 내보내기를 테스트하던 중, "codeprint" 자체 레포(HIGH_FAN_OUT 6건 확인된 큰 프로젝트)로도 `FeatureSpecService`의 기능명세 섹션이 계속 빈 문자열로 나오는 걸 발견. `RoleSpecService.summarizeOne`·`FeatureSpecService.summarizeContext`의 개별 항목 실패 로그(`log.warn("...실패...: context={}", contextName)`)가 예외 객체(`e`)를 인자로 안 넘겨서, 실제로 컨텍스트 10개 전부 시도했다가 전부 실패했는데도 로그엔 "실패했다"는 사실만 남고 **왜** 실패했는지(API 키 문제인지 quota인지 모델명 문제인지)가 전혀 안 남아 진단이 불가능했음. 최상위 `generateSection`의 catch는 이미 `e`를 넘기고 있어(SLF4J 마지막 인자 컨벤션) 스택트레이스가 남는데, 개별 항목 catch만 이 컨벤션에서 빠져 있었음(비대칭).
+
+**결정.** `e.getMessage()`를 로그 메시지에 포함(스택트레이스 전체는 개별 항목 단위로는 과함, 원인 한 줄이면 충분). RoleSpecService·FeatureSpecService 둘 다 동일하게 수정.
+
+**결과(이 수정으로 실제로 확인된 원인).** 로그에 원인이 찍히자마자 바로 확인: `Gemini API 호출 실패: 429 Too Many Requests ... "limit: 0" ... generate_content_free_tier_requests`. 코드 결함이 아니라 — 방금 새로 만든 Google Cloud 프로젝트의 Gemini 무료 티어 할당량이 0으로 설정돼 있어(신규 프로젝트 활성화 지연 또는 리전 제한으로 추정) 모든 요청이 즉시 거부된 것. `RoleSpecService`는 같은 프로젝트에서 별개 이유(HIGH_FAN_OUT 6건이 전부 이미 주석 있어 대상 자체가 0개, §6 함수 주석 규칙 때문)로 빈 결과였고 이건 정상 동작. `compileJava` 클린, 관련 유닛테스트 green. **부수 발견**: `preview_start`로 뜬 `bootRun`은 소스 파일을 Edit 도구로 수정하는 것만으로는 DevTools 재시작이 트리거되지 않음(.class 파일이 갱신 안 됨) — `compileJava`를 명시적으로 실행해야 실제 리로드가 일어남(다운→재기동 확인).

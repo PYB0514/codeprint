@@ -136,7 +136,7 @@ public class FeatureSpecService {
             String badge = flaggedCount > 0 ? "(레이어A 플래그 노드 " + flaggedCount + "개 포함)" : "";
             return "### " + contextName + " 컨텍스트 " + badge + "\n\n" + summary + "\n\n";
         } catch (Exception e) {
-            log.warn("기능명세 개별 컨텍스트 생성 실패(최선노력, 건너뜀): context={}", contextName);
+            log.warn("기능명세 개별 컨텍스트 생성 실패(최선노력, 건너뜀): context={}, 원인={}", contextName, e.getMessage());
             return null;
         }
     }

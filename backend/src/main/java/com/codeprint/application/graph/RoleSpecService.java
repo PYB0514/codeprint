@@ -140,7 +140,7 @@ public class RoleSpecService {
             if (summary.isBlank()) return null;
             return "- `" + target.getName() + "`(" + target.getFilePath() + ") — " + summary + "\n";
         } catch (Exception e) {
-            log.warn("역할 명세서 개별 노드 생성 실패(최선노력, 건너뜀): nodeId={}", target.getId());
+            log.warn("역할 명세서 개별 노드 생성 실패(최선노력, 건너뜀): nodeId={}, 원인={}", target.getId(), e.getMessage());
             return null;
         }
     }
