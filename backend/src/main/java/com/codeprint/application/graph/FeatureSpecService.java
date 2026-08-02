@@ -48,8 +48,8 @@ public class FeatureSpecService {
         if (aiService == null) return "";
 
         try {
-            List<Node> nodes = graphQueryService.getNodes(graphId);
-            List<Edge> edges = graphQueryService.getEdges(graphId);
+            List<Node> nodes = graphQueryService.getNodes(graphId).stream().filter(n -> !n.isHidden()).toList();
+            List<Edge> edges = graphQueryService.getEdges(graphId).stream().filter(e -> !e.isHidden()).toList();
             Map<String, List<Node>> byContext = groupFilesByContext(nodes);
             List<Map.Entry<String, List<Node>>> targets = byContext.entrySet().stream()
                     .filter(e -> !"(미분류)".equals(e.getKey()))

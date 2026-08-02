@@ -2638,3 +2638,11 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결정.** `PUT /api/users/me/ai-key`·`DELETE /api/users/me/ai-key/*`를 같은 `ai-key-write` 카테고리(분당 10회, 결제 prepare 3종과 동일하게 엔드포인트가 달라도 버킷 공유)로 등록. 등록은 정상 사용 시 세션당 1~2회 수준이라 10회면 실사용을 방해하지 않으면서 스팸을 막기에 충분하다고 판단.
 
 **결과.** `RateLimitFilterTest`에 PUT/DELETE 공유 버킷 회귀 테스트 추가, `compileJava` 클린, 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 5건 그대로).
+
+## 역할 명세서/기능명세(레이어A/B)가 사용자가 숨긴 노드까지 LLM으로 요약하던 갭 수정 (2026-08-02, codeprint_158)
+
+**문제.** `McpController`·`GraphController.getGraph`/`getPublicGraph`/`getContextMd`(RepoMap 대상 목록)는 전부 `graphQueryService.getNodes/getEdges` 조회 직후 `!isHidden()`으로 필터링하는 게 이 코드베이스의 일관된 컨벤션인데(노드 예산 초과 시 함수 80개 넘는 그래프에서 사용자가 "전체 보기"를 끄면 초과분이 숨김 처리됨), `RoleSpecService.generateSection`·`FeatureSpecService.generateSection`은 `graphId`만 받아 내부에서 `graphQueryService.getNodes/getEdges`를 직접 재조회하면서 이 필터를 빠뜨리고 있었음. 결과적으로 사용자가 명시적으로 숨긴(관심 밖으로 표시한) 노드까지 레이어A가 자기 BYOK 키로 요약을 생성하고, 레이어B의 컨텍스트 그룹핑·A/B 교차배지 카운트에도 포함될 수 있었음 — 사용자 의도(숨김)와 어긋나고, 본인 LLM 토큰을 원치 않는 대상에 소비시키는 문제.
+
+**결정.** 두 서비스의 `generateSection` 진입점에서 노드·엣지 조회 직후 `.filter(n -> !n.isHidden())`/`.filter(e -> !e.isHidden())` 추가 — 기존 컨벤션(McpController 등)과 동일한 위치·방식으로 통일.
+
+**결과.** `compileJava` 클린, `RoleSpecServiceTest`·`FeatureSpecServiceTest`(Mockito 미스텁 `isHidden()`은 기본 `false`라 기존 케이스 영향 없음) 통과, 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인 불변.
