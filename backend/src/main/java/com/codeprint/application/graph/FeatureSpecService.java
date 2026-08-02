@@ -42,10 +42,8 @@ public class FeatureSpecService {
     @Transactional(readOnly = true)
     public String generateSection(UUID graphId, UUID userId, AiProvider provider) {
         if (provider == null) return "";
-        String apiKey = aiKeyPort.findPlainKey(userId, provider).orElse(null);
-        if (apiKey == null) return "";
-        AiService aiService = servicesByProvider.get(provider);
-        if (aiService == null) return "";
+        if (aiKeyPort.findPlainKey(userId, provider).isEmpty()) return "";
+        AiFailoverClient failover = AiFailoverClient.forUser(provider, userId, aiKeyPort, servicesByProvider);
 
         try {
             List<Node> nodes = graphQueryService.getNodes(graphId);
@@ -62,7 +60,7 @@ public class FeatureSpecService {
 
             List<String> entries = new ArrayList<>();
             for (Map.Entry<String, List<Node>> entry : targets) {
-                String section = summarizeContext(entry.getKey(), entry.getValue(), nodes, edges, layerAFlaggedIds, apiKey, aiService);
+                String section = summarizeContext(entry.getKey(), entry.getValue(), nodes, edges, layerAFlaggedIds, failover);
                 if (section != null) entries.add(section);
             }
             if (entries.isEmpty()) return "";
@@ -71,6 +69,10 @@ public class FeatureSpecService {
             sb.append("\n\n## AI 추정 기능명세 (미검증)\n\n");
             sb.append("> 아래는 각 컨텍스트를 구성하는 파일들을 종합해 사용자 본인의 LLM 키로 생성한 추정 설명입니다. ");
             sb.append("실제 코드로 확정된 구조적 사실이 아니므로 참고용으로만 사용하세요.\n\n");
+            if (failover.switched()) {
+                sb.append("> ⚠️ ").append(failover.originalProvider()).append(" 호출 실패로 ")
+                        .append(failover.currentProvider()).append("로 전환해 생성했습니다.\n\n");
+            }
             entries.forEach(sb::append);
             return sb.toString();
         } catch (Exception e) {
@@ -100,7 +102,7 @@ public class FeatureSpecService {
 
     // 컨텍스트 내 파일들의 기존 주석+구조적 신호(API/DB 존재, 레이어A 플래그 노드 수)를 종합해 LLM 호출
     private String summarizeContext(String contextName, List<Node> files, List<Node> allNodes, List<Edge> edges,
-                                     Set<UUID> layerAFlaggedIds, String apiKey, AiService aiService) {
+                                     Set<UUID> layerAFlaggedIds, AiFailoverClient failover) {
         Set<String> filePaths = files.stream().map(Node::getFilePath).collect(Collectors.toSet());
 
         List<String> fileLines = new ArrayList<>();
@@ -131,7 +133,7 @@ public class FeatureSpecService {
                 hasApi ? "있음" : "없음", hasDb ? "있음" : "없음");
 
         try {
-            String summary = aiService.generate(apiKey, prompt).trim();
+            String summary = failover.generate(prompt).trim();
             if (summary.isBlank()) return null;
             String badge = flaggedCount > 0 ? "(레이어A 플래그 노드 " + flaggedCount + "개 포함)" : "";
             return "### " + contextName + " 컨텍스트 " + badge + "\n\n" + summary + "\n\n";

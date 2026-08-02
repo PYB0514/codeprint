@@ -30,7 +30,7 @@ public class UserAiKeyRepositoryImpl implements UserAiKeyRepository {
 
     @Override
     public List<AiProvider> findProvidersByUserId(UUID userId) {
-        return jpa.findByUserId(userId).stream().map(UserAiKey::getProvider).toList();
+        return jpa.findByUserIdOrderByCreatedAtAsc(userId).stream().map(UserAiKey::getProvider).toList();
     }
 
     @Override
