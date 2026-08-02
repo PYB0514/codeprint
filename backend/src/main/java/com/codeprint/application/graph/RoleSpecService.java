@@ -90,6 +90,15 @@ public class RoleSpecService {
 
     // 무주석 + HIGH_FAN_OUT 판정된 FUNCTION 노드만 대상(기존 판정 재사용, 최대 MAX_TARGET_NODES개로 제한)
     private List<Node> selectTargetNodes(List<Node> nodes, UUID graphId) {
+        return candidateTargetNodes(nodes, graphId).stream().limit(MAX_TARGET_NODES).toList();
+    }
+
+    // 무주석+HIGH_FAN_OUT 판정 전체(상한 없음) — 레이어B의 A/B 교차배지 계산이 재사용(LLM 호출 여부와 무관한 순수 카운트)
+    public Set<UUID> selectTargetNodeIds(List<Node> nodes, UUID graphId) {
+        return candidateTargetNodes(nodes, graphId).stream().map(Node::getId).collect(Collectors.toSet());
+    }
+
+    private List<Node> candidateTargetNodes(List<Node> nodes, UUID graphId) {
         Set<UUID> highFanOutIds = graphQueryService.getWarnings(graphId).stream()
                 .filter(w -> "HIGH_FAN_OUT".equals(w.get("type")))
                 .flatMap(w -> ((List<?>) w.getOrDefault("nodeIds", List.of())).stream())
@@ -100,7 +109,6 @@ public class RoleSpecService {
                 .filter(n -> n.getType() == NodeType.FUNCTION)
                 .filter(n -> highFanOutIds.contains(n.getId()))
                 .filter(n -> isBlank(commentOf(n)))
-                .limit(MAX_TARGET_NODES)
                 .toList();
     }
 

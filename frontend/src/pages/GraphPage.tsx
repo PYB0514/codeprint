@@ -1117,8 +1117,11 @@ function GraphPageInner() {
     try {
       const params = new URLSearchParams({ level, grouping })
       if (graphId) params.set('graphId', graphId)
-      // 역할 명세서(레이어A) — BYOK 등록된 제공자가 있을 때만, 요청 범위에서만 생성(서버에 저장 안 됨)
-      if (includeAiRoleSpec && aiKeyProvider) params.set('aiRoleSpecProvider', aiKeyProvider)
+      // 역할 명세서(레이어A)+기능명세(레이어B) — BYOK 등록된 제공자가 있을 때만, 요청 범위에서만 생성(서버에 저장 안 됨)
+      if (includeAiRoleSpec && aiKeyProvider) {
+        params.set('aiRoleSpecProvider', aiKeyProvider)
+        params.set('aiFeatureSpecProvider', aiKeyProvider)
+      }
       const url = `/api/projects/${projectId}/graph/context-md?${params.toString()}`
       const res = await axios.get<{ content: string }>(url)
       const md = res.data.content
