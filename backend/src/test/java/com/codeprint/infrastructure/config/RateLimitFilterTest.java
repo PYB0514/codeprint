@@ -304,4 +304,24 @@ class RateLimitFilterTest {
         verify(response).setStatus(429);
         verify(chain, times(10)).doFilter(request, response);
     }
+
+    @Test
+    @DisplayName("BYOK 우선순위 재배열도 ai-key-write 버킷 공유(2026-08-03 발견)")
+    void aiKeyPriorityCategory_sharesAiKeyWriteBucket() throws Exception {
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("15.15.15.15");
+        when(request.getMethod()).thenReturn("PUT");
+
+        when(request.getRequestURI()).thenReturn("/api/users/me/ai-key");
+        for (int i = 0; i < 9; i++) {
+            filter.doFilter(request, response, chain);
+        }
+        when(request.getRequestURI()).thenReturn("/api/users/me/ai-key/priority");
+        filter.doFilter(request, response, chain);
+        verify(chain, times(10)).doFilter(request, response); // 합쳐 10회까지는 통과
+
+        filter.doFilter(request, response, chain); // 11번째 — 초과
+        verify(response).setStatus(429);
+        verify(chain, times(10)).doFilter(request, response);
+    }
 }

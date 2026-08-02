@@ -9,8 +9,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -25,7 +28,7 @@ public class UserAiKeyService {
         return userAiKeyRepository.findProvidersByUserId(userId);
     }
 
-    // 신규 등록 또는 기존 키 회전
+    // 신규 등록 또는 기존 키 회전 — 신규 등록 시 priority는 현재 최대값+1(맨 뒤)
     public void registerOrRotate(UUID userId, AiProvider provider, String plainApiKey) {
         if (plainApiKey == null || plainApiKey.isBlank()) {
             throw new IllegalArgumentException("API 키가 비어 있습니다.");
@@ -35,7 +38,24 @@ public class UserAiKeyService {
             existing.rotate(plainApiKey);
             userAiKeyRepository.save(existing);
         } else {
-            userAiKeyRepository.save(UserAiKey.create(userId, provider, plainApiKey));
+            int nextPriority = userAiKeyRepository.findMaxPriority(userId) + 1;
+            userAiKeyRepository.save(UserAiKey.create(userId, provider, plainApiKey, nextPriority));
+        }
+    }
+
+    // failover 우선순위 재배열 — 등록된 프로바이더 집합과 정확히 일치해야 함(누락·추가 시 거부)
+    public void reorderProviders(UUID userId, List<AiProvider> orderedProviders) {
+        List<UserAiKey> existing = userAiKeyRepository.findAllByUserId(userId);
+        Set<AiProvider> registered = existing.stream().map(UserAiKey::getProvider).collect(Collectors.toSet());
+        if (!registered.equals(Set.copyOf(orderedProviders)) || registered.size() != orderedProviders.size()) {
+            throw new IllegalArgumentException("등록된 프로바이더 목록과 정확히 일치해야 합니다.");
+        }
+        Map<AiProvider, UserAiKey> byProvider = existing.stream()
+                .collect(Collectors.toMap(UserAiKey::getProvider, k -> k));
+        for (int i = 0; i < orderedProviders.size(); i++) {
+            UserAiKey key = byProvider.get(orderedProviders.get(i));
+            key.changePriority(i);
+            userAiKeyRepository.save(key);
         }
     }
 

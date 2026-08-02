@@ -30,7 +30,18 @@ public class UserAiKeyRepositoryImpl implements UserAiKeyRepository {
 
     @Override
     public List<AiProvider> findProvidersByUserId(UUID userId) {
-        return jpa.findByUserIdOrderByCreatedAtAsc(userId).stream().map(UserAiKey::getProvider).toList();
+        return jpa.findByUserIdOrderByPriorityAsc(userId).stream().map(UserAiKey::getProvider).toList();
+    }
+
+    @Override
+    public List<UserAiKey> findAllByUserId(UUID userId) {
+        return jpa.findByUserIdOrderByPriorityAsc(userId);
+    }
+
+    @Override
+    public int findMaxPriority(UUID userId) {
+        Integer max = jpa.findMaxPriority(userId);
+        return max != null ? max : -1;
     }
 
     @Override

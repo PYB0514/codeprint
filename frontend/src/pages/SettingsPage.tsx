@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import AppHeader from '../components/AppHeader'
 
+const AI_PROVIDER_LABELS: Record<string, string> = { ANTHROPIC: 'Anthropic', OPENAI: 'OpenAI', GEMINI: 'Gemini' }
+
 // 설정 페이지 렌더링
 export default function SettingsPage() {
   const { t } = useTranslation('workspace')
@@ -66,6 +68,23 @@ export default function SettingsPage() {
       setAiKeyMsg(t('settings.aiKey.deleteFailed'))
     } finally {
       setAiKeyLoading(false)
+      setTimeout(() => setAiKeyMsg(null), 3000)
+    }
+  }
+
+  // failover 우선순위 재배열 — 낙관적 업데이트 후 실패 시 원복
+  const moveProviderPriority = async (index: number, direction: -1 | 1) => {
+    const target = index + direction
+    if (target < 0 || target >= registeredProviders.length) return
+    const prev = registeredProviders
+    const reordered = [...registeredProviders]
+    ;[reordered[index], reordered[target]] = [reordered[target], reordered[index]]
+    setRegisteredProviders(reordered)
+    try {
+      await axios.put('/api/users/me/ai-key/priority', { providers: reordered })
+    } catch {
+      setRegisteredProviders(prev)
+      setAiKeyMsg(t('settings.aiKey.reorderFailed'))
       setTimeout(() => setAiKeyMsg(null), 3000)
     }
   }
@@ -219,6 +238,34 @@ export default function SettingsPage() {
               >
                 {t('settings.aiKey.deleteButton')}
               </button>
+            </div>
+          )}
+          {registeredProviders.length >= 2 && (
+            <div className="mt-4 pt-4 border-t border-gray-800">
+              <p className="text-xs text-gray-500 mb-2">{t('settings.aiKey.priorityHeading')}</p>
+              <ul className="flex flex-col gap-1">
+                {registeredProviders.map((provider, index) => (
+                  <li key={provider} className="flex items-center gap-2 text-xs text-gray-300 bg-gray-900 rounded px-2 py-1.5">
+                    <span className="flex-1">{index + 1}. {AI_PROVIDER_LABELS[provider] ?? provider}</span>
+                    <button
+                      onClick={() => moveProviderPriority(index, -1)}
+                      disabled={index === 0}
+                      className="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                      aria-label="위로"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      onClick={() => moveProviderPriority(index, 1)}
+                      disabled={index === registeredProviders.length - 1}
+                      className="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                      aria-label="아래로"
+                    >
+                      ↓
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </section>

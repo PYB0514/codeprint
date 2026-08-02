@@ -20,7 +20,9 @@
       "saved": "Key saved.",
       "saveFailed": "Failed to save.",
       "deleted": "Key deleted.",
-      "deleteFailed": "Failed to delete."
+      "deleteFailed": "Failed to delete.",
+      "priorityHeading": "Failover priority (tried top to bottom)",
+      "reorderFailed": "Failed to reorder."
     },
     "deleteAccount": {
       "heading": "Delete Account",

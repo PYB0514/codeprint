@@ -38,6 +38,7 @@ class UserAiKeyServiceTest {
     void registerOrRotate_noExisting_createsNew() {
         UUID userId = UUID.randomUUID();
         when(userAiKeyRepository.findByUserIdAndProvider(userId, AiProvider.ANTHROPIC)).thenReturn(Optional.empty());
+        when(userAiKeyRepository.findMaxPriority(userId)).thenReturn(1);
 
         service.registerOrRotate(userId, AiProvider.ANTHROPIC, "sk-ant-plain-key");
 
@@ -46,6 +47,7 @@ class UserAiKeyServiceTest {
         assertThat(captor.getValue().getUserId()).isEqualTo(userId);
         assertThat(captor.getValue().getProvider()).isEqualTo(AiProvider.ANTHROPIC);
         assertThat(captor.getValue().getApiKey()).isEqualTo("sk-ant-plain-key");
+        assertThat(captor.getValue().getPriority()).isEqualTo(2);
     }
 
     // 기존 키가 있으면 새로 만들지 않고 회전(rotate)한다
@@ -53,7 +55,7 @@ class UserAiKeyServiceTest {
     @DisplayName("registerOrRotate — 기존 키 있으면 회전")
     void registerOrRotate_existing_rotatesInPlace() {
         UUID userId = UUID.randomUUID();
-        UserAiKey existing = UserAiKey.create(userId, AiProvider.ANTHROPIC, "old-key");
+        UserAiKey existing = UserAiKey.create(userId, AiProvider.ANTHROPIC, "old-key", 0);
         when(userAiKeyRepository.findByUserIdAndProvider(userId, AiProvider.ANTHROPIC)).thenReturn(Optional.of(existing));
 
         service.registerOrRotate(userId, AiProvider.ANTHROPIC, "new-key");
@@ -99,5 +101,49 @@ class UserAiKeyServiceTest {
         service.delete(userId, AiProvider.OPENAI);
 
         verify(userAiKeyRepository).deleteByUserIdAndProvider(userId, AiProvider.OPENAI);
+    }
+
+    // 등록된 프로바이더 집합과 정확히 일치하는 순서로 priority를 재기록한다
+    @Test
+    @DisplayName("reorderProviders — 지정한 순서대로 priority 갱신")
+    void reorderProviders_validOrder_updatesPriorities() {
+        UUID userId = UUID.randomUUID();
+        UserAiKey anthropic = UserAiKey.create(userId, AiProvider.ANTHROPIC, "a-key", 0);
+        UserAiKey gemini = UserAiKey.create(userId, AiProvider.GEMINI, "g-key", 1);
+        when(userAiKeyRepository.findAllByUserId(userId)).thenReturn(java.util.List.of(anthropic, gemini));
+
+        service.reorderProviders(userId, java.util.List.of(AiProvider.GEMINI, AiProvider.ANTHROPIC));
+
+        assertThat(gemini.getPriority()).isEqualTo(0);
+        assertThat(anthropic.getPriority()).isEqualTo(1);
+        verify(userAiKeyRepository).save(gemini);
+        verify(userAiKeyRepository).save(anthropic);
+    }
+
+    // 등록되지 않은 프로바이더가 섞이면 거부한다
+    @Test
+    @DisplayName("reorderProviders — 등록 안 된 프로바이더 포함 시 예외")
+    void reorderProviders_unregisteredProvider_throws() {
+        UUID userId = UUID.randomUUID();
+        UserAiKey anthropic = UserAiKey.create(userId, AiProvider.ANTHROPIC, "a-key", 0);
+        when(userAiKeyRepository.findAllByUserId(userId)).thenReturn(java.util.List.of(anthropic));
+
+        assertThatThrownBy(() -> service.reorderProviders(userId, java.util.List.of(AiProvider.ANTHROPIC, AiProvider.OPENAI)))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(userAiKeyRepository, never()).save(any());
+    }
+
+    // 등록된 프로바이더 일부가 누락되면 거부한다
+    @Test
+    @DisplayName("reorderProviders — 등록된 프로바이더 누락 시 예외")
+    void reorderProviders_missingProvider_throws() {
+        UUID userId = UUID.randomUUID();
+        UserAiKey anthropic = UserAiKey.create(userId, AiProvider.ANTHROPIC, "a-key", 0);
+        UserAiKey gemini = UserAiKey.create(userId, AiProvider.GEMINI, "g-key", 1);
+        when(userAiKeyRepository.findAllByUserId(userId)).thenReturn(java.util.List.of(anthropic, gemini));
+
+        assertThatThrownBy(() -> service.reorderProviders(userId, java.util.List.of(AiProvider.ANTHROPIC)))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(userAiKeyRepository, never()).save(any());
     }
 }

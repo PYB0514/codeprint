@@ -20,7 +20,9 @@
       "saved": "키가 저장됐습니다.",
       "saveFailed": "저장에 실패했습니다.",
       "deleted": "키가 삭제됐습니다.",
-      "deleteFailed": "삭제에 실패했습니다."
+      "deleteFailed": "삭제에 실패했습니다.",
+      "priorityHeading": "failover 우선순위 (위에 있을수록 먼저 시도)",
+      "reorderFailed": "순서 변경에 실패했습니다."
     },
     "deleteAccount": {
       "heading": "계정 삭제",

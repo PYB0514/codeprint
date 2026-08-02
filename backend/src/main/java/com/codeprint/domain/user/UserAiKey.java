@@ -38,13 +38,18 @@ public class UserAiKey {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    // 신규 키 등록
-    public static UserAiKey create(UUID userId, AiProvider provider, String plainApiKey) {
+    // failover 시도 순서 — 낮을수록 우선, 사용자가 직접 재배열 가능(기본값은 등록순)
+    @Column(name = "priority", nullable = false)
+    private int priority;
+
+    // 신규 키 등록 — priority는 호출부가 현재 최대값+1로 지정(맨 뒤에 추가)
+    public static UserAiKey create(UUID userId, AiProvider provider, String plainApiKey, int priority) {
         UserAiKey key = new UserAiKey();
         key.id = UUID.randomUUID();
         key.userId = userId;
         key.provider = provider;
         key.apiKey = plainApiKey;
+        key.priority = priority;
         Instant now = Instant.now();
         key.createdAt = now;
         key.updatedAt = now;
@@ -54,6 +59,12 @@ public class UserAiKey {
     // 키 회전(재등록)
     public void rotate(String newPlainApiKey) {
         this.apiKey = newPlainApiKey;
+        this.updatedAt = Instant.now();
+    }
+
+    // 사용자가 직접 지정한 순서로 우선순위 갱신
+    public void changePriority(int newPriority) {
+        this.priority = newPriority;
         this.updatedAt = Instant.now();
     }
 }
