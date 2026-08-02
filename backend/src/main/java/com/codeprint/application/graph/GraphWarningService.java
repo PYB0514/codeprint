@@ -210,7 +210,7 @@ public class GraphWarningService {
         Set<String> features = new HashSet<>();
         boolean hasFrontend = false;
         for (Node n : nodes) {
-            String f = featureOf(n.getFilePath());
+            String f = BoundedContextResolver.featureOf(n.getFilePath());
             if (f != null) features.add(f);
             if (isFrontendLanguage(n.getLanguage())) hasFrontend = true;
         }
@@ -750,7 +750,7 @@ public class GraphWarningService {
         Set<String> features = new HashSet<>();
         boolean hasFrontend = false;
         for (Node n : nodes) {
-            String f = featureOf(nodeFilePaths.get(n.getId()));
+            String f = BoundedContextResolver.featureOf(nodeFilePaths.get(n.getId()));
             if (f != null) features.add(f);
             if (isFrontendLanguage(n.getLanguage())) hasFrontend = true;
         }
@@ -765,8 +765,8 @@ public class GraphWarningService {
             String tgtPath = nodeFilePaths.getOrDefault(e.getTargetNodeId(), "");
             // 테스트 코드는 여러 피처를 자유롭게 import(픽스처)라 위반 아님 — 제외
             if (isTestArtifact(srcPath, nameMap.getOrDefault(e.getSourceNodeId(), ""))) continue;
-            String srcFeature = featureOf(srcPath);
-            String tgtFeature = featureOf(tgtPath);
+            String srcFeature = BoundedContextResolver.featureOf(srcPath);
+            String tgtFeature = BoundedContextResolver.featureOf(tgtPath);
             if (srcFeature != null && tgtFeature != null && !srcFeature.equals(tgtFeature)) {
                 Map<String, Object> w = new LinkedHashMap<>();
                 w.put("type", "CROSS_FEATURE_IMPORT");
@@ -780,20 +780,6 @@ public class GraphWarningService {
             }
         }
         return warnings;
-    }
-
-    // 경로에서 features/{X}/ 의 피처명 X 추출 — features 직속 파일(features/x.ts)이나 미해당이면 null.
-    private static String featureOf(String path) {
-        if (path == null) return null;
-        String p = path.replace("\\", "/");
-        int idx = p.indexOf("/features/");
-        int start;
-        if (idx >= 0) start = idx + "/features/".length();
-        else if (p.startsWith("features/")) start = "features/".length();
-        else return null;
-        int slash = p.indexOf('/', start);
-        if (slash <= start) return null;
-        return p.substring(start, slash);
     }
 
     // Redux/RTK 프로젝트 지문 — features/ 를 쓰지만 피처-슬라이스(bulletproof/FSD)와 정반대 규칙을 따른다.
@@ -834,7 +820,7 @@ public class GraphWarningService {
         Set<String> features = new HashSet<>();
         boolean hasFrontend = false;
         for (Node n : nodes) {
-            String f = featureOf(nodeFilePaths.get(n.getId()));
+            String f = BoundedContextResolver.featureOf(nodeFilePaths.get(n.getId()));
             if (f != null) features.add(f);
             if (isFrontendLanguage(n.getLanguage())) hasFrontend = true;
         }
@@ -883,7 +869,7 @@ public class GraphWarningService {
     //   entities 만 추가: FSD 고유 디렉터리라 모호성 낮고 entities↛features 핵심 규칙을 todo-app으로 검증.
     // features 우선 판정(피처 내부 components/ 등은 SHARED 아닌 FEATURE).
     private static int frontendLayerRank(String path) {
-        if (featureOf(path) != null) return 1;
+        if (BoundedContextResolver.featureOf(path) != null) return 1;
         if (path == null) return -1;
         String p = path.replace("\\", "/");
         if (hasSegment(p, "app")) return 0;

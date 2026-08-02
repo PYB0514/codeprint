@@ -151,4 +151,20 @@ public final class BoundedContextResolver {
         }
         return best;
     }
+
+    // 경로에서 features/{X}/ 의 피처명 X 추출 — features 직속 파일(features/x.ts)이나 미해당이면 null.
+    // React/JS 피처-슬라이스 레이아웃 전용(CROSS_FEATURE_IMPORT 등)이었으나, DDD 컨텍스트가 없는 프로젝트의
+    // 대체 그룹핑 축으로 RepoMapService(§16 컨텍스트별 export)도 공유하도록 공용화(2026-08-02, decisions/DECISIONS_ANALYSIS.md 참조).
+    public static String featureOf(String path) {
+        if (path == null) return null;
+        String p = path.replace("\\", "/");
+        int idx = p.indexOf("/features/");
+        int start;
+        if (idx >= 0) start = idx + "/features/".length();
+        else if (p.startsWith("features/")) start = "features/".length();
+        else return null;
+        int slash = p.indexOf('/', start);
+        if (slash <= start) return null;
+        return p.substring(start, slash);
+    }
 }
