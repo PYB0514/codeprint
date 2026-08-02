@@ -1,6 +1,7 @@
 // 그래프 조회 REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.graph.FeatureSpecService;
 import com.codeprint.application.graph.GraphCommandService;
 import com.codeprint.application.graph.GraphDiffService;
 import com.codeprint.application.graph.GraphFacade;
@@ -50,6 +51,7 @@ public class GraphController {
     private final GraphResponseAssembler graphResponseAssembler;
     private final RepoMapService repoMapService;
     private final RoleSpecService roleSpecService;
+    private final FeatureSpecService featureSpecService;
 
     // 프로젝트의 그래프 버전 목록을 최신순으로 조회
     @GetMapping("/api/projects/{projectId}/graphs")
@@ -173,6 +175,7 @@ public class GraphController {
             @RequestParam(defaultValue = "full") String level,
             @RequestParam(defaultValue = "folder") String grouping,
             @RequestParam(required = false) AiProvider aiRoleSpecProvider,
+            @RequestParam(required = false) AiProvider aiFeatureSpecProvider,
             @AuthenticationPrincipal User user) {
 
         graphFacade.getOwnedProject(projectId, user.getId());
@@ -185,9 +188,12 @@ public class GraphController {
                     List<Node> nodes = graphQueryService.getNodes(graph.getId()).stream()
                             .filter(n -> !n.isHidden()).toList();
                     String content = repoMapService.generate(nodes, level, grouping);
-                    // "역할 명세서"(레이어A) — 요청 시에만, 요청 범위 생성(DB 영구 저장 없음), BYOK 키 등록 시에만 동작
+                    // "역할 명세서"(레이어A)·"기능명세"(레이어B) — 요청 시에만, 요청 범위 생성(DB 영구 저장 없음), BYOK 키 등록 시에만 동작
                     if (aiRoleSpecProvider != null) {
                         content += roleSpecService.generateSection(projectId, graph.getId(), user.getId(), aiRoleSpecProvider);
+                    }
+                    if (aiFeatureSpecProvider != null) {
+                        content += featureSpecService.generateSection(graph.getId(), user.getId(), aiFeatureSpecProvider);
                     }
                     return ResponseEntity.ok(Map.of("content", content));
                 })

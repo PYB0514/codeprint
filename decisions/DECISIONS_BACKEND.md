@@ -2587,3 +2587,22 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결과.** 신규 테스트 2건(`RateLimitFilterTest`) green + 전체 스위트 green. `SECURITY_POLICY.md` 레이트리밋 표 동기화, "GET은 전부 미등록" 서술도 함께 정정.
 
 **PR 게이트 웹훅 플레이키니스 재관찰(2026-08-02).** 이 PR을 머지하는 과정에서 `codeprint/structure` 상태가 두 차례 `error`("구조 검사 실행 중 오류 발생")로 응답 — 1차는 콜드스타트(500) 패턴과 일치, 2차는 이미 프로덕션이 웜인 상태에서도 재현돼 순수 콜드스타트로만 설명되지 않음. 3차 재트리거(빈 커밋)에서 자연 해소. 근본 원인 미상 — `GATE_GAPS.md` [G-5]와 동일 계열이나 콜드스타트 단일 원인으로 완전히 설명 안 되는 잔여 플레이키니스로 별도 관찰 필요(재발 시 [G-5] 항목에 추가 기록).
+
+## 레이어B "기능명세" 구현 — 시리즈 완결 (2026-08-02, codeprint_158, PR4)
+
+**문제.** PR3(레이어A)에 이어 마지막 조각. 레이어A는 무주석 노드만 대상이라 이미 잘 정리된 코드에선 발동하지 않는데, "괜찮은 코드 구조 프로젝트도 이득 봐야 한다"는 사용자 요구가 레이어B의 존재 이유였음(개별 함수 주석이 다 있어도 "이 파일 여러 개가 합쳐서 무슨 기능을 하는가"라는 상위 추상화는 원천적으로 없음).
+
+**스코프 판정 — RepoMapService의 기존 컨텍스트 그룹핑을 별도로 재구현(공유는 안 함).** `RepoMapService.generateByContext`가 이미 `BoundedContextResolver.detectContextFirstContexts`+`functionContextOf`로 동일한 그룹핑을 하고 있었으나, 그 메서드는 private이고 MD 트리 렌더링과 결합돼 있어 그대로 재사용하기보다 `FeatureSpecService`에 동일 로직을 독립적으로 작성(§3 surgical changes — 이미 배포된 RepoMapService의 동작을 이번 PR을 위해 건드리지 않기 위함). 대신 PR2에서 이미 공용화해둔 `BoundedContextResolver.featureOf`를 DDD 컨텍스트 감지 실패 시 폴백으로 추가해, 적대적 검증에서 지적된 "React 피처슬라이스 프로젝트에서 레이어B가 발동 안 하는" 갭을 해소.
+
+**정보이득 가드(적대적 검증 필수 보완 반영).**
+1. 파일 1개짜리 컨텍스트는 스코프에서 제외(`MIN_FILES_PER_CONTEXT=2`) — 종합이 성립하지 않는 케이스.
+2. 프롬프트에 "파일별 주석을 그대로 나열하지 말고 데이터 흐름·책임 경계·외부 연동 관점에서 종합" 명시 — 단순 재나열 방지.
+3. LLM 입력은 함수 본문이 아니라 기존 주석+구조적 신호(API_ENDPOINT/DB_TABLE 노드 존재 여부)만 — 레이어A보다 페이로드 작게 유지.
+
+**A/B 교차배지.** `RoleSpecService.selectTargetNodes`를 `candidateTargetNodes`(상한 없는 순수 판정)+`selectTargetNodes`(LLM 호출용 상한 적용)로 분리하고 `selectTargetNodeIds`를 public으로 노출 — `FeatureSpecService`가 이를 재사용해 "이 컨텍스트에 레이어A 플래그 노드 N개 포함"을 LLM 호출 없이 순수 카운트로 계산. 새 탐지 로직 중복 없음.
+
+**API.** `GET /api/projects/{id}/graph/context-md`에 `aiFeatureSpecProvider` 파라미터 추가(레이어A의 `aiRoleSpecProvider`와 독립적으로 존재 가능하나, 프론트는 단일 "AI 컨텍스트 + AI 분석" 버튼에서 둘 다 함께 요청 — 메뉴 단순화).
+
+**검증.** `compileJava`/`npx tsc -b` 클린, 신규 단위테스트 7건(`FeatureSpecServiceTest`) green — 테스트 작성 중 Mockito "다른 mock을 아직 안 끝난 when() 안에서 스터빙" 함정(`thenReturn(List.of(fileNode(...)))`처럼 mock 생성을 인자로 인라인하면 안 됨)과 `getId()` 미스텁으로 `Set.of().contains(null)`이 NPE를 던져 catch에 삼켜지는 함정 둘 다 실제로 걸려 수정. 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5, CROSS_CONTEXT_IMPORT 0) 유지, 로컬 백엔드 재기동 `/actuator/health` UP.
+
+**"BYOK 기반 역할 명세서/기능명세(레이어A/B)" 시리즈 완결.** PR1(BYOK 인프라)→PR2(featureOf 공용화)→PR3(레이어A)→PR4(레이어B) 전부 완료.
