@@ -2646,3 +2646,13 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결정.** 두 서비스의 `generateSection` 진입점에서 노드·엣지 조회 직후 `.filter(n -> !n.isHidden())`/`.filter(e -> !e.isHidden())` 추가 — 기존 컨벤션(McpController 등)과 동일한 위치·방식으로 통일.
 
 **결과.** `compileJava` 클린, `RoleSpecServiceTest`·`FeatureSpecServiceTest`(Mockito 미스텁 `isHidden()`은 기본 `false`라 기존 케이스 영향 없음) 통과, 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인 불변.
+
+> ⚠️ **대체됨(정정) — 2026-08-02, 같은 codeprint_158 세션, PR #746.** 위 항목의 전제가 틀렸음이 독립 적대적 검증(신선한 컨텍스트 Agent)으로 드러나 되돌림. 아래 "역할 명세서/기능명세 hidden 필터 되돌림" 참조. 원문은 이력 보존용으로 남김.
+
+## 역할 명세서/기능명세 hidden 필터 되돌림 — 전제가 틀렸음을 독립 검증으로 확인 (2026-08-02, codeprint_158, PR #746)
+
+**문제.** 바로 위 항목("역할 명세서/기능명세가 사용자가 숨긴 노드까지 요약하던 갭 수정", PR #744)이 merge된 뒤, CLAUDE.md 표준 규칙("코드 변경 PR은 항상 독립 적대적 검증 거쳐 머지")을 이번 PR742~745 시리즈엔 적용하지 못했음을 뒤늦게 자각해 신선한 컨텍스트의 독립 에이전트로 소급 검증을 돌림 — 이 검증에서 PR #744의 전제 자체가 틀렸다는 CONFIRMED 결함이 나왔다. 직접 재확인(코드 grep+`exploreLocal`)한 결과: `Node.isHidden`/`Edge.isHidden`을 `true`로 만드는 백엔드 쓰기 경로가 프로덕션 코드 어디에도 없다 — `toggleHidden()` 호출부는 `NodeTest`/`EdgeTest`(도메인 단위 테스트) 둘뿐, 어떤 Controller에도 hide용 엔드포인트가 없다. "노드 예산"(함수 80개 초과 시 복잡도 허브만 표시)은 완전히 `GraphPage.tsx` 로컬 React 상태(`showAllNodes`/`hiddenNodeTypes`)일 뿐 백엔드 `isHidden` 컬럼과 무관하고, `CommunityController`의 `hiddenLayers`/`hiddenGroups`/`hiddenNodeNames`도 완전히 별개(게시글 스냅샷 필터, 도메인 `isHidden` 필드가 아님). 즉 `Node.isHidden()`/`Edge.isHidden()`은 오늘 기준 생성 시 `false`로 고정된 채 절대 안 바뀌는 죽은 필드라, PR #744가 추가한 `!isHidden()` 필터는 어떤 노드도 걸러내지 않는 no-op이었다.
+
+**결정.** `RoleSpecService.generateSection`·`FeatureSpecService.generateSection`의 필터를 되돌림. CLAUDE.md 규칙3("불가능한 시나리오에 대한 방어 코드 제거")과 정면으로 부딪히는 사례라, 해가 없다는 이유로 남겨두지 않고 원상복구.
+
+**결과.** `compileJava` 클린, 관련 유닛테스트 green. **더 큰 관찰(이번엔 조치 안 함, 범위 밖)**: `isHidden` 자체가 백엔드 전체에서 쓰기 경로 없는 죽은 필드일 가능성 — "노드 숨김" 기능이 애초에 서버 저장 없이 프론트 전용으로 재설계됐거나, 백엔드 hide API가 만들어지다 만 것으로 보인다. 실제 제거·정리는 별도 판단이 필요해 이번 정정 범위에 안 넣음.

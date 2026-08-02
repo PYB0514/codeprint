@@ -63,8 +63,8 @@ public class RoleSpecService {
             String repoUrl = projectAccessPort.findGithubRepoUrl(projectId).orElse(null);
             if (sha == null || repoUrl == null) return "";
 
-            List<Node> nodes = graphQueryService.getNodes(graphId).stream().filter(n -> !n.isHidden()).toList();
-            List<Edge> edges = graphQueryService.getEdges(graphId).stream().filter(e -> !e.isHidden()).toList();
+            List<Node> nodes = graphQueryService.getNodes(graphId);
+            List<Edge> edges = graphQueryService.getEdges(graphId);
             List<Node> targets = selectTargetNodes(nodes, graphId);
             if (targets.isEmpty()) return "";
 
