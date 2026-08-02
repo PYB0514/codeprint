@@ -2622,3 +2622,11 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결정.** 3개 서비스가 공유하는 `AiRestClients.create()` 헬퍼 신설(`SimpleClientHttpRequestFactory`, connectTimeout 10초·readTimeout 30초) — `GitHubApiClient`의 connectTimeout 값과 동일하게 맞추고, readTimeout은 LLM 완성 응답이 단순 API 호출보다 오래 걸릴 수 있어 별도로 30초 설정.
 
 **결과.** `compileJava` 클린, 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인 불변.
+
+## BYOK 키 등록 요청에 길이 상한 추가 (2026-08-02, codeprint_158)
+
+**문제.** BYOK 시리즈 완료 후 자체 재검토 중 발견. `UserAiKeyController.RegisterKeyRequest`의 `apiKey` 필드가 `@NotBlank`만 있고 길이 상한이 없었음 — CLAUDE.md 규칙2 "외부 입력값에 @Valid 검증"과 부분적으로만 부합. 인증된 사용자가 임의로 큰 문자열을 보내면 그대로 AES-GCM 암호화 후 DB에 저장됨(실제 오남용 시나리오는 낮은 위험이지만, 검증 원칙상 갖춰야 할 기본기).
+
+**결정.** `@Size(max = 300)` 추가 — 실제 Anthropic/OpenAI/Gemini 키는 전부 200자 미만이라 넉넉한 상한.
+
+**결과.** `compileJava` 클린, 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인 불변.
