@@ -1365,3 +1365,13 @@ const fetchGraph = useCallback(async () => {
 **수정.** 3곳 모두 상태 갱신(`setRevealedNodeIds`/`setSelectedNode`)을 먼저 실행하고 `fitView` 호출을 `setTimeout(..., 50)`으로 지연 — `GraphPage.tsx` 안에 이미 30곳 넘게 쓰이던 기존 패턴("state 반영 후 50ms 지연 fitView")과 동일하게 맞춤. React의 setState는 그 뒤에 오는 매크로태스크(setTimeout) 실행 전에 항상 커밋되므로, 50ms 시점엔 해당 노드가 이미 hidden=false로 반영돼 있음이 보장된다.
 
 **검증의 한계.** 이 샌드박스 브라우저 환경은 `document.hidden === true`(Browser pane이 실제로 렌더링되지 않는 상태 — 스크린샷도 "compositing 안 됨"으로 실패)라 `fitView`의 `duration` 기반 애니메이션(d3-zoom 트랜지션)이 아예 진행되지 않아 최종 카메라 transform을 시각적으로 확인할 수 없었다(반면 버튼 직접 클릭형 확대/축소는 애니메이션 없이 즉시 반영돼 정상 동작 확인됨 — 즉 이 환경 자체가 애니메이션을 못 그리는 것이지 앱 결함이 아님을 별도로 확인). 대신 DOM 레벨로 순서를 검증: reveal 클릭 후 700ms(50ms 지연보다 충분히 긴 시간) 뒤 대상 노드가 DOM에 나타나 있음을 재확인 — React state가 setTimeout 매크로태스크보다 먼저 커밋된다는 건 React 자체의 스케줄링 보장이라 이걸로 충분하다고 판단. 실사용자 환경(페이지가 실제로 보이는 상태)에서의 최종 육안 확인은 다음 세션 숙제로 남김.
+
+---
+
+## SettingsPage BYOK — `hasAiKey` 전역 boolean이 프로바이더별 등록 상태를 잘못 표시하던 버그 수정 (2026-08-02, codeprint_158)
+
+**문제.** BYOK 시리즈 완료 후 자체 재검토 중 발견(GraphPage.tsx는 이미 `providers[0]`로 정확히 구현돼 있었으나 SettingsPage.tsx만 이 버그가 있었음). `hasAiKey`가 프로바이더 구분 없는 단일 boolean이라, 예를 들어 Anthropic 키를 등록한 뒤 드롭다운을 OpenAI로 바꿔도 "등록됨" 배지·삭제 버튼이 그대로 남아있었다. 이 상태에서 삭제를 누르면 `DELETE /api/users/me/ai-key/OPENAI`(등록된 적 없어 실제로는 아무 효과 없음)가 나가면서도 화면엔 "삭제됨" 메시지가 뜬다 — 사용자는 Anthropic 키를 지웠다고 믿지만 실제로는 그대로 남아있어 계속 자기도 모르게 BYOK 요약 생성에 쓰이는 상황이 발생할 수 있었음.
+
+**결정.** `hasAiKey: boolean`을 `registeredProviders: string[]`로 교체(백엔드가 이미 GET 응답에 `providers` 배열을 반환하고 있었는데 프론트가 안 쓰고 있었음). 등록 성공 시 배열에 추가, 삭제 성공 시 배열에서 제거, "등록됨" 배지·삭제 버튼은 `registeredProviders.includes(현재 선택된 프로바이더)`로 파생.
+
+**검증의 한계.** `tsc -b` 클린 + 상태 전이 4곳(초기 조회·등록 성공·삭제 성공·드롭다운 전환) 전부 코드 추적으로 확인 + 기존 프론트 테스트(4건) green. 이 세션은 사용자가 자리에 없는 백그라운드 `/loop` 중이라 Claude in Chrome이 연결 안 돼(`tabs_context_mcp` 응답: extension unreachable) 실 로그인 상태의 브라우저 E2E는 이번엔 수행하지 못함 — CLAUDE.md 규칙4의 "조건부 UI는 true/false 둘 다 확인" 기준에는 못 미친다. 다음에 사용자가 직접 확인 가능한 시점에 설정 페이지에서 프로바이더 전환 시나리오 육안 확인 권장.
