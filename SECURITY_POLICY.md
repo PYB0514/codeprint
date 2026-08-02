@@ -191,6 +191,16 @@
 
 ---
 
+## Desktop(`watchLocal`) 코드 외부 전송 금지 (2026-08-02, codeprint_158)
+
+> **철학적 약속이 아니라 컴플라이언스급 규칙** — 기업 고객이 Desktop을 선택하는 이유 자체가 "코드가 로컬 밖으로 안 나간다"는 보장이다. `backend/build.gradle`의 `watchLocal` 태스크는 `classpath = sourceSets.main.runtimeClasspath`(백엔드 프로덕션 코드 전체와 동일 클래스패스)로 돌기 때문에, 컴파일러가 강제하는 경계가 없다 — 아래는 순수 관례(코드 리뷰 시 확인)로 지켜야 한다.
+
+- **`com.codeprint.tools.*`(`LocalWatcher`·`LocalAnalyzer`·`LocalGraphQuery`·`LocalDiff`·`LocalEdgeAuditor`) 패키지는 외부 네트워크 호출을 하는 어떤 서비스도 import·호출하지 않는다** — 특히 LLM 호출 서비스(`UserAiKeyService`, 향후 레이어A/B "역할 명세서"/"기능명세" 서비스) 전체.
+- 신규 `tools/` 파일을 추가하거나 기존 파일을 수정할 때, 위 패키지에서 `infrastructure.analysis.*`·`java.nio.*` 외의 새 import가 생기면 코드 리뷰에서 "이게 외부 네트워크를 호출하는가"를 반드시 확인한다.
+- 장기적으로 실제 Desktop(Electron) 배포판 착수 시 Gradle 멀티모듈 분리(`core` 모듈에 `tools/`+분석엔진, `web` 모듈에 LLM 서비스 등 격리)로 컴파일 타임 강제로 승격 — 지금은 위 관례 규칙만 적용(경위 `decisions/DECISIONS_BACKEND.md` "BYOK 기반 역할 명세서/기능명세" 참조).
+
+---
+
 ## 개발 체크리스트 (커밋 전 확인)
 
 ```

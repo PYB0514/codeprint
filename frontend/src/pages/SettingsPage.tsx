@@ -18,6 +18,12 @@ export default function SettingsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleteLoading, setDeleteLoading] = useState(false)
 
+  const [hasAiKey, setHasAiKey] = useState(false)
+  const [aiProvider, setAiProvider] = useState('ANTHROPIC')
+  const [aiKeyInput, setAiKeyInput] = useState('')
+  const [aiKeyMsg, setAiKeyMsg] = useState<string | null>(null)
+  const [aiKeyLoading, setAiKeyLoading] = useState(false)
+
   useEffect(() => {
     axios.get<{ avatarUrl?: string | null; graphBgUrl?: string | null }>('/api/auth/me')
       .then((r) => {
@@ -25,7 +31,42 @@ export default function SettingsPage() {
         setBgUrl(r.data.graphBgUrl ?? null)
       })
       .catch(() => navigate('/', { replace: true }))
+    axios.get<{ hasKey: boolean }>('/api/users/me/ai-key')
+      .then((r) => setHasAiKey(r.data.hasKey))
+      .catch(() => {})
   }, [navigate])
+
+  // BYOK 키 등록/회전
+  const registerAiKey = async () => {
+    if (!aiKeyInput.trim()) return
+    setAiKeyLoading(true)
+    try {
+      await axios.put('/api/users/me/ai-key', { provider: aiProvider, apiKey: aiKeyInput })
+      setHasAiKey(true)
+      setAiKeyInput('')
+      setAiKeyMsg(t('settings.aiKey.saved'))
+    } catch {
+      setAiKeyMsg(t('settings.aiKey.saveFailed'))
+    } finally {
+      setAiKeyLoading(false)
+      setTimeout(() => setAiKeyMsg(null), 3000)
+    }
+  }
+
+  // BYOK 키 삭제
+  const deleteAiKey = async () => {
+    setAiKeyLoading(true)
+    try {
+      await axios.delete(`/api/users/me/ai-key/${aiProvider}`)
+      setHasAiKey(false)
+      setAiKeyMsg(t('settings.aiKey.deleted'))
+    } catch {
+      setAiKeyMsg(t('settings.aiKey.deleteFailed'))
+    } finally {
+      setAiKeyLoading(false)
+      setTimeout(() => setAiKeyMsg(null), 3000)
+    }
+  }
 
   // 이미지 업로드 공통 처리
   const uploadImage = async (file: File, endpoint: string, setter: (url: string) => void) => {
@@ -134,6 +175,50 @@ export default function SettingsPage() {
             </div>
 
           </div>
+        </section>
+
+        {/* BYOK AI 키 */}
+        <section className="mt-8 border border-gray-800 rounded-xl p-5">
+          <h2 className="text-sm font-medium text-gray-300 mb-1">{t('settings.aiKey.heading')}</h2>
+          <p className="text-xs text-gray-500 mb-4">{t('settings.aiKey.desc')}</p>
+          {aiKeyMsg && <p className="text-xs text-green-400 mb-3">{aiKeyMsg}</p>}
+          <div className="flex gap-2 items-center">
+            <select
+              value={aiProvider}
+              onChange={(e) => setAiProvider(e.target.value)}
+              className="bg-gray-900 text-white text-xs px-2 py-2 rounded border border-gray-700 focus:outline-none focus:border-blue-700"
+            >
+              <option value="ANTHROPIC">Anthropic</option>
+              <option value="OPENAI">OpenAI</option>
+              <option value="GEMINI">Gemini</option>
+            </select>
+            <input
+              type="password"
+              value={aiKeyInput}
+              onChange={(e) => setAiKeyInput(e.target.value)}
+              placeholder={t('settings.aiKey.keyPlaceholder')}
+              className="flex-1 bg-gray-900 text-white text-xs px-3 py-2 rounded border border-gray-700 focus:outline-none focus:border-blue-700 placeholder-gray-600"
+            />
+            <button
+              onClick={registerAiKey}
+              disabled={!aiKeyInput.trim() || aiKeyLoading}
+              className="text-xs bg-blue-700 text-white font-medium px-4 py-2 rounded hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {t('settings.aiKey.registerButton')}
+            </button>
+          </div>
+          {hasAiKey && (
+            <div className="flex items-center gap-2 mt-3">
+              <span className="text-xs text-green-500">{t('settings.aiKey.registeredLabel')}</span>
+              <button
+                onClick={deleteAiKey}
+                disabled={aiKeyLoading}
+                className="text-xs text-red-400 hover:text-red-300 disabled:opacity-40"
+              >
+                {t('settings.aiKey.deleteButton')}
+              </button>
+            </div>
+          )}
         </section>
 
         {/* 계정 삭제 */}
