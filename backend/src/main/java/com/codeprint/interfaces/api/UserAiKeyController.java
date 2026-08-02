@@ -7,6 +7,7 @@ import com.codeprint.domain.user.User;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -47,6 +48,6 @@ public class UserAiKeyController {
         return ResponseEntity.noContent().build();
     }
 
-    // 키 등록 요청 DTO
-    public record RegisterKeyRequest(@NotNull AiProvider provider, @NotBlank String apiKey) {}
+    // 키 등록 요청 DTO — 실제 제공자 키는 전부 200자 미만이라 300자를 상한으로 넉넉히 설정(암호화 후 DB 저장되는 임의 크기 문자열 방지)
+    public record RegisterKeyRequest(@NotNull AiProvider provider, @NotBlank @Size(max = 300) String apiKey) {}
 }
