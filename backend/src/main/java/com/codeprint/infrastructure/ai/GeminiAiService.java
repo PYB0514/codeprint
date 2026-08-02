@@ -34,8 +34,11 @@ public class GeminiAiService implements AiService {
                 )
         );
         try {
+            // API 키를 URL 쿼리 파라미터가 아니라 헤더로 전달 — 쿼리 파라미터는 RestClient 예외 메시지·프록시
+            // 로그 등에 URI 전체가 노출될 수 있어(로그 warn에 예외를 그대로 남기는 호출부가 있음) 헤더가 더 안전
             String response = restClient.post()
-                    .uri(API_URL + "?key=" + apiKey)
+                    .uri(API_URL)
+                    .header("x-goog-api-key", apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .retrieve()
