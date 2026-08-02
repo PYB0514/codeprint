@@ -31,6 +31,7 @@
 - `GET /projects/{id}/graphs` (own) — 버전 목록
 - `GET /projects/{id}/graph` (own) — 현재 그래프(suppress 반영)
 - `GET /share/{projectId}/graph` (**public**, 5분 캐시) — 공개 그래프
+- `GET /projects/{id}/graph/context-md` (own) — AI 컨텍스트 MD 내보내기(level/grouping). `aiRoleSpecProvider`/`aiFeatureSpecProvider` 지정 시 BYOK로 레이어A(무주석 함수 역할 요약)·레이어B(컨텍스트별 기능명세)를 요청 범위에서만 생성해 별도 섹션으로 추가(서버 미저장)
 - `GET /projects/{id}/diff` (own) — 두 버전 비교
 - `PUT`/`DELETE /projects/{id}/graphs/{graphId}/pin` (own) — 슬롯 1~5 고정
 - `PUT /graphs/{graphId}/nodes/{nodeId}/annotation|position` (own)
@@ -64,6 +65,12 @@
 
 ### 이미지 업로드 (`/api/attachments`)
 - `POST /presign` (auth) — S3 서명 URL. JPEG/PNG/GIF/WebP만, 최대 10MB, 파일명 255자 이하, path traversal 차단.
+
+### AI 키(BYOK) (`/api/users/me/ai-key`, auth)
+- `GET` — 등록된 제공자 목록(`{hasKey, providers}`, 평문 키 미포함)
+- `PUT` — 신규 등록/회전(`{provider, apiKey}`, AES-GCM 암호화 저장)
+- `DELETE /{provider}` — 삭제
+- 등록한 키는 사용자 본인의 그래프 조회(`context-md`)에서만, 요청 시점에만 사용됨(서버에 별도 저장·재사용 없음)
 
 ### 메시지/알림 (`/api/messages`, `/api/notifications`)
 - 받은편지함·스레드·전송(최대 1000자)·읽음처리, 알림 목록·읽음처리
@@ -140,3 +147,4 @@ Java · Python · TypeScript/JavaScript · Go · Rust · C · C++ · C# · PHP �
 - 그래프 조립: `backend/.../application/graph/GraphBuilder.java`
 - 프론트 그래프 페이지: `frontend/src/pages/GraphPage.tsx`(소유자)·`ShareGraphPage.tsx`(공개)·`CommunityPostGraphPage.tsx`(커뮤니티 스냅샷)
 - 흐름재생 공유 모듈: `frontend/src/utils/flowPlayback.ts`·`hooks/useFlowPlayback.ts`·`components/FlowPlaybackPanel.tsx`
+- BYOK AI 역할명세서/기능명세: `backend/.../application/graph/RoleSpecService.java`(레이어A)·`FeatureSpecService.java`(레이어B)·`infrastructure/ai/{Claude,OpenAi,Gemini}AiService.java`·`application/user/UserAiKeyService.java`
