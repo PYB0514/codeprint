@@ -18,11 +18,13 @@ export default function SettingsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleteLoading, setDeleteLoading] = useState(false)
 
-  const [hasAiKey, setHasAiKey] = useState(false)
+  // 프로바이더별 등록 여부 — 단일 boolean이면 드롭다운 전환 시 "등록됨" 배지가 실제와 어긋남(2026-08-02 발견)
+  const [registeredProviders, setRegisteredProviders] = useState<string[]>([])
   const [aiProvider, setAiProvider] = useState('ANTHROPIC')
   const [aiKeyInput, setAiKeyInput] = useState('')
   const [aiKeyMsg, setAiKeyMsg] = useState<string | null>(null)
   const [aiKeyLoading, setAiKeyLoading] = useState(false)
+  const isCurrentProviderRegistered = registeredProviders.includes(aiProvider)
 
   useEffect(() => {
     axios.get<{ avatarUrl?: string | null; graphBgUrl?: string | null }>('/api/auth/me')
@@ -31,8 +33,8 @@ export default function SettingsPage() {
         setBgUrl(r.data.graphBgUrl ?? null)
       })
       .catch(() => navigate('/', { replace: true }))
-    axios.get<{ hasKey: boolean }>('/api/users/me/ai-key')
-      .then((r) => setHasAiKey(r.data.hasKey))
+    axios.get<{ providers: string[] }>('/api/users/me/ai-key')
+      .then((r) => setRegisteredProviders(r.data.providers))
       .catch(() => {})
   }, [navigate])
 
@@ -42,7 +44,7 @@ export default function SettingsPage() {
     setAiKeyLoading(true)
     try {
       await axios.put('/api/users/me/ai-key', { provider: aiProvider, apiKey: aiKeyInput })
-      setHasAiKey(true)
+      setRegisteredProviders((prev) => prev.includes(aiProvider) ? prev : [...prev, aiProvider])
       setAiKeyInput('')
       setAiKeyMsg(t('settings.aiKey.saved'))
     } catch {
@@ -53,12 +55,12 @@ export default function SettingsPage() {
     }
   }
 
-  // BYOK 키 삭제
+  // BYOK 키 삭제 — 현재 선택된 프로바이더만 대상
   const deleteAiKey = async () => {
     setAiKeyLoading(true)
     try {
       await axios.delete(`/api/users/me/ai-key/${aiProvider}`)
-      setHasAiKey(false)
+      setRegisteredProviders((prev) => prev.filter((p) => p !== aiProvider))
       setAiKeyMsg(t('settings.aiKey.deleted'))
     } catch {
       setAiKeyMsg(t('settings.aiKey.deleteFailed'))
@@ -207,7 +209,7 @@ export default function SettingsPage() {
               {t('settings.aiKey.registerButton')}
             </button>
           </div>
-          {hasAiKey && (
+          {isCurrentProviderRegistered && (
             <div className="flex items-center gap-2 mt-3">
               <span className="text-xs text-green-500">{t('settings.aiKey.registeredLabel')}</span>
               <button
