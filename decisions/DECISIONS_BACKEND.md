@@ -2606,3 +2606,11 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `compileJava`/`npx tsc -b` 클린, 신규 단위테스트 7건(`FeatureSpecServiceTest`) green — 테스트 작성 중 Mockito "다른 mock을 아직 안 끝난 when() 안에서 스터빙" 함정(`thenReturn(List.of(fileNode(...)))`처럼 mock 생성을 인자로 인라인하면 안 됨)과 `getId()` 미스텁으로 `Set.of().contains(null)`이 NPE를 던져 catch에 삼켜지는 함정 둘 다 실제로 걸려 수정. 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5, CROSS_CONTEXT_IMPORT 0) 유지, 로컬 백엔드 재기동 `/actuator/health` UP.
 
 **"BYOK 기반 역할 명세서/기능명세(레이어A/B)" 시리즈 완결.** PR1(BYOK 인프라)→PR2(featureOf 공용화)→PR3(레이어A)→PR4(레이어B) 전부 완료.
+
+## Gemini API 키 — URL 쿼리 파라미터에서 헤더로 이동 (2026-08-02, codeprint_158)
+
+**문제.** BYOK 시리즈(PR1~4) 완료 후 자체 보안 재검토 중 발견. `GeminiAiService`가 API 키를 `?key=apiKey` URL 쿼리 파라미터로 전달하고 있었음(2026-07-12 삭제 전 원본 코드를 그대로 복원한 부분이라 이번 세션에서 새로 만든 결함은 아님). `RoleSpecService`/`FeatureSpecService`가 실패 시 `log.warn(..., e)`로 예외 객체를 그대로 로깅하는데, Spring `RestClient`의 예외 메시지에 요청 URI가 포함될 수 있어(버전에 따라 다름, 확정 재현은 안 했으나 방어적으로 판단) 평문 API 키가 애플리케이션 로그에 남을 위험이 있음.
+
+**결정.** URL 쿼리 파라미터 대신 `x-goog-api-key` HTTP 헤더로 전달하도록 변경(Google Generative Language API가 공식 지원하는 대체 인증 방식). 헤더는 URL과 달리 예외 메시지·프록시 접근 로그·브라우저 히스토리에 노출되는 경로가 원천적으로 적어 OWASP 권고와도 일치.
+
+**결과.** `compileJava` 클린, 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인 불변. 이 클래스는 기존 컨벤션상(`GitHubApiClient`도 동일) 실제 네트워크 호출은 유닛테스트 대상이 아니라 별도 테스트 추가 안 함.
