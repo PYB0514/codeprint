@@ -2,7 +2,7 @@
 package com.codeprint.interfaces.api;
 
 import com.codeprint.application.user.UserAiKeyService;
-import com.codeprint.domain.user.AiProvider;
+import com.codeprint.shared.ai.AiProvider;
 import com.codeprint.domain.user.User;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -21,10 +22,11 @@ public class UserAiKeyController {
 
     private final UserAiKeyService userAiKeyService;
 
-    // 등록 여부 조회(제공자 무관) — 평문 키는 반환하지 않음
+    // 등록 상태 조회 — 등록된 제공자 목록(평문 키는 반환하지 않음)
     @GetMapping
-    public ResponseEntity<Map<String, Boolean>> status(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(Map.of("hasKey", userAiKeyService.hasAnyKey(user.getId())));
+    public ResponseEntity<Map<String, Object>> status(@AuthenticationPrincipal User user) {
+        List<AiProvider> providers = userAiKeyService.getRegisteredProviders(user.getId());
+        return ResponseEntity.ok(Map.of("hasKey", !providers.isEmpty(), "providers", providers));
     }
 
     // 신규 등록 또는 회전

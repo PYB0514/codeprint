@@ -8,6 +8,7 @@ import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.application.graph.GraphWarningService;
 import com.codeprint.application.graph.NodeStyleService;
 import com.codeprint.application.graph.RepoMapService;
+import com.codeprint.application.graph.RoleSpecService;
 import com.codeprint.application.graph.WarningSuppressionService;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.user.User;
@@ -38,6 +39,7 @@ class GraphControllerOwnershipTest {
     @Mock private NodeStyleService nodeStyleService;
     @Mock private GraphResponseAssembler graphResponseAssembler;
     @Mock private RepoMapService repoMapService;
+    @Mock private RoleSpecService roleSpecService;
 
     private GraphController controller;
 
@@ -50,7 +52,7 @@ class GraphControllerOwnershipTest {
         controller = new GraphController(
                 graphQueryService, graphCommandService, graphFacade, graphDiffService,
                 graphWarningService, warningSuppressionService, nodeStyleService,
-                graphResponseAssembler, repoMapService);
+                graphResponseAssembler, repoMapService, roleSpecService);
         user = mock(User.class);
         lenient().when(user.getId()).thenReturn(userId);
     }
@@ -103,7 +105,7 @@ class GraphControllerOwnershipTest {
         doThrow(new IllegalStateException("Not authorized to access this project"))
                 .when(graphFacade).getOwnedProject(projectId, userId);
 
-        assertThatThrownBy(() -> controller.getContextMd(projectId, null, "full", "folder", user))
+        assertThatThrownBy(() -> controller.getContextMd(projectId, null, "full", "folder", null, user))
                 .isInstanceOf(IllegalStateException.class);
 
         verify(graphQueryService, never()).findLatestByProject(any());
@@ -119,7 +121,7 @@ class GraphControllerOwnershipTest {
         when(foreignGraph.getProjectId()).thenReturn(UUID.randomUUID()); // 다른 프로젝트
         when(graphQueryService.findById(foreignGraphId)).thenReturn(Optional.of(foreignGraph));
 
-        var response = controller.getContextMd(projectId, foreignGraphId, "full", "folder", user);
+        var response = controller.getContextMd(projectId, foreignGraphId, "full", "folder", null, user);
 
         assertThat(response.getStatusCode().value()).isEqualTo(404);
         verify(repoMapService, never()).generate(any(), any(), any());

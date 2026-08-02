@@ -310,6 +310,8 @@ function GraphPageInner() {
   const [showTeamChat, setShowTeamChat] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportingContextMd, setExportingContextMd] = useState(false)
+  // BYOK 등록 제공자 — "역할 명세서" AI 요약 내보내기 옵션 활성화 여부 판단용(2026-08-02, 레이어A)
+  const [aiKeyProvider, setAiKeyProvider] = useState<string | null>(null)
   const [showVersions, setShowVersions] = useState(false)
   const [versions, setVersions] = useState<{ graphId: string; createdAt: string; branch: string; pinnedSlot: number | null }[]>([])
   const [showRetentionInfo, setShowRetentionInfo] = useState(false)
@@ -482,6 +484,14 @@ function GraphPageInner() {
       .then(res => setReportedFingerprints(new Set(res.data)))
       .catch(() => {})
   }, [projectId, currentUserId])
+
+  // BYOK 등록 제공자 조회 — "역할 명세서" AI 요약 내보내기 옵션 활성화 여부(2026-08-02, 레이어A)
+  useEffect(() => {
+    if (!currentUserId) return
+    axios.get<{ providers: string[] }>('/api/users/me/ai-key')
+      .then(res => setAiKeyProvider(res.data.providers[0] ?? null))
+      .catch(() => {})
+  }, [currentUserId])
 
   // 오탐 신고 — 서버에 저장(멱등) 후 버튼 상태를 "신고됨"으로 갱신. graphId/message/file/line/col은 재현 페이로드용(GitHub 공개 레포면 코드 스니펫도 서버에서 최선노력 확보)
   const handleReportFp = useCallback(async (w: { type: string; fingerprint?: string; message?: string; file?: string; line?: number; col?: number; endCol?: number }) => {
@@ -1101,12 +1111,14 @@ function GraphPageInner() {
   // 전체 그래프를 원본 크기 PNG로 다운로드
   // "AI 컨텍스트 (.md)" 다운로드 — 생성은 백엔드(RepoMapService)가 담당, 프론트는 결과를 받아 파일로 저장만 한다
   // grouping="context"는 레이어드 폴더에 흩어진 같은 기능 파일을 바운디드 컨텍스트별로 묶어 보여준다(감지 실패 시 폴더 구조로 자동 폴백)
-  const handleDownloadContextMd = useCallback(async (level: 'full' | 'summary' = 'full', grouping: 'folder' | 'context' = 'folder') => {
+  const handleDownloadContextMd = useCallback(async (level: 'full' | 'summary' = 'full', grouping: 'folder' | 'context' = 'folder', includeAiRoleSpec = false) => {
     if (!projectId) return
     setExportingContextMd(true)
     try {
       const params = new URLSearchParams({ level, grouping })
       if (graphId) params.set('graphId', graphId)
+      // 역할 명세서(레이어A) — BYOK 등록된 제공자가 있을 때만, 요청 범위에서만 생성(서버에 저장 안 됨)
+      if (includeAiRoleSpec && aiKeyProvider) params.set('aiRoleSpecProvider', aiKeyProvider)
       const url = `/api/projects/${projectId}/graph/context-md?${params.toString()}`
       const res = await axios.get<{ content: string }>(url)
       const md = res.data.content
@@ -1122,7 +1134,7 @@ function GraphPageInner() {
     } finally {
       setExportingContextMd(false)
     }
-  }, [projectId, graphId])
+  }, [projectId, graphId, aiKeyProvider])
 
   const handleExportImage = useCallback(async () => {
     const flowEl = flowRef.current?.querySelector('.react-flow__viewport') as HTMLElement | null
@@ -1895,6 +1907,16 @@ function GraphPageInner() {
               >
                 {exportingContextMd ? t('graphPage.generating') : t('graphPage.exportContextByDomain')}
               </button>
+              {aiKeyProvider && (
+                <button
+                  onClick={() => { handleDownloadContextMd('full', 'folder', true); setOpenToolbarMenu(null) }}
+                  disabled={exportingContextMd || rawNodes.length === 0}
+                  title={t('graphPage.exportWithAiRoleSpecTitle')}
+                  className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {exportingContextMd ? t('graphPage.generating') : t('graphPage.exportWithAiRoleSpec')}
+                </button>
+              )}
               <button
                 onClick={() => { handleExportImage(); setOpenToolbarMenu(null) }}
                 disabled={exporting || rawNodes.length === 0}

@@ -1,13 +1,14 @@
 // UserAiKeyRepository 구현체
 package com.codeprint.infrastructure.persistence.user;
 
-import com.codeprint.domain.user.AiProvider;
+import com.codeprint.shared.ai.AiProvider;
 import com.codeprint.domain.user.UserAiKey;
 import com.codeprint.domain.user.UserAiKeyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,6 +26,11 @@ public class UserAiKeyRepositoryImpl implements UserAiKeyRepository {
     @Override
     public boolean existsByUserId(UUID userId) {
         return jpa.existsByUserId(userId);
+    }
+
+    @Override
+    public List<AiProvider> findProvidersByUserId(UUID userId) {
+        return jpa.findByUserId(userId).stream().map(UserAiKey::getProvider).toList();
     }
 
     @Override
