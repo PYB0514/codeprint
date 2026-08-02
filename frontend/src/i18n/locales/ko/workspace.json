@@ -9,6 +9,19 @@
     "uploadFailed": "업로드 실패. 파일 형식과 크기(5MB 이하)를 확인해주세요.",
     "imageDeleted": "삭제됐습니다.",
     "imageDeleteFailed": "삭제 실패.",
+    "aiKey": {
+      "heading": "AI 컨텍스트 보강 (BYOK)",
+      "desc": "본인의 LLM API 키를 등록하면, AI 컨텍스트 내보내기에서 주석 없는 코드에 대한 역할 요약을 생성할 수 있습니다. 키는 암호화되어 저장되며, 요청 시에만 본인의 계정으로 직접 LLM 호출에 사용됩니다.",
+      "providerLabel": "제공자",
+      "keyPlaceholder": "API 키 입력",
+      "registerButton": "등록",
+      "registeredLabel": "등록됨",
+      "deleteButton": "삭제",
+      "saved": "키가 저장됐습니다.",
+      "saveFailed": "저장에 실패했습니다.",
+      "deleted": "키가 삭제됐습니다.",
+      "deleteFailed": "삭제에 실패했습니다."
+    },
     "deleteAccount": {
       "heading": "계정 삭제",
       "descLine1": "계정을 삭제하면 모든 프로젝트, 그래프, 게시글, 댓글이 즉시 영구 삭제됩니다.",

@@ -9,6 +9,19 @@
     "uploadFailed": "Upload failed. Please check the file type and size (5MB max).",
     "imageDeleted": "Deleted.",
     "imageDeleteFailed": "Delete failed.",
+    "aiKey": {
+      "heading": "AI Context Enrichment (BYOK)",
+      "desc": "Register your own LLM API key to generate role summaries for uncommented code in AI context exports. Keys are stored encrypted and are only used, on request, to call the LLM directly under your own account.",
+      "providerLabel": "Provider",
+      "keyPlaceholder": "Enter API key",
+      "registerButton": "Register",
+      "registeredLabel": "Registered",
+      "deleteButton": "Delete",
+      "saved": "Key saved.",
+      "saveFailed": "Failed to save.",
+      "deleted": "Key deleted.",
+      "deleteFailed": "Failed to delete."
+    },
     "deleteAccount": {
       "heading": "Delete Account",
       "descLine1": "Deleting your account permanently removes all projects, graphs, posts, and comments immediately.",
