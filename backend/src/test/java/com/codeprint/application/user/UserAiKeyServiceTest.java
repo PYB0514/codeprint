@@ -1,7 +1,7 @@
 // UserAiKeyService 단위 테스트 — 신규 등록/회전 분기, 삭제, 상태조회 회귀 방지
 package com.codeprint.application.user;
 
-import com.codeprint.domain.user.AiProvider;
+import com.codeprint.shared.ai.AiProvider;
 import com.codeprint.domain.user.UserAiKey;
 import com.codeprint.domain.user.UserAiKeyRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,6 +79,15 @@ class UserAiKeyServiceTest {
         when(userAiKeyRepository.existsByUserId(userId)).thenReturn(true);
 
         assertThat(service.hasAnyKey(userId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("getRegisteredProviders — 등록된 제공자 목록을 그대로 반환")
+    void getRegisteredProviders_delegatesToRepository() {
+        UUID userId = UUID.randomUUID();
+        when(userAiKeyRepository.findProvidersByUserId(userId)).thenReturn(java.util.List.of(AiProvider.ANTHROPIC));
+
+        assertThat(service.getRegisteredProviders(userId)).containsExactly(AiProvider.ANTHROPIC);
     }
 
     // 삭제는 리포지토리에 위임한다

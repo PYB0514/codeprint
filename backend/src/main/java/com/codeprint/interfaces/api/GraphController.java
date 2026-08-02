@@ -8,10 +8,12 @@ import com.codeprint.application.graph.GraphQueryService;
 import com.codeprint.application.graph.GraphWarningService;
 import com.codeprint.application.graph.NodeStyleService;
 import com.codeprint.application.graph.RepoMapService;
+import com.codeprint.application.graph.RoleSpecService;
 import com.codeprint.application.graph.WarningSuppressionService;
 import com.codeprint.domain.graph.Edge;
 import com.codeprint.domain.graph.Graph;
 import com.codeprint.domain.graph.Node;
+import com.codeprint.shared.ai.AiProvider;
 import com.codeprint.domain.user.User;
 import com.codeprint.shared.gate.GatePolicy;
 import jakarta.validation.Valid;
@@ -47,6 +49,7 @@ public class GraphController {
     private final NodeStyleService nodeStyleService;
     private final GraphResponseAssembler graphResponseAssembler;
     private final RepoMapService repoMapService;
+    private final RoleSpecService roleSpecService;
 
     // 프로젝트의 그래프 버전 목록을 최신순으로 조회
     @GetMapping("/api/projects/{projectId}/graphs")
@@ -169,6 +172,7 @@ public class GraphController {
             @RequestParam(required = false) UUID graphId,
             @RequestParam(defaultValue = "full") String level,
             @RequestParam(defaultValue = "folder") String grouping,
+            @RequestParam(required = false) AiProvider aiRoleSpecProvider,
             @AuthenticationPrincipal User user) {
 
         graphFacade.getOwnedProject(projectId, user.getId());
@@ -180,7 +184,12 @@ public class GraphController {
         return graphOpt.map(graph -> {
                     List<Node> nodes = graphQueryService.getNodes(graph.getId()).stream()
                             .filter(n -> !n.isHidden()).toList();
-                    return ResponseEntity.ok(Map.of("content", repoMapService.generate(nodes, level, grouping)));
+                    String content = repoMapService.generate(nodes, level, grouping);
+                    // "역할 명세서"(레이어A) — 요청 시에만, 요청 범위 생성(DB 영구 저장 없음), BYOK 키 등록 시에만 동작
+                    if (aiRoleSpecProvider != null) {
+                        content += roleSpecService.generateSection(projectId, graph.getId(), user.getId(), aiRoleSpecProvider);
+                    }
+                    return ResponseEntity.ok(Map.of("content", content));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

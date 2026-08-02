@@ -1,6 +1,7 @@
 // BYOK(사용자 소유 LLM API 키) 도메인 엔티티
 package com.codeprint.domain.user;
 
+import com.codeprint.shared.ai.AiProvider;
 import com.codeprint.shared.jpa.AesEncryptionConverter;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
