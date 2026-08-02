@@ -2525,3 +2525,11 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** TDD로 `AdminDigestServiceTest`에 3건 재정비 — 기존 "저장 실패 시 복구" 테스트를 `saveAndFlush` 스텁으로 갱신(유니크 위반이 아닌 일반 오류로 실패하는 경우와 구분), 신규 "동시 실행 레이스로 유니크 위반 시 재조회해 UPDATE로 전환하고 레이트리밋은 복구하지 않는다"(consecutive stubbing으로 `findByStatDate`가 1차 호출엔 빈 값, 재조회 시엔 경쟁에서 이긴 다른 스레드의 행을 반환하도록 재현) — 전부 green. 백엔드 전체 스위트(통합 테스트 포함) green, `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변, 로컬 백엔드 실제 재기동 → `/actuator/health` UP.
 
 **한계·다음.** 이 패턴(유니크 위반 시 재조회 후 UPDATE)은 "낙관적 재시도"라 아주 드물게 두 스레드가 동시에 재시도 경로에 진입하면 이론적으로 한 단계 더 깊은 레이스가 남을 수 있으나, `synchronized`가 이미 대부분의 동시 진입을 막아둔 상태에서의 잔여 잔여 케이스라 실질적 위험은 무시할 수준으로 판단, 별도 재귀 재시도는 추가하지 않음.
+
+## 그래프 조회 GET 엔드포인트 4종 레이트리밋 신설 (2026-08-02, codeprint_158)
+
+**문제.** BYOK 레이어A/B 착수 준비 중 `RateLimitFilter.rules` 전수 확인 결과, 등록된 규칙이 전부 POST 전용이라 그래프 조회 GET 엔드포인트(`getGraph`·`getPublicGraph`·`getContextMd`·`getGraphDiff`)엔 레이트리밋이 전혀 없었음이 드러남. `getGraph`/`getContextMd`는 `GraphQueryService`의 `@Cacheable("graphWarnings")` 캐시가 미스일 때 `detect()` 전체 재계산(대형 그래프 기준 초 단위)까지 유발할 수 있고, `getPublicGraph`(`/api/share/{id}/graph`)는 **비인증**이라 로그인 없이 누구나 반복 호출 가능 — `SECURITY_POLICY.md`의 기존 DDoS 감사(분석 파이프라인·WebSocket·웹훅)에서 빠져있던 사각지대.
+
+**결정.** `RateLimitFilter.rules`에 GET 규칙 4종 추가(`AntPathMatcher`+`RateLimitRule.method()`가 GET도 정상 매칭함을 테스트로 확인). 비인증 공개 엔드포인트(`getPublicGraph`)만 20회/분으로 더 낮게, 나머지는 30회/분(인증 그래프 조회) 또는 20회/분(diff·context-md, 상대적으로 무거운 연산). `context-md`는 지금은 LLM 호출이 없어 남용 표면이 없지만, 후속 PR3(레이어A)에서 LLM 호출이 붙을 걸 대비해 선제 등록.
+
+**결과.** 신규 테스트 2건(`RateLimitFilterTest`) green + 전체 스위트 green. `SECURITY_POLICY.md` 레이트리밋 표 동기화, "GET은 전부 미등록" 서술도 함께 정정.

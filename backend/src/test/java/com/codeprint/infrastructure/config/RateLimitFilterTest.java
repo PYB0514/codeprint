@@ -247,4 +247,40 @@ class RateLimitFilterTest {
         verify(response).setStatus(429);
         verify(chain, times(5)).doFilter(request, response);
     }
+
+    @Test
+    @DisplayName("비인증 공개 그래프 조회(getPublicGraph)는 분당 20회 — 로그인 없이 누구나 호출 가능해 더 낮은 한도(2026-08-02 발견)")
+    void publicGraphReadCategory_limitedToTwentyPerMinute() throws Exception {
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getRequestURI()).thenReturn("/api/share/abc-123/graph");
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("12.12.12.12");
+
+        for (int i = 0; i < 20; i++) {
+            filter.doFilter(request, response, chain);
+        }
+        verify(chain, times(20)).doFilter(request, response);
+
+        filter.doFilter(request, response, chain); // 21번째 — 초과
+        verify(response).setStatus(429);
+        verify(chain, times(20)).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("인증된 프로젝트 그래프 조회는 분당 30회 — detect() 캐시미스 시 재계산 비용 방어(2026-08-02 발견)")
+    void projectGraphReadCategory_limitedToThirtyPerMinute() throws Exception {
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getRequestURI()).thenReturn("/api/projects/abc-123/graph");
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("13.13.13.13");
+
+        for (int i = 0; i < 30; i++) {
+            filter.doFilter(request, response, chain);
+        }
+        verify(chain, times(30)).doFilter(request, response);
+
+        filter.doFilter(request, response, chain); // 31번째 — 초과
+        verify(response).setStatus(429);
+        verify(chain, times(30)).doFilter(request, response);
+    }
 }
