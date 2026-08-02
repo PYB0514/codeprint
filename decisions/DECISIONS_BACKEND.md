@@ -2656,3 +2656,11 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결정.** `RoleSpecService.generateSection`·`FeatureSpecService.generateSection`의 필터를 되돌림. CLAUDE.md 규칙3("불가능한 시나리오에 대한 방어 코드 제거")과 정면으로 부딪히는 사례라, 해가 없다는 이유로 남겨두지 않고 원상복구.
 
 **결과.** `compileJava` 클린, 관련 유닛테스트 green. **더 큰 관찰(이번엔 조치 안 함, 범위 밖)**: `isHidden` 자체가 백엔드 전체에서 쓰기 경로 없는 죽은 필드일 가능성 — "노드 숨김" 기능이 애초에 서버 저장 없이 프론트 전용으로 재설계됐거나, 백엔드 hide API가 만들어지다 만 것으로 보인다. 실제 제거·정리는 별도 판단이 필요해 이번 정정 범위에 안 넣음.
+
+## `exploreLocal`에 `callPath` 모드 추가 — 다홉 호출 경로 추적 (2026-08-03, codeprint_158)
+
+**문제.** 사용자가 "웹의 흐름 재생(다단계 호출 추적+분기 선택)을 로컬 도구로 옮기는 게 도움되면 방법을 찾아보라"고 요청. `LocalGraphQuery`(exploreLocal 엔진)의 `neighbors` 모드는 1홉 이웃 조회만 지원 — 여러 홉을 훑으려면 `neighbors`를 반복 호출하며 직접 그래프를 손으로 이어붙여야 했음. 처음엔 PROGRESS.md의 "③흐름재생/호출경로 추적 서버 이전"(Desktop 스코프 결정 대기 중)과 같은 항목으로 오인했으나, 그 항목은 **웹 페이로드 축소를 위해 프로덕션 백엔드에 새 엔드포인트+캐시를 두는 것**(다른 목적·다른 계층)이고, 이번 요청은 **이미 메모리에 올라온 로컬 그래프를 순회하는 순수 CLI 확장**이라 서로 무관함을 확인 — Desktop 결정과 독립적으로 지금 착수 가능.
+
+**결정.** `LocalGraphQuery.java`에 `callPath` 모드 추가(`-PqueryMode=callPath -PqueryTarget=<함수명>`) — `FUNCTION_CALL` 엣지만 따라 호출자(callers)·피호출자(callees) 트리를 재귀로 구성. 사이클 가드(경로별 방문 이력)+깊이 상한(`MAX_CALL_DEPTH=6`)+전체 노드 상한(`MAX_CALL_PATH_NODES=300`)으로 허브 함수에서의 폭발을 방지. `LocalDiff`/`LocalGraphQuery` 자체가 이미 gitignore 처리된 내부 전용 도구라(공개 레포 미노출), 이번 추가도 같은 파일 안에서 이뤄져 별도 공개범위 결정 불필요 — `build.gradle`의 태스크 설명 주석만 갱신(실제 git 추적 대상은 이 한 줄뿐).
+
+**검증.** `RoleSpecService.summarizeOne`을 대상으로 실행 — `generateSection`→`GraphController.getContextMd`(+그 호출부 테스트들)까지 호출자 체인을, `fetchFileContent`/`neighborContext`/3개 `AiService.generate` 구현체까지 피호출자 체인을 정확히 추적함을 확인. `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 5건). 이번엔 `preview_start`로 가동 중인 백엔드 옆에서 `compileJava`·`exploreLocal`·`analyzeLocal`을 차례로 실행하고 매번 `/actuator/health` UP을 재확인해 죽지 않았음을 관찰(`interfaces/api` 밖 `tools/`·`application/graph` 파일만 건드린 이번 변경 한정) — 다만 이 1회 관측만으로 "백엔드 가동 중 gradle 금지" 기존 규칙을 뒤집지 않는다, 계속 원칙대로 서버 내리고 검증할 것.

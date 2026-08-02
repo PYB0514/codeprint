@@ -174,12 +174,12 @@ task edgeAudit(type: JavaExec, dependsOn: classes) {
 // 로컬 그래프 탐색 — repo map/노드검색/이웃조회 (Spring/DB 불필요, 내부 전용 — LocalGraphQuery.java는 gitignore 처리돼 공개 레포엔 없음)
 task exploreLocal(type: JavaExec, dependsOn: classes) {
     group = 'codeprint'
-    description = '로컬 그래프에서 repo map(기본)·노드검색·이웃조회 (내부 전용, Spring/DB 불필요)'
+    description = '로컬 그래프에서 repo map(기본)·노드검색·이웃조회·다홉 호출경로 (내부 전용, Spring/DB 불필요)'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.codeprint.tools.LocalGraphQuery'
     // Windows 콘솔 기본 인코딩(CP949)이 한국어 주석·경로를 깨뜨려 UTF-8 강제
     jvmArgs = ['-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8']
-    // -PqueryMode=repoMap|find|neighbors, -PqueryTarget=검색어 또는 노드ID, -PanalysisDir=경로(기본 .),
+    // -PqueryMode=repoMap|find|neighbors|callPath, -PqueryTarget=검색어 또는 노드ID, -PanalysisDir=경로(기본 .),
     // -PqueryGrouping=folder|context(repoMap 전용, 기본 folder — 바운디드 컨텍스트별 트리로 전환)
     args = [
         project.hasProperty('queryMode') ? project.property('queryMode') : 'repoMap',
