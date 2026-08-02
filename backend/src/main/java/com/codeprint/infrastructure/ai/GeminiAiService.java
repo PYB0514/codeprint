@@ -17,7 +17,7 @@ public class GeminiAiService implements AiService {
     private static final String API_URL =
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient = AiRestClients.create();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
