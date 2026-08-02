@@ -2630,3 +2630,11 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결정.** `@Size(max = 300)` 추가 — 실제 Anthropic/OpenAI/Gemini 키는 전부 200자 미만이라 넉넉한 상한.
 
 **결과.** `compileJava` 클린, 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인 불변.
+
+## BYOK 키 등록/삭제 엔드포인트 레이트리밋 누락 발견·수정 (2026-08-02, codeprint_158)
+
+**문제.** `RateLimitFilter`는 화이트리스트 방식(주석에 "남용 위험이 있는 쓰기 엔드포인트 전체 등록" 명시)인데, BYOK 시리즈 PR1(`/api/users/me/ai-key` CRUD 신설)에서 `RateLimitFilter`를 같이 손대지 않아 `PUT`(등록/회전)·`DELETE`(삭제) 둘 다 목록에서 빠져 있었음. 인증이 1차 방어선이지만, 세션 탈취나 단순 남용 시 무제한 반복 호출(암호화+DB 쓰기 반복)을 막을 2차 방어가 전무했던 상태.
+
+**결정.** `PUT /api/users/me/ai-key`·`DELETE /api/users/me/ai-key/*`를 같은 `ai-key-write` 카테고리(분당 10회, 결제 prepare 3종과 동일하게 엔드포인트가 달라도 버킷 공유)로 등록. 등록은 정상 사용 시 세션당 1~2회 수준이라 10회면 실사용을 방해하지 않으면서 스팸을 막기에 충분하다고 판단.
+
+**결과.** `RateLimitFilterTest`에 PUT/DELETE 공유 버킷 회귀 테스트 추가, `compileJava` 클린, 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 5건 그대로).
