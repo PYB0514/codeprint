@@ -17,7 +17,7 @@ public class OpenAiService implements AiService {
     private static final String API_URL = "https://api.openai.com/v1/chat/completions";
     private static final String MODEL = "gpt-4o-mini";
 
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient = AiRestClients.create();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override

@@ -2614,3 +2614,11 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결정.** URL 쿼리 파라미터 대신 `x-goog-api-key` HTTP 헤더로 전달하도록 변경(Google Generative Language API가 공식 지원하는 대체 인증 방식). 헤더는 URL과 달리 예외 메시지·프록시 접근 로그·브라우저 히스토리에 노출되는 경로가 원천적으로 적어 OWASP 권고와도 일치.
 
 **결과.** `compileJava` 클린, 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인 불변. 이 클래스는 기존 컨벤션상(`GitHubApiClient`도 동일) 실제 네트워크 호출은 유닛테스트 대상이 아니라 별도 테스트 추가 안 함.
+
+## AI 서비스 3종에 요청 타임아웃 추가 (2026-08-02, codeprint_158)
+
+**문제.** BYOK 시리즈 완료 후 자체 재검토 중 발견. `ClaudeAiService`/`OpenAiService`/`GeminiAiService`가 `RestClient.create()`(타임아웃 미설정)를 쓰고 있었음 — 기존 `GitHubApiClient`가 외부 API 호출에 `connectTimeout(10초)`를 명시하는 이 프로젝트의 확립된 컨벤션과 불일치. 레이어A(최대 15개 노드)+레이어B(최대 10개 컨텍스트)가 한 export 요청에서 최대 25회까지 순차적으로 LLM을 호출할 수 있어, 제공자 API가 느려지거나 응답이 없으면 요청 스레드가 무한정 묶일 위험이 있음.
+
+**결정.** 3개 서비스가 공유하는 `AiRestClients.create()` 헬퍼 신설(`SimpleClientHttpRequestFactory`, connectTimeout 10초·readTimeout 30초) — `GitHubApiClient`의 connectTimeout 값과 동일하게 맞추고, readTimeout은 LLM 완성 응답이 단순 API 호출보다 오래 걸릴 수 있어 별도로 30초 설정.
+
+**결과.** `compileJava` 클린, 백엔드 전체 스위트 green(Docker DB), `analyzeLocal` 베이스라인 불변.
