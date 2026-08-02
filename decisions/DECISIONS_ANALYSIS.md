@@ -2470,3 +2470,11 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 - 신규 Spring 빈·생성자 의존관계 변경 없음(기존 빈에 메서드만 추가)이라 로컬 재기동 필수 조건은 아니었으나, 실제 E2E 검증을 위해 어차피 재기동해 확인함.
 
 **한계·다음.** 비공개 레포에서 `codeload.github.com`이 Bearer 토큰을 실제로 받아들이는지는 미검증(공개 레포로만 실측) — 필요 시 별도 검증. 커밋 목록 브라우징 UI는 여전히 미착수(스코프 밖으로 명시적 축소).
+
+## BoundedContextResolver — featureOf 공용화 (2026-08-02, codeprint_158, PR2)
+
+**문제.** `GraphWarningService.featureOf()`(React `features/{X}/` 피처명 추출, `CROSS_FEATURE_IMPORT`/`FEATURE_LAYER_VIOLATION` 전용)가 private이라 다른 소비자가 재사용할 수 없었다. 착수 예정인 "기능명세(레이어B)" 기능이 `BoundedContextResolver`(DDD 레이어 디렉터리명 휴리스틱)만으로 스코프를 잡으면 비-DDD/피처슬라이스 프로젝트(특히 React)에서 컨텍스트가 하나도 안 잡혀 아예 발동하지 않는 갭이 독립 에이전트 적대적 검증(codeprint_158)에서 발견됨.
+
+**결정.** `featureOf(String path)`를 `GraphWarningService`에서 `BoundedContextResolver`로 이동, `public static`으로 공용화. `serviceOf()`를 `shared/topology/ServiceBoundary`로 분리했던 선례(SERVICE_CALL_CHAIN)와 동일 원칙 — 순수 함수를 여러 소비자가 공유하는 유틸로 승격. `isFeatureSliceProject`/`isFrontendLanguage`는 경고 판정 전용 로직이라 `GraphWarningService`에 그대로 유지(레이어B가 실제로 필요로 하는 건 `featureOf` 하나뿐).
+
+**결과.** 동작 변화 없는 순수 리팩토링 — `GraphWarningServiceTest` 전체 green, 백엔드 전체 스위트 green, `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변. 레이어B(PR4)가 "DDD 컨텍스트 없음 → 피처슬라이스 시도" 순서로 이 메서드를 재사용할 수 있게 됨(1차 스코프는 여전히 DDD+피처슬라이스 한정, 레이어드/플랫 구조는 후속).
