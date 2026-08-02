@@ -9,6 +9,26 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.157.1',
+    date: '2026-08-02',
+    title: '보안·안정성 강화 — 그래프 조회 레이트리밋 확장, AI 키 전송 방식 개선',
+    type: 'fix',
+    items: [
+      { category: '보안', desc: '로그인 없이 접근 가능한 공개 그래프 조회를 포함해, 그래프 조회 API 4종에 요청 빈도 제한을 추가했습니다.' },
+      { category: '보안', desc: '외부 AI 제공자 호출 시 API 키를 URL이 아니라 요청 헤더로 전달하도록 개선하고, 응답 지연에 대비한 타임아웃을 추가했습니다.' },
+    ],
+  },
+  {
+    version: 'v0.157.0',
+    date: '2026-08-02',
+    title: 'AI 컨텍스트 내보내기 강화 — 본인 LLM 키로 역할 요약·기능명세 함께 받기',
+    type: 'feature',
+    items: [
+      { category: '신규', desc: '설정 페이지에서 본인의 LLM API 키(Anthropic·OpenAI·Gemini)를 등록하면, 그래프 화면 "AI 컨텍스트 내보내기"에서 주석 없는 주요 함수의 역할 요약과 컨텍스트별 기능명세를 함께 받아볼 수 있습니다.' },
+      { category: '안내', desc: '코드는 서버에 저장되지 않고, 등록한 본인의 키로 직접 LLM을 호출한 결과만 그 요청 한정으로 포함됩니다.' },
+    ],
+  },
+  {
     version: 'v0.156.2',
     date: '2026-08-02',
     title: '서비스 간 호출(MSA) 탐지 정확도 개선 — Spring 설정값 조합 URL',
