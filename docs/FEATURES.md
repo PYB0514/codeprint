@@ -67,10 +67,11 @@
 - `POST /presign` (auth) — S3 서명 URL. JPEG/PNG/GIF/WebP만, 최대 10MB, 파일명 255자 이하, path traversal 차단.
 
 ### AI 키(BYOK) (`/api/users/me/ai-key`, auth)
-- `GET` — 등록된 제공자 목록(`{hasKey, providers}`, 평문 키 미포함)
-- `PUT` — 신규 등록/회전(`{provider, apiKey}`, AES-GCM 암호화 저장)
+- `GET` — 등록된 제공자 목록(`{hasKey, providers}`, priority순 정렬, 평문 키 미포함)
+- `PUT` — 신규 등록/회전(`{provider, apiKey}`, AES-GCM 암호화 저장, 신규 등록은 맨 뒤 priority로 배치)
 - `DELETE /{provider}` — 삭제
-- 등록한 키는 사용자 본인의 그래프 조회(`context-md`)에서만, 요청 시점에만 사용됨(서버에 별도 저장·재사용 없음)
+- `PUT /priority` — failover 우선순위 재배열(`{providers: [...]}`, 등록된 프로바이더 집합과 정확히 일치해야 함)
+- 등록한 키는 사용자 본인의 그래프 조회(`context-md`)에서만, 요청 시점에만 사용됨(서버에 별도 저장·재사용 없음). 요청한 프로바이더가 인증/quota 오류(401/403/429)로 실패하면 다음 priority 순위 프로바이더로 자동 전환(`AiFailoverClient`)
 
 ### 메시지/알림 (`/api/messages`, `/api/notifications`)
 - 받은편지함·스레드·전송(최대 1000자)·읽음처리, 알림 목록·읽음처리

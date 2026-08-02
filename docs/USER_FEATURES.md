@@ -57,7 +57,7 @@
 
 - 프로필 이미지·그래프 배경 이미지 업로드(5MB 제한)
 - 알림 설정(팀챗/DM 알림 on/off), 브라우저 푸시 알림 구독(Web Push), 계정 삭제
-- 본인 LLM API 키 등록/교체/삭제(BYOK, Anthropic·OpenAI·Gemini 중 선택) — "AI 컨텍스트" 내보내기의 역할 요약·기능명세 기능에 사용
+- 본인 LLM API 키 등록/교체/삭제(BYOK, Anthropic·OpenAI·Gemini 중 선택) — "AI 컨텍스트" 내보내기의 역할 요약·기능명세 기능에 사용. 2개 이상 등록 시 failover 우선순위를 직접 재배열 가능(1순위 프로바이더가 인증·quota 오류로 실패하면 다음 순위로 자동 전환)
 
 ## 관리자 전용
 

@@ -2682,3 +2682,13 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **설계 보완(구현 중 발견) — 팬아웃 회귀.** 두 `generateSection`에 후보 목록 조립 로직을 인라인으로 넣었더니 `analyzeLocal` 신규 HIGH_FAN_OUT 2건 발생(9·11개 팬아웃). `AiFailoverClient.forUser(provider, userId, aiKeyPort, servicesByProvider)` 정적 팩토리로 조립 단계(등록 목록 조회+순서 생성+client 생성)를 캡슐화해 호출부를 3줄→1줄로 줄여 8·10개로 완화했으나 완전히 없애진 못함. §10 판단 기준(연속값이라 0개 강제 안 함, 예외 패턴인지 진짜 책임 혼재인지 검토)에 따라 검토한 결과 — `generateSection`은 권한/키 확인→그래프 조회→대상 선정→반복 생성→결과 조립을 잇는 전형적 ApplicationService 조율 메서드라 오케스트레이터 예외 패턴으로 판단, 추가 리팩토링 안 함(더 쪼개면 흐름 추적이 오히려 어려워짐).
 
 **검증.** 신규 `AiFailoverClientTest` 8건(1차 성공·429/401/403 전환·5xx 및 비-HTTP 예외 즉시전파·전체 소진·키없는 후보 스킵·orderedCandidates 순서) 전부 green. 기존 `RoleSpecServiceTest`·`FeatureSpecServiceTest` 무수정 통과(Mockito 미스텁 `findRegisteredProviders`는 기본 빈 리스트 반환이라 단일 후보로 기존과 동일 동작). 백엔드 전체 스위트 green. `analyzeLocal` HIGH_FAN_OUT 5→7건(신규 2건, 위 판단으로 수용).
+
+## BYOK 프로바이더 우선순위 사용자 설정 (2026-08-03, codeprint_158)
+
+**문제.** 위 failover가 "등록 시각순"으로만 순서를 정해서, 사용자가 명시적으로 어느 프로바이더를 먼저 시도할지 정할 수 없었음. 사용자가 직접 제안.
+
+**결정.** `user_ai_keys`에 `priority INT` 컬럼 추가(V67 마이그레이션, 기존 행은 `ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at)`으로 등록순 그대로 백필해 하위호환). 신규 등록 키는 `findMaxPriority(userId)+1`(맨 뒤)에 배치 — 기존 "등록한 순서가 곧 우선순위"라는 사용자 습성과 자연스럽게 이어짐. `UserAiKeyJpaRepository.findByUserIdOrderByCreatedAtAsc`를 `findByUserIdOrderByPriorityAsc`로 교체(failover의 `findRegisteredProviders`가 그대로 이 순서를 이어받음, 별도 연동 코드 불필요). 신규 `PUT /api/users/me/ai-key/priority` — 원하는 순서의 프로바이더 배열을 통째로 받아, 등록된 프로바이더 집합과 정확히 일치할 때만(누락·추가 시 400) 그 순서로 priority 재기록. 레이트리밋은 기존 `ai-key-write` 버킷 공유(신규 카테고리 안 만듦, 같은 위협 프로필).
+
+**프론트.** `SettingsPage.tsx`에 등록 프로바이더가 2개 이상일 때만 순서 목록 노출(↑↓ 버튼, 드래그 라이브러리 도입 안 함 — §2 단순성). 낙관적 업데이트 후 실패 시 원복. `GET /api/users/me/ai-key`가 이미 priority순으로 `providers` 배열을 반환하므로 프론트는 그 배열 순서를 그대로 렌더링 순서로 씀(별도 정렬 로직 불필요).
+
+**검증.** 신규 `UserAiKeyServiceTest` 3건(정상 재배열·미등록 프로바이더 포함 거부·등록 프로바이더 누락 거부) + 기존 "신규 생성" 테스트에 priority 값 단언 추가, `RateLimitFilterTest` 1건 추가(우선순위 엔드포인트도 `ai-key-write` 버킷 공유 확인) — 전부 green. `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 7건 그대로). **실제 로컬 DB로 end-to-end 검증**: 마이그레이션 적용 후 기존 키 2개(Gemini·OpenAI)가 등록순 그대로 0·1로 정확히 백필된 것을 psql로 직접 확인 → 설정 페이지에서 "↓" 버튼으로 OpenAI를 1순위로 옮김 → DB에 실제로 priority가 스왑된 것을 재확인 → 새로고침 후에도 서버가 그 순서를 그대로 반환하는 것까지 확인.

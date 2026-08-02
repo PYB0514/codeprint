@@ -15,8 +15,14 @@ public interface UserAiKeyRepository {
     // 사용자의 키 등록 여부(제공자 무관)
     boolean existsByUserId(UUID userId);
 
-    // 사용자가 등록한 제공자 목록 — 프론트에서 어느 제공자로 LLM 기능을 호출할지 선택하는 데 사용
+    // 사용자가 등록한 제공자 목록(우선순위순) — failover 순서·프론트 선택에 사용
     List<AiProvider> findProvidersByUserId(UUID userId);
+
+    // 사용자의 등록 키 전체(우선순위순) — 재배열(reorder) 시 개별 엔티티 갱신에 사용
+    List<UserAiKey> findAllByUserId(UUID userId);
+
+    // 사용자의 현재 최대 우선순위 — 신규 등록 시 맨 뒤(max+1)에 배치하는 데 사용, 등록된 키 없으면 -1
+    int findMaxPriority(UUID userId);
 
     // 저장(신규 등록/회전 공용)
     UserAiKey save(UserAiKey userAiKey);
