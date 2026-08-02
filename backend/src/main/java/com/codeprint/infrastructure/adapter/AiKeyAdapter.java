@@ -7,6 +7,7 @@ import com.codeprint.shared.ai.AiProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,5 +20,10 @@ public class AiKeyAdapter implements AiKeyPort {
     @Override
     public Optional<String> findPlainKey(UUID userId, AiProvider provider) {
         return userAiKeyService.getPlainKey(userId, provider);
+    }
+
+    @Override
+    public List<AiProvider> findRegisteredProviders(UUID userId) {
+        return userAiKeyService.getRegisteredProviders(userId);
     }
 }

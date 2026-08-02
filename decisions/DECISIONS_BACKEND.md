@@ -2672,3 +2672,13 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **결정.** `e.getMessage()`를 로그 메시지에 포함(스택트레이스 전체는 개별 항목 단위로는 과함, 원인 한 줄이면 충분). RoleSpecService·FeatureSpecService 둘 다 동일하게 수정.
 
 **결과(이 수정으로 실제로 확인된 원인).** 로그에 원인이 찍히자마자 바로 확인: `Gemini API 호출 실패: 429 Too Many Requests ... "limit: 0" ... generate_content_free_tier_requests`. 코드 결함이 아니라 — 방금 새로 만든 Google Cloud 프로젝트의 Gemini 무료 티어 할당량이 0으로 설정돼 있어(신규 프로젝트 활성화 지연 또는 리전 제한으로 추정) 모든 요청이 즉시 거부된 것. `RoleSpecService`는 같은 프로젝트에서 별개 이유(HIGH_FAN_OUT 6건이 전부 이미 주석 있어 대상 자체가 0개, §6 함수 주석 규칙 때문)로 빈 결과였고 이건 정상 동작. `compileJava` 클린, 관련 유닛테스트 green. **부수 발견**: `preview_start`로 뜬 `bootRun`은 소스 파일을 Edit 도구로 수정하는 것만으로는 DevTools 재시작이 트리거되지 않음(.class 파일이 갱신 안 됨) — `compileJava`를 명시적으로 실행해야 실제 리로드가 일어남(다운→재기동 확인).
+
+## BYOK 프로바이더 failover — 등록된 다음 프로바이더로 자동 전환 (2026-08-03, codeprint_158)
+
+**문제.** 위 도그푸딩에서 Gemini·OpenAI 둘 다 계정 설정 문제(quota 0·미결제)로 실패하는 걸 실제로 겪음 — 사용자가 "스페어 키" 개념(1차 프로바이더 실패 시 등록된 다른 프로바이더로 자동 전환)의 필요성을 직접 제안. 지금까진 `RoleSpecService`·`FeatureSpecService`가 프론트에서 넘어온 프로바이더 하나만 시도하고 실패하면 그 항목만 조용히 건너뛰었음.
+
+**결정.** 신규 `AiFailoverClient`(`application/graph/`) — 요청 프로바이더를 1순위로, 사용자가 등록한 나머지 프로바이더(등록 시각순)를 후보로 삼아 순차 시도. 전환 조건은 **HTTP 401/403/429(인증·quota) 한정** — 그 외 오류(파싱 실패, 5xx 등)는 프로바이더를 바꿔도 똑같이 실패할 가능성이 높아 기존처럼 즉시 항목 스킵. 전환 단위는 **요청(생성 세션) 단위** — 한 번 quota로 실패하면 그 세션의 남은 모든 항목은 처음부터 다음 프로바이더로 시도(항목마다 재시도하면 이미 죽은 걸 아는 프로바이더에 계속 헛손질하며 지연만 늘어남). `UserAiKeyJpaRepository.findByUserId`(비정렬)가 failover 순서 결정엔 위험해 `findByUserIdOrderByCreatedAtAsc`로 교체(기존 유일한 호출부 `findProvidersByUserId`도 함께 정렬 혜택). `AiKeyPort`에 `findRegisteredProviders(userId)` 추가.
+
+**설계 보완(구현 중 발견) — 팬아웃 회귀.** 두 `generateSection`에 후보 목록 조립 로직을 인라인으로 넣었더니 `analyzeLocal` 신규 HIGH_FAN_OUT 2건 발생(9·11개 팬아웃). `AiFailoverClient.forUser(provider, userId, aiKeyPort, servicesByProvider)` 정적 팩토리로 조립 단계(등록 목록 조회+순서 생성+client 생성)를 캡슐화해 호출부를 3줄→1줄로 줄여 8·10개로 완화했으나 완전히 없애진 못함. §10 판단 기준(연속값이라 0개 강제 안 함, 예외 패턴인지 진짜 책임 혼재인지 검토)에 따라 검토한 결과 — `generateSection`은 권한/키 확인→그래프 조회→대상 선정→반복 생성→결과 조립을 잇는 전형적 ApplicationService 조율 메서드라 오케스트레이터 예외 패턴으로 판단, 추가 리팩토링 안 함(더 쪼개면 흐름 추적이 오히려 어려워짐).
+
+**검증.** 신규 `AiFailoverClientTest` 8건(1차 성공·429/401/403 전환·5xx 및 비-HTTP 예외 즉시전파·전체 소진·키없는 후보 스킵·orderedCandidates 순서) 전부 green. 기존 `RoleSpecServiceTest`·`FeatureSpecServiceTest` 무수정 통과(Mockito 미스텁 `findRegisteredProviders`는 기본 빈 리스트 반환이라 단일 후보로 기존과 동일 동작). 백엔드 전체 스위트 green. `analyzeLocal` HIGH_FAN_OUT 5→7건(신규 2건, 위 판단으로 수용).

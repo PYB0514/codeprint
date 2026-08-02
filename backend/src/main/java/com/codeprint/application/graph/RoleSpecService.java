@@ -51,10 +51,8 @@ public class RoleSpecService {
     @Transactional(readOnly = true)
     public String generateSection(UUID projectId, UUID graphId, UUID userId, AiProvider provider) {
         if (provider == null) return "";
-        String apiKey = aiKeyPort.findPlainKey(userId, provider).orElse(null);
-        if (apiKey == null) return "";
-        AiService aiService = servicesByProvider.get(provider);
-        if (aiService == null) return "";
+        if (aiKeyPort.findPlainKey(userId, provider).isEmpty()) return "";
+        AiFailoverClient failover = AiFailoverClient.forUser(provider, userId, aiKeyPort, servicesByProvider);
 
         try {
             Graph graph = graphRepository.findById(graphId).orElse(null);
@@ -71,7 +69,7 @@ public class RoleSpecService {
             Map<UUID, Node> nodesById = nodes.stream().collect(Collectors.toMap(Node::getId, n -> n));
             List<String> entries = new ArrayList<>();
             for (Node target : targets) {
-                String entry = summarizeOne(target, nodesById, edges, repoUrl, sha, apiKey, aiService);
+                String entry = summarizeOne(target, nodesById, edges, repoUrl, sha, failover);
                 if (entry != null) entries.add(entry);
             }
             if (entries.isEmpty()) return "";
@@ -80,6 +78,10 @@ public class RoleSpecService {
             sb.append("\n\n## AI 추정 역할 요약 (미검증)\n\n");
             sb.append("> 아래는 주석이 없는 함수에 대해 사용자 본인의 LLM 키로 생성한 추정 요약입니다. ");
             sb.append("실제 코드로 확정된 구조적 사실이 아니므로 참고용으로만 사용하세요.\n\n");
+            if (failover.switched()) {
+                sb.append("> ⚠️ ").append(failover.originalProvider()).append(" 호출 실패로 ")
+                        .append(failover.currentProvider()).append("로 전환해 생성했습니다.\n\n");
+            }
             entries.forEach(sb::append);
             return sb.toString();
         } catch (Exception e) {
@@ -114,7 +116,7 @@ public class RoleSpecService {
 
     // 함수 본문 스니펫 + 1홉 이웃(호출자/피호출자) 기존 주석을 프롬프트로 조립해 LLM 호출, 실패 시 null(해당 노드만 건너뜀)
     private String summarizeOne(Node target, Map<UUID, Node> nodesById, List<Edge> edges,
-                                 String repoUrl, String sha, String apiKey, AiService aiService) {
+                                 String repoUrl, String sha, AiFailoverClient failover) {
         Object lineObj = target.getMetadata() != null ? target.getMetadata().get("line") : null;
         if (!(lineObj instanceof Number lineNum)) return null;
         String content = gitHubApiClient.fetchFileContent(repoUrl, target.getFilePath(), sha);
@@ -136,7 +138,7 @@ public class RoleSpecService {
                 target.getLanguage() != null ? target.getLanguage() : "", snippet);
 
         try {
-            String summary = aiService.generate(apiKey, prompt).trim();
+            String summary = failover.generate(prompt).trim();
             if (summary.isBlank()) return null;
             return "- `" + target.getName() + "`(" + target.getFilePath() + ") — " + summary + "\n";
         } catch (Exception e) {

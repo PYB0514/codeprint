@@ -17,5 +17,6 @@ public interface UserAiKeyJpaRepository extends JpaRepository<UserAiKey, UUID> {
 
     void deleteByUserIdAndProvider(UUID userId, AiProvider provider);
 
-    List<UserAiKey> findByUserId(UUID userId);
+    // failover 순서 결정에 쓰이므로 등록 시각순 명시 필요(ORDER BY 없으면 비결정적)
+    List<UserAiKey> findByUserIdOrderByCreatedAtAsc(UUID userId);
 }
