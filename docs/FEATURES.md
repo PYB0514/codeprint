@@ -31,7 +31,7 @@
 - `GET /projects/{id}/graphs` (own) — 버전 목록
 - `GET /projects/{id}/graph` (own) — 현재 그래프(suppress 반영)
 - `GET /share/{projectId}/graph` (**public**, 5분 캐시) — 공개 그래프
-- `GET /projects/{id}/graph/context-md` (own) — AI 컨텍스트 MD 내보내기(level/grouping). `aiRoleSpecProvider`/`aiFeatureSpecProvider` 지정 시 BYOK로 레이어A(무주석 함수 역할 요약)·레이어B(컨텍스트별 기능명세)를 요청 범위에서만 생성해 별도 섹션으로 추가(서버 미저장)
+- `GET /projects/{id}/graph/context-md` (own) — AI 컨텍스트 MD 내보내기(level/grouping). `aiRoleSpecProvider`/`aiFeatureSpecProvider` 지정 시 BYOK로 레이어A(무주석 함수 역할 요약)·레이어B(컨텍스트별 기능명세)를 요청 범위에서만 생성해 별도 섹션으로 추가(서버 미저장). `includeMigrationGuide=true`는 LLM 불필요한 결정론적 계산(`DddMigrationGuideService`) — DDD/피처슬라이스 구조가 감지 안 되면 API 엔드포인트별 실행경로 클러스터링으로 후보 모듈 경계를 제안, 이미 구조가 있거나 신호 부족이면 섹션 없음
 - `GET /projects/{id}/diff` (own) — 두 버전 비교
 - `PUT`/`DELETE /projects/{id}/graphs/{graphId}/pin` (own) — 슬롯 1~5 고정
 - `PUT /graphs/{graphId}/nodes/{nodeId}/annotation|position` (own)

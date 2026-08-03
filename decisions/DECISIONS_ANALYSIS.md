@@ -2478,3 +2478,23 @@ codeprint(Java) 82→63(**19**) · gin(Go) 86→77(9) · sinatra(Ruby) 35→19(*
 **결정.** `featureOf(String path)`를 `GraphWarningService`에서 `BoundedContextResolver`로 이동, `public static`으로 공용화. `serviceOf()`를 `shared/topology/ServiceBoundary`로 분리했던 선례(SERVICE_CALL_CHAIN)와 동일 원칙 — 순수 함수를 여러 소비자가 공유하는 유틸로 승격. `isFeatureSliceProject`/`isFrontendLanguage`는 경고 판정 전용 로직이라 `GraphWarningService`에 그대로 유지(레이어B가 실제로 필요로 하는 건 `featureOf` 하나뿐).
 
 **결과.** 동작 변화 없는 순수 리팩토링 — `GraphWarningServiceTest` 전체 green, 백엔드 전체 스위트 green, `analyzeLocal` 베이스라인(HIGH_FAN_OUT 5) 불변. 레이어B(PR4)가 "DDD 컨텍스트 없음 → 피처슬라이스 시도" 순서로 이 메서드를 재사용할 수 있게 됨(1차 스코프는 여전히 DDD+피처슬라이스 한정, 레이어드/플랫 구조는 후속).
+
+## DDD 마이그레이션 후보 가이드 — 엔드포인트 실행경로 클러스터링으로 구현 (2026-08-04, codeprint_159)
+
+**배경.** `PROGRESS.md` "(아이디어, 미착수) DDD 미도입 프로젝트용 마이그레이션 가이드 MD 생성" 항목 — 원안은 리스크(존재하지 않는 도메인 경계를 결합도만으로 추론해야 함, 오답 비용이 개별 경고보다 훨씬 큼)로 착수 보류돼 있었다. 항목 자체가 권장한 안전 스코프("완전 자동 추론이 아니라, 기존 그래프 데이터 근거로 후보만 보여주고 최종 판단은 사람이 하는 보조 형태")를 그대로 따라 구현.
+
+**알고리즘 선택 — 폴더 계층 대신 API 엔드포인트 실행경로 클러스터링.** 처음 검토한 안(최상위 폴더를 그대로 후보 모듈로 삼는 방식)은 레이어드 구조(controller/service/repository)에는 무의미하다 — 폴더가 곧 "레이어"라 도메인 경계와 무관하다. 대신 이미 그래프에 있는 `API_ENDPOINT → FUNCTION`(FUNCTION_CALL, `GraphBuilder` 613행 근처) 엣지를 진입점으로 삼아, 각 엔드포인트가 실행 시 실제로 닿는 FILE/DB_TABLE 집합("footprint")을 BFS로 구하고, footprint가 많이 겹치는 엔드포인트들을 Union-Find로 같은 클러스터(=후보 모듈)로 묶었다. 클러스터가 2개 미만(전부 한 덩어리로 뭉침)이면 나눌 근거가 없다고 보고 섹션 자체를 생략(null).
+
+**공유 자원 처리.** 대부분의 엔드포인트가 공통으로 닿는 파일/테이블(로깅, 공통 유틸, audit 테이블 등)을 후보 모듈 나누기 전에 먼저 제외해야 했다 — 안 그러면 공유 유틸 하나 때문에 사실상 무관한 엔드포인트들이 전부 한 클러스터로 뭉친다. 처음엔 "전체의 50% 이상이 닿으면 공유"로만 판정했으나, 엔드포인트가 2~3개뿐인 소규모 테스트에서 진짜 클러스터 신호(둘만 공유하는 파일)까지 "공유"로 지워버리는 결함을 테스트 작성 중 발견 — 비율 기준에 **최소 절대 개수(3) 하한**을 추가해(`Math.max(ratio 기반, 3)`) 해결.
+
+**가드 — 이미 구조가 있으면 아예 발동 안 함.** `RepoMapService.generateByContext`와 동일한 판정(`BoundedContextResolver.functionContextOf`/`featureOf`로 컨텍스트 2개 이상 감지)을 재사용해, DDD/피처슬라이스 구조가 이미 있는 프로젝트에는 이 섹션 자체를 붙이지 않는다(단일 소스 판정 재사용, 별도 로직 새로 안 만듦).
+
+**배선.** `GET /api/projects/{id}/graph/context-md`에 `includeMigrationGuide`(boolean, 기본 false) 파라미터 추가 — LLM/BYOK 불필요한 순수 결정론적 계산이라 무료로 전부 개방(레이어A/B와 달리 AI 키 등록 여부와 무관하게 항상 노출). `GraphPage.tsx` 내보내기 메뉴에 새 버튼 추가.
+
+**검증.**
+- TDD 6건(`DddMigrationGuideServiceTest`) — 구조 감지 가드, 엔드포인트 부족 가드, 정상 분리, 전부 겹침(null), 공유자원 분리, 충분히 겹치면 병합. 공유자원 하한 버그는 이 중 "충분히_겹치면_같은모듈로_병합" 테스트 작성 중 발견해 그 자리에서 수정(TDD가 실제로 결함을 잡은 사례).
+- 백엔드 전체 스위트 실행 — DB 필요한 통합테스트 10건은 Docker 미기동으로 실패(무관, 환경 문제), 나머지 1210건 green.
+- `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 7건, 신규 위반 0).
+- **신규 Spring 빈 추가**라 로컬 백엔드 실제 재기동 후(`/actuator/health` UP) 실 로그인 브라우저(Claude in Chrome)로 두 가지 실사례 확인: ①`gin-gonic/gin`을 `binding` 패키지로 국소분석한 프로젝트(API_ENDPOINT 0개인 순수 유틸 스코프) — 200 OK, 섹션 미포함(정상, 신호 부족) ②codeprint 자기분석(강한 DDD 구조) — 200 OK, 섹션 미포함(정상, 이미 구조 있음).
+
+**한계.** "실제로 후보 모듈이 갈라지는" 포지티브 케이스는 로컬에 마땅한 논-DDD+엔드포인트 보유 실제 레포가 없어 유닛 테스트로만 검증됐다(합성 그래프 기준으론 정확). 실사용자 유입 후 레거시 플랫 구조 프로젝트로 재검증 권장.

@@ -1,6 +1,7 @@
 // 그래프 조회 REST API 컨트롤러
 package com.codeprint.interfaces.api;
 
+import com.codeprint.application.graph.DddMigrationGuideService;
 import com.codeprint.application.graph.FeatureSpecService;
 import com.codeprint.application.graph.GraphCommandService;
 import com.codeprint.application.graph.GraphDiffService;
@@ -52,6 +53,7 @@ public class GraphController {
     private final RepoMapService repoMapService;
     private final RoleSpecService roleSpecService;
     private final FeatureSpecService featureSpecService;
+    private final DddMigrationGuideService dddMigrationGuideService;
 
     // 프로젝트의 그래프 버전 목록을 최신순으로 조회
     @GetMapping("/api/projects/{projectId}/graphs")
@@ -176,6 +178,7 @@ public class GraphController {
             @RequestParam(defaultValue = "folder") String grouping,
             @RequestParam(required = false) AiProvider aiRoleSpecProvider,
             @RequestParam(required = false) AiProvider aiFeatureSpecProvider,
+            @RequestParam(defaultValue = "false") boolean includeMigrationGuide,
             @AuthenticationPrincipal User user) {
 
         graphFacade.getOwnedProject(projectId, user.getId());
@@ -194,6 +197,12 @@ public class GraphController {
                     }
                     if (aiFeatureSpecProvider != null) {
                         content += featureSpecService.generateSection(graph.getId(), user.getId(), aiFeatureSpecProvider);
+                    }
+                    // DDD 마이그레이션 후보 가이드 — 결정론적 계산이라 BYOK 무관, 이미 구조가 감지되거나 신호 부족이면 섹션 자체가 없음(null)
+                    if (includeMigrationGuide) {
+                        List<Edge> edges = graphQueryService.getEdges(graph.getId());
+                        String guide = dddMigrationGuideService.generateSection(nodes, edges);
+                        if (guide != null) content += guide;
                     }
                     return ResponseEntity.ok(Map.of("content", content));
                 })

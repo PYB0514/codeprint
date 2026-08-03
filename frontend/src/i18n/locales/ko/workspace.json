@@ -653,6 +653,8 @@
     "exportContextByDomain": "↓ AI 컨텍스트 - 컨텍스트별 (.md)",
     "exportWithAiRoleSpec": "↓ AI 컨텍스트 + AI 분석 (.md)",
     "exportWithAiRoleSpecTitle": "본인의 LLM 키(설정에서 등록)로 주석 없는 주요 함수의 역할 요약과, 컨텍스트별 기능명세를 함께 추정해 내보냅니다. AI 추정치이며 서버에 저장되지 않습니다.",
+    "exportMigrationGuide": "↓ DDD 마이그레이션 후보 가이드 (.md)",
+    "exportMigrationGuideTitle": "이 프로젝트에서 도메인 구조를 감지하지 못했을 때, API 엔드포인트별 실행 경로를 추적해 후보 모듈 경계를 제안합니다. LLM 없이 결정론적으로 계산되며(무료), 이미 도메인/기능 구조가 있으면 아무것도 추가되지 않습니다.",
     "savingImage": "저장 중...",
     "exportImage": "↓ 이미지 (.png)",
     "shareToCommunityButton": "커뮤니티에 공유",

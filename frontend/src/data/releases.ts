@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.159.0',
+    date: '2026-08-04',
+    title: 'DDD 마이그레이션 후보 가이드 — 도메인 구조 없는 프로젝트에 후보 모듈 제안',
+    type: 'feature',
+    items: [
+      { category: '신규', desc: '도메인/기능 구조가 감지되지 않는 프로젝트에서 "DDD 마이그레이션 후보 가이드"를 내보내면, API 엔드포인트별 실행 경로를 추적해 자주 함께 쓰이는 파일들을 후보 모듈로 묶어 제안합니다. LLM 없이 계산되는 무료 기능이며, 이미 도메인 구조가 있으면 아무것도 추가되지 않습니다.' },
+    ],
+  },
+  {
     version: 'v0.158.0',
     date: '2026-08-03',
     title: 'BYOK 프로바이더 자동 전환 + 우선순위 직접 설정',
