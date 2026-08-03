@@ -9,6 +9,26 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.158.0',
+    date: '2026-08-03',
+    title: 'BYOK 프로바이더 자동 전환 + 우선순위 직접 설정',
+    type: 'feature',
+    items: [
+      { category: '신규', desc: '여러 개의 LLM 키(Anthropic·OpenAI·Gemini)를 등록해두면, 사용 중인 키가 인증 오류나 사용량 초과로 실패할 때 등록된 다음 키로 자동 전환해 요청을 이어갑니다.' },
+      { category: '신규', desc: '설정 페이지에서 등록한 키들의 우선순위를 화살표로 직접 재배열할 수 있습니다 — 자동 전환 시 이 순서를 따릅니다.' },
+    ],
+  },
+  {
+    version: 'v0.157.2',
+    date: '2026-08-02',
+    title: 'BYOK 키 관리 안정성 보완',
+    type: 'fix',
+    items: [
+      { category: '보안', desc: 'AI 키 등록·삭제 요청에도 다른 API와 동일한 요청 빈도 제한을 적용했습니다.' },
+      { category: '버그 수정', desc: '설정 페이지에서 프로바이더를 변경해 조회할 때, 실제로는 키가 등록되지 않은 프로바이더에도 "등록됨" 표시가 남아있던 문제를 고쳤습니다.' },
+    ],
+  },
+  {
     version: 'v0.157.1',
     date: '2026-08-02',
     title: '보안·안정성 강화 — 그래프 조회 레이트리밋 확장, AI 키 전송 방식 개선',
