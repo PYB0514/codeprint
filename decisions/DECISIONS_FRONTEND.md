@@ -1173,7 +1173,15 @@ const fetchGraph = useCallback(async () => {
 
 **한계·다음.** 남은 26건(주로 `setState-in-effect`)은 실제 effect 재설계가 필요해 별도 세션에서 `GraphPage.tsx` 파일 하나씩 신중하게(가능하면 실제 프로젝트로 로그인 후 브라우저 검증 동반) 처리할 것 — 이번처럼 일괄 처리하지 않는다. ESLint를 CI 게이트로 배선하는 것도 여전히 미착수(에러 0건이 될 때까지는 게이트가 매번 깨질 것이므로 후순위).
 
-## i18n 미번역 컴포넌트 배치 처리 1차 — 10/13 완료, 2건은 대상 아님으로 확인 (2026-07-22, codeprint_143)
+## ESLint CI 게이트 배선 완료 (2026-08-03, codeprint_159)
+
+**문제.** 위 항목에서 "에러 0건이 될 때까지 후순위"로 미뤄둔 ESLint CI 배선이 그 뒤로도 계속 미착수 상태였음.
+
+**확인.** 직접 `npx eslint .` 실행 결과 에러 0건, 경고 21건(전부 `react-hooks/exhaustive-deps` 등 비차단 성격)으로 전제조건이 이미 충족돼 있었음. 종료 코드도 0.
+
+**결정.** `ci.yml`의 `Frontend Type Check` 잡(브랜치 보호 필수 체크)에 `Type check` 다음 순서로 `Lint`(`npx eslint .`) 스텝 추가. `--max-warnings=0`은 쓰지 않음 — 현재 21건의 `exhaustive-deps` 경고를 전부 즉시 해소해야 하는 부담을 지우지 않고, "에러(진짜 버그류) 발생 시 게이트"라는 원래 취지만 배선. 경고를 에러로 승격할지는 추후 별도 판단.
+
+**결과.** 앞으로 신규 ESLint 에러가 추가되면 CI에서 즉시 잡힌다.
 
 **배경.** `contexts/Context138.md` R2(#9)가 지목한 `useTranslation` 없는 13개 컴포넌트 — 사용자 노출 화면인데 i18n 미적용. `contexts/Context142.md`가 "큰 작업이라 배치로 나눠 처리 권장"이라 명시해뒀던 항목.
 
