@@ -1,5 +1,5 @@
 // 서비스 메인 랜딩 페이지 — 로그인, 대시보드, 커뮤니티 진입점
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
@@ -18,7 +18,6 @@ export default function LandingPage() {
   const [loggedIn, setLoggedIn] = useState(false)
   const [urlInput, setUrlInput] = useState('')
   const [urlError, setUrlError] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // 쿠키 기반 인증 상태 확인 + 청크 프리페치
   useEffect(() => {
@@ -49,11 +48,6 @@ export default function LandingPage() {
       window.location.href = `${apiUrl}/oauth2/authorization/github`
     }
   }
-
-  // 타이머 cleanup
-  useEffect(() => {
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [])
 
   return (
     <div className="min-h-screen flex flex-col bg-blueprint-950 text-white">

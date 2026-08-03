@@ -128,7 +128,7 @@ function DiffPageInner() {
         }
       })
       .catch(() => setError(t('diff.loadVersionsError')))
-  }, [projectId])
+  }, [projectId, t])
 
   // diff 불러오기
   const fetchDiff = useCallback(async () => {
@@ -155,10 +155,10 @@ function DiffPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, fromId, toId, fitView, setNodes, setEdges])
+  }, [projectId, fromId, toId, fitView, setNodes, setEdges, t])
 
   // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
-  useEffect(() => { Promise.resolve().then(() => fetchDiff()) }, [fromId, toId])
+  useEffect(() => { Promise.resolve().then(() => fetchDiff()) }, [fetchDiff])
 
   // 버전 레이블 — branch + 날짜
   const versionLabel = (v: GraphVersion) =>

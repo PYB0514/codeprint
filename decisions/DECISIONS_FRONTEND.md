@@ -1383,3 +1383,18 @@ const fetchGraph = useCallback(async () => {
 **결정.** `hasAiKey: boolean`을 `registeredProviders: string[]`로 교체(백엔드가 이미 GET 응답에 `providers` 배열을 반환하고 있었는데 프론트가 안 쓰고 있었음). 등록 성공 시 배열에 추가, 삭제 성공 시 배열에서 제거, "등록됨" 배지·삭제 버튼은 `registeredProviders.includes(현재 선택된 프로바이더)`로 파생.
 
 **검증의 한계.** `tsc -b` 클린 + 상태 전이 4곳(초기 조회·등록 성공·삭제 성공·드롭다운 전환) 전부 코드 추적으로 확인 + 기존 프론트 테스트(4건) green. 이 세션은 사용자가 자리에 없는 백그라운드 `/loop` 중이라 Claude in Chrome이 연결 안 돼(`tabs_context_mcp` 응답: extension unreachable) 실 로그인 상태의 브라우저 E2E는 이번엔 수행하지 못함 — CLAUDE.md 규칙4의 "조건부 UI는 true/false 둘 다 확인" 기준에는 못 미친다. 다음에 사용자가 직접 확인 가능한 시점에 설정 페이지에서 프로바이더 전환 시나리오 육안 확인 권장.
+
+## ESLint 경고 21건(실측 24건) 완전 해소 — "별도 세션에서 신중하게" 미뤄둔 항목 완료 (2026-08-04, codeprint_159)
+
+**배경.** "ESLint 마지막 5건" 항목에서 "남은 26건(현재 24건)은 실제 effect 재설계가 필요해 별도 세션에서 GraphPage.tsx 파일 하나씩 신중하게 처리할 것 — 이번처럼 일괄 처리하지 않는다"로 명시적으로 미뤄뒀던 작업. 이번 세션이 그 "별도 세션".
+
+**기계적으로 안전한 것과 실제 버그를 구분해 처리.**
+- **완전 안전(동작 무변경)**: `AdminPage.tsx`의 죽은 `eslint-disable-line` 3건 제거, `GraphPage.tsx`의 `applyEdgeVisibility`(모듈 스코프 함수라 애초에 의존성 아님) 5건 제거.
+- **의도적으로 dep을 안 넣는 게 맞는 경우(disable 주석 유지/신설)**: `TeamsPage.tsx`/`CommunityPage.tsx`의 마운트 1회 전용 effect — `fetchTeams`/딥링크 조회 함수가 매 렌더 재생성되는 비메모 함수라, 제안대로 deps에 넣으면 "마운트 시 1회만" 의도가 깨진다(무한루프는 아니지만 매 렌더 재실행). 이유를 주석으로 남기고 유지.
+- **진짜 버그였던 것(발견·수정)**:
+  1. **`LandingPage.tsx`의 `timerRef`가 100% 죽은 코드** — 선언되고 cleanup에서 읽히기만 할 뿐 `setInterval`로 값을 할당하는 곳이 어디에도 없어 `if (timerRef.current)`가 항상 false. ESLint 제안(ref를 지역변수로 복사하는 우회 패턴) 대신 통째로 제거.
+  2. **`GraphPage.tsx`의 `fetchGraph`가 `labelMode`/`layoutPreset`/`searchParams`를 클로저로 고정** — 마운트 시점 값에 영구 고정돼, 사용자가 뷰를 전환한 뒤 재분석 완료나 예외규칙 변경으로 `fetchGraph`가 다시 불리면 전환 이전 레이아웃으로 조용히 되돌아갈 수 있는 잠재 버그였음. 단, ESLint 제안대로 그냥 deps에 추가하면 `fetchGraph`를 의존하는 마운트 effect(750행)가 **뷰 전환마다 서버를 재조회**하는 새 회귀를 만든다 — 기존 `openFileSidebarRef` 패턴을 그대로 재사용해 `labelModeRef`/`layoutPresetRef`/`searchParamsRef`로 해결(정체성은 고정, 값은 항상 최신).
+  3. **`useTeamChat.ts`의 `notificationsEnabled`가 STOMP 연결 시점 값에 고정** — 알림 토글을 꺼도 재연결 전까지 알림이 계속 옴(또는 그 반대). 같은 ref 패턴으로 해결하되, `roomId` 기준 재연결(무거움)이 아니라 알림 여부만 최신값으로 읽도록 분리.
+  4. **`ArchitectureIntentPanel.tsx`의 `save`가 `ignore` state를 deps에서 누락** — 다만 실제로는 저장 직전 GET으로 최신값을 우선 쓰고 `ignore`는 그 GET이 실패했을 때만 쓰는 폴백이라 체감 영향은 작음, 그래도 정확성을 위해 추가.
+
+**검증.** `npx tsc -b`·`npx eslint .` 둘 다 0건. 실 로그인 브라우저(Claude in Chrome)로 GraphPage(레이아웃 전환 시 네트워크 요청 0건 실측 확인 — 핵심 회귀 방지 검증, 도메인 섹션 클릭 → 흐름 목록 정상 표시, 경고 패널 6건 정상 렌더링), DiffPage(정상 로드), TeamsPage(정상 로드, 무한루프·리다이렉트 없음) E2E 확인. Docker DB 포함 백엔드 전체 스위트는 이번 변경과 무관(프론트 전용)이라 재실행 안 함.

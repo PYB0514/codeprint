@@ -1,5 +1,5 @@
 // 현재 프로젝트에 적용 중인 게이트 테마(DDD/레이어드/범용) 배지 + 규칙 목록 + 게이트 정책(자동/DDD/레이어드) 선택 바
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 
@@ -38,13 +38,13 @@ export default function GateThemeBadge({ projectId }: Props) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const load = () => {
+  const load = useCallback(() => {
     axios.get(`/api/projects/${projectId}/gate-theme`)
       .then(res => setTheme(res.data))
       .catch(() => setTheme(null))
-  }
+  }, [projectId])
 
-  useEffect(() => { load() }, [projectId])
+  useEffect(() => { load() }, [load])
 
   const handleSelectPolicy = async (policy: GatePolicy) => {
     if (!theme || policy === theme.gatePolicy) return

@@ -272,7 +272,7 @@ function GraphViewerInner() {
       })
       .catch(() => setError(t('graphViewer.notFound')))
       .finally(() => setLoading(false))
-  }, [projectId, searchParams, fitView])
+  }, [projectId, searchParams, fitView, setNodes, setEdges, t])
 
   // bgEnabled 또는 ownerBgUrl 변화 시 body 배경이미지 동기화
   useEffect(() => {
