@@ -57,10 +57,10 @@ A solo-developed project that doubles as a job-search portfolio, aiming beyond s
 ### Analysis engine
 - **Multi-language static analysis** — a tree-sitter AST-based analyzer covering 13 languages (Java, Kotlin, TypeScript, JavaScript, Python, Go, Rust, C, C++, C#, Ruby, PHP, Swift) plus Prisma schemas. Falls back to regex when the native parser fails.
 - **Framework-aware** — API endpoints (Spring, Express, NestJS, FastAPI/Flask, Django, Gin/Echo/Fiber, Rails, Laravel, ASP.NET, Ktor, Vapor) and DB entities (JPA, TypeORM, SQLAlchemy, Django ORM, Prisma, ActiveRecord, Eloquent, EF Core, Core Data, GORM, raw SQL).
-- **Relationship extraction** — `IMPORT`, `FUNCTION_CALL`, `INSTANTIATION`, `CONTAINS`, `DB_READ/WRITE`, `API_CALL` edges.
+- **Relationship extraction** — `IMPORT`, `FUNCTION_CALL`, `INSTANTIATION`, `DB_READ/WRITE/CREATE/UPDATE/DELETE`, `API_CALL`, `SERVICE_CALL`, `FIELD_DEPENDENCY` edges.
 
 ### Structural warning detection (the differentiator)
-Proactively detects structural/architectural issues via static analysis and classifies them by severity (HIGH/MEDIUM/LOW). 19 detectors.
+Proactively detects structural/architectural issues via static analysis and classifies them by severity (HIGH/MEDIUM/LOW). 20 detectors.
 - Circular dependencies (`CYCLIC_IMPORT`) · broken interface chains (`BROKEN_INTERFACE_CHAIN`) · `@Async` self-calls · DB layer bypass
 - DDD boundary violations (`CROSS_DOMAIN_CALL`, `CROSS_CONTEXT_IMPORT`, `DOMAIN_IMPORTS_INFRA`) · feature-slice boundary violations (`CROSS_FEATURE_IMPORT`, `FEATURE_LAYER_VIOLATION`) · architecture-intent drift (`INTENT_DRIFT`) · dead code · high fan-out
 - **False-positive calibration** — precision is continuously tuned via A/B measurement against real open-source repos (Spring PetClinic, gin, ripgrep, bulletproof-react, requests, and other per-language benchmarks). Zero-config: it automatically detects the project's structure (DDD, feature-slice) and fires only the matching rules.
@@ -132,11 +132,11 @@ cd frontend && npm install && npm run dev
 
 ## 🗺 Roadmap
 
-- [x] Multi-language analysis engine (tree-sitter AST) · 19 structural warning detectors + severity · false-positive calibration
+- [x] Multi-language analysis engine (tree-sitter AST) · 20 structural warning detectors + severity · false-positive calibration
 - [x] React Flow visualization · flow playback · dual domain/layer view · architecture-intent declarations · version retention policy
 - [x] Real-time collaboration · community · AI integration (BYOK) · MCP context endpoint
 - [x] GitHub PR webhook auto-review + `codeprint/structure` merge gate · payments · admin dashboard
-- [ ] **Self-service PR gate UI** — per-project webhook issuance and connection status (v1.0 critical path, in progress)
+- [x] **Self-service PR gate UI** — per-project webhook issuance and connection status
 - [x] Free distribution channel — **[published as a Claude Code Skill](https://github.com/PYB0514/codeprint-plugins)** (2026-07-11). The MCP JSON-RPC server (`POST /mcp/rpc`) was retired for lack of a real trigger, replaced by wrapping the local CLI as a Skill — see `decisions/DECISIONS_BACKEND.md` for details
 - [ ] Desktop app — local folder analysis (detect file changes → auto re-check before push), no code ever leaves the machine
 
@@ -146,7 +146,7 @@ cd frontend && npm install && npm run dev
 
 | Plan | Details |
 |---|---|
-| **Free** | Effectively all features free for individual use — unlimited analysis · graph visualization · structural warnings · community · AI explanations (bring your own API key) |
+| **Free** | Effectively all features free for individual use — unlimited public projects (up to 6 private) · graph visualization · 20 structural warning types · community · AI context export (bring your own API key, BYOK) |
 | **Pro · Desktop** | ₩4,900 per seat (currently one-time payment — recurring monthly billing in progress) — team seat billing (Toss Payments) + desktop license (upcoming). Individual billing is temporarily paused (to resume later) |
 
 > Analysis, visualization, and the gate stay free as the distribution funnel; billing sits on the team/org tier and the desktop license.
