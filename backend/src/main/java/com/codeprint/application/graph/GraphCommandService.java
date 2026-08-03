@@ -77,11 +77,10 @@ public class GraphCommandService {
 
     // 그래프 버전을 고정 슬롯에 고정 — 같은 슬롯 기존 점유분은 해제(덮어쓰기). 그래프가 프로젝트 소속인지 검증
     public void pinGraph(UUID projectId, UUID graphId, int slot) {
-        Graph graph = requireGraphInProject(projectId, graphId);
-        graph.pin(slot); // 슬롯 범위 검증 — clearPinnedSlot 부수효과 전에 조기 실패
+        requireGraphInProject(projectId, graphId);
         graphRepository.clearPinnedSlot(projectId, slot);
         // clearPinnedSlot이 영속성 컨텍스트를 초기화하므로 최신 상태로 재조회 후 고정
-        graph = requireGraphInProject(projectId, graphId);
+        Graph graph = requireGraphInProject(projectId, graphId);
         graph.pin(slot);
         graphRepository.save(graph);
     }

@@ -2724,7 +2724,9 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 
 **남은 것.** 마켓플레이스 게시(퍼블리셔 계정 필요)·`.vscodeignore`/패키징(vsix) 설정은 별도 단계로 미룸 — 이번 스코프는 "어떤 워크스페이스에서든 동작하게 만드는 것"까지.
 
-## GraphCommandService.pinGraph — 슬롯 범위 검증 순서 버그 수정 (2026-08-04, codeprint_159)
+## GraphCommandService.pinGraph — 슬롯 범위 검증 순서 "수정" (2026-08-04, codeprint_159)
+
+> ⚠️ **대체됨 (2026-08-04)** — "GraphCommandService.pinGraph 슬롯 범위 검증 순서 재수정(원복)"으로 대체. 아래 "수정"이 실제로는 unique 제약 위반 회귀를 유발하는 진짜 버그였음. 이유 요약: mocked 단위 테스트만으로 검증하고 실 Postgres로 검증하지 않아 Hibernate flush 순서 문제를 못 잡았음. 아래 원문은 이력 보존용.
 
 **배경.** 백엔드 테스트 커버리지 갭 점검 중 `Graph.pin(slot)`의 `1~5` 경계 검증이 CLAUDE.md TDD 트리거("경계 조건 있는 비즈니스 규칙")에 해당하는데 `GraphCommandServiceTest`엔 정상 슬롯(2·3)만 있고 경계값 테스트가 없다는 걸 발견 — 테스트를 추가하려고 기존 구현(`pinGraph`)을 다시 읽다가 실제 버그를 발견.
 
@@ -2733,3 +2735,19 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **수정.** `requireGraphInProject`로 조회한 첫 번째 `Graph` 객체에 `graph.pin(slot)`을 **`clearPinnedSlot` 호출 전에** 먼저 실행해 범위 검증만 조기 수행(이 객체는 어차피 `clearPinnedSlot`이 영속성 컨텍스트를 초기화해서 이후 버려지고 재조회함 — 기존 코드도 `requireGraphInProject`를 이미 2번 호출하고 있었으므로 호출 횟수 변화 없이 순서만 바꿈). `Graph.pin()`의 범위 검증 로직을 서비스 레이어에 중복 구현하지 않고 도메인 메서드를 그대로 재사용.
 
 **검증.** `pinGraph_outOfRangeSlot_throwsBeforeMutation` 신규 테스트(slot=0, slot=6) — `clearPinnedSlot`·`save` 둘 다 `never()` 확인. 기존 IDOR 테스트(`pinGraph_notInProject_throwsBeforeMutation`)·정상 케이스 포함 `GraphCommandServiceTest` 8건 전부 green. `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 7건).
+
+## GraphCommandService.pinGraph — 슬롯 범위 검증 순서 재수정(원복) — mocked 테스트가 못 잡은 unique 제약 회귀 (2026-08-04, codeprint_159) — 대체: 위 "슬롯 범위 검증 순서 '수정'"(같은 날)
+
+**번복 이유 — 자체 소급 적대적 검증에서 CONFIRMED 결함 발견.** 위 "수정"을 PR #761로 머지한 직후, "코드 변경 PR은 항상 독립 적대적 검증"(사용자 표준 규칙)을 이번에도 건너뛴 걸 자각하고 재검토하다가, `GraphJpaRepository.clearPinnedSlot`이 `@Modifying(clearAutomatically = true, flushAutomatically = true)`라는 걸 재확인 — `flushAutomatically=true`는 이 JPQL 벌크 쿼리 실행 **전에** 영속성 컨텍스트를 flush한다(Spring Data JPA 표준 동작). "수정"이 만든 순서는:
+1. `graph.pin(slot)`을 관리 엔티티(`clearPinnedSlot` 이전에 조회한 첫 `graph`)에 먼저 호출 → `pinnedSlot` 필드가 dirty 상태로 표시됨.
+2. `clearPinnedSlot(projectId, slot)` 호출 → **flush가 먼저 실행돼 dirty한 `pinnedSlot=slot`이 그대로 DB에 쓰여짐** → 이 시점에 **다른 그래프가 이미 같은 슬롯을 점유 중이면 `uq_graphs_project_pinned_slot`(V44, `(project_id, pinned_slot) WHERE pinned_slot IS NOT NULL` unique 부분 인덱스) 위반으로 즉시 예외**.
+
+**즉 "수정"은 `clearPinnedSlot`+재고정이라는 2단계 춤이 존재하는 이유(같은 슬롯에 두 그래프가 동시에 flush되는 걸 막기 위함) 자체를 무력화하는 결함이었다** — 원래 "버그"로 지목했던 범위 밖 슬롯 케이스는 애초에 DB `CHECK (pinned_slot BETWEEN 1 AND 5)` 제약 때문에 `clearPinnedSlot(projectId, 0)`이 항상 매칭 0건인 무해한 no-op이라 실질적 부수효과가 없었던 반면(가짜 버그), "수정"이 새로 만든 회귀는 **핀 기능의 주 사용 사례(이미 점유된 슬롯을 다른 그래프로 재고정)를 그대로 깨뜨리는 진짜 버그**였다.
+
+**왜 mocked 단위 테스트가 못 잡았나.** `GraphCommandServiceTest`는 `GraphRepository`를 Mockito로 mock해서 `clearPinnedSlot`·`save`가 실제 DB 부수효과 없이 단순 호출 기록만 남는다 — Hibernate의 dirty-checking·flush 타이밍은 애초에 시뮬레이션되지 않아 이 클래스의 버그를 구조적으로 탐지할 수 없다. `pinGraph_inProject_clearsSlotThenPins` 테스트가 green이었던 것도 이 때문(순서가 뭐든 mock은 다 통과시킴).
+
+**수정(원복).** `pinGraph`를 원래 순서로 되돌림 — `requireGraphInProject`(IDOR 검증, 저장 안 함) → `clearPinnedSlot` → 재조회 → `graph.pin(slot)`(여기서 범위 검증) → `save`. 범위 밖 슬롯은 여전히 `save` 전에 예외로 막힘(진짜 필요한 것 — DB 상태 오염 방지 — 은 그대로 보장), 다만 `clearPinnedSlot` 자체는 호출됨(무해한 no-op).
+
+**검증 — 이번엔 실 Postgres로.** 신규 `GraphCommandServicePinIntegrationTest`(`@DataJpaTest`+`docker compose`의 실 DB, `PostGraphSnapshotIntegrationTest`와 동일 패턴) — 그래프 A를 슬롯 3에 고정 → 그래프 B를 같은 슬롯 3에 재고정 → **"수정" 코드로 먼저 실행해 실제로 `ConstraintViolationException`이 재현되는 것까지 확인한 뒤**, 원복 코드로 같은 테스트가 green으로 전환되는 것까지 확인(A는 슬롯 해제, B가 슬롯 3 보유). 단위 테스트(`GraphCommandServiceTest` 8건, out-of-range 테스트는 `save` never()만 확인하도록 수정 — `clearPinnedSlot`은 이제 호출되는 게 정상이라 그 단언 제거)까지 전부 green. `analyzeLocal` 베이스라인 불변.
+
+**교훈.** "상태 전이/경계 조건" TDD 대상이라도 **JPA `@Modifying` 쿼리의 순서·flush 타이밍이 얽힌 로직은 mocked 단위 테스트만으론 불충분** — 이 클래스처럼 벌크 업데이트와 엔티티 dirty-checking이 상호작용하는 코드는 실 DB 통합 테스트(`@DataJpaTest`)가 필요하다는 새 하위 규칙으로 기록. 이번엔 병합 전이 아니라 병합 직후 자체 소급 검증으로 잡았다 — PR744(2026-08-03, `contexts/Context159.md`)와 같은 패턴 반복.
