@@ -2394,6 +2394,8 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 
 **한계·다음.** LLM 친화 로컬 도구 확장 후보 2번(`watchLocal` jar화)·3번(흐름재생/호출경로 추적 서버 이전, Desktop 스코프 결정 선행 필요)은 이번 세션 미착수 — `contexts/Context152.md` "D. LLM 친화 로컬 도구 확장" 참조. `LocalDiff.java`는 `LocalGraphQuery.java`와 마찬가지로 fat jar화(`diffLocalJar`)는 하지 않음 — 공개 Skill 배포 대상이 아니라 내부 개발 도구 용도로만 남긴다.
 
+> ⚠️ **대체됨 (2026-08-04)** — "watchLocal jar화 + VS Code 확장 이식성 확보"로 대체. Desktop 앱이 아니라 이미 존재하는 VS Code 확장의 "Codeprint 레포 전용" 한계를 푸는 용도로 재해석해 착수. 아래 원문은 이력 보존용.
+
 ## watchLocal jar화 보류 — Desktop GUI 미확정 상태에서 투기적 작업 판단 (2026-07-28, codeprint_153)
 
 **배경.** Context152 "LLM 친화 로컬 도구 확장" 후보 2번(watchLocal jar화)에 착수하려다, 사용자에게 목적을 확인하는 과정에서 재검토.
@@ -2706,3 +2708,18 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 - 백엔드 전체 스위트(Docker DB 포함, V68 마이그레이션 적용) green.
 - `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 7건).
 - **실 로그인 브라우저(Claude in Chrome) E2E**: `/mypage`에서 토글 클릭 → "AI 내보내기 차단됨"으로 UI 즉시 반영 → `/graph` 응답에 `aiExportDisabled:true` 확인 → **직접 fetch로 `aiRoleSpecProvider=ANTHROPIC`을 강제 요청해도 응답 MD에 AI 섹션이 전혀 없음을 확인**(서버 강제가 실제로 우회 불가함을 실증) → 토글 원복까지 완료.
+
+## watchLocal jar화 + VS Code 확장 이식성 확보 (2026-08-04, codeprint_159) — 대체: "watchLocal jar화 보류"(2026-07-28)
+
+**번복 이유.** 2026-07-28 결정은 "jar를 만들어도 담을 그릇(Desktop 앱 GUI)이 없다"는 전제였음 — 그 전제는 지금도 유효하다(Desktop 스코프는 여전히 미확정). 하지만 이번엔 **다른 그릇이 이미 있었다**: `vscode-extension/`(MVP 완료, 2026-07-13)이 정확히 그 그릇인데, 코드를 다시 보니 `spawn(gradlew, ['watchLocal', ...], {cwd: backendDir})`로 **Codeprint 레포 자신을 열었을 때만 동작**하도록 하드코딩돼 있었다(`workspaceRoot/backend/gradlew.bat` 경로 하드코딩) — "실질 병목은 게이팅이 아니라 엔진 번들링"이라는 codeprint_123 Fable 조사 결론이 정확히 이 지점이었다. 즉 이번 작업은 "Desktop 앱을 위한 선행 투자"가 아니라 "이미 만든 확장의 실사용 불가 버그를 고치는 것"으로 프레이밍이 바뀐다.
+
+**구현.**
+- `build.gradle`에 `watchLocalJar` 태스크 신설 — `exploreLocalJar`/`analyzeLocalJar`와 완전히 동일한 패턴(`toolsRuntime` 최소 의존성, `application-*.yml` 제외해 자격증명 유출 재발 방지). Main-Class는 `com.codeprint.tools.LocalWatcher`(gitignore 처리된 내부 전용 소스 — 컴파일된 jar만 배포).
+- `vscode-extension/bin/codeprint-watch.jar`로 번들(21MB, git 커밋). `extension.ts`를 `gradlew watchLocal` 실행 대신 `spawn('java', ['-jar', jarPath, workspaceRoot])`로 교체 — **cwd를 워크스페이스가 아니라 `context.globalStorageUri`(확장 전용 저장소)로 지정**해 분석 대상 프로젝트에 `build/` 폴더가 남지 않도록 함(기존엔 `backend/build/`였던 걸 그대로 재사용해서 문제가 안 됐던 지점, 범용화하며 새로 신경 써야 했던 부분).
+
+**검증.**
+- `watchLocalJar` 빌드 후 실제 격리된 스크래치 디렉터리(Codeprint 레포와 무관한 임시 `Hello.java` 1개)를 워크스페이스로, 별도 디렉터리를 확장 저장소로 지정해 `java -jar` 직접 실행 — DEAD_CODE 경고를 파일별로 정확히 감지, 파일 저장 시 자동 재분석까지 동작 확인. 워크스페이스 디렉터리에 `build/` 등 흔적이 전혀 안 남는 것도 확인(핵심 요구사항).
+- `npm run compile`(tsc) clean.
+- VS Code Extension Development Host(F5) 실행 자체는 사용자 로컬 GUI 세션이 필요해 이번 세션에서 미실증(2026-07-13 MVP 때와 동일한 한계) — 다음에 실사용 확인 시 F5로 재검증 권장.
+
+**남은 것.** 마켓플레이스 게시(퍼블리셔 계정 필요)·`.vscodeignore`/패키징(vsix) 설정은 별도 단계로 미룸 — 이번 스코프는 "어떤 워크스페이스에서든 동작하게 만드는 것"까지.

@@ -792,3 +792,13 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 **탈락한 대안.** ①"6개월마다 CLAUDE.md 전부 삭제"를 문자 그대로 채택 — 기각(위 배경 참조, 사고 이력 손실 위험). ②지금 바로 전체 규칙을 감사해 stale 규칙을 찾아 제거 — 기각, 사용자가 점진적 도입을 요청했고 무엇이 실제로 stale한지 신중한 별도 검토가 필요해 이번엔 트리거 조건만 만들어두고 첫 실행은 다음으로 미룸.
 
 **결과.** CLAUDE.md 한 문단 추가(기존 규칙 어디도 수정·삭제하지 않음, 순수 추가라 되돌리기 쉬움). 코드 변경 없음, 실행 없음 — 다음에 트리거(모델 교체 또는 사용자 요청) 발생 시 실제 감사를 진행한다.
+
+## 프로덕션 DB 볼륨 실측 완료 — 여러 세션째 미실행이던 항목 해소 (2026-08-04, codeprint_159)
+
+**배경.** `PROGRESS.md` "얼리억세스 Phase 0"의 "남은 것: 프로덕션 DB 볼륨 실측(관리자 로그인 또는 Railway 콘솔 접근 필요)"이 여러 세션째 미실행 상태였음 — 이번 세션에서 Railway CLI가 이미 로그인돼 있음을 확인(`railway whoami`)하고 직접 실행.
+
+**방법.** `railway variables --service Postgres --kv`로 `DATABASE_PUBLIC_URL` 조회(읽기 전용 연결 문자열) → 로컬에 이미 캐시된 `postgres:16` Docker 이미지로 psql 클라이언트 실행(`docker run --rm postgres:16 psql "$DB_URL" -c "..."`) — 새 설치·자격증명 저장 없이 1회성 읽기 전용 조회.
+
+**결과.** DB 총 크기 **410MB**(5GB 중 8.2%) — 여유 충분. 테이블별: `edges` 315MB·`nodes` 65MB·`parsed_file_cache` 18MB(나머지는 전부 수백 KB 이하). 프로젝트별 그래프 개수 확인 결과 "codeprint" 자기분석 프로젝트도 3개로 정상(2026-07-22 폭주 사고 당시 10개였던 것과 대조 — `GraphRetentionPolicy` 보존정책이 이후 정상 동작 중임을 재확인). 즉시 조치 불필요.
+
+**콜드스타트 재확인.** 첫 연결 시도가 `FATAL: the database system is not yet accepting connections`로 실패(Serverless 슬립, [G-5]/[G-9] 후속측정②와 동일 패턴) — 15초 재시도 1회로 정상 연결. 기존에 문서화된 패턴과 일치, 새로운 발견 없음.
