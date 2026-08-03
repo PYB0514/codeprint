@@ -69,6 +69,10 @@ public class Project {
     @Column(name = "path_prefix", length = 500)
     private String pathPrefix;
 
+    // AI 컨텍스트 내보내기(BYOK 역할 명세서/기능명세) 차단 — 코드가 외부 LLM으로 전송되는 걸 원천 금지하고 싶은 프로젝트용(DLP)
+    @Column(name = "ai_export_disabled", nullable = false)
+    private boolean aiExportDisabled;
+
     // 사용자 ID와 GitHub URL로 새 프로젝트 인스턴스 생성
     public static Project create(UUID userId, String githubRepoUrl, String name, String description) {
         Project project = new Project();
@@ -83,6 +87,7 @@ public class Project {
         project.gateArchitectureEnabled = true;
         project.gateExperimentalEnabled = false;
         project.gatePolicy = GatePolicy.AUTO;
+        project.aiExportDisabled = false;
         return project;
     }
 
@@ -154,6 +159,12 @@ public class Project {
     // 국소분석 스코프 설정 (null이면 해제 — 레포 전체로 되돌림)
     public void setPathPrefix(String pathPrefix) {
         this.pathPrefix = (pathPrefix != null && pathPrefix.isBlank()) ? null : pathPrefix;
+        this.updatedAt = Instant.now();
+    }
+
+    // AI 컨텍스트 내보내기 차단 켬/끔 전환(DLP)
+    public void setAiExportDisabled(boolean disabled) {
+        this.aiExportDisabled = disabled;
         this.updatedAt = Instant.now();
     }
 }

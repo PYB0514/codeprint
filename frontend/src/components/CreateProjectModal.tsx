@@ -15,6 +15,7 @@ interface Project {
   gateArchitectureEnabled: boolean
   gateExperimentalEnabled: boolean
   pathPrefix: string | null
+  aiExportDisabled: boolean
 }
 
 interface GitHubRepo {

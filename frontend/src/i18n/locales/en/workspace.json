@@ -429,6 +429,11 @@
       "close": "Close",
       "failed": "Something went wrong processing the request."
     },
+    "aiExportDisabled": {
+      "title": "When on, the server never generates AI context exports (role spec / feature spec) for this project — this fully blocks any chance of code being sent to an external LLM.",
+      "buttonOn": "AI export blocked",
+      "buttonOff": "Block AI export"
+    },
     "analysisFailed": "Analysis failed. Please try again.",
     "public": "Public",
     "private": "Private",

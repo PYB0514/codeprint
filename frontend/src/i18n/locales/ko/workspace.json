@@ -429,6 +429,11 @@
       "close": "닫기",
       "failed": "요청 처리 중 오류가 발생했습니다."
     },
+    "aiExportDisabled": {
+      "title": "켜면 이 프로젝트는 AI 컨텍스트 내보내기(역할 명세서·기능명세)를 서버가 아예 생성하지 않습니다 — 코드가 외부 LLM으로 전송될 가능성을 원천 차단합니다.",
+      "buttonOn": "AI 내보내기 차단됨",
+      "buttonOff": "AI 내보내기 차단"
+    },
     "analysisFailed": "분석 실패. 다시 시도해주세요.",
     "public": "공개",
     "private": "비공개",

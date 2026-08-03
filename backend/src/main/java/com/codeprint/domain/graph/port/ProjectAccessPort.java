@@ -29,7 +29,8 @@ public interface ProjectAccessPort {
     void setGatePolicy(UUID projectId, UUID userId, GatePolicy policy);
 
     // graph 도메인이 필요로 하는 project 필드만 추린 view
-    record ProjectAccessView(UUID id, UUID userId, String name, String githubRepoUrl, GatePolicy gatePolicy) {
+    record ProjectAccessView(UUID id, UUID userId, String name, String githubRepoUrl, GatePolicy gatePolicy,
+                              boolean aiExportDisabled) {
         // 레포 owner가 프로젝트 소유자의 GitHub 계정과 일치하는지 (내 레포 vs 외부 레포 분석 판정)
         public boolean isOwnRepo(String ownerUsername) {
             return com.codeprint.shared.GithubRepoOwner.matches(githubRepoUrl, ownerUsername);

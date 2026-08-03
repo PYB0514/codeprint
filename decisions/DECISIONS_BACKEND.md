@@ -2695,6 +2695,20 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 
 **검증.** 신규 `UserAiKeyServiceTest` 3건(정상 재배열·미등록 프로바이더 포함 거부·등록 프로바이더 누락 거부) + 기존 "신규 생성" 테스트에 priority 값 단언 추가, `RateLimitFilterTest` 1건 추가(우선순위 엔드포인트도 `ai-key-write` 버킷 공유 확인) — 전부 green. `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 7건 그대로). **실제 로컬 DB로 end-to-end 검증**: 마이그레이션 적용 후 기존 키 2개(Gemini·OpenAI)가 등록순 그대로 0·1로 정확히 백필된 것을 psql로 직접 확인 → 설정 페이지에서 "↓" 버튼으로 OpenAI를 1순위로 옮김 → DB에 실제로 priority가 스왑된 것을 재확인 → 새로고침 후에도 서버가 그 순서를 그대로 반환하는 것까지 확인.
 
+## AI 내보내기 차단 토글(DLP) — 프로젝트 단위 서버 강제 (2026-08-04, codeprint_159)
+
+**배경.** `PROGRESS.md` "보안 키워드 점검발 신규 기능 후보" — `SECURITY_REVIEW.md` 전수 점검에서 나온 "완전한 DLP 토글"이 유일하게 남아있던 항목. 기존엔 BYOK 등록 화면의 안내 문구("요청 시에만 본인 계정으로 직접 LLM 호출")뿐이었고, 실제로 그 기능 자체를 꺼버리는 스위치는 없었음.
+
+**결정 — 프로젝트 단위, 서버가 강제.** Team 유료축으로 분류돼 있었으나 결제 로직과 무관(단순 boolean 설정)이라 유료 게이트 없이 바로 구현. 스코프는 Team 전체가 아니라 **프로젝트 단위**(`projects.ai_export_disabled`, V68) — 기존 `gatePolicy`/`pathPrefix`와 동일한 소유자-설정 패턴 재사용, 새 Team 전역 설정 개념을 만들지 않음(§2 단순성, 여러 프로젝트에 일괄 적용은 팀이 실제로 그 니즈를 보이면 재검토).
+
+**핵심 — UI 숨김이 아니라 서버 강제.** `GraphController.getContextMd`가 `aiRoleSpecProvider`/`aiFeatureSpecProvider` 파라미터를 실행하기 전에 `ProjectAccessView.aiExportDisabled()`를 확인 — 켜져 있으면 클라이언트가 뭘 요청하든(직접 API 호출로 UI를 우회해도) 서버가 그 자리에서 생략한다. `ProjectAccessPort.ProjectAccessView`에 필드 추가(Graph 컨텍스트가 Project 도메인을 직접 참조하지 않는 기존 포트 패턴 그대로 재사용).
+
+**검증.**
+- TDD — `ProjectCommandServiceTest` 2건(소유자 반영·비소유자 거부) + `GraphControllerOwnershipTest` 1건(차단 프로젝트는 `aiRoleSpecProvider` 요청해도 `roleSpecService.generateSection` 호출 자체가 안 됨을 verify로 확인).
+- 백엔드 전체 스위트(Docker DB 포함, V68 마이그레이션 적용) green.
+- `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 7건).
+- **실 로그인 브라우저(Claude in Chrome) E2E**: `/mypage`에서 토글 클릭 → "AI 내보내기 차단됨"으로 UI 즉시 반영 → `/graph` 응답에 `aiExportDisabled:true` 확인 → **직접 fetch로 `aiRoleSpecProvider=ANTHROPIC`을 강제 요청해도 응답 MD에 AI 섹션이 전혀 없음을 확인**(서버 강제가 실제로 우회 불가함을 실증) → 토글 원복까지 완료.
+
 ## watchLocal jar화 + VS Code 확장 이식성 확보 (2026-08-04, codeprint_159) — 대체: "watchLocal jar화 보류"(2026-07-28)
 
 **번복 이유.** 2026-07-28 결정은 "jar를 만들어도 담을 그릇(Desktop 앱 GUI)이 없다"는 전제였음 — 그 전제는 지금도 유효하다(Desktop 스코프는 여전히 미확정). 하지만 이번엔 **다른 그릇이 이미 있었다**: `vscode-extension/`(MVP 완료, 2026-07-13)이 정확히 그 그릇인데, 코드를 다시 보니 `spawn(gradlew, ['watchLocal', ...], {cwd: backendDir})`로 **Codeprint 레포 자신을 열었을 때만 동작**하도록 하드코딩돼 있었다(`workspaceRoot/backend/gradlew.bat` 경로 하드코딩) — "실질 병목은 게이팅이 아니라 엔진 번들링"이라는 codeprint_123 Fable 조사 결론이 정확히 이 지점이었다. 즉 이번 작업은 "Desktop 앱을 위한 선행 투자"가 아니라 "이미 만든 확장의 실사용 불가 버그를 고치는 것"으로 프레이밍이 바뀐다.

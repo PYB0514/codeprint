@@ -13,7 +13,10 @@ import com.codeprint.application.graph.RepoMapService;
 import com.codeprint.application.graph.RoleSpecService;
 import com.codeprint.application.graph.WarningSuppressionService;
 import com.codeprint.domain.graph.Graph;
+import com.codeprint.domain.graph.port.ProjectAccessPort;
 import com.codeprint.domain.user.User;
+import com.codeprint.shared.ai.AiProvider;
+import com.codeprint.shared.gate.GatePolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -130,6 +134,27 @@ class GraphControllerOwnershipTest {
 
         assertThat(response.getStatusCode().value()).isEqualTo(404);
         verify(repoMapService, never()).generate(any(), any(), any());
+    }
+
+    // AI 내보내기를 차단(DLP)한 프로젝트는 aiRoleSpecProvider/aiFeatureSpecProvider를 요청해도 서버가 강제로 생략해야 한다
+    // (UI에서 버튼을 숨기는 것만으론 우회 가능하므로 서버 단에서도 반드시 막혀야 함)
+    @Test
+    @DisplayName("getContextMd — AI 내보내기 차단 프로젝트는 요청해도 AI 섹션을 생성하지 않는다")
+    void getContextMd_aiExportDisabled_skipsAiSections() {
+        UUID ownedGraphId = UUID.randomUUID();
+        Graph graph = mock(Graph.class);
+        when(graph.getId()).thenReturn(ownedGraphId);
+        when(graphFacade.getOwnedProject(projectId, userId)).thenReturn(
+                new ProjectAccessPort.ProjectAccessView(projectId, userId, "n", "https://github.com/x/y", GatePolicy.AUTO, true));
+        when(graphQueryService.findLatestByProject(projectId)).thenReturn(Optional.of(graph));
+        when(graphQueryService.getNodes(ownedGraphId)).thenReturn(List.of());
+        when(repoMapService.generate(any(), any(), any())).thenReturn("# tree");
+
+        var response = controller.getContextMd(projectId, null, "full", "folder", AiProvider.ANTHROPIC, AiProvider.ANTHROPIC, false, user);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        verify(roleSpecService, never()).generateSection(any(), any(), any(), any());
+        verify(featureSpecService, never()).generateSection(any(), any(), any());
     }
 
     // 비소유자가 diff 호출 시 차단되고 diff 연산을 수행하지 않아야 한다
