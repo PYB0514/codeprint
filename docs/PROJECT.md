@@ -1,6 +1,6 @@
 # Codeprint — 프로젝트 개요
 
-> 아키텍처·데이터 모델 → [`ARCHITECTURE.md`](ARCHITECTURE.md) · 분석 엔진 상세 → [`ANALYSIS_ENGINE.md`](ANALYSIS_ENGINE.md) · 전체 기능·API 인벤토리 → [`FEATURES.md`](FEATURES.md) · 사용자 관점 기능 요약 → [`USER_FEATURES.md`](USER_FEATURES.md) · 제품 전략/지향점 → [`../PRODUCT_STRATEGY.md`](../PRODUCT_STRATEGY.md) · 개발 원칙 → [`../CLAUDE.md`](../CLAUDE.md)
+> 전체를 한 문서로 훑고 싶다면 → [`PRODUCT_GUIDE.md`](PRODUCT_GUIDE.md) · 아키텍처·데이터 모델 → [`ARCHITECTURE.md`](ARCHITECTURE.md) · 분석 엔진 상세 → [`ANALYSIS_ENGINE.md`](ANALYSIS_ENGINE.md) · 전체 기능·API 인벤토리 → [`FEATURES.md`](FEATURES.md) · 사용자 관점 기능 요약 → [`USER_FEATURES.md`](USER_FEATURES.md) · 제품 전략/지향점 → [`../PRODUCT_STRATEGY.md`](../PRODUCT_STRATEGY.md) · 개발 원칙 → [`../CLAUDE.md`](../CLAUDE.md)
 
 ## 프로젝트 개요
 
