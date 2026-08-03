@@ -156,6 +156,7 @@ public class GraphController {
                     body.put("warnings", partitioned.get(false));
                     body.put("suppressedWarnings", partitioned.get(true));
                     body.put("ownRepo", project.isOwnRepo(user.getUsername()));
+                    body.put("aiExportDisabled", project.aiExportDisabled());
                     // 대형 레포 절단 안내 — 기존 그래프(NULL)는 미포함
                     if (graph.getTotalFileCount() != null) {
                         body.put("analyzedFileCount", graph.getAnalyzedFileCount());
@@ -181,7 +182,7 @@ public class GraphController {
             @RequestParam(defaultValue = "false") boolean includeMigrationGuide,
             @AuthenticationPrincipal User user) {
 
-        graphFacade.getOwnedProject(projectId, user.getId());
+        var ownedProject = graphFacade.getOwnedProject(projectId, user.getId());
 
         Optional<Graph> graphOpt = graphId != null
                 ? graphQueryService.findById(graphId).filter(g -> g.getProjectId().equals(projectId))
@@ -191,11 +192,12 @@ public class GraphController {
                     List<Node> nodes = graphQueryService.getNodes(graph.getId()).stream()
                             .filter(n -> !n.isHidden()).toList();
                     String content = repoMapService.generate(nodes, level, grouping);
-                    // "역할 명세서"(레이어A)·"기능명세"(레이어B) — 요청 시에만, 요청 범위 생성(DB 영구 저장 없음), BYOK 키 등록 시에만 동작
-                    if (aiRoleSpecProvider != null) {
+                    // "역할 명세서"(레이어A)·"기능명세"(레이어B) — 요청 시에만, 요청 범위 생성(DB 영구 저장 없음), BYOK 키 등록 시에만 동작.
+                    // 프로젝트가 AI 내보내기를 차단(DLP)했으면 클라이언트가 뭘 요청하든 서버가 강제로 생략 — UI 숨김만으론 우회 가능
+                    if (aiRoleSpecProvider != null && !ownedProject.aiExportDisabled()) {
                         content += roleSpecService.generateSection(projectId, graph.getId(), user.getId(), aiRoleSpecProvider);
                     }
-                    if (aiFeatureSpecProvider != null) {
+                    if (aiFeatureSpecProvider != null && !ownedProject.aiExportDisabled()) {
                         content += featureSpecService.generateSection(graph.getId(), user.getId(), aiFeatureSpecProvider);
                     }
                     // DDD 마이그레이션 후보 가이드 — 결정론적 계산이라 BYOK 무관, 이미 구조가 감지되거나 신호 부족이면 섹션 자체가 없음(null)

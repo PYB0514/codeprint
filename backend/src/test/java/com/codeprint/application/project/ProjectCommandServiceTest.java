@@ -266,6 +266,36 @@ class ProjectCommandServiceTest {
         verifyNoInteractions(graphWarningsCachePort);
     }
 
+    // --- setAiExportDisabled: 소유권 ---
+
+    @Test
+    @DisplayName("setAiExportDisabled — 소유자면 반영")
+    void setAiExportDisabled_owner_succeeds() {
+        UUID ownerId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        Project project = Project.create(ownerId, VALID_URL, "n", "d");
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRepository.save(project)).thenReturn(project);
+
+        Project result = service.setAiExportDisabled(projectId, ownerId, true);
+
+        assertThat(result.isAiExportDisabled()).isTrue();
+    }
+
+    @Test
+    @DisplayName("setAiExportDisabled — 소유자가 아니면 IllegalStateException, 저장 안 함")
+    void setAiExportDisabled_notOwner_rejected() {
+        UUID ownerId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        Project project = Project.create(ownerId, VALID_URL, "n", "d");
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+
+        assertThatThrownBy(() -> service.setAiExportDisabled(projectId, otherId, true))
+                .isInstanceOf(IllegalStateException.class);
+        verify(projectRepository, never()).save(any());
+    }
+
     // --- deleteProject: 소유권 ---
 
     @Test

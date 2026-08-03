@@ -17,6 +17,7 @@ interface Project {
   gateArchitectureEnabled: boolean
   gateExperimentalEnabled: boolean
   pathPrefix: string | null
+  aiExportDisabled: boolean
 }
 
 interface Props {
@@ -86,6 +87,10 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
   const [pathPrefix, setPathPrefix] = useState(project.pathPrefix ?? '')
   const [pathPrefixSaving, setPathPrefixSaving] = useState(false)
   const [pathPrefixError, setPathPrefixError] = useState<string | null>(null)
+
+  // AI 내보내기 차단(DLP) 상태 — 켜면 이 프로젝트는 서버가 BYOK 역할 명세서/기능명세를 아예 생성하지 않음
+  const [aiExportDisabled, setAiExportDisabled] = useState(project.aiExportDisabled)
+  const [aiExportDisabledSaving, setAiExportDisabledSaving] = useState(false)
 
   // PR 검사 셀프서비스 연결 상태 (webhook 시크릿 발급/조회/재발급/해제)
   const [showPrGate, setShowPrGate] = useState(false)
@@ -203,6 +208,21 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
       setPathPrefixError(t('projectCard.pathPrefix.failed'))
     } finally {
       setPathPrefixSaving(false)
+    }
+  }
+
+  // AI 내보내기 차단(DLP) 토글을 서버에 반영
+  const handleToggleAiExportDisabled = async () => {
+    const next = !aiExportDisabled
+    setAiExportDisabledSaving(true)
+    try {
+      await axios.patch(
+        `/api/projects/${project.id}/ai-export-disabled`,
+        { disabled: next }
+      )
+      setAiExportDisabled(next)
+    } finally {
+      setAiExportDisabledSaving(false)
     }
   }
 
@@ -903,6 +923,14 @@ export default function ProjectCard({ project, onDelete, onVisibilityChange, aut
             title={t('projectCard.prGate.title')}
           >
             {t('projectCard.prGate.button')}
+          </button>
+          <button
+            onClick={handleToggleAiExportDisabled}
+            disabled={aiExportDisabledSaving}
+            className={`text-xs disabled:opacity-40 ${aiExportDisabled ? 'text-red-400 hover:text-red-300' : 'text-gray-500 hover:text-gray-300'}`}
+            title={t('projectCard.aiExportDisabled.title')}
+          >
+            {aiExportDisabled ? t('projectCard.aiExportDisabled.buttonOn') : t('projectCard.aiExportDisabled.buttonOff')}
           </button>
         </div>
 

@@ -16,7 +16,8 @@ public record ProjectResponse(
         String primaryBranch,
         boolean gateArchitectureEnabled,
         boolean gateExperimentalEnabled,
-        String pathPrefix
+        String pathPrefix,
+        boolean aiExportDisabled
 ) {
     // 프로젝트 도메인 객체를 응답 DTO로 변환
     public static ProjectResponse from(Project project) {
@@ -30,7 +31,8 @@ public record ProjectResponse(
                 project.getPrimaryBranch(),
                 project.isGateArchitectureEnabled(),
                 project.isGateExperimentalEnabled(),
-                project.getPathPrefix()
+                project.getPathPrefix(),
+                project.isAiExportDisabled()
         );
     }
 }

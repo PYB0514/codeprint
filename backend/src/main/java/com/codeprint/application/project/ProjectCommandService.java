@@ -142,6 +142,17 @@ public class ProjectCommandService {
         return projectRepository.save(project);
     }
 
+    // 소유자 확인 후 AI 컨텍스트 내보내기 차단 토글(DLP) — 코드가 외부 LLM으로 전송되는 걸 원천 금지
+    public Project setAiExportDisabled(UUID projectId, UUID requestingUserId, boolean disabled) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+        if (!project.getUserId().equals(requestingUserId)) {
+            throw new IllegalStateException("Not authorized to modify this project");
+        }
+        project.setAiExportDisabled(disabled);
+        return projectRepository.save(project);
+    }
+
     // 소유자 확인 후 프로젝트 삭제
     public void deleteProject(UUID projectId, UUID requestingUserId) {
         Project project = projectRepository.findById(projectId)

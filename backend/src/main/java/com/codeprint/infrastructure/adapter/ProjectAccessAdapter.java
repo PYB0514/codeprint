@@ -64,6 +64,6 @@ public class ProjectAccessAdapter implements ProjectAccessPort {
     // project 도메인 엔티티를 graph 도메인 소유 view로 변환 — 필요한 필드만 추림
     private ProjectAccessView toView(Project project) {
         return new ProjectAccessView(project.getId(), project.getUserId(), project.getName(),
-                project.getGithubRepoUrl(), project.getGatePolicy());
+                project.getGithubRepoUrl(), project.getGatePolicy(), project.isAiExportDisabled());
     }
 }

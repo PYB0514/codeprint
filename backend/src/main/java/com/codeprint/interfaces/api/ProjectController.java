@@ -128,6 +128,16 @@ public class ProjectController {
                 projectCommandService.setPathPrefix(projectId, user.getId(), request.pathPrefix())));
     }
 
+    // AI 컨텍스트 내보내기 차단 토글(DLP) — 켜면 이 프로젝트는 BYOK 역할 명세서/기능명세를 서버가 아예 생성하지 않음
+    @PatchMapping("/{projectId}/ai-export-disabled")
+    public ResponseEntity<ProjectResponse> setAiExportDisabled(
+            @PathVariable UUID projectId,
+            @RequestBody AiExportDisabledRequest request,
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(ProjectResponse.from(
+                projectCommandService.setAiExportDisabled(projectId, user.getId(), request.disabled())));
+    }
+
     // 프로젝트 삭제
     @DeleteMapping("/{projectId}")
     public ResponseEntity<Void> deleteProject(
@@ -154,4 +164,5 @@ public class ProjectController {
 
     // 국소분석 스코프 설정 요청 DTO (null이면 해제)
     public record PathPrefixRequest(String pathPrefix) {}
+    public record AiExportDisabledRequest(boolean disabled) {}
 }

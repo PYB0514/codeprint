@@ -336,6 +336,7 @@ function GraphPageInner() {
   const [truncation, setTruncation] = useState<{ analyzed: number; total: number } | null>(null)
   // 내 레포 분석 vs 외부 공개 레포 분석 판정 (1차: owner 문자열 비교, org 레포는 예외적으로 "외부"로 뜰 수 있음)
   const [ownRepo, setOwnRepo] = useState<boolean | null>(null)
+  const [aiExportDisabled, setAiExportDisabled] = useState(false)
   const [showDomainBoxes, setShowDomainBoxes] = useState(true)
   // 탭 분리: null = 전체 보기, 문자열 = 해당 도메인/레이어만 표시
   const [activeDomainTab, setActiveDomainTab] = useState<string | null>(null)
@@ -671,9 +672,10 @@ function GraphPageInner() {
     try {
       const res = await axios.get(`/api/projects/${projectId}/graph`)
       type WarningItem = { type: string; severity?: 'HIGH' | 'MEDIUM' | 'LOW'; nodeIds: string[]; edgeIds?: string[]; message: string; fingerprint?: string }
-      const { graphId: gid, nodes: rn, edges: re, warnings: w, suppressedWarnings: sw, analyzedFileCount, totalFileCount, ownRepo: or } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: WarningItem[]; suppressedWarnings?: WarningItem[]; analyzedFileCount?: number; totalFileCount?: number; ownRepo?: boolean }
+      const { graphId: gid, nodes: rn, edges: re, warnings: w, suppressedWarnings: sw, analyzedFileCount, totalFileCount, ownRepo: or, aiExportDisabled: aed } = res.data as { graphId: string; nodes: RawNode[]; edges: RawEdge[]; warnings?: WarningItem[]; suppressedWarnings?: WarningItem[]; analyzedFileCount?: number; totalFileCount?: number; ownRepo?: boolean; aiExportDisabled?: boolean }
       setGraphId(gid)
       setOwnRepo(or ?? null)
+      setAiExportDisabled(aed ?? false)
       // 500개 초과 절단 시에만 안내 배너 (기존 그래프는 카운트 없음)
       setTruncation(
         totalFileCount != null && analyzedFileCount != null && totalFileCount > analyzedFileCount
@@ -1912,7 +1914,7 @@ function GraphPageInner() {
               >
                 {exportingContextMd ? t('graphPage.generating') : t('graphPage.exportContextByDomain')}
               </button>
-              {aiKeyProvider && (
+              {aiKeyProvider && !aiExportDisabled && (
                 <button
                   onClick={() => { handleDownloadContextMd('full', 'folder', true); setOpenToolbarMenu(null) }}
                   disabled={exportingContextMd || rawNodes.length === 0}

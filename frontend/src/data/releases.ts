@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.160.0',
+    date: '2026-08-04',
+    title: 'AI 내보내기 차단 토글 — 프로젝트 단위로 코드 외부 전송을 원천 차단',
+    type: 'feature',
+    items: [
+      { category: '신규', desc: '프로젝트 카드에서 "AI 내보내기 차단"을 켜면, 그 프로젝트는 AI 컨텍스트 내보내기(역할 명세서·기능명세)를 서버가 아예 생성하지 않습니다. 코드가 외부 LLM으로 전송될 가능성을 원천 차단하고 싶은 프로젝트에 사용하세요.' },
+    ],
+  },
+  {
     version: 'v0.159.0',
     date: '2026-08-04',
     title: 'DDD 마이그레이션 후보 가이드 — 도메인 구조 없는 프로젝트에 후보 모듈 제안',
