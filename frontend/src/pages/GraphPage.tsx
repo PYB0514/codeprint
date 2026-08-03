@@ -1111,7 +1111,7 @@ function GraphPageInner() {
   // 전체 그래프를 원본 크기 PNG로 다운로드
   // "AI 컨텍스트 (.md)" 다운로드 — 생성은 백엔드(RepoMapService)가 담당, 프론트는 결과를 받아 파일로 저장만 한다
   // grouping="context"는 레이어드 폴더에 흩어진 같은 기능 파일을 바운디드 컨텍스트별로 묶어 보여준다(감지 실패 시 폴더 구조로 자동 폴백)
-  const handleDownloadContextMd = useCallback(async (level: 'full' | 'summary' = 'full', grouping: 'folder' | 'context' = 'folder', includeAiRoleSpec = false) => {
+  const handleDownloadContextMd = useCallback(async (level: 'full' | 'summary' = 'full', grouping: 'folder' | 'context' = 'folder', includeAiRoleSpec = false, includeMigrationGuide = false) => {
     if (!projectId) return
     setExportingContextMd(true)
     try {
@@ -1122,6 +1122,8 @@ function GraphPageInner() {
         params.set('aiRoleSpecProvider', aiKeyProvider)
         params.set('aiFeatureSpecProvider', aiKeyProvider)
       }
+      // DDD 마이그레이션 후보 가이드 — LLM 불필요, 결정론적 계산(무료)
+      if (includeMigrationGuide) params.set('includeMigrationGuide', 'true')
       const url = `/api/projects/${projectId}/graph/context-md?${params.toString()}`
       const res = await axios.get<{ content: string }>(url)
       const md = res.data.content
@@ -1920,6 +1922,14 @@ function GraphPageInner() {
                   {exportingContextMd ? t('graphPage.generating') : t('graphPage.exportWithAiRoleSpec')}
                 </button>
               )}
+              <button
+                onClick={() => { handleDownloadContextMd('full', 'folder', false, true); setOpenToolbarMenu(null) }}
+                disabled={exportingContextMd || rawNodes.length === 0}
+                title={t('graphPage.exportMigrationGuideTitle')}
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-800/60 hover:bg-gray-800 text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {exportingContextMd ? t('graphPage.generating') : t('graphPage.exportMigrationGuide')}
+              </button>
               <button
                 onClick={() => { handleExportImage(); setOpenToolbarMenu(null) }}
                 disabled={exporting || rawNodes.length === 0}

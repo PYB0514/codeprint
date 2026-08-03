@@ -653,6 +653,8 @@
     "exportContextByDomain": "↓ AI Context - By Context (.md)",
     "exportWithAiRoleSpec": "↓ AI Context + AI Analysis (.md)",
     "exportWithAiRoleSpecTitle": "Uses your own LLM key (registered in Settings) to estimate uncommented function roles and per-context feature summaries together. AI-estimated, not stored on the server.",
+    "exportMigrationGuide": "↓ DDD Migration Candidate Guide (.md)",
+    "exportMigrationGuideTitle": "When no domain structure is detected, traces each API endpoint's execution path to suggest candidate module boundaries. Computed deterministically without an LLM (free) — adds nothing if domain/feature structure is already detected.",
     "savingImage": "Saving...",
     "exportImage": "↓ Image (.png)",
     "shareToCommunityButton": "Share to Community",
