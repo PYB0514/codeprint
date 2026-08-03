@@ -39,8 +39,11 @@ export function useTeamChat(roomId: string | null, notificationsEnabled = true) 
   const clientRef = useRef<Client | null>(null)
   const [messages, setMessages] = useState<TeamChatMessage[]>([])
   const [connected, setConnected] = useState(false)
+  // WebSocket 콜백은 roomId 기준으로 한 번만 등록되므로, 토글이 즉시 반영되려면 최신값을 ref로 읽어야 함(재연결 없이)
+  const notificationsEnabledRef = useRef(notificationsEnabled)
 
   useEffect(() => {
+    notificationsEnabledRef.current = notificationsEnabled
     if (notificationsEnabled) {
       requestNotificationPermission()
     }
@@ -60,7 +63,7 @@ export function useTeamChat(roomId: string | null, notificationsEnabled = true) 
             const next = [...prev, msg]
             return next.length > MAX_MESSAGES ? next.slice(-MAX_MESSAGES) : next
           })
-          if (notificationsEnabled) showNotification(msg)
+          if (notificationsEnabledRef.current) showNotification(msg)
         })
       },
       onDisconnect: () => setConnected(false),

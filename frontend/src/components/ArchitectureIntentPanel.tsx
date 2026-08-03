@@ -173,7 +173,7 @@ export default function ArchitectureIntentPanel({ projectId, filePaths, onSaved 
     } finally {
       setSaving(false)
     }
-  }, [projectId, modules, rules, onSaved, t])
+  }, [projectId, modules, rules, onSaved, t, ignore])
 
   // 모듈·규칙 초기화 — 예외 규칙(경고 패널 관리)이 있으면 보존(PUT), 없으면 전체 삭제(DELETE)
   const clear = useCallback(async () => {

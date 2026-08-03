@@ -144,6 +144,8 @@ export default function CommunityPage() {
         }
       })
       .finally(() => setLoading(false))
+    // 마운트 시 1회만 딥링크(postId) 확인 — searchParams를 deps에 넣으면 아래 필터 이펙트가 URL을 바꿀 때마다 이 초기 선택 로직이 재실행됨
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 검색어, 탭, 정렬 변경 시 300ms 디바운스 후 게시글 재조회 (페이지 초기화)

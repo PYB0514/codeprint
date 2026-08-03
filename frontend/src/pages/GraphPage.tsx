@@ -639,6 +639,15 @@ function GraphPageInner() {
   // openFileSidebar는 rawNodes에 의존해 매 fetchGraph 호출 후 재생성됨 → ref로 안정화
   const openFileSidebarRef = useRef(openFileSidebar)
   useEffect(() => { openFileSidebarRef.current = openFileSidebar }, [openFileSidebar])
+  // fetchGraph는 마운트 시 1회 + projectId 변경 시에만 재실행돼야 함(아래 749행 근처 effect) —
+  // labelMode/layoutPreset/searchParams를 deps에 그대로 넣으면 사용자가 뷰만 전환해도 서버 재조회가 트리거된다.
+  // ref로 최신값만 읽어 fetchGraph 정체성은 그대로 두고 값은 항상 최신을 쓴다(openFileSidebarRef와 동일 패턴).
+  const labelModeRef = useRef(labelMode)
+  useEffect(() => { labelModeRef.current = labelMode }, [labelMode])
+  const layoutPresetRef = useRef(layoutPreset)
+  useEffect(() => { layoutPresetRef.current = layoutPreset }, [layoutPreset])
+  const searchParamsRef = useRef(searchParams)
+  useEffect(() => { searchParamsRef.current = searchParams }, [searchParams])
 
   // GraphPage 언마운트 시 body 배경이미지 정리
   useEffect(() => () => { document.body.classList.remove('has-bg') }, [])
@@ -685,7 +694,7 @@ function GraphPageInner() {
       const warningList = w ?? []
       setWarnings(warningList)
       setSuppressedWarnings(sw ?? [])
-      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelMode, layoutPreset, openFileSidebarRef.current)
+      const { nodes: layoutNodes, edges: layoutEdges } = buildLayout(rn, re, labelModeRef.current, layoutPresetRef.current, openFileSidebarRef.current)
       setRawNodes(rn)
       setRawEdgesCache(re)
       // bgColor 초기화 — 서버에서 받은 색상을 즉시 반영 맵에 저장
@@ -713,7 +722,7 @@ function GraphPageInner() {
       const apiCount = rn.filter((n) => n.type === 'API_ENDPOINT').length
       setCounts({ files: fileCount, funcs: funcCount, edges: re.length })
       // 분석 완료 직후 진입 시 결과 카드 표시 — 구조 카운트 + 경고 가치
-      if (searchParams.get('fresh') === '1' && fileCount > 0) {
+      if (searchParamsRef.current.get('fresh') === '1' && fileCount > 0) {
         const high = warningList.filter((w) => w.severity === 'HIGH').length
         const medium = warningList.filter((w) => w.severity === 'MEDIUM').length
         const low = warningList.filter((w) => w.severity === 'LOW').length
@@ -730,7 +739,7 @@ function GraphPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, setNodes, setEdges, applyEdgeVisibility, fitView, t])
+  }, [projectId, setNodes, setEdges, fitView, t])
   // 예외 규칙 변경 후 경고를 재조회하기 위해 최신 fetchGraph를 ref에 보관 — 렌더 중 ref 쓰기는 동시성 렌더링에서 비안전해 커밋 직전(useLayoutEffect)으로 이동
   useLayoutEffect(() => {
     fetchGraphRef.current = fetchGraph
@@ -849,7 +858,7 @@ function GraphPageInner() {
       })
       setEdges(applyEdgeVisibility(layoutEdges, false, false, false, sb, false, false))
     }
-  }, [rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, applyEdgeVisibility])
+  }, [rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar])
 
   // 그래프의 프리셋 목록 로드
   const loadPresets = useCallback(async (gid: string) => {
@@ -923,7 +932,7 @@ function GraphPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, applyEdgeVisibility, showBrokenEdges, t])
+  }, [projectId, labelMode, layoutPreset, openFileSidebar, setNodes, setEdges, showBrokenEdges, t])
 
   // 현재 보는 버전 라벨 표시용 — 버전 목록을 조용히 로드 (graphId 변경 시 갱신)
   useEffect(() => {
@@ -1026,7 +1035,7 @@ function GraphPageInner() {
       setNodes(layoutNodes)
       setEdges(applyEdgeVisibility(layoutEdges, false, false, false, showBrokenEdges, false, false))
     }
-  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showBrokenEdges, applyEdgeVisibility])
+  }, [labelMode, layoutPreset, rawNodes, rawEdgesCache, setNodes, setEdges, openFileSidebar, showBrokenEdges])
 
   // 특정 노드 타입의 표시/숨김 토글 — rawNodes에서 ID로 타입 역조회
   const toggleNodeType = useCallback((nodeType: string) => {
@@ -1066,7 +1075,7 @@ function GraphPageInner() {
       setEdges(applyEdgeVisibility(le, false, false, false, showBrokenEdges, false, false))
       setTimeout(() => fitView({ padding: 0.1, duration: 300 }), 50)
     }
-  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showBrokenEdges, applyEdgeVisibility])
+  }, [layoutPreset, rawNodes, rawEdgesCache, labelMode, setNodes, setEdges, fitView, openFileSidebar, showBrokenEdges])
 
   // 키보드 단축키 — / 검색 포커스, Esc 사이드바 닫기, f fitView, l 라벨 전환
   useEffect(() => {
@@ -1467,7 +1476,7 @@ function GraphPageInner() {
     }
 
     openFuncNode(node.id)
-  }, [rawNodes, rawEdgesCache, commonPrefix, knownDomains, layoutPreset, openFuncNode, startPlayback, resetPlayback])
+  }, [rawNodes, rawEdgesCache, commonPrefix, knownDomains, layoutPreset, openFuncNode, startPlayback, resetPlayback, domainColorMap, publishSelection, warnings])
 
   // 노드 배경색 변경 — PUT API 호출 후 즉시 UI 반영
   const handleNodeColorChange = useCallback(async (nodeId: string, bgColor: string) => {

@@ -129,7 +129,7 @@ export default function AdminPage() {
         else setError('데이터를 불러오지 못했습니다.')
       })
       .finally(() => setLoading(false))
-  }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page])
 
   // JVM 메트릭 로드 — 30초마다 갱신
   useEffect(() => {
@@ -159,14 +159,14 @@ export default function AdminPage() {
     axios.get('/api/admin/gate-metrics')
       .then((res) => setGateMetrics(res.data))
       .catch(() => {})
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // 공지사항 목록 로드
   useEffect(() => {
     axios.get('/api/notices/all')
       .then((res) => setNotices(res.data))
       .catch(() => {})
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // 플랜 변경 감사 로그 로드
   const loadPlanGrants = () => {

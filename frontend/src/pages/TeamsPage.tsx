@@ -113,8 +113,10 @@ export default function TeamsPage() {
   }
 
   // 마이크로태스크로 한 틱 미뤄 이펙트 본문에서의 직접 setState 호출로 분류되지 않게 함(react-hooks/set-state-in-effect)
+  // fetchTeams는 매 렌더마다 새로 생성되는 함수라 deps에 넣으면 마운트 시 1회만 불러오려는 의도가 깨짐(무한 재호출 아님, 매 렌더 재요청)
   useEffect(() => {
     Promise.resolve().then(() => fetchTeams())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 팀 생성 결제 시작 — Toss 결제창 호출, 승인·팀 생성은 리다이렉트 후 TeamPaymentSuccessPage에서 처리

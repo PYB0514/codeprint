@@ -137,7 +137,7 @@ function CommunityPostGraphInner() {
       })
       .catch(() => setError(t('communityPostGraph.loadFailed')))
       .finally(() => setLoading(false))
-  }, [postId])
+  }, [postId, setNodes, setEdges, t])
 
   if (loading) {
     return (
@@ -306,7 +306,7 @@ function CommunityPostSnapshotInner() {
     } catch {
       alert(t('communityPostGraph.reportFpFailed'))
     }
-  }, [snapshotProjectId, graphId])
+  }, [snapshotProjectId, graphId, t])
 
   // 흐름 재생 — 종료 시 표시 토글 기준 기본 엣지 스타일 복원
   const restorePlaybackEdgeStyles = useCallback(() => {
