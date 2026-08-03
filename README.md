@@ -36,6 +36,8 @@ Codeprint는 GitHub 레포를 정적 분석해 **파일·함수·DB·API를 노�
 
 🔗 **Live:** [codeprint-iota.vercel.app](https://codeprint-iota.vercel.app) · 🧩 **Claude Code Skill:** [codeprint-plugins](https://github.com/PYB0514/codeprint-plugins) — 이 프로젝트의 분석 엔진을 로컬 CLI로 감싼 무료 Claude Code 스킬(Java/Kotlin/TypeScript/TSX)
 
+📖 **써보지 않고도 전체를 이해하고 싶다면 → [`docs/PRODUCT_GUIDE.md`](docs/PRODUCT_GUIDE.md)** (기능·경고 20종·동작 원리를 한 문서로 정리)
+
 ---
 
 ## 🎯 이 프로젝트에서 보여주고 싶은 것
