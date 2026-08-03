@@ -245,6 +245,27 @@ tasks.register('analyzeLocalJar', Jar) {
     }
 }
 
+// 로컬 워치모드용 독립 실행 fat jar (watchLocal) — exploreLocalJar와 동일한 toolsRuntime 구성 재사용.
+// VS Code 확장이 이 jar를 실행해 파일 변경을 감시(LocalWatcher는 Gradle 데몬 없이도 동작해야 함).
+tasks.register('watchLocalJar', Jar) {
+    group = 'codeprint'
+    description = '남의 프로젝트에서 java -jar로 독립 실행 가능한 watchLocal fat jar 빌드'
+    archiveBaseName = 'codeprint-watch'
+    archiveClassifier = ''
+    archiveVersion = ''
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(sourceSets.main.output) {
+        // 로컬 전용 프로필(application-*.yml, 실 자격증명 포함)이 fat jar에 번들링되는 것 차단 — 2026-07-12 유출 사고 재발 방지
+        exclude 'application-*.yml'
+    }
+    from({ configurations.toolsRuntime.collect { it.isDirectory() ? it : zipTree(it) } }) {
+        exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'module-info.class'
+    }
+    manifest {
+        attributes 'Main-Class': 'com.codeprint.tools.LocalWatcher'
+    }
+}
+
 // tree-sitter A/B 회귀 도구 — Java 함수·호출 추출을 정규식과 비교 (DB 불필요)
 task treesitterPoc(type: JavaExec, dependsOn: classes) {
     group = 'codeprint'

@@ -31,19 +31,25 @@ export function activate(context: vscode.ExtensionContext) {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
   if (!workspaceRoot) return
 
-  const backendDir = path.join(workspaceRoot, 'backend')
-  const gradlew = path.join(backendDir, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew')
-  if (!fs.existsSync(gradlew)) {
-    vscode.window.showWarningMessage(`Codeprint Watch: ${gradlew}을 찾을 수 없어 비활성화됩니다.`)
+  // 번들된 fat jar(java -jar)로 독립 실행 — Codeprint 레포 자신뿐 아니라 어떤 워크스페이스든 동작(2026-08-04, jar화)
+  const jarPath = path.join(context.extensionPath, 'bin', 'codeprint-watch.jar')
+  if (!fs.existsSync(jarPath)) {
+    vscode.window.showWarningMessage(`Codeprint Watch: ${jarPath}을 찾을 수 없어 비활성화됩니다.`)
     return
   }
 
-  const outputFile = path.join(backendDir, 'build', 'codeprint-local', 'watch-warnings.json')
+  // 출력은 워크스페이스가 아니라 확장 전용 저장소에 — 사용자 프로젝트에 build/ 폴더를 남기지 않는다
+  const storageDir = context.globalStorageUri.fsPath
+  fs.mkdirSync(storageDir, { recursive: true })
+  const outputFile = path.join(storageDir, 'build', 'codeprint-local', 'watch-warnings.json')
   fs.mkdirSync(path.dirname(outputFile), { recursive: true })
 
-  watcherProcess = spawn(gradlew, ['watchLocal', '-PanalysisDir=..'], { cwd: backendDir, shell: true })
+  watcherProcess = spawn('java', ['-jar', jarPath, workspaceRoot], { cwd: storageDir })
   watcherProcess.stdout?.on('data', (chunk) => console.log(`[codeprint watchLocal] ${chunk}`))
   watcherProcess.stderr?.on('data', (chunk) => console.error(`[codeprint watchLocal] ${chunk}`))
+  watcherProcess.on('error', (err) => {
+    vscode.window.showWarningMessage(`Codeprint Watch: java 실행 실패(${err.message}) — JDK 17+ 설치·PATH 등록을 확인하세요.`)
+  })
   context.subscriptions.push({ dispose: () => watcherProcess?.kill() })
 
   // watch-warnings.json이 아직 없을 수 있어(최초 분석 진행 중) 부모 디렉터리를 감시 — 파일이 나타나거나 갱신되면 반영
