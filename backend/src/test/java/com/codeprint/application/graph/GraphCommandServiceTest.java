@@ -164,6 +164,20 @@ class GraphCommandServiceTest {
     }
 
     @Test
+    @DisplayName("그래프 고정 — 슬롯 범위(1~5) 밖이면 슬롯 비우기 전에 예외")
+    void pinGraph_outOfRangeSlot_throwsBeforeMutation() {
+        Graph graph = graphInProject(projectId);
+        when(repository.findById(graph.getId())).thenReturn(Optional.of(graph));
+
+        assertThatThrownBy(() -> service.pinGraph(projectId, graph.getId(), 0))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.pinGraph(projectId, graph.getId(), 6))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(repository, never()).clearPinnedSlot(any(), anyInt());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("그래프 고정 해제 — 소속 검증 통과 시 unpin 저장")
     void unpinGraph_inProject_unpinsAndSaves() {
         Graph graph = graphInProject(projectId);

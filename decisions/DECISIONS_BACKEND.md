@@ -2723,3 +2723,13 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 - VS Code Extension Development Host(F5) 실행 자체는 사용자 로컬 GUI 세션이 필요해 이번 세션에서 미실증(2026-07-13 MVP 때와 동일한 한계) — 다음에 실사용 확인 시 F5로 재검증 권장.
 
 **남은 것.** 마켓플레이스 게시(퍼블리셔 계정 필요)·`.vscodeignore`/패키징(vsix) 설정은 별도 단계로 미룸 — 이번 스코프는 "어떤 워크스페이스에서든 동작하게 만드는 것"까지.
+
+## GraphCommandService.pinGraph — 슬롯 범위 검증 순서 버그 수정 (2026-08-04, codeprint_159)
+
+**배경.** 백엔드 테스트 커버리지 갭 점검 중 `Graph.pin(slot)`의 `1~5` 경계 검증이 CLAUDE.md TDD 트리거("경계 조건 있는 비즈니스 규칙")에 해당하는데 `GraphCommandServiceTest`엔 정상 슬롯(2·3)만 있고 경계값 테스트가 없다는 걸 발견 — 테스트를 추가하려고 기존 구현(`pinGraph`)을 다시 읽다가 실제 버그를 발견.
+
+**버그.** `pinGraph`가 `clearPinnedSlot(projectId, slot)`(기존 고정 슬롯 비우기, DB 부수효과)을 먼저 실행한 뒤 재조회한 그래프에 `graph.pin(slot)`을 호출해서 범위를 검증하고 있었음 — 즉 `slot=0`처럼 범위 밖 값이 들어오면 **예외가 던져지기 전에 이미 슬롯 비우기가 DB에 반영**됨. 컨트롤러(`PinRequest`에 `@Min(1) @Max(5)`)가 API 경로는 막고 있어 실사용자 영향은 없었지만, 서비스가 직접 호출되는 경로(다른 Application Service·향후 배치 작업 등)가 생기면 그대로 노출될 수 있는 잠재 결함.
+
+**수정.** `requireGraphInProject`로 조회한 첫 번째 `Graph` 객체에 `graph.pin(slot)`을 **`clearPinnedSlot` 호출 전에** 먼저 실행해 범위 검증만 조기 수행(이 객체는 어차피 `clearPinnedSlot`이 영속성 컨텍스트를 초기화해서 이후 버려지고 재조회함 — 기존 코드도 `requireGraphInProject`를 이미 2번 호출하고 있었으므로 호출 횟수 변화 없이 순서만 바꿈). `Graph.pin()`의 범위 검증 로직을 서비스 레이어에 중복 구현하지 않고 도메인 메서드를 그대로 재사용.
+
+**검증.** `pinGraph_outOfRangeSlot_throwsBeforeMutation` 신규 테스트(slot=0, slot=6) — `clearPinnedSlot`·`save` 둘 다 `never()` 확인. 기존 IDOR 테스트(`pinGraph_notInProject_throwsBeforeMutation`)·정상 케이스 포함 `GraphCommandServiceTest` 8건 전부 green. `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 7건).
