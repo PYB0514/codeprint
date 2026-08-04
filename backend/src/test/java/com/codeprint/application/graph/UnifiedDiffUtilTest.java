@@ -82,6 +82,30 @@ class UnifiedDiffUtilTest {
     }
 
     @Test
+    @DisplayName("헝크 중간에 마커(공백/+/-) 없는 줄이 있으면 조용히 건너뛰지 않고 예외 — 삭제/컨텍스트 유실 방지")
+    void unmarkedLineMidHunk_throwsInsteadOfSilentlySkipping() {
+        String original = String.join("\n", "a", "b", "c", "d") + "\n";
+        // "b" 앞에 컨텍스트 마커 공백이 빠짐(LLM diff에서 흔한 실수) — 예전엔 이 줄과 이후 " d"까지 조용히
+        // 스킵된 채 apply()가 예외 없이 "성공"을 반환해, 트윈 검증이 실제로 반영 안 된 패치를 통과시켰다.
+        String diff = String.join("\n", "@@ -1,4 +1,5 @@", " a", "+X", "b", " d");
+
+        assertThatThrownBy(() -> UnifiedDiffUtil.apply(original, diff))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("알 수 없는 마커");
+    }
+
+    @Test
+    @DisplayName("빈 줄은 마커가 트리밍된 blank 컨텍스트로 취급 — 원문과 실제로 대조된다")
+    void emptyLineInHunk_treatedAsBlankContext() {
+        String original = String.join("\n", "a", "", "c") + "\n";
+        String diff = String.join("\n", "@@ -1,3 +1,4 @@", " a", "", "+X", " c");
+
+        String patched = UnifiedDiffUtil.apply(original, diff);
+
+        assertThat(patched).isEqualTo(String.join("\n", "a", "", "X", "c") + "\n");
+    }
+
+    @Test
     @DisplayName("헝크가 없는 diff는 예외")
     void noHunk_throws() {
         assertThatThrownBy(() -> UnifiedDiffUtil.apply(ORIGINAL, "설명만 있고 diff는 없음"))

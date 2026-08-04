@@ -2783,3 +2783,14 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증.** `UnifiedDiffUtilTest`(추가/삭제/컨텍스트 불일치 4케이스) + `FixAttemptServiceTest`(BYOK 미등록·DLP 차단·정상 fix 성공·no-op diff 트윈검증 실패·컨텍스트 불일치 패치실패·대상 경고 없음 6케이스, `AiService`만 mock하고 `StaticCodeAnalyzer`는 실 인스턴스로 진짜 재파싱 경로 통과) 전부 green. 성공 케이스는 기존 벤치 P-코퍼스(`bench/rules/MISSING_TRANSACTIONAL_DELETE/p-derived-delete-no-annotation`)와 동일한 픽스처를 사용해 실제 프로덕션에서 발화하는 경고를 대상으로 검증. `analyzeLocal`: `attemptFix`가 HIGH_FAN_OUT 신규 1건(17개 호출) — Application Service 오케스트레이터 예외 패턴(§10, `RoleSpecService.generateSection` 등 기존 항목과 동일 성격, 단일 목표를 향한 순차 검증→위임)으로 판단해 리팩토링하지 않음. 백엔드 전체 테스트 1237건 중 신규 테스트 전부 green, 실패 11건은 전부 로컬 Postgres 미기동으로 인한 기존 DB 통합 테스트(Docker 안 띄운 상태에서 실행 — 무관).
 
 **남은 것(다음 세션 이후, 이번 범위 밖).** 실제 라이브 트리거(어디서 언제 `attemptFix`를 호출할지 — PR 게이트 리컨실리에이션 경로 재사용이 유력)·GitHub PR 오픈 연동·T2 확장·비용(BYOK라 사용자 부담이지만 자동 트리거되면 무제한 반복 호출 리스크 — `RoleSpecService`의 `MAX_TARGET_NODES` 같은 상한 필요)은 전부 미착수. 이번 세션은 "완성"까지만, "가동"은 별도 결정.
+
+**독립 적대적 검증(같은 세션, PR #764) — CONFIRMED 3건 발견·전부 수정.** 사용자 표준 규칙("코드 변경 PR은 항상 독립 적대적 검증")에 따라 fresh-context 에이전트로 검증한 결과:
+1. **`UnifiedDiffUtil` 헝크 내부에 마커(공백/+/-) 없는 줄을 만나면 `break`로 조용히 건너뛰고 이후 줄들도 소비 안 된 채 스킵** — 삭제/컨텍스트 유실이 있어도 `apply()`가 예외 없이 "성공"을 반환할 수 있었다(트윈 검증 전체가 이 위에 서 있어 치명적). 수정: 빈 줄은 마커 공백이 트리밍된 blank 컨텍스트로 취급(원문과 실제 대조), 그 외 인식 못 할 마커는 즉시 예외. 회귀 테스트 2건 추가.
+2. **fingerprint(type+message) 단독 비교라 동명 메서드가 다른 파일에 있으면 충돌** — 예를 들어 `deleteByUserId`가 두 리포지토리 인터페이스에 있으면 완전히 같은 fingerprint를 내, 대상 노드를 성공적으로 고쳐도 다른 파일의 동명 미해결 경고 때문에 "대상 경고가 여전히 발생"으로 오판(false negative, 방향은 안전하지만 흔한 명명 패턴에서 실사용을 막는 실질 버그). 수정: 비교 키를 `type+nodeIds`로 스코프 축소(`warningKey`). 회귀 테스트(`fingerprintCollisionAcrossFiles_stillSucceeds`) 추가.
+3. **`getProjectById`(소유권 미검증 원시 조회)를 사용해 향후 배선 시 IDOR 가능** — 포트 인터페이스 자체가 "호출자가 이미 접근을 검증한 흐름 전용"이라고 명시한 메서드인데, `attemptFix`는 소유권 검증을 전혀 안 거쳤다. 수정: `getOwnedProject(projectId, userId)`로 교체(기존 `GraphFacade` 컨벤션과 동일 — 미소유 시 예외 전파, catch 안 함). 회귀 테스트(`notOwner_propagatesException`) 추가.
+
+부수적으로 재검토 중 직접 발견한 4번째 버그(적대적 검증 리포트엔 없음): **트윈 검증용 `patched` Node를 `Node.create()`로 만들면 매번 새 랜덤 UUID가 발급되는데, 그래프의 기존 엣지들은 원본 `target.getId()`를 참조하고 있어 그대로 쓰면 그 엣지들이 patched 노드와 연결이 끊긴다** — "isTransactional=true인 호출자로부터 커버됨" 같은 엣지 기반 판정이 부정확해질 수 있음. 수정: id 필드만 리플렉션으로 원본과 동일하게 맞추는 `copyWithSameId` 헬퍼 도입(다른 필드는 전부 `Node.create()`로 정상 생성 — 리플렉션은 id 1개 필드로 최소화).
+
+PLAUSIBLE로 보고된 클래스 헤더 주석의 "OSIV 꺼짐→반환 시 detached 보장" 근거도 확인 결과 **틀렸음**(`spring.jpa.open-in-view` 미설정이라 기본값 true, 즉 OSIV 켜짐) — 다만 코드가 애초에 관리 엔티티를 mutate한 적이 없어(패치는 항상 `Node.create()`로 만든 새 미영속 인스턴스에만) 지금 당장 위험은 없었다. 주석을 정확한 근거("트랜잭션 경계가 아니라 '관리 엔티티를 절대 안 건드린다'는 불변식")로 정정.
+
+전부 수정 후 재검증: 신규 테스트 6→8(FixAttemptServiceTest)·4→6(UnifiedDiffUtilTest), `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 8건, `attemptFix` 여전히 17콜 — 내부 리팩토링이라 팬아웃 불변), 백엔드 전체 1241건 중 신규 전부 green(기존 DB 통합 테스트 실패 11건은 로컬 Postgres 미기동으로 무관, 개수 불변).

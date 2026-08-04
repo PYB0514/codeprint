@@ -1,8 +1,11 @@
 // 리컨실러 T1 수직 관통 — MISSING_TRANSACTIONAL_DELETE 한 룰 전용: 조립→LLM 호출→트윈 검증까지
 // (§17.10/§19.4 2막 설계, 사용자 승인으로 "런칭 완료" 게이트 예외 착수. 실제 GitHub PR 오픈 API·자동 머지는 범위 밖 —
-// PR 초안 재료(diff+근거)만 반환한다. 클래스 레벨 @Transactional을 두지 않는다 — 트윈 검증이 조회한 Node의 메타데이터를
-// 임시로 갱신해 재탐지하는데, 영속성 컨텍스트가 열려 있으면 그 임시 변경이 flush될 위험이 있다(이번 세션 pinGraph 사고와
-// 같은 클래스의 위험). 각 조회를 별도 짧은 트랜잭션으로 끝내 반환 시점엔 detached 상태를 보장한다.
+// PR 초안 재료(diff+근거)만 반환한다. 클래스 레벨 @Transactional을 두지 않는다 — 이 서비스는 조회한 Node를 절대
+// 직접 mutate하지 않는다(트윈 검증은 Node.create()로 만든 완전히 새 미영속 인스턴스에만 updateMetadata를 호출).
+// 이 프로젝트는 spring.jpa.open-in-view가 기본값(true)이라 트랜잭션이 끝나도 조회한 엔티티가 detached라고
+// 가정할 수 없다(적대적 검증에서 지적 — 이전 주석의 "detached 보장" 근거는 틀렸었음) — 안전은 트랜잭션 경계가
+// 아니라 "관리 엔티티를 절대 안 건드린다"는 불변식에서 온다. 향후 이 클래스를 수정할 때도 target(조회된 관리
+// 엔티티)에 updateMetadata를 직접 호출하지 말 것.
 package com.codeprint.application.graph;
 
 import com.codeprint.domain.graph.Edge;
@@ -31,7 +34,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -70,9 +72,10 @@ public class FixAttemptService {
         if (provider == null) return FixAttempt.skipped("프로바이더 미지정");
         if (aiKeyPort.findPlainKey(userId, provider).isEmpty()) return FixAttempt.skipped("BYOK 키 미등록");
 
-        Optional<ProjectAccessPort.ProjectAccessView> projectView = projectAccessPort.getProjectById(projectId);
-        if (projectView.isEmpty()) return FixAttempt.failed("프로젝트 없음");
-        if (projectView.get().aiExportDisabled()) return FixAttempt.skipped("프로젝트가 AI 내보내기를 차단(DLP)");
+        // getOwnedProject는 소유자가 아니면 예외를 던진다(기존 GraphFacade 컨벤션과 동일) — 적대적 검증에서
+        // 지적된 IDOR 갭(소유권 검증 없이 임의 projectId를 받아 타인 레포 소스를 LLM에 보낼 수 있었던 결함) 수정.
+        ProjectAccessPort.ProjectAccessView projectView = projectAccessPort.getOwnedProject(projectId, userId);
+        if (projectView.aiExportDisabled()) return FixAttempt.skipped("프로젝트가 AI 내보내기를 차단(DLP)");
 
         Graph graph = graphRepository.findById(graphId).orElse(null);
         if (graph == null || !graph.getProjectId().equals(projectId)) return FixAttempt.failed("그래프 없음 또는 프로젝트 불일치");
@@ -139,27 +142,53 @@ public class FixAttemptService {
             return "패치 후에도 @Transactional 미검출";
         }
 
-        Node patched = Node.create(target.getGraphId(), target.getType(), target.getName(),
-                target.getFilePath(), target.getLanguage());
         Map<String, Object> mergedMeta = target.getMetadata() != null ? new HashMap<>(target.getMetadata()) : new HashMap<>();
         mergedMeta.put("isTransactional", true);
-        patched.updateMetadata(mergedMeta);
+        Node patched = copyWithSameId(target, mergedMeta);
 
         List<Node> patchedNodes = nodes.stream().map(n -> n.getId().equals(target.getId()) ? patched : n).toList();
         List<Map<String, Object>> after = new GraphWarningService().detect(patchedNodes, edges);
 
-        String targetFingerprint = String.valueOf(targetWarning.get("fingerprint"));
-        Set<String> beforeFp = before.stream().map(w -> String.valueOf(w.get("fingerprint"))).collect(Collectors.toSet());
-        Set<String> afterFp = after.stream().map(w -> String.valueOf(w.get("fingerprint"))).collect(Collectors.toSet());
+        // fingerprint(type+message)만으로 비교하면 동명 메서드(예: 서로 다른 파일의 deleteByUserId)가 같은
+        // fingerprint를 내 오판할 수 있다(적대적 검증에서 발견) — type+nodeIds로 스코프를 좁혀 비교한다.
+        String targetKey = warningKey(targetWarning);
+        Set<String> beforeKeys = before.stream().map(this::warningKey).collect(Collectors.toSet());
+        Set<String> afterKeys = after.stream().map(this::warningKey).collect(Collectors.toSet());
 
-        if (afterFp.contains(targetFingerprint)) return "대상 경고가 여전히 발생";
-        Set<String> newlyIntroduced = new HashSet<>(afterFp);
-        newlyIntroduced.removeAll(beforeFp);
+        if (afterKeys.contains(targetKey)) return "대상 경고가 여전히 발생";
+        Set<String> newlyIntroduced = new HashSet<>(afterKeys);
+        newlyIntroduced.removeAll(beforeKeys);
         if (!newlyIntroduced.isEmpty()) return "신규 경고 발생: " + newlyIntroduced;
-        Set<String> expectedAfter = new HashSet<>(beforeFp);
-        expectedAfter.remove(targetFingerprint);
-        if (!expectedAfter.equals(afterFp)) return "기존 경고 집합이 대상 외에도 변경됨";
+        Set<String> expectedAfter = new HashSet<>(beforeKeys);
+        expectedAfter.remove(targetKey);
+        if (!expectedAfter.equals(afterKeys)) return "기존 경고 집합이 대상 외에도 변경됨";
         return null;
+    }
+
+    // 룰타입+nodeIds로 경고를 식별 — fingerprint(메시지 텍스트) 단독보다 노드 스코프가 좁아 동명 메서드 충돌을 피함
+    private String warningKey(Map<String, Object> w) {
+        return w.get("type") + "@" + nodeIdsOf(w).stream().sorted().collect(Collectors.joining(","));
+    }
+
+    private List<String> nodeIdsOf(Map<String, Object> w) {
+        return ((List<?>) w.getOrDefault("nodeIds", List.of())).stream().map(String::valueOf).toList();
+    }
+
+    // Node.create()는 새 UUID를 발급하는데, 그래프의 기존 엣지들은 target.getId()를 참조하고 있어 그대로 새
+    // id를 쓰면 그 엣지들이 patched 노드와 연결이 끊긴다(적대적 검증에서 발견 — "isTransactional=true인
+    // 호출자" 같은 엣지 기반 판정이 부정확해질 수 있었음). id 필드만 리플렉션으로 원본과 동일하게 맞춘다.
+    private Node copyWithSameId(Node source, Map<String, Object> metadata) {
+        Node copy = Node.create(source.getGraphId(), source.getType(), source.getName(),
+                source.getFilePath(), source.getLanguage());
+        copy.updateMetadata(metadata);
+        try {
+            java.lang.reflect.Field idField = Node.class.getDeclaredField("id");
+            idField.setAccessible(true);
+            idField.set(copy, source.getId());
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Node id 복사 실패", e);
+        }
+        return copy;
     }
 
     // 패치 결과를 임시 파일에 써서 프로덕션과 동일한 StaticCodeAnalyzer 경로로 재분석(B-13 교훈 — 별도 경로는 오탐 재현 못 함)
@@ -193,8 +222,6 @@ public class FixAttemptService {
 
     private Map<String, Object> findWarningForNode(List<Map<String, Object>> warnings, UUID nodeId) {
         String idStr = nodeId.toString();
-        return warnings.stream()
-                .filter(w -> ((List<?>) w.getOrDefault("nodeIds", List.of())).stream().anyMatch(id -> idStr.equals(String.valueOf(id))))
-                .findFirst().orElse(null);
+        return warnings.stream().filter(w -> nodeIdsOf(w).contains(idStr)).findFirst().orElse(null);
     }
 }

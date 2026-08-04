@@ -85,9 +85,9 @@ class FixAttemptServiceTest {
 
     private void stubHappyPathUpTo(String llmResponse) {
         when(aiKeyPort.findPlainKey(userId, AiProvider.ANTHROPIC)).thenReturn(Optional.of("sk-test"));
-        when(projectAccessPort.getProjectById(projectId)).thenReturn(Optional.of(
+        when(projectAccessPort.getOwnedProject(projectId, userId)).thenReturn(
                 new ProjectAccessPort.ProjectAccessView(projectId, userId, "proj", "https://github.com/x/y",
-                        GatePolicy.AUTO, false)));
+                        GatePolicy.AUTO, false));
         when(graphRepository.findById(graph.getId())).thenReturn(Optional.of(graph));
         when(graphQueryService.getNodes(graph.getId())).thenReturn(List.of(targetNode));
         when(graphQueryService.getEdges(graph.getId())).thenReturn(List.<Edge>of());
@@ -126,9 +126,9 @@ class FixAttemptServiceTest {
     @DisplayName("프로젝트 DLP(AI 내보내기 차단) 시 SKIPPED — 신규 AI 진입점도 토글을 존중")
     void dlpDisabled_skipped() {
         when(aiKeyPort.findPlainKey(userId, AiProvider.ANTHROPIC)).thenReturn(Optional.of("sk-test"));
-        when(projectAccessPort.getProjectById(projectId)).thenReturn(Optional.of(
+        when(projectAccessPort.getOwnedProject(projectId, userId)).thenReturn(
                 new ProjectAccessPort.ProjectAccessView(projectId, userId, "proj", "https://github.com/x/y",
-                        GatePolicy.AUTO, true)));
+                        GatePolicy.AUTO, true));
 
         FixAttempt result = service.attemptFix(projectId, graph.getId(), targetNode.getId(), userId, AiProvider.ANTHROPIC);
 
@@ -173,15 +173,52 @@ class FixAttemptServiceTest {
     }
 
     @Test
+    @DisplayName("프로젝트 미소유(IDOR)면 예외가 그대로 전파됨 — 조용히 SKIPPED/FAILED로 흡수하지 않음")
+    void notOwner_propagatesException() {
+        when(aiKeyPort.findPlainKey(userId, AiProvider.ANTHROPIC)).thenReturn(Optional.of("sk-test"));
+        when(projectAccessPort.getOwnedProject(projectId, userId))
+                .thenThrow(new IllegalArgumentException("소유자 아님"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        service.attemptFix(projectId, graph.getId(), targetNode.getId(), userId, AiProvider.ANTHROPIC))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(graphRepository);
+    }
+
+    @Test
+    @DisplayName("동명 메서드가 다른 파일에도 있어 fingerprint가 충돌해도 대상 노드 기준으로 정확히 판정(false negative 회귀 방지)")
+    void fingerprintCollisionAcrossFiles_stillSucceeds() {
+        // 서로 다른 파일에 있지만 이름이 같아 경고 message(따라서 fingerprint)가 동일한 decoy 노드 — 패치 대상이 아님
+        Node decoy = Node.create(graph.getId(), NodeType.FUNCTION, "deleteByUserIdAndPostId",
+                "infrastructure/persistence/OtherJpaRepository.java", "Java");
+
+        when(aiKeyPort.findPlainKey(userId, AiProvider.ANTHROPIC)).thenReturn(Optional.of("sk-test"));
+        when(projectAccessPort.getOwnedProject(projectId, userId)).thenReturn(
+                new ProjectAccessPort.ProjectAccessView(projectId, userId, "proj", "https://github.com/x/y",
+                        GatePolicy.AUTO, false));
+        when(graphRepository.findById(graph.getId())).thenReturn(Optional.of(graph));
+        when(graphQueryService.getNodes(graph.getId())).thenReturn(List.of(targetNode, decoy));
+        when(graphQueryService.getEdges(graph.getId())).thenReturn(List.<Edge>of());
+        when(analysisReadPort.findCommitSha(analysisId)).thenReturn(Optional.of("sha123"));
+        when(projectAccessPort.findGithubRepoUrl(projectId)).thenReturn(Optional.of("https://github.com/x/y"));
+        when(gitHubApiClient.fetchFileContent("https://github.com/x/y", FILE_PATH, "sha123")).thenReturn(ORIGINAL_CONTENT);
+        when(aiService.generate(eq("sk-test"), anyString())).thenReturn(VALID_LLM_RESPONSE);
+
+        FixAttempt result = service.attemptFix(projectId, graph.getId(), targetNode.getId(), userId, AiProvider.ANTHROPIC);
+
+        assertThat(result.outcome()).isEqualTo(FixAttempt.Outcome.SUCCESS);
+    }
+
+    @Test
     @DisplayName("대상 경고가 없으면(이미 해소) FAILED")
     void noWarning_failed() {
         Node alreadyFixed = Node.create(graph.getId(), NodeType.FUNCTION, "deleteByUserIdAndPostId", FILE_PATH, "Java");
         alreadyFixed.updateMetadata(java.util.Map.of("isTransactional", true));
 
         when(aiKeyPort.findPlainKey(userId, AiProvider.ANTHROPIC)).thenReturn(Optional.of("sk-test"));
-        when(projectAccessPort.getProjectById(projectId)).thenReturn(Optional.of(
+        when(projectAccessPort.getOwnedProject(projectId, userId)).thenReturn(
                 new ProjectAccessPort.ProjectAccessView(projectId, userId, "proj", "https://github.com/x/y",
-                        GatePolicy.AUTO, false)));
+                        GatePolicy.AUTO, false));
         when(graphRepository.findById(graph.getId())).thenReturn(Optional.of(graph));
         when(graphQueryService.getNodes(graph.getId())).thenReturn(List.of(alreadyFixed));
         when(graphQueryService.getEdges(graph.getId())).thenReturn(List.<Edge>of());

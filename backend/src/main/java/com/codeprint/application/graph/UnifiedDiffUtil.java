@@ -39,12 +39,11 @@ final class UnifiedDiffUtil {
             i++;
             while (i < diffLines.size() && !diffLines.get(i).startsWith("@@")) {
                 String hl = diffLines.get(i);
-                if (hl.isEmpty()) {
-                    i++;
-                    continue;
-                }
-                char marker = hl.charAt(0);
-                String content = hl.length() > 1 ? hl.substring(1) : "";
+                // 빈 줄은 마커 공백이 트리밍된 blank 컨텍스트 줄로 간주(흔한 LLM/마크다운 출력 손실) — 건너뛰지 않고
+                // 반드시 원문과 대조 후 srcIdx를 소비한다. 그 외 인식 못 할 마커는 예외로 실패(적대적 검증에서 발견된
+                // 문제: 예전엔 마커 없는 중간 줄을 조용히 건너뛰어 삭제/컨텍스트가 유실된 채로도 "적용 성공"을 반환했음).
+                char marker = hl.isEmpty() ? ' ' : hl.charAt(0);
+                String content = hl.isEmpty() ? "" : (hl.length() > 1 ? hl.substring(1) : "");
                 if (marker == ' ') {
                     expectContext(src, srcIdx, content);
                     result.add(src.get(srcIdx++));
@@ -54,7 +53,7 @@ final class UnifiedDiffUtil {
                 } else if (marker == '+') {
                     result.add(content);
                 } else {
-                    break;
+                    throw new IllegalStateException("diff 헝크 내부에 알 수 없는 마커: '" + hl + "'");
                 }
                 i++;
             }
