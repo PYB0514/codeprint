@@ -2577,3 +2577,17 @@ PR #761/#762(pinGraph 회귀) 사고 이후, 이번 세션에 독립 적대적 �
 **검증.** 신규 회귀 2건 + 기존 결정론 테스트 수정본 green. **`edgeAudit` 전체 벤치 스위트(`BenchSuiteTest`/`BenchCommonCasesTest`, 17종 룰 P/N/R 코퍼스) 전부 green** — 이 정도 규모(핵심 해소 알고리즘)의 변경엔 필수 확인. `analyzeLocal` 자기분석: 워닝 베이스라인 불변(HIGH_FAN_OUT 8건), `attemptFix` 팬아웃 17→16(패턴 F가 실제로 자기 레포에서도 애매한 엣지 하나를 걸러낸 것 — 무해, 오히려 그래프 정밀도 개선 신호). 전체 백엔드 1248건(누적 8건 신규) 중 실패 11건 로컬 Postgres 미기동 무관.
 
 **T1→T2 게이트 재판단.** 패턴 E(수정)에 이어 패턴 F(수정)까지 해소돼, §19.4가 T2 착수의 전제로 요구한 "phantom 엣지 측정" 항목 중 이번 세션에 실측된 두 근본 패턴이 모두 처리됐다. `PRODUCT_STRATEGY.md` §19.4의 "조건부 통과" 판정을 갱신해 반영 — 단, 이번 수정 자체가 만든 recall 손실(합성 접근자 대 decoy 모호, 동명 무관 클래스 2개+)의 실사용 영향 범위는 별도 측정 안 함(다음 엣지 정확도 세션에서 재감사 시 자연히 드러남).
+
+---
+
+## 패턴 F 수정 PR 독립 적대적 검증 — CONFIRMED 2건 발견·수정 (2026-08-05, codeprint_160, PR #766)
+
+**배경.** 사용자 표준 규칙에 따라 위 패턴 F 수정을 fresh-context 에이전트로 검증.
+
+**CONFIRMED① — 인터페이스 업그레이드 분기가 새 ambiguity 판정을 통째로 우회.** 기존(이 PR 이전부터 있던) "인터페이스→구현체 업그레이드" 조건(`!isSyntheticOnly && bestIsInterface && !calleeIsInterface`)은 새 후보가 **bestMatch(인터페이스)의 실제 구현체인지 전혀 검증하지 않는다** — `interfaceToImplFiles.containsKey(calleeClassName)`은 "이 후보 자신이 어딘가의 인터페이스로 등록돼 있는가"만 본다. 결과: bestMatch가 인터페이스로 시작하고 그 뒤에 완전히 무관한 실제 정의 후보(우연히 인터페이스가 아니기만 하면)가 나타나면 이 오래된 분기가 새 ambiguity 검사보다 먼저 걸려 조용히 그 무관한 후보로 "업그레이드"된다 — **이 PR이 막으려던 것과 정확히 같은 임의 채택이, 후보 중 하나가 우연히 인터페이스이기만 하면 그대로 재발**. 재현: 에이전트가 `IFoo`(인터페이스)+`Baz`(IFoo 진짜 구현체, 하지만 대상 메서드는 없음)+`Bar`(IFoo와 무관하지만 동명 실제 정의)+무-import caller 조합으로 실제 phantom 엣지 생성을 확인.
+- **수정.** `interfaceToImplFiles.getOrDefault(bestMatch의 클래스명, List.of()).contains(calleeFile)`로 "이 후보가 진짜 bestMatch 인터페이스의 등록된 구현체인가"를 명시 검증(`verifiedImplOfBestInterface`) — 검증되면 업그레이드, 안 되면 (bestMatch가 합성 전용이 아닌 한) `sawAmbiguousRealCandidate`로 표시해 동일하게 판정 보류.
+- **TDD.** 회귀 테스트(`interfaceBestMatch_notUpgradedToUnverifiedUnrelatedRealCandidate`) — 수정 전 코드로 되돌려 실제 phantom 엣지 생성(FAIL) 확인 후 원복.
+
+**CONFIRMED② — `onlyImported=true`(import 스코프 안) 패스도 안전하지 않다는 지적, PR의 "이미 안전하다" 주장은 근거 부족.** caller가 서로 무관한 두 파일을 **둘 다 명시 import**하고 동명 함수를 부르면, import 스코프 안에서도 여전히 "먼저 찾은 것" 문제가 그대로 남아있었다(이건 이 PR이 새로 만든 회귀는 아니고 훨씬 이전부터 있던 구멍이지만, "import 스코프는 이미 좁혀져 있어 안전하다"는 이 PR의 설계 근거 자체가 검증 안 된 가정이었다는 지적). **수정 — 애초에 별도 처리 불필요, 같은 로직으로 함께 해소.** 위 CONFIRMED①의 수정 자체가 `sawAmbiguousRealCandidate` 판정을 `onlyImported` 여부와 무관하게 전체 순회에 적용하는 구조로 재작성됐기 때문에(관계 미검증 실제 정의 후보 2개 이상 → 모호), import 스코프 안에서의 이 문제도 자동으로 함께 해소됨 — 별도 분기 불필요.
+
+**검증.** 신규 회귀 테스트 1건 green, 기존 "인터페이스보다 구현체 우선" 정상 케이스 테스트도 계속 green(진짜 관계가 검증되는 케이스는 그대로 업그레이드). **벤치 스위트 재확인 green.** `analyzeLocal` 베이스라인 불변. 전체 백엔드 1249건(누적 9건 신규) 중 실패 11건 로컬 Postgres 미기동 무관.

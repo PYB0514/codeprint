@@ -908,6 +908,29 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("인터페이스가 bestMatch일 때 무관한(그 인터페이스의 구현체가 아닌) 실제 정의 후보로 검증 없이 업그레이드되지 않는다(패턴 F 2차 적대적 검증 발견)")
+    void interfaceBestMatch_notUpgradedToUnverifiedUnrelatedRealCandidate() {
+        // IFoo(인터페이스, process 선언) 뒤에 Bar(process를 우연히 동명 정의했지만 IFoo와 완전 무관)가 오면,
+        // 기존엔 "Bar가 인터페이스가 아니다"만 보고 무조건 업그레이드해 IFoo의 진짜 구현체를 검증 없이
+        // Bar로 대체했다 — 이 PR이 막으려던 것과 동일한 임의 채택이 인터페이스가 섞이면 그대로 재발했었음.
+        ParsedFile iface = parsedFile("domain/IFoo.java", "Java", List.of("process"), Map.of());
+        ParsedFile realImplUnused = parsedFileWithImpl("domain/Baz.java", "Java", List.of("otherMethod"), "IFoo");
+        ParsedFile unrelatedDecoy = parsedFile("domain/Bar.java", "Java", List.of("process"), Map.of());
+        ParsedFile caller = parsedFileWithCallsAndImports("app/Caller.java", "Java",
+                List.of("run"), Map.of("run", List.of("process")), List.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(iface, realImplUnused, unrelatedDecoy, caller));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeast(0)).saveEdge(cap.capture());
+        boolean phantomToUnrelatedDecoy = cap.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("run") && e.getEdgeIdentifier().contains("process")
+                        && "domain/Bar.java".equals(e.getMetadata().get("calleeFile")));
+        assertThat(phantomToUnrelatedDecoy).isFalse();
+    }
+
+    @Test
     @DisplayName("record 컴포넌트명이 실제 import된 다른 클래스의 동명 메서드와 겹쳐도 진짜 엣지가 소실되지 않는다(적대적 검증 발견 회귀)")
     void bareCallResolvesToRealDefinition_evenWhenSyntheticOnlyCandidateEnumeratedFirst() {
         // record는 FUNCTION 노드가 없어 그 자체로는 엣지를 못 만듦 — 그런데 이 후보가 먼저 bestMatch로

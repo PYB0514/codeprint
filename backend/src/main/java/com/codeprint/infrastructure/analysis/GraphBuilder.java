@@ -845,26 +845,16 @@ public class GraphBuilder {
                                        boolean onlyImported) {
         ParsedFile bestMatch = null;
         boolean bestIsInterface = false;
-        // 합성 접근자(hasEntityAccessor/hasRecordAccessor)만으로 인정된 후보는 FUNCTION 노드가 없어 그 자체로는
-        // 엣지를 못 만든다 — 그런데 이 후보가 먼저 bestMatch로 고정되면, 뒤늦게 열거된 "진짜 정의가 있는" 후보를
-        // 기존 "인터페이스→구현체 업그레이드"만으로는 절대 대체 못 해(둘 다 non-interface면 업그레이드 조건
-        // 자체가 안 걸림) — 정상적으로 만들어졌어야 할 엣지가 조용히 사라지는 회귀(적대적 검증에서 발견,
-        // record 컴포넌트명이 실제 import된 다른 클래스의 동명 메서드와 겹치는 경우 재현).
-        // ★ onlyImported=true(caller가 실제로 import한 후보끼리 경쟁)일 때만 업그레이드한다 — onlyImported=false
-        // (전역 폴백)에서까지 "실제 정의가 있으면 무조건 우선"을 적용하면, import 안 된 무관한 동명 메서드(decoy)가
-        // 다시 채택돼 hasEntityAccessor/hasRecordAccessor가 막으려던 phantom이 그대로 재발한다(1차 시도에서
-        // bareCallToLombokEntityGetter_notMisattributedToUnrelatedDecoy가 실제로 재발해 잡아냄) — 두 필터의 존재
-        // 이유 자체가 "import 스코프 밖에서는 실제 정의보다 안전한 무응답을 택한다"이므로 폴백 패스에선 원래
-        // 규칙(먼저 찾은 것 유지)을 그대로 둬야 한다.
         boolean bestIsSyntheticOnly = false;
-        // 전역 폴백(onlyImported=false)에서 "누가 진짜 대상인지 판단할 신호가 없는" 두 상황을 모호로 표시해
-        // 순회 순서로 승자를 정하지 않는다(엣지 정확도 5차 감사 패턴 F — TeamAccessAdapter.hasAccessViaTeam이
-        // 무관한 TeamPaymentOrder.getTeamId로 오귀속된 실사고, 정답은 합성 접근자뿐이라 노드가 없는
-        // TeamProjectAllocation.getTeamId였음). 순서에 무관하게 판정되도록 전체 순회에서 집계한 뒤 끝에 결정한다.
-        // ①실제 정의를 가진, 서로 인터페이스↔구현체 관계가 아닌 후보가 2개 이상
-        // ②합성 접근자뿐인 후보와 실제 정의 후보가 동시에 존재(어느 쪽이 맞는지 판단 불가 — 합성 쪽이 맞을 수도 있음)
-        // import 스코프 안(onlyImported=true)에선 적용 안 함 — "caller가 실제로 import했다"는 신호로 후보가 이미
-        // 좁혀져 있어 여러 개면 대개 인터페이스+구현체 관계고, 기존 업그레이드 규칙으로 충분히 해소됨.
+        // "누가 진짜 대상인지 판단할 신호가 없는" 상황을 모호로 표시해 순회 순서로 승자를 정하지 않는다(엣지
+        // 정확도 5차 감사 패턴 F — TeamAccessAdapter.hasAccessViaTeam이 무관한 TeamPaymentOrder.getTeamId로
+        // 오귀속된 실사고, 정답은 합성 접근자뿐이라 노드가 없는 TeamProjectAllocation.getTeamId였음). 순서에
+        // 무관하게 판정되도록 전체 순회에서 집계한 뒤 끝에 결정한다.
+        // ①실제 정의를 가진, 서로 인터페이스↔구현체 관계가 "검증되지 않은" 후보가 2개 이상 — onlyImported
+        //   양쪽 다 적용(캐일러가 A·B를 둘 다 import했어도 어느 쪽인지 신호가 없으면 여전히 모호하다,
+        //   적대적 검증에서 "import 스코프는 이미 안전하다"는 이전 가정이 틀렸음을 지적받아 확장).
+        // ②합성 접근자뿐인 후보와 실제 정의 후보가 동시에 존재 — 전역 폴백(onlyImported=false)에서만.
+        //   import 스코프 안에선 위 별도 규칙(합성→실제 업그레이드)이 이미 처리한다.
         boolean sawSyntheticOnlyCandidate = false;
         boolean sawAmbiguousRealCandidate = false;
         for (ParsedFile calleeFile : parsedFiles) {
@@ -889,16 +879,27 @@ public class GraphBuilder {
                 bestMatch = calleeFile;
                 bestIsInterface = calleeIsInterface;
                 bestIsSyntheticOnly = false;
-            } else if (!isSyntheticOnly && bestIsInterface && !calleeIsInterface) {
-                // 구현체로 업그레이드(기존 규칙, 둘 다 실제 정의가 있을 때만 의미 있음)
+                continue;
+            }
+            if (isSyntheticOnly || !hasRealDef) continue; // 실제 정의 없는 후보는 아래 관계 판정과 무관
+            // bestMatch(인터페이스)가 실제로 이 후보를 구현체로 등록하고 있는지 검증 — 기존엔 후보 자신이
+            // "어딘가의 인터페이스가 아니다"만 보고 무조건 업그레이드해서, bestMatch와 무관한 decoy가 우연히
+            // 비-인터페이스이기만 하면 "구현체 우선"이라는 명목으로 조용히 채택됐다(적대적 검증에서 발견 —
+            // 이 PR이 막으려던 것과 동일한 임의 채택이 인터페이스가 섞이면 그대로 재발).
+            boolean verifiedImplOfBestInterface = bestIsInterface
+                    && interfaceToImplFiles.getOrDefault(extractFileNameWithoutExt(bestMatch.filePath()), List.of())
+                            .contains(calleeFile);
+            if (verifiedImplOfBestInterface) {
                 bestMatch = calleeFile;
                 bestIsInterface = false;
                 bestIsSyntheticOnly = false;
-            } else if (!onlyImported && hasRealDef && !bestIsSyntheticOnly && !calleeIsInterface && !bestIsInterface) {
+            } else if (!bestIsSyntheticOnly) {
+                // bestMatch도 실제 정의(또는 인터페이스)인데 지금 후보가 검증된 구현체가 아니다 — 서로
+                // 무관한 실제 정의 후보가 최소 2개라는 뜻이라 판단 근거가 없다.
                 sawAmbiguousRealCandidate = true;
             }
         }
-        if (!onlyImported && (sawAmbiguousRealCandidate || (sawSyntheticOnlyCandidate && !bestIsSyntheticOnly))) {
+        if (sawAmbiguousRealCandidate || (!onlyImported && sawSyntheticOnlyCandidate && !bestIsSyntheticOnly)) {
             return null;
         }
         return bestMatch;
