@@ -857,6 +857,16 @@ public class GraphBuilder {
         // 이유 자체가 "import 스코프 밖에서는 실제 정의보다 안전한 무응답을 택한다"이므로 폴백 패스에선 원래
         // 규칙(먼저 찾은 것 유지)을 그대로 둬야 한다.
         boolean bestIsSyntheticOnly = false;
+        // 전역 폴백(onlyImported=false)에서 "누가 진짜 대상인지 판단할 신호가 없는" 두 상황을 모호로 표시해
+        // 순회 순서로 승자를 정하지 않는다(엣지 정확도 5차 감사 패턴 F — TeamAccessAdapter.hasAccessViaTeam이
+        // 무관한 TeamPaymentOrder.getTeamId로 오귀속된 실사고, 정답은 합성 접근자뿐이라 노드가 없는
+        // TeamProjectAllocation.getTeamId였음). 순서에 무관하게 판정되도록 전체 순회에서 집계한 뒤 끝에 결정한다.
+        // ①실제 정의를 가진, 서로 인터페이스↔구현체 관계가 아닌 후보가 2개 이상
+        // ②합성 접근자뿐인 후보와 실제 정의 후보가 동시에 존재(어느 쪽이 맞는지 판단 불가 — 합성 쪽이 맞을 수도 있음)
+        // import 스코프 안(onlyImported=true)에선 적용 안 함 — "caller가 실제로 import했다"는 신호로 후보가 이미
+        // 좁혀져 있어 여러 개면 대개 인터페이스+구현체 관계고, 기존 업그레이드 규칙으로 충분히 해소됨.
+        boolean sawSyntheticOnlyCandidate = false;
+        boolean sawAmbiguousRealCandidate = false;
         for (ParsedFile calleeFile : parsedFiles) {
             if (calleeFile.filePath().equals(callerFile.filePath())) continue;
             boolean hasRealDef = calleeFile.functions().contains(calleeFunc);
@@ -864,13 +874,16 @@ public class GraphBuilder {
                     && (hasEntityAccessor(calleeFile, calleeFunc) || hasRecordAccessor(calleeFile, calleeFunc));
             if (!hasRealDef && !isSyntheticOnly) continue;
             if (onlyImported && !callerImports(callerFile, calleeFile)) continue;
+            if (!onlyImported && isSyntheticOnly) sawSyntheticOnlyCandidate = true;
             String calleeClassName = extractFileNameWithoutExt(calleeFile.filePath());
             boolean calleeIsInterface = interfaceToImplFiles.containsKey(calleeClassName);
             if (bestMatch == null) {
                 bestMatch = calleeFile;
                 bestIsInterface = calleeIsInterface;
                 bestIsSyntheticOnly = isSyntheticOnly;
-            } else if (onlyImported && bestIsSyntheticOnly && hasRealDef) {
+                continue;
+            }
+            if (onlyImported && bestIsSyntheticOnly && hasRealDef) {
                 // 실제 정의가 있는 후보로 업그레이드 — import 스코프 안에서만(둘 다 caller가 실제로 import했다는
                 // 확증이 있을 때만) 합성 접근자뿐인 죽은 후보가 진짜 후보를 막지 않도록
                 bestMatch = calleeFile;
@@ -881,7 +894,12 @@ public class GraphBuilder {
                 bestMatch = calleeFile;
                 bestIsInterface = false;
                 bestIsSyntheticOnly = false;
+            } else if (!onlyImported && hasRealDef && !bestIsSyntheticOnly && !calleeIsInterface && !bestIsInterface) {
+                sawAmbiguousRealCandidate = true;
             }
+        }
+        if (!onlyImported && (sawAmbiguousRealCandidate || (sawSyntheticOnlyCandidate && !bestIsSyntheticOnly))) {
+            return null;
         }
         return bestMatch;
     }

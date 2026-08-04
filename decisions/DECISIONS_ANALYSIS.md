@@ -2558,3 +2558,22 @@ PR #761/#762(pinGraph 회귀) 사고 이후, 이번 세션에 독립 적대적 �
 **CONFIRMED이지만 미수정 — `onlyImported` 스코프 제한은 1차 CONFIRMED①(recall 소실)을 완전히 없애지 못하고 줄였을 뿐.** `extractImports`가 와일드카드(`import x.*`)·static import(`import static ...`)를 캡처 못 해(정규식 한계, 실측 확인), 진짜 정의 파일이 이런 형태로만 import되거나 애초에 import가 아예 없는 경우(같은 패키지 등)엔 `onlyImported=true` 패스가 후보를 못 찾아 업그레이드가 발동 안 하고 recall 소실이 재현된다. **판단 — 정직하게 기록하고 미수정.** 이건 이미 이 항목 위쪽에 기록한 "패턴 F"(전역 폴백의 "첫 매치 우선" 자체 결함)와 근본 원인이 겹치는 서브셋이다 — 완전한 해법은 전역 폴백 알고리즘 자체의 재설계(예: 실후보 2개 이상이면 판정 보류, 또는 wildcard/static import까지 포함한 import 해소 강화)가 필요해 패턴 F와 함께 다음 엣지 정확도 세션으로 묶는다. **이번 PR의 순net 효과는 여전히 개선**이다 — 수정 전엔 스코프 무관하게 항상 recall이 소실됐지만, 수정 후엔 최소한 명시적(non-wildcard) import 케이스에서는 정상 동작한다. "완전히 해결"이라고 과장하지 않는다.
 
 **검증.** 신규 테스트 1건(애노테이션 가변인자) green, 전체 백엔드 1246건(누적 6건 신규) 중 실패 11건 로컬 Postgres 미기동 무관. `analyzeLocal` 베이스라인 불변.
+
+---
+
+## 패턴 F 수정 — resolveBareCall 전역 폴백 "판정 불가 시 무응답" 원칙 도입 (2026-08-05, codeprint_160, PR #765 후속)
+
+**배경.** 위에서 CONFIRMED이지만 미수정으로 남겨뒀던 패턴 F(전역 폴백의 "첫 매치 우선"이 근거 없이 승자를 정하는 구조적 결함) — 사용자가 "패턴 F도 진행" 승인해 이번에 같은 PR 흐름에서 착수.
+
+**설계.** `resolveBareCall`이 전역 폴백(`onlyImported=false`)에서 반환하는 `bestMatch`가 실은 순회 순서라는 우연에 의해 정해진다는 게 근본 문제 — 판단 근거(caller의 실제 import)가 없는 상태에서 뭐라도 골라야 한다는 압박 자체가 phantom 생성 메커니즘이다. **원칙 전환: 판단 근거가 불충분하면 엣지를 만들지 않는다(recall 손실 감수, phantom 원천 차단)** — 이 세션 내내(패턴 A~E) 일관되게 적용해온 철학의 연장. 순회 순서 의존을 없애기 위해 "먼저 찾은 걸로 즉시 확정" 대신 **전체 후보를 다 본 뒤 끝에 판정**하는 구조로 변경(순서 무관):
+1. **합성 접근자뿐인 후보(hasEntityAccessor/hasRecordAccessor)와 실제 정의를 가진 후보가 동시에 존재** → 어느 쪽이 진짜인지 판단 불가(합성 쪽이 맞을 수도 있다 — 실사고가 정확히 이 경우: 정답은 합성 접근자였는데 실제 정의를 가진 무관한 decoy가 채택됨). 실사고(`TeamAccessAdapter.hasAccessViaTeam → TeamPaymentOrder.getTeamId`, 정답은 `TeamProjectAllocation.getTeamId`)로 회귀 테스트 작성 — decoy를 먼저 열거해 실제 버그가 재현된 순서 그대로 검증.
+2. **실제 정의를 가진, 서로 인터페이스↔구현체 관계가 아닌 후보가 2개 이상** → 흔한 메서드명(예: 여러 Handler 클래스가 각자 `process()`)이면 어느 쪽인지 판단할 신호가 없다.
+`onlyImported=true`(import 스코프 안)에는 적용 안 함 — 그쪽은 이미 "caller가 실제로 import했다"는 신호로 후보가 좁혀져 있다.
+
+**TDD.** 회귀 테스트 2건 — `globalFallback_synthenticOnlyAndRealDecoyBothCandidates_noArbitraryPick`(실사고 재현) + `globalFallback_twoUnrelatedRealCandidates_noArbitraryPick`(동명 무관 클래스 2개) — 둘 다 수정 전 코드로 되돌려 실제 FAIL(RED) 확인 후 원복.
+
+**기존 테스트 회귀 1건 발견·수정(우연한 충돌).** `같은_입력_두번_빌드_결과_동일`(결정론 가드) 픽스처가 `handlers/one·two·three.js` 3개 파일에 전부 동명(`handle`) 함수를 두고 무-import로 호출하는 구성이었는데, 이게 정확히 패턴 F②(실제 정의 2개 이상, 무관)에 해당해 엣지 자체가 안 생기게 됨 — `verify(atLeastOnce()).saveEdge(...)`가 실패. 이 테스트의 목적은 "동명 충돌 시 어떻게 되는지"가 아니라 "같은 입력을 두 번 빌드하면 같은 결과가 나오는지"라 3-way 충돌은 우연한 겹침이었음 — `b.js`가 `./handlers/one`을 명시 import하도록 픽스처만 조정해 원래 의도(엣지 SET 결정론)를 유지하면서 패턴 F와의 우연한 충돌을 해소.
+
+**검증.** 신규 회귀 2건 + 기존 결정론 테스트 수정본 green. **`edgeAudit` 전체 벤치 스위트(`BenchSuiteTest`/`BenchCommonCasesTest`, 17종 룰 P/N/R 코퍼스) 전부 green** — 이 정도 규모(핵심 해소 알고리즘)의 변경엔 필수 확인. `analyzeLocal` 자기분석: 워닝 베이스라인 불변(HIGH_FAN_OUT 8건), `attemptFix` 팬아웃 17→16(패턴 F가 실제로 자기 레포에서도 애매한 엣지 하나를 걸러낸 것 — 무해, 오히려 그래프 정밀도 개선 신호). 전체 백엔드 1248건(누적 8건 신규) 중 실패 11건 로컬 Postgres 미기동 무관.
+
+**T1→T2 게이트 재판단.** 패턴 E(수정)에 이어 패턴 F(수정)까지 해소돼, §19.4가 T2 착수의 전제로 요구한 "phantom 엣지 측정" 항목 중 이번 세션에 실측된 두 근본 패턴이 모두 처리됐다. `PRODUCT_STRATEGY.md` §19.4의 "조건부 통과" 판정을 갱신해 반영 — 단, 이번 수정 자체가 만든 recall 손실(합성 접근자 대 decoy 모호, 동명 무관 클래스 2개+)의 실사용 영향 범위는 별도 측정 안 함(다음 엣지 정확도 세션에서 재감사 시 자연히 드러남).

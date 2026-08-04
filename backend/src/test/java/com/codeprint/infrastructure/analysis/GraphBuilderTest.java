@@ -838,6 +838,24 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("전역 폴백에서 서로 무관한(인터페이스↔구현체 관계 아님) 실제 정의 후보가 2개 이상이면 임의 채택 대신 엣지를 만들지 않는다(패턴 F)")
+    void globalFallback_twoUnrelatedRealCandidates_noArbitraryPick() {
+        ParsedFile serviceA = parsedFile("domain/orderA/Handler.java", "Java", List.of("process"), Map.of());
+        ParsedFile serviceB = parsedFile("domain/orderB/Handler.java", "Java", List.of("process"), Map.of());
+        ParsedFile caller = parsedFileWithCallsAndImports("app/Dispatcher.java", "Java",
+                List.of("dispatch"), Map.of("dispatch", List.of("process")), List.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(serviceA, serviceB, caller));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeast(0)).saveEdge(cap.capture());
+        boolean anyCallEdgeToEitherHandler = cap.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("dispatch") && e.getEdgeIdentifier().contains("process"));
+        assertThat(anyCallEdgeToEitherHandler).isFalse();
+    }
+
+    @Test
     @DisplayName("bare 호출 대상이 record 컴포넌트 접근자(소스에 텍스트 없음)면 동명의 무관한 명시적 메서드로 오귀속되지 않는다(엣지 정확도 5차 감사 패턴 E)")
     void bareCallToRecordComponentAccessor_notMisattributedToUnrelatedDecoy() {
         // NodeView.language()는 record 컴포넌트라 소스에 텍스트가 없음(functions 비어있음, recordComponents에만 존재).
@@ -859,6 +877,33 @@ class GraphBuilderTest {
                 .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
                 .anyMatch(e -> e.getEdgeIdentifier().contains("toNodeMaps") && e.getEdgeIdentifier().contains("language")
                         && "infrastructure/analysis/AbstractTreeSitterAnalyzer.java".equals(e.getMetadata().get("calleeFile")));
+        assertThat(phantomToDecoy).isFalse();
+    }
+
+    @Test
+    @DisplayName("전역 폴백에서 합성 접근자뿐인 진짜 대상과 실제 정의를 가진 무관한 decoy가 동시에 후보면 임의 채택 대신 엣지를 만들지 않는다(엣지 정확도 5차 감사 패턴 F)")
+    void globalFallback_synthenticOnlyAndRealDecoyBothCandidates_noArbitraryPick() {
+        // 실사고 재현: TeamAccessAdapter.hasAccessViaTeam이 TeamProjectAllocation.getTeamId(합성 접근자, entity라
+        // functions엔 없음)를 호출하려던 건데, 스트림 제네릭 추론이라 caller가 TeamProjectAllocation을 이름으로
+        // import 안 해 1차 매칭이 실패 → 전역 폴백에서 무관한 TeamPaymentOrder.getTeamId(실제 정의, 먼저 열거됨)로
+        // 오귀속됐다. decoy를 record/entity보다 먼저 두어(실제 버그가 재현된 순서) 순서 의존성 없이 안전한지 확인.
+        ParsedFile decoy = parsedFile("domain/payment/TeamPaymentOrder.java", "Java",
+                List.of("getTeamId"), Map.of());
+        ParsedFile entity = parsedFileWithEntityColumns("domain/team/TeamProjectAllocation.java", "Java",
+                List.of(new ColumnInfo("teamId", "teamId", "UUID", false)));
+        // caller는 둘 다 import 안 함(제네릭 추론으로 타입명이 텍스트에 없는 실제 상황 재현) — 전역 폴백만 탐
+        ParsedFile caller = parsedFileWithCallsAndImports("infrastructure/adapter/TeamAccessAdapter.java", "Java",
+                List.of("hasAccessViaTeam"), Map.of("hasAccessViaTeam", List.of("getTeamId")),
+                List.of());
+
+        graphBuilder.build(projectId, analysisId, List.of(decoy, entity, caller));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeast(0)).saveEdge(cap.capture());
+        boolean phantomToDecoy = cap.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("hasAccessViaTeam") && e.getEdgeIdentifier().contains("getTeamId")
+                        && "domain/payment/TeamPaymentOrder.java".equals(e.getMetadata().get("calleeFile")));
         assertThat(phantomToDecoy).isFalse();
     }
 
@@ -1769,13 +1814,16 @@ class GraphBuilderTest {
     @Test
     @DisplayName("동일 입력을 두 번 빌드해도 노드·엣지 구성이 완전히 동일하다(결정론)")
     void 같은_입력_두번_빌드_결과_동일() throws Exception {
+        // handlers/one·two·three가 전부 동명(handle)이라 import 없이 부르면 패턴 F(전역 폴백 모호 후보 판정
+        // 보류)에 걸려 엣지 자체가 안 생긴다 — 이 테스트의 목적(엣지 SET이 두 빌드에서 동일한지)과 무관한
+        // 우연한 충돌이라, b.js가 handlers/one을 명시 import해 대상을 명확히 하도록 픽스처를 조정.
         List<ParsedFile> parsedFiles = List.of(
                 parsedFileWithCalls("src/a.js", "JavaScript", List.of("run"), Map.of("run", List.of("handle"))),
                 parsedFileWithCalls("src/handlers/one.js", "JavaScript", List.of("handle"), Map.of()),
                 parsedFileWithCalls("src/handlers/two.js", "JavaScript", List.of("handle"), Map.of()),
                 parsedFileWithCalls("src/handlers/three.js", "JavaScript", List.of("handle"), Map.of()),
                 parsedFileWithCallsAndImports("src/b.js", "JavaScript", List.of("dispatch"),
-                        Map.of("dispatch", List.of("handle")), List.of())
+                        Map.of("dispatch", List.of("handle")), List.of("./handlers/one"))
         );
 
         // 1차 빌드 — 클래스 공용 graphBuilder/mock 사용
