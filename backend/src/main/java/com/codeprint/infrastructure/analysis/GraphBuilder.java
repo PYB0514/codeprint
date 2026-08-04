@@ -882,20 +882,26 @@ public class GraphBuilder {
                 continue;
             }
             if (isSyntheticOnly || !hasRealDef) continue; // 실제 정의 없는 후보는 아래 관계 판정과 무관
-            // bestMatch(인터페이스)가 실제로 이 후보를 구현체로 등록하고 있는지 검증 — 기존엔 후보 자신이
-            // "어딘가의 인터페이스가 아니다"만 보고 무조건 업그레이드해서, bestMatch와 무관한 decoy가 우연히
-            // 비-인터페이스이기만 하면 "구현체 우선"이라는 명목으로 조용히 채택됐다(적대적 검증에서 발견 —
-            // 이 PR이 막으려던 것과 동일한 임의 채택이 인터페이스가 섞이면 그대로 재발).
-            boolean verifiedImplOfBestInterface = bestIsInterface
+            // 인터페이스↔구현체 관계를 양방향으로 검증 — bestMatch가 인터페이스고 신규 후보가 그 구현체인
+            // 경우(3차 적대적 검증까지 다뤄진 방향)뿐 아니라, **반대로 구현체가 먼저 bestMatch로 확정되고
+            // 나중에 그 인터페이스 자신이 열거되는 경우**도 "관계없는 후보"로 오판해선 안 된다(3차 검증에서
+            // 발견 — 이 검사를 한쪽 방향만 두면 순서에 따라 진짜 구현체+인터페이스 쌍조차 모호로 처리돼
+            // 정상 엣지가 사라지는 신규 회귀가 생김, 이 PR 전체의 목표인 "순서 무관 판정"과 정면 모순).
+            boolean calleeIsVerifiedImplOfBest = bestIsInterface
                     && interfaceToImplFiles.getOrDefault(extractFileNameWithoutExt(bestMatch.filePath()), List.of())
                             .contains(calleeFile);
-            if (verifiedImplOfBestInterface) {
+            boolean bestIsVerifiedImplOfCallee = calleeIsInterface
+                    && interfaceToImplFiles.getOrDefault(calleeClassName, List.of()).contains(bestMatch);
+            if (calleeIsVerifiedImplOfBest) {
+                // 신규 후보가 bestMatch(인터페이스)의 검증된 구현체 — 구현체로 업그레이드
                 bestMatch = calleeFile;
                 bestIsInterface = false;
                 bestIsSyntheticOnly = false;
+            } else if (bestIsVerifiedImplOfCallee) {
+                // bestMatch가 이미 신규 후보(인터페이스)의 검증된 구현체 — bestMatch 그대로 유지, 모호 아님
             } else if (!bestIsSyntheticOnly) {
-                // bestMatch도 실제 정의(또는 인터페이스)인데 지금 후보가 검증된 구현체가 아니다 — 서로
-                // 무관한 실제 정의 후보가 최소 2개라는 뜻이라 판단 근거가 없다.
+                // 어느 방향으로도 검증된 인터페이스↔구현체 관계가 아니다 — 서로 무관한 실제 정의 후보가
+                // 최소 2개라는 뜻이라 판단 근거가 없다.
                 sawAmbiguousRealCandidate = true;
             }
         }

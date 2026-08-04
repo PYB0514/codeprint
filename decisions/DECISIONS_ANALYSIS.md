@@ -2591,3 +2591,17 @@ PR #761/#762(pinGraph 회귀) 사고 이후, 이번 세션에 독립 적대적 �
 **CONFIRMED② — `onlyImported=true`(import 스코프 안) 패스도 안전하지 않다는 지적, PR의 "이미 안전하다" 주장은 근거 부족.** caller가 서로 무관한 두 파일을 **둘 다 명시 import**하고 동명 함수를 부르면, import 스코프 안에서도 여전히 "먼저 찾은 것" 문제가 그대로 남아있었다(이건 이 PR이 새로 만든 회귀는 아니고 훨씬 이전부터 있던 구멍이지만, "import 스코프는 이미 좁혀져 있어 안전하다"는 이 PR의 설계 근거 자체가 검증 안 된 가정이었다는 지적). **수정 — 애초에 별도 처리 불필요, 같은 로직으로 함께 해소.** 위 CONFIRMED①의 수정 자체가 `sawAmbiguousRealCandidate` 판정을 `onlyImported` 여부와 무관하게 전체 순회에 적용하는 구조로 재작성됐기 때문에(관계 미검증 실제 정의 후보 2개 이상 → 모호), import 스코프 안에서의 이 문제도 자동으로 함께 해소됨 — 별도 분기 불필요.
 
 **검증.** 신규 회귀 테스트 1건 green, 기존 "인터페이스보다 구현체 우선" 정상 케이스 테스트도 계속 green(진짜 관계가 검증되는 케이스는 그대로 업그레이드). **벤치 스위트 재확인 green.** `analyzeLocal` 베이스라인 불변. 전체 백엔드 1249건(누적 9건 신규) 중 실패 11건 로컬 Postgres 미기동 무관.
+
+---
+
+## 패턴 F 수정 PR 3차(최종) 독립 적대적 검증 — CONFIRMED 1건 발견·수정 (2026-08-05, codeprint_160, PR #766)
+
+**배경.** 2차 검증에서 수정한 "인터페이스↔구현체 관계 검증" 자체가 새 회귀를 만들지 않았는지 3차로 재검증(같은 사용자 표준 규칙, "수정의 수정의 수정"에도 계속 적용).
+
+**CONFIRMED — 관계 검증이 한쪽 방향에만 적용돼 순서 의존 회귀.** 2차 수정의 `verifiedImplOfBestInterface`는 "**bestMatch가 인터페이스이고** 신규 후보가 그 구현체인지"만 검증했다 — 반대로 **구현체가 먼저 bestMatch로 확정되고 그 인터페이스 자신이 나중에 열거되는 경우**는 전혀 검사하지 않아, `!bestIsSyntheticOnly` 조건에 걸려 무조건 모호(`sawAmbiguousRealCandidate`) 처리됐다. decoy 없이 **진짜 인터페이스+구현체 관계 하나만 있어도**, 단지 구현체가 먼저 열거된다는 이유만으로 정상 엣지가 사라지는 순수 신규 회귀였다 — 이 PR 3커밋 전체가 추구한 "순서 무관 판정"이라는 목표와 정면 모순되는 지점이라 특히 심각하게 다뤘다. 에이전트가 `[Baz(IFoo의 진짜 구현체), IFoo(인터페이스)]` 순서로 직접 재현.
+- **수정.** 양방향 검증 — `calleeIsVerifiedImplOfBest`(기존 방향) + `bestIsVerifiedImplOfCallee`(신규 후보가 인터페이스고 bestMatch가 이미 그 구현체인 경우, `interfaceToImplFiles.getOrDefault(calleeClassName, List.of()).contains(bestMatch)`) 둘 다 확인 — 후자면 bestMatch를 그대로 유지하고 모호 처리 skip.
+- **TDD.** 회귀 테스트(`realImplBestMatch_thenItsOwnInterfaceEnumeratedLater_notTreatedAsAmbiguous`) — 수정 전 코드로 되돌려 실제 엣지 소실(FAIL) 확인 후 원복.
+
+**검증.** 신규 회귀 테스트 1건 green, 기존 테스트(정방향 인터페이스 업그레이드·2차 검증 테스트 포함) 전부 계속 green. **벤치 스위트 3번째 재확인도 green.** `analyzeLocal` 베이스라인 불변. 전체 백엔드 1250건(누적 10건 신규) 중 실패 11건 로컬 Postgres 미기동 무관.
+
+**3차 검증 결론.** 에이전트 판정: "조건부"(반대방향 회귀 지적) → 수정 완료 후 재검증하면 "예"로 볼 수 있는 수준. 3라운드에 걸쳐 CONFIRMED 총 6건(패턴 F 도입 자체의 recall 소실 2건, 인터페이스 검증 누락 2건, 양방향 비대칭 1건, import 스코프 안 모호성 1건)을 전부 반영 — `resolveBareCall`처럼 핵심적인 해소 알고리즘 변경은 "한 번 검증 통과"로 끝내지 않고 수정이 새 문제를 만드는지 재귀적으로 계속 확인해야 한다는 걸 이번 세션이 실증. 이걸로 패턴 F 수정 마무리, 머지 진행.

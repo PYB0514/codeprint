@@ -931,6 +931,30 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("진짜 구현체가 먼저 bestMatch로 확정된 뒤 그 인터페이스 자신이 나중에 열거돼도 모호로 오판하지 않는다(패턴 F 3차 적대적 검증 발견 — 역방향 회귀)")
+    void realImplBestMatch_thenItsOwnInterfaceEnumeratedLater_notTreatedAsAmbiguous() {
+        // Baz가 IFoo의 진짜 구현체(process 실제 정의)인데, 순회에서 Baz가 먼저 bestMatch로 확정된 뒤 IFoo
+        // 자신이 나중에 나오면 — 검증 방향이 "bestMatch가 인터페이스일 때만" 이었어서 반대 방향(구현체가
+        // 이미 bestMatch)은 검증 없이 무조건 모호 처리돼 정상 엣지가 사라졌다(decoy 없이 진짜 관계 하나만
+        // 있어도 재현). 순서를 [Baz, IFoo]로 고정해 재현.
+        ParsedFile impl = parsedFileWithImpl("domain/Baz.java", "Java", List.of("process"), "IFoo");
+        ParsedFile iface = parsedFile("domain/IFoo.java", "Java", List.of("process"), Map.of());
+        ParsedFile caller = parsedFileWithCallsAndImports("app/Caller.java", "Java",
+                List.of("run"), Map.of("run", List.of("process")),
+                List.of("domain.Baz", "domain.IFoo"));
+
+        graphBuilder.build(projectId, analysisId, List.of(impl, iface, caller));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeastOnce()).saveEdge(cap.capture());
+        boolean edgeToRealImpl = cap.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("run") && e.getEdgeIdentifier().contains("process")
+                        && "domain/Baz.java".equals(e.getMetadata().get("calleeFile")));
+        assertThat(edgeToRealImpl).isTrue();
+    }
+
+    @Test
     @DisplayName("record 컴포넌트명이 실제 import된 다른 클래스의 동명 메서드와 겹쳐도 진짜 엣지가 소실되지 않는다(적대적 검증 발견 회귀)")
     void bareCallResolvesToRealDefinition_evenWhenSyntheticOnlyCandidateEnumeratedFirst() {
         // record는 FUNCTION 노드가 없어 그 자체로는 엣지를 못 만듦 — 그런데 이 후보가 먼저 bestMatch로
