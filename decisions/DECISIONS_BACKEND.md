@@ -2766,3 +2766,31 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 **검증 — 이번엔 실 Postgres로.** 신규 `GraphCommandServicePinIntegrationTest`(`@DataJpaTest`+`docker compose`의 실 DB, `PostGraphSnapshotIntegrationTest`와 동일 패턴) — 그래프 A를 슬롯 3에 고정 → 그래프 B를 같은 슬롯 3에 재고정 → **"수정" 코드로 먼저 실행해 실제로 `ConstraintViolationException`이 재현되는 것까지 확인한 뒤**, 원복 코드로 같은 테스트가 green으로 전환되는 것까지 확인(A는 슬롯 해제, B가 슬롯 3 보유). 단위 테스트(`GraphCommandServiceTest` 8건, out-of-range 테스트는 `save` never()만 확인하도록 수정 — `clearPinnedSlot`은 이제 호출되는 게 정상이라 그 단언 제거)까지 전부 green. `analyzeLocal` 베이스라인 불변.
 
 **교훈.** "상태 전이/경계 조건" TDD 대상이라도 **JPA `@Modifying` 쿼리의 순서·flush 타이밍이 얽힌 로직은 mocked 단위 테스트만으론 불충분** — 이 클래스처럼 벌크 업데이트와 엔티티 dirty-checking이 상호작용하는 코드는 실 DB 통합 테스트(`@DataJpaTest`)가 필요하다는 새 하위 규칙으로 기록. 이번엔 병합 전이 아니라 병합 직후 자체 소급 검증으로 잡았다 — PR744(2026-08-03, `contexts/Context159.md`)와 같은 패턴 반복.
+
+## 리컨실러 T1 수직 관통 — `FixAttemptService` 신설 (2026-08-05, codeprint_160)
+
+**배경 — 게이트 예외.** `PRODUCT_STRATEGY.md` §13.3/§17.4는 "벤치(2번) 없이 3번(오케스트레이션 파이프라인) 착수 안 함"과 별개로, §19.4가 2막(T1 수직 관통) 착수 조건을 **"런칭 완료 + 가드레일 정상"**으로 못박아 뒀다. 이번 세션엔 v1.0 런칭 자체가 사용자 결정 3건(콜드스타트·도메인·Railway Pro)으로 미결인 상태였는데, 사용자가 "v1.0 이후 할 일을 미리 진행"을 명시적으로 요청 — Plan 제시 후 사용자 승인으로 이번 세션 한정 게이트 예외 착수. 전제: **완성하되 실제 프로덕션 실행/공개는 하지 않는다** — 라이브 트리거(컨트롤러 엔드포인트·스케줄러)는 만들지 않아 병합돼도 자동으로 발동하지 않는다.
+
+**§17.10 설계 대비 의도적으로 축소한 3곳(전부 Plan 단계에서 사용자에게 명시 후 진행).**
+1. **트윈 검증에서 "compile" 단계 제외** — 연결된 프로젝트는 임의 사용자 레포라, 서버가 그 레포의 `build.gradle`/`pom.xml`을 실행하는 건 임의 원격 코드 실행 표면이 된다(기존 코드베이스 어디에도 사용자 레포 빌드 실행 코드가 없다 — 신설이면 신규 취약면). 대신 **패치 결과를 임시 파일에 써서 프로덕션과 동일한 `StaticCodeAnalyzer` 경로로 재파싱**(B-13 교훈 — 별도 경로는 오탐 재현 못 함)해 구문 유효성 + `transactionalMethods()`에 대상 함수가 포함됐는지(구조적 사실)만 확인. "기존 테스트 green" 기준도 같은 이유로 제외.
+2. **GitHub 실제 PR 오픈 API 미연동** — 기존 코드는 웹훅 수신·클론·커밋 상태 게시·리뷰 코멘트만 하고 브랜치 생성·PR 오픈 같은 쓰기 권한 API를 쓴 적이 없다. 이건 GitHub App 권한 승격이 필요한 별개 보안 표면이라 "코드만 준비" 합의 범위를 넘는다고 판단 — `FixAttempt` 결과(diff+근거)까지만 반환, 실제 오픈은 별도 착수.
+3. **신규 바운디드 컨텍스트(`orchestration`) 대신 기존 `application/graph` 패키지에 배치** — §17.10-⑥은 "domain/ 또는 application/orchestration/(신설 컨텍스트) 후보"로 제안했지만, 같은 성격의 기존 BYOK LLM 기능(`RoleSpecService`·`FeatureSpecService`·`AiFailoverClient`)이 전부 `application/graph`에 이미 있어 그 컨벤션을 그대로 따름(CLAUDE.md "재사용성 먼저 확인" — 비슷한 기능이 검증된 채로 있으면 새로 설계하지 않는다). 신규 컨텍스트 도입은 T2 확장 시점에 실제로 여러 컨텍스트를 넘나드는 필요가 생기면 재검토.
+
+**구현.** `FixPromptBundle`(값 객체) + `FixPromptBundleAssembler`(경고+대상 노드+파일 원문 → 번들 조립, MISSING_TRANSACTIONAL_DELETE 전용 — 수정 레시피는 경고 `message`에 이미 있어 재사용) + `UnifiedDiffUtil`(unified diff 최소 파서/적용기, 컨텍스트 불일치 시 예외 — 트윈 검증의 "패치 적용 실패" 판정에 그대로 노출) + `FixAttemptService.attemptFix(projectId, graphId, nodeId, userId, provider)`: BYOK 키·DLP(`aiExportDisabled`) 체크 → `AiFailoverClient.generate()`(기존 실패조치 인프라 재사용, provider 어댑터 신규 구현 불필요) → `RATIONALE:`/`DIFF:` 형식 파싱 → diff 적용 → 트윈 검증(재파싱+`GraphWarningService.detect()` 재실행으로 대상 fingerprint 소멸·신규 경고 0·기존 경고 집합 불변 확인). **DLP 체크를 컨트롤러가 아니라 서비스 안에 직접 넣었다** — 이 경로는 향후 웹훅/배치처럼 컨트롤러를 안 거치는 트리거가 생길 수 있어(현재 `RoleSpecService`처럼 상위에서만 체크하면 우회 구멍이 될 수 있음), 방어를 서비스 레벨로 내려 신규 AI 진입점이 기존 DLP 토글(PR #756)을 놓치지 않게 함.
+
+**JPA flush 안전.** `FixAttemptService`엔 클래스 레벨 `@Transactional`을 두지 않았다 — 트윈 검증이 조회한 `Node`의 메타데이터를 임시로 갱신해 재탐지하는데, 영속성 컨텍스트가 열려 있으면 그 임시 변경이 flush될 위험이 있다(바로 위 pinGraph 사고와 같은 위험 클래스). 각 조회(`graphQueryService.getNodes` 등)가 자체 짧은 트랜잭션으로 끝나 반환 시점엔 detached 상태를 보장하고, 패치된 노드는 `Node.create()`로 만든 완전히 새 미영속 인스턴스에 메타데이터를 병합한 것이라 원본 관리 엔티티는 건드리지 않는다.
+
+**검증.** `UnifiedDiffUtilTest`(추가/삭제/컨텍스트 불일치 4케이스) + `FixAttemptServiceTest`(BYOK 미등록·DLP 차단·정상 fix 성공·no-op diff 트윈검증 실패·컨텍스트 불일치 패치실패·대상 경고 없음 6케이스, `AiService`만 mock하고 `StaticCodeAnalyzer`는 실 인스턴스로 진짜 재파싱 경로 통과) 전부 green. 성공 케이스는 기존 벤치 P-코퍼스(`bench/rules/MISSING_TRANSACTIONAL_DELETE/p-derived-delete-no-annotation`)와 동일한 픽스처를 사용해 실제 프로덕션에서 발화하는 경고를 대상으로 검증. `analyzeLocal`: `attemptFix`가 HIGH_FAN_OUT 신규 1건(17개 호출) — Application Service 오케스트레이터 예외 패턴(§10, `RoleSpecService.generateSection` 등 기존 항목과 동일 성격, 단일 목표를 향한 순차 검증→위임)으로 판단해 리팩토링하지 않음. 백엔드 전체 테스트 1237건 중 신규 테스트 전부 green, 실패 11건은 전부 로컬 Postgres 미기동으로 인한 기존 DB 통합 테스트(Docker 안 띄운 상태에서 실행 — 무관).
+
+**남은 것(다음 세션 이후, 이번 범위 밖).** 실제 라이브 트리거(어디서 언제 `attemptFix`를 호출할지 — PR 게이트 리컨실리에이션 경로 재사용이 유력)·GitHub PR 오픈 연동·T2 확장·비용(BYOK라 사용자 부담이지만 자동 트리거되면 무제한 반복 호출 리스크 — `RoleSpecService`의 `MAX_TARGET_NODES` 같은 상한 필요)은 전부 미착수. 이번 세션은 "완성"까지만, "가동"은 별도 결정.
+
+**독립 적대적 검증(같은 세션, PR #764) — CONFIRMED 3건 발견·전부 수정.** 사용자 표준 규칙("코드 변경 PR은 항상 독립 적대적 검증")에 따라 fresh-context 에이전트로 검증한 결과:
+1. **`UnifiedDiffUtil` 헝크 내부에 마커(공백/+/-) 없는 줄을 만나면 `break`로 조용히 건너뛰고 이후 줄들도 소비 안 된 채 스킵** — 삭제/컨텍스트 유실이 있어도 `apply()`가 예외 없이 "성공"을 반환할 수 있었다(트윈 검증 전체가 이 위에 서 있어 치명적). 수정: 빈 줄은 마커 공백이 트리밍된 blank 컨텍스트로 취급(원문과 실제 대조), 그 외 인식 못 할 마커는 즉시 예외. 회귀 테스트 2건 추가.
+2. **fingerprint(type+message) 단독 비교라 동명 메서드가 다른 파일에 있으면 충돌** — 예를 들어 `deleteByUserId`가 두 리포지토리 인터페이스에 있으면 완전히 같은 fingerprint를 내, 대상 노드를 성공적으로 고쳐도 다른 파일의 동명 미해결 경고 때문에 "대상 경고가 여전히 발생"으로 오판(false negative, 방향은 안전하지만 흔한 명명 패턴에서 실사용을 막는 실질 버그). 수정: 비교 키를 `type+nodeIds`로 스코프 축소(`warningKey`). 회귀 테스트(`fingerprintCollisionAcrossFiles_stillSucceeds`) 추가.
+3. **`getProjectById`(소유권 미검증 원시 조회)를 사용해 향후 배선 시 IDOR 가능** — 포트 인터페이스 자체가 "호출자가 이미 접근을 검증한 흐름 전용"이라고 명시한 메서드인데, `attemptFix`는 소유권 검증을 전혀 안 거쳤다. 수정: `getOwnedProject(projectId, userId)`로 교체(기존 `GraphFacade` 컨벤션과 동일 — 미소유 시 예외 전파, catch 안 함). 회귀 테스트(`notOwner_propagatesException`) 추가.
+
+부수적으로 재검토 중 직접 발견한 4번째 버그(적대적 검증 리포트엔 없음): **트윈 검증용 `patched` Node를 `Node.create()`로 만들면 매번 새 랜덤 UUID가 발급되는데, 그래프의 기존 엣지들은 원본 `target.getId()`를 참조하고 있어 그대로 쓰면 그 엣지들이 patched 노드와 연결이 끊긴다** — "isTransactional=true인 호출자로부터 커버됨" 같은 엣지 기반 판정이 부정확해질 수 있음. 수정: id 필드만 리플렉션으로 원본과 동일하게 맞추는 `copyWithSameId` 헬퍼 도입(다른 필드는 전부 `Node.create()`로 정상 생성 — 리플렉션은 id 1개 필드로 최소화).
+
+PLAUSIBLE로 보고된 클래스 헤더 주석의 "OSIV 꺼짐→반환 시 detached 보장" 근거도 확인 결과 **틀렸음**(`spring.jpa.open-in-view` 미설정이라 기본값 true, 즉 OSIV 켜짐) — 다만 코드가 애초에 관리 엔티티를 mutate한 적이 없어(패치는 항상 `Node.create()`로 만든 새 미영속 인스턴스에만) 지금 당장 위험은 없었다. 주석을 정확한 근거("트랜잭션 경계가 아니라 '관리 엔티티를 절대 안 건드린다'는 불변식")로 정정.
+
+전부 수정 후 재검증: 신규 테스트 6→8(FixAttemptServiceTest)·4→6(UnifiedDiffUtilTest), `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 8건, `attemptFix` 여전히 17콜 — 내부 리팩토링이라 팬아웃 불변), 백엔드 전체 1241건 중 신규 전부 green(기존 DB 통합 테스트 실패 11건은 로컬 Postgres 미기동으로 무관, 개수 불변).
