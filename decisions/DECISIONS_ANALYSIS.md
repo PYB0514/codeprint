@@ -2546,3 +2546,15 @@ PR #761/#762(pinGraph 회귀) 사고 이후, 이번 세션에 독립 적대적 �
 **PLAUSIBLE(수정 안 함, 범위 밖) — `hasEntityAccessor`(2026-07-24, 이 PR 밖)에도 구조적으로 같은 CONFIRMED① 위험이 있을 수 있음.** Lombok getter/setter명이 실제 다른 클래스의 동명 메서드와 충돌하면 같은 방식으로 recall이 소실될 수 있다. 이번 PR이 만든 문제는 아니고(기존 코드), `hasRecordAccessor`를 같은 패턴으로 추가하며 이 PR의 스코프 제한 수정이 `hasEntityAccessor` 쪽에도 동일하게 적용되므로(같은 `resolveBareCall` 루프를 공유) **이미 함께 수정됐다** — 별도 후속 불필요, 기록만.
 
 **검증.** 신규 회귀 테스트 2건(recall 소실 재현 + RED→GREEN, 가변인자 추출) + 기존 패턴 C/E 테스트 재확인 green. 전체 백엔드 1245건(신규 5건 누적) 중 실패 11건은 로컬 Postgres 미기동으로 무관. `analyzeLocal` 베이스라인 불변.
+
+---
+
+## 패턴 E 수정 PR 2차 독립 적대적 검증 — CONFIRMED 1건 수정, 1건은 한계로 정직하게 기록 (2026-08-05, codeprint_160, PR #765)
+
+**배경.** 위 1차 검증에서 나온 수정 자체가 또 다른 문제를 만들지 않았는지 fresh-context 에이전트로 재검증(같은 사용자 표준 규칙을 이번엔 "수정의 수정"에도 적용).
+
+**CONFIRMED — 애노테이션 붙은 가변인자 record 컴포넌트에서 이름 오추출.** `findFirstIdentifier`를 `spread_parameter` 서브트리 전체에 돌리면, `@Deprecated String... items`처럼 컴포넌트에 애노테이션이 붙은 경우 `modifiers > marker_annotation > identifier`(애노테이션 이름 "Deprecated")가 `variable_declarator > identifier`("items")보다 트리 순서상 먼저 나와 잘못 채택됐다(실제 파싱해 확인). **수정.** `findChildOfType`(직계 자식만 스캔, 재귀 아님) 신설해 먼저 `variable_declarator`를 찾고, 그 서브트리 안에서만 `findFirstIdentifier`를 실행(`variable_declarator` 안엔 애노테이션이 없어 안전). 회귀 테스트(`Java_record_애노테이션붙은_가변인자_컴포넌트_추출`) 추가.
+
+**CONFIRMED이지만 미수정 — `onlyImported` 스코프 제한은 1차 CONFIRMED①(recall 소실)을 완전히 없애지 못하고 줄였을 뿐.** `extractImports`가 와일드카드(`import x.*`)·static import(`import static ...`)를 캡처 못 해(정규식 한계, 실측 확인), 진짜 정의 파일이 이런 형태로만 import되거나 애초에 import가 아예 없는 경우(같은 패키지 등)엔 `onlyImported=true` 패스가 후보를 못 찾아 업그레이드가 발동 안 하고 recall 소실이 재현된다. **판단 — 정직하게 기록하고 미수정.** 이건 이미 이 항목 위쪽에 기록한 "패턴 F"(전역 폴백의 "첫 매치 우선" 자체 결함)와 근본 원인이 겹치는 서브셋이다 — 완전한 해법은 전역 폴백 알고리즘 자체의 재설계(예: 실후보 2개 이상이면 판정 보류, 또는 wildcard/static import까지 포함한 import 해소 강화)가 필요해 패턴 F와 함께 다음 엣지 정확도 세션으로 묶는다. **이번 PR의 순net 효과는 여전히 개선**이다 — 수정 전엔 스코프 무관하게 항상 recall이 소실됐지만, 수정 후엔 최소한 명시적(non-wildcard) import 케이스에서는 정상 동작한다. "완전히 해결"이라고 과장하지 않는다.
+
+**검증.** 신규 테스트 1건(애노테이션 가변인자) green, 전체 백엔드 1246건(누적 6건 신규) 중 실패 11건 로컬 Postgres 미기동 무관. `analyzeLocal` 베이스라인 불변.

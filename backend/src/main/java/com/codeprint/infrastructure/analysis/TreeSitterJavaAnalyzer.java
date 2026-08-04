@@ -153,8 +153,13 @@ class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
                         if (nameNode != null && !nameNode.isNull()) recordComponents.add(text(nameNode, src));
                     } else if (child.getType().equals("spread_parameter")) {
                         // 가변인자 컴포넌트(String... items)는 formal_parameter가 아니라 spread_parameter이고
-                        // "name" 필드가 없이 variable_declarator > identifier 로 한 단계 더 들어가야 함
-                        TSNode identifier = findFirstIdentifier(child);
+                        // "name" 필드가 없이 variable_declarator > identifier 로 한 단계 더 들어가야 함. 반드시
+                        // variable_declarator 안에서만 찾는다 — spread_parameter 서브트리 전체를 뒤지면 애노테이션
+                        // (@Deprecated String... items)의 이름도 identifier 타입이라 먼저 걸려 오추출된다
+                        // (적대적 검증 2차에서 발견 — modifiers > marker_annotation > identifier가 variable_declarator
+                        // 보다 문서상 먼저 옴).
+                        TSNode declarator = findChildOfType(child, "variable_declarator");
+                        TSNode identifier = declarator != null ? findFirstIdentifier(declarator) : null;
                         if (identifier != null) recordComponents.add(text(identifier, src));
                     }
                 }
@@ -166,7 +171,17 @@ class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
         }
     }
 
-    // 서브트리에서 첫 identifier 타입 노드를 찾는다(spread_parameter의 variable_declarator처럼 필드명 없이 중첩된 경우용)
+    // 직계 자식 중 주어진 타입의 첫 노드를 찾는다(재귀 아님 — 다른 타입 서브트리까지 뒤지지 않도록 범위 한정)
+    private TSNode findChildOfType(TSNode node, String type) {
+        int n = node.getChildCount();
+        for (int i = 0; i < n; i++) {
+            TSNode child = node.getChild(i);
+            if (child.getType().equals(type)) return child;
+        }
+        return null;
+    }
+
+    // 서브트리에서 첫 identifier 타입 노드를 찾는다(variable_declarator엔 애노테이션이 없어 안전하게 첫 매치 사용 가능)
     private TSNode findFirstIdentifier(TSNode node) {
         if (node.getType().equals("identifier")) return node;
         int n = node.getChildCount();
