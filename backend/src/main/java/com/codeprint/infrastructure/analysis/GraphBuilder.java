@@ -845,18 +845,18 @@ public class GraphBuilder {
                                        boolean onlyImported) {
         ParsedFile bestMatch = null;
         boolean bestIsInterface = false;
-        // 합성 접근자(hasEntityAccessor/hasRecordAccessor)만으로 인정된 후보는 FUNCTION 노드가 없어 그 자체로는
-        // 엣지를 못 만든다 — 그런데 이 후보가 먼저 bestMatch로 고정되면, 뒤늦게 열거된 "진짜 정의가 있는" 후보를
-        // 기존 "인터페이스→구현체 업그레이드"만으로는 절대 대체 못 해(둘 다 non-interface면 업그레이드 조건
-        // 자체가 안 걸림) — 정상적으로 만들어졌어야 할 엣지가 조용히 사라지는 회귀(적대적 검증에서 발견,
-        // record 컴포넌트명이 실제 import된 다른 클래스의 동명 메서드와 겹치는 경우 재현).
-        // ★ onlyImported=true(caller가 실제로 import한 후보끼리 경쟁)일 때만 업그레이드한다 — onlyImported=false
-        // (전역 폴백)에서까지 "실제 정의가 있으면 무조건 우선"을 적용하면, import 안 된 무관한 동명 메서드(decoy)가
-        // 다시 채택돼 hasEntityAccessor/hasRecordAccessor가 막으려던 phantom이 그대로 재발한다(1차 시도에서
-        // bareCallToLombokEntityGetter_notMisattributedToUnrelatedDecoy가 실제로 재발해 잡아냄) — 두 필터의 존재
-        // 이유 자체가 "import 스코프 밖에서는 실제 정의보다 안전한 무응답을 택한다"이므로 폴백 패스에선 원래
-        // 규칙(먼저 찾은 것 유지)을 그대로 둬야 한다.
         boolean bestIsSyntheticOnly = false;
+        // "누가 진짜 대상인지 판단할 신호가 없는" 상황을 모호로 표시해 순회 순서로 승자를 정하지 않는다(엣지
+        // 정확도 5차 감사 패턴 F — TeamAccessAdapter.hasAccessViaTeam이 무관한 TeamPaymentOrder.getTeamId로
+        // 오귀속된 실사고, 정답은 합성 접근자뿐이라 노드가 없는 TeamProjectAllocation.getTeamId였음). 순서에
+        // 무관하게 판정되도록 전체 순회에서 집계한 뒤 끝에 결정한다.
+        // ①실제 정의를 가진, 서로 인터페이스↔구현체 관계가 "검증되지 않은" 후보가 2개 이상 — onlyImported
+        //   양쪽 다 적용(캐일러가 A·B를 둘 다 import했어도 어느 쪽인지 신호가 없으면 여전히 모호하다,
+        //   적대적 검증에서 "import 스코프는 이미 안전하다"는 이전 가정이 틀렸음을 지적받아 확장).
+        // ②합성 접근자뿐인 후보와 실제 정의 후보가 동시에 존재 — 전역 폴백(onlyImported=false)에서만.
+        //   import 스코프 안에선 위 별도 규칙(합성→실제 업그레이드)이 이미 처리한다.
+        boolean sawSyntheticOnlyCandidate = false;
+        boolean sawAmbiguousRealCandidate = false;
         for (ParsedFile calleeFile : parsedFiles) {
             if (calleeFile.filePath().equals(callerFile.filePath())) continue;
             boolean hasRealDef = calleeFile.functions().contains(calleeFunc);
@@ -864,24 +864,49 @@ public class GraphBuilder {
                     && (hasEntityAccessor(calleeFile, calleeFunc) || hasRecordAccessor(calleeFile, calleeFunc));
             if (!hasRealDef && !isSyntheticOnly) continue;
             if (onlyImported && !callerImports(callerFile, calleeFile)) continue;
+            if (!onlyImported && isSyntheticOnly) sawSyntheticOnlyCandidate = true;
             String calleeClassName = extractFileNameWithoutExt(calleeFile.filePath());
             boolean calleeIsInterface = interfaceToImplFiles.containsKey(calleeClassName);
             if (bestMatch == null) {
                 bestMatch = calleeFile;
                 bestIsInterface = calleeIsInterface;
                 bestIsSyntheticOnly = isSyntheticOnly;
-            } else if (onlyImported && bestIsSyntheticOnly && hasRealDef) {
+                continue;
+            }
+            if (onlyImported && bestIsSyntheticOnly && hasRealDef) {
                 // 실제 정의가 있는 후보로 업그레이드 — import 스코프 안에서만(둘 다 caller가 실제로 import했다는
                 // 확증이 있을 때만) 합성 접근자뿐인 죽은 후보가 진짜 후보를 막지 않도록
                 bestMatch = calleeFile;
                 bestIsInterface = calleeIsInterface;
                 bestIsSyntheticOnly = false;
-            } else if (!isSyntheticOnly && bestIsInterface && !calleeIsInterface) {
-                // 구현체로 업그레이드(기존 규칙, 둘 다 실제 정의가 있을 때만 의미 있음)
+                continue;
+            }
+            if (isSyntheticOnly || !hasRealDef) continue; // 실제 정의 없는 후보는 아래 관계 판정과 무관
+            // 인터페이스↔구현체 관계를 양방향으로 검증 — bestMatch가 인터페이스고 신규 후보가 그 구현체인
+            // 경우(3차 적대적 검증까지 다뤄진 방향)뿐 아니라, **반대로 구현체가 먼저 bestMatch로 확정되고
+            // 나중에 그 인터페이스 자신이 열거되는 경우**도 "관계없는 후보"로 오판해선 안 된다(3차 검증에서
+            // 발견 — 이 검사를 한쪽 방향만 두면 순서에 따라 진짜 구현체+인터페이스 쌍조차 모호로 처리돼
+            // 정상 엣지가 사라지는 신규 회귀가 생김, 이 PR 전체의 목표인 "순서 무관 판정"과 정면 모순).
+            boolean calleeIsVerifiedImplOfBest = bestIsInterface
+                    && interfaceToImplFiles.getOrDefault(extractFileNameWithoutExt(bestMatch.filePath()), List.of())
+                            .contains(calleeFile);
+            boolean bestIsVerifiedImplOfCallee = calleeIsInterface
+                    && interfaceToImplFiles.getOrDefault(calleeClassName, List.of()).contains(bestMatch);
+            if (calleeIsVerifiedImplOfBest) {
+                // 신규 후보가 bestMatch(인터페이스)의 검증된 구현체 — 구현체로 업그레이드
                 bestMatch = calleeFile;
                 bestIsInterface = false;
                 bestIsSyntheticOnly = false;
+            } else if (bestIsVerifiedImplOfCallee) {
+                // bestMatch가 이미 신규 후보(인터페이스)의 검증된 구현체 — bestMatch 그대로 유지, 모호 아님
+            } else if (!bestIsSyntheticOnly) {
+                // 어느 방향으로도 검증된 인터페이스↔구현체 관계가 아니다 — 서로 무관한 실제 정의 후보가
+                // 최소 2개라는 뜻이라 판단 근거가 없다.
+                sawAmbiguousRealCandidate = true;
             }
+        }
+        if (sawAmbiguousRealCandidate || (!onlyImported && sawSyntheticOnlyCandidate && !bestIsSyntheticOnly)) {
+            return null;
         }
         return bestMatch;
     }

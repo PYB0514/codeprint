@@ -2558,3 +2558,50 @@ PR #761/#762(pinGraph 회귀) 사고 이후, 이번 세션에 독립 적대적 �
 **CONFIRMED이지만 미수정 — `onlyImported` 스코프 제한은 1차 CONFIRMED①(recall 소실)을 완전히 없애지 못하고 줄였을 뿐.** `extractImports`가 와일드카드(`import x.*`)·static import(`import static ...`)를 캡처 못 해(정규식 한계, 실측 확인), 진짜 정의 파일이 이런 형태로만 import되거나 애초에 import가 아예 없는 경우(같은 패키지 등)엔 `onlyImported=true` 패스가 후보를 못 찾아 업그레이드가 발동 안 하고 recall 소실이 재현된다. **판단 — 정직하게 기록하고 미수정.** 이건 이미 이 항목 위쪽에 기록한 "패턴 F"(전역 폴백의 "첫 매치 우선" 자체 결함)와 근본 원인이 겹치는 서브셋이다 — 완전한 해법은 전역 폴백 알고리즘 자체의 재설계(예: 실후보 2개 이상이면 판정 보류, 또는 wildcard/static import까지 포함한 import 해소 강화)가 필요해 패턴 F와 함께 다음 엣지 정확도 세션으로 묶는다. **이번 PR의 순net 효과는 여전히 개선**이다 — 수정 전엔 스코프 무관하게 항상 recall이 소실됐지만, 수정 후엔 최소한 명시적(non-wildcard) import 케이스에서는 정상 동작한다. "완전히 해결"이라고 과장하지 않는다.
 
 **검증.** 신규 테스트 1건(애노테이션 가변인자) green, 전체 백엔드 1246건(누적 6건 신규) 중 실패 11건 로컬 Postgres 미기동 무관. `analyzeLocal` 베이스라인 불변.
+
+---
+
+## 패턴 F 수정 — resolveBareCall 전역 폴백 "판정 불가 시 무응답" 원칙 도입 (2026-08-05, codeprint_160, PR #765 후속)
+
+**배경.** 위에서 CONFIRMED이지만 미수정으로 남겨뒀던 패턴 F(전역 폴백의 "첫 매치 우선"이 근거 없이 승자를 정하는 구조적 결함) — 사용자가 "패턴 F도 진행" 승인해 이번에 같은 PR 흐름에서 착수.
+
+**설계.** `resolveBareCall`이 전역 폴백(`onlyImported=false`)에서 반환하는 `bestMatch`가 실은 순회 순서라는 우연에 의해 정해진다는 게 근본 문제 — 판단 근거(caller의 실제 import)가 없는 상태에서 뭐라도 골라야 한다는 압박 자체가 phantom 생성 메커니즘이다. **원칙 전환: 판단 근거가 불충분하면 엣지를 만들지 않는다(recall 손실 감수, phantom 원천 차단)** — 이 세션 내내(패턴 A~E) 일관되게 적용해온 철학의 연장. 순회 순서 의존을 없애기 위해 "먼저 찾은 걸로 즉시 확정" 대신 **전체 후보를 다 본 뒤 끝에 판정**하는 구조로 변경(순서 무관):
+1. **합성 접근자뿐인 후보(hasEntityAccessor/hasRecordAccessor)와 실제 정의를 가진 후보가 동시에 존재** → 어느 쪽이 진짜인지 판단 불가(합성 쪽이 맞을 수도 있다 — 실사고가 정확히 이 경우: 정답은 합성 접근자였는데 실제 정의를 가진 무관한 decoy가 채택됨). 실사고(`TeamAccessAdapter.hasAccessViaTeam → TeamPaymentOrder.getTeamId`, 정답은 `TeamProjectAllocation.getTeamId`)로 회귀 테스트 작성 — decoy를 먼저 열거해 실제 버그가 재현된 순서 그대로 검증.
+2. **실제 정의를 가진, 서로 인터페이스↔구현체 관계가 아닌 후보가 2개 이상** → 흔한 메서드명(예: 여러 Handler 클래스가 각자 `process()`)이면 어느 쪽인지 판단할 신호가 없다.
+`onlyImported=true`(import 스코프 안)에는 적용 안 함 — 그쪽은 이미 "caller가 실제로 import했다"는 신호로 후보가 좁혀져 있다.
+
+**TDD.** 회귀 테스트 2건 — `globalFallback_synthenticOnlyAndRealDecoyBothCandidates_noArbitraryPick`(실사고 재현) + `globalFallback_twoUnrelatedRealCandidates_noArbitraryPick`(동명 무관 클래스 2개) — 둘 다 수정 전 코드로 되돌려 실제 FAIL(RED) 확인 후 원복.
+
+**기존 테스트 회귀 1건 발견·수정(우연한 충돌).** `같은_입력_두번_빌드_결과_동일`(결정론 가드) 픽스처가 `handlers/one·two·three.js` 3개 파일에 전부 동명(`handle`) 함수를 두고 무-import로 호출하는 구성이었는데, 이게 정확히 패턴 F②(실제 정의 2개 이상, 무관)에 해당해 엣지 자체가 안 생기게 됨 — `verify(atLeastOnce()).saveEdge(...)`가 실패. 이 테스트의 목적은 "동명 충돌 시 어떻게 되는지"가 아니라 "같은 입력을 두 번 빌드하면 같은 결과가 나오는지"라 3-way 충돌은 우연한 겹침이었음 — `b.js`가 `./handlers/one`을 명시 import하도록 픽스처만 조정해 원래 의도(엣지 SET 결정론)를 유지하면서 패턴 F와의 우연한 충돌을 해소.
+
+**검증.** 신규 회귀 2건 + 기존 결정론 테스트 수정본 green. **`edgeAudit` 전체 벤치 스위트(`BenchSuiteTest`/`BenchCommonCasesTest`, 17종 룰 P/N/R 코퍼스) 전부 green** — 이 정도 규모(핵심 해소 알고리즘)의 변경엔 필수 확인. `analyzeLocal` 자기분석: 워닝 베이스라인 불변(HIGH_FAN_OUT 8건), `attemptFix` 팬아웃 17→16(패턴 F가 실제로 자기 레포에서도 애매한 엣지 하나를 걸러낸 것 — 무해, 오히려 그래프 정밀도 개선 신호). 전체 백엔드 1248건(누적 8건 신규) 중 실패 11건 로컬 Postgres 미기동 무관.
+
+**T1→T2 게이트 재판단.** 패턴 E(수정)에 이어 패턴 F(수정)까지 해소돼, §19.4가 T2 착수의 전제로 요구한 "phantom 엣지 측정" 항목 중 이번 세션에 실측된 두 근본 패턴이 모두 처리됐다. `PRODUCT_STRATEGY.md` §19.4의 "조건부 통과" 판정을 갱신해 반영 — 단, 이번 수정 자체가 만든 recall 손실(합성 접근자 대 decoy 모호, 동명 무관 클래스 2개+)의 실사용 영향 범위는 별도 측정 안 함(다음 엣지 정확도 세션에서 재감사 시 자연히 드러남).
+
+---
+
+## 패턴 F 수정 PR 독립 적대적 검증 — CONFIRMED 2건 발견·수정 (2026-08-05, codeprint_160, PR #766)
+
+**배경.** 사용자 표준 규칙에 따라 위 패턴 F 수정을 fresh-context 에이전트로 검증.
+
+**CONFIRMED① — 인터페이스 업그레이드 분기가 새 ambiguity 판정을 통째로 우회.** 기존(이 PR 이전부터 있던) "인터페이스→구현체 업그레이드" 조건(`!isSyntheticOnly && bestIsInterface && !calleeIsInterface`)은 새 후보가 **bestMatch(인터페이스)의 실제 구현체인지 전혀 검증하지 않는다** — `interfaceToImplFiles.containsKey(calleeClassName)`은 "이 후보 자신이 어딘가의 인터페이스로 등록돼 있는가"만 본다. 결과: bestMatch가 인터페이스로 시작하고 그 뒤에 완전히 무관한 실제 정의 후보(우연히 인터페이스가 아니기만 하면)가 나타나면 이 오래된 분기가 새 ambiguity 검사보다 먼저 걸려 조용히 그 무관한 후보로 "업그레이드"된다 — **이 PR이 막으려던 것과 정확히 같은 임의 채택이, 후보 중 하나가 우연히 인터페이스이기만 하면 그대로 재발**. 재현: 에이전트가 `IFoo`(인터페이스)+`Baz`(IFoo 진짜 구현체, 하지만 대상 메서드는 없음)+`Bar`(IFoo와 무관하지만 동명 실제 정의)+무-import caller 조합으로 실제 phantom 엣지 생성을 확인.
+- **수정.** `interfaceToImplFiles.getOrDefault(bestMatch의 클래스명, List.of()).contains(calleeFile)`로 "이 후보가 진짜 bestMatch 인터페이스의 등록된 구현체인가"를 명시 검증(`verifiedImplOfBestInterface`) — 검증되면 업그레이드, 안 되면 (bestMatch가 합성 전용이 아닌 한) `sawAmbiguousRealCandidate`로 표시해 동일하게 판정 보류.
+- **TDD.** 회귀 테스트(`interfaceBestMatch_notUpgradedToUnverifiedUnrelatedRealCandidate`) — 수정 전 코드로 되돌려 실제 phantom 엣지 생성(FAIL) 확인 후 원복.
+
+**CONFIRMED② — `onlyImported=true`(import 스코프 안) 패스도 안전하지 않다는 지적, PR의 "이미 안전하다" 주장은 근거 부족.** caller가 서로 무관한 두 파일을 **둘 다 명시 import**하고 동명 함수를 부르면, import 스코프 안에서도 여전히 "먼저 찾은 것" 문제가 그대로 남아있었다(이건 이 PR이 새로 만든 회귀는 아니고 훨씬 이전부터 있던 구멍이지만, "import 스코프는 이미 좁혀져 있어 안전하다"는 이 PR의 설계 근거 자체가 검증 안 된 가정이었다는 지적). **수정 — 애초에 별도 처리 불필요, 같은 로직으로 함께 해소.** 위 CONFIRMED①의 수정 자체가 `sawAmbiguousRealCandidate` 판정을 `onlyImported` 여부와 무관하게 전체 순회에 적용하는 구조로 재작성됐기 때문에(관계 미검증 실제 정의 후보 2개 이상 → 모호), import 스코프 안에서의 이 문제도 자동으로 함께 해소됨 — 별도 분기 불필요.
+
+**검증.** 신규 회귀 테스트 1건 green, 기존 "인터페이스보다 구현체 우선" 정상 케이스 테스트도 계속 green(진짜 관계가 검증되는 케이스는 그대로 업그레이드). **벤치 스위트 재확인 green.** `analyzeLocal` 베이스라인 불변. 전체 백엔드 1249건(누적 9건 신규) 중 실패 11건 로컬 Postgres 미기동 무관.
+
+---
+
+## 패턴 F 수정 PR 3차(최종) 독립 적대적 검증 — CONFIRMED 1건 발견·수정 (2026-08-05, codeprint_160, PR #766)
+
+**배경.** 2차 검증에서 수정한 "인터페이스↔구현체 관계 검증" 자체가 새 회귀를 만들지 않았는지 3차로 재검증(같은 사용자 표준 규칙, "수정의 수정의 수정"에도 계속 적용).
+
+**CONFIRMED — 관계 검증이 한쪽 방향에만 적용돼 순서 의존 회귀.** 2차 수정의 `verifiedImplOfBestInterface`는 "**bestMatch가 인터페이스이고** 신규 후보가 그 구현체인지"만 검증했다 — 반대로 **구현체가 먼저 bestMatch로 확정되고 그 인터페이스 자신이 나중에 열거되는 경우**는 전혀 검사하지 않아, `!bestIsSyntheticOnly` 조건에 걸려 무조건 모호(`sawAmbiguousRealCandidate`) 처리됐다. decoy 없이 **진짜 인터페이스+구현체 관계 하나만 있어도**, 단지 구현체가 먼저 열거된다는 이유만으로 정상 엣지가 사라지는 순수 신규 회귀였다 — 이 PR 3커밋 전체가 추구한 "순서 무관 판정"이라는 목표와 정면 모순되는 지점이라 특히 심각하게 다뤘다. 에이전트가 `[Baz(IFoo의 진짜 구현체), IFoo(인터페이스)]` 순서로 직접 재현.
+- **수정.** 양방향 검증 — `calleeIsVerifiedImplOfBest`(기존 방향) + `bestIsVerifiedImplOfCallee`(신규 후보가 인터페이스고 bestMatch가 이미 그 구현체인 경우, `interfaceToImplFiles.getOrDefault(calleeClassName, List.of()).contains(bestMatch)`) 둘 다 확인 — 후자면 bestMatch를 그대로 유지하고 모호 처리 skip.
+- **TDD.** 회귀 테스트(`realImplBestMatch_thenItsOwnInterfaceEnumeratedLater_notTreatedAsAmbiguous`) — 수정 전 코드로 되돌려 실제 엣지 소실(FAIL) 확인 후 원복.
+
+**검증.** 신규 회귀 테스트 1건 green, 기존 테스트(정방향 인터페이스 업그레이드·2차 검증 테스트 포함) 전부 계속 green. **벤치 스위트 3번째 재확인도 green.** `analyzeLocal` 베이스라인 불변. 전체 백엔드 1250건(누적 10건 신규) 중 실패 11건 로컬 Postgres 미기동 무관.
+
+**3차 검증 결론.** 에이전트 판정: "조건부"(반대방향 회귀 지적) → 수정 완료 후 재검증하면 "예"로 볼 수 있는 수준. 3라운드에 걸쳐 CONFIRMED 총 6건(패턴 F 도입 자체의 recall 소실 2건, 인터페이스 검증 누락 2건, 양방향 비대칭 1건, import 스코프 안 모호성 1건)을 전부 반영 — `resolveBareCall`처럼 핵심적인 해소 알고리즘 변경은 "한 번 검증 통과"로 끝내지 않고 수정이 새 문제를 만드는지 재귀적으로 계속 확인해야 한다는 걸 이번 세션이 실증. 이걸로 패턴 F 수정 마무리, 머지 진행.
