@@ -1,0 +1,227 @@
+{
+  "repoLabel": "self",
+  "seed": 42,
+  "edgeType": "FUNCTION_CALL",
+  "auditedAt": "2026-08-05",
+  "method": "전수 판정(30/30) — 호출 지점 텍스트 대조(소스 파일 grep/Read) + receiver 클래스의 실제 필드/메서드 정의 확인. 2026-07-24 대비 패턴 C 수정(resolveBareCall의 hasEntityAccessor) 이후 첫 재측정 — T1→T2 하드 게이트 확인용.",
+  "summary": {
+    "real": 28,
+    "phantom": 2,
+    "phantomRate": "6.7%",
+    "wilson95CI": "1.9%~21.3%"
+  },
+  "analysisDir": "src/main/java",
+  "comparisonWith2026-07-24": "동일 시드(42)지만 30건 표본이 완전히 다름(코드 변경으로 그래프 자체가 달라져 샘플링 결과가 달라짐) — 이전 phantom 2건(FeedbackController.listAll→TeamPaymentOrder.getStatus, CommunityController.addLike→User.getUserId)은 이번 표본에 없어 직접 재검증 불가. 대신 이번 표본에서 새로운 phantom 2건이 발견됐으며 근본 원인은 이전 '패턴 C'(Lombok/컴파일러 합성 접근자가 tree-sitter 소스에 텍스트로 없어 무관한 동명 메서드로 전역 오귀속)와 동일 계열이나, 7/24 수정(hasEntityAccessor)이 커버하지 않는 두 변종.",
+  "samples": [
+    {
+      "edgeIdentifier": "GraphQueryService.java-getEdges-calls-GraphRepository.java-findEdgesByGraphId",
+      "source": { "name": "getEdges", "filePath": "com/codeprint/application/graph/GraphQueryService.java", "line": 55 },
+      "target": { "name": "findEdgesByGraphId", "filePath": "com/codeprint/domain/graph/GraphRepository.java", "line": 23 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphQueryService.java-findAllByProject-calls-GraphRepository.java-findByProjectId",
+      "source": { "name": "findAllByProject", "filePath": "com/codeprint/application/graph/GraphQueryService.java", "line": 36 },
+      "target": { "name": "findByProjectId", "filePath": "com/codeprint/domain/graph/GraphRepository.java", "line": 17 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "StaticCodeAnalyzer.java-analyze-calls-TreeSitterGoAnalyzer.java-parse",
+      "source": { "name": "analyze", "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java", "line": 41 },
+      "target": { "name": "parse", "filePath": "com/codeprint/infrastructure/analysis/TreeSitterGoAnalyzer.java", "line": 36 },
+      "verdict": "real",
+      "note": "제공된 스니펫(40줄)에는 호출부가 안 보였으나 analyze() 89번째 줄에서 language.equals(\"Go\") ? treeSitterGo.parse(content) : ... 로 실제 호출 확인(소스 직접 Read)."
+    },
+    {
+      "edgeIdentifier": "UserQueryPortImpl.java-findById-calls-UserRepository.java-findById",
+      "source": { "name": "findById", "filePath": "com/codeprint/infrastructure/persistence/user/UserQueryPortImpl.java", "line": 22 },
+      "target": { "name": "findById", "filePath": "com/codeprint/domain/user/UserRepository.java", "line": 11 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "NotificationService.java-create-calls-NotificationRepository.java-save",
+      "source": { "name": "create", "filePath": "com/codeprint/application/notification/NotificationService.java", "line": 23 },
+      "target": { "name": "save", "filePath": "com/codeprint/domain/notification/NotificationRepository.java", "line": 11 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "com/codeprint/domain/featured/FeaturedPostRepository.java-findPostId-impl-com/codeprint/infrastructure/persistence/featured/FeaturedPostRepositoryImpl.java",
+      "source": { "name": "findPostId", "filePath": "com/codeprint/domain/featured/FeaturedPostRepository.java", "line": 10 },
+      "target": { "name": "findPostId", "filePath": "com/codeprint/infrastructure/persistence/featured/FeaturedPostRepositoryImpl.java", "line": 21 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphFacade.java-verifyGraphReadAccess-calls-ProjectAccessPort.java-verifyOwnership",
+      "source": { "name": "verifyGraphReadAccess", "filePath": "com/codeprint/application/graph/GraphFacade.java", "line": 49 },
+      "target": { "name": "verifyOwnership", "filePath": "com/codeprint/domain/graph/port/ProjectAccessPort.java", "line": 11 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "com/codeprint/domain/graph/port/ProjectAccessPort.java-findGithubRepoUrl-impl-com/codeprint/infrastructure/adapter/ProjectAccessAdapter.java",
+      "source": { "name": "findGithubRepoUrl", "filePath": "com/codeprint/domain/graph/port/ProjectAccessPort.java", "line": 23 },
+      "target": { "name": "findGithubRepoUrl", "filePath": "com/codeprint/infrastructure/adapter/ProjectAccessAdapter.java", "line": 42 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TeamPaymentOrderJpaRepository.java-from-calls-TeamPaymentOrder.java-getTeamId",
+      "source": { "name": "from", "filePath": "com/codeprint/infrastructure/persistence/payment/TeamPaymentOrderJpaRepository.java", "line": 57 },
+      "target": { "name": "getTeamId", "filePath": "com/codeprint/domain/payment/TeamPaymentOrder.java", "line": 71 },
+      "verdict": "real",
+      "note": "동일 edgeIdentifier가 2026-07-24 표본에도 real로 존재 — 판정 일치."
+    },
+    {
+      "edgeIdentifier": "GraphController.java-getPublicGraph-calls-GraphFacade.java-getPublicOwnerInfo",
+      "source": { "name": "getPublicGraph", "filePath": "com/codeprint/interfaces/api/GraphController.java", "line": 216 },
+      "target": { "name": "getPublicOwnerInfo", "filePath": "com/codeprint/application/graph/GraphFacade.java", "line": 85 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ProjectQueryService.java-getAllPrGateConnectedInternal-calls-ProjectRepository.java-findAllWithPrGateConnected",
+      "source": { "name": "getAllPrGateConnectedInternal", "filePath": "com/codeprint/application/project/ProjectQueryService.java", "line": 50 },
+      "target": { "name": "findAllWithPrGateConnected", "filePath": "com/codeprint/domain/project/ProjectRepository.java", "line": 23 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "CommunityController.java-toNodeMaps-calls-AbstractTreeSitterAnalyzer.java-language",
+      "source": { "name": "toNodeMaps", "filePath": "com/codeprint/interfaces/api/CommunityController.java", "line": 276 },
+      "target": { "name": "language", "filePath": "com/codeprint/infrastructure/analysis/AbstractTreeSitterAnalyzer.java", "line": 38 },
+      "verdict": "phantom",
+      "note": "실제 호출은 n.language() — n은 GraphReadPort.NodeView(record) 파라미터이고 language()는 그 record component 접근자(컴파일러 합성, 소스에 텍스트로 없음). NodeView는 @Entity가 아니므로 hasEntityAccessor(7/24 패턴 C 수정) 보호 대상이 아니라 후보에서 제외되고, resolveBareCall이 전역에서 유일하게 실제로 정의된 동명 메서드 AbstractTreeSitterAnalyzer.language()로 오귀속. 패턴 C와 근본 원인은 동일(컴파일러 합성 접근자가 tree-sitter에 안 보임)이지만 Lombok @Entity가 아닌 record component라 기존 수정 범위 밖."
+    },
+    {
+      "edgeIdentifier": "FeaturedRepoCronController.java-refreshFeatured-calls-CronSecretVerifier.java-verify",
+      "source": { "name": "refreshFeatured", "filePath": "com/codeprint/interfaces/api/FeaturedRepoCronController.java", "line": 31 },
+      "target": { "name": "verify", "filePath": "com/codeprint/domain/analysis/CronSecretVerifier.java", "line": 12 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "ProjectCommandService.java-toggleVisibility-calls-Project.java-makePublic",
+      "source": { "name": "toggleVisibility", "filePath": "com/codeprint/application/project/ProjectCommandService.java", "line": 45 },
+      "target": { "name": "makePublic", "filePath": "com/codeprint/domain/project/Project.java", "line": 101 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "FeaturedRepoService.java-featureOne-calls-CommitShaPort.java-fetchLatestCommitSha",
+      "source": { "name": "featureOne", "filePath": "com/codeprint/application/featured/FeaturedRepoService.java", "line": 67 },
+      "target": { "name": "fetchLatestCommitSha", "filePath": "com/codeprint/domain/featured/port/CommitShaPort.java", "line": 9 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "WarningDetectionAdapter.java-detectWarnings-calls-GraphQueryService.java-getWarnings",
+      "source": { "name": "detectWarnings", "filePath": "com/codeprint/infrastructure/adapter/WarningDetectionAdapter.java", "line": 24 },
+      "target": { "name": "getWarnings", "filePath": "com/codeprint/application/graph/GraphQueryService.java", "line": 62 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AnalysisFacade.java-getAnalysis-calls-AnalysisApplicationService.java-getAnalysis",
+      "source": { "name": "getAnalysis", "filePath": "com/codeprint/application/analysis/AnalysisFacade.java", "line": 51 },
+      "target": { "name": "getAnalysis", "filePath": "com/codeprint/application/analysis/AnalysisApplicationService.java", "line": 126 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "com/codeprint/domain/team/TeamProjectAllocationRepository.java-save-impl-com/codeprint/infrastructure/persistence/team/TeamProjectAllocationRepositoryImpl.java",
+      "source": { "name": "save", "filePath": "com/codeprint/domain/team/TeamProjectAllocationRepository.java", "line": 10 },
+      "target": { "name": "save", "filePath": "com/codeprint/infrastructure/persistence/team/TeamProjectAllocationRepositoryImpl.java", "line": 19 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphQueryService.java-findById-calls-GraphRepository.java-findById",
+      "source": { "name": "findById", "filePath": "com/codeprint/application/graph/GraphQueryService.java", "line": 43 },
+      "target": { "name": "findById", "filePath": "com/codeprint/domain/graph/GraphRepository.java", "line": 14 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphController.java-getContextMd-calls-DddMigrationGuideService.java-generateSection",
+      "source": { "name": "getContextMd", "filePath": "com/codeprint/interfaces/api/GraphController.java", "line": 175 },
+      "target": { "name": "generateSection", "filePath": "com/codeprint/application/graph/DddMigrationGuideService.java", "line": 32 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "NotificationEventHandler.java-onMessageSent-calls-NotificationService.java-create",
+      "source": { "name": "onMessageSent", "filePath": "com/codeprint/application/notification/NotificationEventHandler.java", "line": 26 },
+      "target": { "name": "create", "filePath": "com/codeprint/application/notification/NotificationService.java", "line": 23 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "FpReportService.java-reportFalsePositive-calls-FpReportRepository.java-save",
+      "source": { "name": "reportFalsePositive", "filePath": "com/codeprint/application/graph/FpReportService.java", "line": 35 },
+      "target": { "name": "save", "filePath": "com/codeprint/domain/graph/FpReportRepository.java", "line": 10 },
+      "verdict": "real",
+      "note": "필드 선언(private final FpReportRepository repository;) 확인 — repository.save(...) 호출과 일치."
+    },
+    {
+      "edgeIdentifier": "ArchitectureIntentController.java-deleteIntent-calls-ArchitectureIntentService.java-delete",
+      "source": { "name": "deleteIntent", "filePath": "com/codeprint/interfaces/api/ArchitectureIntentController.java", "line": 115 },
+      "target": { "name": "delete", "filePath": "com/codeprint/application/graph/ArchitectureIntentService.java", "line": 82 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "UserAiKeyRepositoryImpl.java-existsByUserId-calls-UserAiKeyJpaRepository.java-existsByUserId",
+      "source": { "name": "existsByUserId", "filePath": "com/codeprint/infrastructure/persistence/user/UserAiKeyRepositoryImpl.java", "line": 27 },
+      "target": { "name": "existsByUserId", "filePath": "com/codeprint/infrastructure/persistence/user/UserAiKeyJpaRepository.java", "line": 17 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "com/codeprint/domain/collaboration/port/GraphAccessPort.java-verifyAccess-impl-com/codeprint/infrastructure/adapter/CollaborationGraphAccessAdapter.java",
+      "source": { "name": "verifyAccess", "filePath": "com/codeprint/domain/collaboration/port/GraphAccessPort.java", "line": 9 },
+      "target": { "name": "verifyAccess", "filePath": "com/codeprint/infrastructure/adapter/CollaborationGraphAccessAdapter.java", "line": 18 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "TeamAccessAdapter.java-hasAccessViaTeam-calls-TeamPaymentOrder.java-getTeamId",
+      "source": { "name": "hasAccessViaTeam", "filePath": "com/codeprint/infrastructure/adapter/TeamAccessAdapter.java", "line": 20 },
+      "target": { "name": "getTeamId", "filePath": "com/codeprint/domain/payment/TeamPaymentOrder.java", "line": 71 },
+      "verdict": "phantom",
+      "note": "실제 호출은 alloc.getTeamId() — alloc은 allocationRepository.findByProjectId(projectId) 스트림 요소로 타입은 TeamProjectAllocation(@Entity, @Getter). TeamAccessAdapter.java는 TeamProjectAllocation을 이름으로 import하지 않아(스트림 제네릭으로만 추론) callerImports 1차 탐색이 실패하고, 전역 폴백(onlyImported=false)에서 hasEntityAccessor로 TeamProjectAllocation.java도 후보에는 들지만 실제 FUNCTION 노드가 없어 엣지를 못 만들고, 대신 명시적으로 getTeamId()가 정의된 TeamPaymentOrder.java(domain/payment, 알파벳상 domain/team보다 먼저 순회)가 '첫 매치' 우선 규칙으로 최종 채택됨. 7/24 수정(hasEntityAccessor)은 이 사례에서 후보 등록까지는 성공했지만, 동일 메서드명을 가진 여러 실후보가 동시에 있을 때 receiver 실제 타입으로 우선순위를 매기는 로직이 없어 여전히 오귀속."
+    },
+    {
+      "edgeIdentifier": "TeamPaymentApplicationService.java-prepareSeatIncrease-calls-TeamPaymentOrder.java-forSeatIncrease",
+      "source": { "name": "prepareSeatIncrease", "filePath": "com/codeprint/application/payment/TeamPaymentApplicationService.java", "line": 35 },
+      "target": { "name": "forSeatIncrease", "filePath": "com/codeprint/domain/payment/TeamPaymentOrder.java", "line": 42 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "AsyncConfig.java-getAsyncExecutor-selfcalls-taskExecutor",
+      "source": { "name": "getAsyncExecutor", "filePath": "com/codeprint/infrastructure/config/AsyncConfig.java", "line": 40 },
+      "target": { "name": "taskExecutor", "filePath": "com/codeprint/infrastructure/config/AsyncConfig.java", "line": 27 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "GraphBuilder.java-resolveInterfaceCandidates-selfcalls-extractFileNameWithoutExt",
+      "source": { "name": "resolveInterfaceCandidates", "filePath": "com/codeprint/infrastructure/analysis/GraphBuilder.java", "line": 908 },
+      "target": { "name": "extractFileNameWithoutExt", "filePath": "com/codeprint/infrastructure/analysis/GraphBuilder.java", "line": 821 },
+      "verdict": "real",
+      "note": null
+    },
+    {
+      "edgeIdentifier": "StaticCodeAnalyzer.java-extractEntityColumns-selfcalls-toSnakeCase",
+      "source": { "name": "extractEntityColumns", "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java", "line": 839 },
+      "target": { "name": "toSnakeCase", "filePath": "com/codeprint/infrastructure/analysis/StaticCodeAnalyzer.java", "line": 885 },
+      "verdict": "real",
+      "note": null
+    }
+  ]
+}

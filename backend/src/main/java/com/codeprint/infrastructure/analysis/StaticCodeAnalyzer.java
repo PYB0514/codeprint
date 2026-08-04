@@ -204,8 +204,10 @@ public class StaticCodeAnalyzer {
                 : List.of();
         String beanStereotype = extractBeanStereotype(masked, language);
         List<String> lazyDependencyTypes = extractLazyDependencyTypes(masked, language);
+        // record 컴포넌트 접근자명(Java만) — resolveBareCall이 합성 접근자를 무관한 동명 메서드로 오귀속하지 않도록
+        List<String> recordComponents = javaTs.map(TreeSitterJavaAnalyzer.Result::recordComponents).orElse(List.of());
 
-        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions, transactionalMethods, functionLines, functionColumns, interfaceMethods, serviceCalls, feignClientTarget, fieldDependencyTypes, beanStereotype, lazyDependencyTypes);
+        return new ParsedFile(relativePath, language, functions, imports, fileComment, functionComments, functionCalls, instantiatedClasses, dbTables, repositoryEntityClass, entityColumns, apiCalls, controllerMappings, implementedInterfaces, asyncMethods, jsxComponents, rawSqlAccesses, frameworkAnnotatedMethods, valueReferencedFunctions, functionDefCounts, declaredTypes, testMethods, dbAccesses, extendedClass, controllerMappingFunctions, transactionalMethods, functionLines, functionColumns, interfaceMethods, serviceCalls, feignClientTarget, fieldDependencyTypes, beanStereotype, lazyDependencyTypes, Map.of(), Map.of(), recordComponents);
     }
 
     // 주석 본문을 공백으로 치환한 길이 보존 사본 생성 — 식별자 검출기가 주석 속 식별자를 코드로 오인하지 않게 함
