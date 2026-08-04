@@ -215,7 +215,8 @@ tasks.register('exploreLocalJar', Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(sourceSets.main.output) {
         // 로컬 전용 프로필(application-*.yml, 실 자격증명 포함)이 fat jar에 번들링되는 것 차단 — 2026-07-12 유출 사고 재발 방지
-        exclude 'application-*.yml'
+        // 기본 application.yml도 이 도구들은 Spring을 부팅하지 않아 전혀 불필요 — 지금은 더미 값뿐이지만 향후 실수로 실값이 들어갈 잠재 위험 사전 차단(2026-08-04, 독립 검증에서 발견)
+        exclude 'application-*.yml', 'application.yml'
     }
     from({ configurations.toolsRuntime.collect { it.isDirectory() ? it : zipTree(it) } }) {
         exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'module-info.class'
@@ -235,7 +236,8 @@ tasks.register('analyzeLocalJar', Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(sourceSets.main.output) {
         // 로컬 전용 프로필(application-*.yml, 실 자격증명 포함)이 fat jar에 번들링되는 것 차단 — 2026-07-12 유출 사고 재발 방지
-        exclude 'application-*.yml'
+        // 기본 application.yml도 이 도구들은 Spring을 부팅하지 않아 전혀 불필요 — 지금은 더미 값뿐이지만 향후 실수로 실값이 들어갈 잠재 위험 사전 차단(2026-08-04, 독립 검증에서 발견)
+        exclude 'application-*.yml', 'application.yml'
     }
     from({ configurations.toolsRuntime.collect { it.isDirectory() ? it : zipTree(it) } }) {
         exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'module-info.class'
@@ -256,7 +258,8 @@ tasks.register('watchLocalJar', Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(sourceSets.main.output) {
         // 로컬 전용 프로필(application-*.yml, 실 자격증명 포함)이 fat jar에 번들링되는 것 차단 — 2026-07-12 유출 사고 재발 방지
-        exclude 'application-*.yml'
+        // 기본 application.yml도 이 도구들은 Spring을 부팅하지 않아 전혀 불필요 — 지금은 더미 값뿐이지만 향후 실수로 실값이 들어갈 잠재 위험 사전 차단(2026-08-04, 독립 검증에서 발견)
+        exclude 'application-*.yml', 'application.yml'
     }
     from({ configurations.toolsRuntime.collect { it.isDirectory() ? it : zipTree(it) } }) {
         exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'module-info.class'

@@ -172,4 +172,46 @@ class DddMigrationGuideServiceTest {
         assertThat(md).contains("후보 모듈 1", "후보 모듈 2");
         assertThat(md).doesNotContain("후보 모듈 3");
     }
+
+    @Test
+    @DisplayName("엔드포인트가 상한(300)을 넘으면 O(E²) 클러스터링 대신 섹션을 생략한다")
+    void 엔드포인트_상한초과_null() {
+        List<Node> nodes = new ArrayList<>();
+        for (int i = 0; i < 301; i++) {
+            nodes.add(endpointNode("/api/e" + i));
+        }
+
+        assertThat(service.generateSection(nodes, List.of())).isNull();
+    }
+
+    @Test
+    @DisplayName("엔드포인트 7개(비율 임계값이 최소치 3을 넘어서는 구간)에서도 비율 기준으로 공유 자원을 정확히 분리한다")
+    void 엔드포인트_다수_비율임계값_적용() {
+        // 임계값 = max(ceil(7*0.5)=4, 3) = 4 — 최소치(3)가 아니라 비율(4)이 실제로 적용되는 경계
+        Node funcM = funcNode("src/CommonUtil.java", "m"); // 4개 엔드포인트가 공유 → 임계값(4) 이상, "공유 자원"으로 분리돼야 함
+        Node funcL = funcNode("src/LessCommon.java", "l"); // 3개 엔드포인트가 공유 → 임계값(4) 미만, 실제 신호로 남아야 함
+
+        List<Node> nodes = new ArrayList<>(List.of(funcM, funcL));
+        List<Edge> edges = new ArrayList<>();
+        for (int i = 1; i <= 4; i++) {
+            Node ep = endpointNode("/api/m" + i);
+            nodes.add(ep);
+            edges.add(call(ep.getId(), funcM.getId()));
+        }
+        for (int i = 1; i <= 3; i++) {
+            Node ep = endpointNode("/api/l" + i);
+            nodes.add(ep);
+            edges.add(call(ep.getId(), funcL.getId()));
+        }
+
+        String md = service.generateSection(nodes, edges);
+
+        assertThat(md).isNotNull();
+        assertThat(md).contains("여러 후보 모듈이 공유하는 파일/테이블");
+        String beforeSharedSection = md.substring(0, md.indexOf("여러 후보 모듈이 공유하는"));
+        // 3개 엔드포인트만 공유하는 funcL은 임계값(4) 미만이라 "공유 자원"이 아니라 후보 모듈 쪽에 남아야 한다
+        assertThat(beforeSharedSection).contains("src/LessCommon.java");
+        assertThat(beforeSharedSection).doesNotContain("src/CommonUtil.java");
+        assertThat(md).contains("src/CommonUtil.java");
+    }
 }

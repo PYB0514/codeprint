@@ -15,6 +15,8 @@ public class DddMigrationGuideService {
 
     private static final int MAX_DEPTH = 10;
     private static final int MAX_VISITED = 500;
+    // 클러스터링이 엔드포인트 쌍마다 footprint 비교(O(E²))라 이 상한을 넘으면 계산량이 급증 — 대형 프로젝트에서 기능을 조용히 생략(참고용 기능이라 크래시보단 생략이 안전)
+    private static final int MAX_ENDPOINTS_FOR_CLUSTERING = 300;
     // 후보 모듈 경계를 나눌 때 따라갈 엣지 — "이 엔드포인트가 실제로 쓰는 것"만 본다(IMPORT는 제외, 실제 실행 경로 아님)
     private static final Set<EdgeType> TRAVERSAL_TYPES = Set.of(
             EdgeType.FUNCTION_CALL, EdgeType.INSTANTIATION,
@@ -31,7 +33,7 @@ public class DddMigrationGuideService {
         if (hasExistingStructure(nodes)) return null;
 
         List<Node> endpoints = nodes.stream().filter(n -> n.getType() == NodeType.API_ENDPOINT).toList();
-        if (endpoints.size() < MIN_ENDPOINTS) return null;
+        if (endpoints.size() < MIN_ENDPOINTS || endpoints.size() > MAX_ENDPOINTS_FOR_CLUSTERING) return null;
 
         Map<UUID, Node> nodesById = nodes.stream().collect(Collectors.toMap(Node::getId, n -> n));
         Map<UUID, List<UUID>> adjacency = buildAdjacency(edges);
