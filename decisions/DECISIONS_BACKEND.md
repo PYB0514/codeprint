@@ -2724,6 +2724,21 @@ ame.charAt(2) 확인 필요 (isXxx는 2글자 접두사)
 
 **남은 것.** 마켓플레이스 게시(퍼블리셔 계정 필요)·`.vscodeignore`/패키징(vsix) 설정은 별도 단계로 미룸 — 이번 스코프는 "어떤 워크스페이스에서든 동작하게 만드는 것"까지.
 
+**후속 — 독립 적대적 검증 하드닝: `application.yml`(하이픈 없음)도 제외 (같은 날, codeprint_159)**
+공개 레포에 새 바이너리(jar)를 커밋하는 건 CLAUDE.md가 명시하는 "신규 공개 배포 채널" 트리거라 fresh-context 에이전트로 독립 검증(공개 레포 최초 게시 전 필수 검증을 이번엔 사후에라도 수행) — 실제 jar를 `unzip -l`로 직접 풀어 파일 목록을 확인한 결과 비밀정보 유출·명령 주입·경로 탈출·불필요한 네트워크/실행 전부 없음을 확인. 다만 한 가지 잠재 위험을 발견: 3개 jar 태스크(`exploreLocalJar`/`analyzeLocalJar`/`watchLocalJar`) 전부 `exclude 'application-*.yml'`만 걸어 자격증명 없는 **기본** `application.yml`(하이픈 없음)은 계속 번들링되고 있었음 — 지금은 전부 더미 값(`DB_PASSWORD:1234`, `JWT_SECRET:local-dev-secret-key-...` 등 env-var 플레이스홀더뿐)이라 실질 유출은 아니지만, 이 도구들(`LocalWatcher`/`LocalAnalyzer`/`LocalGraphQuery`)은 Spring을 부팅하지 않아 이 파일이 애초에 불필요함(그레핑으로 `SpringApplication` 사용 없음 확인) — 누군가 향후 실수로 진짜 기본값을 넣으면 SEC-3(2026-07-12 공개 jar 자격증명 유출)가 그대로 재발할 잠재 경로였음.
+
+**수정.** 세 태스크 모두 `exclude 'application-*.yml', 'application.yml'`로 확장. 재빌드 후 `unzip -l`로 세 jar 전부에서 `application*.yml`이 완전히 사라진 것 확인, 각 jar를 스크래치 워크스페이스에서 직접 `java -jar` 실행해 정상 동작(파일 스캔·경고 감지·워치 모드) 확인 — 파일 부재로 인한 기능 저하 없음(원래도 안 쓰던 파일). `vscode-extension/bin/codeprint-watch.jar`도 재빌드본으로 교체 커밋. `analyzeLocal` 베이스라인 불변.
+
+## 이번 세션 미검증 PR 5건 소급 독립 적대적 검증 (2026-08-04, codeprint_159)
+
+**배경.** PR #761→#762(pinGraph 회귀 원복) 사고를 겪은 뒤, 이번 세션에 "코드 변경 PR은 항상 독립 적대적 검증"(사용자 표준 규칙) 없이 머지된 PR 5건(#749 BYOK failover·#750 BYOK 우선순위·#754 DDD 마이그레이션 가이드·#755 watchLocal jar화·#756 DLP 토글)을 fresh-context 에이전트로 소급 검증.
+
+**결과.**
+- **#755**: 하드닝 1건 발견·수정(위 "watchLocal jar화" 항목의 "후속" 참조 — `application.yml` 미제외).
+- **#754**: 저위험 갭 2건 발견·수정(`decisions/DECISIONS_ANALYSIS.md` "DDD 마이그레이션 후보 가이드" 항목의 "후속" 참조 — O(E²) 상한 부재, 비율-지배 구간 테스트 공백).
+- **#749/#750**: 실질 결함 없음. 프로바이더별 예외 매칭·키 로그 유출·flush-ordering(오늘 리버트된 것과 같은 버그 클래스, `@Modifying` 쿼리 자체가 없어 애초에 해당 안 됨)·소유권·0/1개 키 엣지케이스 전부 클린. 참고(수정 안 함, 저위험): 전체 프로바이더 실패 시 마지막 예외만 로그에 남아 "N개를 다 시도했다"는 사실이 안 보이는 관측성 갭 — 사용자 노출 없음(양쪽 호출부가 best-effort로 삼킴), 후순위.
+- **#756**: 우회 경로 없음. 소유권 검증 정상, LLM 호출 자체가 차단되는 구조(응답만 숨기는 게 아님) 확인. 참고(이 PR 범위 밖, 버그 아님): `/mcp/graphs/.../context` 등 MCP 엔드포인트는 이 토글을 보지 않지만, LLM 생성 콘텐츠가 아니라 원본 구조 데이터를 반환하는 PR 이전부터 있던 별개 기능 — DLP 취지와 긴장 관계가 있어 향후 "MCP 노출 범위" 논의 시 참고.
+
 ## GraphCommandService.pinGraph — 슬롯 범위 검증 순서 "수정" (2026-08-04, codeprint_159)
 
 > ⚠️ **대체됨 (2026-08-04)** — "GraphCommandService.pinGraph 슬롯 범위 검증 순서 재수정(원복)"으로 대체. 아래 "수정"이 실제로는 unique 제약 위반 회귀를 유발하는 진짜 버그였음. 이유 요약: mocked 단위 테스트만으로 검증하고 실 Postgres로 검증하지 않아 Hibernate flush 순서 문제를 못 잡았음. 아래 원문은 이력 보존용.
