@@ -3027,6 +3027,19 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("가변인자 record 컴포넌트(String... items)도 recordComponents로 추출한다 — spread_parameter는 formal_parameter와 문법 노드가 달라 별도 처리 필요(적대적 검증 발견)")
+    void Java_record_가변인자_컴포넌트_추출() throws IOException {
+        Path file = writeJavaFile("""
+                public record Foo(String... items) {
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.recordComponents()).containsExactly("items");
+    }
+
+    @Test
     @DisplayName("접근제어자 없는 인터페이스 추상 메서드(JpaRepository 파생 쿼리)도 감지한다")
     void Java_Transactional_인터페이스_추상메서드_감지() throws IOException {
         // JpaRepository 파생 쿼리는 인터페이스 추상 메서드라 public/private 같은 제어자가 없는 게 흔함

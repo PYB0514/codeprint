@@ -845,20 +845,42 @@ public class GraphBuilder {
                                        boolean onlyImported) {
         ParsedFile bestMatch = null;
         boolean bestIsInterface = false;
+        // 합성 접근자(hasEntityAccessor/hasRecordAccessor)만으로 인정된 후보는 FUNCTION 노드가 없어 그 자체로는
+        // 엣지를 못 만든다 — 그런데 이 후보가 먼저 bestMatch로 고정되면, 뒤늦게 열거된 "진짜 정의가 있는" 후보를
+        // 기존 "인터페이스→구현체 업그레이드"만으로는 절대 대체 못 해(둘 다 non-interface면 업그레이드 조건
+        // 자체가 안 걸림) — 정상적으로 만들어졌어야 할 엣지가 조용히 사라지는 회귀(적대적 검증에서 발견,
+        // record 컴포넌트명이 실제 import된 다른 클래스의 동명 메서드와 겹치는 경우 재현).
+        // ★ onlyImported=true(caller가 실제로 import한 후보끼리 경쟁)일 때만 업그레이드한다 — onlyImported=false
+        // (전역 폴백)에서까지 "실제 정의가 있으면 무조건 우선"을 적용하면, import 안 된 무관한 동명 메서드(decoy)가
+        // 다시 채택돼 hasEntityAccessor/hasRecordAccessor가 막으려던 phantom이 그대로 재발한다(1차 시도에서
+        // bareCallToLombokEntityGetter_notMisattributedToUnrelatedDecoy가 실제로 재발해 잡아냄) — 두 필터의 존재
+        // 이유 자체가 "import 스코프 밖에서는 실제 정의보다 안전한 무응답을 택한다"이므로 폴백 패스에선 원래
+        // 규칙(먼저 찾은 것 유지)을 그대로 둬야 한다.
+        boolean bestIsSyntheticOnly = false;
         for (ParsedFile calleeFile : parsedFiles) {
             if (calleeFile.filePath().equals(callerFile.filePath())) continue;
-            if (!calleeFile.functions().contains(calleeFunc) && !hasEntityAccessor(calleeFile, calleeFunc)
-                    && !hasRecordAccessor(calleeFile, calleeFunc)) continue;
+            boolean hasRealDef = calleeFile.functions().contains(calleeFunc);
+            boolean isSyntheticOnly = !hasRealDef
+                    && (hasEntityAccessor(calleeFile, calleeFunc) || hasRecordAccessor(calleeFile, calleeFunc));
+            if (!hasRealDef && !isSyntheticOnly) continue;
             if (onlyImported && !callerImports(callerFile, calleeFile)) continue;
             String calleeClassName = extractFileNameWithoutExt(calleeFile.filePath());
             boolean calleeIsInterface = interfaceToImplFiles.containsKey(calleeClassName);
             if (bestMatch == null) {
                 bestMatch = calleeFile;
                 bestIsInterface = calleeIsInterface;
-            } else if (bestIsInterface && !calleeIsInterface) {
-                // 구현체로 업그레이드
+                bestIsSyntheticOnly = isSyntheticOnly;
+            } else if (onlyImported && bestIsSyntheticOnly && hasRealDef) {
+                // 실제 정의가 있는 후보로 업그레이드 — import 스코프 안에서만(둘 다 caller가 실제로 import했다는
+                // 확증이 있을 때만) 합성 접근자뿐인 죽은 후보가 진짜 후보를 막지 않도록
+                bestMatch = calleeFile;
+                bestIsInterface = calleeIsInterface;
+                bestIsSyntheticOnly = false;
+            } else if (!isSyntheticOnly && bestIsInterface && !calleeIsInterface) {
+                // 구현체로 업그레이드(기존 규칙, 둘 다 실제 정의가 있을 때만 의미 있음)
                 bestMatch = calleeFile;
                 bestIsInterface = false;
+                bestIsSyntheticOnly = false;
             }
         }
         return bestMatch;

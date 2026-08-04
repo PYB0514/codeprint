@@ -148,9 +148,15 @@ class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
                 int n = params.getChildCount();
                 for (int i = 0; i < n; i++) {
                     TSNode child = params.getChild(i);
-                    if (!child.getType().equals("formal_parameter")) continue;
-                    TSNode nameNode = child.getChildByFieldName("name");
-                    if (nameNode != null && !nameNode.isNull()) recordComponents.add(text(nameNode, src));
+                    if (child.getType().equals("formal_parameter")) {
+                        TSNode nameNode = child.getChildByFieldName("name");
+                        if (nameNode != null && !nameNode.isNull()) recordComponents.add(text(nameNode, src));
+                    } else if (child.getType().equals("spread_parameter")) {
+                        // 가변인자 컴포넌트(String... items)는 formal_parameter가 아니라 spread_parameter이고
+                        // "name" 필드가 없이 variable_declarator > identifier 로 한 단계 더 들어가야 함
+                        TSNode identifier = findFirstIdentifier(child);
+                        if (identifier != null) recordComponents.add(text(identifier, src));
+                    }
                 }
             }
         }
@@ -158,6 +164,17 @@ class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
         for (int i = 0; i < n; i++) {
             collectRecordComponents(node.getChild(i), src, recordComponents);
         }
+    }
+
+    // 서브트리에서 첫 identifier 타입 노드를 찾는다(spread_parameter의 variable_declarator처럼 필드명 없이 중첩된 경우용)
+    private TSNode findFirstIdentifier(TSNode node) {
+        if (node.getType().equals("identifier")) return node;
+        int n = node.getChildCount();
+        for (int i = 0; i < n; i++) {
+            TSNode found = findFirstIdentifier(node.getChild(i));
+            if (found != null) return found;
+        }
+        return null;
     }
 
     // 클래스 필드 선언에서 변수명→타입(심플명) 수집 — 메서드 어디서든 가시하므로 walk 전에 모은다

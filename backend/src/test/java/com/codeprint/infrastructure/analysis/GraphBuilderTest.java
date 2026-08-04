@@ -863,6 +863,32 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("record 컴포넌트명이 실제 import된 다른 클래스의 동명 메서드와 겹쳐도 진짜 엣지가 소실되지 않는다(적대적 검증 발견 회귀)")
+    void bareCallResolvesToRealDefinition_evenWhenSyntheticOnlyCandidateEnumeratedFirst() {
+        // record는 FUNCTION 노드가 없어 그 자체로는 엣지를 못 만듦 — 그런데 이 후보가 먼저 bestMatch로
+        // 고정되면 뒤늦게 열거된 진짜 정의(real)를 "인터페이스→구현체 업그레이드"만으론 대체 못 해 엣지 자체가
+        // 소실되던 버그. record가 real보다 먼저 오도록 입력 순서를 고정해 재현.
+        ParsedFile record = parsedFileWithRecordComponents("domain/graph/port/NodeView.java", "Java",
+                List.of("language"));
+        ParsedFile real = parsedFile("infrastructure/analysis/AbstractTreeSitterAnalyzer.java", "Java",
+                List.of("language"), Map.of());
+        ParsedFile caller = parsedFileWithCallsAndImports("interfaces/api/CommunityController.java", "Java",
+                List.of("toNodeMaps"), Map.of("toNodeMaps", List.of("language")),
+                List.of("domain.graph.port.NodeView",
+                        "infrastructure.analysis.AbstractTreeSitterAnalyzer"));
+
+        graphBuilder.build(projectId, analysisId, List.of(record, real, caller));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeast(0)).saveEdge(cap.capture());
+        boolean realEdgeCreated = cap.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("toNodeMaps") && e.getEdgeIdentifier().contains("language")
+                        && "infrastructure/analysis/AbstractTreeSitterAnalyzer.java".equals(e.getMetadata().get("calleeFile")));
+        assertThat(realEdgeCreated).isTrue();
+    }
+
+    @Test
     @DisplayName("import된 후보 집합 안에서도 인터페이스보다 구현체를 우선 선택한다")
     void import된_집합에서_구현체_우선() {
         // caller가 인터페이스(Repo)와 구현체(RepoImpl)를 모두 import — 구현체로 해소돼야 함
