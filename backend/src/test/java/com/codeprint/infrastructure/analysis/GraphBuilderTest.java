@@ -838,6 +838,31 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("bare 호출 대상이 record 컴포넌트 접근자(소스에 텍스트 없음)면 동명의 무관한 명시적 메서드로 오귀속되지 않는다(엣지 정확도 5차 감사 패턴 E)")
+    void bareCallToRecordComponentAccessor_notMisattributedToUnrelatedDecoy() {
+        // NodeView.language()는 record 컴포넌트라 소스에 텍스트가 없음(functions 비어있음, recordComponents에만 존재).
+        // AbstractTreeSitterAnalyzer.language()는 완전 무관한 클래스지만 명시적으로 정의돼 있어, 종전엔 import 후보가
+        // 없다는 이유로 전역 폴백이 이쪽으로 잘못 연결됐다(실제 사고: 엣지 정확도 5차 감사 — CommunityController.toNodeMaps).
+        ParsedFile record = parsedFileWithRecordComponents("domain/graph/port/GraphReadPort.java", "Java",
+                List.of("language"));
+        ParsedFile decoy = parsedFile("infrastructure/analysis/AbstractTreeSitterAnalyzer.java", "Java",
+                List.of("language"), Map.of());
+        ParsedFile caller = parsedFileWithCallsAndImports("interfaces/api/CommunityController.java", "Java",
+                List.of("toNodeMaps"), Map.of("toNodeMaps", List.of("language")),
+                List.of("com.codeprint.domain.graph.port.GraphReadPort"));
+
+        graphBuilder.build(projectId, analysisId, List.of(record, decoy, caller));
+
+        ArgumentCaptor<Edge> cap = ArgumentCaptor.forClass(Edge.class);
+        verify(graphRepository, atLeast(0)).saveEdge(cap.capture());
+        boolean phantomToDecoy = cap.getAllValues().stream()
+                .filter(e -> e.getType() == EdgeType.FUNCTION_CALL)
+                .anyMatch(e -> e.getEdgeIdentifier().contains("toNodeMaps") && e.getEdgeIdentifier().contains("language")
+                        && "infrastructure/analysis/AbstractTreeSitterAnalyzer.java".equals(e.getMetadata().get("calleeFile")));
+        assertThat(phantomToDecoy).isFalse();
+    }
+
+    @Test
     @DisplayName("import된 후보 집합 안에서도 인터페이스보다 구현체를 우선 선택한다")
     void import된_집합에서_구현체_우선() {
         // caller가 인터페이스(Repo)와 구현체(RepoImpl)를 모두 import — 구현체로 해소돼야 함
@@ -1986,6 +2011,14 @@ class GraphBuilderTest {
                 Map.of(), List.of(), List.of(), null, entityColumns, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
                 List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), null,
                 List.of(), null, List.of());
+    }
+
+    // record 컴포넌트(recordComponents)만 지정하는 헬퍼 — 컴파일러 합성 접근자가 self-file 해소 후보로 잡히는지 테스트용
+    private ParsedFile parsedFileWithRecordComponents(String path, String lang, List<String> recordComponents) {
+        return new ParsedFile(path, lang, List.of(), List.of(), null, Map.of(),
+                Map.of(), List.of(), List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(),
+                List.of(), List.of(), List.of(), null, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), null,
+                List.of(), null, List.of(), Map.of(), Map.of(), recordComponents);
     }
 
     // 백엔드 컨트롤러 매핑 파일 생성 헬퍼 — controllerMappings 포함

@@ -42,7 +42,7 @@ public class CachedParsedFileLoader {
     // 미인상 시 이미 캐시된 파일은 새 로직이 영영 실행되지 않고 구 serviceCalls를 계속 반환).
     // v9(2026-08-02): ParsedFile에 springYamlHosts 필드 추가(SERVICE_CALL_CHAIN "변수 조합 URL" ③ — Spring
     // @Value("${key}") 필드 + application.yml/.properties 조인, 새 SpringYaml 언어 신설).
-    static final int ANALYZER_VERSION = 9;
+    static final int ANALYZER_VERSION = 10;
     private static final Duration CACHE_TTL = Duration.ofDays(30);
     // 미니파이드 번들·생성 파일 등 비정상적으로 큰 파일이 파싱 파이프라인 메모리를 잡아먹는 것 방지 — 이 이상은 분석 제외
     static final long MAX_FILE_SIZE_BYTES = 2L * 1024 * 1024;

@@ -847,7 +847,8 @@ public class GraphBuilder {
         boolean bestIsInterface = false;
         for (ParsedFile calleeFile : parsedFiles) {
             if (calleeFile.filePath().equals(callerFile.filePath())) continue;
-            if (!calleeFile.functions().contains(calleeFunc) && !hasEntityAccessor(calleeFile, calleeFunc)) continue;
+            if (!calleeFile.functions().contains(calleeFunc) && !hasEntityAccessor(calleeFile, calleeFunc)
+                    && !hasRecordAccessor(calleeFile, calleeFunc)) continue;
             if (onlyImported && !callerImports(callerFile, calleeFile)) continue;
             String calleeClassName = extractFileNameWithoutExt(calleeFile.filePath());
             boolean calleeIsInterface = interfaceToImplFiles.containsKey(calleeClassName);
@@ -876,6 +877,14 @@ public class GraphBuilder {
             if (isBoolean && methodName.equals("is" + cap)) return true;
         }
         return false;
+    }
+
+    // record 컴포넌트 접근자(get 접두사 없이 컴포넌트명 그대로) 후보 인정 — hasEntityAccessor와 동일 원칙:
+    // FUNCTION 노드가 없어(functions()에 미포함) 엣지 생성 단계에서 자연히 no-op되므로 phantom을 만들 수 없고,
+    // "틀린 후보를 걸러내는" 방향으로만 작용한다(엣지 정확도 5차 감사 패턴 E — record 컴포넌트가 @Entity가 아니라
+    // hasEntityAccessor 보호 대상에서 빠져, 무관한 동명 메서드로 전역 폴백되던 문제).
+    private boolean hasRecordAccessor(ParsedFile pf, String methodName) {
+        return pf.recordComponents().contains(methodName);
     }
 
     // Java 상속 체인(extends)을 타고 올라가 calleeFunc를 정의한 가장 가까운 조상 파일을 찾는다(엣지 정확도 패턴 A').

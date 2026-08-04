@@ -2505,3 +2505,27 @@ PR #761/#762(pinGraph 회귀) 사고 이후, 이번 세션에 독립 적대적 �
 2. **비율-지배 구간 테스트 공백** — 기존 6개 테스트가 전부 엔드포인트 2~3개짜리 소규모라 `SHARED_RATIO` 임계값이 항상 하한(3)에 의해 결정되고, 비율(0.5×E)이 하한을 넘어서는 구간(E≥7)은 한 번도 실행되지 않았다. 엔드포인트 7개(임계값=max(ceil(3.5)=4,3)=4) 시나리오로 "4개가 공유하는 라벨은 공유 자원, 3개가 공유하는 라벨은 하한(3) 근처지만 실제 임계값(4) 미만이라 후보 모듈에 남아야 함"을 검증하는 테스트(`엔드포인트_다수_비율임계값_적용`) 추가 — 로직 자체는 이미 올바르게 동작 중이었음(버그 아님, 순수 커버리지 보강).
 
 검증: 신규 테스트 2건 포함 `DddMigrationGuideServiceTest` 8건 전부 green, `analyzeLocal` 베이스라인 불변.
+
+---
+
+## 엣지 정확도 5차 감사 — FUNCTION_CALL 재측정(패턴 C 수정 후 첫 재측정), T1→T2 게이트 조건부 통과 (2026-08-05, codeprint_160)
+
+**배경.** `PRODUCT_STRATEGY.md` §19.4가 리컨실러 T2(다중파일 자동수정) 착수 전 하드 게이트로 "phantom 엣지 측정"을 명시했다 — T2는 위반 엣지의 "counterpart"(반대편)를 읽어 패치를 만드는데 phantom이면 엉뚱한 파일을 고친다. 2026-07-24 4차 감사(FUNCTION_CALL phantom 6.7%, 패턴 C 발견·즉시 수정)이후 재측정이 한 번도 없었다 — 사용자가 "v1.0 이후 하드 게이트 항목은 계속 진행"을 승인해 이번에 fresh-context 에이전트로 재측정.
+
+**방법.** `edgeAudit`(동일 시드 42)로 FUNCTION_CALL 30건 재표본추출 → 전수 판정(소스 직접 대조) → 2026-07-24 판정 파일과 비교.
+
+**결과 — phantom 6.7%(2/30), Wilson 95% CI [1.9%, 21.3%], 수치는 7/24와 동일선상.** 표본이 코드 변화로 달라져 이전 phantom 2건(FeedbackController.listAll→TeamPaymentOrder.getStatus 등)을 직접 재검증하진 못했지만, **새로운 phantom 2건**이 발견됐다 — 근본 원인은 "패턴 C"(컴파일러 합성 접근자가 소스에 텍스트로 없어 무관한 동명 메서드로 전역 폴백)와 동일 계열이나 7/24 수정(`hasEntityAccessor`)이 커버하지 않는 두 변종.
+
+**패턴 E(신규, 이번에 수정) — Java record 컴포넌트 접근자.** `CommunityController.toNodeMaps → AbstractTreeSitterAnalyzer.language`. 실제 호출은 `n.language()`(`n`은 record `NodeView`의 컴포넌트 접근자, 컴파일러 합성이라 소스에 텍스트 없음)인데, `NodeView`는 `@Entity`가 아니라 `hasEntityAccessor` 보호 대상이 아니어서 후보에서 완전히 제외된 채 전역에서 유일하게 실정의가 있는 동명 메서드로 오귀속됐다.
+
+**패턴 F(신규, 이번은 문서화만 — 후속 필요) — 전역 폴백의 "첫 매치 우선" + 제네릭 추론 receiver.** `TeamAccessAdapter.hasAccessViaTeam → TeamPaymentOrder.getTeamId`(정답은 `TeamProjectAllocation.getTeamId`). `alloc`의 타입이 스트림 제네릭 추론이라 파일이 `TeamProjectAllocation`을 이름으로 import 안 해 1차 import 매칭이 실패 → 전역 폴백에서 `hasEntityAccessor`가 `TeamProjectAllocation`을 후보로는 인정하지만(엔티티라서) 실제 FUNCTION 노드가 없어 엣지를 못 만들고, 대신 `resolveBareCall`(`GraphBuilder.java:848` 루프)이 **처음 만난 실제 정의를 그대로 채택**(`bestMatch == null`일 때 무조건 채택, 이후엔 인터페이스→구현체 승격만 있고 재검토 없음)해 무관한 `TeamPaymentOrder.getTeamId`가 선택됐다. 패턴 E/C와 달리 이건 "합성 접근자가 안 보인다"가 아니라 "전역 폴백의 후보 우선순위 로직 자체에 재현 가능한 결함이 있다"는 더 근본적인 문제라, 이번 세션 범위를 넘는다고 판단 — **다음 엣지 정확도 세션 후보로 남김**. 후보 수정 방향: 전역 폴백에서 실제 후보(정의 있는 파일)가 2개 이상이면 "판정 불가"로 보고 엣지를 안 만들거나(recall 손실, phantom 방지), import 안 된 receiver 타입을 스트림 제네릭 등에서도 추론하는 방향(더 정확하지만 설계 필요).
+
+**패턴 E 수정.** `TreeSitterJavaAnalyzer`에 `collectRecordComponents` 신설 — `record_declaration`의 `formal_parameters`에서 컴포넌트명을 수집해 `Result.recordComponents`로 노출(tree-sitter 필드명 `parameters`는 `addParameterTypes`가 이미 method_declaration에 쓰던 것과 동일 관례 재사용, 별도 디버그 테스트로 실제 grammar 트리 덤프해 확인 후 구현). `ParsedFile`에 `recordComponents` 필드 신설(37번째, 기존 컨벤션대로 이 파일이 가진 "구필드 개수 호환 생성자"를 하나 더 추가하는 패턴 재사용 — 28개 이상의 기존 `new ParsedFile(...)` 호출부 전부 무변경). `GraphBuilder`에 `hasRecordAccessor`(= `hasEntityAccessor`와 완전히 동일한 안전 원칙 — FUNCTION 노드를 안 만드므로 최악의 경우도 "엣지 미생성"이지 "잘못된 엣지"가 될 수 없음) 신설해 `resolveBareCall` 후보 필터에 추가.
+
+**TDD.** `Java_record_컴포넌트_추출`(`StaticCodeAnalyzerTest`, 실 tree-sitter 파싱으로 컴포넌트명이 `recordComponents`엔 있고 `functions`엔 없음을 확인) + `bareCallToRecordComponentAccessor_notMisattributedToUnrelatedDecoy`(`GraphBuilderTest`, 실사고 재현 픽스처) — RED(수정 전 GraphBuilder로 실제 phantom 엣지 생성 확인) → GREEN.
+
+**ANALYZER_VERSION 동반 인상.** `ParsedFile` 필드 수 변경(36→37)이라 `CachedParsedFileLoaderTest`의 트립와이어(`parsedFileFieldCount_tripwireForAnalyzerVersion`, B-16 재발 방지용)가 즉시 잡아냄 — `CachedParsedFileLoader.ANALYZER_VERSION` 9→10, 트립와이어 기댓값 36→37 동반 수정.
+
+**검증.** 신규 테스트 2건 GREEN, 전체 백엔드 1243건 중 실패 11건은 전부 로컬 Postgres 미기동(무관, 개수 불변). `analyzeLocal` 베이스라인 불변(HIGH_FAN_OUT 8건). `edgeAudit` 재실행으로 회귀 없음 확인. 판정 파일 `backend/src/test/resources/edge-audit/self/2026-08-05-function-call.json` 커밋.
+
+**T1→T2 게이트 판단 — 조건부 통과, 패턴 F 해소 전까지 T2 미착수 권고.** phantom 비율 자체(6.7%, CI 상한 21.3%)는 7/24와 동일선상이라 악화는 아니고 30건 중 28건이 REAL이라 T2가 "대부분" 올바른 파일을 고친다는 근거는 있다. 다만 이번에 발견된 패턴 E(수정 완료)·F(미수정) 둘 다 우연이 아닌 재현 가능한 구조적 패턴이라, **패턴 F(전역 폴백 첫 매치 우선)가 남아있는 한 T2 자동수정 착수는 보류**한다 — 이 패턴이 프로젝트 전역에 잠재적으로 더 있을 수 있고(동명 메서드가 흔한 Java 관례), 이게 T2가 만드는 다중파일 패치의 대상 파일을 통째로 잘못 짚을 위험과 직결되기 때문. `PRODUCT_STRATEGY.md` §19.4에 이 판단(조건부 통과 + 패턴 F 해소가 다음 관문)을 반영.

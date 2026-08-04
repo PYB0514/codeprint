@@ -18,9 +18,11 @@ import java.util.Set;
 class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
 
     // tree-sitter 추출 결과 — 함수명 목록과 함수별 호출(callee) 목록, 함수명→정의 시작 줄(1-indexed), 함수명→식별자 시작 컬럼(0-indexed),
-    // 필드명→선언 타입명(CIRCULAR_BEAN_DEPENDENCY의 빈 의존 그래프 구성용 — 기존엔 메서드 호출 수신자 해소용으로만 쓰고 버려졌음)
+    // 필드명→선언 타입명(CIRCULAR_BEAN_DEPENDENCY의 빈 의존 그래프 구성용 — 기존엔 메서드 호출 수신자 해소용으로만 쓰고 버려졌음),
+    // record 컴포넌트명 목록(컴파일러가 합성하는 접근자 이름 — 소스에 텍스트가 없어 GraphBuilder.hasRecordAccessor가
+    // resolveBareCall 후보 인정에만 사용, 엣지 정확도 5차 감사에서 발견한 phantom 패턴)
     record Result(List<String> functions, Map<String, List<String>> functionCalls, Map<String, Integer> functionLines,
-                  Map<String, Integer> functionColumns, Map<String, String> fieldTypes) {}
+                  Map<String, Integer> functionColumns, Map<String, String> fieldTypes, List<String> recordComponents) {}
 
     @Override
     protected TSLanguage createLanguage() {
@@ -47,9 +49,12 @@ class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
             collectFieldTypes(root, src, fieldTypes);
             walk(root, src, null, functions, calls, fieldTypes, functionLines, functionColumns);
 
+            List<String> recordComponents = new ArrayList<>();
+            collectRecordComponents(root, src, recordComponents);
+
             Map<String, List<String>> functionCalls = new LinkedHashMap<>();
             calls.forEach((caller, callees) -> functionCalls.put(caller, new ArrayList<>(callees)));
-            return new Result(functions, functionCalls, functionLines, functionColumns, fieldTypes);
+            return new Result(functions, functionCalls, functionLines, functionColumns, fieldTypes, recordComponents);
         });
     }
 
@@ -131,6 +136,28 @@ class TreeSitterJavaAnalyzer extends AbstractTreeSitterAnalyzer {
             if (field != null && !field.isNull()) return scope.get(text(field, src));
         }
         return null;
+    }
+
+    // record 선언(record_declaration)의 컴포넌트 목록(formal_parameters)에서 컴포넌트명을 수집 — Java record는
+    // 컴포넌트마다 동명의 접근자 메서드(get 접두사 없이 "name()"·"line()" 형태)를 컴파일러가 자동 생성하는데
+    // 소스엔 텍스트로 없어 GraphBuilder의 bare 호출 해소가 못 찾는다(엣지 정확도 5차 감사, 패턴 E).
+    private void collectRecordComponents(TSNode node, byte[] src, List<String> recordComponents) {
+        if (node.getType().equals("record_declaration")) {
+            TSNode params = node.getChildByFieldName("parameters");
+            if (params != null && !params.isNull()) {
+                int n = params.getChildCount();
+                for (int i = 0; i < n; i++) {
+                    TSNode child = params.getChild(i);
+                    if (!child.getType().equals("formal_parameter")) continue;
+                    TSNode nameNode = child.getChildByFieldName("name");
+                    if (nameNode != null && !nameNode.isNull()) recordComponents.add(text(nameNode, src));
+                }
+            }
+        }
+        int n = node.getChildCount();
+        for (int i = 0; i < n; i++) {
+            collectRecordComponents(node.getChild(i), src, recordComponents);
+        }
     }
 
     // 클래스 필드 선언에서 변수명→타입(심플명) 수집 — 메서드 어디서든 가시하므로 walk 전에 모은다

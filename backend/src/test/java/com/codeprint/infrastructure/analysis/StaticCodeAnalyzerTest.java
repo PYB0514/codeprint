@@ -3011,6 +3011,22 @@ class StaticCodeAnalyzerTest {
     }
 
     @Test
+    @DisplayName("record 컴포넌트명을 recordComponents로 추출한다 — 컴파일러 합성 접근자는 소스에 텍스트가 없어 functions에는 안 잡힘")
+    void Java_record_컴포넌트_추출() throws IOException {
+        Path file = writeJavaFile("""
+                public record NodeView(String name, int line, boolean isHidden) {
+                    public String extra() { return name; }
+                }
+                """);
+
+        ParsedFile result = analyzer.analyze(file, tempDir, "Java");
+
+        assertThat(result.recordComponents()).containsExactlyInAnyOrder("name", "line", "isHidden");
+        assertThat(result.functions()).doesNotContain("name", "line", "isHidden");
+        assertThat(result.functions()).contains("extra");
+    }
+
+    @Test
     @DisplayName("접근제어자 없는 인터페이스 추상 메서드(JpaRepository 파생 쿼리)도 감지한다")
     void Java_Transactional_인터페이스_추상메서드_감지() throws IOException {
         // JpaRepository 파생 쿼리는 인터페이스 추상 메서드라 public/private 같은 제어자가 없는 게 흔함
