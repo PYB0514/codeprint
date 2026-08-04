@@ -166,7 +166,11 @@ public class FixAttemptService {
     private ParsedFile reparse(Node target, String patchedContent) throws IOException {
         Path tempDir = Files.createTempDirectory("codeprint-fix-verify-");
         try {
-            Path tempFile = tempDir.resolve(target.getFilePath());
+            // filePath는 분석된 레포에서 온 값 — "../" 등으로 tempDir 밖을 가리키면 경로 탈출이라 즉시 거부(방어적 검증)
+            Path tempFile = tempDir.resolve(target.getFilePath()).normalize();
+            if (!tempFile.startsWith(tempDir)) {
+                throw new IllegalStateException("파일 경로가 임시 디렉터리를 벗어남: " + target.getFilePath());
+            }
             Files.createDirectories(tempFile.getParent());
             Files.writeString(tempFile, patchedContent, StandardCharsets.UTF_8);
             return staticCodeAnalyzer.analyze(tempFile, tempDir, target.getLanguage());
