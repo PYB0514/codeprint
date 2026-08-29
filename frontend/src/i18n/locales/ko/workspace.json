@@ -855,7 +855,19 @@
     "addRuleButton": "규칙 추가",
     "reportTitle": "# 구조 경고 리포트",
     "reportTotalLine": "> 총 {{count}}개 경고",
-    "reportGroupCount": "{{count}}개"
+    "reportGroupCount": "{{count}}개",
+    "fixAttemptButton": "자동수정 시도",
+    "fixAttemptButtonTitle": "등록된 AI 키로 이 경고의 자동수정을 시도합니다 (PR·적용은 자동으로 하지 않습니다)",
+    "fixAttemptLoading": "시도 중...",
+    "fixAttemptRationaleLabel": "근거",
+    "fixAttemptDiffLabel": "변경 사항 (diff)",
+    "fixAttemptCopyButton": "복사",
+    "fixAttemptCopiedLabel": "복사됨",
+    "fixAttemptCopyFailedLabel": "복사 실패",
+    "fixAttemptCloseButton": "닫기",
+    "fixAttemptSkippedLabel": "건너뜀",
+    "fixAttemptFailedLabel": "실패",
+    "fixAttemptErrorGeneric": "자동수정 시도 중 오류가 발생했습니다."
   },
   "graphShared": {
     "legend": {

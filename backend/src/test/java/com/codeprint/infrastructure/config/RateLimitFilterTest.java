@@ -324,4 +324,22 @@ class RateLimitFilterTest {
         verify(response).setStatus(429);
         verify(chain, times(10)).doFilter(request, response);
     }
+
+    // 리컨실러 T1 fix-attempt는 analysis와 동일하게 3분당 1회 — 최초 값(3회/3분)이 "analysis에 준하는"이라는
+    // 주석·의도와 실제로 어긋나 있음을 적대적 검증에서 지적받아 1회/3분으로 수정(2026-08-29)
+    @Test
+    @DisplayName("fix-attempt 카테고리는 analysis와 동일하게 3분당 1회 — GitHub 조회+LLM 호출까지 도는 가장 비용이 큰 신규 엔드포인트")
+    void fixAttemptCategory_limitedToOnePerThreeMinutes() throws Exception {
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getRequestURI()).thenReturn("/api/projects/abc-123/graph/def-456/nodes/ghi-789/fix-attempt");
+        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(request.getRemoteAddr()).thenReturn("16.16.16.16");
+
+        filter.doFilter(request, response, chain);
+        verify(chain, times(1)).doFilter(request, response);
+
+        filter.doFilter(request, response, chain); // 같은 3분 창 내 2번째 — 초과
+        verify(response).setStatus(429);
+        verify(chain, times(1)).doFilter(request, response);
+    }
 }

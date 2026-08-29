@@ -1,5 +1,6 @@
 // 구조 경고 목록을 타입별로 그룹핑해서 표시하는 패널
 import { useState } from 'react'
+import axios from 'axios'
 import { useTranslation } from 'react-i18next'
 import { type IgnoreRule, type AuditLogEntry, inferGlob, countMatches, loadAuditLog } from '../utils/ignoreRules'
 import { currentDateLocale } from '../i18n/dateLocale'
@@ -12,6 +13,17 @@ interface Warning {
   message: string
   fingerprint?: string
 }
+
+// 리컨실러 T1 자동수정 시도 결과 — 백엔드 FixAttempt 레코드와 동일 형태(diff·근거만, PR 생성·적용은 하지 않음)
+export interface FixAttemptResult {
+  outcome: 'SUCCESS' | 'SKIPPED' | 'FAILED'
+  diff: string | null
+  rationale: string | null
+  reason: string | null
+}
+
+// 리컨실러 T1이 지원하는 유일한 룰 — 백엔드 FixAttemptService.SUPPORTED_RULE_TYPE과 동일
+const FIX_ATTEMPT_SUPPORTED_TYPE = 'MISSING_TRANSACTIONAL_DELETE'
 
 // 경고에서 패턴 예외 규칙을 만들기 위한 부가 핸들러 묶음 (소유자에게만 전달)
 interface IgnoreOps {
@@ -37,6 +49,8 @@ interface Props {
   onReportFp?: (w: Warning) => void
   // 내가 이미 신고한 fingerprint 집합 — 신고 버튼 상태 표시용
   reportedFingerprints?: Set<string>
+  // 리컨실러 T1 자동수정 시도 — BYOK 등록된 사용자에게만 전달(없으면 버튼 미표시), MISSING_TRANSACTIONAL_DELETE에만 노출
+  onFixAttempt?: (nodeId: string) => Promise<FixAttemptResult>
 }
 
 const SEVERITY_ORDER: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
@@ -47,7 +61,7 @@ const SEVERITY_STYLE: Record<string, { label: string; bg: string; text: string }
 }
 
 // 경고 목록을 타입별로 그룹핑하여 severity 순(HIGH→MEDIUM→LOW)으로 표시
-export default function WarningPanel({ warnings, onNodeNavigate, onSuppress, suppressed, onRestore, ignoreOps, onReportFp, reportedFingerprints }: Props) {
+export default function WarningPanel({ warnings, onNodeNavigate, onSuppress, suppressed, onRestore, ignoreOps, onReportFp, reportedFingerprints, onFixAttempt }: Props) {
   const grouped = new Map<string, Warning[]>()
   for (const w of warnings) {
     if (!grouped.has(w.type)) grouped.set(w.type, [])
@@ -66,7 +80,7 @@ export default function WarningPanel({ warnings, onNodeNavigate, onSuppress, sup
         <IgnoreRulesSection ops={ignoreOps} />
       )}
       {sortedEntries.map(([type, items]) => (
-        <WarningGroup key={type} type={type} items={items} onNodeNavigate={onNodeNavigate} onSuppress={onSuppress} ignoreOps={ignoreOps} onReportFp={onReportFp} reportedFingerprints={reportedFingerprints} />
+        <WarningGroup key={type} type={type} items={items} onNodeNavigate={onNodeNavigate} onSuppress={onSuppress} ignoreOps={ignoreOps} onReportFp={onReportFp} reportedFingerprints={reportedFingerprints} onFixAttempt={onFixAttempt} />
       ))}
       {suppressed && suppressed.length > 0 && (
         <SuppressedGroup items={suppressed} onRestore={onRestore} />
@@ -182,12 +196,30 @@ function SuppressedGroup({ items, onRestore }: { items: Warning[]; onRestore?: (
 }
 
 // 경고 타입별 접기/펼치기 그룹
-function WarningGroup({ type, items, onNodeNavigate, onSuppress, ignoreOps, onReportFp, reportedFingerprints }: { type: string; items: Warning[]; onNodeNavigate?: (nodeId: string) => void; onSuppress?: (w: Warning) => void; ignoreOps?: IgnoreOps; onReportFp?: (w: Warning) => void; reportedFingerprints?: Set<string> }) {
+function WarningGroup({ type, items, onNodeNavigate, onSuppress, ignoreOps, onReportFp, reportedFingerprints, onFixAttempt }: { type: string; items: Warning[]; onNodeNavigate?: (nodeId: string) => void; onSuppress?: (w: Warning) => void; ignoreOps?: IgnoreOps; onReportFp?: (w: Warning) => void; reportedFingerprints?: Set<string>; onFixAttempt?: (nodeId: string) => Promise<FixAttemptResult> }) {
   const { t } = useTranslation('workspace')
   const [open, setOpen] = useState(true)
   // 현재 패턴 예외 폼이 열린 경고의 인덱스 (-1=닫힘)
   const [ignoreFormFor, setIgnoreFormFor] = useState(-1)
+  // 항목별 자동수정 시도 상태 — nodeId 키(배열 인덱스로 키잉하면 억제·재조회 등으로 항목 순서가
+  // 바뀔 때 결과가 엉뚱한 행에 붙는다, 적대적 검증에서 발견). 로딩 중엔 result 없이 loading만 true
+  const [fixState, setFixState] = useState<Record<string, { loading: boolean; result?: FixAttemptResult; error?: string }>>({})
   const meta = WARNING_META[type] ?? { color: '#eab308', severity: 'MEDIUM' }
+
+  // 자동수정 시도 — 응답을 nodeId별 상태에 저장, 실패해도 재시도 가능하도록 loading만 내린다.
+  // axios 에러의 서버 응답 본문(RateLimitFilter의 {"error":"..."}, 예외 메시지 등)을 최선노력으로
+  // 노출 — 429(레이트리밋)와 401/500 등을 사용자가 구분 못 하면 같은 제한에 재시도만 반복하게 된다.
+  const handleFixAttempt = async (nodeId: string) => {
+    if (!onFixAttempt) return
+    setFixState(prev => ({ ...prev, [nodeId]: { loading: true } }))
+    try {
+      const result = await onFixAttempt(nodeId)
+      setFixState(prev => ({ ...prev, [nodeId]: { loading: false, result } }))
+    } catch (e) {
+      const detail = axios.isAxiosError(e) ? (e.response?.data?.error ?? e.response?.data?.message) : undefined
+      setFixState(prev => ({ ...prev, [nodeId]: { loading: false, error: detail ?? t('warningPanel.fixAttemptErrorGeneric') } }))
+    }
+  }
   const label = t(`warningPanel.types.${type}.label`, { defaultValue: type })
   const desc = t(`warningPanel.types.${type}.desc`, { defaultValue: '' })
   const severity = items[0]?.severity ?? meta.severity ?? 'MEDIUM'
@@ -248,6 +280,15 @@ function WarningGroup({ type, items, onNodeNavigate, onSuppress, ignoreOps, onRe
                     title={t('warningPanel.suppressTooltip')}
                   >✕</button>
                 )}
+                {/* 자동수정 시도 — T1이 지원하는 룰(MISSING_TRANSACTIONAL_DELETE)에만, BYOK 등록 시에만(onFixAttempt 전달) */}
+                {onFixAttempt && type === FIX_ATTEMPT_SUPPORTED_TYPE && w.nodeIds[0] && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleFixAttempt(w.nodeIds[0]) }}
+                    disabled={fixState[w.nodeIds[0]]?.loading}
+                    className="shrink-0 text-gray-500 hover:text-cyan-400 disabled:opacity-50 disabled:cursor-wait px-1.5 text-[10px]"
+                    title={t('warningPanel.fixAttemptButtonTitle')}
+                  >{fixState[w.nodeIds[0]]?.loading ? t('warningPanel.fixAttemptLoading') : t('warningPanel.fixAttemptButton')}</button>
+                )}
               </div>
               {ignoreOps && ignoreFormFor === i && (
                 <IgnoreRuleForm
@@ -256,9 +297,67 @@ function WarningGroup({ type, items, onNodeNavigate, onSuppress, ignoreOps, onRe
                   onDone={() => setIgnoreFormFor(-1)}
                 />
               )}
+              {w.nodeIds[0] && (fixState[w.nodeIds[0]]?.result || fixState[w.nodeIds[0]]?.error) && (
+                <FixAttemptResultView
+                  result={fixState[w.nodeIds[0]]?.result}
+                  error={fixState[w.nodeIds[0]]?.error}
+                  onClose={() => setFixState(prev => { const next = { ...prev }; delete next[w.nodeIds[0]]; return next })}
+                />
+              )}
             </div>
           ))}
         </div>
+      )}
+    </div>
+  )
+}
+
+// 자동수정 시도 결과 표시 — SUCCESS면 근거+diff(복사 가능), SKIPPED/FAILED면 사유만. PR 자동 생성·적용 없음(§17.10 범위)
+function FixAttemptResultView({ result, error, onClose }: { result?: FixAttemptResult; error?: string; onClose: () => void }) {
+  const { t } = useTranslation('workspace')
+  // 'idle' | 'copied' | 'failed' — 클립보드 쓰기 실패(비보안 컨텍스트·권한 거부 등)도 화면에 표시(적대적 검증에서
+  // 무음 실패 지적됨, 이전엔 catch에서 아무 신호 없이 삼켜졌음)
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+
+  const handleCopy = () => {
+    if (!result?.diff) return
+    navigator.clipboard.writeText(result.diff).then(() => {
+      setCopyState('copied')
+      setTimeout(() => setCopyState('idle'), 1500)
+    }).catch(() => {
+      setCopyState('failed')
+      setTimeout(() => setCopyState('idle'), 1500)
+    })
+  }
+
+  return (
+    <div className="mt-1 mb-0.5 ml-2 border border-cyan-800/40 bg-cyan-950/10 rounded px-2 py-1.5 flex flex-col gap-1">
+      {error && <p className="text-[10px] text-red-400">{error}</p>}
+      {result?.outcome === 'SUCCESS' && (
+        <>
+          <p className="text-[10px] text-gray-400"><span className="text-cyan-400 font-semibold">{t('warningPanel.fixAttemptRationaleLabel')}</span> {result.rationale}</p>
+          <p className="text-[10px] text-gray-500">{t('warningPanel.fixAttemptDiffLabel')}</p>
+          <pre className="text-[10px] font-mono text-gray-300 bg-gray-900/60 rounded px-1.5 py-1 overflow-x-auto whitespace-pre-wrap max-h-40">{result.diff}</pre>
+          <div className="flex items-center gap-2">
+            <button onClick={handleCopy} className={`text-[10px] px-2 py-0.5 rounded text-cyan-100 ${copyState === 'failed' ? 'bg-red-800/60 hover:bg-red-700/60' : 'bg-cyan-800/60 hover:bg-cyan-700/60'}`}>
+              {copyState === 'copied' ? t('warningPanel.fixAttemptCopiedLabel') : copyState === 'failed' ? t('warningPanel.fixAttemptCopyFailedLabel') : t('warningPanel.fixAttemptCopyButton')}
+            </button>
+            <button onClick={onClose} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800/60 text-gray-400 hover:text-gray-200 ml-auto">{t('warningPanel.fixAttemptCloseButton')}</button>
+          </div>
+        </>
+      )}
+      {(result?.outcome === 'SKIPPED' || result?.outcome === 'FAILED') && (
+        <div className="flex items-center gap-2">
+          <p className="text-[10px] text-gray-400">
+            <span className={result.outcome === 'SKIPPED' ? 'text-gray-500' : 'text-red-400'}>
+              {result.outcome === 'SKIPPED' ? t('warningPanel.fixAttemptSkippedLabel') : t('warningPanel.fixAttemptFailedLabel')}
+            </span> — {result.reason}
+          </p>
+          <button onClick={onClose} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800/60 text-gray-400 hover:text-gray-200 ml-auto shrink-0">{t('warningPanel.fixAttemptCloseButton')}</button>
+        </div>
+      )}
+      {error && (
+        <button onClick={onClose} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800/60 text-gray-400 hover:text-gray-200 self-end">{t('warningPanel.fixAttemptCloseButton')}</button>
       )}
     </div>
   )
