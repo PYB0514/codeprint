@@ -85,6 +85,15 @@ public class GraphBuilder {
         // 함수명 → 노드ID (파일 경로 포함: "filePath::funcName" → nodeId)
         Map<String, UUID> funcNodeIds = new HashMap<>();
 
+        // 엔티티 클래스명 → 칼럼 목록 — DOMAIN_LOGIC_LEAK 판정에 FUNCTION 노드 생성 시점부터 필요해 이른 시점에 미리 구축
+        // (아래 DB_TABLE 절의 entityClassToColumns와 목적은 겹치나 필요 시점이 달라 별도 유지, 계산 자체는 파일 수만큼 O(n)이라 무시 가능)
+        Map<String, List<ColumnInfo>> entityColumnsByClassName = new HashMap<>();
+        for (ParsedFile pf : parsedFiles) {
+            if (!pf.entityColumns().isEmpty()) {
+                entityColumnsByClassName.put(extractFileNameWithoutExt(pf.filePath()), pf.entityColumns());
+            }
+        }
+
         // FILE 노드 생성
         for (ParsedFile pf : parsedFiles) {
             Node fileNode = Node.create(graphId, NodeType.FILE,
@@ -155,6 +164,16 @@ public class GraphBuilder {
                     if (col != null) {
                         meta.put("col", col);
                         meta.put("endCol", col + funcName.length());
+                    }
+                }
+                // DOMAIN_LOGIC_LEAK 후보 — ApplicationService 메서드가 같은 엔티티의 setter를 2개 이상 직접
+                // 호출(위임 없이 필드를 여러 개 직접 조작) — GraphWarningService가 이 메타로만 판정, 여기선 사실만 기록
+                if (isApplicationServiceFile(pf.filePath())) {
+                    Set<String> leakEntities = detectSetterLeakEntities(
+                            pf.functionCalls() != null ? pf.functionCalls().get(funcName) : null,
+                            entityColumnsByClassName);
+                    if (!leakEntities.isEmpty()) {
+                        meta.put("domainLogicLeakEntities", new ArrayList<>(leakEntities));
                     }
                 }
                 funcNode.updateMetadata(meta);
@@ -924,6 +943,41 @@ public class GraphBuilder {
             if (isBoolean && methodName.equals("is" + cap)) return true;
         }
         return false;
+    }
+
+    // ApplicationService 클래스 파일인지 — DOMAIN_LOGIC_LEAK 판정 범위(GraphWarningService의 isOrchestratorArtifact와
+    // 같은 "/application/"+"ApplicationService.java" 컨벤션 재사용, 단 Controller/Facade는 대상 아님 — 이 룰은
+    // "Application Service가 도메인 메서드에 위임하는가"만 본다, CLAUDE.md §10)
+    private boolean isApplicationServiceFile(String filePath) {
+        String normalized = filePath.replace("\\", "/");
+        return normalized.contains("/application/") && normalized.endsWith("ApplicationService.java");
+    }
+
+    // 호출 목록(칼리티: "EntityType::setXxx" 형태로 수신자 타입이 해소된 것만 유효, TreeSitterJavaAnalyzer.recordInvocation
+    // 참조)에서 같은 엔티티의 setter를 2개 이상 직접 호출하는 엔티티 타입을 후보로 반환 — "필드를 여러 개 직접
+    // 수정 = 도메인 메서드로 위임하지 않고 여기서 로직을 구현했다"는 구조적 신호(1차 룰, 정밀도는 다음 감사에서 재확인)
+    private Set<String> detectSetterLeakEntities(List<String> calleeNames, Map<String, List<ColumnInfo>> entityColumnsByClassName) {
+        if (calleeNames == null || calleeNames.isEmpty()) return Set.of();
+        Map<String, Set<String>> setFieldsByEntityType = new HashMap<>();
+        for (String callee : calleeNames) {
+            int sep = callee.indexOf("::");
+            if (sep < 0) continue;
+            String entityType = callee.substring(0, sep);
+            String method = callee.substring(sep + 2);
+            List<ColumnInfo> columns = entityColumnsByClassName.get(entityType);
+            if (columns == null || !method.startsWith("set") || method.length() <= 3) continue;
+            String field = decapitalize(method.substring(3));
+            boolean isRealField = columns.stream().anyMatch(c -> c.fieldName().equals(field));
+            if (isRealField) setFieldsByEntityType.computeIfAbsent(entityType, k -> new HashSet<>()).add(field);
+        }
+        Set<String> leaked = new HashSet<>();
+        setFieldsByEntityType.forEach((entityType, fields) -> { if (fields.size() >= 2) leaked.add(entityType); });
+        return leaked;
+    }
+
+    private String decapitalize(String s) {
+        if (s.isEmpty()) return s;
+        return Character.toLowerCase(s.charAt(0)) + s.substring(1);
     }
 
     // record 컴포넌트 접근자(get 접두사 없이 컴포넌트명 그대로) 후보 인정 — hasEntityAccessor와 동일 원칙:

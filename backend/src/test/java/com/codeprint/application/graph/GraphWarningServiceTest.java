@@ -1040,6 +1040,29 @@ class GraphWarningServiceTest {
     }
 
     @Test
+    @DisplayName("FUNCTION 노드에 domainLogicLeakEntities 메타데이터 — DOMAIN_LOGIC_LEAK 경고(GraphBuilder가 판정한 사실만 소비)")
+    void domainLogicLeak_metadataPresent_detected() {
+        Node funcNode = Node.create(graphId, NodeType.FUNCTION, "confirmOrder",
+                "application/order/OrderApplicationService.java", "java");
+        funcNode.updateMetadata(Map.of("domainLogicLeakEntities", List.of("Order")));
+
+        List<Map<String, Object>> warnings = service.detect(List.of(funcNode), List.of());
+
+        assertThat(warnings.stream().filter(w -> "DOMAIN_LOGIC_LEAK".equals(w.get("type"))).toList()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("FUNCTION 노드에 domainLogicLeakEntities 메타데이터 없음 — DOMAIN_LOGIC_LEAK 경고 없음")
+    void domainLogicLeak_noMetadata_noWarning() {
+        Node funcNode = Node.create(graphId, NodeType.FUNCTION, "confirmOrder",
+                "application/order/OrderApplicationService.java", "java");
+
+        List<Map<String, Object>> warnings = service.detect(List.of(funcNode), List.of());
+
+        assertThat(warnings.stream().filter(w -> "DOMAIN_LOGIC_LEAK".equals(w.get("type"))).toList()).isEmpty();
+    }
+
+    @Test
     @DisplayName("infra/persistence의 deleteBy* 메서드에 @Transactional 없음 — MISSING_TRANSACTIONAL_DELETE 경고")
     void missingTransactionalDelete_derivedDeleteMethod_noAnnotation_detected() {
         Node deleteMethod = funcNodeWithPath("deleteByUserIdAndPostId",

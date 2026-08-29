@@ -23,6 +23,7 @@ export const WARNING_META: Record<string, { color: string; severity: string }> =
   SHARED_DATABASE_ACCESS:       { color: '#0891b2', severity: 'MEDIUM' },
   SERVICE_CALL_CHAIN:           { color: '#c026d3', severity: 'MEDIUM' },
   CIRCULAR_BEAN_DEPENDENCY:     { color: '#b91c1c', severity: 'HIGH' },
+  DOMAIN_LOGIC_LEAK:            { color: '#65a30d', severity: 'MEDIUM' },
 }
 
 // 경고 타입 라벨 — React 컴포넌트 밖(graphLayout.ts의 MD 내보내기)에서도 호출되므로 훅 대신 i18n 인스턴스 직접 사용

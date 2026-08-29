@@ -4,6 +4,25 @@
 
 ---
 
+## DOMAIN_LOGIC_LEAK 신설 — "Service에서 도메인 로직 누출" 룰 1차 완료 (2026-08-29, codeprint_161 연속)
+
+**배경.** CLAUDE.md §10 "Application Service가 도메인 로직을 직접 구현하지 않고 도메인 메서드에 위임하는지"는 오랫동안 자동화 대상 5개(인터페이스 체인 끊김·@Convert 마이그레이션·@Async 자기호출·순환 의존·DB 레이어 우회) 중 유일하게 미자동화로 남아 있었다(PROGRESS.md "런타임 오류 감지" 표). 이유는 "필드 접근·조건분기까지 봐야 하는 판단이라 현재 그래프 엣지 모델(호출 관계만 추적)로는 탐지 어렵다"였고, 그래서 "필드 접근 그래프 확장이 선행돼야 한다"는 전제로 착수가 보류돼 있었다. 이번 세션 사용자 확인("A로 제대로")으로 착수.
+
+**검토한 대안 — B(기존 FUNCTION_CALL 재사용)가 왜 탈락했나.** 처음엔 "ApplicationService 메서드가 domain/ 함수를 한 번도 안 부르면 의심"이라는, 신규 데이터 추출이 필요 없는 저비용안(B)을 먼저 검토했다. 하지만 `GraphBuilder.hasEntityAccessor` 주석을 재확인한 결과 **이 프로젝트는 Lombok이 생성하는 getter/setter를 의도적으로 FUNCTION 노드로 만들지 않는다**(phantom 엣지 방지, 엣지 정확도 4차 감사 패턴 C) — 즉 `order.setStatus(...)` 같은 흔한 필드 조작 호출이 지금 그래프에 **아예 흔적이 없다**. B안은 이 다수 패턴(Lombok 기반 엔티티)을 구조적으로 못 잡아 탈락, A(필드 접근 추적)가 맞는 선택으로 확인됐다.
+
+**설계 — "필드 접근 그래프"를 새로 만들지 않고 기존 인프라 3개를 조합.** 처음엔 A가 새 파서·새 ParsedFile 필드·`ANALYZER_VERSION` 인상이 필요한 큰 작업이라고 예상했으나, 실제로 필요한 재료가 이미 다 있었다(§2 단순성 — 재사용성 먼저 확인).
+1. `TreeSitterJavaAnalyzer.recordInvocation`/`receiverType` — `resolveBareCall`(패턴 F) 작업 때 이미 만들어진 수신자 타입 해소기가, 타입을 알 수 있는 호출을 `"EntityType::methodName"` 형태로 `ParsedFile.functionCalls()`에 저장하고 있었다(모르면 bare name 폴백). **신규 파싱 불필요.**
+2. `GraphBuilder.entityColumns()`/`hasEntityAccessor` — `@Entity` 클래스의 실제 필드 목록이 이미 클래스명으로 인덱싱돼 있어, `"Order::setStatus"`의 `status`가 진짜 `Order` 필드인지 검증하는 로직(오탐 방지)을 그대로 재사용.
+3. `GraphWarningService.isOrchestratorArtifact`의 `"/application/"+"ApplicationService.java"` 판정 컨벤션을 재사용해 대상 범위(Application Service만, Controller/Facade 제외)를 좁힘.
+
+**규칙(1차, MEDIUM+opt-out)**: ApplicationService 메서드가 **같은 엔티티의 setter를 2개 이상** 직접 호출하면 발화 — "여러 필드를 직접 수정 = 위임 없이 로직을 여기서 구현했다"는 구조적 신호. `GraphBuilder`가 FUNCTION 노드 메타(`domainLogicLeakEntities`)로 사실만 기록하고, `GraphWarningService.detectDomainLogicLeak`이 그 메타만 보고 판정하는 기존 분업(예: `isTransactional`/`MISSING_TRANSACTIONAL_DELETE`)을 그대로 따른다. **정밀도 리스크를 사용자에게 명시**: 다른 15개 룰과 달리 "도메인 로직인지"는 구조적 사실이 아니라 판단이라 오탐 여지가 구조적으로 크다 — MEDIUM severity + opt-out(패턴 예외)으로 시작, 실사용 축적 후 재감사 필요(다른 룰들이 거친 "N차 정확도 감사"와 동일 절차 예정, 이번 세션엔 자기 레포 도그푸딩에서 미발화 확인만 함 — 실 케이스는 아직 못 봄).
+
+**ANALYZER_VERSION 인상 불필요**: `ParsedFile` 스키마 변경 없음(위 3개 모두 기존 필드 재사용) — 파싱 결과가 아니라 `GraphBuilder`의 해석 로직만 추가했기 때문에 `parsed_file_cache` 캐시 유효성과 무관.
+
+**검증.** `GraphBuilderTest` 4건(setter 2개 발화·1개 미발화·비-ApplicationService 파일 제외·존재 안 하는 필드명 오탐 방지) + `GraphWarningServiceTest` 2건(메타 존재/부재). 백엔드 전체 테스트 green, `analyzeLocal` 자기 레포 재실행 결과 새 경고 0건(회귀 없음, 발화 사례도 없음 — 우리 자신의 ApplicationService들은 현재 이 패턴에 안 걸림). 프론트 `WARNING_META`+ko/en `workspace.json`에 라벨/설명 추가하며 룰 총계(20→21종) 참조 문구도 함께 갱신(landing.json 포함, 스테일 카운트 재발 방지).
+
+---
+
 ## SERVICE_CALL_CHAIN "변수 조합 URL" ③ — Spring `@Value`+`application.yml` 조인 완료 (2026-08-02, codeprint_158)
 
 **배경.** "변수 조합 URL" 시리즈(①리터럴 직접 ②env var/docker-compose ③필드변수 문자열연결, 전부 완료) 중 마지막으로 남아있던 하위 패턴. Spring에서 흔한 관용구 — `@Value("${services.visits.url}") private String visitsUrl;` 로 `application.yml`의 값을 필드에 주입받아 그 필드를 WebClient 호출에 문자열 연결로 쓰는 경우 — 는 여태 미탐지였다. env var 패턴(② JS/TS·Python)과 동일하게 cross-file join이 필요해(필드 선언은 Java 소스에, 실제 값은 별도 설정 파일에) "진짜 신규 분석기가 필요"해 스코프가 크다고 여러 세션 미뤄져 있었다(Context157 "E" 항목).
