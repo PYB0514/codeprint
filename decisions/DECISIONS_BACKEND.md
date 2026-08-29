@@ -2,6 +2,20 @@
 
 ---
 
+## 리컨실러 T1 실제 가동 배선 — 수동 버튼 트리거 채택(2026-08-29, codeprint_161 연속)
+
+**문제.** Context161(PR #764)에서 `FixAttemptService.attemptFix`(MISSING_TRANSACTIONAL_DELETE 자동수정 파이프라인)를 완성했지만 "완성"과 "가동"을 분리한다는 조건으로 실제 호출부는 만들지 않은 채 남겨뒀다("미배선"). 이번 세션에서 사용자가 벤치마킹 조사(시장 성장 속도) 이후 "리컨실러 2막을 실제로 가동"하기로 결정 — 트리거 방식(누가·언제 LLM을 호출하는가) 자체가 미확정이라 착수 전 확정이 필요했다.
+
+**검토한 대안과 탈락 이유.**
+1. **PR 게이트 리컨실리에이션 크론에 자동 배선**(Context161 원안 후보) — 열린 PR마다 자동으로 자동수정을 시도하는 방식. 탈락 이유: `attemptFix`는 특정 사용자의 BYOK 키가 필수인데, 자동 트리거에서는 "프로젝트 소유자의 키를 사용자 동의 없이 자동 소모"하는 새로운 문제가 생긴다 — 설계 범위가 이번 세션에서 감당하기엔 커짐(다중 소유자·팀 프로젝트의 키 선택 규칙 등 미결 질문 다수).
+2. **수동 버튼(채택)** — `WarningPanel.tsx`에 "자동수정 시도" 버튼을 노출해, 사용자가 명시적으로 클릭할 때만 그 사용자 본인의 BYOK 키로 1회 호출. 기존 "AI 컨텍스트+AI 분석"(레이어A/B) 버튼과 동일한 "요청 시에만, 그 사용자 키로만" 패턴이라 신규 설계 리스크가 거의 없고, 첫 라이브 가동으로 적절히 보수적이라는 사용자 판단으로 확정.
+
+**결정.** `GraphController`에 `POST /api/projects/{projectId}/graph/{graphId}/nodes/{nodeId}/fix-attempt` 신설, `FixAttemptService.attemptFix`(기존 완성 로직, 수정 없음)를 그대로 위임. 소유권(IDOR)·DLP·BYOK 키 존재 여부는 전부 서비스 내부에서 기존 검증 재사용. `RateLimitFilter`에 `analysis`(3분당 1회)에 준하는 `fix-attempt`(3분당 3회) 카테고리 추가 — GitHub 파일 조회+LLM 호출+재파싱까지 도는 신규 엔드포인트 중 가장 비용이 크기 때문. 결과(diff+근거)는 인라인 표시+복사 버튼만 제공하고 PR 자동 생성·적용은 하지 않는다(§17.10 범위 그대로 — "완성=코드, 가동=UI 노출"이지 "가동=자동화"가 아님).
+
+**검증.** 신규 생성자 의존성(`FixAttemptService`)이 추가된 `GraphController` 컴파일 깨짐 → `GraphControllerOwnershipTest`(IDOR 회귀 테스트 파일)에 mock 추가로 수정. 로컬 백엔드 실제 재기동으로 `/actuator/health` UP 확인(순환 빈 참조 없음). 프론트는 `WarningPanel.test.tsx`(신규, RTL) 5건으로 타입 게이팅(MISSING_TRANSACTIONAL_DELETE만)·BYOK 게이팅(onFixAttempt 미전달 시 버튼 자체가 없음)·클릭 시 SUCCESS/SKIPPED 결과 표시를 고정 — 이 프로젝트 최초의 React 컴포넌트 테스트(기존 1건은 순수 로직 유틸 테스트였음). **한계 명시**: 자기 레포("codeprint") 실 데이터엔 현재 MISSING_TRANSACTIONAL_DELETE 경고가 없어(이미 수정된 상태) 실제 LLM 왕복까지 포함한 라이브 클릭 검증은 하지 못했다 — 컴포넌트 테스트와 `FixAttemptServiceTest`(백엔드, 기존 8건 green)가 대신 커버.
+
+---
+
 ## 그래프 보존 개수 10→3(`GraphRetentionPolicy.MAX_RECENT`) — 볼륨 수용량 레버 실행(2026-07-26, codeprint_149)
 
 **문제.** codeprint_148(분석 전용 세션)의 저장 비용 실측(`GATE_GAPS.md` [G-9] 후속측정)에서 "상한(500파일)보다 보존 정책이 볼륨 수용량에 미치는 영향이 크다"는 결론이 나왔다 — 밀한 레포 1프로젝트 = 11.7 MB × 보존 10 = 117 MB, 3.5 GB 볼륨에 약 30개 수용. 보존을 10→3으로만 낮춰도 수용량이 약 100개(3.3배)로 늘어난다는 계산이었으나, 그 세션은 "분석만" 지정돼 코드는 건드리지 않고 PROGRESS.md §18.8에 다음 세션 실행 항목으로만 남겨뒀다.
