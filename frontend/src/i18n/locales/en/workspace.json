@@ -855,7 +855,18 @@
     "addRuleButton": "Add Rule",
     "reportTitle": "# Structural Warning Report",
     "reportTotalLine": "> {{count}} warnings total",
-    "reportGroupCount": "{{count}}"
+    "reportGroupCount": "{{count}}",
+    "fixAttemptButton": "Try Auto-Fix",
+    "fixAttemptButtonTitle": "Attempt an automatic fix for this warning using your registered AI key (no PR is opened or applied automatically)",
+    "fixAttemptLoading": "Trying...",
+    "fixAttemptRationaleLabel": "Rationale",
+    "fixAttemptDiffLabel": "Changes (diff)",
+    "fixAttemptCopyButton": "Copy",
+    "fixAttemptCopiedLabel": "Copied",
+    "fixAttemptCloseButton": "Close",
+    "fixAttemptSkippedLabel": "Skipped",
+    "fixAttemptFailedLabel": "Failed",
+    "fixAttemptErrorGeneric": "An error occurred while attempting the fix."
   },
   "graphShared": {
     "legend": {

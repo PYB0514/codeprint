@@ -3,6 +3,8 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.application.graph.DddMigrationGuideService;
 import com.codeprint.application.graph.FeatureSpecService;
+import com.codeprint.application.graph.FixAttempt;
+import com.codeprint.application.graph.FixAttemptService;
 import com.codeprint.application.graph.GraphCommandService;
 import com.codeprint.application.graph.GraphDiffService;
 import com.codeprint.application.graph.GraphFacade;
@@ -54,6 +56,7 @@ public class GraphController {
     private final RoleSpecService roleSpecService;
     private final FeatureSpecService featureSpecService;
     private final DddMigrationGuideService dddMigrationGuideService;
+    private final FixAttemptService fixAttemptService;
 
     // 프로젝트의 그래프 버전 목록을 최신순으로 조회
     @GetMapping("/api/projects/{projectId}/graphs")
@@ -209,6 +212,19 @@ public class GraphController {
                     return ResponseEntity.ok(Map.of("content", content));
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    // 리컨실러 T1 수동 트리거 — 사용자가 특정 경고에 대해 명시적으로 "자동수정 시도" 버튼을 눌렀을 때만 호출.
+    // 소유권·DLP·BYOK 키 존재 여부는 FixAttemptService 내부에서 전부 검증(IDOR 방어 포함). 결과는 diff+근거만
+    // 반환하고 PR 생성·자동 적용은 하지 않는다(§17.10 범위 — 사람이 최종 확인).
+    @PostMapping("/api/projects/{projectId}/graph/{graphId}/nodes/{nodeId}/fix-attempt")
+    public ResponseEntity<FixAttempt> attemptFix(
+            @PathVariable UUID projectId,
+            @PathVariable UUID graphId,
+            @PathVariable UUID nodeId,
+            @RequestParam AiProvider provider,
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(fixAttemptService.attemptFix(projectId, graphId, nodeId, user.getId(), provider));
     }
 
     // 공개 프로젝트의 그래프를 비인증으로 조회 (오너 배경이미지 포함)

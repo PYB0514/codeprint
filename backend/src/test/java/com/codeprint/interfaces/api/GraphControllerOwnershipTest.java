@@ -3,6 +3,7 @@ package com.codeprint.interfaces.api;
 
 import com.codeprint.application.graph.DddMigrationGuideService;
 import com.codeprint.application.graph.FeatureSpecService;
+import com.codeprint.application.graph.FixAttemptService;
 import com.codeprint.application.graph.GraphCommandService;
 import com.codeprint.application.graph.GraphDiffService;
 import com.codeprint.application.graph.GraphFacade;
@@ -48,6 +49,7 @@ class GraphControllerOwnershipTest {
     @Mock private RoleSpecService roleSpecService;
     @Mock private FeatureSpecService featureSpecService;
     @Mock private DddMigrationGuideService dddMigrationGuideService;
+    @Mock private FixAttemptService fixAttemptService;
 
     private GraphController controller;
 
@@ -61,7 +63,7 @@ class GraphControllerOwnershipTest {
                 graphQueryService, graphCommandService, graphFacade, graphDiffService,
                 graphWarningService, warningSuppressionService, nodeStyleService,
                 graphResponseAssembler, repoMapService, roleSpecService, featureSpecService,
-                dddMigrationGuideService);
+                dddMigrationGuideService, fixAttemptService);
         user = mock(User.class);
         lenient().when(user.getId()).thenReturn(userId);
     }

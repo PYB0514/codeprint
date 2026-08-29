@@ -32,7 +32,7 @@ import { useCollaboration } from '../hooks/useCollaboration'
 import { useSidebarResize } from '../hooks/useSidebarResize'
 import CollaborationPanel from '../components/CollaborationPanel'
 import CursorOverlay from '../components/CursorOverlay'
-import WarningPanel from '../components/WarningPanel'
+import WarningPanel, { type FixAttemptResult } from '../components/WarningPanel'
 import TeamChatPanel from '../components/TeamChatPanel'
 import ArchitectureIntentPanel from '../components/ArchitectureIntentPanel'
 import { LayoutPresetToggle, LabelModeToggle } from '../components/GraphViewToggles'
@@ -506,6 +506,18 @@ function GraphPageInner() {
       alert('오탐 신고에 실패했습니다.')
     }
   }, [projectId, graphId])
+
+  // 리컨실러 T1 수동 트리거 — 등록된 BYOK 프로바이더(우선순위 1순위)로 자동수정 시도, diff·근거만 반환(§17.10 범위,
+  // PR 생성·자동 적용 없음). 버튼 자체가 aiKeyProvider 존재 시에만 노출되므로 여기선 방어적으로만 재확인.
+  const handleFixAttempt = useCallback(async (nodeId: string): Promise<FixAttemptResult> => {
+    if (!projectId || !graphId || !aiKeyProvider) throw new Error('AI 프로바이더 미등록')
+    const res = await axios.post<FixAttemptResult>(
+      `/api/projects/${projectId}/graph/${graphId}/nodes/${nodeId}/fix-attempt`,
+      null,
+      { params: { provider: aiKeyProvider } }
+    )
+    return res.data
+  }, [projectId, graphId, aiKeyProvider])
 
   // 패턴 예외(IGNORE) 규칙 — architecture-intent에 저장, 그룹 단위로 경고 억제
   const [ignoreRules, setIgnoreRules] = useState<IgnoreRule[]>([])
@@ -2432,6 +2444,7 @@ function GraphPageInner() {
             onRestore={handleRestoreWarning}
             onReportFp={handleReportFp}
             reportedFingerprints={reportedFingerprints}
+            onFixAttempt={aiKeyProvider && !aiExportDisabled ? handleFixAttempt : undefined}
             ignoreOps={{
               projectId: projectId ?? '',
               fileOf: fileOfNodeId,
