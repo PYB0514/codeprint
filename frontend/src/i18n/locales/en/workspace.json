@@ -863,6 +863,7 @@
     "fixAttemptDiffLabel": "Changes (diff)",
     "fixAttemptCopyButton": "Copy",
     "fixAttemptCopiedLabel": "Copied",
+    "fixAttemptCopyFailedLabel": "Copy failed",
     "fixAttemptCloseButton": "Close",
     "fixAttemptSkippedLabel": "Skipped",
     "fixAttemptFailedLabel": "Failed",

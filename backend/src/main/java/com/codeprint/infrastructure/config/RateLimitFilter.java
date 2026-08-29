@@ -82,8 +82,9 @@ public class RateLimitFilter implements Filter {
             // 우선순위 재배열도 같은 쓰기 버킷 공유(2026-08-03, BYOK failover 시리즈)
             new RateLimitRule("PUT", "/api/users/me/ai-key/priority", "ai-key-write", 10, 1),
             // 리컨실러 T1 수동 트리거 — GitHub 파일 조회+LLM 호출+재분석까지 도는 가장 비용이 큰 신규 엔드포인트,
-            // analysis(3분당 1회)에 준하는 보수적 한도로 시작(2026-08-29, 리컨실러 2막 수동 배선)
-            new RateLimitRule("POST", "/api/projects/*/graph/*/nodes/*/fix-attempt", "fix-attempt", 3, 3)
+            // analysis와 동일하게 3분당 1회(적대적 검증에서 최초 값 3회/3분이 "analysis에 준하는"이라는
+            // 주석·의도와 실제로 3배 어긋나 있음을 지적받아 수정, 2026-08-29, 리컨실러 2막 수동 배선)
+            new RateLimitRule("POST", "/api/projects/*/graph/*/nodes/*/fix-attempt", "fix-attempt", 1, 3)
     );
 
     // 요청 IP 추출 — Railway 프록시가 실제 접속 IP를 X-Forwarded-For 맨 끝에 추가하므로 마지막 값을 사용

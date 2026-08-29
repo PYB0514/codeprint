@@ -10,9 +10,17 @@
 1. **PR 게이트 리컨실리에이션 크론에 자동 배선**(Context161 원안 후보) — 열린 PR마다 자동으로 자동수정을 시도하는 방식. 탈락 이유: `attemptFix`는 특정 사용자의 BYOK 키가 필수인데, 자동 트리거에서는 "프로젝트 소유자의 키를 사용자 동의 없이 자동 소모"하는 새로운 문제가 생긴다 — 설계 범위가 이번 세션에서 감당하기엔 커짐(다중 소유자·팀 프로젝트의 키 선택 규칙 등 미결 질문 다수).
 2. **수동 버튼(채택)** — `WarningPanel.tsx`에 "자동수정 시도" 버튼을 노출해, 사용자가 명시적으로 클릭할 때만 그 사용자 본인의 BYOK 키로 1회 호출. 기존 "AI 컨텍스트+AI 분석"(레이어A/B) 버튼과 동일한 "요청 시에만, 그 사용자 키로만" 패턴이라 신규 설계 리스크가 거의 없고, 첫 라이브 가동으로 적절히 보수적이라는 사용자 판단으로 확정.
 
-**결정.** `GraphController`에 `POST /api/projects/{projectId}/graph/{graphId}/nodes/{nodeId}/fix-attempt` 신설, `FixAttemptService.attemptFix`(기존 완성 로직, 수정 없음)를 그대로 위임. 소유권(IDOR)·DLP·BYOK 키 존재 여부는 전부 서비스 내부에서 기존 검증 재사용. `RateLimitFilter`에 `analysis`(3분당 1회)에 준하는 `fix-attempt`(3분당 3회) 카테고리 추가 — GitHub 파일 조회+LLM 호출+재파싱까지 도는 신규 엔드포인트 중 가장 비용이 크기 때문. 결과(diff+근거)는 인라인 표시+복사 버튼만 제공하고 PR 자동 생성·적용은 하지 않는다(§17.10 범위 그대로 — "완성=코드, 가동=UI 노출"이지 "가동=자동화"가 아님).
+**결정.** `GraphController`에 `POST /api/projects/{projectId}/graph/{graphId}/nodes/{nodeId}/fix-attempt` 신설, `FixAttemptService.attemptFix`(기존 완성 로직, 수정 없음)를 그대로 위임. 소유권(IDOR)·DLP·BYOK 키 존재 여부는 전부 서비스 내부에서 기존 검증 재사용. `RateLimitFilter`에 `analysis`와 동일한 `fix-attempt`(3분당 1회) 카테고리 추가 — GitHub 파일 조회+LLM 호출+재파싱까지 도는 신규 엔드포인트 중 가장 비용이 크기 때문(최초 값 3회/3분은 이 주석 의도와 실제로 3배 어긋나 있었고, 같은 세션 독립 적대적 검증에서 지적받아 1회/3분으로 수정). 결과(diff+근거)는 인라인 표시+복사 버튼만 제공하고 PR 자동 생성·적용은 하지 않는다(§17.10 범위 그대로 — "완성=코드, 가동=UI 노출"이지 "가동=자동화"가 아님).
 
 **검증.** 신규 생성자 의존성(`FixAttemptService`)이 추가된 `GraphController` 컴파일 깨짐 → `GraphControllerOwnershipTest`(IDOR 회귀 테스트 파일)에 mock 추가로 수정. 로컬 백엔드 실제 재기동으로 `/actuator/health` UP 확인(순환 빈 참조 없음). 프론트는 `WarningPanel.test.tsx`(신규, RTL) 5건으로 타입 게이팅(MISSING_TRANSACTIONAL_DELETE만)·BYOK 게이팅(onFixAttempt 미전달 시 버튼 자체가 없음)·클릭 시 SUCCESS/SKIPPED 결과 표시를 고정 — 이 프로젝트 최초의 React 컴포넌트 테스트(기존 1건은 순수 로직 유틸 테스트였음). **한계 명시**: 자기 레포("codeprint") 실 데이터엔 현재 MISSING_TRANSACTIONAL_DELETE 경고가 없어(이미 수정된 상태) 실제 LLM 왕복까지 포함한 라이브 클릭 검증은 하지 못했다 — 컴포넌트 테스트와 `FixAttemptServiceTest`(백엔드, 기존 8건 green)가 대신 커버.
+
+**독립 적대적 검증(8각도 병렬 에이전트, 2026-08-29 같은 세션) — CONFIRMED 2건·PLAUSIBLE 3건 발견, 전부 같은 PR에서 수정.**
+- **CONFIRMED — `fixState` 배열 인덱스 키잉 오류**(3개 각도가 독립적으로 발견): `WarningPanel.tsx`의 항목별 자동수정 결과 상태가 그룹 내 배열 인덱스로 키잉돼 있어, 억제(✕)로 같은 그룹의 다른 항목이 사라지면 인덱스가 밀리면서 결과가 엉뚱한 경고 행에 표시될 수 있었음 — `w.nodeIds[0]`(안정적 노드 식별자) 키로 수정.
+- **CONFIRMED — `fix-attempt` 레이트리밋이 자기 주석과 3배 어긋남**: 코드가 3분당 3회인데 바로 위 주석과 이 문서 원문 모두 "analysis(3분당 1회)에 준하는"이라고 서술 — 실제로는 GitHub 조회+LLM 호출까지 도는 가장 비용 큰 엔드포인트를 의도보다 3배 느슨하게 열어두고 있었음. 1회/3분으로 수정 + `RateLimitFilterTest`에 회귀 테스트 추가.
+- **PLAUSIBLE — 자동수정 실패 시 에러 원인이 항상 같은 일반 문구로 뭉개짐**: 429(레이트리밋)·DLP 차단·BYOK 키 무효 등 서로 다른 원인이 전부 "자동수정 시도 중 오류가 발생했습니다"로만 보여, 레이트리밋에 걸린 사용자가 원인을 모른 채 즉시 재시도해 같은 제한에 다시 걸리기 쉬웠음 — `axios.isAxiosError`로 서버 응답 본문(`error`/`message`)을 최선노력으로 노출하도록 수정.
+- **PLAUSIBLE — 클립보드 복사 실패가 무음으로 삼켜짐**: 비보안 컨텍스트·권한 거부 시 "복사" 버튼을 눌러도 아무 신호가 없어 사용자가 복사 성공으로 착각할 수 있었음 — 실패 시 "복사 실패"로 버튼 라벨·색이 바뀌도록 수정.
+- **PLAUSIBLE(기록만, 미수정) — 지원 룰 상수 이중 선언**: 프론트 `FIX_ATTEMPT_SUPPORTED_TYPE`이 백엔드 `SUPPORTED_RULE_TYPE`을 컴파일 타임 연결 없이 문자열로 재정의 — 이미 상호 참조 주석이 있고, 이 코드베이스에서 프론트 `WARNING_META`가 백엔드 룰 타입 문자열 전체를 같은 방식으로 이미 재정의하고 있는 기존 패턴과 일관돼 이번 PR만의 새 안티패턴은 아니라고 판단해 이번엔 손대지 않음.
+- **PLAUSIBLE(기록만, 범위 밖)** — LLM 호출이 Tomcat 요청 스레드에서 동기 블로킹으로 실행됨: `FixAttemptService`(#764) 자체의 기존 설계이고 이번 PR은 그걸 처음 배선만 하는 것이라 범위 밖으로 판단 — 비동기 전환은 반환 형태(폴링/웹소켓 등) 재설계가 필요한 별도 작업으로 후속 검토.
 
 ---
 
