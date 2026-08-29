@@ -21,6 +21,11 @@
 
 **검증.** `GraphBuilderTest` 4건(setter 2개 발화·1개 미발화·비-ApplicationService 파일 제외·존재 안 하는 필드명 오탐 방지) + `GraphWarningServiceTest` 2건(메타 존재/부재). 백엔드 전체 테스트 green, `analyzeLocal` 자기 레포 재실행 결과 새 경고 0건(회귀 없음, 발화 사례도 없음 — 우리 자신의 ApplicationService들은 현재 이 패턴에 안 걸림). 프론트 `WARNING_META`+ko/en `workspace.json`에 라벨/설명 추가하며 룰 총계(20→21종) 참조 문구도 함께 갱신(landing.json 포함, 스테일 카운트 재발 방지).
 
+**독립 적대적 검증(8각도 병렬 에이전트) — CONFIRMED 6건, 전부 같은 PR(#769)에서 수정.** 가장 중요한 발견은 Angle G(altitude/정밀도 리스크 각도)가 **이 저장소 자신의 코드로 오탐 가능성을 실증**한 것이다.
+- **핵심 발견 — 위 "검증" 문단의 '자기 레포 0건'이 '깨끗해서'가 아니라 '거의 안 봐서'였다.** `isApplicationServiceFile`이 파일명 리터럴 접미사(`*ApplicationService.java`)에만 반응해, 이 저장소 `application/` 하위 64개 파일 중 9개(14%)만 스캔 대상이었다 — `ProjectCommandService.java`·`NotificationService.java` 등 86%는 존재 자체를 몰랐다. 게다가 스캔 대상에 들어간다면(가정) `ProjectCommandService.setGateSettings`(조건 분기 없이 파라미터 2개를 그대로 엔티티에 반영하는 평범한 CRUD 업데이트)가 **정확히 이 규칙과 일치해 오탐했을 것**임을 코드로 확인 — CROSS_CONTEXT_IMPORT·DOMAIN_IMPORTS_INFRA에서 이미 겪은 "recall 0을 정밀도로 착각"하는 함정과 동일 패턴이 새로 재발할 뻔했다.
+- **판단 — 규칙 로직 자체(파일명 게이팅·setter 2개 임계값)는 이번 라운드에서 안 바꿨다.** 근본 수정(조건분기 신호 요구, 디렉터리 별칭 인식)은 새 파싱 데이터가 필요해 범위가 커진다. 대신 **정직성으로 대응**: ko/en `workspace.json`의 `howItWorks.warningGuide.DOMAIN_LOGIC_LEAK.limitation`에 "다른 룰과 달리 판단 기반이라 오탐 여지가 크다" + "조건 분기 없는 단순 매핑도 걸릴 수 있다" + "파일명 컨벤션 밖은 감지 안 됨" + "정밀도 감사 전"을 명시적으로 적어, 이 룰이 나머지 20개와 신뢰도가 다르다는 걸 화면에서부터 드러냈다. §0.2-3 "신뢰 없는 성장 금지" 원칙에 따라 근본 정밀도 개선은 실사용 데이터(`fp_reports`) 축적 후 별도 세션으로 미룬다.
+- **CONFIRMED 버그 5건**: ① `entities.get(0)`이 다중 엔티티 누출 시 나머지를 과소보고(2개 각도 독립 발견) → 전체 join으로 수정 + 회귀 테스트 추가 ② `HashSet` 순서 비결정성 → `TreeSet`으로 수정 ③ `entityColumnsByClassName`/`entityClassToColumns`가 같은 메서드 안에서 동일 로직 중복 계산(3개 각도 독립 발견) → 하나로 통합 ④ 신규 함수 `decapitalize`에 §6 필수 주석 누락 → 추가 ⑤ `/proof` 페이지 `howItWorks.warningGuide`와 README·docs 다수 파일의 "20종" 표기가 이 PR의 "21종" 갱신과 안 맞음(과거 releases.ts에서 겪은 것과 동일한 카운트 드리프트) → 전부 동기화, `releases.ts`에 CLAUDE.md §8 요구 Changelog 항목도 추가(§8 요구사항 자체가 PR #768 리컨실러 버튼 때 이미 한 번 누락됐던 걸 이번에 소급 발견해 함께 기록, v0.161.0).
+
 ---
 
 ## SERVICE_CALL_CHAIN "변수 조합 URL" ③ — Spring `@Value`+`application.yml` 조인 완료 (2026-08-02, codeprint_158)

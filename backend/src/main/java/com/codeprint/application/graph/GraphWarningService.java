@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -1526,13 +1527,17 @@ public class GraphWarningService {
             Object raw = meta.get("domainLogicLeakEntities");
             if (!(raw instanceof List<?> entities) || entities.isEmpty()) continue;
 
+            // 한 함수가 엔티티 여러 개에서 동시에 누출을 일으킬 수 있어(예: order·payment 둘 다) 전부 나열 —
+            // 예전엔 entities.get(0)만 써서 나머지가 조용히 누락됐음(적대적 검증 지적, GraphBuilder가 TreeSet으로
+            // 정렬해 반환하므로 이 join 결과도 실행마다 안정적)
+            String entityList = entities.stream().map(String::valueOf).collect(Collectors.joining(", "));
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("type", "DOMAIN_LOGIC_LEAK");
             w.put("severity", "MEDIUM");
             w.put("nodeIds", List.of(n.getId().toString()));
             w.put("edgeIds", List.of());
-            w.put("message", n.getName() + ": " + entities.get(0) + "의 필드를 여러 개 직접 수정 (도메인 메서드 위임 후보)."
-                    + " 수정: 이 필드 조합을 " + entities.get(0) + "의 도메인 메서드로 옮겨 여기선 호출만 하세요.");
+            w.put("message", n.getName() + ": " + entityList + "의 필드를 여러 개 직접 수정 (도메인 메서드 위임 후보)."
+                    + " 수정: 이 필드 조합을 " + entityList + "의 도메인 메서드로 옮겨 여기선 호출만 하세요.");
             warnings.add(w);
         }
         return warnings;

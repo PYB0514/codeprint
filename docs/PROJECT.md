@@ -31,7 +31,7 @@
 - **ORM**: Spring Data JPA (Hibernate)
 - **DB**: PostgreSQL
 - **인증**: Spring Security + OAuth2 (GitHub OAuth)
-- **코드 분석 엔진**: tree-sitter AST 기반 정적 분석기(정규식 폴백 유지) — Java·Kotlin·TypeScript·JavaScript·Python·Go·Rust·C·C++·C#·PHP·Ruby·Swift 13개 언어 + Prisma 스키마 + docker-compose.yml(Kotlin은 정규식 전용, 나머지 AST). 경고 감지기 20종(HIGH 11·MEDIUM 7·LOW 2, 2026-07-26 재확인 — 상세는 [`docs/FEATURES.md`](FEATURES.md) 참조).
+- **코드 분석 엔진**: tree-sitter AST 기반 정적 분석기(정규식 폴백 유지) — Java·Kotlin·TypeScript·JavaScript·Python·Go·Rust·C·C++·C#·PHP·Ruby·Swift 13개 언어 + Prisma 스키마 + docker-compose.yml(Kotlin은 정규식 전용, 나머지 AST). 경고 감지기 21종(HIGH 11·MEDIUM 8·LOW 2, 2026-08-29 DOMAIN_LOGIC_LEAK 신설 반영 — 상세는 [`docs/FEATURES.md`](FEATURES.md) 참조).
 - **비동기 처리**: Spring @Async + WebSocket (분석 진행률 실시간 푸시)
 - **결제**: 토스페이먼츠 (테스트 키 있음, 라이브 키는 사업자 등록 필요)
 

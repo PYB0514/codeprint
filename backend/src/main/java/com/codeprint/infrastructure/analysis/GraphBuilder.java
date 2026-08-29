@@ -18,6 +18,7 @@ import java.util.UUID;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.TreeSet;
 
 @Component
 @RequiredArgsConstructor
@@ -85,8 +86,8 @@ public class GraphBuilder {
         // 함수명 → 노드ID (파일 경로 포함: "filePath::funcName" → nodeId)
         Map<String, UUID> funcNodeIds = new HashMap<>();
 
-        // 엔티티 클래스명 → 칼럼 목록 — DOMAIN_LOGIC_LEAK 판정에 FUNCTION 노드 생성 시점부터 필요해 이른 시점에 미리 구축
-        // (아래 DB_TABLE 절의 entityClassToColumns와 목적은 겹치나 필요 시점이 달라 별도 유지, 계산 자체는 파일 수만큼 O(n)이라 무시 가능)
+        // 엔티티 클래스명 → 칼럼 목록 — DOMAIN_LOGIC_LEAK 판정에 FUNCTION 노드 생성 시점부터 필요해 이른 시점에 구축.
+        // 아래 DB_TABLE 절도 같은 인덱스가 필요해 이 맵을 그대로 재사용한다(적대적 검증에서 중복 재계산 지적받아 통합).
         Map<String, List<ColumnInfo>> entityColumnsByClassName = new HashMap<>();
         for (ParsedFile pf : parsedFiles) {
             if (!pf.entityColumns().isEmpty()) {
@@ -435,16 +436,9 @@ public class GraphBuilder {
         // DB_TABLE 노드 생성 + Repository → DB_TABLE 엣지 생성
         // 엔티티 클래스명 → DB_TABLE 노드 ID 인덱스
         Map<String, UUID> entityClassToTableNodeId = new HashMap<>();
-        // 엔티티 클래스명 → 칼럼 목록 인덱스 (DB_TABLE 노드 메타데이터용)
-        Map<String, List<ColumnInfo>> entityClassToColumns = new HashMap<>();
-
-        for (ParsedFile pf : parsedFiles) {
-            // @Entity 파일의 칼럼 정보를 엔티티 클래스명으로 인덱싱
-            if (!pf.entityColumns().isEmpty()) {
-                String className = extractFileNameWithoutExt(pf.filePath());
-                entityClassToColumns.put(className, pf.entityColumns());
-            }
-        }
+        // 칼럼 인덱스는 위에서 이미 구축한 entityColumnsByClassName 재사용(적대적 검증 발견 — 예전엔 여기서
+        // 동일 로직으로 별도 재구축해 두 인덱스가 조용히 갈라질 수 있는 중복이었음)
+        Map<String, List<ColumnInfo>> entityClassToColumns = entityColumnsByClassName;
 
         for (ParsedFile pf : parsedFiles) {
             for (DbTableInfo table : pf.dbTables()) {
@@ -970,11 +964,14 @@ public class GraphBuilder {
             boolean isRealField = columns.stream().anyMatch(c -> c.fieldName().equals(field));
             if (isRealField) setFieldsByEntityType.computeIfAbsent(entityType, k -> new HashSet<>()).add(field);
         }
-        Set<String> leaked = new HashSet<>();
+        // TreeSet(정렬) — HashSet 순서는 해시 버킷의 우연한 산물이라, 이 결과가 그대로 메시지에 인용될 때
+        // (GraphWarningService.detectDomainLogicLeak) 실행마다 달라 보이면 안 됨(적대적 검증 지적)
+        Set<String> leaked = new TreeSet<>();
         setFieldsByEntityType.forEach((entityType, fields) -> { if (fields.size() >= 2) leaked.add(entityType); });
         return leaked;
     }
 
+    // 첫 글자만 소문자로(getter/setter 접미사→필드명 역변환용)
     private String decapitalize(String s) {
         if (s.isEmpty()) return s;
         return Character.toLowerCase(s.charAt(0)) + s.substring(1);

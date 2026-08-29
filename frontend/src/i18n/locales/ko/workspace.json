@@ -147,6 +147,10 @@
       "CIRCULAR_BEAN_DEPENDENCY": {
         "example": "@Component/@Service/@Repository/@Configuration/@RestController 빈 파일 2개 이상이 생성자 필드로 서로를 순환 참조 — Spring ApplicationContext 기동 자체가 실패할 수 있는 신호.",
         "limitation": "Java/Kotlin Spring 프로젝트에서만 활성화(빈 스테레오타입 어노테이션이 하나도 없으면 검사하지 않음). 생성자 파라미터에 @Lazy가 붙은 의존은 Spring이 프록시로 즉시 생성을 미루므로 순환 판정에서 제외됩니다."
+      },
+      "DOMAIN_LOGIC_LEAK": {
+        "example": "ApplicationService 메서드가 같은 엔티티의 필드를 setter로 2개 이상 직접 수정 — 도메인 메서드에 위임하지 않고 로직을 여기서 구현했을 가능성.",
+        "limitation": "다른 룰들과 달리 \"도메인 로직인지\"는 구조적 사실이 아니라 판단이라 오탐 여지가 더 큽니다 — 조건 분기 없이 단순히 값을 옮기는 정상적인 업데이트 메서드도 걸릴 수 있습니다. 파일명이 *ApplicationService.java로 끝나는 클래스에서만 활성화(그 외 네이밍 컨벤션에서는 감지되지 않음). 아직 실사용 정확도 감사 전이라 다른 룰보다 보수적으로 참고하세요."
       }
     }
   },
