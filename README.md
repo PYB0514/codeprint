@@ -36,7 +36,7 @@ Codeprint는 GitHub 레포를 정적 분석해 **파일·함수·DB·API를 노�
 
 🔗 **Live:** [codeprint-iota.vercel.app](https://codeprint-iota.vercel.app) · 🧩 **Claude Code Skill:** [codeprint-plugins](https://github.com/PYB0514/codeprint-plugins) — 이 프로젝트의 분석 엔진을 로컬 CLI로 감싼 무료 Claude Code 스킬(Java/Kotlin/TypeScript/TSX)
 
-📖 **써보지 않고도 전체를 이해하고 싶다면 → [`docs/PRODUCT_GUIDE.md`](docs/PRODUCT_GUIDE.md)** (기능·경고 20종·동작 원리를 한 문서로 정리)
+📖 **써보지 않고도 전체를 이해하고 싶다면 → [`docs/PRODUCT_GUIDE.md`](docs/PRODUCT_GUIDE.md)** (기능·경고 21종·동작 원리를 한 문서로 정리)
 
 ---
 
@@ -62,7 +62,7 @@ Codeprint는 GitHub 레포를 정적 분석해 **파일·함수·DB·API를 노�
 - **관계 추출** — `IMPORT`·`FUNCTION_CALL`·`INSTANTIATION`·`DB_READ/WRITE/CREATE/UPDATE/DELETE`·`API_CALL`·`SERVICE_CALL`·`FIELD_DEPENDENCY` 엣지.
 
 ### 구조 경고 감지 (차별화 포인트)
-정적 분석으로 구조·아키텍처 문제를 선제 감지하고, severity(HIGH/MEDIUM/LOW)로 분류한다. 감지기 20종.
+정적 분석으로 구조·아키텍처 문제를 선제 감지하고, severity(HIGH/MEDIUM/LOW)로 분류한다. 감지기 21종.
 - 순환 의존(`CYCLIC_IMPORT`) · 끊긴 인터페이스 체인(`BROKEN_INTERFACE_CHAIN`) · `@Async` 자기 호출 · DB 레이어 우회
 - DDD 경계 위반(`CROSS_DOMAIN_CALL`·`CROSS_CONTEXT_IMPORT`·`DOMAIN_IMPORTS_INFRA`) · 피처 슬라이스 경계 위반(`CROSS_FEATURE_IMPORT`·`FEATURE_LAYER_VIOLATION`) · 아키텍처 의도 위반(`INTENT_DRIFT`) · Dead Code · High Fan-out
 - **오탐 캘리브레이션** — 실제 오픈소스 레포(Spring PetClinic·gin·ripgrep·bulletproof-react·requests 등 언어별 벤치)로 A/B 측정해 precision을 지속 교정. 무설정(zero-config)으로 프로젝트 구조(DDD·피처 슬라이스)를 자동 감지해 해당 규칙만 발화.
@@ -134,7 +134,7 @@ cd frontend && npm install && npm run dev
 
 ## 🗺 로드맵
 
-- [x] 다국어 분석 엔진(tree-sitter AST) · 구조 경고 감지 20종 + severity · 오탐 캘리브레이션
+- [x] 다국어 분석 엔진(tree-sitter AST) · 구조 경고 감지 21종 + severity · 오탐 캘리브레이션
 - [x] React Flow 시각화 · 흐름 재생 · 도메인/계층 이중 뷰 · 아키텍처 의도 선언 · 버전 보관 정책
 - [x] 실시간 협업 · 커뮤니티 · AI 연동(BYOK) · MCP 컨텍스트 엔드포인트
 - [x] GitHub PR webhook 자동 리뷰 + `codeprint/structure` 머지 게이트 · 결제 · 관리자 대시보드
@@ -148,7 +148,7 @@ cd frontend && npm install && npm run dev
 
 | 플랜 | 내용 |
 |---|---|
-| **Free** | 개인 사용은 사실상 전 기능 무료 — 공개 프로젝트 무제한(비공개는 6개까지) · 그래프 시각화 · 구조 경고 20종 · 커뮤니티 · AI 컨텍스트 내보내기(본인 API 키, BYOK) |
+| **Free** | 개인 사용은 사실상 전 기능 무료 — 공개 프로젝트 무제한(비공개는 6개까지) · 그래프 시각화 · 구조 경고 21종 · 커뮤니티 · AI 컨텍스트 내보내기(본인 API 키, BYOK) |
 | **Pro · Desktop** | 좌석당 4,900원(현재 1회 결제 — 월 정기결제는 도입 준비 중) — 팀 좌석제(토스페이먼츠) + 데스크탑 라이선스(출시 예정). 개인 결제는 임시 중단(재개 예정) |
 
 > 분석·시각화·게이트는 무료로 배포 깔때기 역할을 하고, 과금은 팀/조직 단위와 데스크탑 라이선스에 둔다.

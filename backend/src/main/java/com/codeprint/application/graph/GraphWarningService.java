@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -79,6 +80,9 @@ public class GraphWarningService {
         warnings.addAll(detectServiceCallChain(nodes, edges));
         // Spring 순환 빈 참조 — 자체 게이트(beanStereotype 메타 존재, 즉 @Component류 어노테이션 파일 존재)로 해당 구조만 발화
         warnings.addAll(detectCircularBeanDependency(nodes, edges));
+        // Application Service 도메인 로직 누출 후보 — 자체 게이트(GraphBuilder가 계산한 domainLogicLeakEntities
+        // 메타 존재, 즉 ApplicationService.java+@Entity 둘 다 있는 구조)로 해당 프로젝트만 발화
+        warnings.addAll(detectDomainLogicLeak(nodes));
         // 사용자가 선언한 의도 아키텍처와 실제 의존을 대조 (컨벤션 무관 — 비-DDD 프로젝트도 적용)
         warnings.addAll(detectIntentDrift(nodes, edges, intent));
         // 노드 위치 조회용 인덱스 — 경고에 발생 파일 경로를 부여하기 위함
@@ -1506,6 +1510,34 @@ public class GraphWarningService {
             w.put("message", "@Convert 컨버터 감지: " + n.getName()
                     + " — 기존 평문 데이터에 대한 Flyway 마이그레이션이 필요합니다."
                     + " 수정: 기존 행을 새 형식으로 변환하는 V{N}__migrate_{table}.sql 을 작성하세요.");
+            warnings.add(w);
+        }
+        return warnings;
+    }
+
+    // Application Service가 같은 엔티티의 setter를 2개 이상 직접 호출(GraphBuilder.detectSetterLeakEntities가
+    // 판정한 사실) — 도메인 메서드에 위임하지 않고 필드를 여러 개 직접 조작한다는 구조적 신호. 다른 15개 룰과
+    // 달리 "도메인 로직인지"는 구조적 사실이 아니라 판단이라 MEDIUM+opt-out 전제(§14.3 정밀도 리스크 명시).
+    private List<Map<String, Object>> detectDomainLogicLeak(List<Node> nodes) {
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        for (Node n : nodes) {
+            if (n.getType() != NodeType.FUNCTION) continue;
+            Map<String, Object> meta = n.getMetadata();
+            if (meta == null) continue;
+            Object raw = meta.get("domainLogicLeakEntities");
+            if (!(raw instanceof List<?> entities) || entities.isEmpty()) continue;
+
+            // 한 함수가 엔티티 여러 개에서 동시에 누출을 일으킬 수 있어(예: order·payment 둘 다) 전부 나열 —
+            // 예전엔 entities.get(0)만 써서 나머지가 조용히 누락됐음(적대적 검증 지적, GraphBuilder가 TreeSet으로
+            // 정렬해 반환하므로 이 join 결과도 실행마다 안정적)
+            String entityList = entities.stream().map(String::valueOf).collect(Collectors.joining(", "));
+            Map<String, Object> w = new LinkedHashMap<>();
+            w.put("type", "DOMAIN_LOGIC_LEAK");
+            w.put("severity", "MEDIUM");
+            w.put("nodeIds", List.of(n.getId().toString()));
+            w.put("edgeIds", List.of());
+            w.put("message", n.getName() + ": " + entityList + "의 필드를 여러 개 직접 수정 (도메인 메서드 위임 후보)."
+                    + " 수정: 이 필드 조합을 " + entityList + "의 도메인 메서드로 옮겨 여기선 호출만 하세요.");
             warnings.add(w);
         }
         return warnings;

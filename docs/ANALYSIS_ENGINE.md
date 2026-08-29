@@ -58,6 +58,7 @@ GitHub URL → RepoCloner(shallow clone) → SourceFileWalker(최대 500파일 �
 | ★LAYERED_BYPASS | MEDIUM | Service 존재하는데 Controller가 Repository 직접 IMPORT | 비-DDD(레이어드) 프로젝트 한정 |
 | ★SHARED_DATABASE_ACCESS | MEDIUM | 모노레포 내 서로 다른 서비스 2개 이상이 같은 DB 테이블 접근 | MSA 경계 축, 테스트 코드의 통합테스트성 접근 제외 |
 | ★SERVICE_CALL_CHAIN | MEDIUM | 서비스 간 동기 호출(SERVICE_CALL 엣지)이 2홉 이상 연쇄 | distributed monolith 신호, WebClient/RestTemplate/FeignClient/requests/axios/net-http 등 |
+| ★DOMAIN_LOGIC_LEAK | MEDIUM | ApplicationService가 같은 엔티티의 setter를 2개 이상 직접 호출 | *ApplicationService.java 파일명 한정, 다른 룰과 달리 판단 기반이라 정밀도 감사 전(2026-08-29 신설) |
 | DEAD_CODE | LOW | FUNCTION_CALL 인바운드 0인 함수 | 진입점/프레임워크/JPA Converter/도메인 인터페이스 디스패치 제외(C-16) |
 | HIGH_FAN_OUT | LOW | 한 함수의 FUNCTION_CALL 아웃바운드 과다 | 오케스트레이터·DTO 조립은 정상, 참고용 |
 

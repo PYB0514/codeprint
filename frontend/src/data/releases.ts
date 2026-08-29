@@ -9,6 +9,24 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.162.0',
+    date: '2026-08-29',
+    title: '도메인 로직 누출 후보 감지 — DOMAIN_LOGIC_LEAK 신규 경고',
+    type: 'feature',
+    items: [
+      { category: '신규', desc: 'Application Service가 같은 엔티티의 필드를 여러 개 직접 수정하면(도메인 메서드에 위임하지 않고 로직을 여기서 구현했을 가능성) 새 MEDIUM 경고로 알려줍니다. 구조 경고 감지기가 21종으로 늘었습니다. 다른 룰보다 판단 성격이 강해 오탐 가능성이 있으니 참고용으로 활용하세요.' },
+    ],
+  },
+  {
+    version: 'v0.161.0',
+    date: '2026-08-05',
+    title: '경고에서 바로 자동수정 시도 — 리컨실러 수동 트리거(소급 기록)',
+    type: 'feature',
+    items: [
+      { category: '신규', desc: '@Transactional 누락 경고에 "자동수정 시도" 버튼이 추가됐습니다(BYOK 키 등록 시에만 노출). 등록한 AI 키로 수정을 시도해 diff와 근거를 보여주며, PR 생성이나 자동 적용은 하지 않습니다 — 최종 확인은 직접 하세요.' },
+    ],
+  },
+  {
     version: 'v0.160.0',
     date: '2026-08-04',
     title: 'AI 내보내기 차단 토글 — 프로젝트 단위로 코드 외부 전송을 원천 차단',

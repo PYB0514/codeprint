@@ -39,7 +39,7 @@
 - **흐름 재생**: 함수를 클릭하면 그 함수를 호출한 곳(상류)과 그 함수가 호출하는 곳(하류)을 API 엔드포인트나 DB 접근까지 단계별로 재생 — 분기가 여러 개면 선택해서 따라갈 수 있다.
 - **국소분석**: 프로젝트 설정에서 특정 하위 경로만 분석하도록 좁힐 수 있다. 모노레포처럼 정말 보고 싶은 디렉터리가 500파일 상한 때문에 잘려나가는 경우에 쓴다.
 
-## 5. 20종 구조 경고 — 무엇을, 왜 잡는가
+## 5. 21종 구조 경고 — 무엇을, 왜 잡는가
 
 경고는 세 축으로 나뉜다: **①의존 방향**(위쪽 계층이 아래쪽만 알아야 하는데 거꾸로 된 경우) **②경계 침범**(모듈/도메인/기능 폴더가 서로를 몰라야 하는데 직접 참조하는 경우) **③런타임에 실제로 깨지는 코드**(정적으로 보이지만 실행하면 버그가 되는 패턴). 아래 설명은 앱이 사용자에게 실제로 보여주는 문구를 그대로 옮긴 것이다(단일 소스: `frontend/src/i18n/locales/ko/workspace.json`).
 
@@ -89,7 +89,7 @@
 
 ## 8. 기술적으로는 어떻게 동작하는가 (요약)
 
-GitHub URL을 받으면 shallow clone 후, 언어별 tree-sitter AST 파서(정규식은 안전망)로 함수·import·DB 접근·API 엔드포인트 등을 추출해 그래프로 조립하고, 순수 함수 형태의 감지기가 그 그래프만으로 20종 경고를 계산한다. Java/Python/TypeScript·JavaScript/Go/Rust/C#/Ruby/PHP/C/C++/Swift/Kotlin 13개 언어를 지원한다. 백엔드는 Java/Spring Boot(DDD), 프론트는 React/TypeScript다. 더 자세한 내용은 [`ARCHITECTURE.md`](ARCHITECTURE.md)·[`ANALYSIS_ENGINE.md`](ANALYSIS_ENGINE.md)·[`PROJECT.md`](PROJECT.md) 참조.
+GitHub URL을 받으면 shallow clone 후, 언어별 tree-sitter AST 파서(정규식은 안전망)로 함수·import·DB 접근·API 엔드포인트 등을 추출해 그래프로 조립하고, 순수 함수 형태의 감지기가 그 그래프만으로 21종 경고를 계산한다. Java/Python/TypeScript·JavaScript/Go/Rust/C#/Ruby/PHP/C/C++/Swift/Kotlin 13개 언어를 지원한다. 백엔드는 Java/Spring Boot(DDD), 프론트는 React/TypeScript다. 더 자세한 내용은 [`ARCHITECTURE.md`](ARCHITECTURE.md)·[`ANALYSIS_ENGINE.md`](ANALYSIS_ENGINE.md)·[`PROJECT.md`](PROJECT.md) 참조.
 
 ## 9. 더 알아보기
 

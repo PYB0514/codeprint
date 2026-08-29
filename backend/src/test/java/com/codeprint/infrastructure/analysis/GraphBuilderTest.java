@@ -681,6 +681,87 @@ class GraphBuilderTest {
     }
 
     @Test
+    @DisplayName("DOMAIN_LOGIC_LEAK — ApplicationService가 같은 엔티티의 setter를 2개 호출하면 메타데이터가 붙는다")
+    void domainLogicLeak_twoSettersOnSameEntity_metadataSet() {
+        ParsedFile entity = parsedFileWithEntityColumns("domain/order/Order.java", "Java", List.of(
+                new ColumnInfo("status", "status", "String", false),
+                new ColumnInfo("confirmedAt", "confirmed_at", "Instant", false)));
+        ParsedFile appService = parsedFileWithCalls("src/main/java/com/example/application/order/OrderApplicationService.java", "Java",
+                List.of("confirmOrder"),
+                Map.of("confirmOrder", List.of("Order::setStatus", "Order::setConfirmedAt")));
+
+        graphBuilder.build(projectId, analysisId, List.of(entity, appService));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+        Node funcNode = nodeCaptor.getAllValues().stream()
+                .filter(n -> n.getType() == NodeType.FUNCTION && "confirmOrder".equals(n.getName()))
+                .findFirst().orElseThrow();
+
+        assertThat((List<String>) funcNode.getMetadata().get("domainLogicLeakEntities")).containsExactly("Order");
+    }
+
+    @Test
+    @DisplayName("DOMAIN_LOGIC_LEAK — setter 호출이 1개뿐이면 메타데이터가 안 붙는다")
+    void domainLogicLeak_singleSetter_noMetadata() {
+        ParsedFile entity = parsedFileWithEntityColumns("domain/order/Order.java", "Java",
+                List.of(new ColumnInfo("status", "status", "String", false)));
+        ParsedFile appService = parsedFileWithCalls("src/main/java/com/example/application/order/OrderApplicationService.java", "Java",
+                List.of("confirmOrder"), Map.of("confirmOrder", List.of("Order::setStatus")));
+
+        graphBuilder.build(projectId, analysisId, List.of(entity, appService));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+        Node funcNode = nodeCaptor.getAllValues().stream()
+                .filter(n -> n.getType() == NodeType.FUNCTION && "confirmOrder".equals(n.getName()))
+                .findFirst().orElseThrow();
+
+        assertThat(funcNode.getMetadata()).doesNotContainKey("domainLogicLeakEntities");
+    }
+
+    @Test
+    @DisplayName("DOMAIN_LOGIC_LEAK — ApplicationService가 아닌 파일(예: 도메인 메서드 자체)은 대상에서 제외된다")
+    void domainLogicLeak_nonApplicationServiceFile_notFlagged() {
+        ParsedFile entity = parsedFileWithEntityColumns("domain/order/Order.java", "Java", List.of(
+                new ColumnInfo("status", "status", "String", false),
+                new ColumnInfo("confirmedAt", "confirmed_at", "Instant", false)));
+        // 도메인 메서드 자신이 자기 필드의 setter를 2개 부르는 건 정상(위임 대상 그 자체) — 오탐 아니어야 함
+        ParsedFile domainMethod = parsedFileWithCalls("domain/order/OrderConfirmHelper.java", "Java",
+                List.of("confirm"), Map.of("confirm", List.of("Order::setStatus", "Order::setConfirmedAt")));
+
+        graphBuilder.build(projectId, analysisId, List.of(entity, domainMethod));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+        Node funcNode = nodeCaptor.getAllValues().stream()
+                .filter(n -> n.getType() == NodeType.FUNCTION && "confirm".equals(n.getName()))
+                .findFirst().orElseThrow();
+
+        assertThat(funcNode.getMetadata()).doesNotContainKey("domainLogicLeakEntities");
+    }
+
+    @Test
+    @DisplayName("DOMAIN_LOGIC_LEAK — 알려진 엔티티 필드와 이름이 안 맞는 setter 호출 2개는 오탐으로 잡지 않는다")
+    void domainLogicLeak_unrelatedSetterNames_notFlagged() {
+        ParsedFile entity = parsedFileWithEntityColumns("domain/order/Order.java", "Java",
+                List.of(new ColumnInfo("status", "status", "String", false)));
+        // Order에 없는 필드(setFoo/setBar)를 부르는 건 entityColumns에 없는 이름이라 실제 필드 매칭 실패해야 함
+        ParsedFile appService = parsedFileWithCalls("src/main/java/com/example/application/order/OrderApplicationService.java", "Java",
+                List.of("confirmOrder"), Map.of("confirmOrder", List.of("Order::setFoo", "Order::setBar")));
+
+        graphBuilder.build(projectId, analysisId, List.of(entity, appService));
+
+        ArgumentCaptor<Node> nodeCaptor = ArgumentCaptor.forClass(Node.class);
+        verify(graphRepository, atLeastOnce()).saveNode(nodeCaptor.capture());
+        Node funcNode = nodeCaptor.getAllValues().stream()
+                .filter(n -> n.getType() == NodeType.FUNCTION && "confirmOrder".equals(n.getName()))
+                .findFirst().orElseThrow();
+
+        assertThat(funcNode.getMetadata()).doesNotContainKey("domainLogicLeakEntities");
+    }
+
+    @Test
     @DisplayName("ParsedFile.functionColumns()의 컬럼이 FUNCTION 노드 메타데이터에 시작/끝으로 저장된다")
     void FUNCTION_노드_컬럼_메타데이터_저장() {
         ParsedFile file = new ParsedFile("src/UserService.java", "Java",

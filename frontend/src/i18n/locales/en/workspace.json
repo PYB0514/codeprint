@@ -147,6 +147,10 @@
       "CIRCULAR_BEAN_DEPENDENCY": {
         "example": "Two or more @Component/@Service/@Repository/@Configuration/@RestController bean files reference each other through constructor fields — a signal that Spring's ApplicationContext startup itself can fail.",
         "limitation": "Only active for Java/Kotlin Spring projects (skipped entirely if no bean stereotype annotation is present). A dependency whose constructor parameter is marked @Lazy is excluded from cycle detection, since Spring defers its full construction via a proxy."
+      },
+      "DOMAIN_LOGIC_LEAK": {
+        "example": "An ApplicationService method directly mutates two or more fields of the same entity via setters — it may be implementing logic here instead of delegating to a domain method.",
+        "limitation": "Unlike the other rules, whether something \"is domain logic\" is a judgment call, not a structural fact — so this one has more false-positive risk. A plain update method that just copies values through, with no conditional branching, can still trigger it. Only active for classes whose filename ends in *ApplicationService.java (other naming conventions go undetected). No precision audit against real-world repos yet, so treat this one more conservatively than the others."
       }
     }
   },
@@ -248,7 +252,7 @@
     "subtitle": "The claims we share with the community, verified directly against the code — all checkable in the open-source repo.",
     "section1": {
       "heading": "1. Detection Coverage",
-      "detectorCount": "20 structural violation warning types (19 detector methods)",
+      "detectorCount": "21 structural violation warning types (20 detector methods)",
       "detectorDesc": "Cyclic dependencies, DB layer bypass, DDD boundary violations, domain→infrastructure inversions, and custom architecture rules you can define with an LLM.",
       "languageCount": "11 languages with tree-sitter AST analysis",
       "languageDesc": "Java·Kotlin(regex)·Python·TypeScript/JavaScript·Go·Rust·C#·Ruby·PHP·C·C++·Swift — Prisma and docker-compose are additionally recognized via regex, 15 languages in total."
@@ -598,7 +602,7 @@
       "step2Title": "Try clicking a function node",
       "step2Content": "Clicking a function or DB node plays back the call flow step by step. If there's a branch, you can choose which path to follow.",
       "step3Title": "Structural warnings",
-      "step3Content": "You can check 20 kinds of structural warnings here, like cyclic dependencies and layer violations.",
+      "step3Content": "You can check 21 kinds of structural warnings here, like cyclic dependencies and layer violations.",
       "step4Title": "Analyze your own repo too",
       "step4Content": "Log in with GitHub to analyze your own repo the same way, and share graphs like this one."
     }
@@ -832,7 +836,8 @@
       "INTENT_DRIFT": { "label": "Declared Structure Rule Violation", "desc": "An import that violates a prohibition rule you declared yourself in \"Architecture Intent\" — code that has drifted from the structure rules you set." },
       "SHARED_DATABASE_ACCESS": { "label": "Shared Database Antipattern", "desc": "Different services in a monorepo access the same DB table — consolidate table ownership into one service and have others query it through an API." },
       "SERVICE_CALL_CHAIN": { "label": "Cross-Service Synchronous Call Chain", "desc": "Synchronous service-to-service calls (WebClient/RestTemplate, etc.) chain 2+ hops — a distributed-monolith signal. Break the middle of the chain with an async event, or move data composition to a gateway layer." },
-      "CIRCULAR_BEAN_DEPENDENCY": { "label": "Circular Bean Dependency", "desc": "Spring beans reference each other in a cycle through constructor fields — this can cause the app to fail on startup. Mark one constructor parameter with @Lazy, or break the cycle by extracting the dependency into an interface or event." }
+      "CIRCULAR_BEAN_DEPENDENCY": { "label": "Circular Bean Dependency", "desc": "Spring beans reference each other in a cycle through constructor fields — this can cause the app to fail on startup. Mark one constructor parameter with @Lazy, or break the cycle by extracting the dependency into an interface or event." },
+      "DOMAIN_LOGIC_LEAK": { "label": "Domain Logic Leak Candidate", "desc": "An Application Service directly mutates two or more fields of the same entity — it may be implementing logic here instead of delegating to a domain method. Move this field combination into the entity's own domain method and just call it here." }
     },
     "ignoreRulesTitle": "Ignore Rules",
     "noTypeLabel": "All Types",

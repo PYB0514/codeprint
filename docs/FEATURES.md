@@ -99,7 +99,7 @@
 
 Java · Python · TypeScript/JavaScript · Go · Rust · C · C++ · C# · PHP · Ruby · Swift (11개 언어)
 
-## 3. 경고 감지기 20종 (2026-07-26 실제 코드와 재동기화 — 이전 "15종" 이후 5개 신설이 표에 반영 안 돼 있었음)
+## 3. 경고 감지기 21종 (2026-08-29 DOMAIN_LOGIC_LEAK 신설 반영 — 이전 20종에서 갱신)
 
 | 타입 | Severity | 설명 |
 |---|---|---|
@@ -121,6 +121,7 @@ Java · Python · TypeScript/JavaScript · Go · Rust · C · C++ · C# · PHP �
 | LAYERED_BYPASS | MEDIUM | Service 있는데 Controller가 Repository 직접 import(비-DDD) |
 | SHARED_DATABASE_ACCESS | MEDIUM | 모노레포 내 서로 다른 서비스 2개 이상이 같은 DB 테이블 접근(MSA 경계 축) |
 | SERVICE_CALL_CHAIN | MEDIUM | 서비스 간 동기 호출이 2홉 이상 연쇄(distributed monolith 신호) |
+| DOMAIN_LOGIC_LEAK | MEDIUM | ApplicationService가 같은 엔티티의 setter를 2개 이상 직접 호출(도메인 메서드 위임 후보) — 다른 룰과 달리 판단 기반이라 정밀도 리스크 더 큼(감사 전) |
 | DEAD_CODE | LOW | 호출되지 않는 함수(테스트/프레임워크 진입점 등 다수 필터로 오탐 억제) |
 | HIGH_FAN_OUT | LOW | 함수가 7개 초과 대상 호출(단일 책임 위반 가능성, 폴리모픽 머지 제외 처리됨) |
 

@@ -147,6 +147,10 @@
       "CIRCULAR_BEAN_DEPENDENCY": {
         "example": "@Component/@Service/@Repository/@Configuration/@RestController 빈 파일 2개 이상이 생성자 필드로 서로를 순환 참조 — Spring ApplicationContext 기동 자체가 실패할 수 있는 신호.",
         "limitation": "Java/Kotlin Spring 프로젝트에서만 활성화(빈 스테레오타입 어노테이션이 하나도 없으면 검사하지 않음). 생성자 파라미터에 @Lazy가 붙은 의존은 Spring이 프록시로 즉시 생성을 미루므로 순환 판정에서 제외됩니다."
+      },
+      "DOMAIN_LOGIC_LEAK": {
+        "example": "ApplicationService 메서드가 같은 엔티티의 필드를 setter로 2개 이상 직접 수정 — 도메인 메서드에 위임하지 않고 로직을 여기서 구현했을 가능성.",
+        "limitation": "다른 룰들과 달리 \"도메인 로직인지\"는 구조적 사실이 아니라 판단이라 오탐 여지가 더 큽니다 — 조건 분기 없이 단순히 값을 옮기는 정상적인 업데이트 메서드도 걸릴 수 있습니다. 파일명이 *ApplicationService.java로 끝나는 클래스에서만 활성화(그 외 네이밍 컨벤션에서는 감지되지 않음). 아직 실사용 정확도 감사 전이라 다른 룰보다 보수적으로 참고하세요."
       }
     }
   },
@@ -248,7 +252,7 @@
     "subtitle": "커뮤니티에 공유하는 주장을 코드로 직접 검증한 근거 — 전부 오픈소스에서 확인 가능합니다.",
     "section1": {
       "heading": "1. 감지 범위",
-      "detectorCount": "구조 위반 경고 타입 20종(감지 메서드 19개)",
+      "detectorCount": "구조 위반 경고 타입 21종(감지 메서드 20개)",
       "detectorDesc": "순환 의존, DB 계층 우회, DDD 경계 위반, 도메인↔인프라 역방향 의존, 커스텀 아키텍처 규칙(LLM으로 직접 정의 가능) 등.",
       "languageCount": "11개 언어 tree-sitter AST 정밀 분석",
       "languageDesc": "Java·Kotlin(정규식)·Python·TypeScript/JavaScript·Go·Rust·C#·Ruby·PHP·C·C++·Swift — Prisma·docker-compose는 정규식으로 보조 인식, 총 15개 언어."
@@ -598,7 +602,7 @@
       "step2Title": "함수 노드를 클릭해보세요",
       "step2Content": "함수나 DB 노드를 클릭하면 호출 흐름이 단계별로 재생됩니다. 분기가 있으면 경로를 선택할 수도 있어요.",
       "step3Title": "구조 경고",
-      "step3Content": "순환 의존, 레이어 위반 등 20종의 구조 경고를 여기서 확인할 수 있습니다.",
+      "step3Content": "순환 의존, 레이어 위반 등 21종의 구조 경고를 여기서 확인할 수 있습니다.",
       "step4Title": "내 레포도 분석해보세요",
       "step4Content": "GitHub으로 로그인하면 내 레포를 똑같이 분석하고, 이렇게 그래프를 공유할 수 있습니다."
     }
@@ -832,7 +836,8 @@
       "INTENT_DRIFT": { "label": "선언한 구조 규칙 위반", "desc": "\"아키텍처 의도\"에서 직접 선언한 금지 규칙을 어긴 import입니다 — 내가 정한 구조 규칙에서 벗어난 코드입니다." },
       "SHARED_DATABASE_ACCESS": { "label": "공유 데이터베이스 안티패턴", "desc": "모노레포의 서로 다른 서비스가 같은 DB 테이블을 함께 접근합니다 — 테이블 소유권을 한 서비스로 모으고 다른 서비스는 API로 조회하세요." },
       "SERVICE_CALL_CHAIN": { "label": "서비스 간 동기 호출 체인", "desc": "서비스 간 동기 호출(WebClient/RestTemplate 등)이 2홉 이상 연쇄됩니다 — 분산 모놀리스 신호입니다. 체인 중간을 비동기 이벤트로 끊거나 데이터 조합을 게이트웨이 레이어로 옮기세요." },
-      "CIRCULAR_BEAN_DEPENDENCY": { "label": "순환 빈 의존", "desc": "Spring 빈끼리 생성자 필드로 서로를 순환 참조합니다 — 앱 기동 실패로 이어질 수 있습니다. 한쪽 생성자 파라미터에 @Lazy를 붙이거나 의존을 인터페이스·이벤트로 분리해 순환을 끊으세요." }
+      "CIRCULAR_BEAN_DEPENDENCY": { "label": "순환 빈 의존", "desc": "Spring 빈끼리 생성자 필드로 서로를 순환 참조합니다 — 앱 기동 실패로 이어질 수 있습니다. 한쪽 생성자 파라미터에 @Lazy를 붙이거나 의존을 인터페이스·이벤트로 분리해 순환을 끊으세요." },
+      "DOMAIN_LOGIC_LEAK": { "label": "도메인 로직 누출 후보", "desc": "Application Service가 같은 엔티티의 필드를 여러 개 직접 수정합니다 — 도메인 메서드에 위임하지 않고 로직을 여기서 구현했을 수 있습니다. 이 필드 조합을 엔티티의 도메인 메서드로 옮기고 여기선 호출만 하세요." }
     },
     "ignoreRulesTitle": "예외 규칙",
     "noTypeLabel": "모든 타입",
