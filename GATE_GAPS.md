@@ -30,7 +30,7 @@ Codeprint 구조 게이트(`codeprint/structure`)가 **통과(HIGH 0)했는데�
 - **조치**: `gh api repos/.../branches/main/protection` PUT으로 `codeprint/structure`·`Backend Build & Test`·`Frontend Type Check` 3종을 required status check로 등록, `enforce_admins: true`(관리자도 우회 불가), force-push/삭제 금지.
 - **실측 검증**: 의도적 `DOMAIN_IMPORTS_INFRA` 위반을 심은 테스트 PR(#415, 머지 안 함)로 `mergeStateStatus: BLOCKED` + 실제 머지 시도 시 "the base branch policy prohibits the merge" 거부 확인. `--admin` 플래그 없이는 관리자도 못 뚫는 것까지 확인 후 PR 종료·브랜치 삭제.
 - **재발 방지**: 머지 제안 시 필수 출력 형식(CLAUDE.md)에 브랜치 보호 상태 확인 항목 추가 — 매 머지 제안마다 가볍게 재확인.
-- **미해결 잔여**: push 전 로컬 감지(`codeprint` MCP 자가검사)는 `.mcp.json` 서버가 세션에 연결 안 돼 있어 별도로 고장 상태였음(`enabledMcpjsonServers` 설정 추가, 다음 세션에서 재검증 필요). 강제 게이트와 로컬 감지는 대체 관계가 아니라 각자 다른 이유로 필요(전자=팀 보장, 후자=개발자 빠른 피드백) — 사용자 지적으로 이 프레이밍 교정됨.
+- **미해결 잔여 — 해소됨(2026-07-10, 방식 자체가 바뀌어 무의미해짐)**: 당시엔 push 전 로컬 감지가 `codeprint` MCP 자가검사(연결 문제로 고장)에 의존했으나, 2026-07-10 MCP JSON-RPC 서버 자체를 폐기(`decisions/DECISIONS_BACKEND.md`)하고 `./gradlew analyzeLocal`/`exploreLocal` 직접 실행으로 전환하면서 연결 문제라는 실패 모드 자체가 사라짐 — 이번 세션에서도 수십 회 정상 사용 확인. 강제 게이트와 로컬 감지가 각자 다른 이유로 필요하다는 프레이밍은 유효하게 유지.
 
 ### [G-1] DDL 컬럼 타입 ≠ JPA 엔티티 타입 → 부팅 실패 · `[닫힘: 테스트]` (2026-06-30, PR #399 개발 중)
 - **증상**: `content_hash char(64)`(DDL) vs `@Column(length=64) String`(엔티티 → varchar 기대) → Hibernate `validate`가 CHAR≠VARCHAR로 부팅 거부. 구조 게이트는 green(아키텍처 위반 아님)이나 앱이 안 뜸.
