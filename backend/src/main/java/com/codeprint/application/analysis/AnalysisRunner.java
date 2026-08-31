@@ -39,6 +39,7 @@ public class AnalysisRunner {
     @Async
     public void run(UUID analysisId, UUID projectId, String githubRepoUrl, String branch, String githubAccessToken, String ref) {
         Path repoDir = null;
+        UUID graphId = null;
         try {
             // 매 재시도가 각자 자체 트랜잭션(REQUIRED 기본) — outer 트랜잭션 커밋 후 확실히 존재
             AnalysisResult analysis = waitForAnalysis(analysisId);
@@ -63,7 +64,7 @@ public class AnalysisRunner {
             // 변경된 파일만 재파싱하고 안 바뀐 파일은 캐시된 ParsedFile을 재사용(incremental) — 순서 보존(GraphBuilder 결과 불변)
             List<ParsedFile> parsedFiles = cachedParsedFileLoader.load(projectId, repoDir, sourceFiles);
 
-            UUID graphId = graphBuilder.build(projectId, analysisId, parsedFiles, walkResult.totalEligible()).getId();
+            graphId = graphBuilder.build(projectId, analysisId, parsedFiles, walkResult.totalEligible()).getId();
 
             // ref로 명시 요청했으면 그 SHA 자체가 곧 분석된 커밋 — 재조회 불필요. 아니면 기존처럼 분석 완료
             // 시점의 브랜치 최신 커밋 SHA를 조회(약간의 레이스가 있으나 기존 동작 그대로 유지).
@@ -83,9 +84,6 @@ public class AnalysisRunner {
 
             log.info("분석 완료: analysisId={}, files={}", analysisId, parsedFiles.size());
 
-            // 구조 경고를 미리 계산·저장 — 콜드스타트 첫 방문자가 detect() 재계산(수 초)을 겪지 않도록
-            warmUpWarnings(graphId);
-
         } catch (Exception e) {
             log.error("분석 실패: analysisId={}", analysisId, e);
             try {
@@ -104,6 +102,11 @@ public class AnalysisRunner {
             // AnalysisApplicationService.startAnalysis에서 예약한 동시성 슬롯을 실제 작업 완료 시점에 반납
             // (성공/실패 무관 — 점유 구간은 "제출"이 아니라 "이 비동기 작업 전체")
             concurrencyGuard.release();
+        }
+
+        // 슬롯 반납 후 경고 사전계산 — detect() 계산 시간 동안 동시성 슬롯을 붙들지 않도록(실패는 warmUpWarnings가 삼킴)
+        if (graphId != null) {
+            warmUpWarnings(graphId);
         }
     }
 

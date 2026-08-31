@@ -10,21 +10,28 @@
 1. **Redis 등 분산 캐시로 교체** — 재기동에도 캐시 생존. 탈락: 매출 0 상태에서 신규 인프라(월 비용+운영) 도입은 과함. jsonb 컬럼 하나로 같은 효과.
 2. **INTENT_DRIFT를 컬럼에서 분리해 온디맨드 유지**(Context162 §A 초안) — 탈락: `detect()`의 후처리(fingerprint/file/line 부여, ignore 패턴 `removeIf`, 안정 정렬)가 한 덩어리라 분리하려면 파이프라인을 쪼개야 함. intent 변경 시 컬럼을 무효화하는 훅 하나가 훨씬 단순하고, intent 변경은 드묾.
 3. **gatePolicy별로 여러 세트 저장**(안B) — 탈락: DDD/LAYERED 명시 override는 드물고(대부분 AUTO), 저장·조회 로직이 복잡해짐.
-4. **채택** — `graphs.warnings jsonb` 컬럼(nullable)에 `detect(nodes, edges, intent, AUTO)` 결과 전체를 저장. 컬럼 입력은 (nodes, edges, intent)뿐이고 nodes/edges는 그래프별 불변이라, 무효화가 필요한 건 intent 변경 한 곳뿐.
+4. **채택** — `graphs.warnings jsonb` 컬럼(nullable)에 `detect(nodes, edges, intent, AUTO)` 결과 전체를 저장 + `warnings_ruleset_version smallint`에 계산 시점 규칙 버전을 함께 저장.
 
 **결정.**
 - **매핑**: `Node.metadata`와 동일하게 `@JdbcTypeCode(SqlTypes.JSON)` + `List<Map<String,Object>>` 직접 매핑(수동 ObjectMapper 없음). null=미계산(레거시/무효화), `[]`=경고 없음으로 구분.
-- **읽기**(`GraphQueryService.getWarnings`, 기존 `@Cacheable` 유지): gatePolicy가 AUTO일 때만 컬럼 신뢰 → 있으면 그대로 반환, 없으면 계산 후 write-through 저장. DDD/LAYERED 명시 override는 기존대로 온디맨드 계산(컬럼 안 씀·안 만듦).
+- **읽기**(`GraphQueryService.getWarnings`, 기존 `@Cacheable` 유지): gatePolicy가 AUTO일 때만 컬럼 신뢰 → `hasFreshWarnings(RULESET_VERSION)`이 true면 그대로 반환, 아니면(미계산·버전 불일치) 계산 후 write-through 저장. DDD/LAYERED 명시 override는 기존대로 온디맨드 계산(컬럼 안 씀·안 만듦).
 - **write-through 트랜잭션**: `getWarnings`는 클래스 레벨 `@Transactional(readOnly=true)`라 그 안에서 그냥 저장하면 Hibernate FlushMode.MANUAL로 UPDATE가 조용히 누락된다(REQUIRED 전파는 기존 readOnly 플래그를 못 뒤집음). 그래서 저장은 별도 빈 `GraphWarningStore.save`에 `@Transactional(propagation = REQUIRES_NEW)`로 분리 — 같은 빈 메서드였으면 프록시 우회로 이 분리가 무효였을 것이라 별도 빈이 필수.
-- **warm-up**: `AnalysisRunner`가 분석 완료(COMPLETED 저장) 직후 `WarningDetectionPort.detectWarnings(graphId)`를 1회 호출(실패는 로그만, 분석은 이미 완료) → 신규/재분석 그래프는 방문자가 콜드 계산을 아예 안 겪는다. `WarningDetectionPort`는 analysis 도메인 소유 포트(PR 리뷰가 이미 쓰던 것)라 DDD 방향 위반 없음.
-- **무효화**: `ArchitectureIntentService.save/delete`에 `graphWarningStore.invalidateProject(projectId)` 추가(기존 `@CacheEvict("graphWarnings")` 옆). gatePolicy 변경은 컬럼 무효화 불필요 — 컬럼은 AUTO 기준이고 읽기 경로가 `gatePolicy==AUTO` 가드로 걸러냄. 재분석은 새 `graphs` row라 자연히 새 컬럼(null).
+- **warm-up**: `AnalysisRunner`가 분석 완료(COMPLETED 저장) + **동시성 슬롯 반납 후** `WarningDetectionPort.detectWarnings(graphId)`를 1회 호출(실패는 로그만, 분석은 이미 완료). `finally` 밖으로 뺀 건 적대적 검증 지적 반영 — `detect()` 계산 시간(대형 그래프 수 초)만큼 `Semaphore(40)` 슬롯을 붙들지 않게. `WarningDetectionPort`는 analysis 도메인 소유 포트(PR 리뷰가 이미 쓰던 것)라 DDD 방향 위반 없음.
+- **무효화**: intent 변경(`ArchitectureIntentService.save/delete`) → `graphWarningStore.invalidateProject` → `GraphRepository.clearWarnings`(단일 벌크 `UPDATE graphs SET warnings=NULL, warnings_ruleset_version=NULL WHERE project_id=? AND warnings IS NOT NULL` — `clearPinnedSlot`과 동일 `@Modifying` 패턴). 감지 로직 변경 → `GraphWarningService.RULESET_VERSION` 상수를 올리면 읽기 시 버전 불일치로 전 그래프가 자연 재계산(배포 훅 불필요). gatePolicy 변경은 컬럼 무효화 불필요(컬럼은 AUTO 기준, 읽기 가드로 걸러냄). 재분석은 새 `graphs` row라 자연히 새 컬럼(null).
+- **`cacheWarnings`는 `updatedAt`을 안 건드린다** — 파생 캐시 적재이지 콘텐츠 변경이 아니므로(적대적 검증 지적 반영, 버전 목록 정렬이 `updatedAt` 기준이 될 경우 대비).
+
+**적대적 검증(inline, high) — CONFIRMED 2·PLAUSIBLE 2, 전부 같은 PR에서 수정.**
+- **CONFIRMED(핵심) — 감지 로직 변경 시 영속 경고가 무기한 stale.** 초안은 "컬럼 입력은 (nodes, edges, intent)뿐"이라 봤으나, `detect()`의 감지기 목록·규칙·임계값(DOMAIN_LOGIC_LEAK 신설, 패턴 C~F 수정 등 이 레포에서 빈번)이 바뀌면 그것도 입력이다. PR 전엔 Caffeine이 재기동마다 비워져 배포 후 10분 안에 전부 갱신됐는데, 컬럼은 배포를 넘어 살아남아 재분석·intent 변경이 없는 갤러리/유휴 프로젝트가 옛 로직 결과를 계속 서빙. → `RULESET_VERSION` 상수 + `warnings_ruleset_version` 컬럼으로 해결(불일치 시 재계산).
+- **PLAUSIBLE — warm-up이 동시성 슬롯을 detect() 시간만큼 더 붙듦.** → `finally`(슬롯 반납) 뒤로 이동.
+- **PLAUSIBLE — `invalidateProject`가 N개 엔티티 로드 + N회 save + 매번 `updatedAt` bump.** → 단일 벌크 `clearWarnings` 쿼리 + `cacheWarnings`에서 `updatedAt` 갱신 제거.
+- **CONFIRMED(경미) — 주석 "20종" vs 실제 21종**(DOMAIN_LOGIC_LEAK 반영). → 카운트를 주석에서 제거.
 
 **검증.**
-- `GraphWarningStoreIntegrationTest`(`@DataJpaTest` + 실 Postgres + `ddl-auto=validate`): V69 컬럼과 엔티티 매핑 일치 + jsonb 왕복에서 숫자(`line:42`가 문자열로 안 바뀜)·중첩 리스트(`nodeIds`) 보존 + null/`[]` 구분 확인.
-- 단위 테스트: `getWarnings`가 컬럼 있으면 `detect` 생략, 없으면 계산 후 `save`, DDD override면 컬럼 무시(`GraphQueryServiceTest` +4건). `GraphWarningStore`의 null vs `[]` 시맨틱·`invalidateProject`가 이미 null인 그래프는 건너뜀(+4건). `AnalysisRunner`가 완료 후 `detectWarnings(graphId)` 호출(+1 assert).
-- 로컬 백엔드 실제 재기동 `/actuator/health` UP — 신규 빈 `GraphWarningStore` 3곳 주입(`GraphQueryService`·`ArchitectureIntentService`)에도 순환 빈 참조 없음. Flyway V69 실제 적용 확인(`flyway_schema_history` success=t, `\d graphs`에 `warnings jsonb`).
-- `analyzeLocal`: HIGH_FAN_OUT 8건(main과 동일 — `AnalysisRunner.run`은 원래 목록에 있던 orchestrator, warm-up 호출 1개 추가는 합성 루트 예외 패턴), CROSS_CONTEXT_IMPORT 0(첫 시도에 `AnalysisRunner`가 `domain.graph.Graph`를 import해 1건 떴으나 `PrReviewService`와 동일하게 `.build(...).getId()` 인라인으로 import 제거해 해소).
-- **미검증(범위 밖·loop 모드라 스킵)**: 실 GitHub OAuth 로그인 → 실제 분석 → 컬럼 자동 적재 → 콜드 TTFB 하락폭 실측. 각 링크(warm-up→adapter→getWarnings→store.save→Postgres)는 개별 테스트로 커버되나 end-to-end 실측은 다음 로그인 세션에서.
+- `GraphWarningStoreIntegrationTest`(`@DataJpaTest` + 실 Postgres + `ddl-auto=validate`): V69 두 컬럼과 엔티티 매핑 일치 + jsonb 왕복에서 숫자(`line:42`)·중첩 리스트(`nodeIds`) 보존 + null/`[]` 구분 + `clearWarnings` 벌크 UPDATE 실동작.
+- 단위 테스트: `getWarnings`가 컬럼 fresh면 `detect` 생략·stale면 재계산·DDD override면 컬럼 무시(`GraphQueryServiceTest` +4). `GraphWarningStore` 버전 불일치/미계산 empty·`save` 버전 스탬프·`updatedAt` 불변·`invalidateProject` 벌크 위임(+6). `AnalysisRunner` 완료 후 `detectWarnings` 호출(+1).
+- 로컬 백엔드 재기동 `/actuator/health` UP(신규 빈 `GraphWarningStore` 주입에 순환 참조 없음), Flyway V69(두 컬럼) 적용 확인.
+- `analyzeLocal`: HIGH_FAN_OUT 8건·CROSS_CONTEXT_IMPORT 0(main과 동일).
+- **미검증(범위 밖·loop 모드라 스킵)**: 실 GitHub OAuth → 실제 분석 → 컬럼 자동 적재 → 콜드 TTFB 하락폭 실측. 각 링크는 개별 테스트로 커버되나 end-to-end 실측은 다음 로그인 세션에서.
 
 **범위 한정.** 이 작업은 "구조 경고 재계산 제거"까지만. 페이로드 자체 축소(lazy edge fetch 2·3단계, 흐름 재생 서버 이전)는 여전히 별도 후속 과제 — 이걸로 콜드스타트는 고쳐지지만 응답 크기는 안 줄어든다.
 

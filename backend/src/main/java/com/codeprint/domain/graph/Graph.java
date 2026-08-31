@@ -45,10 +45,14 @@ public class Graph {
     @Column(name = "pinned_slot")
     private Short pinnedSlot;
 
-    // 사전계산된 구조 경고(20종) — null이면 미계산(레거시 또는 무효화됨), 조회 시 지연 계산. Node.metadata와 동일 매핑
+    // 사전계산된 구조 경고 — null이면 미계산(레거시 또는 무효화됨), 조회 시 지연 계산. Node.metadata와 동일 매핑
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "warnings", columnDefinition = "jsonb")
     private List<Map<String, Object>> warnings;
+
+    // warnings를 계산한 시점의 감지 규칙 버전 — 현재 버전과 다르면 stale로 보고 재계산
+    @Column(name = "warnings_ruleset_version")
+    private Short warningsRulesetVersion;
 
     // 프로젝트 ID와 분석 ID로 새 그래프 인스턴스 생성
     public static Graph create(UUID projectId, UUID analysisId) {
@@ -81,10 +85,15 @@ public class Graph {
         this.updatedAt = Instant.now();
     }
 
-    // 사전계산된 구조 경고를 적재 — null 전달 시 무효화(재계산 필요 상태로 되돌림)
-    public void cacheWarnings(List<Map<String, Object>> warnings) {
+    // 사전계산된 구조 경고를 규칙 버전과 함께 적재 — 파생 캐시라 updatedAt은 건드리지 않는다. null 전달 시 무효화
+    public void cacheWarnings(List<Map<String, Object>> warnings, short rulesetVersion) {
         this.warnings = warnings;
-        this.updatedAt = Instant.now();
+        this.warningsRulesetVersion = warnings == null ? null : rulesetVersion;
+    }
+
+    // 사전계산 경고가 주어진 규칙 버전 기준으로 최신인지 — 버전 불일치 또는 미계산이면 false
+    public boolean hasFreshWarnings(short currentRulesetVersion) {
+        return warnings != null && warningsRulesetVersion != null && warningsRulesetVersion == currentRulesetVersion;
     }
 
     // 고정 해제 — 다시 보존 정책 대상이 됨

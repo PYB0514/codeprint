@@ -57,7 +57,7 @@ class GraphWarningStoreIntegrationTest {
         Graph graph = persistGraph();
         graph.cacheWarnings(List.of(
                 Map.of("type", "DEAD_CODE", "message", "미사용 함수", "line", 42, "nodeIds", List.of("n1", "n2")),
-                Map.of("type", "HIGH_FAN_OUT", "message", "호출 8개", "line", 7)));
+                Map.of("type", "HIGH_FAN_OUT", "message", "호출 8개", "line", 7)), (short) 1);
         graphJpa.save(graph);
         entityManager.flush();
         entityManager.clear();
@@ -80,10 +80,28 @@ class GraphWarningStoreIntegrationTest {
         assertThat(graphJpa.findById(never.getId()).orElseThrow().getWarnings()).isNull();
 
         Graph emptied = persistGraph();
-        emptied.cacheWarnings(List.of());
+        emptied.cacheWarnings(List.of(), (short) 1);
         graphJpa.save(emptied);
         entityManager.flush();
         entityManager.clear();
         assertThat(graphJpa.findById(emptied.getId()).orElseThrow().getWarnings()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("clearWarnings 벌크 UPDATE — 프로젝트의 채워진 그래프만 warnings·version을 NULL로 되돌린다")
+    void clearWarnings_bulkUpdate() {
+        Graph graph = persistGraph();
+        UUID projectId = graph.getProjectId();
+        graph.cacheWarnings(List.of(Map.of("type", "X")), (short) 1);
+        graphJpa.save(graph);
+        entityManager.flush();
+        entityManager.clear();
+
+        graphJpa.clearWarnings(projectId);
+        entityManager.clear();
+
+        Graph reloaded = graphJpa.findById(graph.getId()).orElseThrow();
+        assertThat(reloaded.getWarnings()).isNull();
+        assertThat(reloaded.hasFreshWarnings((short) 1)).isFalse();
     }
 }

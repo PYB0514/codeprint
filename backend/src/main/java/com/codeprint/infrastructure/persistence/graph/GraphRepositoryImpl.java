@@ -82,4 +82,10 @@ public class GraphRepositoryImpl implements GraphRepository {
     public void clearPinnedSlot(UUID projectId, int slot) {
         graphJpa.clearPinnedSlot(projectId, slot);
     }
+
+    // 프로젝트의 모든 그래프 사전계산 경고를 무효화
+    @Override
+    public void clearWarnings(UUID projectId) {
+        graphJpa.clearWarnings(projectId);
+    }
 }
