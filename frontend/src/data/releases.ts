@@ -9,6 +9,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.162.1',
+    date: '2026-08-31',
+    title: '그래프 첫 로딩 속도 개선 — 경고 계산 결과 저장',
+    type: 'fix',
+    items: [
+      { category: '개선', desc: '오랜만에 접속했을 때 그래프·공유 링크가 처음 열리기까지 걸리던 지연을 줄였습니다. 구조 경고(21종)를 분석 완료 시점에 미리 계산해 저장하므로, 조회할 때마다 수만 개 관계를 다시 훑지 않습니다.' },
+    ],
+  },
+  {
     version: 'v0.162.0',
     date: '2026-08-29',
     title: '도메인 로직 누출 후보 감지 — DOMAIN_LOGIC_LEAK 신규 경고',

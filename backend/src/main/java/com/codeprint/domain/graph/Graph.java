@@ -5,8 +5,12 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -41,6 +45,11 @@ public class Graph {
     @Column(name = "pinned_slot")
     private Short pinnedSlot;
 
+    // 사전계산된 구조 경고(20종) — null이면 미계산(레거시 또는 무효화됨), 조회 시 지연 계산. Node.metadata와 동일 매핑
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "warnings", columnDefinition = "jsonb")
+    private List<Map<String, Object>> warnings;
+
     // 프로젝트 ID와 분석 ID로 새 그래프 인스턴스 생성
     public static Graph create(UUID projectId, UUID analysisId) {
         Graph graph = new Graph();
@@ -69,6 +78,12 @@ public class Graph {
             throw new IllegalArgumentException("고정 슬롯은 1~5만 허용됩니다: " + slot);
         }
         this.pinnedSlot = (short) slot;
+        this.updatedAt = Instant.now();
+    }
+
+    // 사전계산된 구조 경고를 적재 — null 전달 시 무효화(재계산 필요 상태로 되돌림)
+    public void cacheWarnings(List<Map<String, Object>> warnings) {
+        this.warnings = warnings;
         this.updatedAt = Instant.now();
     }
 

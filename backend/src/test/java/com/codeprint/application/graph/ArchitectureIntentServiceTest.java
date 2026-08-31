@@ -25,11 +25,13 @@ class ArchitectureIntentServiceTest {
 
     // 인메모리 저장소를 주입한 서비스 생성 (@RequiredArgsConstructor 필드 순서: repository, objectMapper, auditLogRepository)
     private ArchitectureIntentService serviceWith(InMemoryRepository repo) {
-        return new ArchitectureIntentService(repo, new ObjectMapper(), new InMemoryAuditLogRepository());
+        return new ArchitectureIntentService(repo, new ObjectMapper(), new InMemoryAuditLogRepository(),
+                org.mockito.Mockito.mock(GraphWarningStore.class));
     }
 
     private ArchitectureIntentService serviceWith(InMemoryRepository repo, InMemoryAuditLogRepository auditRepo) {
-        return new ArchitectureIntentService(repo, new ObjectMapper(), auditRepo);
+        return new ArchitectureIntentService(repo, new ObjectMapper(), auditRepo,
+                org.mockito.Mockito.mock(GraphWarningStore.class));
     }
 
     @Test

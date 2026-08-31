@@ -3,6 +3,7 @@ package com.codeprint.application.analysis;
 
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
+import com.codeprint.domain.analysis.port.WarningDetectionPort;
 import com.codeprint.infrastructure.analysis.*;
 import com.codeprint.infrastructure.config.AnalysisConcurrencyGuard;
 import com.codeprint.infrastructure.github.GitHubApiClient;
@@ -27,6 +28,7 @@ public class AnalysisRunner {
     private final CachedParsedFileLoader cachedParsedFileLoader;
     private final GraphBuilder graphBuilder;
     private final AnalysisConcurrencyGuard concurrencyGuard;
+    private final WarningDetectionPort warningDetectionPort;
 
     // 레포 클론 → 파일 수집 → 정적 분석 → 그래프 빌드를 비동기로 실행
     // 메서드 전체를 트랜잭션으로 감싸지 않는다 — git clone·GitHub API 왕복(수십초~수 분)까지 DB 커넥션을 물고
@@ -61,7 +63,7 @@ public class AnalysisRunner {
             // 변경된 파일만 재파싱하고 안 바뀐 파일은 캐시된 ParsedFile을 재사용(incremental) — 순서 보존(GraphBuilder 결과 불변)
             List<ParsedFile> parsedFiles = cachedParsedFileLoader.load(projectId, repoDir, sourceFiles);
 
-            graphBuilder.build(projectId, analysisId, parsedFiles, walkResult.totalEligible());
+            UUID graphId = graphBuilder.build(projectId, analysisId, parsedFiles, walkResult.totalEligible()).getId();
 
             // ref로 명시 요청했으면 그 SHA 자체가 곧 분석된 커밋 — 재조회 불필요. 아니면 기존처럼 분석 완료
             // 시점의 브랜치 최신 커밋 SHA를 조회(약간의 레이스가 있으나 기존 동작 그대로 유지).
@@ -81,6 +83,9 @@ public class AnalysisRunner {
 
             log.info("분석 완료: analysisId={}, files={}", analysisId, parsedFiles.size());
 
+            // 구조 경고를 미리 계산·저장 — 콜드스타트 첫 방문자가 detect() 재계산(수 초)을 겪지 않도록
+            warmUpWarnings(graphId);
+
         } catch (Exception e) {
             log.error("분석 실패: analysisId={}", analysisId, e);
             try {
@@ -99,6 +104,15 @@ public class AnalysisRunner {
             // AnalysisApplicationService.startAnalysis에서 예약한 동시성 슬롯을 실제 작업 완료 시점에 반납
             // (성공/실패 무관 — 점유 구간은 "제출"이 아니라 "이 비동기 작업 전체")
             concurrencyGuard.release();
+        }
+    }
+
+    // 경고 사전계산 적재 — 실패는 삼키고 로그만(조회 시 지연 계산으로 폴백, 분석은 이미 완료 상태)
+    private void warmUpWarnings(UUID graphId) {
+        try {
+            warningDetectionPort.detectWarnings(graphId);
+        } catch (Exception e) {
+            log.warn("경고 사전계산 실패 graphId={} (조회 시 지연 계산): {}", graphId, e.getMessage());
         }
     }
 

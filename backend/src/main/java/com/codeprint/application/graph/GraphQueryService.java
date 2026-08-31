@@ -23,6 +23,7 @@ public class GraphQueryService {
 
     private final GraphRepository graphRepository;
     private final GraphWarningService graphWarningService;
+    private final GraphWarningStore graphWarningStore;
     private final ArchitectureIntentService architectureIntentService;
     private final ProjectAccessPort projectAccessPort;
 
@@ -56,7 +57,7 @@ public class GraphQueryService {
         return graphRepository.findEdgesByGraphId(graphId);
     }
 
-    // 그래프 경고 감지 결과 캐싱 — detect()는 CPU 집약적이므로 graphId 기준으로 10분 캐시
+    // 그래프 경고 감지 결과 — 인메모리 캐시(10분) + AUTO 정책이면 graphs.warnings 컬럼에 영속화(콜드스타트 재계산 회피)
     // 의도 아키텍처가 있으면 INTENT_DRIFT까지 함께 검사
     @Cacheable(value = "graphWarnings", key = "#graphId")
     public List<Map<String, Object>> getWarnings(UUID graphId) {
@@ -68,7 +69,15 @@ public class GraphQueryService {
         GatePolicy gatePolicy = projectId == null ? GatePolicy.AUTO : projectAccessPort.getProjectById(projectId)
                 .map(ProjectAccessPort.ProjectAccessView::gatePolicy)
                 .orElse(GatePolicy.AUTO);
-        return graphWarningService.detect(nodes, edges, intent, gatePolicy);
+        // 명시 override(DDD/LAYERED)는 온디맨드 계산 — 영속 컬럼은 AUTO 기준으로만 저장·신뢰
+        if (gatePolicy != GatePolicy.AUTO) {
+            return graphWarningService.detect(nodes, edges, intent, gatePolicy);
+        }
+        return graphWarningStore.load(graphId).orElseGet(() -> {
+            List<Map<String, Object>> computed = graphWarningService.detect(nodes, edges, intent, GatePolicy.AUTO);
+            graphWarningStore.save(graphId, computed);
+            return computed;
+        });
     }
 
     // 경고 캐시 전체 무효화 — 프로젝트 설정(게이트 정책 등)이 바뀌어 detect() 결과가 달라질 때 사용

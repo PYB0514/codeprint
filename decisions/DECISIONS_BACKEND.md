@@ -2,6 +2,34 @@
 
 ---
 
+## 구조 경고 영속화 — 콜드스타트 첫 방문자의 detect() 재계산 제거(2026-08-31, codeprint_162 연속)
+
+**문제.** 공유 링크를 처음 클릭한 방문자가 그래프 조회에서 TTFB 11초를 겪는다. codeprint_148 실측 + codeprint_149 적대적 재검증 결론: 병목은 페이로드(gzip 후 2.3MB, 다운로드 0.5초)가 아니라 `GraphWarningService.detect()`가 엣지 3만 개에 대해 20종 규칙을 재계산하는 시간(11초의 95%). 이 결과는 `graphWarnings` Caffeine 캐시(10분 TTL, 인메모리)로 완충되는데, Railway Serverless는 유휴 시 슬립하며 슬립마다 캐시가 비워진다 — 그래서 "유휴 후 첫 방문자"(홍보 유입자와 정확히 겹침)가 거의 항상 재계산을 맞는다.
+
+**검토한 대안과 탈락 이유.**
+1. **Redis 등 분산 캐시로 교체** — 재기동에도 캐시 생존. 탈락: 매출 0 상태에서 신규 인프라(월 비용+운영) 도입은 과함. jsonb 컬럼 하나로 같은 효과.
+2. **INTENT_DRIFT를 컬럼에서 분리해 온디맨드 유지**(Context162 §A 초안) — 탈락: `detect()`의 후처리(fingerprint/file/line 부여, ignore 패턴 `removeIf`, 안정 정렬)가 한 덩어리라 분리하려면 파이프라인을 쪼개야 함. intent 변경 시 컬럼을 무효화하는 훅 하나가 훨씬 단순하고, intent 변경은 드묾.
+3. **gatePolicy별로 여러 세트 저장**(안B) — 탈락: DDD/LAYERED 명시 override는 드물고(대부분 AUTO), 저장·조회 로직이 복잡해짐.
+4. **채택** — `graphs.warnings jsonb` 컬럼(nullable)에 `detect(nodes, edges, intent, AUTO)` 결과 전체를 저장. 컬럼 입력은 (nodes, edges, intent)뿐이고 nodes/edges는 그래프별 불변이라, 무효화가 필요한 건 intent 변경 한 곳뿐.
+
+**결정.**
+- **매핑**: `Node.metadata`와 동일하게 `@JdbcTypeCode(SqlTypes.JSON)` + `List<Map<String,Object>>` 직접 매핑(수동 ObjectMapper 없음). null=미계산(레거시/무효화), `[]`=경고 없음으로 구분.
+- **읽기**(`GraphQueryService.getWarnings`, 기존 `@Cacheable` 유지): gatePolicy가 AUTO일 때만 컬럼 신뢰 → 있으면 그대로 반환, 없으면 계산 후 write-through 저장. DDD/LAYERED 명시 override는 기존대로 온디맨드 계산(컬럼 안 씀·안 만듦).
+- **write-through 트랜잭션**: `getWarnings`는 클래스 레벨 `@Transactional(readOnly=true)`라 그 안에서 그냥 저장하면 Hibernate FlushMode.MANUAL로 UPDATE가 조용히 누락된다(REQUIRED 전파는 기존 readOnly 플래그를 못 뒤집음). 그래서 저장은 별도 빈 `GraphWarningStore.save`에 `@Transactional(propagation = REQUIRES_NEW)`로 분리 — 같은 빈 메서드였으면 프록시 우회로 이 분리가 무효였을 것이라 별도 빈이 필수.
+- **warm-up**: `AnalysisRunner`가 분석 완료(COMPLETED 저장) 직후 `WarningDetectionPort.detectWarnings(graphId)`를 1회 호출(실패는 로그만, 분석은 이미 완료) → 신규/재분석 그래프는 방문자가 콜드 계산을 아예 안 겪는다. `WarningDetectionPort`는 analysis 도메인 소유 포트(PR 리뷰가 이미 쓰던 것)라 DDD 방향 위반 없음.
+- **무효화**: `ArchitectureIntentService.save/delete`에 `graphWarningStore.invalidateProject(projectId)` 추가(기존 `@CacheEvict("graphWarnings")` 옆). gatePolicy 변경은 컬럼 무효화 불필요 — 컬럼은 AUTO 기준이고 읽기 경로가 `gatePolicy==AUTO` 가드로 걸러냄. 재분석은 새 `graphs` row라 자연히 새 컬럼(null).
+
+**검증.**
+- `GraphWarningStoreIntegrationTest`(`@DataJpaTest` + 실 Postgres + `ddl-auto=validate`): V69 컬럼과 엔티티 매핑 일치 + jsonb 왕복에서 숫자(`line:42`가 문자열로 안 바뀜)·중첩 리스트(`nodeIds`) 보존 + null/`[]` 구분 확인.
+- 단위 테스트: `getWarnings`가 컬럼 있으면 `detect` 생략, 없으면 계산 후 `save`, DDD override면 컬럼 무시(`GraphQueryServiceTest` +4건). `GraphWarningStore`의 null vs `[]` 시맨틱·`invalidateProject`가 이미 null인 그래프는 건너뜀(+4건). `AnalysisRunner`가 완료 후 `detectWarnings(graphId)` 호출(+1 assert).
+- 로컬 백엔드 실제 재기동 `/actuator/health` UP — 신규 빈 `GraphWarningStore` 3곳 주입(`GraphQueryService`·`ArchitectureIntentService`)에도 순환 빈 참조 없음. Flyway V69 실제 적용 확인(`flyway_schema_history` success=t, `\d graphs`에 `warnings jsonb`).
+- `analyzeLocal`: HIGH_FAN_OUT 8건(main과 동일 — `AnalysisRunner.run`은 원래 목록에 있던 orchestrator, warm-up 호출 1개 추가는 합성 루트 예외 패턴), CROSS_CONTEXT_IMPORT 0(첫 시도에 `AnalysisRunner`가 `domain.graph.Graph`를 import해 1건 떴으나 `PrReviewService`와 동일하게 `.build(...).getId()` 인라인으로 import 제거해 해소).
+- **미검증(범위 밖·loop 모드라 스킵)**: 실 GitHub OAuth 로그인 → 실제 분석 → 컬럼 자동 적재 → 콜드 TTFB 하락폭 실측. 각 링크(warm-up→adapter→getWarnings→store.save→Postgres)는 개별 테스트로 커버되나 end-to-end 실측은 다음 로그인 세션에서.
+
+**범위 한정.** 이 작업은 "구조 경고 재계산 제거"까지만. 페이로드 자체 축소(lazy edge fetch 2·3단계, 흐름 재생 서버 이전)는 여전히 별도 후속 과제 — 이걸로 콜드스타트는 고쳐지지만 응답 크기는 안 줄어든다.
+
+---
+
 ## 리컨실러 T1 실제 가동 배선 — 수동 버튼 트리거 채택(2026-08-29, codeprint_161 연속)
 
 **문제.** Context161(PR #764)에서 `FixAttemptService.attemptFix`(MISSING_TRANSACTIONAL_DELETE 자동수정 파이프라인)를 완성했지만 "완성"과 "가동"을 분리한다는 조건으로 실제 호출부는 만들지 않은 채 남겨뒀다("미배선"). 이번 세션에서 사용자가 벤치마킹 조사(시장 성장 속도) 이후 "리컨실러 2막을 실제로 가동"하기로 결정 — 트리거 방식(누가·언제 LLM을 호출하는가) 자체가 미확정이라 착수 전 확정이 필요했다.

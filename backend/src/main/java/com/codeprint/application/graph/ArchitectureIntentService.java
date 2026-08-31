@@ -28,6 +28,7 @@ public class ArchitectureIntentService {
     private final ArchitectureIntentRepository repository;
     private final ObjectMapper objectMapper;
     private final ArchitectureIntentAuditLogRepository auditLogRepository;
+    private final GraphWarningStore graphWarningStore;
 
     // 프로젝트의 의도 아키텍처 조회 — 없으면 빈 Optional
     @Transactional(readOnly = true)
@@ -40,6 +41,7 @@ public class ArchitectureIntentService {
     @CacheEvict(value = "graphWarnings", allEntries = true)
     public void save(UUID projectId, ArchitectureIntent intent) {
         repository.upsert(projectId, toJson(intent));
+        graphWarningStore.invalidateProject(projectId);
     }
 
     // 행위자 정보를 남기며 저장 — 예외(IGNORE) 규칙 추가/제거분만 감사 로그로 기록(모듈·의존규칙은 대상 아님)
@@ -51,6 +53,7 @@ public class ArchitectureIntentService {
                 .orElse(List.of());
         recordIgnoreRuleChanges(projectId, actorUserId, actorUsername, before, intent.ignores());
         repository.upsert(projectId, toJson(intent));
+        graphWarningStore.invalidateProject(projectId);
     }
 
     // 이전·이후 예외 규칙을 비교해 추가/제거된 것만 감사 로그로 기록
@@ -81,6 +84,7 @@ public class ArchitectureIntentService {
     @CacheEvict(value = "graphWarnings", allEntries = true)
     public void delete(UUID projectId) {
         repository.deleteByProjectId(projectId);
+        graphWarningStore.invalidateProject(projectId);
     }
 
     // JSON 문자열 → ArchitectureIntent 변환 (LocalAnalyzer와 동일 방식)
