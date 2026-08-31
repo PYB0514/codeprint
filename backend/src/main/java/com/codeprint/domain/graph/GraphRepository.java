@@ -39,4 +39,7 @@ public interface GraphRepository {
 
     // 같은 프로젝트의 지정 고정 슬롯을 비움 (고정 덮어쓰기용)
     void clearPinnedSlot(UUID projectId, int slot);
+
+    // 프로젝트의 모든 그래프 사전계산 경고를 무효화 (의도 아키텍처 변경 시)
+    void clearWarnings(UUID projectId);
 }

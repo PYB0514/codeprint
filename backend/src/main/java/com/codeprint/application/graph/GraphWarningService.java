@@ -18,6 +18,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class GraphWarningService {
 
+    // 감지 규칙 버전 — detect()의 감지기 목록·규칙·임계값을 바꾸면 올린다. graphs.warnings 영속 컬럼의
+    // 무효화 키(버전 불일치 시 재계산). 파싱 캐시의 ANALYZER_VERSION과는 별개 축이다.
+    public static final short RULESET_VERSION = 1;
+
     // 게이트 테마별 규칙 타입 — detectActiveTheme()과 detect()의 분기가 항상 같은 목록을 참조하도록 단일 소스로 고정
     // DDD_RULE_TYPES는 "바운디드 컨텍스트" 축(다중 컨텍스트 전제)만 남긴다 — "의존 방향" 축(도메인이 인프라를
     // 몰라야 함)은 DDD/헥사고날/클린 아키텍처 등 어떤 테마에서도 보편이라 UNIVERSAL_RULE_TYPES로 승격했다

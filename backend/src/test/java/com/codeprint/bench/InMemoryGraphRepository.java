@@ -75,4 +75,9 @@ public class InMemoryGraphRepository implements GraphRepository {
     @Override
     public void clearPinnedSlot(UUID projectId, int slot) {
     }
+
+    @Override
+    public void clearWarnings(UUID projectId) {
+        findByProjectId(projectId).forEach(g -> g.cacheWarnings(null, (short) 0));
+    }
 }

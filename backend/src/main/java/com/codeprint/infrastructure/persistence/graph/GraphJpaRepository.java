@@ -23,4 +23,9 @@ public interface GraphJpaRepository extends JpaRepository<Graph, UUID> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Graph g SET g.pinnedSlot = NULL WHERE g.projectId = :projectId AND g.pinnedSlot = :slot")
     void clearPinnedSlot(@Param("projectId") UUID projectId, @Param("slot") int slot);
+
+    // 프로젝트의 모든 그래프 사전계산 경고를 한 번에 무효화 — 의도 아키텍처 변경 시
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Graph g SET g.warnings = NULL, g.warningsRulesetVersion = NULL WHERE g.projectId = :projectId AND g.warnings IS NOT NULL")
+    void clearWarnings(@Param("projectId") UUID projectId);
 }

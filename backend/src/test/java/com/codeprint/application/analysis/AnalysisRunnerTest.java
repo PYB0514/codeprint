@@ -4,6 +4,8 @@ package com.codeprint.application.analysis;
 
 import com.codeprint.domain.analysis.AnalysisRepository;
 import com.codeprint.domain.analysis.AnalysisResult;
+import com.codeprint.domain.analysis.port.WarningDetectionPort;
+import com.codeprint.domain.graph.Graph;
 import com.codeprint.infrastructure.analysis.*;
 import com.codeprint.infrastructure.config.AnalysisConcurrencyGuard;
 import com.codeprint.infrastructure.github.GitHubApiClient;
@@ -33,10 +35,11 @@ class AnalysisRunnerTest {
     @Mock private CachedParsedFileLoader cachedParsedFileLoader;
     @Mock private GraphBuilder graphBuilder;
     @Mock private AnalysisConcurrencyGuard concurrencyGuard;
+    @Mock private WarningDetectionPort warningDetectionPort;
 
     private AnalysisRunner runner() {
         return new AnalysisRunner(analysisRepository, gitHubApiClient, repoCloner, sourceFileWalker,
-                cachedParsedFileLoader, graphBuilder, concurrencyGuard);
+                cachedParsedFileLoader, graphBuilder, concurrencyGuard, warningDetectionPort);
     }
 
     @Test
@@ -50,12 +53,15 @@ class AnalysisRunnerTest {
         when(repoCloner.clone("https://github.com/a/b", "main")).thenReturn(repoDir);
         when(sourceFileWalker.walk(repoDir, (String) null)).thenReturn(new WalkResult(List.of(), 0));
         when(cachedParsedFileLoader.load(any(), any(), any())).thenReturn(List.of());
+        Graph graph = Graph.create(projectId, analysisId);
+        when(graphBuilder.build(any(), any(), any(), anyInt())).thenReturn(graph);
         when(gitHubApiClient.fetchLatestCommitSha("https://github.com/a/b", "main", "tok")).thenReturn("sha1");
 
         runner().run(analysisId, projectId, "https://github.com/a/b", "main", "tok", null);
 
         verify(concurrencyGuard).release();
         verify(repoCloner).deleteDir(repoDir);
+        verify(warningDetectionPort).detectWarnings(graph.getId());
     }
 
     @Test

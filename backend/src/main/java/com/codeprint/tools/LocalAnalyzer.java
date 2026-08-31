@@ -198,6 +198,11 @@ public class LocalAnalyzer {
         @Override
         public void clearPinnedSlot(UUID projectId, int slot) {
         }
+
+        // 경고 캐시 무효화 — CLI에선 불필요
+        @Override
+        public void clearWarnings(UUID projectId) {
+        }
     }
 
     // DB 없이 GraphBuilder를 구동하기 위한 더미 — CLI엔 실제 프로젝트 소유자 개념이 없어 항상 미조회 처리

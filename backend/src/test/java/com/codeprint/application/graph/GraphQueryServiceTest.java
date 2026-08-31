@@ -36,12 +36,14 @@ class GraphQueryServiceTest {
     @Mock
     private GraphWarningService graphWarningService;
     @Mock
+    private GraphWarningStore graphWarningStore;
+    @Mock
     private ArchitectureIntentService architectureIntentService;
     @Mock
     private ProjectAccessPort projectAccessPort;
 
     private GraphQueryService service() {
-        return new GraphQueryService(graphRepository, graphWarningService, architectureIntentService, projectAccessPort);
+        return new GraphQueryService(graphRepository, graphWarningService, graphWarningStore, architectureIntentService, projectAccessPort);
     }
 
     // 지정 createdAt를 가진 그래프 생성 (정렬 검증용 — createdAt은 create()에서 now()라 리플렉션으로 덮어씀)
@@ -126,5 +128,65 @@ class GraphQueryServiceTest {
         ArgumentCaptor<ArchitectureIntent> captor = ArgumentCaptor.forClass(ArchitectureIntent.class);
         org.mockito.Mockito.verify(graphWarningService).detect(any(), any(), captor.capture(), eq(GatePolicy.AUTO));
         assertThat(captor.getValue()).isNull();
+    }
+
+    @Test
+    @DisplayName("getWarnings는 사전계산된 경고가 있으면 detect를 호출하지 않고 그대로 반환한다")
+    void getWarnings_영속_컬럼_있으면_detect_생략() {
+        UUID graphId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        Graph graph = graphAt(projectId, Instant.now());
+        List<Map<String, Object>> stored = List.of(Map.of("type", "DEAD_CODE"));
+        when(graphRepository.findNodesByGraphId(graphId)).thenReturn(List.of());
+        when(graphRepository.findEdgesByGraphId(graphId)).thenReturn(List.of());
+        when(graphRepository.findById(graphId)).thenReturn(Optional.of(graph));
+        when(architectureIntentService.findByProjectId(projectId)).thenReturn(Optional.empty());
+        when(graphWarningStore.load(graphId)).thenReturn(Optional.of(stored));
+
+        List<Map<String, Object>> result = service().getWarnings(graphId);
+
+        assertThat(result).isSameAs(stored);
+        org.mockito.Mockito.verifyNoInteractions(graphWarningService);
+        org.mockito.Mockito.verify(graphWarningStore, org.mockito.Mockito.never()).save(any(), any());
+    }
+
+    @Test
+    @DisplayName("getWarnings는 사전계산 컬럼이 비어 있으면 detect 후 결과를 저장한다")
+    void getWarnings_컬럼_없으면_계산_후_저장() {
+        UUID graphId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        Graph graph = graphAt(projectId, Instant.now());
+        List<Map<String, Object>> computed = List.of(Map.of("type", "HIGH_FAN_OUT"));
+        when(graphRepository.findNodesByGraphId(graphId)).thenReturn(List.of());
+        when(graphRepository.findEdgesByGraphId(graphId)).thenReturn(List.of());
+        when(graphRepository.findById(graphId)).thenReturn(Optional.of(graph));
+        when(architectureIntentService.findByProjectId(projectId)).thenReturn(Optional.empty());
+        when(graphWarningStore.load(graphId)).thenReturn(Optional.empty());
+        when(graphWarningService.detect(any(), any(), any(), eq(GatePolicy.AUTO))).thenReturn(computed);
+
+        List<Map<String, Object>> result = service().getWarnings(graphId);
+
+        assertThat(result).isSameAs(computed);
+        org.mockito.Mockito.verify(graphWarningStore).save(graphId, computed);
+    }
+
+    @Test
+    @DisplayName("getWarnings는 gatePolicy가 명시 override(DDD)면 영속 컬럼을 쓰지 않고 온디맨드 계산한다")
+    void getWarnings_정책_override면_컬럼_무시() {
+        UUID graphId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        Graph graph = graphAt(projectId, Instant.now());
+        when(graphRepository.findNodesByGraphId(graphId)).thenReturn(List.of());
+        when(graphRepository.findEdgesByGraphId(graphId)).thenReturn(List.of());
+        when(graphRepository.findById(graphId)).thenReturn(Optional.of(graph));
+        when(architectureIntentService.findByProjectId(projectId)).thenReturn(Optional.empty());
+        when(projectAccessPort.getProjectById(projectId)).thenReturn(Optional.of(
+                new ProjectAccessPort.ProjectAccessView(projectId, UUID.randomUUID(), "p", "https://github.com/x/y", GatePolicy.DDD, false)));
+        when(graphWarningService.detect(any(), any(), any(), eq(GatePolicy.DDD))).thenReturn(List.of());
+
+        service().getWarnings(graphId);
+
+        org.mockito.Mockito.verify(graphWarningService).detect(any(), any(), any(), eq(GatePolicy.DDD));
+        org.mockito.Mockito.verifyNoInteractions(graphWarningStore);
     }
 }
