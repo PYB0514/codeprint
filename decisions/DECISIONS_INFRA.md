@@ -642,6 +642,8 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 
 ## 프로덕션 DB 최소권한 — postgres 슈퍼유저 단일 계정 → 앱 전용 스코프 역할 교체 (2026-07-17, codeprint_136)
 
+> ⚠️ **정정 (2026-10-29)** — 아래 "소유권 이전 없이 GRANT만으로 충분" 판단은 DML에만 맞고 DDL(`ALTER TABLE`)엔 틀렸다. 이 때문에 V65 이후 프로덕션 배포가 약 3개월간 전부 실패했다. 소유권 이관으로 해소 — 하단 "프로덕션 배포 3개월 연속 실패 — Flyway V65 테이블 소유권 오류" 참조. 아래 원문은 이력 보존용.
+
 **문제.** SECURITY_REVIEW.md의 "DB 유저 권한이 최소권한으로 운영되는지 미확인" 항목을 점검하다 실제 리스크로 확정 — 프로덕션 Postgres에 역할이 `postgres`(슈퍼유저) 단 하나뿐이었고, 백엔드 앱(`DataSourceConfig`가 파싱하는 `DATABASE_URL`)도 이 계정으로 직접 접속하고 있었다. 앱이 실제로 필요한 것(자기 스키마 테이블 CRUD + Flyway 마이그레이션)보다 훨씬 큰 권한(DB 생성/삭제, 역할 생성, RLS 우회, 복제 스트림 접근)을 상시 보유한 상태.
 
 **사전 조사(변경 전 확인).** ①Flyway 마이그레이션 63개 전수 확인 — `CREATE/ALTER/DROP TABLE`·`CREATE INDEX`뿐, `CREATE EXTENSION`/`CREATE ROLE`/`CREATE DATABASE` 없음(`gen_random_uuid()`는 Postgres 13+ 내장이라 pgcrypto 등 extension 불필요). ②DB `railway`·스키마 `public`·테이블 48개 전부 `postgres` 소유, 시퀀스 0개(UUID 기본키라 SERIAL 미사용) — 소유권 이전 없이 GRANT만으로 충분함을 확인. ③DB 백업(`db-backup.yml`)은 별도 GitHub Secret(`BACKUP_DATABASE_URL`)을 써서 이번 변경과 무관함을 확인 — 스코프 밖으로 명시적 제외(값 확인 불가라 별도 후속 판단 필요, 이번엔 안 건드림).
@@ -802,3 +804,21 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 **결과.** DB 총 크기 **410MB**(5GB 중 8.2%) — 여유 충분. 테이블별: `edges` 315MB·`nodes` 65MB·`parsed_file_cache` 18MB(나머지는 전부 수백 KB 이하). 프로젝트별 그래프 개수 확인 결과 "codeprint" 자기분석 프로젝트도 3개로 정상(2026-07-22 폭주 사고 당시 10개였던 것과 대조 — `GraphRetentionPolicy` 보존정책이 이후 정상 동작 중임을 재확인). 즉시 조치 불필요.
 
 **콜드스타트 재확인.** 첫 연결 시도가 `FATAL: the database system is not yet accepting connections`로 실패(Serverless 슬립, [G-5]/[G-9] 후속측정②와 동일 패턴) — 15초 재시도 1회로 정상 연결. 기존에 문서화된 패턴과 일치, 새로운 발견 없음.
+
+---
+
+## 프로덕션 배포 3개월 연속 실패 — Flyway V65 테이블 소유권 오류 (2026-10-29)
+
+**문제.** 커스텀 도메인 연결 중 Railway 배포 이력을 보다가 발견 — PR #725(2026-07-31) 이후 머지된 모든 백엔드 배포가 "Network › Healthcheck failure"로 실패, 프로덕션은 #723(스키마 V64)을 계속 서빙. `/actuator/health`가 UP이고 CI도 전부 green이라 겉으로는 정상이었음. `ERROR_TRACKER.md` D-14로 2026-08-31에 이미 원인이 기록됐으나 "운영 DB 구조 변경이라 사용자 확인 필요"로 남은 채 미처리였다.
+
+**진단 과정.** ①과거 같은 증상(#718, 2026-07-30)은 동일 이미지 재배포로 해소된 헬스체크 플레이키니스였어서 처음엔 그 가설부터 확인 — 하지만 10건 연속 실패는 플레이키니스로 설명 불가. ②실패 당시 배포 로그는 보관 기간이 지나 비어 있었고 Railway CLI 토큰도 만료 → 대시보드에서 최신 커밋을 재배포해 실시간 로그를 확보. ③로그에서 `Migrating schema "public" to version "65" ... ERROR: must be owner of table analyses`가 재시작마다 반복 — 헬스체크 문제가 아니라 Flyway 실패로 앱이 기동조차 못 한 것. ④운영 DB 조회로 `public` 테이블 48개 전부 `postgres` 소유 확인.
+
+**원인.** 2026-07-17 최소권한 전환에서 앱 계정 `codeprint_app`에 기존 테이블 `SELECT/INSERT/UPDATE/DELETE`만 GRANT하고 소유자는 `postgres`로 남겼다. Postgres에서 `ALTER TABLE`은 GRANT로 위임할 수 없고 소유자만 가능하다. 당시 검증은 "임시 테이블 CREATE/DROP"(=자기가 만든 테이블이라 소유자)으로 해서 이 차이를 못 잡았고, V65가 기존 테이블을 ALTER하는 첫 마이그레이션이었다.
+
+**검토한 대안.** ①기존 테이블 소유권을 `codeprint_app`으로 이관 — 채택. 07-17 결정의 의도("앱은 자기 스키마를 관리, 슈퍼유저는 비상용")와 일치하고, 이후 생성 테이블은 이미 `codeprint_app` 소유가 되므로 규칙이 하나로 통일됨. `OWNER TO postgres`로 즉시 되돌릴 수 있음. ②Flyway만 `postgres` 자격증명으로 실행(`spring.flyway.user`) — 기각. 배포 경로에 슈퍼유저 비밀번호를 다시 넣는 셈이라 07-17 하드닝을 되돌리고, 새 테이블이 `postgres` 소유가 돼 같은 문제가 반복됨. ③`DATABASE_URL`을 `postgres`로 원복 — 기각, 하드닝 자체 철회.
+
+**조치.** Railway Postgres Console에서 `psql -U postgres`로 `public` 테이블 중 `codeprint_app` 소유가 아닌 것을 `ALTER TABLE ... OWNER TO codeprint_app`로 일괄 이관(DO 블록). 검증: 48개 전부 `codeprint_app` 소유, `codeprint_backup`은 48개 모두 SELECT 유지(소유자 변경 시 기존 ACL 보존). #771 재배포 → "Successfully applied 5 migrations to schema public, now at version v69" + 헬스체크 통과, 운영이 #723 → #771로 일괄 반영.
+
+**잔여.** `ALTER DEFAULT PRIVILEGES FOR ROLE codeprint_app IN SCHEMA public GRANT SELECT ON TABLES TO codeprint_backup;` 미실행 — 새 테이블을 만드는 다음 마이그레이션 전에 필요(없으면 백업 덤프가 새 테이블에서 권한 오류). 배포 실패를 아무도 몰랐던 근본 문제(배포 실패 알림 부재)는 별도 과제.
+
+**교훈.** ①최소권한 전환을 검증할 땐 "새로 만든 객체"가 아니라 "기존 객체에 대한 실제 마이그레이션 동작(ALTER)"으로 시험해야 한다. ②`/actuator/health` UP과 CI green은 "최신 코드가 배포됐다"는 뜻이 아니다 — 배포 이력의 ACTIVE 커밋을 직접 확인해야 한다. ③"사용자 확인 필요"로 남긴 장애 항목은 다음 세션 첫 액션에 명시적으로 올려야 묻히지 않는다(D-14가 2개월간 방치됨).
