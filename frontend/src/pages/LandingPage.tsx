@@ -72,6 +72,10 @@ export default function LandingPage() {
               {t('heroDesc')}
             </p>
 
+            <p className="max-w-md px-3 py-2 text-xs leading-relaxed text-amber-300/90 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+              {t('betaNotice')}
+            </p>
+
             {/* URL 입력 — 바로 분석 시작 */}
             <form
               onSubmit={(e) => { e.preventDefault(); handleTryUrl() }}

@@ -6,6 +6,8 @@
 
 A developer-facing SaaS that lets you understand a project's structure without reading the code, and catch architecture problems *before you merge*.
 
+> 🚧 **Beta — this project is still unfinished.** Analysis, visualization and the PR gate work, but some features may be incomplete, and repositories with more than 500 files are only partially analyzed.
+
 [![Live](https://img.shields.io/badge/Live-Demo-2563eb)](https://codeprint-iota.vercel.app)
 [![Claude Code Skill](https://img.shields.io/badge/Claude%20Code-Skill-d97757)](https://github.com/PYB0514/codeprint-plugins)
 ![Java](https://img.shields.io/badge/Java-17-orange)

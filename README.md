@@ -6,6 +6,8 @@
 
 코드를 읽지 않고도 프로젝트의 구조를 파악하고, *머지하기 전에* 아키텍처 문제를 잡아내는 개발자용 SaaS.
 
+> 🚧 **베타 — 아직 미완성인 프로젝트입니다.** 분석·시각화·PR 게이트는 동작하지만 일부 기능은 불완전할 수 있고, 파일 500개를 넘는 레포는 일부만 분석됩니다.
+
 [![Live](https://img.shields.io/badge/Live-Demo-2563eb)](https://codeprint-iota.vercel.app)
 [![Claude Code Skill](https://img.shields.io/badge/Claude%20Code-Skill-d97757)](https://github.com/PYB0514/codeprint-plugins)
 ![Java](https://img.shields.io/badge/Java-17-orange)

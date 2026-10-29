@@ -18,7 +18,9 @@
     "noNotifications": "알림이 없습니다.",
     "settings": "설정",
     "logout": "로그아웃",
-    "login": "로그인"
+    "login": "로그인",
+    "beta": "Beta",
+    "betaTooltip": "아직 미완성인 베타 버전입니다"
   },
   "footer": {
     "copyright": "© 2025 Codeprint",
