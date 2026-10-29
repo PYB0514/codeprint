@@ -151,12 +151,20 @@ export default function AppHeader({ onLogin }: Props) {
 
   return (
     <header className="flex items-center justify-between px-8 py-4 border-b border-gray-800 flex-shrink-0 bg-gray-950">
-      <button
-        onClick={() => navigate('/')}
-        className="font-bold text-lg tracking-tight hover:text-gray-300 transition-colors"
-      >
-        Codeprint
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => navigate('/')}
+          className="font-bold text-lg tracking-tight hover:text-gray-300 transition-colors"
+        >
+          Codeprint
+        </button>
+        <span
+          title={t('header.betaTooltip')}
+          className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded border border-amber-500/40 text-amber-400 bg-amber-500/10"
+        >
+          {t('header.beta')}
+        </span>
+      </div>
       <nav className="flex items-center gap-5 text-sm">
         <button onClick={() => navigate('/community')} className="text-gray-400 hover:text-white transition-colors">
           {t('header.community')}

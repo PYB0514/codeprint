@@ -18,7 +18,9 @@
     "noNotifications": "No notifications.",
     "settings": "Settings",
     "logout": "Log out",
-    "login": "Log in"
+    "login": "Log in",
+    "beta": "Beta",
+    "betaTooltip": "This is an unfinished beta"
   },
   "footer": {
     "copyright": "© 2025 Codeprint",

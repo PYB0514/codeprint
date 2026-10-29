@@ -6,7 +6,9 @@
 
 코드를 읽지 않고도 프로젝트의 구조를 파악하고, *머지하기 전에* 아키텍처 문제를 잡아내는 개발자용 SaaS.
 
-[![Live](https://img.shields.io/badge/Live-Demo-2563eb)](https://codeprint-iota.vercel.app)
+> 🚧 **베타 — 아직 미완성인 프로젝트입니다.** 분석·시각화·PR 게이트는 동작하지만 일부 기능은 불완전할 수 있고, 파일 500개를 넘는 레포는 일부만 분석됩니다.
+
+[![Live](https://img.shields.io/badge/Live-Demo-2563eb)](https://getcodeprint.com)
 [![Claude Code Skill](https://img.shields.io/badge/Claude%20Code-Skill-d97757)](https://github.com/PYB0514/codeprint-plugins)
 ![Java](https://img.shields.io/badge/Java-17-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-6db33f)
@@ -34,7 +36,7 @@ Codeprint는 GitHub 레포를 정적 분석해 **파일·함수·DB·API를 노�
 - **웹 서비스** — GitHub PR 연동: PR을 열면 변경된 브랜치를 분석해 구조 경고를 자동 코멘트.
 - **(예정) 데스크탑 앱** — 로컬 폴더 분석: 코드를 외부로 전송하지 않고 push 전에 로컬에서 경고 감지.
 
-🔗 **Live:** [codeprint-iota.vercel.app](https://codeprint-iota.vercel.app) · 🧩 **Claude Code Skill:** [codeprint-plugins](https://github.com/PYB0514/codeprint-plugins) — 이 프로젝트의 분석 엔진을 로컬 CLI로 감싼 무료 Claude Code 스킬(Java/Kotlin/TypeScript/TSX)
+🔗 **Live:** [getcodeprint.com](https://getcodeprint.com) · 🧩 **Claude Code Skill:** [codeprint-plugins](https://github.com/PYB0514/codeprint-plugins) — 이 프로젝트의 분석 엔진을 로컬 CLI로 감싼 무료 Claude Code 스킬(Java/Kotlin/TypeScript/TSX)
 
 📖 **써보지 않고도 전체를 이해하고 싶다면 → [`docs/PRODUCT_GUIDE.md`](docs/PRODUCT_GUIDE.md)** (기능·경고 21종·동작 원리를 한 문서로 정리)
 
@@ -157,6 +159,6 @@ cd frontend && npm install && npm run dev
 
 <div align="center">
 
-**Codeprint** · 1인 풀스택 개발 · [Live Demo](https://codeprint-iota.vercel.app)
+**Codeprint** · 1인 풀스택 개발 · [Live Demo](https://getcodeprint.com)
 
 </div>

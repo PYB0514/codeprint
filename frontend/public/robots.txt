@@ -6,4 +6,4 @@ Disallow: /settings
 Disallow: /admin
 Disallow: /messages
 
-Sitemap: https://codeprint-iota.vercel.app/sitemap.xml
+Sitemap: https://getcodeprint.com/sitemap.xml

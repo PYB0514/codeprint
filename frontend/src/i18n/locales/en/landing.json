@@ -4,6 +4,7 @@
   "heroTitle2": "interactive circuit diagram",
   "heroTitle3": "",
   "heroDesc": "One URL visualizes file structure, function call flow, and DB relationships. Structural warning detection included — all free.",
+  "betaNotice": "🚧 This is an unfinished beta. Analysis, visualization and the PR gate work, but some features may be incomplete, and repositories with more than 500 files are only partially analyzed.",
   "urlPlaceholder": "github.com/owner/repo",
   "analyzeButton": "Analyze",
   "urlErrorEmpty": "Please enter a repo URL.",

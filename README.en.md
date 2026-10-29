@@ -6,7 +6,9 @@
 
 A developer-facing SaaS that lets you understand a project's structure without reading the code, and catch architecture problems *before you merge*.
 
-[![Live](https://img.shields.io/badge/Live-Demo-2563eb)](https://codeprint-iota.vercel.app)
+> 🚧 **Beta — this project is still unfinished.** Analysis, visualization and the PR gate work, but some features may be incomplete, and repositories with more than 500 files are only partially analyzed.
+
+[![Live](https://img.shields.io/badge/Live-Demo-2563eb)](https://getcodeprint.com)
 [![Claude Code Skill](https://img.shields.io/badge/Claude%20Code-Skill-d97757)](https://github.com/PYB0514/codeprint-plugins)
 ![Java](https://img.shields.io/badge/Java-17-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-6db33f)
@@ -34,7 +36,7 @@ Codeprint statically analyzes a GitHub repo and builds an interactive graph wher
 - **Web service** — GitHub PR integration: opening a PR analyzes the changed branch and auto-comments structural warnings.
 - **(planned) Desktop app** — local folder analysis: detect warnings locally before push, without sending code anywhere.
 
-🔗 **Live:** [codeprint-iota.vercel.app](https://codeprint-iota.vercel.app) · 🧩 **Claude Code Skill:** [codeprint-plugins](https://github.com/PYB0514/codeprint-plugins) — a free Claude Code skill (Java/Kotlin/TypeScript/TSX) that wraps this project's analysis engine as a local CLI
+🔗 **Live:** [getcodeprint.com](https://getcodeprint.com) · 🧩 **Claude Code Skill:** [codeprint-plugins](https://github.com/PYB0514/codeprint-plugins) — a free Claude Code skill (Java/Kotlin/TypeScript/TSX) that wraps this project's analysis engine as a local CLI
 
 ---
 
@@ -155,6 +157,6 @@ cd frontend && npm install && npm run dev
 
 <div align="center">
 
-**Codeprint** · Solo full-stack development · [Live Demo](https://codeprint-iota.vercel.app)
+**Codeprint** · Solo full-stack development · [Live Demo](https://getcodeprint.com)
 
 </div>

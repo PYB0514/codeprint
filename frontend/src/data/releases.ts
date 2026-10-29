@@ -9,6 +9,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: 'v0.162.2',
+    date: '2026-10-29',
+    title: '새 도메인 getcodeprint.com · 베타 상태 안내',
+    type: 'fix',
+    items: [
+      { category: '개선', desc: 'Codeprint의 새 주소는 getcodeprint.com입니다(API는 api.getcodeprint.com). 기존 주소도 당분간 계속 동작하며, 주소가 바뀌어 한 번 다시 로그인해야 할 수 있습니다.' },
+      { category: '개선', desc: 'Codeprint가 아직 미완성인 베타 버전이라는 점을 헤더(Beta 표시)와 첫 화면 안내로 알립니다. 분석·시각화·PR 게이트는 동작하지만 일부 기능은 불완전할 수 있고, 파일 500개를 넘는 레포는 일부만 분석됩니다.' },
+    ],
+  },
+  {
     version: 'v0.162.1',
     date: '2026-08-31',
     title: '그래프 첫 로딩 속도 개선 — 경고 계산 결과 저장',

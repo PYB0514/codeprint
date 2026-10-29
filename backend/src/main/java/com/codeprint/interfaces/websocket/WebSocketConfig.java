@@ -29,7 +29,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("http://localhost:3000", "https://codeprint-iota.vercel.app")
+                .setAllowedOriginPatterns("http://localhost:3000", "https://codeprint-iota.vercel.app", "https://getcodeprint.com")
                 .addInterceptors(new ClientIpHandshakeInterceptor())
                 .withSockJS();
     }
