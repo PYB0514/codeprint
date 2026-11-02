@@ -57,8 +57,8 @@ public class LocalAnalyzer {
         }
     }
 
-    // native 폴백 경고 출력
     // -Dcodeprint.requireNative=true면 폴백 시 exit 3 — CI 멀티 OS 매트릭스가 번들 native 누락을 실패로 잡게 한다.
+    // native 폴백 경고 출력
     private static void reportNativeSupport(StaticCodeAnalyzer analyzer) {
         List<String> unavailable = analyzer.probeNativeUnavailableLanguages();
         String platform = System.getProperty("os.name") + "/" + System.getProperty("os.arch");

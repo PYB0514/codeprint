@@ -195,6 +195,13 @@ jobs:
         shell: bash
 
     steps:
+      # Windows 러너는 core.autocrlf=true라 LF로 커밋된 gradlew가 CRLF로 체크아웃돼 bash에서 캐리지리턴(CR) 오류로 죽는다.
+      # backend/는 체크아웃 전이라 아직 없으므로 워크스페이스 루트에서 실행.
+      - name: Windows 체크아웃 줄바꿈 변환 끄기
+        if: runner.os == 'Windows'
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -211,6 +218,7 @@ jobs:
       - name: 새로 빌드한 jar — native 로드 + 실제 분석
         run: java -Dcodeprint.requireNative=true -cp build/libs/codeprint-watch.jar com.codeprint.tools.LocalAnalyzer src/main/java
 
-      # 확장이 실제로 배포하는 건 커밋된 번들 jar — 재빌드 누락으로 stale해도 여기서 드러난다
+      # 확장이 실제로 배포하는 건 커밋된 번들 jar — 그 jar에 이 플랫폼 native가 들었는지 확인한다.
+      # 소스 대비 stale 여부는 못 잡는다(probe 이전 jar는 requireNative를 몰라 항상 exit 0) — 재빌드는 사람이 챙긴다.
       - name: 커밋된 확장 번들 jar — native 로드 + 실제 분석
         run: java -Dcodeprint.requireNative=true -cp ../vscode-extension/bin/codeprint-watch.jar com.codeprint.tools.LocalAnalyzer src/main/java

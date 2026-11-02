@@ -13,13 +13,15 @@
 - (탈락) **로드 실패를 예외로 승격해 분석 중단** — 미지원 플랫폼에서 도구 자체가 안 돌게 됨. 폴백이 있는 언어(Java/Python 등)는 저정밀이라도 쓸모가 있어 과잉.
 - (채택) **시작 시 1회 probe** — 각 분석기가 빈 소스를 파싱해 native 로드를 강제(`probeNative()`), `StaticCodeAnalyzer.probeNativeUnavailableLanguages()`가 실패 언어 목록 반환. 실패 시 기존 parseTree가 영구 폴백을 기록하므로 probe 결과와 이후 분석 동작이 일치. 픽스처 없이 12개 그래머 전부 검증. TS는 tsx가 별도 native라 `probeNative()` 오버라이드로 둘 다 점검.
 
-**표면화 경로.** `analyzeLocal`(LocalAnalyzer)은 플랫폼과 사용 불가 언어를 stderr로 경고, `-Dcodeprint.requireNative=true`면 exit 3. `watchLocal`(LocalWatcher)은 워닝 배열 계약을 깨지 않도록 별도 `watch-status.json`(platform·nativeUnavailable)을 쓰고, VS Code 확장이 이를 읽어 경고 메시지 표시(이전 실행의 상태 파일은 기동 전 삭제 — 다른 플랫폼 판정과 섞임 방지). CI `native-matrix` job이 ubuntu x64·ubuntu ARM64·windows x64·macos ARM64에서 새로 빌드한 jar와 **커밋된 확장 번들 jar** 둘 다 requireNative로 실행 — 번들 jar 재빌드 누락(stale)도 여기서 드러난다. 단위 테스트(`번들_native_플랫폼_전언어_사용가능`)는 tree-sitter 의존성 업그레이드로 native가 빠지는 회귀를 일반 backend job에서도 잡는다.
+**표면화 경로.** `analyzeLocal`(LocalAnalyzer)은 플랫폼과 사용 불가 언어를 stderr로 경고, `-Dcodeprint.requireNative=true`면 exit 3. `watchLocal`(LocalWatcher)은 워닝 배열 계약을 깨지 않도록 별도 `watch-status.json`(platform·nativeUnavailable)을 쓰고, VS Code 확장이 이를 읽어 경고 메시지 표시(이전 실행의 상태 파일은 기동 전 삭제 — 다른 플랫폼 판정과 섞임 방지). CI `native-matrix` job이 ubuntu x64·ubuntu ARM64·windows x64·macos ARM64에서 새로 빌드한 jar와 **커밋된 확장 번들 jar** 둘 다 requireNative로 실행. 커밋된 jar 검사는 "그 jar에 이 플랫폼 native가 들었는가"까지만 보장한다 — 소스 대비 stale 여부는 못 잡는다(적대적 검증이 probe 이전 main jar로 aarch64 시뮬레이션 + requireNative를 돌려 exit 0을 확인 — 옛 LocalAnalyzer는 이 플래그를 모름). Windows 러너는 `core.autocrlf=true`라 LF로 커밋된 `gradlew`가 CRLF로 체크아웃돼 bash에서 죽으므로 체크아웃 전에 autocrlf를 끈다(이 레포 첫 Windows 러너 — 적대적 검증 지적). 단위 테스트(`번들_native_플랫폼_전언어_사용가능`)는 tree-sitter 의존성 업그레이드로 native가 빠지는 회귀를 일반 backend job에서도 잡는다.
 
 **Windows ARM64 정책.** 번들 추가(bonede 바인딩 미제공 → 직접 크로스컴파일·배포 파이프라인 필요)는 수요 신호 전 인프라 투자라 보류, **미지원 명시 + 런타임 경고**로 결정. 매트릭스에서도 제외(기대 실패를 녹색으로 만드는 job은 신호가 아니라 소음).
 
 **검증.** compileJava, `StaticCodeAnalyzerTest` green, 확장 `tsc -p ./` 클린. 실제 jar로 ①Windows x64 정상(exit 0, 상태 파일 `nativeUnavailable: []`) ②`-Dos.arch=aarch64`로 Windows ARM64 시뮬레이션 → 11개 언어 전부 사용 불가 보고 + exit 3, 상태 파일에도 동일 기록 확인. `analyzeLocal` HIGH_FAN_OUT 8건 전부 기존 항목(신규 함수 0). VS Code 확장 UI의 경고 메시지 자체는 Extension Host에서 직접 띄워 보지 못함(로직은 상태 파일 실측과 컴파일로만 확인). macOS/Linux 실제 로드는 CI 매트릭스 첫 실행이 최초 검증.
 
-**참고(범위 밖, 기존 상태).** `LocalWatcher.java`는 Desktop 유료 축이라 gitignore돼 있지만, 확장 번들 jar(#755부터 커밋)에는 컴파일된 `LocalWatcher.class`가 포함돼 공개 레포에서 역컴파일 가능하다 — 소스 비공개 정책과 산출물 공개 사이의 기존 불일치. 이번 PR은 jar 갱신만 했고 정책은 바꾸지 않음.
+**적대적 검증 반영(같은 PR).** ①Windows `gradlew` CRLF(위) ②"stale도 드러난다" 과장 문구 정정(위) ③새 함수 주석 순서 — `extractFunctionComments`는 정의 바로 위 마지막 주석 줄을 그래프 라벨로 쓰는데 짧은 라벨 줄을 설명 줄 위에 둬서 긴 설명이 라벨이 되던 것을 라벨 줄이 마지막에 오도록 교정 ④상태 파일 원자적 쓰기(임시 파일 → ATOMIC_MOVE)와 확장의 상태 파일 삭제를 spawn 이전으로 이동. 수용한 한계: ts·tsx가 폴백 플래그를 공유해 tsx native만 깨진 플랫폼에선 probe가 .ts까지 폴백시킴(두 native가 같은 플랫폼 세트로 배포돼 가능성 낮음, 코드 주석에 명시) / 시작 시 12개 native를 전부 추출·로드(언어 없는 레포에서도 — 기존 FileLock 경합 노출 범위 확대 정도) / 매트릭스에 Intel macOS 없음(번들 x86_64 macOS native 미검증).
+
+**참고(범위 밖, 기존 상태 — 별도 처리 필요).** 확장 번들 jar(#755부터 커밋)는 `sourceSets.main.output` 전체를 담아 gitignore된 Desktop 유료 축 도구 3종(`LocalWatcher`·`LocalGraphQuery`·`LocalDiff`, `.gitignore` 22·25·29행)의 컴파일된 클래스와 백엔드 전체 클래스·`db/migration/*.sql`까지 공개 레포에 포함한다(적대적 검증이 jar 6357항목 직접 확인, main jar에도 동일). 시크릿·로컬 경로는 0건이지만, 소스 비공개 정책과 산출물 공개의 불일치이자 CLAUDE.md 규칙 2 "산출물 opt-in 구성" 위반. 이번 PR은 jar 갱신만 했고 구성 정책은 바꾸지 않음.
 
 ---
 

@@ -44,6 +44,10 @@ export function activate(context: vscode.ExtensionContext) {
   const outputFile = path.join(storageDir, 'build', 'codeprint-local', 'watch-warnings.json')
   fs.mkdirSync(path.dirname(outputFile), { recursive: true })
 
+  // 이전 실행의 상태 파일이 남아 있으면 이번 플랫폼 판정과 섞이므로 기동 전에 지운다
+  const statusFile = path.join(path.dirname(outputFile), 'watch-status.json')
+  fs.rmSync(statusFile, { force: true })
+
   watcherProcess = spawn('java', ['-jar', jarPath, workspaceRoot], { cwd: storageDir })
   watcherProcess.stdout?.on('data', (chunk) => console.log(`[codeprint watchLocal] ${chunk}`))
   watcherProcess.stderr?.on('data', (chunk) => console.error(`[codeprint watchLocal] ${chunk}`))
@@ -51,10 +55,6 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.window.showWarningMessage(`Codeprint Watch: java 실행 실패(${err.message}) — JDK 17+ 설치·PATH 등록을 확인하세요.`)
   })
   context.subscriptions.push({ dispose: () => watcherProcess?.kill() })
-
-  // 이전 실행의 상태 파일이 남아 있으면 이번 플랫폼 판정과 섞이므로 기동 전에 지운다
-  const statusFile = path.join(path.dirname(outputFile), 'watch-status.json')
-  fs.rmSync(statusFile, { force: true })
 
   // watch-warnings.json이 아직 없을 수 있어(최초 분석 진행 중) 부모 디렉터리를 감시 — 파일이 나타나거나 갱신되면 반영
   let debounceTimer: ReturnType<typeof setTimeout> | undefined
@@ -74,8 +74,8 @@ export function deactivate() {
   watcherProcess?.kill()
 }
 
-// native 폴백 경고 표시
 // 폴백은 조용히 정확도를 떨어뜨리므로(C/C++는 결과 자체가 빔) 사용자에게 명시한다. 읽기 성공 시 true.
+// native 폴백 경고 표시
 function warnNativeFallback(statusFile: string): boolean {
   let status: { platform?: string; nativeUnavailable?: string[] }
   try {

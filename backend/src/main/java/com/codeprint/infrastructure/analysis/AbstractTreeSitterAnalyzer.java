@@ -75,8 +75,8 @@ abstract class AbstractTreeSitterAnalyzer {
         }
     }
 
-    // native 로드 가능 여부 점검
     // 빈 소스를 파싱해 native 로드를 강제로 일으킨다 — 실패 시 parseTree가 영구 폴백을 기록하므로 이후 분석 결과와 일치.
+    // native 로드 가능 여부 점검
     boolean probeNative() {
         return parseTree("", (root, src) -> Boolean.TRUE).isPresent();
     }
