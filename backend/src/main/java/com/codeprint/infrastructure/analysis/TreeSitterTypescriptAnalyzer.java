@@ -38,6 +38,14 @@ class TreeSitterTypescriptAnalyzer extends AbstractTreeSitterAnalyzer {
         return "TypeScript";
     }
 
+    // tsx는 별도 그래머 native라 ts만 점검하면 .tsx 파일의 폴백을 놓친다. 단 폴백 플래그는 ts·tsx 공유라 tsx native만
+    // 깨진 플랫폼에선 .ts도 폴백된다(기존에도 .tsx 파일을 만나면 동일 — 두 native는 같은 플랫폼 세트로 배포돼 실제 가능성 낮음).
+    // ts·tsx native 점검
+    @Override
+    boolean probeNative() {
+        return super.probeNative() && parse("", true).isPresent();
+    }
+
     // TypeScript 소스 1개를 파싱해 함수·호출을 추출. tsx=true면 JSX 그래머 사용. 실패 시 Optional.empty() → 정규식 폴백
     Optional<Result> parse(String content, boolean tsx) {
         return parseTree(content, tsx ? this::tsxLanguage : this::language, (root, src) -> {

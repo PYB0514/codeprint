@@ -26,6 +26,16 @@ class StaticCodeAnalyzerTest {
         analyzer = new StaticCodeAnalyzer();
     }
 
+    // ── native 지원 점검 ────────────────────────────────────────────────
+    // CI 실행 플랫폼(ubuntu x64)과 개발 플랫폼(Windows x64)은 번들 native가 있으므로 전 언어 사용 가능해야 한다.
+    // 실패하면 tree-sitter 의존성 업그레이드로 해당 플랫폼 native가 빠졌다는 뜻 — 폴백이 조용히 일어나기 전에 여기서 잡는다.
+
+    @Test
+    @DisplayName("번들 native 플랫폼에서는 사용 불가 언어가 없다")
+    void 번들_native_플랫폼_전언어_사용가능() {
+        assertThat(analyzer.probeNativeUnavailableLanguages()).isEmpty();
+    }
+
     // ── 회귀: 함수 주석 추출 ────────────────────────────────────────────────
 
     @Test

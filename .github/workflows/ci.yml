@@ -178,3 +178,47 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  # 로컬 도구 fat jar(VS Code 확장 번들)의 tree-sitter native가 각 OS/아키텍처에서 실제로 로드되는지 검증.
+  # native 로드 실패는 예외 없이 정규식 폴백으로 조용히 넘어가(C/C++는 결과가 아예 빔) 다른 CI로는 안 잡힌다 —
+  # requireNative=true로 폴백 시 exit 3. Windows ARM64는 번들 native가 없어 미지원(매트릭스 제외, 확장이 런타임 경고).
+  native-matrix:
+    name: Native Matrix (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: backend
+        shell: bash
+
+    steps:
+      # Windows 러너는 core.autocrlf=true라 LF로 커밋된 gradlew가 CRLF로 체크아웃돼 bash에서 캐리지리턴(CR) 오류로 죽는다.
+      # backend/는 체크아웃 전이라 아직 없으므로 워크스페이스 루트에서 실행.
+      - name: Windows 체크아웃 줄바꿈 변환 끄기
+        if: runner.os == 'Windows'
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      # 체크아웃에는 LocalWatcher 소스가 없어(유료 축, gitignore) Main-Class는 비지만 같은 toolsRuntime·native 구성이라 LocalAnalyzer로 검증한다
+      - name: Build watchLocal jar
+        run: ./gradlew watchLocalJar --no-daemon
+
+      - name: 새로 빌드한 jar — native 로드 + 실제 분석
+        run: java -Dcodeprint.requireNative=true -cp build/libs/codeprint-watch.jar com.codeprint.tools.LocalAnalyzer src/main/java
+
+      # 확장이 실제로 배포하는 건 커밋된 번들 jar — 그 jar에 이 플랫폼 native가 들었는지 확인한다.
+      # 소스 대비 stale 여부는 못 잡는다(probe 이전 jar는 requireNative를 몰라 항상 exit 0) — 재빌드는 사람이 챙긴다.
+      - name: 커밋된 확장 번들 jar — native 로드 + 실제 분석
+        run: java -Dcodeprint.requireNative=true -cp ../vscode-extension/bin/codeprint-watch.jar com.codeprint.tools.LocalAnalyzer src/main/java

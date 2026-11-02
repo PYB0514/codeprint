@@ -75,6 +75,12 @@ abstract class AbstractTreeSitterAnalyzer {
         }
     }
 
+    // 빈 소스를 파싱해 native 로드를 강제로 일으킨다 — 실패 시 parseTree가 영구 폴백을 기록하므로 이후 분석 결과와 일치.
+    // native 로드 가능 여부 점검
+    boolean probeNative() {
+        return parseTree("", (root, src) -> Boolean.TRUE).isPresent();
+    }
+
     // callee 를 호출자 집합에 추가 (자기 이름 호출=재귀는 제외 — DEAD_CODE 오탐 방지)
     protected static void add(Map<String, Set<String>> calls, String current, String callee) {
         if (!callee.isEmpty() && !callee.equals(current)) {

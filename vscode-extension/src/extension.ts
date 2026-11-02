@@ -44,6 +44,10 @@ export function activate(context: vscode.ExtensionContext) {
   const outputFile = path.join(storageDir, 'build', 'codeprint-local', 'watch-warnings.json')
   fs.mkdirSync(path.dirname(outputFile), { recursive: true })
 
+  // 이전 실행의 상태 파일이 남아 있으면 이번 플랫폼 판정과 섞이므로 기동 전에 지운다
+  const statusFile = path.join(path.dirname(outputFile), 'watch-status.json')
+  fs.rmSync(statusFile, { force: true })
+
   watcherProcess = spawn('java', ['-jar', jarPath, workspaceRoot], { cwd: storageDir })
   watcherProcess.stdout?.on('data', (chunk) => console.log(`[codeprint watchLocal] ${chunk}`))
   watcherProcess.stderr?.on('data', (chunk) => console.error(`[codeprint watchLocal] ${chunk}`))
@@ -54,7 +58,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   // watch-warnings.json이 아직 없을 수 있어(최초 분석 진행 중) 부모 디렉터리를 감시 — 파일이 나타나거나 갱신되면 반영
   let debounceTimer: ReturnType<typeof setTimeout> | undefined
+  let statusShown = false
   fs.watch(path.dirname(outputFile), (_event, filename) => {
+    if (filename === path.basename(statusFile) && !statusShown) {
+      statusShown = warnNativeFallback(statusFile)
+      return
+    }
     if (filename !== path.basename(outputFile)) return
     if (debounceTimer) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(() => reloadDiagnostics(outputFile, workspaceRoot), 300)
@@ -63,6 +72,24 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
   watcherProcess?.kill()
+}
+
+// 폴백은 조용히 정확도를 떨어뜨리므로(C/C++는 결과 자체가 빔) 사용자에게 명시한다. 읽기 성공 시 true.
+// native 폴백 경고 표시
+function warnNativeFallback(statusFile: string): boolean {
+  let status: { platform?: string; nativeUnavailable?: string[] }
+  try {
+    status = JSON.parse(fs.readFileSync(statusFile, 'utf8'))
+  } catch {
+    return false // 쓰는 도중일 수 있음 — 다음 이벤트에서 재시도
+  }
+  const unavailable = status.nativeUnavailable ?? []
+  if (unavailable.length > 0) {
+    vscode.window.showWarningMessage(
+      `Codeprint Watch: 이 플랫폼(${status.platform})에서 ${unavailable.join(', ')} 정밀 분석(tree-sitter)을 쓸 수 없어 ` +
+      `정확도가 낮은 폴백으로 동작합니다. C/C++ 파일은 분석되지 않습니다.`)
+  }
+  return true
 }
 
 // 워닝 JSON을 읽어 파일별로 그룹핑한 뒤 DiagnosticCollection에 반영 — 파일 line은 1-indexed, VS Code Range는 0-indexed
