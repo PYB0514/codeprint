@@ -37,6 +37,19 @@ public class StaticCodeAnalyzer {
     // tree-sitter 기반 Swift 분석기 — 생성자(init)·프로토콜 메서드·navigation 호출 정확 귀속. native 로드 실패 시 정규식 폴백.
     private final TreeSitterSwiftAnalyzer treeSitterSwift = new TreeSitterSwiftAnalyzer();
 
+    // native 미지원 언어 목록
+    // 시작 시 1회 호출해 이 플랫폼에서 tree-sitter native를 못 쓰는 언어를 확인한다. 폴백은 조용히 일어나
+    // (C/C++는 정규식 경로가 없어 결과 자체가 비고) 정확도 저하가 정상 결과로 보이므로, 호출부가 사용자에게 알린다.
+    public List<String> probeNativeUnavailableLanguages() {
+        List<AbstractTreeSitterAnalyzer> analyzers = List.of(treeSitterJava, treeSitterPython, treeSitterTypescript,
+                treeSitterGo, treeSitterRust, treeSitterCSharp, treeSitterRuby, treeSitterPhp, treeSitterC, treeSitterCpp,
+                treeSitterSwift);
+        return analyzers.stream()
+                .filter(a -> !a.probeNative())
+                .map(AbstractTreeSitterAnalyzer::languageName)
+                .toList();
+    }
+
     // 단일 소스 파일을 분석하여 함수명, import, 주석 등을 추출
     public ParsedFile analyze(Path file, Path repoRoot, String language) throws IOException {
         String content = Files.readString(file, StandardCharsets.UTF_8);

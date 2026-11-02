@@ -35,8 +35,11 @@ public class LocalAnalyzer {
         Path rootDir = args.length > 0 ? Path.of(args[0]) : Path.of(".");
         System.out.println("분석 대상: " + rootDir.toAbsolutePath());
 
+        StaticCodeAnalyzer analyzer = new StaticCodeAnalyzer();
+        reportNativeSupport(analyzer);
+
         UUID projectId = UUID.randomUUID();
-        CachedParsedFileLoader loader = new CachedParsedFileLoader(new StaticCodeAnalyzer(), new InMemoryParsedFileCachePort());
+        CachedParsedFileLoader loader = new CachedParsedFileLoader(analyzer, new InMemoryParsedFileCachePort());
         List<Map<String, Object>> warnings = analyze(rootDir, projectId, loader);
 
         if (warnings.isEmpty()) {
@@ -52,6 +55,20 @@ public class LocalAnalyzer {
             System.out.println("\n--- 유형별 요약 ---");
             counts.forEach((type, count) -> System.out.println("  " + type + ": " + count + "개"));
         }
+    }
+
+    // native 폴백 경고 출력
+    // -Dcodeprint.requireNative=true면 폴백 시 exit 3 — CI 멀티 OS 매트릭스가 번들 native 누락을 실패로 잡게 한다.
+    private static void reportNativeSupport(StaticCodeAnalyzer analyzer) {
+        List<String> unavailable = analyzer.probeNativeUnavailableLanguages();
+        String platform = System.getProperty("os.name") + "/" + System.getProperty("os.arch");
+        if (unavailable.isEmpty()) {
+            System.out.println("tree-sitter native: 전 언어 사용 가능 (" + platform + ")");
+            return;
+        }
+        System.err.println("⚠️  tree-sitter native 사용 불가 (" + platform + "): " + unavailable
+                + " — 정규식 폴백으로 정확도가 떨어지고 C/C++는 분석되지 않습니다.");
+        if (Boolean.getBoolean("codeprint.requireNative")) System.exit(3);
     }
 
     // rootDir을 분석해 워닝 목록을 반환 — LocalWatcher가 동일 loader(캐시 유지)로 반복 호출
