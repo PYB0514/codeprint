@@ -2,6 +2,28 @@
 
 ---
 
+## 프로덕션 장애 — Serverless Postgres 웨이크 후 응답 불능, 앱 Crashed 고착 → Postgres 슬립 해제 (2026-11-02, 약 70분)
+
+**발견.** 문서 PR #782의 필수 체크 `codeprint/structure`가 45분째 게시되지 않아 머지가 막힘. 웹훅 전송 기록에서 `pull_request/opened`가 10초 타임아웃(GitHub 표기 500)으로 실패한 것을 확인하고, 수동 `reconcile-pr-gate`도 2회 실패(curl exit 22)하자 프로덕션 health를 직접 확인 → 두 도메인 모두 502 "Application failed to respond".
+
+**추적(Railway 대시보드 로그, 사용자 Chrome 세션으로 읽기).**
+1. 직전 배포(#781, 8123e87)는 10:19 UTC 정상 기동 → 11:04 UTC 같은 배포가 failure. 배포 직후 깨진 게 아니라 기동 후 어느 시점에 죽음 — 코드 회귀 가설 기각(#781은 서버 경로 미변경).
+2. 앱 로그: 재기동 때마다 Flyway가 `PSQLException: The connection attempt failed` ← `SocketTimeoutException: Connect timed out`(08001)로 실패, 재시작 정책 소진 후 Crashed.
+3. Postgres 서비스는 UI상 "Online"이지만 Railway Database 탭도 "unable to connect via SSH". 로그상 Postgres도 **Serverless 슬립 대상** — 유휴 약 5분마다 "Stopping Container" → 요청 시 재기동 + "not properly shut down; automatic recovery"를 반복해 왔고, **10:45 UTC 기동 로그 이후 아무 출력이 없음**(응답 불능).
+
+**복구(사용자 권한 허용 후).** ①앱 Restart → 같은 연결 타임아웃 반복(복구 실패) ②Postgres Restart → 11:50 UTC "ready to accept connections" → 앱 다음 재시도에서 기동, `/actuator/health` UP. 이후 `reconcile-pr-gate` 성공, #782 게이트 pass. **앱만으로는 안 되고 DB 재시작으로 풀렸다는 점이 원인을 "슬립에서 깨어난 Postgres 컨테이너의 응답 불능"으로 좁힌다.** 정확한 Railway 내부 원인(웨이크 처리 중 행)은 확인 불가.
+
+**결정(같은 날, 사용자 승인) — Postgres Serverless 슬립 해제, 앱만 슬립 유지.** 대체: "Railway Serverless(구 App Sleeping) 준비"(2026-07-15)의 "codeprint·Postgres 두 서비스 모두 Serverless" 중 **Postgres 부분**. 번복 이유: 그때는 청구액의 96.6%가 RAM이라 DB까지 재우는 게 비용상 이득이었지만, 이번 장애로 ①웨이크 후 응답 불능 시 앱 재시작으로는 복구되지 않고 ②매 슬립이 비정상 종료 + 크래시 복구라 데이터 무결성 위험이 상시 존재한다는 게 실증됐다 — DB 상시 가동 비용보다 위험이 크다. 적용: Railway Postgres Settings → Enable Serverless 끔(`Sleep Application: true → false`, 1건만 변경 확인) → Deploy → 새 배포 Active → 앱 `/actuator/health` UP + DB를 실제 조회하는 `/api/featured-repos` 200(0.75s)으로 재연결 확인, 설정 화면에서 토글 꺼짐 재확인. 앱(codeprint)의 Serverless는 그대로라 콜드스타트 비용 절감 효과는 유지된다.
+
+**검토한 재발 방지안.**
+- (1순위, **채택**) **Postgres Serverless 슬립 해제**(앱만 슬립). 근거: 이번 장애의 직접 원인 + 매 슬립마다 비정상 종료·크래시 복구가 반복되는 것 자체가 데이터 무결성 위험 신호. 비용은 DB 상시 가동분만 증가.
+- (보조) 앱 기동 시 DB 연결 재시도·긴 connectTimeout — 이번 건처럼 DB가 행이면 효과 없음(재시도해도 붙을 대상이 없음). 일시적 웨이크 지연에만 유효.
+- (보조) 외부 헬스 모니터링 알림 — 이번엔 사람이 PR 게이트 지연으로 우연히 발견. 다운 감지가 없는 것 자체가 갭.
+
+**부수 발견.** 매시 G-5 리컨실리에이션 cron(`0 * * * *`)이 GitHub 스케줄 지연으로 이날 05:39 UTC 이후 실행 0회 — 웹훅 유실 안전망이 기대만큼 돌지 않음(GitHub 예약 워크플로는 부하 시 지연·누락 가능).
+
+---
+
 ## DB 백업 복원 리허설 신설 — "쌓이기만 하고 검증 0회"였던 갭 해소(2026-07-26, codeprint_149)
 
 **문제.** `decisions/DECISIONS_INFRA.md:383`(과거 기록)에 "진짜 재해 시점에 처음 시도하면 위험"으로 남아있던 항목. `db-backup.yml`이 매일 프로덕션 Postgres를 S3에 백업하고 있었지만, 그 백업이 실제로 복원 가능한지 확인한 적이 한 번도 없었다.
@@ -565,6 +587,8 @@ Matt Pocock의 "좋은 Claude Code 스킬 작성 가이드"(사용자 공유)의
 ---
 
 ## Railway Serverless(구 App Sleeping) 준비 — 내부 스케줄러 외부화 + HikariCP 유휴 커넥션 축소 (2026-07-15, codeprint_129)
+
+> ⚠️ **대체됨 (2026-11-02, Postgres 부분만)** — "프로덕션 장애 — Serverless Postgres 웨이크 후 응답 불능"으로 대체. 웨이크 후 DB 응답 불능으로 약 70분 장애가 실증돼 Postgres는 슬립 해제(앱 codeprint는 Serverless 유지). 아래 원문은 이력 보존용.
 
 **문제.** 위 실측에서 RAM이 청구액의 96.6%로 확정된 뒤, "12일에 $4.59면 남은 18일도 비슷한 속도로 늘 텐데 90%대로 줄일 수 있냐"는 질문이 나왔다. 조사 결과 Railway의 "Serverless"(구 App Sleeping)는 **서비스별로 켤 수 있어 Postgres도 재울 수 있음**을 확인(당초 "Postgres는 상시과금 불가피"라 판단했던 게 부정확했음 — 정정). 단 이걸 켜려면 두 가지 선결 조건이 있었다: ①내부 `@Scheduled`(매일 06:00 갤러리 갱신·09:00 다이제스트)가 유휴 시간에 강제로 깨어나 sleep을 방해 ②HikariCP 기본 설정(`minimum-idle`=`maximum-pool-size`=10)이 유휴 커넥션을 상시 유지.
 

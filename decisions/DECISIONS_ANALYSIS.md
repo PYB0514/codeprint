@@ -4,6 +4,33 @@
 
 ---
 
+## PHP PSR-4 해소 가설 실측 — 가설은 이미 성립, 진짜 레버는 타입 프로퍼티 한정 (2026-11-02, 코드 변경 없음)
+
+**배경.** 이전 기록("AST 프로덕션 전환 — TS" 항목)은 "`resolveQualifiedCall`의 파일명 매칭은 Java/C# 전용, PHP는 파일명≠클래스명"이라고 적었다. 그런데 CodeIgniter 4·Laravel은 PSR-4(오토로딩 표준) 때문에 파일명=클래스명이므로, 네임스페이스 기반 PHP에도 그 경로를 쓸 수 있는지 확인이 필요했다(PHP MVC 컨벤션 규칙 착수 전 사전 측정).
+
+**코드 확인.** `GraphBuilder.resolveQualifiedCall`은 언어 분기가 없다. `Class::method` 호출이면 모든 언어에서 ①파일명(확장자 제외)=클래스명 ②`declaredTypes`에 클래스명 포함 순으로 매칭한다. PHP 분석기는 `declaredTypes`를 채우지 않지만 ①은 이미 PHP에 적용되고 있었다. 즉 "Java/C# 전용"은 코드 제약이 아니라 "다른 언어는 관례상 파일명이 안 맞는다"는 관찰이었고, **PSR-4 PHP에서는 별도 작업 없이 이미 성립**한다.
+
+**측정.** 엔진 클래스(`StaticCodeAnalyzer`)로 실제 추출한 호출을 집계하는 일회성 스크립트(스크래치, 미커밋). 대상은 라이브러리 성격의 laravel/framework(`src`, 1,746파일)와 앱 성격의 koel(Laravel 앱 `app`, 1,064파일).
+
+| 지표 | laravel/framework | koel(앱) |
+|---|---|---|
+| PSR-4 일치(첫 선언 클래스명 = 파일명) | 1,650/1,650 (100%) | 1,063/1,063 (100%) |
+| 전체 호출 중 `Class::method` 비율 | 7.0% | 22.2% |
+| └ 파일명 매칭으로 해소 | 1,557/2,344 | 594/1,854 |
+| └ 레포 밖 클래스(파사드·vendor) | 404 | 1,010 |
+| └ 클래스는 있으나 메서드 없음(상속·`__callStatic`) | 383 | 250 |
+| bare 호출(`->` 등) 중 동명 정의 2개 이상(모호) | 14,038 (전체의 41.8%) | 1,142 (13.6%) |
+| `$this->prop->m()` 중 prop에 타입 선언 있음 | 265/3,152 (8.4%) | 743/984 (75.5%) |
+
+**해석.**
+- PSR-4는 두 레포 모두 100%라 파일명 매칭 경로는 PHP에서 정확하다. "레포 밖 클래스"와 "메서드 없음"은 `resolveQualifiedCall`이 null을 돌려 엣지를 만들지 않으므로 phantom 위험이 없다(recall만 손실).
+- PHP 호출의 대부분(78~93%)은 bare(`$obj->m()`)이고 모호도가 높다. 이게 PHP 그래프 정확도의 실제 병목이다.
+- **실제 레버는 타입 프로퍼티 기반 한정**이다. 생성자 승격·타입 프로퍼티(`private UserService $users`)로 `$this->users->find()`를 `UserService::find`로 바꾸면 PSR-4 덕분에 기존 파일명 매칭으로 바로 해소된다(Java/C#/TS의 필드 타입 인지와 같은 방식). 효과는 코드 스타일에 크게 좌우된다. 현대 Laravel 앱(koel)은 75.5%를 덮지만 프레임워크 코드는 8.4%뿐이고, 타입 선언이 없는 CodeIgniter 3는 0%에 가깝다.
+
+**결론.** 가설 검증 완료, 코드 변경 불필요. PHP MVC 규칙 착수 시 우선순위를 이렇게 둔다. ①타입 프로퍼티 → `Type::method` 한정(새 파싱 데이터라 `ANALYZER_VERSION` 인상 + phantom 감사 필요) ②CI3처럼 타입이 없는 코드베이스는 해소 대신 폴더·명명 컨벤션 기반 판정에 의존. 벤치는 라이브러리(framework)가 아니라 **앱 레포**(koel 등)를 기준으로 삼는다 — 둘의 수치 차이가 이렇게 크다.
+
+---
+
 ## tree-sitter native 조용한 폴백 표면화 + 멀티 OS CI 매트릭스 (2026-11-02, PRODUCT_STRATEGY §20 B-1)
 
 **문제.** `AbstractTreeSitterAnalyzer.parseTree`는 native 로드 실패(`LinkageError`) 시 해당 언어를 영구 폴백으로 돌리고 `log.warn`만 남긴다. 그런데 ①로컬 도구 fat jar(`toolsRuntime`)에는 SLF4J 구현체가 없어 **실행 시 "No SLF4J providers — NOP logger"로 그 경고조차 버려진다**(2026-11-02 jar 실행으로 확인) ②정규식 폴백은 AST보다 정밀도가 낮고, **C/C++는 정규식 경로가 아예 없어 결과가 빈다** ③번들 jar의 native는 x86_64/aarch64 Linux·macOS + x86_64 Windows 5종(jar 내용 직접 확인), **Windows ARM64는 없다** ④실행은 Windows x64에서만 확인됐었다. 즉 미지원·로드 실패 플랫폼 사용자는 저정밀(또는 빈) 결과를 정상 결과로 받는다 — §0.2-3 "정확도가 곧 신뢰"에 정면 위배되는 조용한 결함. `build.gradle` 주석("Linux .so + Windows .dll 동봉")도 실제(5종)와 달랐다.
